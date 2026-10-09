@@ -110,7 +110,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Download tested Windows packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: STAR-Windows-vNext
           path: release-assets
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: STAR-Windows-vNext
           path: release-assets
