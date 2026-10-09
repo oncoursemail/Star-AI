@@ -7,11 +7,16 @@ $python = Join-Path (Get-Location) '.venv\Scripts\python.exe'
 & $python -m pip install -r requirements-desktop.txt -r requirements-dev.txt 'pyinstaller>=6.10,<7'
 if (-not (Get-Command npm -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is needed for the React UI build.' }
 Push-Location frontend
-& npm install --no-audit --no-fund
-if ($LASTEXITCODE -ne 0) { throw 'React dependency install failed' }
-& npm run build
-if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
-Pop-Location
+try {
+  & npm install --no-audit --no-fund
+  if ($LASTEXITCODE -ne 0) { throw 'React dependency install failed' }
+  & npm run typecheck
+  if ($LASTEXITCODE -ne 0) { throw 'TypeScript check failed' }
+  & npm run test
+  if ($LASTEXITCODE -ne 0) { throw 'React tests failed' }
+  & npm run build
+  if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
+} finally { Pop-Location }
 & $python -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed; aborting build.' }
 & $python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR --icon assets/star.ico --add-data "frontend/dist;frontend/dist" --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel --hidden-import mcp.client.session --hidden-import mcp.client.stdio --hidden-import mcp.types --collect-all faster_whisper --collect-all ctranslate2 --collect-all av --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules cryptography star_desktop.py
