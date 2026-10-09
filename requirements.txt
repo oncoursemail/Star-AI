@@ -1,5 +1,5 @@
 openai>=2.0,<3
-mcp>=1.19,<2
+mcp>=2.3.0,<3
 Pillow>=11,<13
 python-dotenv>=1,<2
 jsonschema>=4.23,<5
