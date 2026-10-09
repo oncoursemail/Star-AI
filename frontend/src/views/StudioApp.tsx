@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  Activity, ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3, BookOpen,
+  Activity, ArrowDownToLine, ArrowRight, ArrowUpRight, BarChart3,
   BrainCircuit, Check, CheckCheck, ChevronDown, CircleHelp,
   Clock3, Code2, Copy, Cpu, FileCode2, FileImage, FolderClosed,
   History, Keyboard, LayoutGrid, Menu, MessageSquareText,
@@ -13,10 +13,9 @@ import {
 import { AreaChart, Area, CartesianGrid, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 import { Brand, StarGlyph } from '../components/Brand';
 import { emptyAnalytics, previewState, starClient } from '../lib/bridge';
-import type { Analytics, Area as AreaType, Attachment, Message, Settings, StarState } from '../lib/types';
+import type { Area as AreaType, Attachment, Message, Settings, StarState } from '../lib/types';
 
 const RELEASES = 'https://github.com/oncoursemail/Star-AI/releases/latest';
-const REPO = 'https://github.com/oncoursemail/Star-AI';
 const NAV: { id: AreaType; title: string; icon: typeof MessageSquareText }[] = [
   { id: 'chat', title: 'Chat', icon: MessageSquareText },
   { id: 'projects', title: 'Projects', icon: LayoutGrid },
