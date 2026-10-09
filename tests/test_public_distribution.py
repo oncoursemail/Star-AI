@@ -115,3 +115,10 @@ def test_qa_screenshots_use_real_star_theme():
     assert "app.setStyleSheet(STYLE)" in source
     assert "app.setStyle('Fusion')" in source
     assert "not using its OLED stylesheet" in source
+
+
+def test_no_font_offscreen_renderer_is_not_treated_as_a_real_ui_verification():
+    script=(ROOT/'scripts/capture_desktop_ui.py').read_text()
+    assert 'if fonts:' in script
+    assert 'nonrepresentative' in script
+    assert 'real desktop visual QA' in script

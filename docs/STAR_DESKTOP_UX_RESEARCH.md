@@ -97,3 +97,5 @@ A nonblocking streaming assistant response; first-run model downloader diagnosti
 5. Every UI action is wired to a real callback or disabled with explanation.
 6. Windows runner captures offscreen Qt renders; an actual Windows computer validates appearance and accessibility.
 7. The next real user screenshot is compared against approved layout references, not blindly rebuilt from vague aesthetics.
+
+**CI font caveat (October 2026):** Windows GitHub's Qt `offscreen` plugin may report **zero system font families**, producing blank/square glyphs and unstyled-looking pixels. The captured artifact remains useful as a structural diagnostic but is **not evidence of approved visual fidelity**. The screenshot tool warns and preserves the artifact in that case; final typography and color checks require native STAR running on the target user's Windows desktop.
