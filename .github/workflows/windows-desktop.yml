@@ -39,7 +39,6 @@ jobs:
         shell: pwsh
         working-directory: frontend
         run: |
-          Push-Location frontend
           npm install --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw 'React dependencies could not be installed' }
           npm run typecheck
@@ -48,7 +47,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'React component tests failed' }
           npm run build
           if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
-          Pop-Location
           if (-not (Test-Path 'dist/index.html')) { throw 'React index missing' }
       - name: Install STAR build requirements
         shell: pwsh
