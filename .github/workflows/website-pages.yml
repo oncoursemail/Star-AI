@@ -33,6 +33,27 @@ jobs:
         run: |
           test -f frontend/dist/index.html
           ! grep -R -E 'BEGIN PRIVATE KEY|github_pat_|ghp_[A-Za-z0-9]{20}' frontend/dist
+      - name: Browser-render website and desktop-preview screenshots
+        if: always()
+        continue-on-error: true
+        run: |
+          mkdir -p site-captures
+          python3 -m http.server 8931 --bind 127.0.0.1 --directory frontend/dist >/tmp/star-site-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 1
+          BROWSER=$(command -v google-chrome || command -v chromium || true)
+          if [ -z "$BROWSER" ]; then echo 'No Chrome on runner; screenshots unavailable'; exit 0; fi
+          timeout 40 "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=1800 --screenshot="$PWD/site-captures/marketing.png" http://127.0.0.1:8931/
+          timeout 40 "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=1800 --screenshot="$PWD/site-captures/desktop-preview.png" 'http://127.0.0.1:8931/?preview=1'
+      - name: Upload actual React browser renders for visual QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-React-Visual-QA
+          path: site-captures/*.png
+          if-no-files-found: ignore
+          retention-days: 30
       - uses: actions/upload-artifact@v4
         with:
           name: STAR-React-Website-Preview
