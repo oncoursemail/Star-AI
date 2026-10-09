@@ -1,3 +1,33 @@
+# ✦ STAR Intelligence — React Genesis v0.7.0
+
+**STAR is now transitioning to a shared React + TypeScript interface for its public website and Windows desktop.** The backend remains Python, local-first AI inference, memory, Roblox MCP, and checked updater. Source is public. The public website is a product site and interactive demo, not an online connection to your private AI.
+
+- **Website (after Pages deployment):** https://oncoursemail.github.io/Star-AI/
+- **Latest Windows installer:** https://github.com/oncoursemail/Star-AI/releases/latest
+- **Preview:** visit the website with `?demo=1`. The demo does not invent AI responses or telemetry.
+- **React interface + desktop installation:** [docs/STAR_REACT_DESKTOP_SETUP.md](docs/STAR_REACT_DESKTOP_SETUP.md)
+- **Research, accessibility and implementation decisions:** [docs/STAR_REACT_DESIGN_RESEARCH.md](docs/STAR_REACT_DESIGN_RESEARCH.md)
+
+The GitHub CI must first build and test STAR v0.7.0 before a Release download exists. Do not treat this README as proof of a running Windows package or deployed website.
+
+## Development layout
+
+| Path | Purpose |
+|---|---|
+| `frontend/` | React 19, TypeScript, Motion, SVG icons, Vite build and responsive website |
+| `star/react_desktop.py` | Bounded Python / Qt WebChannel bridge |
+| `star/desktop_core.py` | Local inference, conversation storage and project context |
+| `star/analytics.py` | Real SQLite activity, not fabricated graphics |
+| `star/brain_setup.py` | Local engine/model installation |
+| `.github/workflows/website-pages.yml` | Build/deploy React site on GitHub Pages |
+| `.github/workflows/windows-desktop.yml` | Compile React, package QtWebEngine Windows installer, test and release |
+
+### Fundamental safety distinction
+
+React renders information and invokes a **fixed native command allowlist**; it does not acquire unrestricted operating-system access. Uploaded media is selected through native dialogs and remains on disk. Model credentials and local project files are not exposed through website code.
+
+---
+
 # ✦ STAR Intelligence — Genesis v0.6.1
 
 A **local-first Windows AI workspace** built around Roblox development and creative production. Native OLED-style interface, real project analytics, compact chat, image inputs, optional voice/video tools, and a model you can download directly inside STAR. **No paid model API key and no LM Studio are required for the default setup.**

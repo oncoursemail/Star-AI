@@ -12,6 +12,7 @@ on:
       - 'scripts/build_windows.ps1'
       - '.github/workflows/windows-desktop.yml'
       - 'tests/**'
+      - 'frontend/**'
   workflow_dispatch:
 
 concurrency:
@@ -26,6 +27,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Compile STAR React interface
+        shell: pwsh
+        run: |
+          Push-Location frontend
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed' }
+          npm run build
+          if ($LASTEXITCODE -ne 0) { throw 'STAR React build failed' }
+          Pop-Location
+          if (-not (Test-Path 'frontend/dist/index.html')) { throw 'Missing compiled STAR UI' }
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -61,6 +75,8 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
+            --add-data "frontend/dist;frontend/dist" `
+            --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
             --collect-all ctranslate2 --collect-all av `

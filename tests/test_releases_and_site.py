@@ -58,8 +58,9 @@ def test_windows_release_workflow_has_real_windows_installer_and_guarded_release
 
 def test_pages_is_opt_in_not_exposing_private_source():
     s=(ROOT/'.github/workflows/website-pages.yml').read_text()
-    assert "vars.STAR_DEPLOY_PAGES == 'true'" in s
-    assert 'path: site' in s
+    assert "frontend/dist" in s and "npm run build" in s
+    assert "actions/deploy-pages@v4" in s
+    assert 'path: frontend/dist/' in s
 
 
 def test_release_job_finds_nested_setup_artifact():

@@ -1,3 +1,10 @@
+# The same React assets power the desktop UI and the public website.
+Push-Location 'frontend'
+npm install --no-audit --no-fund
+if ($LASTEXITCODE -ne 0) { throw 'React dependencies failed' }
+npm run build
+if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
+Pop-Location
 $ErrorActionPreference = 'Stop'
 Set-Location (Join-Path $PSScriptRoot '..')
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) { throw 'Install Python 3.11 x64.' }
@@ -7,7 +14,7 @@ $python = Join-Path (Get-Location) '.venv\Scripts\python.exe'
 & $python -m pip install -r requirements-desktop.txt -r requirements-dev.txt 'pyinstaller>=6.10,<7'
 & $python -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed; aborting build.' }
-& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR --icon assets/star.ico --hidden-import mcp.client.session --hidden-import mcp.client.stdio --hidden-import mcp.types --collect-all faster_whisper --collect-all ctranslate2 --collect-all av --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules cryptography star_desktop.py
+& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR --add-data "frontend/dist;frontend/dist" --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel --icon assets/star.ico --hidden-import mcp.client.session --hidden-import mcp.client.stdio --hidden-import mcp.types --collect-all faster_whisper --collect-all ctranslate2 --collect-all av --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules cryptography star_desktop.py
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
 $exe = (Resolve-Path '.\dist\STAR\STAR.exe').Path
 $doctor = Start-Process -FilePath $exe -ArgumentList '--doctor' -Wait -PassThru
