@@ -62,38 +62,38 @@ def test_private_release_falls_back_to_browser_not_gh_cli():
 
 
 def test_public_release_detects_new_version_and_current_version():
-    body={'tag_name':'v0.7.1','html_url':updates.PUBLIC_RELEASES_URL,'assets':[]}
+    body={'tag_name':'v0.8.3','html_url':updates.PUBLIC_RELEASES_URL,'assets':[]}
     result=updates.get_latest(FakeClient(FakeResponse(body=body)))
-    assert result.available and not result.requires_browser and result.version=='0.7.1'
+    assert result.available and not result.requires_browser and result.version=='0.8.3'
     body['tag_name']='v0.6.0'
     assert not updates.get_latest(FakeClient(FakeResponse(body=body))).available
 
 
 def test_only_newer_exactly_named_manual_setup_accepted(tmp_path):
-    latest=_fake_exe(tmp_path/'STAR-Setup-v0.7.1.exe')
+    latest=_fake_exe(tmp_path/'STAR-Setup-v0.8.3.exe')
     result=updates.select_downloaded_installer(latest)
-    assert result.version=='0.7.1' and not result.checksum_verified
+    assert result.version=='0.8.3' and not result.checksum_verified
     with pytest.raises(ValueError, match='not newer'):
         updates.select_downloaded_installer(_fake_exe(tmp_path/'STAR-Setup-v0.6.0.exe'))
     with pytest.raises(ValueError, match='Choose STAR-Setup'):
         updates.select_downloaded_installer(_fake_exe(tmp_path/'installer.exe'))
     with pytest.raises(ValueError, match='not a Windows executable'):
-        updates.select_downloaded_installer(_fake_exe(tmp_path/'STAR-Setup-v0.7.2.exe', b'XX' + b'R' * (updates.MIN_INSTALLER_BYTES+1)))
+        updates.select_downloaded_installer(_fake_exe(tmp_path/'STAR-Setup-v0.8.4.exe', b'XX' + b'R' * (updates.MIN_INSTALLER_BYTES+1)))
 
 
 def test_optional_adjacent_sha256_manifest_verification(tmp_path):
-    file=_fake_exe(tmp_path/'STAR-Setup-v0.7.1.exe')
+    file=_fake_exe(tmp_path/'STAR-Setup-v0.8.3.exe')
     checksum=hashlib.sha256(file.read_bytes()).hexdigest()
-    (tmp_path/'SHA256SUMS.txt').write_text(f'{checksum}  STAR-Setup-v0.7.1.exe\n')
+    (tmp_path/'SHA256SUMS.txt').write_text(f'{checksum}  STAR-Setup-v0.8.3.exe\n')
     assert updates.select_downloaded_installer(file).checksum_verified
-    (tmp_path/'SHA256SUMS.txt').write_text(f'{"f"*64}  STAR-Setup-v0.7.1.exe\n')
+    (tmp_path/'SHA256SUMS.txt').write_text(f'{"f"*64}  STAR-Setup-v0.8.3.exe\n')
     with pytest.raises(ValueError, match='checksum'):
         updates.select_downloaded_installer(file)
 
 
 def test_reject_untrusted_public_release_asset(tmp_path, monkeypatch):
     monkeypatch.setattr(updates.sys,'platform','win32')
-    result=updates.UpdateResult(True,'0.7.1',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=({'name': 'STAR-Setup-v0.7.1.exe','digest':'sha256:'+'a'*64,'size':15000000,'browser_download_url':'https://bad.example/install.exe'},))
+    result=updates.UpdateResult(True,'0.8.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=({'name': 'STAR-Setup-v0.8.3.exe','digest':'sha256:'+'a'*64,'size':15000000,'browser_download_url':'https://bad.example/install.exe'},))
     with pytest.raises(ValueError,match='Unexpected'):
         updates.stage_installer(result,tmp_path,FakeClient(FakeResponse()))
 
@@ -102,8 +102,8 @@ def test_public_installer_download_verified_sha_and_cache(tmp_path, monkeypatch)
     monkeypatch.setattr(updates.sys,'platform','win32')
     data = b'MZ'+b'Z'*(updates.MIN_INSTALLER_BYTES + 700)
     sha=hashlib.sha256(data).hexdigest()
-    meta={'name':'STAR-Setup-v0.7.1.exe','digest':'sha256:'+sha,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.7.1/STAR-Setup-v0.7.1.exe'}
-    result=updates.UpdateResult(True,'0.7.1',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
+    meta={'name':'STAR-Setup-v0.8.3.exe','digest':'sha256:'+sha,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.8.3/STAR-Setup-v0.8.3.exe'}
+    result=updates.UpdateResult(True,'0.8.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
     fake=FakeClient(FakeResponse(data=data))
     staged=updates.stage_installer(result,tmp_path,fake)
     assert staged.path.read_bytes()==data
@@ -117,8 +117,8 @@ def test_public_installer_download_verified_sha_and_cache(tmp_path, monkeypatch)
 def test_public_download_tampered_payload_is_never_installed(tmp_path,monkeypatch):
     monkeypatch.setattr(updates.sys,'platform','win32')
     data=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+2)
-    meta={'name':'STAR-Setup-v0.7.1.exe','digest':'sha256:'+'a'*64,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.7.1/STAR-Setup-v0.7.1.exe'}
-    result=updates.UpdateResult(True,'0.7.1',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
+    meta={'name':'STAR-Setup-v0.8.3.exe','digest':'sha256:'+'a'*64,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.8.3/STAR-Setup-v0.8.3.exe'}
+    result=updates.UpdateResult(True,'0.8.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
     with pytest.raises(ValueError,match='SHA-256'):
         updates.stage_installer(result,tmp_path,FakeClient(FakeResponse(data=data)))
     assert not list(tmp_path.rglob('*.part'))
@@ -126,7 +126,7 @@ def test_public_download_tampered_payload_is_never_installed(tmp_path,monkeypatc
 
 
 def test_launcher_uses_user_selected_exe_without_shell(tmp_path,monkeypatch):
-    file=_fake_exe(tmp_path/'STAR-Setup-v0.7.1.exe')
+    file=_fake_exe(tmp_path/'STAR-Setup-v0.8.3.exe')
     candidate=updates.select_downloaded_installer(file)
     monkeypatch.setattr(updates.sys,'platform','win32')
     recorded={}

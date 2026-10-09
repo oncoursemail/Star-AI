@@ -1,109 +1,78 @@
-# ✦ STAR Intelligence — React Genesis v0.7.0
+# ✦ STAR Intelligence — Genesis v0.7.0
 
-**STAR is now transitioning to a shared React + TypeScript interface for its public website and Windows desktop.** The backend remains Python, local-first AI inference, memory, Roblox MCP, and checked updater. Source is public. The public website is a product site and interactive demo, not an online connection to your private AI.
+**A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
-- **Website (after Pages deployment):** https://oncoursemail.github.io/Star-AI/
-- **Latest Windows installer:** https://github.com/oncoursemail/Star-AI/releases/latest
-- **Preview:** visit the website with `?demo=1`. The demo does not invent AI responses or telemetry.
-- **React interface + desktop installation:** [docs/STAR_REACT_DESKTOP_SETUP.md](docs/STAR_REACT_DESKTOP_SETUP.md)
-- **Research, accessibility and implementation decisions:** [docs/STAR_REACT_DESIGN_RESEARCH.md](docs/STAR_REACT_DESIGN_RESEARCH.md)
+STAR brings local model inference, a real chat workspace, image/video/audio references, persistent project memory, Roblox Studio MCP tools, and measured analytics into one app. It uses **no mandatory hosted model API key**. Starting with v0.7, the desktop interface and the public website share a React + TypeScript + Vite visual system, while all existing Python AI and storage modules stay intact.
 
-The GitHub CI must first build and test STAR v0.7.0 before a Release download exists. Do not treat this README as proof of a running Windows package or deployed website.
+> **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-## Development layout
+## Download / Updates
 
-| Path | Purpose |
+**[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
+
+The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater can stage publicly available installers.
+
+### Three-step start
+
+1. Install the latest `STAR-Setup-vX.Y.Z.exe` from Releases. Existing installations are upgraded in place.
+2. Open STAR → **STAR Brain** → **Download & launch STAR Brain** to download a checksum-verified small local model and inference engine from trusted providers. No LM Studio or hosted model API key is required. Plan for several gigabytes of disk space.
+3. Open **Chat**, ask questions, attach references or connect an unpublished Roblox Studio test place under **Developer tools**. Start with read-only access.
+
+### Website
+
+The public-facing React website builds from `frontend/` and is intended for **https://oncoursemail.github.io/Star-AI/**. Pages deployment requires one-time GitHub setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. A passing website-build artifact does not by itself prove the live Pages domain has been enabled or deployed.
+
+## STAR's new interface
+
+- **React 19 + TypeScript + Vite** shipped offline inside Qt WebEngine as part of the Windows application; not a website wrapping a remote service.
+- Restrained **OLED-black + warm gold** surfaces, real Lucide SVG icons, Motion page and message transitions, readable rich Markdown responses, copy actions, reference chips, keyboard-friendly composer, reduced-motion behavior.
+- True on-device **Analytics** using existing `star/analytics.py` SQLite records, displayed with Recharts. Empty state when no real task data exists.
+- **Projects**, **STAR Brain**, **Tools**, **Library**, **Settings** share a consistent spacing/typography system. The previous native advanced tools remain accessible via `STAR.exe --legacy-ui` during migration.
+- **A restricted Qt WebChannel** connects the local React UI to existing Python services. External websites cannot invoke the bridge; internal Qt navigation is limited to the bundled UI. GitHub or other tokens are not accessible to the model/UI.
+
+Read the [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
+
+## Architecture
+
+| Component | Implementation |
 |---|---|
-| `frontend/` | React 19, TypeScript, Motion, SVG icons, Vite build and responsive website |
-| `star/react_desktop.py` | Bounded Python / Qt WebChannel bridge |
-| `star/desktop_core.py` | Local inference, conversation storage and project context |
-| `star/analytics.py` | Real SQLite activity, not fabricated graphics |
-| `star/brain_setup.py` | Local engine/model installation |
-| `.github/workflows/website-pages.yml` | Build/deploy React site on GitHub Pages |
-| `.github/workflows/windows-desktop.yml` | Compile React, package QtWebEngine Windows installer, test and release |
+| Desktop + public site UI | `frontend/` (React, TypeScript, Vite, Motion, Lucide, Recharts) |
+| Windows host / permissions | `star/react_shell.py` — Qt WebEngine + Qt WebChannel allowlist |
+| Legacy native interface | `star/desktop.py`, `star/visuals.py` |
+| Local intelligence | `star/agent.py`, `star/desktop_core.py`, `star/local_runtime.py`, `star/brain_setup.py` |
+| Memory and analytics | `star/memory.py`, `star/knowledge.py`, `star/analytics.py` |
+| Roblox Studio | `star/studio.py`, `star/policy.py` |
+| Installer and GitHub Releases | `installer/STAR.iss`, `.github/workflows/windows-desktop.yml` |
+| Website and Pages | `.github/workflows/website-pages.yml` (builds `frontend/dist`) |
 
-### Fundamental safety distinction
+**Data never migrates into the frontend package.** The existing SQLite stores and models remain in `%APPDATA%\STAR`; a new installer replaces the app directory only. STAR doesn't silently train its weights, merge self-written code or publish Roblox games.
 
-React renders information and invokes a **fixed native command allowlist**; it does not acquire unrestricted operating-system access. Uploaded media is selected through native dialogs and remains on disk. Model credentials and local project files are not exposed through website code.
-
----
-
-# ✦ STAR Intelligence — Genesis v0.6.1
-
-A **local-first Windows AI workspace** built around Roblox development and creative production. Native OLED-style interface, real project analytics, compact chat, image inputs, optional voice/video tools, and a model you can download directly inside STAR. **No paid model API key and no LM Studio are required for the default setup.**
-
-
-## v0.6.1 — Click to update, restart, retain your work
-
-**Updated October 9, 2026:** `oncoursemail/Star-AI` is currently **public** and contains both source and built Releases. The binary-only `Star-Intelligence-Downloads` repo is **not created** yet. While the source repo stays public, STAR v0.6.1 checks its Releases anonymously and downloads its versioned Setup directly; no GitHub CLI or login is needed. If the source repo becomes private, anonymous downloads stop and STAR falls back to the browser. After creating the separate public download repository, that channel takes priority and the source repository can return to private.
-
-From STAR Brain → **Check for updates → Install update**, STAR verifies the GitHub asset SHA-256 and download size, asks whether to install, closes, lets Inno Setup replace the installed runtime and restart STAR, and removes only obsolete staged installer downloads on a subsequent start. The installer cleans the old `{app}\_internal` dependency tree to avoid stale modules and overwrites `STAR.exe`. It **never deletes `%APPDATA%\STAR`** (conversations, checkpoints, stored models and references). A first upgrade from a v0.6.0 installation may still require manually downloading the v0.6.1 Setup because the older updater didn't recognize publicly accessible source Releases. This feature requires real Windows installation/restart validation; only unit tests and CI packaging are automated.
-
-Official download: [STAR Releases](https://github.com/oncoursemail/Star-AI/releases/latest). The executable is currently unsigned; verify its origin and don't treat a release digest as a code-signing certificate.
-
-## Start in three steps
-
-1. From **[STAR Releases](https://github.com/oncoursemail/Star-AI/releases/latest)**, download the latest `STAR-Setup-vX.Y.Z.exe` while public releases are being set up. Install normally; existing installations upgrade in place and keep data in `%APPDATA%\STAR`.
-2. Open STAR → **STAR Brain** → **Download & Launch**. It downloads a chosen Qwen vision model and a compatible llama.cpp inference engine into your local user data folder. Downloads are multiple gigabytes; an NVIDIA driver and sufficient storage are needed. Model launch still requires a real Windows/GPU check.
-3. Open **Chat**, type a request or attach an image. **Analytics** shows your *actual local* task runs and history. You can connect a disposable Roblox Studio MCP project later.
-
-Your local RTX 3060 Ti 8 GB + 32 GB system RAM is supported as a **starting target**, not a guarantee that small open models match today's largest cloud models.
-
-## New: STAR OLED Command Center
-
-- Almost-black, calm design with a **single warm-gold accent**, real SVG icons and quieter navigation.
-- Readable Chat workspace with copyable responses, compact composer, keyboard shortcut **Ctrl+Enter**, short message fades and **Reduce motion** in Settings.
-- **Analytics** panel with custom Qt graphs showing real runs per day, messages, successful/failed tasks, tool actions and task timing. No fake sample counts.
-- Project-scoped history/knowledge, restricted workspace tools and Roblox MCP discovery.
-- Native Windows GUI screenshots captured by CI at multiple window sizes (as an artifact).
-
-Design rationale and quality checklist: [Desktop UX Research](docs/STAR_DESKTOP_UX_RESEARCH.md) and [Design Tokens](docs/STAR_DESIGN_SYSTEM.md).
-
-## Two GitHub repositories: public downloads + private code
-
-**Private development:** [`oncoursemail/Star-AI`](https://github.com/oncoursemail/Star-AI) (this repository) stays Private.
-
-**Planned public distribution:** [`oncoursemail/Star-Intelligence-Downloads`](https://github.com/oncoursemail/Star-Intelligence-Downloads) will contain **only** compiled Setup/portable installers, SHA-256 checksums, release notes and the public website. The separate public repository **must be created by its owner before it can be used**. It does not exist until GitHub confirms it.
-
-After one-time configuration of an expiring token scoped to the public repository **only**, private GitHub Actions will publish signed-by-GitHub-upload Release assets from *passing Windows builds* and copy only seven allowlisted website files. The public channel enables **anonymous in-app update downloads**, without GitHub CLI or browser sign-in. Until it exists, STAR offers a private-Releases browser download and user-selected Setup fallback.
-
-[Owner setup for both repositories](docs/STAR_PUBLIC_PRIVATE_GITHUB.md). **Never change the private source repo to Public.** STAR's own GitHub App for self-development should work on review branches with separately scoped permissions; private credentials do not flow into the AI model.
-
-## Version and trust
-
-The installer automatically upgrades earlier STAR versions under the same Windows App ID. Private source files, model weights, memories, tokens and conversations never belong in the public releases.
-
-STAR is an active prototype; verified Python test cases are not a substitute for **GPU inference, real gameplay, visual QA, or signed production distribution**. Windowed PyInstaller `--doctor` and the Windows screenshot step are included in the build workflow; check the current GitHub Actions job and Release page for actual results before claiming v0.6.1 shipped successfully.
-
-## Repository architecture
-
-| Area | Location |
-|---|---|
-| Desktop UI | `star/desktop.py`, `star/design_system.py`, `star/visuals.py` |
-| Real analytics and chart | `star/analytics.py`, `star/analytics_ui.py` |
-| Conversational model + memory | `star/desktop_core.py`, `star/agent.py`, `star/knowledge.py` |
-| Optional local engine/model download | `star/brain_setup.py`, `star/local_runtime.py` |
-| User-authorized updates | `star/updates.py`, `star/version.py` |
-| Roblox Studio MCP | `star/studio.py`, `star/policy.py` |
-| Versioned Windows installer | `installer/STAR.iss`, `.github/workflows/windows-desktop.yml` |
-| Public binary-and-site publisher | `scripts/publish_public_site.py`, `docs/STAR_PUBLIC_PRIVATE_GITHUB.md` |
-| Public landing page | `site/index.html`, `site/styles.css`, `site/site.js` |
-| CI-native UI screenshots | `scripts/capture_desktop_ui.py` |
-| Developer/research tools | `star/github_app.py`, `star/orchestration.py`, `star/frontier_lab.py` |
-
-## Developer setup
-
-Windows 11 and Python 3.11:
+## Develop locally (Windows 11)
 
 ```powershell
+# Node.js 22+ and Python 3.11 x64 are required only when developing/building from source.
+cd frontend
+npm install
+npm run test
+npm run build
+cd ..
 py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe star_desktop.py
 ```
 
-Build the local portable binary and Setup installer with `scripts/build_windows.ps1`, or use [GitHub Actions](https://github.com/oncoursemail/Star-AI/actions/workflows/windows-desktop.yml). Production releases should be code-signed before wide distribution.
+To preview the website: `cd frontend && npm run dev`, then open the URL shown by Vite. `?preview=1` displays an explicitly read-only interface preview and cannot access a local user's files. On a real STAR desktop, Qt WebChannel enables authenticated local operations through a restricted Python action registry.
 
-## Other references
+Windows packaging runs `scripts/build_windows.ps1`. `STAR.exe --doctor` verifies the bundled Python backend; browser/QWebChannel and GPU use also require live Windows acceptance testing.
 
-[Official Roblox Studio MCP](https://create.roblox.com/docs/studio/mcp) · [Hugging Face model research](docs/HUGGING_FACE_MODEL_GUIDE.md) · [Security/Autonomy](docs/SECURITY_AND_AUTONOMY.md) · [Desktop research](docs/STAR_DESKTOP_UX_RESEARCH.md) · [Issue tracker](https://github.com/oncoursemail/Star-AI/issues)
+## Research and product policy
+
+- [React redesign and implementation decisions](docs/STAR_REACT_REDESIGN.md)
+- [Official Roblox MCP](https://create.roblox.com/docs/studio/mcp)
+- [Hugging Face model selection](docs/HUGGING_FACE_MODEL_GUIDE.md)
+- [Desktop UX research](docs/STAR_DESKTOP_UX_RESEARCH.md)
+- [Security and tool boundaries](docs/SECURITY_AND_AUTONOMY.md)
+- [Feedback / issues](https://github.com/oncoursemail/Star-AI/issues)
+
+The goal is to make STAR measurably better at **specific, verified Roblox workflows**, with proper tooling, memory, and testing. That is different from claiming it is already more generally intelligent than the strongest hosted models.

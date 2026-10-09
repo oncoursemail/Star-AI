@@ -33,7 +33,7 @@ class FakeClient:
 
 
 def test_public_metadata_preferred_without_authentication():
-    public={"tag_name":"v0.7.1","html_url":updates.PUBLIC_RELEASES_URL,"assets":[]}
+    public={"tag_name":"v0.8.0","html_url":updates.PUBLIC_RELEASES_URL,"assets":[]}
     client=FakeClient({updates.PUBLIC_API:FakeResponse(body=public)})
     result=updates.get_latest(client)
     assert result.available and result.repository==PUBLIC_REPO
@@ -49,7 +49,7 @@ def test_when_public_missing_private_stays_browser_only():
 
 
 def test_private_update_assets_never_auto_downloaded():
-    new=updates.UpdateResult(True,'0.7.1',updates.RELEASES_URL,repository=REPO,assets=())
+    new=updates.UpdateResult(True,'0.8.0',updates.RELEASES_URL,repository=REPO,assets=())
     with pytest.raises(PermissionError):
         updates._trusted_setup_asset(new)
 

@@ -1,5 +1,4 @@
-name: STAR Website — React build & GitHub Pages
-
+name: STAR React Website — Build and Deploy
 on:
   push:
     branches: [main]
@@ -12,44 +11,42 @@ permissions:
   contents: read
 
 concurrency:
-  group: star-pages-${{ github.ref }}
+  group: star-website
   cancel-in-progress: true
 
 jobs:
-  build-website:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Install pinned frontend dependencies
-        working-directory: frontend
-        run: npm install --no-audit --no-fund
-      - name: Typecheck and build the React website and app shell
-        working-directory: frontend
-        run: npm run build
-      - name: Inspect produced public artifacts
+      - name: Install React dependencies
+        run: npm install --prefix frontend --no-audit --no-fund
+      - name: Type-check, test and build React
+        run: |
+          npm run typecheck --prefix frontend
+          npm run test --prefix frontend
+          npm run build --prefix frontend
+      - name: Check safe public files
         run: |
           test -f frontend/dist/index.html
-          test -d frontend/dist/assets
-          ! grep -R -l -E 'BEGIN .*PRIVATE KEY|STAR_UPDATE_TOKEN|GITHUB_TOKEN=' frontend/dist
-      - name: Upload verified website preview
-        uses: actions/upload-artifact@v4
+          ! grep -R -E 'BEGIN PRIVATE KEY|github_pat_|ghp_[A-Za-z0-9]{20}' frontend/dist
+      - uses: actions/upload-artifact@v4
         with:
-          name: STAR-React-Website
+          name: STAR-React-Website-Preview
           path: frontend/dist/
           if-no-files-found: error
           retention-days: 30
-      - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v4
         with:
-          path: frontend/dist/
-
+          path: frontend/dist
   deploy:
-    needs: build-website
-    if: github.ref == 'refs/heads/main'
+    needs: build
+    # One-time owner action: Settings → Pages → Source: GitHub Actions.
+    # Set repository variable STAR_DEPLOY_PAGES=false to pause deployment.
+    if: ${{ vars.STAR_DEPLOY_PAGES != 'false' }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -59,6 +56,5 @@ jobs:
       pages: write
       id-token: write
     steps:
-      - name: Deploy STAR React site
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4
         id: deployment

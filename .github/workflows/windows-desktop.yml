@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'star/**'
+      - 'frontend/**'
       - 'star_desktop.py'
       - 'assets/**'
       - 'installer/**'
@@ -12,7 +13,6 @@ on:
       - 'scripts/build_windows.ps1'
       - '.github/workflows/windows-desktop.yml'
       - 'tests/**'
-      - 'frontend/**'
   workflow_dispatch:
 
 concurrency:
@@ -27,24 +27,26 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-      - name: Compile STAR React interface
-        shell: pwsh
-        run: |
-          Push-Location frontend
-          npm install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { throw 'Frontend dependency installation failed' }
-          npm run build
-          if ($LASTEXITCODE -ne 0) { throw 'STAR React build failed' }
-          Pop-Location
-          if (-not (Test-Path 'frontend/dist/index.html')) { throw 'Missing compiled STAR UI' }
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
           cache-dependency-path: requirements-desktop.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build and verify React desktop assets
+        shell: pwsh
+        run: |
+          npm install --prefix frontend --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'React dependencies could not be installed' }
+          npm run typecheck --prefix frontend
+          if ($LASTEXITCODE -ne 0) { throw 'TypeScript check failed' }
+          npm run test --prefix frontend
+          if ($LASTEXITCODE -ne 0) { throw 'React component tests failed' }
+          npm run build --prefix frontend
+          if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
+          if (-not (Test-Path 'frontend/dist/index.html')) { throw 'React index missing' }
       - name: Install STAR build requirements
         shell: pwsh
         run: |
@@ -75,7 +77,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
-            --add-data "frontend/dist;frontend/dist" `
+            --add-data 'frontend/dist;frontend/dist' `
             --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
@@ -89,6 +91,12 @@ jobs:
           $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
           $doctor = Start-Process -FilePath $exe -ArgumentList '--doctor' -Wait -PassThru
           if ($null -eq $doctor.ExitCode -or $doctor.ExitCode -ne 0) { throw "STAR.exe doctor failed: $($doctor.ExitCode)" }
+      - name: Verify React assets included in packaged STAR.exe
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
+          $ui = Start-Process -FilePath $exe -ArgumentList '--ui-doctor' -PassThru -Wait
+          if ($null -eq $ui.ExitCode -or $ui.ExitCode -ne 0) { throw "STAR React UI bundle missing: $($ui.ExitCode)" }
       - name: Zip portable build
         shell: pwsh
         run: |
