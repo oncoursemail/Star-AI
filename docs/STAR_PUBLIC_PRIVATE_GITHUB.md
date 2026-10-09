@@ -1,3 +1,5 @@
+> **Current state (October 9, 2026):** GitHub reports `oncoursemail/Star-AI` is **public**, and its v0.6.0 Release is anonymously accessible. `oncoursemail/Star-Intelligence-Downloads` does not exist yet. The architecture below describes the desired future separation, not the present privacy state. Before returning Star-AI to private, set up and verify the public binary-only Downloads repository and configure the publisher. You cannot retroactively retract copies of code previously published. Do not assume contents, keys, or chats are private solely because you intend a split.
+
 # STAR's dual GitHub architecture — private development, public distribution
 
 ## Why two repositories?

@@ -520,7 +520,7 @@ class MainWindow(QMainWindow):
         self.install_update_button=button('Install available update',primary=True,callback=self.install_star_update)
         self.install_update_button.setIcon(qt_icon('download','#242116',18))
         self.install_update_button.setEnabled(False);ul.addWidget(self.install_update_button)
-        ul.addWidget(label('When the public download channel is enabled, updates download automatically without login. Until then, select Setup from your private Releases page. No GitHub CLI is needed.','Small'))
+        ul.addWidget(label('STAR automatically downloads verified updates from public GitHub Releases. Chats, projects and model files stay safe during upgrades. No GitHub CLI needed.','Small'))
         lay.addWidget(updates)
         lay.addWidget(button('Open STAR local files',callback=self.open_data_folder))
         lay.addStretch(1)
@@ -645,7 +645,7 @@ class MainWindow(QMainWindow):
         self.latest_release_url=result.url
         self.browser_update_required=bool(result.requires_browser)
         if result.requires_browser:
-            self.update_status.setText('Automatic public downloads are not available yet.\nOpen the private STAR Releases page in your normal browser, download the latest STAR Setup and select it here. No GitHub CLI or app tokens needed.')
+            self.update_status.setText('STAR could not access a public Release. Open GitHub Releases in your browser, download STAR Setup, then select it here. No GitHub CLI needed.')
             self.install_update_button.setText('Select downloaded STAR Setup…')
             self.install_update_button.setEnabled(True)
         elif result.available:
@@ -691,17 +691,17 @@ class MainWindow(QMainWindow):
     def update_staged(self,candidate):
         from .updates import launch_installer
         reply=QMessageBox.question(self,'Verified STAR update',
-            f'STAR v{candidate.version} downloaded and checksum-verified. Install now?\n\nSTAR will close and the installer will upgrade your current version.',
+            f'STAR v{candidate.version} downloaded and checksum-verified. Install now?\n\nSTAR will close, install the update, and restart automatically. Your conversations and models stay saved.',
             QMessageBox.Yes | QMessageBox.No,QMessageBox.Yes)
         if reply != QMessageBox.Yes:
             self.install_update_button.setEnabled(True);return
         try:
-            launch_installer(candidate)
-        except (OSError, ValueError) as exc:
+            launch_installer(candidate, unattended=True)
+        except (OSError, ValueError, PermissionError) as exc:
             self.update_status.setText('Installer could not start: '+str(exc))
             self.install_update_button.setEnabled(True)
             return
-        self.update_status.setText('Starting verified STAR Setup…')
+        self.update_status.setText('Closing STAR so Setup can replace the old version and restart…')
         self.close()
 
     def pick_workflow(self):
@@ -1056,6 +1056,13 @@ class MainWindow(QMainWindow):
 
 
 def launch():
+    # After an upgrade, discard obsolete staged installers only (never chats,
+    # memory, model weights, settings or project directories).
+    try:
+        from .updates import prune_obsolete_update_packages
+        prune_obsolete_update_packages(app_data())
+    except OSError:
+        pass
     app=QApplication(sys.argv)
     app.setApplicationName('STAR Intelligence')
     app.setWindowIcon(qt_icon('star','#ffcf57',64))

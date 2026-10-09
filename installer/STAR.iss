@@ -1,5 +1,5 @@
 #ifndef StarVersion
-  #define StarVersion "0.6.0"
+  #define StarVersion "0.6.1"
 #endif
 #define STARName "STAR Intelligence"
 #define STARExe "STAR.exe"
@@ -31,6 +31,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 DisableWelcomePage=no
 
+; Replace the old *application runtime* tree to avoid stale DLL/Python module files.
+; NEVER delete {userappdata}\STAR (chats, models, memory) or arbitrary {app} files.
+[InstallDelete]
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "..\dist\STAR\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -43,3 +48,4 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 
 [Run]
 Filename: "{app}\{#STARExe}"; Description: "Launch STAR Intelligence"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#STARExe}"; Flags: nowait skipifnotsilent

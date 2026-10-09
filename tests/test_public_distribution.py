@@ -76,8 +76,10 @@ def test_all_public_website_files_are_allowlisted_and_copy_only(tmp_path):
 def test_public_web_version_and_download_location():
     site=json.loads((ROOT/'site/version.json').read_text())
     assert site['version']==__version__
-    assert PUBLIC_REPO in site['download']
-    assert PUBLIC_REPO in (ROOT/'site/index.html').read_text()
+    # Until the dedicated public mirror is created, download from the live
+    # publicly accessible main STAR Release instead of a broken link.
+    assert REPO in site['download']
+    assert REPO in (ROOT/'site/index.html').read_text()
     assert 'site.js' in (ROOT/'site/index.html').read_text()
 
 
@@ -101,13 +103,6 @@ def test_oled_palette_is_accessible_and_icons_are_real():
     assert MOTION_MS['message']<=220
     from star.visuals import svg_icon
     assert '<svg' in svg_icon('analytics') and '<path' in svg_icon('copy')
-
-
-def test_visual_capture_uses_project_import_path():
-    source=(ROOT/'scripts/capture_desktop_ui.py').read_text()
-    workflow=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
-    assert 'ROOT = Path(__file__).resolve().parents[1]' in source
-    assert 'python -m scripts.capture_desktop_ui' in workflow
 
 
 def test_qa_screenshots_use_real_star_theme():

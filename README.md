@@ -1,6 +1,15 @@
-# ✦ STAR Intelligence — Genesis v0.6.0
+# ✦ STAR Intelligence — Genesis v0.6.1
 
 A **local-first Windows AI workspace** built around Roblox development and creative production. Native OLED-style interface, real project analytics, compact chat, image inputs, optional voice/video tools, and a model you can download directly inside STAR. **No paid model API key and no LM Studio are required for the default setup.**
+
+
+## v0.6.1 — Click to update, restart, retain your work
+
+**Updated October 9, 2026:** `oncoursemail/Star-AI` is currently **public** and contains both source and built Releases. The binary-only `Star-Intelligence-Downloads` repo is **not created** yet. While the source repo stays public, STAR v0.6.1 checks its Releases anonymously and downloads its versioned Setup directly; no GitHub CLI or login is needed. If the source repo becomes private, anonymous downloads stop and STAR falls back to the browser. After creating the separate public download repository, that channel takes priority and the source repository can return to private.
+
+From STAR Brain → **Check for updates → Install update**, STAR verifies the GitHub asset SHA-256 and download size, asks whether to install, closes, lets Inno Setup replace the installed runtime and restart STAR, and removes only obsolete staged installer downloads on a subsequent start. The installer cleans the old `{app}\_internal` dependency tree to avoid stale modules and overwrites `STAR.exe`. It **never deletes `%APPDATA%\STAR`** (conversations, checkpoints, stored models and references). A first upgrade from a v0.6.0 installation may still require manually downloading the v0.6.1 Setup because the older updater didn't recognize publicly accessible source Releases. This feature requires real Windows installation/restart validation; only unit tests and CI packaging are automated.
+
+Official download: [STAR Releases](https://github.com/oncoursemail/Star-AI/releases/latest). The executable is currently unsigned; verify its origin and don't treat a release digest as a code-signing certificate.
 
 ## Start in three steps
 
@@ -34,7 +43,7 @@ After one-time configuration of an expiring token scoped to the public repositor
 
 The installer automatically upgrades earlier STAR versions under the same Windows App ID. Private source files, model weights, memories, tokens and conversations never belong in the public releases.
 
-STAR is an active prototype; verified Python test cases are not a substitute for **GPU inference, real gameplay, visual QA, or signed production distribution**. Windowed PyInstaller `--doctor` and the Windows screenshot step are included in the build workflow; check the current GitHub Actions job and Release page for actual results before claiming v0.6.0 shipped successfully.
+STAR is an active prototype; verified Python test cases are not a substitute for **GPU inference, real gameplay, visual QA, or signed production distribution**. Windowed PyInstaller `--doctor` and the Windows screenshot step are included in the build workflow; check the current GitHub Actions job and Release page for actual results before claiming v0.6.1 shipped successfully.
 
 ## Repository architecture
 

@@ -1,12 +1,12 @@
 """STAR's installer-based updater without GitHub CLI or a model API key.
 
-The source repository is private, so the anonymous GitHub REST API cannot
-read its Releases. STAR then hands the user to their ordinary authenticated
-browser and lets them select the official Windows Setup EXE. We never obtain
-or persist GitHub browser cookies, and we never pretend a 404 means 'current'.
+STAR first checks the binary-only public download channel and then tries its
+original source repository *anonymously*. Either public GitHub Release can be
+used for authenticated-by-checksum update downloads. If neither repository is
+publicly accessible, STAR offers a browser download, never GitHub CLI.
 
-For a future public binary-only release channel, the same client can download
-an installer directly, verifying the SHA-256 digest reported by GitHub.
+All downloads must match exact GitHub release asset URLs, sizes, and SHA-256
+digests from the same unauthenticated GitHub API response.
 """
 from __future__ import annotations
 
@@ -58,6 +58,7 @@ class UpdateResult:
     assets: tuple[dict, ...] = ()
     explanation: str = ''
     repository: str = REPO
+    anonymous_access: bool = False  # The GitHub API succeeded with no account token.
 
     @property
     def requires_github_login(self) -> bool:
@@ -79,50 +80,49 @@ def _installer_name(version: str) -> str:
 
 
 def get_latest(client: httpx.Client | None = None) -> UpdateResult:
-    """Prefer public, anonymously readable signed-by-GitHub release metadata.
+    """Discover public Releases with no GitHub auth, source or binary-only.
 
-    The public repository holds ONLY release binaries and site assets. When it
-    doesn't exist yet, we keep the private-source browser fallback; we never
-    represent an inaccessible private release as an up-to-date check.
+    An unauthenticated 200 response from GitHub proves that this caller can
+    access the release without GitHub CLI. Private repos return 404 and use the
+    manual browser fallback instead. Prefer the binary-only repo when it is
+    present; use the source repo while the public mirror is being established.
     """
     own = client is None
     client = client or httpx.Client(timeout=15.0, trust_env=False)
     try:
-        for repo, api, url in ((PUBLIC_REPO,PUBLIC_API,PUBLIC_RELEASES_URL),
-                               (REPO,API,RELEASES_URL)):
+        for repo, api, fallback_url in ((PUBLIC_REPO, PUBLIC_API, PUBLIC_RELEASES_URL),
+                                        (REPO, API, RELEASES_URL)):
             try:
-                response = client.get(api, headers={'Accept':'application/vnd.github+json'})
-                if response.status_code in (401,403,404):
+                response = client.get(api, headers={'Accept': 'application/vnd.github+json'})
+                if response.status_code in (401, 403, 404):
                     continue
                 response.raise_for_status()
-                release=response.json()
-                tag=str(release.get('tag_name',''))
-                latest=Version(tag)
-                if repo==REPO:
-                    # Metadata of a private repo cannot be used anonymously.
-                    # Browser handoff remains the least-friction option until
-                    # the binary-only public channel is enabled.
-                    return UpdateResult(False,__version__,RELEASES_URL,requires_browser=True,
-                        explanation='STAR downloads are still in the private repository. Use your browser to download Setup until the public release channel is ready.',
-                        repository=REPO)
-                return UpdateResult(latest>Version(__version__),tag.lstrip('v'),
-                    str(release.get('html_url') or url),assets=tuple(release.get('assets',[])),
-                    repository=PUBLIC_REPO)
-            except (httpx.RequestError, ValueError, KeyError):
+                release = response.json()
+                if release.get('draft') or release.get('prerelease'):
+                    continue
+                version = Version(str(release.get('tag_name', '')))
+                tag = '.'.join(str(x) for x in version.parts)
+                expected_url = f'https://github.com/{repo}/releases/tag/v{tag}'
+                # The release URL comes from the known repository, not arbitrary JSON.
+                return UpdateResult(version > Version(__version__), tag, expected_url,
+                    assets=tuple(release.get('assets', ())), repository=repo,
+                    anonymous_access=True)
+            except (httpx.RequestError, ValueError, KeyError, TypeError):
                 continue
-        return UpdateResult(False,__version__,RELEASES_URL,requires_browser=True,
-            explanation='Public STAR downloads are not available yet. Open the private Releases page in your browser to download Setup. GitHub CLI is not required.',
+        return UpdateResult(False, __version__, RELEASES_URL, requires_browser=True,
+            explanation='No public STAR Release is accessible. Open GitHub Releases in your browser to download Setup. GitHub CLI is not required.',
             repository=REPO)
     finally:
         if own:
             client.close()
 
 
+
 def _trusted_setup_asset(result: UpdateResult) -> dict:
     if not result.available or Version(result.version) <= Version(__version__):
         raise ValueError('No newer STAR version is available')
-    if result.repository != PUBLIC_REPO:
-        raise PermissionError('Automatic updates require the public, binary-only STAR release channel')
+    if result.repository != PUBLIC_REPO and not (result.repository == REPO and result.anonymous_access):
+        raise PermissionError('Automatic updates require an anonymously accessible official STAR Release')
     name = _installer_name(result.version)
     matches = [a for a in result.assets if a.get('name') == name]
     if len(matches) != 1:
@@ -132,9 +132,7 @@ def _trusted_setup_asset(result: UpdateResult) -> dict:
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
         raise ValueError('Release does not provide a trusted SHA-256 digest')
     url = str(asset.get('browser_download_url') or '')
-    if result.repository != PUBLIC_REPO:
-        raise PermissionError('Automatic updates require the public, binary-only STAR release channel')
-    expected = f'https://github.com/{PUBLIC_REPO}/releases/download/v{result.version}/' + name
+    expected = f'https://github.com/{result.repository}/releases/download/v{result.version}/' + name
     if url != expected:
         raise ValueError('Unexpected STAR release installer URL')
     size = int(asset.get('size') or 0)
@@ -143,12 +141,13 @@ def _trusted_setup_asset(result: UpdateResult) -> dict:
     return asset
 
 
+
 def stage_installer(result: UpdateResult, storage: Path,
                     client: httpx.Client | None = None) -> InstallerCandidate:
-    """Download a public Release installer, not an arbitrary ZIP folder switch.
+    """Download a checksum-verified Setup from an anonymously accessible Release.
 
-    This requires *publicly accessible* assets from STAR's public releases.
-    Private source Releases use a browser handoff (no GitHub CLI or token).
+    If the source repository becomes private again, the GitHub API will return
+    404 without authentication and STAR will use the browser fallback.
     """
     if sys.platform != 'win32':
         raise OSError('STAR installer downloads run on Windows only')
@@ -230,8 +229,12 @@ def select_downloaded_installer(path: Path) -> InstallerCandidate:
     return InstallerCandidate(path, version, checksum_verified=verified)
 
 
-def launch_installer(candidate: InstallerCandidate) -> None:
-    """Run the user-approved Inno Setup EXE, letting it upgrade STAR in place."""
+def launch_installer(candidate: InstallerCandidate, *, unattended: bool = False) -> None:
+    """Run a user-approved Inno Setup installer, optionally without another wizard.
+
+    Unattended mode requires a GitHub-checksummed, automatically downloaded
+    candidate. It shows installation progress and errors; no shell is invoked.
+    """
     if sys.platform != 'win32':
         raise OSError('STAR installers run on Windows only')
     # Recheck the selected file and ensure it hasn't been substituted after the
@@ -241,7 +244,13 @@ def launch_installer(candidate: InstallerCandidate) -> None:
         raise ValueError('Installer changed since selection')
     if candidate.expected_sha256 and _sha256(checked.path) != candidate.expected_sha256:
         raise ValueError('Staged installer changed after SHA-256 verification')
-    subprocess.Popen([str(checked.path)], cwd=str(checked.path.parent),
+    if unattended and (not candidate.checksum_verified or not candidate.expected_sha256):
+        raise PermissionError('Unattended upgrades require a verified GitHub Release SHA-256')
+    arguments = [str(checked.path)]
+    if unattended:
+        # Inno Setup handles closing old app files and launching the new STAR.
+        arguments += ['/SILENT', '/CLOSEAPPLICATIONS', '/NORESTART']
+    subprocess.Popen(arguments, cwd=str(checked.path.parent),
                      stdin=subprocess.DEVNULL, shell=False, close_fds=True,
                      creationflags=getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0))
 
@@ -283,3 +292,24 @@ def _extract_update(archive: Path, target: Path):
                 shutil.copyfileobj(src, output)
     if not (target / 'STAR.exe').is_file():
         raise ValueError('Release package is missing STAR.exe')
+
+
+def prune_obsolete_update_packages(storage: Path, current_version: str = __version__) -> list[str]:
+    """Remove obsolete *downloaded installers only*, never projects/models/chats.
+
+    The currently installed version is retained as a possible repair copy.
+    Reject symbolic links and folders without STAR version names.
+    """
+    root = storage.resolve() / 'updates'
+    if not root.is_dir() or root.is_symlink():
+        return []
+    current = Version(current_version)
+    removed = []
+    for path in root.iterdir():
+        if path.is_symlink() or not path.is_dir() or not re.fullmatch(r'v\d+\.\d+\.\d+', path.name):
+            continue
+        if Version(path.name) >= current:
+            continue
+        shutil.rmtree(path)
+        removed.append(path.name)
+    return removed

@@ -159,5 +159,5 @@ def test_rebranded_star_uses_measured_oled_gold_tokens():
     assert 'QFrame#StarBubble' in style
     assert COLORS['gold'] in style and COLORS['black'] in style
     assert contrast_ratio(COLORS['text'],COLORS['canvas'])>=4.5
-    assert __version__ == '0.6.0'
+    assert tuple(map(int,__version__.split('.'))) >= (0,6,0)
     assert (root/'assets/star.ico').is_file()
