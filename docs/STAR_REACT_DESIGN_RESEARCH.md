@@ -92,7 +92,7 @@ frontend/ (React + TypeScript + Vite)
         |
         | Qt WebChannel (JSON commands + JSON signals, local file bundle)
         v
-star/react_desktop.py         explicit native bridge allowlist
+star/react_shell.py         explicit native bridge allowlist
         |
         +-- star/desktop_core.py    chat, settings, model execution
         +-- star/brain_setup.py     verified local engine/model install
@@ -103,7 +103,7 @@ star/react_desktop.py         explicit native bridge allowlist
 
 ### Explicit bridge command allowlist
 
-`bootstrap`, `select_attachments`, `choose_workspace`, `save_settings`, `chat_send`, `brain_install`, `models_list`, `studio_discover`, `check_updates`, `update_install`, and tightly validated documentation URL opening. **There is no arbitrary shell command or filesystem read endpoint in React.** Source/model operations remain inside the existing Python policy and resource controls.
+`bootstrap`, `switchProject`, `pickFiles`, `sendMessage`, `saveSettings`, `installBrain`, `startBrain`, `listModels`, `discoverStudio`, `checkUpdates`, `installUpdate`, `transcribe`, `openDataFolder`, and `copyText`, following the exact allowlist in `star/react_shell.py`. **There is no arbitrary shell command or filesystem read endpoint in React.** Source/model operations remain inside the existing Python policy and resource controls.
 
 ### Lifecycle
 

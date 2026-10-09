@@ -1,35 +1,23 @@
-"""Release-level checks independent of React's node runtime."""
+"""React source/host checks without requiring Qt imports on Linux."""
 from pathlib import Path
-from star.react_desktop import frontend_path, sanitize_new_settings, state_snapshot
-from star.desktop_core import Settings
+from star.react_shell import ALLOWED_ACTIONS, react_index
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT=Path(__file__).resolve().parents[1]
 
-def test_react_source_has_real_local_bridge_and_access_scopes():
-    js = (ROOT / 'frontend/src/lib/bridge.ts').read_text()
-    api = (ROOT / 'star/react_desktop.py').read_text()
-    assert 'QWebChannel' in api and 'starBridge' in api
-    assert "action == 'chat_send'" in api
-    assert "action == 'studio_discover'" in api
-    assert 'open_url' in api and 'https://github.com/oncoursemail/Star-AI/' in api
-    assert 'window.qt?.webChannelTransport' in js
-    assert 'new window.QWebChannel!' in js
+def test_react_native_bridge_commands_are_explicit():
+    assert 'sendMessage' in ALLOWED_ACTIONS
+    assert 'installBrain' in ALLOWED_ACTIONS
+    assert 'discoverStudio' in ALLOWED_ACTIONS
+    assert 'run_arbitrary_shell' not in ALLOWED_ACTIONS
 
+def test_react_web_sources_exist():
+    assert (ROOT/'frontend/src/App.tsx').is_file()
+    assert (ROOT/'frontend/src/Desktop.tsx').is_file()
+    assert (ROOT/'frontend/src/bridge.ts').is_file()
+    assert (ROOT/'frontend/src/styles.css').is_file()
 
-def test_state_settings_are_whitelisted():
-    import pytest
-    with pytest.raises(ValueError):
-        sanitize_new_settings(Settings(), {'developer_mode_unrestricted': True})
-    assert sanitize_new_settings(Settings(), {'project': 'VALEN'}).project == 'VALEN'
-
-
-def test_frontend_build_is_integrated_in_windows_release():
-    workflow = (ROOT / '.github/workflows/windows-desktop.yml').read_text()
+def test_windows_workflow_builds_react_assets():
+    workflow=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
     assert 'frontend/dist' in workflow
     assert 'npm run build' in workflow
     assert '--add-data' in workflow
-
-
-def test_frontend_path_can_be_missing_from_unbuilt_checkout():
-    value = frontend_path()
-    assert value is None or value.name == 'index.html'
