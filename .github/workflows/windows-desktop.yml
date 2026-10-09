@@ -38,14 +38,16 @@ jobs:
       - name: Build and verify React desktop assets
         shell: pwsh
         run: |
-          npm install --prefix frontend --no-audit --no-fund
+          Push-Location frontend
+          npm install --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { throw 'React dependencies could not be installed' }
-          npm run typecheck --prefix frontend
+          npm run typecheck
           if ($LASTEXITCODE -ne 0) { throw 'TypeScript check failed' }
-          npm run test --prefix frontend
+          npm run test
           if ($LASTEXITCODE -ne 0) { throw 'React component tests failed' }
-          npm run build --prefix frontend
+          npm run build
           if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
+          Pop-Location
           if (-not (Test-Path 'frontend/dist/index.html')) { throw 'React index missing' }
       - name: Install STAR build requirements
         shell: pwsh
