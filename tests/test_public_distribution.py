@@ -108,3 +108,10 @@ def test_visual_capture_uses_project_import_path():
     workflow=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
     assert 'ROOT = Path(__file__).resolve().parents[1]' in source
     assert 'python -m scripts.capture_desktop_ui' in workflow
+
+
+def test_qa_screenshots_use_real_star_theme():
+    source=(ROOT/'scripts/capture_desktop_ui.py').read_text()
+    assert "app.setStyleSheet(STYLE)" in source
+    assert "app.setStyle('Fusion')" in source
+    assert "not using its OLED stylesheet" in source

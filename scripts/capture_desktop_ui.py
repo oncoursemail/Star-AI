@@ -17,8 +17,13 @@ if str(ROOT) not in sys.path:
 def main() -> int:
     os.environ.setdefault('QT_QPA_PLATFORM','offscreen')
     from PySide6.QtWidgets import QApplication
-    from star.desktop import MainWindow
+    from PySide6.QtGui import QFontDatabase
+    from star.desktop import MainWindow, STYLE
     app=QApplication.instance() or QApplication([])
+    app.setStyle('Fusion')
+    app.setStyleSheet(STYLE)
+    print('Qt available font families:',len(QFontDatabase.families()),
+          'Segoe UI available:', 'Segoe UI' in QFontDatabase.families())
     output=Path(os.environ.get('STAR_UI_PREVIEW_DIR','ui-previews'))
     output.mkdir(parents=True,exist_ok=True)
     window=MainWindow()
@@ -28,8 +33,12 @@ def main() -> int:
     for name,index in [('chat',0),('analytics',6),('brain',5)]:
         window.show_page(index)
         app.processEvents()
+        snapshot=window.grab()
+        center=snapshot.toImage().pixelColor(snapshot.width()//2,snapshot.height()//2)
+        if max(center.red(),center.green(),center.blue())>115:
+            raise RuntimeError('STAR screenshot is not using its OLED stylesheet')
         path=output / f'{name}-1440x900.png'
-        if not window.grab().save(str(path)):
+        if not snapshot.save(str(path)):
             raise RuntimeError('Qt screenshot capture failed for '+name)
     window.resize(1050,680)
     window.show_page(0)
