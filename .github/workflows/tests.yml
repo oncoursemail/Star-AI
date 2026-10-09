@@ -1,0 +1,31 @@
+name: STAR offline checks
+on:
+  push:
+    branches: [main, 'star/**']
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: star-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  checks:
+    name: Offline Python checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Install reviewed dependencies and pytest
+        run: python -m pip install -r requirements.txt pytest
+      - name: Compile Python sources
+        run: python -m compileall -q star main.py
+      - name: Validate research evaluation catalog
+        run: python -m pytest -q tests/test_star_research.py
+      - name: Run all offline regression tests
+        run: python -m pytest -q

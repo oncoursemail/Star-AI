@@ -1,0 +1,56 @@
+name: STAR Website — Preview & GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/website-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate the public website
+        run: |
+          test -f site/index.html && test -f site/styles.css && test -f site/star-icon.svg
+          python -c 'import json;json.load(open("site/version.json"))'
+          ! grep -r 'BEGIN PRIVATE KEY' site
+      - name: Upload website preview (works even before GitHub Pages is enabled)
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-Website-Preview
+          path: site/
+          retention-days: 30
+
+  package-pages:
+    if: vars.STAR_DEPLOY_PAGES == 'true'
+    needs: preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy:
+    if: vars.STAR_DEPLOY_PAGES == 'true'
+    needs: package-pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Publish STAR public-facing site
+        id: deployment
+        uses: actions/deploy-pages@v4

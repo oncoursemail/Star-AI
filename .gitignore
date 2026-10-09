@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pem
+*.key
+*.p12
+.local/
+runs/
+*.db
+*.sqlite3
+.DS_Store

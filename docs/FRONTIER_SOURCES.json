@@ -1,0 +1,338 @@
+[
+  {
+    "id": "R01",
+    "title": "AlphaEvolve, Google DeepMind, 2025",
+    "url": "https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/",
+    "kind_and_usage": "Engineering report: search/evaluation/evolution",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R02",
+    "title": "AlphaEvolve impact, Google DeepMind, 2026",
+    "url": "https://deepmind.google/blog/alphaevolve-impact/",
+    "kind_and_usage": "Engineering report: later applications",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R03",
+    "title": "Scaling Agentic Verifier for Competitive Coding, ICML 2026",
+    "url": "https://proceedings.mlr.press/v306/ma26av.html",
+    "kind_and_usage": "Peer-reviewed: discriminative counterexamples",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R04",
+    "title": "Scaling Test-Time Compute for Agentic Coding, 2026",
+    "url": "https://arxiv.org/abs/2604.16529",
+    "kind_and_usage": "Preprint: trajectory summaries and refinement",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R05",
+    "title": "GEPA: Reflective Prompt Evolution, 2025",
+    "url": "https://arxiv.org/abs/2507.19457",
+    "kind_and_usage": "Preprint: prompt search with feedback",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R06",
+    "title": "DSPy: GEPA implementation",
+    "url": "https://dspy.ai/3.0.1/tutorials/gepa_ai_program/",
+    "kind_and_usage": "Framework documentation",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R07",
+    "title": "SWE-Gym, ICML 2025",
+    "url": "https://proceedings.mlr.press/v267/pan25g.html",
+    "kind_and_usage": "Peer-reviewed: executable SWE agent training",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R08",
+    "title": "Agent Lightning, 2025",
+    "url": "https://arxiv.org/abs/2508.03680",
+    "kind_and_usage": "Preprint: training/agent loop decoupling",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R09",
+    "title": "Roblox Studio MCP server",
+    "url": "https://create.roblox.com/docs/studio/mcp",
+    "kind_and_usage": "Official docs: discovered tool surfaces",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R10",
+    "title": "Roblox UI styling / StyleSheet",
+    "url": "https://create.roblox.com/docs/ui/styling",
+    "kind_and_usage": "Official docs: style tokens, queries",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R11",
+    "title": "Roblox procedural models",
+    "url": "https://create.roblox.com/docs/parts/procedural-models",
+    "kind_and_usage": "Official docs: parametric 3D generation",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R12",
+    "title": "Roblox animation overview",
+    "url": "https://create.roblox.com/docs/animation",
+    "kind_and_usage": "Official docs: animation, IK and events",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R13",
+    "title": "Roblox Studio testing modes",
+    "url": "https://create.roblox.com/docs/studio/testing-modes",
+    "kind_and_usage": "Official docs: client/server test modes",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R14",
+    "title": "Roblox Network Simulator",
+    "url": "https://create.roblox.com/docs/studio/network-simulator",
+    "kind_and_usage": "Official docs: latency/jitter/loss",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R15",
+    "title": "SWE-agent ACI, NeurIPS 2024",
+    "url": "https://mlanthology.org/neurips/2024/yang2024neurips-sweagent/",
+    "kind_and_usage": "Peer-reviewed: better tools improve agents",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R16",
+    "title": "Effective harnesses for long-running agents, Anthropic, 2025",
+    "url": "https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents",
+    "kind_and_usage": "Engineering report: durable progress",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R17",
+    "title": "LeanMem, 2026",
+    "url": "https://arxiv.org/abs/2608.03463",
+    "kind_and_usage": "Preprint: profile/event/record memory",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R18",
+    "title": "Beyond the Context Window, 2026",
+    "url": "https://arxiv.org/abs/2603.04814",
+    "kind_and_usage": "Preprint: memory vs long-context tradeoff",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R19",
+    "title": "Anthropic multi-agent research, 2025",
+    "url": "https://www.anthropic.com/engineering/multi-agent-research-system",
+    "kind_and_usage": "Engineering report: when parallelism helps",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R20",
+    "title": "SWE-Bench Pro V2, September 2026",
+    "url": "https://labs.scale.com/leaderboard/swe_bench_pro_public_v2?tab=full",
+    "kind_and_usage": "Benchmark release: task grading integrity",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R21",
+    "title": "LM Studio Qwen3.5 4B",
+    "url": "https://lmstudio.ai/models/qwen/qwen3.5-4b",
+    "kind_and_usage": "Model catalog: GGUF vision/reasoning",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R22",
+    "title": "Ollama Qwen3.5 family",
+    "url": "https://ollama.com/library/qwen3.5",
+    "kind_and_usage": "Model catalog: local weight sizes",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R23",
+    "title": "llama.cpp, model quantization/offloading",
+    "url": "https://github.com/ggml-org/llama.cpp",
+    "kind_and_usage": "Open-source project",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R24",
+    "title": "Cost-effective Agent Test-Time Scaling, 2026",
+    "url": "https://research.google/pubs/cost-effective-agent-test-time-scaling-2/",
+    "kind_and_usage": "Research report: budget-aware tool usage",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R25",
+    "title": "SWE-agent tool interface design",
+    "url": "https://github.com/SWE-agent/SWE-agent/blob/main/docs/background/aci.md",
+    "kind_and_usage": "Framework engineering guidance",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R26",
+    "title": "Roblox Style Editor",
+    "url": "https://create.roblox.com/docs/ui/styling/editor",
+    "kind_and_usage": "Official docs: tokens, themes, rules",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R27",
+    "title": "Roblox size modifiers/constraints",
+    "url": "https://create.roblox.com/docs/ui/size-modifiers",
+    "kind_and_usage": "Official docs: responsive layout",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R28",
+    "title": "Roblox Device Simulator",
+    "url": "https://create.roblox.com/docs/studio/device-simulator",
+    "kind_and_usage": "Official docs: form-factor checks",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R29",
+    "title": "Figma MCP server",
+    "url": "https://developers.figma.com/docs/figma-mcp-server/",
+    "kind_and_usage": "Official docs: structured design metadata",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R30",
+    "title": "Roblox securing client-server boundary",
+    "url": "https://create.roblox.com/docs/scripting/security/client-server-boundary",
+    "kind_and_usage": "Official docs: trust, validators, rate limits",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R31",
+    "title": "Generative Test-Driven Development, Oct 2026",
+    "url": "https://arxiv.org/abs/2610.02952",
+    "kind_and_usage": "Recent preprint: fresh adversarial test inputs",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R32",
+    "title": "Roblox performance design",
+    "url": "https://create.roblox.com/docs/performance-optimization/design",
+    "kind_and_usage": "Official docs: device budgets",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R33",
+    "title": "Roblox performance optimization",
+    "url": "https://create.roblox.com/docs/performance-optimization/improve",
+    "kind_and_usage": "Official docs: streaming, LOD",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R34",
+    "title": "Roblox Avatar Setup",
+    "url": "https://create.roblox.com/docs/avatar-setup",
+    "kind_and_usage": "Official docs: R15 setup, not R6 conversion",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R35",
+    "title": "Roblox AnimationTrack",
+    "url": "https://create.roblox.com/docs/reference/engine/classes/AnimationTrack",
+    "kind_and_usage": "Official docs: playback, markers, blending",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R36",
+    "title": "Roblox IKControl",
+    "url": "https://create.roblox.com/docs/reference/engine/classes/IKControl",
+    "kind_and_usage": "Official docs: procedural constraints",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R37",
+    "title": "Roblox Model Generation",
+    "url": "https://create.roblox.com/docs/parts/model-generation",
+    "kind_and_usage": "Official docs: structured mesh generation",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R38",
+    "title": "Roblox and Blender",
+    "url": "https://create.roblox.com/docs/art/blender",
+    "kind_and_usage": "Official docs: axis, scale, authoring",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R39",
+    "title": "Roblox Importer",
+    "url": "https://create.roblox.com/docs/studio/importer",
+    "kind_and_usage": "Official docs: FBX/glTF/rigging/PBR",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R40",
+    "title": "DeepMind SIMA 2, November 2025",
+    "url": "https://deepmind.google/blog/sima-2-an-agent-that-plays-reasons-and-learns-with-you-in-virtual-3d-worlds/",
+    "kind_and_usage": "Research report: simulated embodied learning",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R41",
+    "title": "DeepMind Genie 3, August 2025",
+    "url": "https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/",
+    "kind_and_usage": "Research report: interactive world models",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R42",
+    "title": "Hugging Face TRL/PEFT",
+    "url": "https://huggingface.co/docs/trl/peft_integration",
+    "kind_and_usage": "Official library docs: LoRA/QLoRA",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R43",
+    "title": "GitHub App best practices",
+    "url": "https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps/best-practices-for-creating-a-github-app",
+    "kind_and_usage": "Official docs: scope and credentials",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R44",
+    "title": "GitHub App installation tokens",
+    "url": "https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app",
+    "kind_and_usage": "Official docs: 1h token expiry/scopes",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R45",
+    "title": "GitHub Actions: securely using pull_request_target",
+    "url": "https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target",
+    "kind_and_usage": "Official docs: untrusted PR risks",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R46",
+    "title": "GitHub ruleset availability",
+    "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets",
+    "kind_and_usage": "Official docs: plan-based protection",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R47",
+    "title": "Roblox Creator Docs repo and licenses",
+    "url": "https://github.com/Roblox/creator-docs/blob/main/README.md",
+    "kind_and_usage": "Official repo: CC BY 4.0 prose/MIT code",
+    "audit": "web-source-identified; content not all individually extracted"
+  },
+  {
+    "id": "R48",
+    "title": "Roblox AI data sharing",
+    "url": "https://create.roblox.com/docs/ai-data-sharing",
+    "kind_and_usage": "Official docs: dataset consent and ownership",
+    "audit": "web-source-identified; content not all individually extracted"
+  }
+]
