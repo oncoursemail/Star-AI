@@ -48,7 +48,7 @@ jobs:
         run: |
           $env:QT_QPA_PLATFORM = 'offscreen'
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'STAR-CI-Empty-Profile'
-          python scripts/capture_desktop_ui.py
+          python -m scripts.capture_desktop_ui
       - name: Upload rendered GUI preview screenshots
         uses: actions/upload-artifact@v4
         with:

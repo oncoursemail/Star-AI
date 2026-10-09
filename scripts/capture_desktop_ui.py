@@ -8,6 +8,11 @@ import os
 from pathlib import Path
 import sys
 
+# Direct execution can start inside scripts/, so ensure the project package is visible.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 
 def main() -> int:
     os.environ.setdefault('QT_QPA_PLATFORM','offscreen')

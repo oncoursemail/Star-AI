@@ -101,3 +101,10 @@ def test_oled_palette_is_accessible_and_icons_are_real():
     assert MOTION_MS['message']<=220
     from star.visuals import svg_icon
     assert '<svg' in svg_icon('analytics') and '<path' in svg_icon('copy')
+
+
+def test_visual_capture_uses_project_import_path():
+    source=(ROOT/'scripts/capture_desktop_ui.py').read_text()
+    workflow=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
+    assert 'ROOT = Path(__file__).resolve().parents[1]' in source
+    assert 'python -m scripts.capture_desktop_ui' in workflow
