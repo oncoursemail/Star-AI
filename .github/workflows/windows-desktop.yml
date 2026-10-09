@@ -1,0 +1,200 @@
+name: STAR Desktop — Build, Test & Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'star/**'
+      - 'star_desktop.py'
+      - 'assets/**'
+      - 'installer/**'
+      - 'requirements*.txt'
+      - 'scripts/build_windows.ps1'
+      - '.github/workflows/windows-desktop.yml'
+      - 'tests/**'
+  workflow_dispatch:
+
+concurrency:
+  group: star-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+    timeout-minutes: 65
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+      - name: Install STAR build requirements
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-desktop.txt -r requirements-dev.txt
+          python -m pip install 'pyinstaller>=6.10,<7'
+          python -m pip check
+      - name: Run offline tests
+        shell: pwsh
+        run: |
+          python -m pytest -q
+          python -m compileall -q star star_desktop.py
+      - name: Capture real STAR OLED GUI screens for review
+        shell: pwsh
+        run: |
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'STAR-CI-Empty-Profile'
+          python scripts/capture_desktop_ui.py
+      - name: Upload rendered GUI preview screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-OLED-GUI-Previews
+          path: ui-previews/*.png
+          if-no-files-found: error
+          retention-days: 30
+      - name: Package STAR.exe with vector assets
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
+            --icon assets/star.ico `
+            --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
+            --hidden-import mcp.types --collect-all faster_whisper `
+            --collect-all ctranslate2 --collect-all av `
+            --collect-submodules pyttsx3 --collect-submodules jwt `
+            --collect-submodules cryptography star_desktop.py
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
+      - name: Smoke test actual packaged EXE
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
+          $doctor = Start-Process -FilePath $exe -ArgumentList '--doctor' -Wait -PassThru
+          if ($null -eq $doctor.ExitCode -or $doctor.ExitCode -ne 0) { throw "STAR.exe doctor failed: $($doctor.ExitCode)" }
+      - name: Zip portable build
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'dist/STAR/*' -DestinationPath 'STAR-Genesis-Windows-x64.zip' -Force
+      - name: Build upgradeable Windows setup EXE
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { choco install innosetup --yes --no-progress }
+          if (-not (Test-Path $iscc)) { throw 'Inno Setup was not installed' }
+          $version = (python -c "from star.version import __version__;print(__version__)").Trim()
+          & $iscc "/DStarVersion=$version" 'installer/STAR.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'STAR installer build failed' }
+          $setup = "dist/STAR-Setup-v$version.exe"
+          if (-not (Test-Path $setup)) { throw "Missing $setup" }
+      - name: Upload testable executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-Windows-vNext
+          path: |
+            STAR-Genesis-Windows-x64.zip
+            dist/STAR-Setup-v*.exe
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    needs: windows-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Download tested Windows packages
+        uses: actions/download-artifact@v4
+        with:
+          name: STAR-Windows-vNext
+          path: release-assets
+      - name: Publish when version is new (never overwrite an existing release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STAR_REPO: ${{ github.repository }}
+          STAR_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python -c 'from star.version import __version__;print(__version__)')"
+          TAG="v$VERSION"
+          if gh release view "$TAG" --repo "$STAR_REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; keeping existing verified binaries."
+            exit 0
+          fi
+          # actions/upload-artifact preserves path components for multi-path inputs.
+          # Normalize both assets into a flat release directory.
+          SETUP="$(find release-assets -type f -name "STAR-Setup-$TAG.exe" -print -quit)"
+          PORTABLE="$(find release-assets -type f -name "STAR-Genesis-Windows-x64.zip" -print -quit)"
+          test -n "$SETUP" && test -f "$SETUP"
+          test -n "$PORTABLE" && test -f "$PORTABLE"
+          mkdir -p release-ready
+          cp "$SETUP" "release-ready/STAR-Setup-$TAG.exe"
+          cp "$PORTABLE" release-ready/STAR-Genesis-Windows-x64.zip
+          ( cd release-ready && sha256sum "STAR-Setup-$TAG.exe" STAR-Genesis-Windows-x64.zip ) > release-ready/SHA256SUMS.txt
+          gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
+            --repo "$STAR_REPO" --target "$STAR_COMMIT" --title "STAR Intelligence $TAG" --generate-notes
+
+
+  publish-public:
+    # One-time owner setup: create separate public repository, configure an
+    # expiring fine-grained PAT on *that repo only*, set Actions secret + var.
+    # Never publish the private source repository to the public download repo.
+    needs: [publish-release]
+    if: ${{ github.ref == 'refs/heads/main' && vars.STAR_PUBLIC_REPO != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: STAR-Windows-vNext
+          path: release-assets
+      - name: Publish compiled binaries and website only
+        env:
+          GH_TOKEN: ${{ secrets.STAR_PUBLIC_RELEASE_TOKEN }}
+          PUBLIC_REPO: ${{ vars.STAR_PUBLIC_REPO }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo '::notice::STAR_PUBLIC_RELEASE_TOKEN not configured; skipping public publishing.'
+            exit 0
+          fi
+          if [[ "$PUBLIC_REPO" != 'oncoursemail/Star-Intelligence-Downloads' ]]; then
+            echo '::error::Public repo does not match the approved destination.'
+            exit 1
+          fi
+          gh repo view "$PUBLIC_REPO" --json name,isPrivate >/dev/null
+          if [[ "$(gh repo view "$PUBLIC_REPO" --json isPrivate --jq .isPrivate)" != 'false' ]]; then
+            echo '::error::STAR public downloads repository must be PUBLIC.'
+            exit 1
+          fi
+          VERSION="$(python -c 'from star.version import __version__;print(__version__)')"
+          TAG="v$VERSION"
+          SETUP="$(find release-assets -type f -name "STAR-Setup-$TAG.exe" -print -quit)"
+          PORTABLE="$(find release-assets -type f -name 'STAR-Genesis-Windows-x64.zip' -print -quit)"
+          test -n "$SETUP" && test -f "$SETUP"
+          test -n "$PORTABLE" && test -f "$PORTABLE"
+          mkdir -p release-ready
+          cp "$SETUP" "release-ready/STAR-Setup-$TAG.exe"
+          cp "$PORTABLE" release-ready/STAR-Genesis-Windows-x64.zip
+          ( cd release-ready && sha256sum "STAR-Setup-$TAG.exe" STAR-Genesis-Windows-x64.zip ) > release-ready/SHA256SUMS.txt
+          if gh release view "$TAG" --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
+            echo "Public release $TAG already exists; keeping original verified files."
+          else
+            gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
+              --repo "$PUBLIC_REPO" --target main --title "STAR Intelligence $TAG" \
+              --notes "STAR Windows build; SHA-256 verified. Source lives in a separate private repository."
+          fi
+          python scripts/publish_public_site.py --repo "$PUBLIC_REPO" --site site
