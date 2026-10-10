@@ -236,7 +236,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
                               stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
-                              web_search_enabled=bool(research and mode == 'agent'))
+                              web_search_enabled=bool(research and mode == 'agent'),
+                              subagents_enabled=(mode == 'agent'),
+                              subagent_parallelism=(1 if settings.provider == 'local' else 2))
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
