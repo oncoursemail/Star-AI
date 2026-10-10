@@ -109,7 +109,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }
    const result=event.data as Record<string,unknown>
    if(action==='sendMessage'||action==='runTeam'){
-     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');setNotice('');setMessages(m=>[...m,makeMsg('assistant',String(result?.answer||''))]);void sync()
+     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('')
+     if(action==='runTeam'&&Number.isInteger(result.peak_concurrency)&&Number.isInteger(result.agents)){
+       setNotice(`Completed ${result.agents} specialist stages · peak ${result.peak_concurrency} concurrent · ${(Number(result.elapsed_ms||0)/1000).toFixed(1)}s measured`)
+     }else setNotice('')
+     setMessages(m=>[...m,makeMsg('assistant',String(result?.answer||''))]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
