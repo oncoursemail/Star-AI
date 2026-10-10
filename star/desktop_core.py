@@ -566,7 +566,8 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
     Returns (history messages, newest stored rows). The same function feeds a
     real turn and the cache warm-up, so both start with identical bytes. A
     trailing user row is the message being answered now (already saved by the
-    UI) or one that never got a reply; neither is history.
+    UI) and is not history; an earlier message that never got a reply is kept,
+    marked as unanswered (see context_layout.exchanges).
     """
     budget = history_char_budget(settings)
     dialogue = Conversations(home / 'conversations.sqlite3')

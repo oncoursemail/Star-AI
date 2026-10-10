@@ -14,7 +14,7 @@ import pytest
 import star.agent as agent
 import star.desktop_core as core
 from star.agent import FAST_RULES, RULES, execute, system_prefix, volatile_context
-from star.context_layout import (CONTEXT_CLOSE, CONTEXT_OPEN, TRIM_BLOCK, conversation_window,
+from star.context_layout import (CONTEXT_CLOSE, CONTEXT_OPEN, NO_REPLY, TRIM_BLOCK, conversation_window,
                                  drop_oldest_turns, exchanges, history_chars)
 from star.desktop_core import Conversations, Settings, chat_history, run_task
 from star.providers import PROVIDERS, llama_request_fields, remember_server_limits
@@ -191,13 +191,13 @@ def test_per_turn_notes_reach_only_their_own_turn(desk, monkeypatch):
     assert rendered(second).startswith(rendered(first[:-1]) + "<|im_start|>user\nWhat colour is the door?")
 
 
-def test_history_leaves_out_unanswered_messages_and_failure_records(desk):
+def test_history_marks_an_unanswered_message_and_leaves_out_failure_records(desk):
     desk.turn("first", "one")
     failed = desk.chats.add("STAR", "user", "this one failed", chat_id=desk.chat)
     desk.chats.add_terminal("STAR", desk.chat, failed, "failed", "SECRET-FAILURE-TEXT")
     messages = desk.turn("second", "two")["messages"]
-    assert [text_of(m) for m in messages[1:]] == ["first", "one", "second"]
-    assert "SECRET-FAILURE-TEXT" not in json.dumps(messages) and "this one failed" not in json.dumps(messages)
+    assert [text_of(m) for m in messages[1:]] == ["first", "one", "this one failed", NO_REPLY, "second"]
+    assert "SECRET-FAILURE-TEXT" not in json.dumps(messages)
 
 
 # ------------------------------------------------------------------ trimming
