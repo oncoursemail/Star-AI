@@ -94,3 +94,21 @@ def test_two_whole_tool_calls_on_one_index_stay_two_calls():
     # The usual fragments are still joined: the id comes once, or is repeated unchanged.
     assert asyncio.run(collect(chunk(call(0, "a", "read_file", '{"pa')), chunk(call(0, None, None, 'th":"a.lua"}')),
                                chunk(call(1, "b", "read_file", "")), chunk(call(1, "b", None, '{"path":"b.lua"}')))) == whole
+
+
+# ------------------------------------------------------------------ the short plain-chat rules
+
+def test_plain_chat_rules_keep_the_rule_against_asking_for_credentials():
+    """The short rules dropped the one safety rule that needs no tool to break.
+
+    The full rules say "Never request ... privileged credentials". A chat model
+    can ask the owner to paste a password, a .ROBLOSECURITY cookie or an API key
+    without any tool, so plain chat needs the rule as well.
+    """
+    from star.agent import FAST_RULES, RULES
+    assert "privileged credentials" in RULES
+    short = FAST_RULES.lower()
+    assert "never ask for" in short and "credentials" in short
+    for secret in ("password", "cookie", "api key"):
+        assert secret in short
+    assert len(FAST_RULES) < 0.45 * len(RULES)          # still the short form
