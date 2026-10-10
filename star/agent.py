@@ -200,8 +200,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     elif mcp_gateway is not None and mcp_gateway.owns(name):
                         try:
                             local_output = await mcp_gateway.call(name, args)
-                            data = {"isError": False, "content": [{"type": "text",
-                                "text": json.dumps(local_output, ensure_ascii=False)}]}
+                            data = {"isError": bool(local_output.get("result", {}).get("isError", False)),
+                                    "content": [{"type": "text",
+                                    "text": json.dumps(local_output, ensure_ascii=False)}]}
                         except Exception as exc:
                             # External failures must not erase the agent's context or
                             # expose bearer tokens, untrusted HTTP bodies, or secrets.
