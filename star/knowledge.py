@@ -19,7 +19,7 @@ from typing import Literal
 Kind = Literal["requirement", "reference", "decision", "fix", "observation", "unknown"]
 VALID_KINDS = frozenset({"requirement", "reference", "decision", "fix", "observation", "unknown"})
 MAX_ARTIFACT = 32 * 1024 * 1024
-PROJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$")
+PROJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,95}$")
 
 
 def now() -> str:
@@ -27,7 +27,7 @@ def now() -> str:
 
 
 def _project(value: str) -> str:
-    if not isinstance(value, str) or not PROJECT.fullmatch(value):
+    if not isinstance(value, str) or value != value.strip() or not PROJECT.fullmatch(value):
         raise ValueError("Project identifier must contain 1-96 safe characters")
     return value
 
