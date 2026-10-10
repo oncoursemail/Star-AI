@@ -16,6 +16,7 @@ from .agent import execute
 from .media import image_part
 from .memory import Memory
 from .workspace import Workspace
+from .intelligence import for_settings
 
 
 def app_data() -> Path:
@@ -41,6 +42,10 @@ class Settings:
     gguf_model: str = ''
     gpu_layers: int = 25
     reduced_motion: bool = False
+    obsidian_vault: str = ''
+    obsidian_enabled: bool = False
+    skills_enabled: bool = True
+    graphify_enabled: bool = True
 
     @classmethod
     def load(cls, file: Path):
@@ -59,6 +64,13 @@ class Settings:
             raise ValueError('Project name is invalid')
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
+        if any(type(getattr(self, key)) is not bool
+               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled')):
+            raise ValueError('Tool access settings must be true or false')
+        if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
+            raise ValueError('Obsidian vault must be an existing folder')
+        if self.obsidian_enabled and not self.obsidian_vault:
+            raise ValueError('Select an Obsidian vault before enabling read access')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 0 <= self.gpu_layers <= 1000:
@@ -186,6 +198,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         finally:
             dialogue.close()
         workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
+        intelligence = for_settings(settings, home)
         allow_studio = bool(settings.studio_id)
         async def run():
             async with AsyncOpenAI(base_url=settings.endpoint, api_key='local-only', timeout=180.0, max_retries=0) as client:
@@ -194,6 +207,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               max_calls=settings.max_calls, context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit,
+                               intelligence=intelligence,
                               stream_tokens=stream_tokens)
                 if allow_studio:
                     async with connect() as session:
