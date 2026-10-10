@@ -13,7 +13,7 @@ type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:b
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -42,6 +42,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [updateBusy,setUpdateBusy]=useState(false)
  const [updateProgress,setUpdateProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [studio,setStudio]=useState('')
+ const [mcpTesting,setMcpTesting]=useState('')
+ const [mcpChecks,setMcpChecks]=useState<Record<string,{read_tool_count:number;read_tools:string[];protocol:string}>>({})
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
  const [leftOpen,setLeftOpen]=useState(false)
@@ -97,6 +99,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
+     if(action==='testMcpConnection')setMcpTesting('')
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
@@ -116,6 +119,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }else if(action==='installUpdate'){
      setUpdateBusy(false);setUpdateProgress(null)
      setNotice('Verified setup launched. STAR will restart after installation.')
+   }
+   else if(action==='testMcpConnection'){
+     const name=String(result.name||'')
+     setMcpTesting('')
+     if(name)setMcpChecks(prev=>({...prev,[name]:result as {read_tool_count:number;read_tools:string[];protocol:string}}))
+     setNotice('MCP discovery passed. No external tools were executed.')
    }
    else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
@@ -180,6 +189,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const response=await act('installUpdate')
    if(!response){setUpdateBusy(false);setUpdateProgress(null)}
  }
+ const testMcp=async(name:string)=>{setMcpTesting(name);const reply=await act('testMcpConnection',{server:name});if(!reply)setMcpTesting('')}
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
  const wrapper='shell '+(!leftOpen?'':'shell-open')
  const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
