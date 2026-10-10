@@ -1,5 +1,5 @@
 import {useEffect,useState} from 'react'
-import type {KeyboardEvent} from 'react'
+import type {KeyboardEvent as ReactKeyboardEvent} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
 import {
  ArrowDownToLine,ArrowRight,ArrowUpRight,BookOpen,BrainCircuit,Check,
@@ -57,7 +57,7 @@ export function Landing(){
  const [menu,setMenu]=useState(false)
  const [tour,setTour]=useState<TourId>('chat')
  const [track,setTrack]=useState<TrackId>('design')
- const onTourKeys=(event:KeyboardEvent<HTMLDivElement>)=>{
+ const onTourKeys=(event:ReactKeyboardEvent<HTMLDivElement>)=>{
    const keys=['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End']
    if(!keys.includes(event.key))return
    event.preventDefault()
