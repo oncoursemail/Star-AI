@@ -220,3 +220,10 @@
 @media(max-width:1120px){.intelligence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:710px){.intelligence-grid{grid-template-columns:minmax(0,1fr)}.intelligence-folder-row{align-items:stretch;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.integration-panel *{scroll-behavior:auto}}
+
+/* User-controlled review bundle — secondary by design, never a marketing callout. */
+.star-review-panel .review-export-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0 12px}
+.star-review-panel .review-export-actions>span{font-size:11px;color:#85918b;line-height:1.5}
+.star-review-panel .setting-switch{border-bottom:1px solid #292e2b;padding-bottom:16px}
+.star-review-panel .secondary-button{white-space:nowrap}
+@media(max-width:560px){.star-review-panel .review-export-actions{align-items:stretch;flex-direction:column}.star-review-panel .review-export-actions .secondary-button{justify-content:center}}
