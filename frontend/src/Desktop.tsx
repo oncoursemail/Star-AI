@@ -222,71 +222,91 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
  return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview}>
    <aside className="sidebar" aria-label="STAR navigation">
-      <div className="brand-area"><Brand/><button className="sidebar-collapse icon-button" aria-label="Close menu" onClick={()=>setLeftOpen(false)}><X size={18}/></button></div>
-      <div className="sidebar-content-scroll">
-        <div className="workspace-selector"><button type="button" onClick={()=>nav('projects')} title="Change workspace"><span className="workspace-tile"><Folder size={18}/></span><span className="workspace-label"><strong>{data.project}</strong><small>Current workspace</small></span><ChevronDown size={16}/></button></div>
-        <div className="sidebar-new"><button className="new-chat-button" type="button" onClick={()=>void startNewChat()} disabled={busy} title="Start a fresh conversation"><SquarePen size={18}/><span>New chat</span><Plus size={16}/></button></div>
-        <div className="nav-block"><span className="nav-label">WORKSPACE</span>{sections.slice(0,4).map(([id,name,Icon])=><button type="button" key={id} className={'nav-item '+(tab===id?'active':'')} onClick={()=>nav(id)} aria-current={tab===id?'page':undefined}><Icon size={18} strokeWidth={1.8}/><span>{name}</span>{tab===id?<motion.span className="nav-marker" layoutId="active-nav" transition={{type:'spring',stiffness:440,damping:37}}/>:null}</button>)}</div>
-        <div className="sidebar-history"><div className="history-heading"><span>RECENT CHATS</span><span>{data.chats.length}</span></div><div className="history-list">{data.chats.slice(0,8).map(chat=><button type="button" key={chat.id} title={chat.title} className={'history-item '+(data.active_chat===chat.id&&tab==='chat'?'selected':'')} onClick={()=>void openChat(chat.id)} disabled={busy}><MessageCircleMore size={14}/><span>{chat.title}</span></button>)}{!data.chats.length&&<span className="history-empty">Conversations will appear here.</span>}</div></div>
-        <div className="nav-block nav-dev"><span className="nav-label">YOUR TOOLKIT</span>{sections.slice(4).map(([id,name,Icon])=><button type="button" key={id} className={'nav-item '+(tab===id?'active':'')} onClick={()=>nav(id)} aria-current={tab===id?'page':undefined}><Icon size={18} strokeWidth={1.8}/><span>{name}</span>{tab===id?<motion.span className="nav-marker" layoutId="active-nav" transition={{type:'spring',stiffness:440,damping:37}}/>:null}</button>)}</div>
+      <div className="brand-area">
+        <Brand/>
+        <button className="sidebar-collapse icon-button" type="button" aria-label="Close sidebar" onClick={()=>setLeftOpen(false)}><X size={18}/></button>
       </div>
-      <div className="sidebar-footer"><button type="button" className="sidebar-engine" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{data.brain_running?'Local intelligence ready':'Start your local AI'}</span><ChevronRight size={14}/></button><div className="sidebar-version"><span>STAR INTELLIGENCE</span><span>GENESIS · v{data.version}</span></div></div>
+      <div className="sidebar-actions">
+        <button className="new-chat-button" type="button" disabled={busy} onClick={()=>void startNewChat()}><SquarePen size={18}/><span>New chat</span></button>
+        <button className="sidebar-search-button" type="button" aria-label="Search conversations" title="Search conversations" aria-expanded={historySearchOpen} onClick={()=>{setHistorySearchOpen(v=>!v);setHistoryQuery('')}}><Search size={18}/></button>
+      </div>
+      {historySearchOpen&&<div className="sidebar-search-row"><Search size={15}/><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat…" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={15}/></button></div>}
+      <button className="current-workspace" type="button" onClick={()=>nav('projects')} title="Switch project workspace"><Folder size={15}/><span>{data.project}</span><ChevronDown size={14}/></button>
+      <div className="sidebar-history" aria-label="Saved conversations">
+        <div className="history-heading"><span>Chats</span></div>
+        <div className="history-list">
+          {filteredChats.slice(0,40).map(chat=><button type="button" key={chat.id} title={chat.title} className={'history-item '+(data.active_chat===chat.id&&tab==='chat'?'selected':'')} onClick={()=>void openChat(chat.id)} disabled={busy}><span>{chat.title}</span></button>)}
+          {!filteredChats.length&&<span className="history-empty">{historyQuery?'No conversations found':'Your conversations appear here'}</span>}
+        </div>
+      </div>
+      <div className="sidebar-footer">
+        <button type="button" className={'sidebar-more '+(toolsOpen?'is-open':'')} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(v=>!v)}><Boxes size={17}/><span>Workspace tools</span><ChevronDown size={15}/></button>
+        <AnimatePresence initial={false}>{toolsOpen&&<motion.div className="sidebar-tools" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:.17}}>
+          {sections.filter(([id])=>id!=='chat').map(([id,name,Icon])=><button className={'tool-nav-item '+(tab===id?'active':'')} type="button" key={id} onClick={()=>{nav(id);setToolsOpen(false)}}><Icon size={16}/><span>{name}</span></button>)}
+        </motion.div>}</AnimatePresence>
+        <button className="sidebar-engine" type="button" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{data.brain_running?'STAR Brain ready':'STAR Brain offline'}</span><ChevronRight size={15}/></button>
+      </div>
     </aside>
    <div className="shell-main">
      <header className="topbar">
-        <div className="topbar-left"><button className="hamburger icon-button" aria-label="Open navigation" onClick={()=>setLeftOpen(true)}><MoreHorizontal size={20}/></button><span className="crumb-muted">STAR</span><ChevronRight size={13}/><strong>{sections.find(x=>x[0]===tab)?.[1]}</strong></div>
-        <div className="topbar-right"><button type="button" className="topbar-command" onClick={()=>{nav('chat');composerRef.current?.focus()}} title="Focus STAR chat (Ctrl+K)"><Search size={15}/><span>Ask STAR</span><kbd>Ctrl K</kbd></button><span className="topbar-private"><ShieldCheck size={15}/> Private on your PC</span><button className="topbar-system" type="button" onClick={()=>nav('brain')} title="View local model status"><span className={'status-dot '+(data.brain_running?'ok':'')}/>{data.brain_running?'Model online':'Model offline'}</button><button className="avatar-button" onClick={()=>nav('settings')} title="Open settings" aria-label="Open settings"><Settings2 size={17}/></button></div>
+        <div className="topbar-left">
+          <button className="hamburger icon-button" type="button" aria-label="Open sidebar" onClick={()=>setLeftOpen(true)}><MoreHorizontal size={19}/></button>
+          <button className="topbar-title" type="button" title="Back to chat" onClick={()=>nav('chat')}>{tab==='chat'?'STAR':sections.find(x=>x[0]===tab)?.[1]}</button>
+          {tab==='chat'&&<span className="topbar-subtitle" title={chatTitle}>{chatTitle==='New chat'?'':truncate(chatTitle,56)}</span>}
+        </div>
+        <div className="topbar-right">
+          {tab==='chat'&&<>
+            {showChatSearch&&<input className="chat-find-input" type="search" aria-label="Search messages in this chat" placeholder="Find in chat…" autoFocus value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>}
+            <button className="icon-button header-action" type="button" title="Find in this chat" aria-label="Find in this chat" aria-pressed={showChatSearch} onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={18}/></button>
+            <button className="icon-button header-action" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={17}/></button>
+            <button className="icon-button header-action" type="button" title="New chat" aria-label="New chat" disabled={busy} onClick={()=>void startNewChat()}><SquarePen size={18}/></button>
+          </>}
+          {tab!=='chat'&&<button className="icon-button header-action" type="button" title="Settings" aria-label="Open settings" onClick={()=>nav('settings')}><Settings2 size={18}/></button>}
+        </div>
       </header>
      {preview&&<div className="demo-ribbon"><Info size={14}/> Interactive interface preview — real AI features are available only in STAR Desktop.</div>}
      <AnimatePresence mode="wait" initial={false}>
        <motion.main key={tab} className="page-stage" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.16}}>
          {tab==='chat'&&<div className="chat-page">
-            <div className="chat-topline">
-              <div className="chat-top-context"><span className="eyebrow">{data.project} / CONVERSATION</span><strong>{chatTitle}</strong><small>{data.brain_running?'Your local assistant is ready.':'Your conversation is saved locally.'}</small></div>
-              <div className="chat-top-actions">
-                {showChatSearch&&<input type="search" aria-label="Search this conversation" className="chat-find-input" autoFocus placeholder="Search this chat…" value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>}
-                <button className={'chat-tool-button'+(showChatSearch?' is-active':'')} type="button" title="Find in this chat" aria-label="Find in this chat" onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={17}/></button>
-                <button className="chat-tool-button chat-copy-control" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={16}/></button>
-                <button className="chat-new-action" type="button" onClick={()=>void startNewChat()} disabled={busy}><Plus size={17}/><span>New chat</span></button>
-              </div>
-            </div>
             <div className="chat-scroll" ref={chatScroll} onScroll={onChatScroll}>
               <div className="chat-inner">
-                {!messages.length?
-                  <div className="welcome">
-                    <div className="welcome-emblem"><span className="welcome-emblem-back"/><Star size={33} fill="currentColor" strokeWidth={1.2}/></div>
-                    <div className="welcome-eyebrow"><span className="welcome-status"/>{data.brain_running?'STAR BRAIN READY':'YOUR CREATIVE WORKSPACE'}</div>
-                    <h1>Every great idea <span>starts somewhere.</span></h1>
-                    <p>Your own intelligence workspace for better ideas, deeper research, code, game development and everything in between.</p>
-                    <div className="welcome-prompt">What are we making today?</div>
-                    <div className="suggestions">{examples.map((ex,index)=><button key={ex.title} type="button" onClick={()=>void send(ex.prompt)} disabled={busy}><span className="suggestion-icon">{index===0?<Sparkles size={18}/>:index===1?<Workflow size={18}/>:<Terminal size={18}/>}</span><strong>{ex.title}</strong><small>{ex.description}</small><ArrowRight className="suggest-arrow" size={17}/></button>)}</div>
-                    <span className="welcome-caption"><ShieldCheck size={13}/> Local-first by default. Your projects stay yours.</span>
-                  </div>:
-                  <div className="conversation" role="log" aria-label="Conversation messages">
-                    {matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
-                    {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={20}/><strong>No matching messages</strong><small>Try another phrase.</small></div>}
-                    {busy&&streamingText&&<Message animated={false} key="stream-live" entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
-                    {busy&&<div className={'thinking '+(streamingText?'thinking-compact':'')} role="status" aria-live="off"><span className="pulse-bar"><i/><i/><i/></span><div><strong>{streamingText?'STAR is responding':'STAR is thinking'}</strong><small>{workPhase||'Preparing a thoughtful response…'}</small></div></div>}
-                    {!busy&&retryText&&<div className="chat-recovery"><span>The last response could not finish. Your prompt has been saved.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={14}/> Retry message</button></div>}
-                  </div>}
+                {!messages.length?<div className="welcome">
+                  <motion.div className="welcome-logo" initial={false} animate={{opacity:1}}><Star size={27} fill="currentColor" strokeWidth={1.2}/></motion.div>
+                  <h1>What can I help you with?</h1>
+                  <p>Ask, create, or build something with STAR.</p>
+                  <div className="suggestions">{examples.slice(0,3).map((ex,i)=><button key={ex.title} type="button" disabled={busy} onClick={()=>void send(ex.prompt)}>{i===0?<Sparkles size={16}/>:i===1?<Workflow size={16}/>:<Terminal size={16}/>}<span>{ex.title}</span><ArrowRight size={14}/></button>)}</div>
+                </div>:<div className="conversation" role="log" aria-label="Conversation">
+                  {matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
+                  {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={18}/><span>No messages found</span></div>}
+                  {busy&&streamingText&&<Message key="stream-live" animated={false} entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
+                  {busy&&<div className="thinking" role="status" aria-live="polite"><span className="pulse-bar"><i/><i/><i/></span><span>{imageMode?'Creating image…':workPhase||'Thinking…'}</span></div>}
+                  {!busy&&retryText&&<div className="chat-recovery"><span>The last request stopped.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={15}/> Retry</button></div>}
+                </div>}
               </div>
             </div>
-            {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={17}/> Jump to latest</button>}
+            {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={17}/> Latest</button>}
             <div className="composer-zone">
-              <div className="composer">
+              <div className="composer" aria-label="STAR message composer">
+                {imageMode&&<div className="composer-mode-row"><button className="composer-image-chip" type="button" aria-label="Stop creating an image" onClick={()=>setImageMode(false)}><ImagePlus size={15}/> Create image <X size={14}/></button>{!data.settings.comfy_workflow&&<button className="composer-setup" type="button" onClick={()=>nav('settings')}>Set up image generation <ArrowRight size={13}/></button>}</div>}
                 {!!files.length&&<div className="file-chips">{files.map((f,i)=><span key={f}><File size={14}/>{truncate(f.split(/[\\/]/).pop()||f,40)}<button type="button" title="Remove attachment" aria-label="Remove attachment" onClick={()=>setFiles(x=>x.filter((_,j)=>i!==j))}><X size={13}/></button></span>)}</div>}
                 <label className="sr-only" htmlFor="star-prompt">Message STAR</label>
-                <textarea ref={composerRef} id="star-prompt" rows={1} placeholder="Message STAR…" value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
+                <textarea id="star-prompt" ref={composerRef} rows={1} placeholder={imageMode?'Describe the image you want to create…':'Message STAR…'} value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
                 <div className="composer-tools">
                   <div className="composer-left">
-                    <button className="composer-action attach-button" type="button" onClick={()=>void attach()} title="Attach images, audio or video"><Plus size={17}/><span>Attach</span></button>
-                    <button className="composer-action composer-mic" type="button" title="Transcribe an audio file" aria-label="Transcribe audio" onClick={async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/></button>
-                    <button className="composer-model" type="button" onClick={()=>nav('brain')} title="View or change your installed model"><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{truncate(data.settings.model||'Select local model',25)}</span><ChevronDown size={13}/></button>
+                    <div className="composer-menu-wrap">
+                      <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
+                      <AnimatePresence>{composerMenu&&<motion.div className="composer-menu" role="menu" initial={{opacity:0,y:6,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:4,scale:.99}} transition={{duration:.15}}>
+                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
+                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setFiles([]);setImageMode(true);composerRef.current?.focus()}}><ImagePlus size={18}/><span>Create image</span>{imageMode&&<Check size={15}/>}</button>
+                        <button role="menuitem" type="button" onClick={async()=>{setComposerMenu(false);const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/><span>Transcribe audio</span></button>
+                      </motion.div>}</AnimatePresence>
+                    </div>
+                    <button className="composer-model" type="button" title="View local model" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{imageMode?'Local image creation':truncate(data.settings.model||'STAR Brain',25)}</span><ChevronDown size={13}/></button>
                   </div>
-                  <div className="composer-right"><span className="composer-enter">Enter <ArrowRight size={12}/></span><button className="send-button" type="button" aria-label={busy?'STAR is responding':'Send message'} disabled={!prompt.trim()||busy} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={20}/>}</button></div>
+                  <div className="composer-right"><button className="send-button" type="button" aria-label={busy?'STAR is working':'Send message'} disabled={busy||!prompt.trim()} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={20}/>}</button></div>
                 </div>
               </div>
-              <div className="composer-hint"><span>STAR can make mistakes. Review important results.</span><span>Shift + Enter for a new line</span></div>
+              <div className="composer-hint">STAR can make mistakes. Check important information.</div>
             </div>
           </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
@@ -317,25 +337,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               </Panel>
             </div>
             <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel></div></div>}
-         {tab==='image'&&<div className="scroll-region"><div className="page-wrap image-page">
-            <PageTitle eyebrow="CREATIVE STUDIO / LOCAL GENERATION" title="Image Lab" description="Generate artwork right inside STAR using your existing local ComfyUI workflow. No separate STAR window."/>
-            <div className="image-layout">
-              <Panel className="image-lab-form">
-                <div className="image-panel-header"><div className="image-panel-icon"><ImagePlus size={25}/></div><div><span className="eyebrow">YOUR CREATIVE ENGINE</span><h2>Create an image</h2><p>Powered by a locally running ComfyUI instance and an approved API-format workflow.</p></div></div>
-                <div className="image-workflow"><span className="field-name">API workflow</span><button type="button" className="workflow-picker" onClick={()=>void chooseWorkflow()} disabled={imageBusy}><FolderOpen size={18}/><span>{workflowPath?truncate(workflowPath.split(/[\\/]/).pop()||workflowPath,55):'Choose ComfyUI workflow (.json)'}</span><ChevronRight size={16}/></button><small>Only workflows using STAR's reviewed core-node allowlist are accepted.</small></div>
-                <label className="image-field"><span className="field-name">Your prompt</span><textarea rows={5} maxLength={1500} value={imagePrompt} onChange={e=>setImagePrompt(e.target.value)} placeholder="Describe the image you want to create. Include subject, lighting, composition and materials…"/></label>
-                <div className="image-settings-row"><label className="image-field"><span className="field-name">CLIPTextEncode node ID</span><input type="text" inputMode="numeric" placeholder="e.g. 6" value={imageNode} onChange={e=>setImageNode(e.target.value)}/></label><label className="image-field"><span className="field-name">Local ComfyUI port</span><input type="number" min="1" max="65535" value={imagePort} onChange={e=>setImagePort(e.target.value)}/></label></div>
-                <button type="button" className="primary-button image-generate" disabled={imageBusy||inactive||!workflowPath||!imagePrompt.trim()||!imageNode.trim()} onClick={()=>void createImage()}>{imageBusy?<LoaderCircle className="spin" size={18}/>:<Sparkles size={18}/>} {imageBusy?'Generating locally…':'Generate image'}<ArrowRight size={17}/></button>
-                <p className="image-safety"><ShieldCheck size={14}/> Your prompt and outputs remain on your PC. No hosted image API is used.</p>
-              </Panel>
-              <Panel className="image-output-panel">
-                <div className="image-output-heading"><span>OUTPUT / LOCAL FILES</span><button className="icon-button" type="button" title="Open the STAR data folder" onClick={()=>void act('openDataFolder')}><FolderOpen size={19}/></button></div>
-                {generatedImages.length?<div className="image-files"><div className="image-finished"><Check size={18}/><div><strong>Generation complete</strong><span>{generatedImages.length} image file{generatedImages.length>1?'s':''} saved under STAR / generated</span></div></div><div className="image-results-grid">{generatedImages.map(result=><div className="image-result-card" key={result.filename}>{result.preview?<img src={result.preview} alt={'STAR generated artwork: '+result.filename} loading="lazy"/>:<div className="image-thumbnail-fallback"><ImagePlus size={25}/></div>}<span><File size={14}/>{result.filename}</span></div>)}</div><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open STAR files</button></div>:
-                 <div className="image-output-empty"><div className="output-emblem"><ImagePlus size={31}/></div><strong>{imageBusy?'Your image is being generated':'Your next creation goes here'}</strong><p>{imageBusy?'STAR is waiting for ComfyUI to finish. This can take a few minutes.':'Choose a workflow, write a prompt and create. Your finished images will be stored locally.'}</p>{imageBusy&&<span className="image-wait"><LoaderCircle size={15} className="spin"/> Local generation in progress</span>}</div>}
-              </Panel>
-            </div>
-          </div></div>}
-          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Image and media workflows</h2><p>Attach image, audio and video references in chat. Generate artwork in STAR's built-in Image Lab with a locally configured ComfyUI workflow.</p><button className="secondary-button" onClick={()=>nav('image')}><ImagePlus size={16}/> Open Image Lab <ArrowRight size={15}/></button><small>The Image Lab now runs inside the same STAR desktop window.</small></Panel></div></div>}
+         {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PERSONALIZE YOUR WORKSPACE" title="Settings" description="Keep daily work simple; advanced integrations stay here when you need them."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel>
            <Panel className="settings-section"><h2>Developer permissions</h2><div className="field-grid"><label>Workspace folder<input value={draft.workspace} onChange={e=>setDraft(d=>({...d,workspace:e.target.value}))} placeholder="Choose a project folder"/></label><label>Roblox Studio instance ID<input value={draft.studio_id} onChange={e=>setDraft(d=>({...d,studio_id:e.target.value}))}/></label></div><label className="setting-switch"><span><strong>Allow workspace writes</strong><small>Only inside your selected workspace</small></span><input type="checkbox" checked={draft.workspace_edit} onChange={e=>setDraft(d=>({...d,workspace_edit:e.target.checked}))}/></label><label className="setting-switch"><span><strong>Allow Studio edits</strong><small>Use an unpublished disposable test place first</small></span><input type="checkbox" checked={draft.studio_edit} onChange={e=>setDraft(d=>({...d,studio_edit:e.target.checked}))}/></label></Panel>
            <Panel className="settings-section">
