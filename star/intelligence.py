@@ -43,7 +43,9 @@ SKILL_TOOLS = (
 )
 OBSIDIAN_TOOLS = (
     _tool("star_obsidian_search", "Find Markdown notes in the user-enabled Obsidian vault. Returns short excerpts and relative note paths.", {"query": _s(180), "limit": _limit(20, 10)}, ("query",)),
-    _tool("star_obsidian_read", "Read an individual Markdown note by relative path from Obsidian search; never write or delete notes.", {"path": _s(500)}, ("path",)),
+    _tool("star_obsidian_read", "Read a bounded page of numbered Markdown lines from a selected note. Start with line 1; request later pages only if needed. Never write notes.",
+          {"path": _s(500), "start_line": {"type": "integer", "minimum": 1, "maximum": 200000, "default": 1},
+           "max_lines": _limit(250, 120)}, ("path",)),
     _tool("star_obsidian_list", "List up to 100 Markdown note paths in the authorized Obsidian vault.", {"limit": _limit(100, 60)}),
 )
 GRAPHIFY_TOOLS = (
@@ -120,7 +122,7 @@ class LocalIntelligence:
         if name == "star_obsidian_search":
             return self.vault.search(args["query"], limit=args.get("limit", 10))
         if name == "star_obsidian_read":
-            return self.vault.read(args["path"])
+            return self.vault.read(args["path"], start_line=args.get("start_line", 1), max_lines=args.get("max_lines", 120))
         if name == "star_obsidian_list":
             return self.vault.list(limit=args.get("limit", 60))
         if name == "star_graphify_query":
