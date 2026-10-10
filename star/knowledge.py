@@ -175,6 +175,40 @@ class KnowledgeStore:
                      reviewed=bool(row["reviewed"]), created=row["created"])
                 for row in rows]
 
+    def find_contextual(self, project: str, prompt: str, *, limit: int = 8) -> list[Note]:
+        """Read only reviewed facts, with recall-intent fallback for implicit queries.
+
+        "What did we decide last time?" may share zero lexical words with
+        "Use warm gold accents". In those explicit recall requests, fill
+        remaining slots from recent reviewed decisions. No model-generated
+        candidate is promoted, and retrieval never crosses project scope.
+        """
+        found = self.find(project, prompt, reviewed_only=True, limit=limit)
+        recall = re.search(
+            r"\b(remember|recall|earlier|previous|before|last time|"
+            r"decided|decision|chose|agreed|approved)\b",
+            prompt.lower(),
+        )
+        if not recall or len(found) >= limit:
+            return found
+        known = {row.id for row in found}
+        more = self.db.execute(
+            """SELECT * FROM notes WHERE project=? AND reviewed=1
+               AND kind IN ('requirement','decision','fix')
+               ORDER BY id DESC LIMIT ?""",
+            (_project(project), limit * 3),
+        )
+        for row in more:
+            if int(row["id"]) in known:
+                continue
+            found.append(Note(id=int(row["id"]), project=row["project"],
+                              kind=row["kind"], text=row["text"],
+                              source=row["source"], revision=row["revision"],
+                              reviewed=True, created=row["created"]))
+            if len(found) >= limit:
+                break
+        return found
+
     def _find_like(self, project: str, tokens: list[str], reviewed_only: bool, limit: int):
         sql = "SELECT * FROM notes WHERE project=?"
         params: list[object] = [project]
