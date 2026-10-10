@@ -13,6 +13,17 @@ on:
       - 'scripts/build_windows.ps1'
       - '.github/workflows/windows-desktop.yml'
       - 'tests/**'
+  pull_request:
+    paths:
+      - 'star/**'
+      - 'frontend/**'
+      - 'star_desktop.py'
+      - 'assets/**'
+      - 'installer/**'
+      - 'requirements*.txt'
+      - 'scripts/build_windows.ps1'
+      - '.github/workflows/windows-desktop.yml'
+      - 'tests/**'
   workflow_dispatch:
 
 concurrency:
