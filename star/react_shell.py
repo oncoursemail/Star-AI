@@ -7,7 +7,7 @@ adapters are reused without migration or credential exposure to JavaScript.
 """
 from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 import json
 import os
@@ -128,6 +128,78 @@ def sanitize_event(event: dict) -> dict:
     return {'phase':('STAR is working · '+kind)[:110]}
 
 
+# Bridge actions that save a user message first and then try to answer it.
+TURN_ACTIONS = frozenset({'sendMessage', 'generateImage', 'runTeam'})
+
+
+@dataclass(frozen=True)
+class TurnRef:
+    """The saved user message a running turn answers (set once that message is stored)."""
+    project: str
+    chat_id: str
+    user_id: int
+
+
+def failure_outcome(action: str, exc: Exception, *, cancelled: bool = False,
+                    settings_file: Path | None = None) -> tuple[str, str]:
+    """Return ``(status, user_message)`` for a worker that raised.
+
+    status is 'cancelled' when the user pressed Stop (or the error says so) and
+    'failed' otherwise. The message is what the UI shows and what is stored.
+    """
+    from .model_health import explain_model_failure
+    if cancelled or 'cancelled by user' in str(exc).lower():
+        return 'cancelled', explain_model_failure(RuntimeError('cancelled by user'))
+    if settings_file is not None:
+        # Provider-aware wording (STAR Server vs local brain) and the server status light.
+        return 'failed', describe_failure(action, exc, settings_file)
+    if (action in {'sendMessage', 'startBrain', 'testModel'}
+            and (getattr(exc, 'status_code', None) is not None
+                 or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
+                 or 'System message must be at the beginning' in str(exc))):
+        return 'failed', explain_model_failure(exc)
+    return 'failed', f'{type(exc).__name__}: {str(exc)[:350]}'
+
+
+def record_turn_failure(home: Path, turn: TurnRef, status: str, detail: str) -> bool:
+    """Persist the terminal record of a turn that ended without an answer.
+
+    Never raises: a storage problem must not hide the original error from the UI.
+    """
+    try:
+        chats = Conversations(home / 'conversations.sqlite3')
+        try:
+            chats.add_terminal(turn.project, turn.chat_id, turn.user_id, status, detail)
+        finally:
+            chats.close()
+        return True
+    except Exception:
+        return False
+
+
+def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
+               current_turn, cancelled, settings_file: Path | None = None) -> None:
+    """Run one bridge worker and emit exactly one result or error event.
+
+    A failed or cancelled chat/image/team turn is stored BEFORE its error event is
+    emitted, so a reload or restart shows the same history the UI just displayed.
+    """
+    try:
+        data = worker()
+    except Exception as exc:
+        status, detail = failure_outcome(action, exc, cancelled=bool(cancelled()),
+                                         settings_file=settings_file)
+        turn = current_turn() if action in TURN_ACTIONS else None
+        if turn is not None:
+            record_turn_failure(home, turn, status, detail)
+        emit(request_id, 'error', detail)
+        return
+    try:
+        emit(request_id, 'result', data)
+    except Exception as exc:
+        emit(request_id, 'error', f'{type(exc).__name__}: {str(exc)[:350]}')
+
+
 def file_allowed(path: Path, approved: set[Path]) -> Path:
     resolved = path.expanduser().resolve(strict=True)
     if resolved not in approved:
@@ -137,20 +209,24 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
     return resolved
 
 
-def _get_state(settings_file: Path, runtime: Runtime) -> dict:
+def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dict:
     settings = Settings.load(settings_file)
     home = app_data()
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
         chat_threads = chats.list_chats(settings.project)
-        recent = chats.recent(settings.project, limit=80, chat_id=active_chat)
+        recent = chats.recent_records(settings.project, limit=80, chat_id=active_chat)
+        retry = chats.retry_state(settings.project, active_chat, busy=busy)
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
     messages = []
-    for i, (role, body, created) in enumerate(recent):
+    for i, record in enumerate(recent):
+        role, body, created = record['role'], record['body'], record['created']
         entry = {'id':f'saved-{i}', 'role':role,'text':body,'created':created}
+        if record['status'] != 'complete':
+            entry['status'] = record['status']  # 'failed' | 'cancelled' terminal record
         preview = chat_image(home, body) if role == 'assistant' else None
         if preview:
             entry.update(preview)
@@ -164,6 +240,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     return {
         'version':__version__,'build':read_build_info(),'project':settings.project,'projects':projects,
         'messages':messages,'active_chat':active_chat,'chats':chat_threads,
+        'retry':retry,
         'settings':asdict(settings),
         'brain_installed':brain is not None,'brain_running':runtime.status()=='running',
         'model_router_running':runtime.router_running(),
@@ -223,6 +300,7 @@ def launch():
             self.allowed_files: set[Path] = set()
             self.active_task = False
             self.cancel_chat = threading.Event()
+            self.turn: TurnRef | None = None
             self.active_update = False
 
         def _emit(self, request_id: str, kind: str, data):
@@ -232,12 +310,13 @@ def launch():
         def _run(self, request_id: str, action: str, worker):
             def task():
                 try:
-                    data=worker()
-                    self._emit(request_id, 'result', data)
-                except Exception as exc:
-                    self._emit(request_id, 'error', describe_failure(action, exc, self.settings_file))
+                    run_worker(request_id, action, worker, emit=self._emit, home=app_data(),
+                               current_turn=lambda: self.turn, cancelled=self.cancel_chat.is_set,
+                               settings_file=self.settings_file)
                 finally:
-                    if action in {'sendMessage','generateImage','runTeam'}:self.active_task=False
+                    if action in TURN_ACTIONS:
+                        self.turn=None
+                        self.active_task=False
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -266,9 +345,10 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
+            self.turn=TurnRef(settings.project,active_chat,user_id)
             from .media_features import VIDEO_EXTENSIONS,AUDIO_EXTENSIONS,video_frames,transcribe_audio
             pics=[];extras=[]
             with tempfile.TemporaryDirectory(prefix='star-media-') as directory:
@@ -304,9 +384,10 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
+            self.turn=TurnRef(settings.project,active_chat,user_id)
             chat_id = active_chat
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
             chats=Conversations(home/'conversations.sqlite3')
@@ -329,9 +410,10 @@ def launch():
             chats = Conversations(home / "conversations.sqlite3")
             try:
                 active_chat = chats.active_chat(settings.project)
-                chats.add(settings.project, "user", prompt, chat_id=active_chat)
+                user_id = chats.add(settings.project, "user", prompt, chat_id=active_chat)
             finally:
                 chats.close()
+            self.turn = TurnRef(settings.project, active_chat, user_id)
             from .team_cancellation import run_until_cancelled
             async def run():
                 return await run_until_cancelled(
@@ -365,7 +447,7 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
-                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -386,7 +468,7 @@ def launch():
                         raise ValueError('Project name must be 1–60 characters without path separators')
                     settings=Settings.load(self.settings_file)
                     settings.project=project;settings.save(self.settings_file)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
                 if action=='newChat':
                     if self.active_task:raise RuntimeError('Wait for the current answer before starting a new chat')
                     settings=Settings.load(self.settings_file)

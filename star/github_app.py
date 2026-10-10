@@ -12,7 +12,7 @@ from urllib.parse import quote
 import httpx
 import jwt
 
-from .version import PUBLIC_REPO
+from .version import REPO
 
 BRANCH = re.compile(r"^star/[a-z0-9][a-z0-9._-]{0,49}$")
 SAFE_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
@@ -79,8 +79,8 @@ class GitHubApp:
         return await self.request("GET", "/installation/repositories?per_page=100")
 
     async def create_branch(self, name: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('Public distribution is controlled by tested GitHub Actions, not agent work branches')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App can modify only the canonical public STAR source repository')
         if not BRANCH.fullmatch(name):
             raise ValueError("Only names star/<safe-name> are permitted")
         repo = quote(self.repo, safe="/")
@@ -91,8 +91,8 @@ class GitHubApp:
         return base
 
     async def write_branch_file(self, branch: str, path: str, raw: bytes, message: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('The agent cannot upload development source to public STAR downloads')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App cannot upload source to a non-STAR repository')
         if not BRANCH.fullmatch(branch) or not valid_upload_path(path):
             raise ValueError("Branch or file outside STAR's allowed write scope")
         if len(raw) > 300_000:
@@ -113,8 +113,8 @@ class GitHubApp:
         return await self.request("PUT", endpoint, json=payload)
 
     async def open_pr(self, base: str, head: str, title: str, body: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('Public release PRs must use the reviewed publisher workflow')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App cannot open development PRs outside the STAR source repository')
         if not BRANCH.fullmatch(head):
             raise ValueError("Not a STAR work branch")
         return await self.request("POST", f"/repos/{quote(self.repo, safe='/')}/pulls",

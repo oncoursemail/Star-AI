@@ -68,10 +68,27 @@ def test_reject_bad_output_target(tmp_path):
     for filename in ("review.txt", "review"):
         with pytest.raises(ValueError):
             export_review_bundle(tmp_path,Settings(),tmp_path/filename)
+
+
+def test_reject_symlink_output_target(tmp_path):
     other=tmp_path/"out.zip"
-    other.symlink_to(tmp_path/"target.zip")
+    try:
+        other.symlink_to(tmp_path/"target.zip")
+    except (OSError, NotImplementedError):
+        # Windows without Developer Mode / SeCreateSymbolicLink cannot create links.
+        pytest.skip("Symlinks unavailable on this test host")
     with pytest.raises(PermissionError):
         export_review_bundle(tmp_path,Settings(),other)
+
+
+def test_symlink_output_target_is_refused_without_os_symlink_support(tmp_path, monkeypatch):
+    """Same rule as above, exercised on hosts that cannot create real symlinks."""
+    other=tmp_path/"out.zip"
+    real_is_symlink=Path.is_symlink
+    monkeypatch.setattr(Path,"is_symlink",lambda self: self==other or real_is_symlink(self))
+    with pytest.raises(PermissionError, match="symlink"):
+        export_review_bundle(tmp_path,Settings(),other)
+    assert not other.exists()
 
 
 def test_snapshot_never_publishes_keys_or_local_paths(tmp_path):

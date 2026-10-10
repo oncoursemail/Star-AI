@@ -34,7 +34,7 @@
 
 ## Real Windows acceptance — mandatory follow-up
 
-These require an actual Windows 11 test computer, GPU, internet provider credentials or Roblox Studio; do not mark as passed from CI:
+These require an actual Windows 11 test computer, GPU, internet provider credentials or Roblox Studio; do not mark as passed from CI. The exact step-by-step procedure, with a helper script that records the measurable parts as evidence, is [STAR_WINDOWS_ACCEPTANCE.md](STAR_WINDOWS_ACCEPTANCE.md) (issue #15 stays open until that evidence is attached):
 
 - Back up `%APPDATA%\STAR`; upgrade from v0.8.1 to v0.9.0 and compare original chats/models/attachments.
 - Open STAR Brain with the installed Qwen model, complete a real response, handle incorrect endpoint and slow CPU/GPU. Verify Jinja template no longer emits duplicate-system-message HTTP 500.
