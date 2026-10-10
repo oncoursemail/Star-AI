@@ -61,6 +61,7 @@ ROBLOX_GAME_TOOLS = (
     _tool("star_roblox_search_games", "Search Roblox experiences by name or keyword, with sourced public universe IDs and metadata. Search endpoint is experimental.", {"query": _s(140), "limit": _limit(12, 8)}, ("query",)),
     _tool("star_roblox_game_report", "Get an actual Roblox game's public universe metadata, currently playing snapshot, lifetime visits, favorites, votes, official thumbnail links, and explicitly tentative gameplay genre.", {"universe_id": {"type": "integer", "minimum": 1}}, ("universe_id",)),
     _tool("star_roblox_compare_games", "Compare two to four public Roblox experiences by Universe ID using comparable snapshot metrics. Never infer revenue or retention.", {"universe_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 4, "uniqueItems": True}}, ("universe_ids",)),
+    _tool("star_roblox_game_image", "Visually inspect pixels of one official Roblox game icon or thumbnail in the existing STAR vision-capable chat. Image may be marketing art, not gameplay.", {"universe_id": {"type": "integer", "minimum": 1}, "kind": {"type": "string", "enum": ["icon", "thumbnail"], "default": "thumbnail"}, "index": {"type": "integer", "minimum": 0, "maximum": 3, "default": 0}}, ("universe_id",)),
 )
 ROBLOX_KNOWLEDGE_TOOLS = (
     _tool("star_roblox_docs", "Find relevant official Roblox Creator Hub and Luau documentation links from the curated index; not full-text page retrieval.", {"query": _s(140), "limit": _limit(12, 7)}, ("query",)),
@@ -161,6 +162,7 @@ class LocalIntelligence:
                 "star_roblox_search_games": lambda: self.roblox.search_games(args["query"], args.get("limit", 8)),
                 "star_roblox_game_report": lambda: self.roblox.game_report(args["universe_id"]),
                 "star_roblox_compare_games": lambda: self.roblox.compare_games(args["universe_ids"]),
+                "star_roblox_game_image": lambda: self.roblox.game_image(args["universe_id"], args.get("kind", "thumbnail"), args.get("index", 0)),
                 "star_roblox_docs": lambda: self.roblox.docs(args["query"], args.get("limit", 7)),
                 "star_roblox_forum_search": lambda: self.roblox.search_forum(args["query"], args.get("limit", 7)),
                 "star_roblox_forum_latest": lambda: self.roblox.forum_latest(args.get("limit", 7)),
