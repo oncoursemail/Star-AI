@@ -46,6 +46,7 @@ class Settings:
     obsidian_enabled: bool = False
     skills_enabled: bool = True
     graphify_enabled: bool = True
+    roblox_research_enabled: bool = True
 
     @classmethod
     def load(cls, file: Path):
@@ -65,7 +66,7 @@ class Settings:
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
         if any(type(getattr(self, key)) is not bool
-               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled')):
+               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled', 'roblox_research_enabled')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
