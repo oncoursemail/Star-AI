@@ -131,6 +131,14 @@ async def run_research_team(
         )}
 
     try:
+        if on_event:
+            # The trusted, app-defined plan: lets the UI show queued stages truthfully.
+            try:
+                on_event({"event": "team_planned", "tasks": [
+                    {"id": t.id, "role": t.role, "dependencies": list(t.dependencies)}
+                    for t in plan.tasks.values()]})
+            except Exception:
+                pass  # Progress display is best effort; it never blocks the run.
         result = await run_plan(
             plan, model_worker,
             task_timeout=110.0, total_timeout=300.0,

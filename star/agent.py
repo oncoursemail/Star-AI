@@ -162,6 +162,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         # Some local model servers do not accept null tools/tool_choice values.
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         validate_model_roles(messages)
+        # One real model request is about to start; the UI shows it as a stage.
+        event({'event': 'model_turn', 'step': step + 1, 'max_steps': max_calls})
         response = None
         if stream_tokens and not definitions:
             # Stream only plain chat. With tool definitions we need the complete
@@ -256,6 +258,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     images = []
                     event({"event": "tool_rejected", "tool": name})
                 else:
+                    # Authorized: announce before running so progress is not retroactive.
+                    event({"event": "tool_started", "tool": name})
                     if name == 'star_github_tree' or name == 'star_github_read':
                         try:
                             from .repo_intelligence import repo_tree, repo_read
