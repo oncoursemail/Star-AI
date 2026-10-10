@@ -24,7 +24,9 @@ never fails a chat turn.
 
 1. **Decision** (`brain_router.grounding_plan`, a pure function, no model call). A prompt is grounded when it is a
    Roblox or Luau development question. Greetings, other topics, other engines and public game statistics are not.
-   "studio" on its own does not count.
+   "studio" on its own does not count. Words Roblox shares with other things (R6, R15, animator, Vector3, TextBox,
+   Rojo, HttpService) count only beside a second sign of Roblox; "Xbox Game Pass", "humanoid robot", a Python
+   `enum.auto()` or a C# `Enum.Parse` do not count at all.
 2. **Retrieval** within a budget, because every passage costs prompt time on a CPU server:
 
    | Mode | Passages | Characters |
@@ -50,6 +52,16 @@ A note that begins **Luau check by STAR:** is written only when the check really
 and passes Luau type analysis. It does not mean the code was run, and Roblox API names and argument types are not
 verified (Roblox globals are treated as type `any`). Use `star_api_lookup` for API names.
 
+Engine type names in annotations (`player: Player`, `part: BasePart`, `key: Enum.KeyCode`) are accepted when the
+index knows them as a class, data type or enum; values of those types are not checked. A type the engine does not
+have (`strng`) is still an error.
+
+No note is written, and nothing is claimed about the code, when the check could not finish (the service did not
+answer, a Luau tool hit its time or memory limit) or when the turn had under 10 seconds of its time budget left.
+A repair call is stopped 45 seconds before the turn's deadline; the block then keeps its diagnostics.
+
+A passage is marked "cited" only for a `[n]` in the prose. An index in code such as `waypoints[1]` is not a citation.
+
 ## Tools (Agent mode and project tasks)
 
 All three are read-only and go through the same schema-validated gateway as the other intelligence tools. They are
@@ -63,8 +75,11 @@ offered only for Roblox prompts and only when the knowledge service is configure
 
 ## Sources and licences
 
-Roblox Creator Documentation (Roblox/creator-docs, CC-BY-4.0 prose, MIT code samples) and the Luau documentation
-(luau-lang/site, MIT). Every passage carries its repository commit, licence and retrieval date.
+Roblox Creator Documentation, (c) Roblox Corporation (https://github.com/Roblox/creator-docs, CC-BY-4.0 prose, MIT
+code samples) and the Luau documentation, (c) 2019-2026 Roblox Corporation, (c) 1994-2019 Lua.org, PUC-Rio
+(https://github.com/luau-lang/site, MIT). Every passage carries its repository commit, licence and retrieval date.
+The index lives on your own STAR Server; nothing from it is shipped with STAR. Passages are shortened excerpts; the
+sources list under an answer links each one to its page and names the repository commit and licence.
 
 ## Code map
 
