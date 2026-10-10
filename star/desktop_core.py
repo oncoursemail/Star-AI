@@ -117,6 +117,17 @@ class Conversations:
 
     def new_chat(self, project: str) -> str:
         import uuid
+        # Reuse an already blank active thread instead of filling the history with
+        # duplicate untitled chats when the New chat button is clicked repeatedly.
+        current = self.connection.execute(
+            'SELECT a.chat_id FROM active_chats a JOIN chats c '
+            'ON c.project=a.project AND c.id=a.chat_id '
+            'WHERE a.project=? AND NOT EXISTS '
+            '(SELECT 1 FROM messages m WHERE m.project=a.project AND m.chat_id=a.chat_id)',
+            (project,)
+        ).fetchone()
+        if current:
+            return current[0]
         chat_id = uuid.uuid4().hex
         created = datetime.now(timezone.utc).isoformat()
         with self.connection:
