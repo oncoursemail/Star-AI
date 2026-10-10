@@ -273,6 +273,12 @@
   scrollbar-color: var(--star-stroke-strong) transparent;
   scrollbar-width: thin;
 }
+/* The composer shows focus on its own edge (.cmp:focus-within). The shared :focus-visible ring in
+ * stellar-ui.css is more specific than `.shell .cmp-input`, so it must be switched off here by name:
+ * otherwise a square gold outline is drawn around the text field inside the rounded composer. */
+.shell .cmp .cmp-input:focus-visible {
+  outline: 0;
+}
 .cmp-input::placeholder {
   color: var(--star-faint);
 }
