@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from star.brain_router import select_route, validate_alias
-from star.desktop_core import Settings
+from star.desktop_core import Settings, needs_project_tools
 
 
 def cfg(**kwargs):
@@ -105,6 +105,16 @@ def test_existing_settings_are_backward_compatible_and_validate_aliases(tmp_path
     again.roblox_model = "INVALID MULTIWORD"
     with pytest.raises(ValueError):
         again.validate()
+
+
+def test_followup_scoped_edit_intent_preserves_conversation_context():
+    assert needs_project_tools("fix it", ["Please edit my Roblox Studio game"])
+    assert needs_project_tools("make it better", ["Build my game", "Improve the Roblox HUD"])
+    assert not needs_project_tools("What is the capital of France?", ["Fix Roblox UI"])
+    assert not needs_project_tools("fix it", [])
+    assert not needs_project_tools("fix it", ["I enjoy baking bread"])
+    assert not needs_project_tools("fix this error" * 30, ["Roblox Studio"])
+    assert not needs_project_tools("Tell me about Roblox history", ["Edit the script"])
 
 
 def test_strict_route_inputs():
