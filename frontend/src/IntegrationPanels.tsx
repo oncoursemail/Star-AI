@@ -68,7 +68,7 @@ export function McpPanel({draft,onChange,status,invoke,disabled=false}:{draft:Ap
    setPending('');pendingId.current=''
    if(event.kind==='error'){setResults(prev=>({...prev,error:String(event.data||'Connection test failed').slice(0,240)}));return}
    const value=event.data as {server?:string;read_tool_count?:number;protocol?:string}|null
-   if(value?.server)setResults(prev=>({...prev,[value.server]:String(value.read_tool_count??0)+' read tools / '+String(value.protocol||'unknown')}))
+   if(value?.server){const name=value.server;setResults(prev=>({...prev,[name]:String(value.read_tool_count??0)+' read tools / '+String(value.protocol||'unknown')}))}
  }),[])
  const probe=async(name:string)=>{
    if(pending||disabled)return
