@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,MotionConfig,motion} from 'motion/react'
-import {Activity,ArrowRight,ArrowUp,BookOpen,Boxes,BrainCircuit,Check,ChevronDown,ChevronRight,Command,Copy,Download,ExternalLink,File,Folder,FolderOpen,Globe,HardDrive,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,Mic,Monitor,MoreHorizontal,Plus,RefreshCcw,Search,Send,Settings2,Shield,ShieldCheck,SlidersHorizontal,Sparkles,SquarePen,Star,Terminal,Trash2,Upload,Workflow,X, Zap} from 'lucide-react'
+import {Activity,ArrowRight,ArrowUp,BookOpen,Boxes,BrainCircuit,Check,ChevronDown,ChevronRight,Command,Copy,Download,ExternalLink,File,Folder,FolderOpen,Globe,HardDrive,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,Mic,Monitor,MoreHorizontal,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Send,Settings2,Shield,ShieldCheck,SlidersHorizontal,Sparkles,SquarePen,Star,Terminal,Trash2,Upload,Workflow,X, Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
 import {Brand,EmptyState,Message,Panel,PrivacyNote,Starlight,Tag} from './components'
 import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
@@ -45,6 +45,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
  const [leftOpen,setLeftOpen]=useState(false)
+ const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
  const [showJump,setShowJump]=useState(false)
  const [imageMode,setImageMode]=useState(false)
  const [composerMenu,setComposerMenu]=useState(false)
@@ -223,14 +224,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(!response){setUpdateBusy(false);setUpdateProgress(null)}
  }
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
- const wrapper='shell '+(!leftOpen?'':'shell-open')
+ const wrapper='shell '+(!leftOpen?'':'shell-open')+(sidebarCollapsed?' shell-sidebar-collapsed':'')
  const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
  const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
  return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview}>
    <aside className="sidebar" aria-label="STAR navigation">
       <div className="brand-area">
         <Brand/>
-        <button className="sidebar-collapse icon-button" type="button" aria-label="Close sidebar" onClick={()=>setLeftOpen(false)}><X size={18}/></button>
+        <button className="sidebar-collapse icon-button" type="button" aria-label="Hide sidebar" onClick={()=>{if(window.matchMedia('(max-width: 850px)').matches)setLeftOpen(false);else setSidebarCollapsed(true)}}><PanelLeftClose size={18}/></button>
       </div>
       <div className="sidebar-actions">
         <button className="new-chat-button" type="button" disabled={busy} onClick={()=>void startNewChat()}><SquarePen size={18}/><span>New chat</span></button>
@@ -256,7 +257,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    <div className="shell-main">
      <header className="topbar">
         <div className="topbar-left">
-          <button className="hamburger icon-button" type="button" aria-label="Open sidebar" onClick={()=>setLeftOpen(true)}><MoreHorizontal size={19}/></button>
+          <button className="hamburger icon-button" type="button" aria-label={sidebarCollapsed?'Show sidebar':'Toggle sidebar'} onClick={()=>{if(window.matchMedia('(max-width: 850px)').matches)setLeftOpen(true);else setSidebarCollapsed(v=>!v)}}>{sidebarCollapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}</button>
           <button className="topbar-title" type="button" title="Back to chat" onClick={()=>nav('chat')}>{tab==='chat'?'STAR':sections.find(x=>x[0]===tab)?.[1]}</button>
           {tab==='chat'&&<span className="topbar-subtitle" title={chatTitle}>{chatTitle==='New chat'?'':truncate(chatTitle,56)}</span>}
         </div>
