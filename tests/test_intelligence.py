@@ -23,7 +23,7 @@ def test_skill_starters_discovered_and_read_only(tmp_path):
     names = {row["name"] for row in library.list()["skills"]}
     assert {"roblox-ui-craft", "roblox-luau-review", "evidence-first-debugging"} <= names
     details = library.load("roblox-ui-craft")
-    assert "responsive" in details["instructions"]
+    assert "viewport sizes" in details["instructions"]
     assert "no additional permissions" in details["notice"].lower()
     original = home / "skills" / "roblox-ui-craft" / "SKILL.md"
     original.write_text(original.read_text() + "\nUSER CHANGE\n", encoding="utf-8")
