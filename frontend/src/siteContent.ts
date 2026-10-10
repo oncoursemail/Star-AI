@@ -54,8 +54,8 @@ export type BrainRoute={id:string;icon:'pc'|'server'|'cloud';title:string;body:s
 export const brainRoutes:BrainRoute[]=[
  {id:'pc',icon:'pc',title:'This PC',since:'0.8.0',note:'Default',
   body:'A managed llama.cpp engine with Qwen 3.5 4B, sized for a graphics card with about 8 GB of memory.'},
- {id:'lan',icon:'server',title:'Your own server',since:'0.9.0',
-  body:'A model server you run on another machine on your own network, for when the big hardware lives elsewhere in the house.'},
+ {id:'lan',icon:'server',title:'STAR Server, on your network',since:'0.9.0',
+  body:'A model server you run on another machine at home. STAR reaches it at a private network address, keeps its key in Windows Credential Manager, and needs no model download on this PC.'},
  {id:'hosted',icon:'cloud',title:'A hosted provider, with your key',since:'0.9.0',note:'Optional',
   body:'Groq, OpenRouter, Gemini or Cerebras. Off until you add a key, and local chat never falls back to it silently.'}
 ]

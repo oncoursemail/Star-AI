@@ -223,13 +223,13 @@
 /* ---------- progress ---------- */
 .sw-progress{background:var(--sw-band)}
 .sw-progress-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:28px 48px;align-items:end}
-.sw-sync{display:grid;justify-items:end;gap:8px;max-width:340px;text-align:right}
-.sw-sync-line{display:inline-flex;align-items:center;gap:9px;font:400 .8125rem/1.4 var(--sw-mono);color:var(--sw-text)}
+.sw-sync{display:grid;justify-items:end;gap:8px;text-align:right}
+.sw-sync-line{display:inline-flex;align-items:center;gap:9px;font:400 .8125rem/1.4 var(--sw-mono);color:var(--sw-text);white-space:nowrap}
 .sw-sync-dot{width:8px;height:8px;border-radius:50%;background:var(--sw-faint);flex:none}
 .sw-sync-line[data-tone="live"] .sw-sync-dot{background:var(--sw-gold)}
 .sw-sync-line[data-tone="wait"] .sw-sync-dot{animation:sw-pulse 1s linear infinite alternate}
 .sw-sync-line[data-tone="stale"] .sw-sync-dot{background:transparent;border:1px solid var(--sw-muted)}
-.sw-sync-detail{font-size:.8125rem;line-height:1.5;color:var(--sw-faint)}
+.sw-sync-detail{max-width:340px;font-size:.8125rem;line-height:1.5;color:var(--sw-faint)}
 .sw-spin{animation:sw-turn .9s linear infinite}
 
 .sw-rail{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);margin-top:52px}
@@ -376,7 +376,7 @@
  .sw-nav{position:absolute;top:100%;left:0;right:0;margin:0;padding:8px var(--sw-gutter) 16px;background:var(--sw-bg);border-bottom:1px solid var(--sw-stroke);display:none}
  .sw-nav[data-open="true"]{display:block;animation:sw-fade .18s var(--sw-ease) both}
  .sw-nav ul{flex-direction:column;align-items:stretch;gap:0}
- .sw-nav a{height:50px;padding:0;border-radius:0;font-size:1.0625rem;color:var(--sw-text);border-bottom:1px solid var(--sw-stroke-soft)}
+ .sw-nav a{display:flex;width:100%;height:50px;padding:0;border-radius:0;font-size:1.0625rem;color:var(--sw-text);border-bottom:1px solid var(--sw-stroke-soft)}
  .sw-nav a:hover{background:transparent}
  .sw-nav-out{margin:0;padding:0;border-left:0}
  .sw-nav-out a{border-bottom:0}
@@ -387,7 +387,10 @@
  .sw-spec dd{text-align:left}
  .sw-tour-caption{grid-template-columns:minmax(0,1fr)}
  .sw-progress-head{grid-template-columns:minmax(0,1fr)}
- .sw-sync{justify-items:start;text-align:left;max-width:none}
+ .sw-sync{justify-items:start;text-align:left}
+ .sw-sync-line{align-items:flex-start;white-space:normal}
+ .sw-sync-dot{margin-top:5px}
+ .sw-sync-detail{max-width:none}
  .sw-lanes{grid-template-columns:minmax(0,1fr)}
  .sw-lane,.sw-lane+.sw-lane{padding:24px 0 12px;border-left:0}
  .sw-lane+.sw-lane{border-top:1px solid var(--sw-stroke)}
