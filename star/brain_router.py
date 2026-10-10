@@ -33,11 +33,17 @@ ROBLOX_QUALITY_NOTES = (
 )
 
 
+def is_roblox_task(prompt: str) -> bool:
+    """Detect Roblox-specific quality constraints even in explicit Agent mode."""
+    return isinstance(prompt, str) and bool(_ROBLOX.search(prompt))
+
+
 def validate_alias(value: str, *, field: str = "model") -> None:
     """Only ID strings, never arbitrary provider URLs, controls or shell fragments."""
     if not isinstance(value, str):
         raise ValueError(f"{field} must be a model ID string")
-    if value and (value != value.strip() or not _MODEL_ID.fullmatch(value)):
+    if value and (value != value.strip() or not _MODEL_ID.fullmatch(value)
+                  or value.lower().startswith(("http://", "https://", "file://"))):
         raise ValueError(f"{field} must be a single model ID without whitespace (max 180 characters)")
 
 
@@ -105,6 +111,8 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         chosen = configured["roblox_model"] or configured["reasoning_model"] or primary
     elif profile == "vision":
         chosen = configured["vision_model"] or configured["reasoning_model"] or primary
+    elif profile == "agent" and is_roblox_task(prompt) and configured["roblox_model"]:
+        chosen = configured["roblox_model"]
     else:
         chosen = configured["reasoning_model"] or primary
 
