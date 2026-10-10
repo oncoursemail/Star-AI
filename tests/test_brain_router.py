@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from star.brain_router import select_route, validate_alias
-from star.desktop_core import Settings, needs_project_tools, needs_studio_connection
+from star.desktop_core import Settings, needs_project_tools, needs_studio_connection, model_context_char_budget
 
 
 def cfg(**kwargs):
@@ -139,6 +139,19 @@ def test_public_roblox_research_skips_studio_even_when_agent_mode():
     assert needs_studio_connection("Fix Roblox camera glitches")
     assert needs_studio_connection("fix it", ["Previously you edited my Roblox Studio scripts"])
     assert not needs_studio_connection("fix it", ["Please search Roblox developer forums"])
+
+
+def test_managed_local_router_reserves_context_for_user_and_tool_calls():
+    ordinary = Settings()
+    assert model_context_char_budget(ordinary) == ordinary.context_chars
+    ordinary.router_models_dir = "C:/selected-ggufs"
+    assert model_context_char_budget(ordinary) == 7168
+    ordinary.router_context = 8192
+    assert model_context_char_budget(ordinary) == 15360
+    ordinary.context_chars = 6000
+    assert model_context_char_budget(ordinary) == 6000
+    ordinary.provider = "groq"
+    assert model_context_char_budget(ordinary) == 6000
 
 
 def test_strict_route_inputs():
