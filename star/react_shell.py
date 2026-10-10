@@ -38,6 +38,8 @@ def react_index(root: Path | None = None) -> Path:
 def sanitize_event(event: dict) -> dict:
     """Never forward raw tool results/secret tokens to an unrestricted webpage."""
     kind = str(event.get('event', 'working'))[:36]
+    if kind == 'assistant_delta':
+        return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
     if kind in {'saved','run_completed'}:
         return {'phase':'Saving verified task record'}
     if kind in {'tool_call','tool_result','tool_output'}:
@@ -208,7 +210,9 @@ def launch():
                     pics=pics[:4]
                     extras.append('Only the first 4 visual attachments were sent to respect context limits.')
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
-                answer=run_task(settings,full_prompt,pics,on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)))
+                answer=run_task(settings,full_prompt,pics,
+                    on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
+                    stream_tokens=True)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
