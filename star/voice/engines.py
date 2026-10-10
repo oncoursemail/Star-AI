@@ -206,6 +206,10 @@ class SmartTurnEndpointer:
 AUTO_ASR_MODEL = {"cuda": "small.en", "cpu": "base.en"}
 
 
+def _letters(text: str) -> str:
+    return "".join(ch for ch in text.lower() if ch.isalnum())
+
+
 class FasterWhisperASR:
     """faster-whisper (CTranslate2). On the GPU: float16; on the CPU: int8."""
 
@@ -239,7 +243,12 @@ class FasterWhisperASR:
                 audio, language=self.language, beam_size=1, temperature=0.0, vad_filter=False,
                 condition_on_previous_text=False, without_timestamps=True,
                 initial_prompt=self.prompt or None, no_speech_threshold=0.6)
-            return " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
+            text = " ".join(s.text.strip() for s in segments if s.text.strip()).strip()
+        # Given a short or unclear clip, Whisper sometimes "transcribes" its own hint text. That is not speech.
+        said, hint = _letters(text), _letters(self.prompt)
+        if hint and len(said) >= 0.6 * len(hint) and said in hint:
+            return ""
+        return text
 
 
 # -- text to speech ---------------------------------------------------------------------------
