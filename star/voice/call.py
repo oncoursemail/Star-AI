@@ -329,6 +329,7 @@ class CallSession:
                 if metrics.first_token_at is None:
                     metrics.first_token_at = self.clock()
                 metrics.tokens += 1
+                metrics.last_token_at = self.clock()
                 reply.raw_text += delta
                 self._emit({"type": "assistant_delta", "turn": metrics.turn, "text": delta})
                 for sentence in chunker.feed(delta):

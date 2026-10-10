@@ -180,3 +180,47 @@ class ServerBrain:
 
     def close(self) -> None:
         self._client.close()
+
+
+class _ScriptedStream:
+    def __init__(self, text: str, first_delay: float, delay: float) -> None:
+        words = text.split(" ")
+        self._pieces = [w if i == 0 else " " + w for i, w in enumerate(words)]
+        self._first_delay, self._delay, self._sent = first_delay, delay, 0
+        self._closed = threading.Event()
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> str:
+        wait = self._first_delay if self._sent == 0 else self._delay
+        if self._closed.wait(wait) or self._sent >= len(self._pieces):
+            raise StopIteration
+        self._sent += 1
+        return self._pieces[self._sent - 1]
+
+    def close(self) -> None:
+        self._closed.set()
+
+
+class ScriptedBrain:
+    """Offline stand-in for the server: fixed replies at a set pace. For testing the audio path only."""
+
+    REPLIES = (
+        "Oh, hello love. I'm right here, and I'm listening. Tell me what's on your mind.",
+        "Okay, I hear you. That sounds like a lot for one day, so let's take it one small step at a time. "
+        "First we'll look at what you already have, then we'll fix the one thing that is bothering you, "
+        "and after that we can decide together what comes next.",
+        "Of course, sweetheart. We can stop there. What would you like to do instead?",
+    )
+
+    def __init__(self, replies: tuple[str, ...] | list[str] | None = None, first_delay: float = 0.9,
+                 tokens_per_second: float = 4.6) -> None:
+        self.replies = tuple(replies or self.REPLIES)
+        self.first_delay, self.delay = first_delay, 1.0 / tokens_per_second
+        self.requests: list[list[dict]] = []
+
+    def stream(self, messages: list[dict]) -> _ScriptedStream:
+        self.requests.append(messages)
+        text = self.replies[(len(self.requests) - 1) % len(self.replies)]
+        return _ScriptedStream(text, self.first_delay, self.delay)

@@ -1,0 +1,97 @@
+"""Voice call settings: which engines, which voice, how patient the turn-taking is.
+
+Kept apart from star.desktop_core.Settings on purpose (that class is being changed on another branch).
+Values come from the bridge payload or from STAR_VOICE_* environment variables; every value is
+validated here because the bridge payload is written by the web UI.
+"""
+from __future__ import annotations
+
+import os
+import re
+from dataclasses import asdict, dataclass
+
+from .call import CallConfig
+from .turn import TurnConfig
+
+TTS_ENGINES = ("kokoro",)
+ASR_ENGINES = ("faster-whisper",)
+ASR_MODELS = ("tiny.en", "base.en", "small.en", "medium.en", "distil-large-v3", "large-v3-turbo",
+              "tiny", "base", "small", "medium", "large-v3")
+VAD_ENGINES = ("silero", "energy")
+ENDPOINTERS = ("smart-turn", "silence")
+OUTPUT_MODES = ("headphones", "speakers")
+_VOICE_ID = re.compile(r"^[A-Za-z0-9_.:+\-]{1,120}$")
+
+
+@dataclass
+class VoiceSettings:
+    tts_engine: str = "kokoro"
+    voice: str = "heart"                 # id from the audition page, or an engine-specific recipe
+    speed: float = 0.92                  # a little slower than neutral: calmer
+    asr_engine: str = "faster-whisper"
+    asr_model: str = "small.en"
+    asr_prompt: str = "Star, Roblox, Luau, RemoteEvent."     # spellings the transcript should prefer
+    device: str = "auto"                 # auto | cuda | cpu
+    vad: str = "silero"
+    endpointer: str = "smart-turn"
+    output: str = "headphones"           # "speakers" turns the echo gate on
+    end_silence_ms: int = 640            # silence that ends a turn when the end-of-turn model is off
+    max_silence_ms: int = 2000           # silence that always ends a turn
+    barge_in_ms: int = 288               # speech needed to interrupt Star
+    max_reply_tokens: int = 220
+    partial_transcripts: bool = True
+    input_device: str = ""               # sounddevice name or index; empty = system default
+    output_device: str = ""
+    system_extra: str = ""
+
+    def validate(self) -> "VoiceSettings":
+        checks = [(self.tts_engine in TTS_ENGINES, "Unknown text-to-speech engine"),
+                  (bool(_VOICE_ID.match(self.voice)), "Invalid voice id"),
+                  (0.6 <= float(self.speed) <= 1.4, "Speed must be between 0.6 and 1.4"),
+                  (self.asr_engine in ASR_ENGINES, "Unknown speech-to-text engine"),
+                  (self.asr_model in ASR_MODELS, "Unknown speech-to-text model"),
+                  (len(self.asr_prompt) <= 300, "Speech-to-text hint is too long"),
+                  (self.device in {"auto", "cuda", "cpu"}, "Device must be auto, cuda or cpu"),
+                  (self.vad in VAD_ENGINES, "Unknown voice activity detector"),
+                  (self.endpointer in ENDPOINTERS, "Unknown end-of-turn setting"),
+                  (self.output in OUTPUT_MODES, "Output must be headphones or speakers"),
+                  (300 <= int(self.end_silence_ms) <= 3000, "end_silence_ms must be 300-3000"),
+                  (int(self.end_silence_ms) <= int(self.max_silence_ms) <= 6000, "max_silence_ms must be up to 6000"),
+                  (96 <= int(self.barge_in_ms) <= 2000, "barge_in_ms must be 96-2000"),
+                  (16 <= int(self.max_reply_tokens) <= 800, "max_reply_tokens must be 16-800"),
+                  (len(self.input_device) <= 120 and len(self.output_device) <= 120, "Device name is too long"),
+                  (len(self.system_extra) <= 1200, "Extra context is too long")]
+        for ok, message in checks:
+            if not ok:
+                raise ValueError(message)
+        return self
+
+    @classmethod
+    def from_mapping(cls, data: dict | None, base: "VoiceSettings | None" = None) -> "VoiceSettings":
+        """Overlay known keys from a dict (bridge payload). Unknown keys are ignored, types are coerced."""
+        values = asdict(base or cls())
+        for key, current in values.items():
+            if data and key in data and data[key] is not None:
+                raw = data[key]
+                if isinstance(current, bool):
+                    values[key] = raw if isinstance(raw, bool) else str(raw).strip().lower() in {"1", "true", "yes", "on"}
+                elif isinstance(current, int):
+                    values[key] = int(raw)
+                elif isinstance(current, float):
+                    values[key] = float(raw)
+                else:
+                    values[key] = str(raw).strip()
+        return cls(**values).validate()
+
+    @classmethod
+    def from_env(cls) -> "VoiceSettings":
+        """STAR_VOICE_VOICE=blend-heart-nicole, STAR_VOICE_ASR_MODEL=base.en, and so on."""
+        data = {key: os.environ[f"STAR_VOICE_{key.upper()}"] for key in asdict(cls())
+                if os.environ.get(f"STAR_VOICE_{key.upper()}", "").strip()}
+        return cls.from_mapping(data)
+
+    def call_config(self) -> CallConfig:
+        turn = TurnConfig(end_silence_ms=int(self.end_silence_ms), max_silence_ms=int(self.max_silence_ms),
+                          barge_in_ms=int(self.barge_in_ms))
+        return CallConfig(turn=turn, system_extra=self.system_extra, partial_transcripts=self.partial_transcripts,
+                          use_echo_gate=self.output == "speakers")

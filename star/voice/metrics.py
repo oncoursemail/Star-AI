@@ -16,6 +16,7 @@ class TurnMetrics:
     first_token_at: float | None = None  # first text from the brain
     first_sentence_at: float | None = None   # first chunk handed to text-to-speech
     first_audio_at: float | None = None  # first audio handed to the speaker
+    last_token_at: float | None = None   # last text from the brain
     done_at: float | None = None
     end_reason: str = ""            # how the turn ended: model | silence | max_silence | max_turn
     asr_seconds: float = 0.0        # compute time of the transcription itself
@@ -34,7 +35,7 @@ class TurnMetrics:
 
     def stages(self) -> dict:
         """The latency breakdown in seconds. `total` is what the user feels: stop talking -> hear Star."""
-        generation = self._gap(self.first_token_at, self.done_at)
+        generation = self._gap(self.first_token_at, self.last_token_at)
         return {
             "endpoint": self._gap(self.speech_end, self.turn_end),
             "asr": self._gap(self.turn_end, self.transcript_at),
@@ -42,7 +43,7 @@ class TurnMetrics:
             "transcript_to_first_token": self._gap(self.transcript_at, self.first_token_at),
             "first_token_to_first_audio": self._gap(self.first_token_at, self.first_audio_at),
             "total": self._gap(self.speech_end, self.first_audio_at),
-            "tokens_per_second": (self.tokens / generation) if generation and self.tokens > 1 else None,
+            "tokens_per_second": ((self.tokens - 1) / generation) if generation and self.tokens > 2 else None,
         }
 
     def to_dict(self) -> dict:

@@ -8,8 +8,9 @@ loudspeaker's own echo.
 End of turn uses two layers, the way current voice agents do:
 1. a short pause (pause_ms) triggers an optional end-of-turn model that listens to *how* the sentence
    ended (falling pitch, finished phrase) and can end the turn immediately;
-2. plain silence ends the turn anyway: end_silence_ms without a model, max_silence_ms when the model
-   said "they are not finished".
+2. while the model says "not finished" it is asked again every recheck_ms as the silence grows, and
+   the bar it has to clear drops steadily: the longer nobody speaks, the less proof is needed;
+3. plain silence ends the turn anyway: end_silence_ms without a model, max_silence_ms with one.
 
 Pure Python and deterministic (time comes from the caller), so the unit tests need no audio stack.
 """
@@ -32,6 +33,8 @@ class TurnConfig:
     end_silence_ms: int = 640          # silence that ends the turn when there is no end-of-turn model
     max_silence_ms: int = 2000         # silence that ends the turn even if the model says "not finished"
     complete_threshold: float = 0.5    # end-of-turn model probability that ends the turn at the pause
+    late_threshold: float = 0.25       # ...relaxed to this by the time max_silence_ms is reached
+    recheck_ms: int = 192              # while the model says "not finished", ask it again this often
     resume_ms: int = 64                # voiced time that turns a pause back into speech
     barge_in_ms: int = 288             # voiced time needed to interrupt the assistant
     barge_in_threshold: float = 0.6    # stricter probability while the assistant is audible
@@ -71,6 +74,7 @@ class TurnDetector:
         self._turn_ms = 0
         self._last_voiced = 0.0
         self._model_says_open = False
+        self._checked_ms = 0       # silence length at the last end-of-turn model call
 
     # -- public API -------------------------------------------------------------------------
     def process(self, frame: bytes, probability: float, now: float, *, assistant_active: bool = False,
@@ -86,7 +90,7 @@ class TurnDetector:
         self.state = self.IDLE
         self._pre_roll.clear()
         self._frames = []
-        self._run_ms = self._silence_ms = self._voiced_ms = self._turn_ms = 0
+        self._run_ms = self._silence_ms = self._voiced_ms = self._turn_ms = self._checked_ms = 0
         self._model_says_open = False
 
     @property
@@ -133,12 +137,7 @@ class TurnDetector:
         self.state = self.PAUSE
         self._run_ms = 0
         events = [TurnEvent("pause", now, audio=self.audio, speech_end=self._last_voiced)]
-        probability_complete = None
-        if self.endpointer is not None:
-            try:
-                probability_complete = float(self.endpointer.complete_probability(self.audio))
-            except Exception:
-                probability_complete = None        # a broken model must never block the call: fall back to silence
+        probability_complete = self._ask_model()
         events[0].complete_probability = probability_complete
         if probability_complete is None:
             self._model_says_open = False
@@ -147,6 +146,22 @@ class TurnDetector:
         else:
             self._model_says_open = True
         return events
+
+    def _ask_model(self) -> float | None:
+        self._checked_ms = self._silence_ms
+        if self.endpointer is None:
+            return None
+        try:
+            return float(self.endpointer.complete_probability(self.audio))
+        except Exception:
+            return None                # a broken model must never block the call: fall back to silence
+
+    def _threshold_now(self) -> float:
+        """The bar the end-of-turn model has to clear, falling as the silence grows."""
+        cfg = self.config
+        span = max(1, cfg.max_silence_ms - cfg.pause_ms)
+        progress = min(1.0, max(0.0, (self._silence_ms - cfg.pause_ms) / span))
+        return cfg.complete_threshold + (cfg.late_threshold - cfg.complete_threshold) * progress
 
     def _pause(self, frame, probability, now) -> list[TurnEvent]:
         cfg = self.config
@@ -166,6 +181,12 @@ class TurnDetector:
         limit = cfg.max_silence_ms if self._model_says_open else cfg.end_silence_ms
         if self._silence_ms >= limit:
             return [self._end(now, "max_silence" if self._model_says_open else "silence", None)]
+        if self._model_says_open and self._silence_ms - self._checked_ms >= cfg.recheck_ms:
+            probability_complete = self._ask_model()
+            if probability_complete is None:
+                self._model_says_open = False          # the model broke: plain silence takes over
+            elif probability_complete >= self._threshold_now():
+                return [self._end(now, "model", probability_complete)]
         return []
 
     def _end(self, now: float, reason: str, probability_complete: float | None) -> TurnEvent:

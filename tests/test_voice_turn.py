@@ -87,8 +87,21 @@ def test_end_of_turn_model_can_end_the_turn_at_the_pause():
     assert events[1].at - events[1].speech_end < 0.3          # far sooner than a fixed silence timer
 
 
+def test_model_is_asked_again_as_silence_grows_and_needs_less_proof_each_time():
+    model = Model([0.30, 0.35, 0.44, 0.44, 0.44, 0.44, 0.44, 0.44])
+    cfg = TurnConfig(pause_ms=256, max_silence_ms=2000, complete_threshold=0.5, late_threshold=0.25, recheck_ms=192)
+    f = Feeder(TurnDetector(cfg, model))
+    f.feed(0.9, 20)
+    f.feed(0.0, ms(2000))
+    end = [e for e in f.events if e.kind == "turn_end"][0]
+    assert f.kinds() == ["speech_start", "pause", "turn_end"] and end.reason == "model"
+    assert end.complete_probability == 0.44
+    waited = end.at - end.speech_end
+    assert 0.6 < waited < 1.0                      # 0.44 was not enough at 0.26 s, but is by about 0.8 s
+
+
 def test_model_saying_not_finished_waits_longer_but_never_forever():
-    model = Model([0.1, 0.2])
+    model = Model([0.1] * 4 + [0.2] * 20)
     cfg = TurnConfig(pause_ms=256, end_silence_ms=640, max_silence_ms=2000)
     f = Feeder(TurnDetector(cfg, model))
     f.feed(0.9, 20)
@@ -97,7 +110,7 @@ def test_model_saying_not_finished_waits_longer_but_never_forever():
     f.feed(0.9, 10)                                            # the user finishes the thought
     f.feed(0.0, ms(256) + ms(2000))
     assert f.kinds() == ["speech_start", "pause", "resume", "pause", "turn_end"]
-    assert f.events[-1].reason == "max_silence" and model.calls == 2
+    assert f.events[-1].reason == "max_silence"
 
 
 def test_a_broken_end_of_turn_model_falls_back_to_plain_silence():
@@ -105,6 +118,10 @@ def test_a_broken_end_of_turn_model_falls_back_to_plain_silence():
     f.feed(0.9, 20)
     f.feed(0.0, ms(256) + ms(640))
     assert f.kinds() == ["speech_start", "pause", "turn_end"] and f.events[-1].reason == "silence"
+    g = Feeder(TurnDetector(TurnConfig(pause_ms=256, end_silence_ms=640), Model([0.1, RuntimeError("boom")])))
+    g.feed(0.9, 20)
+    g.feed(0.0, ms(256) + ms(640))                # breaks on the second ask: still ends on plain silence
+    assert g.kinds() == ["speech_start", "pause", "turn_end"] and g.events[-1].reason == "silence"
 
 
 def test_interrupting_the_assistant_needs_longer_and_clearer_speech():
