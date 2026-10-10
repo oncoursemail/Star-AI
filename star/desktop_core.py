@@ -367,6 +367,37 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
                 and any(any(x in turn.lower() for x in scopes)
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
+def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+    """Only connect to Roblox Studio for an actual selected-place operation.
+
+    A configured studio_id is NOT a request to connect for every agent call.
+    Public Roblox game stats, forum research, generic coding discussions,
+    image generation and tool catalogues must remain independent of Studio.
+    """
+    if not isinstance(prompt,str) or not prompt.strip():
+        return False
+    text=prompt.lower()
+    actions=('inspect','edit','modify','build','create','fix','test ','run ','playtest',
+             'open ','change ','update ','delete ','remove ','add ','insert ','scan ')
+    requests_action=any(a in text for a in actions)
+    if not requests_action:
+        return False
+    studio_scopes=('studio','current place','selected place','my game',
+                   'my project','my roblox game','the place','game hierarchy',
+                   'explorer tree','datamodel')
+    if any(term in text for term in studio_scopes):
+        return True
+    if 'roblox' in text and not any(term in text for term in (
+        'statistics','stats','visits','favorites','playing','concurrent',
+        'universe id','place id','news','devforum','forum','public api',
+        'game search','game research','popular games')):
+        return True
+    return bool(len(text)<=160 and prior_user_turns
+                and re.search(r'\b(?:it|this|that|same|continue|again)\b',text)
+                and any(any(term in turn.lower() for term in studio_scopes)
+                        for turn in prior_user_turns[-3:] if isinstance(turn,str)))
+
+
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
@@ -444,7 +475,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         if use_tools and settings.tool_workshop_enabled:
             workshop = ToolWorkshop(home=home,project=settings.project,knowledge=knowledge,
                                     workspace=workspace,intelligence=intelligence)
-        allow_studio = bool(use_tools and settings.studio_id)
+        allow_studio = bool(use_tools and settings.studio_id and
+                            needs_studio_connection(prompt,recent_users))
         mcp_gateway = MCPGateway(settings) if use_tools else None
         endpoint, key = connection_for(settings)
         async def run():
