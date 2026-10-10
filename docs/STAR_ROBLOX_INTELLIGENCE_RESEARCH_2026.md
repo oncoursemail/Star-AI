@@ -7,6 +7,7 @@ STAR now has a read-only, task-scoped Roblox research module in star/roblox_rese
 
 | Tool | Capability | Evidence / limits |
 |---|---|---|
+| star_roblox_resolve_game_url / star_roblox_resolve_place | Validate a Roblox game page URL / Place ID, then resolve to Universe ID via fixed public Roblox API | Experimental public endpoint; explicit error on missing/deprecated mapping |
 | star_roblox_search_games | Public keyword discovery and grounded universe IDs | Experimental endpoint; limited search, not full catalog |
 | star_roblox_game_report | Officially hosted public game data: creator, description, creation/update, playing snapshot, cumulative visits, favorites, votes, image URLs, genre hypothesis | Auxiliary errors are surfaced; genre is not proven gameplay |
 | star_roblox_compare_games | Same public metrics for 2–4 universes | Snapshot data, not DAU, revenue or retention |
@@ -42,7 +43,7 @@ Sources:
 - https://create.roblox.com/docs/cloud/reference/features/thumbnails
 - https://games.roblox.com/v1/games?universeIds=920587237
 
-**Never conflate Universe IDs and Place IDs.** A Roblox experience page URL commonly takes the root Place ID; public data endpoints take the Universe ID. A game title is not a unique identity. STAR's search hydrates explicit Universe IDs from results rather than guessing a number. Place-ID-only resolution is still a later implementation task.
+**Never conflate Universe IDs and Place IDs.** A Roblox experience page URL commonly takes the root Place ID; public data endpoints take the Universe ID. A game title is not a unique identity. STAR's search hydrates explicit Universe IDs from results rather than guessing a number. Place ID resolution is implemented using a fixed public Roblox endpoint at https://apis.roblox.com/universes/v1/places/{placeId}/universe. Because this public interface is not a guaranteed Open Cloud SLA, failures are explicit and no Universe ID is invented.
 
 **Metric semantics:** playing means a point-in-time concurrently playing snapshot, visits is cumulative sessions/visits rather than unique users, favorites and votes are platform counters. None of these proves revenue, DAU, retention, engagement time, originality or game quality. STAR should not invent any of these.
 
