@@ -38,7 +38,7 @@ def chat_image(home: Path, body: str) -> dict | None:
     except (OSError, ValueError):
         return {"text": "Generated image saved; preview unavailable. Open STAR data folder to view."}
 
-def generate_chat_image(settings, prompt: str, home: Path) -> dict:
+def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None) -> dict:
     """Local, explicit ComfyUI opt-in; never downloads unreviewed custom nodes."""
     if not settings.comfy_workflow.strip():
         raise ValueError("Configure a ComfyUI API-format workflow in Settings → Image generation first.")
@@ -48,7 +48,7 @@ def generate_chat_image(settings, prompt: str, home: Path) -> dict:
     output = home / "generated-images"
     images = generate(Path(settings.comfy_workflow), prompt=prompt,
                       node_id=settings.comfy_prompt_node, output=output,
-                      port=settings.comfy_port, timeout_seconds=240)
+                      port=settings.comfy_port, timeout_seconds=240, cancel_event=cancel_event)
     first = images[0]
     if not NAME.fullmatch(first.name):
         raise RuntimeError("Unexpected generated image filename")
