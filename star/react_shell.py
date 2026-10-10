@@ -82,7 +82,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     messages = []
     for i, (role, body, created) in enumerate(recent):
         entry = {'id':f'saved-{i}', 'role':role,'text':body,'created':created}
-        preview = chat_image(home,body) if role == 'assistant' else None
+        preview = chat_image(home, body) if role == 'assistant' else None
         if preview:
             entry.update(preview)
         messages.append(entry)
