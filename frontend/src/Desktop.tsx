@@ -7,6 +7,7 @@ import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
 import './desktop-v2.css'
+import './agents-learning.css'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
