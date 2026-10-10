@@ -62,7 +62,7 @@ class BrainRoute:
 
 def select_route(settings, prompt: str, *, mode: str = "auto",
                  image_count: int = 0, research: bool = False,
-                 project_tools: bool = False) -> BrainRoute:
+                 project_tools: bool = False, roblox_context: bool = False) -> BrainRoute:
     """Select a capability profile, not a different privacy or permission policy.
 
     Auto complexity detection is deliberately cheap and deterministic. It is not
@@ -74,7 +74,7 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         raise ValueError("Prompt is empty")
     if not isinstance(image_count, int) or not 0 <= image_count <= 4:
         raise ValueError("0..4 images are allowed")
-    if type(research) is not bool or type(project_tools) is not bool:
+    if type(research) is not bool or type(project_tools) is not bool or type(roblox_context) is not bool:
         raise ValueError("Route flags must be boolean")
 
     configured = {}
@@ -82,6 +82,7 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         value = getattr(settings, name, "")
         validate_alias(value, field=name)
         configured[name] = value
+    roblox_topic = is_roblox_task(prompt) or roblox_context
     primary = configured["model"]
     if not primary:
         raise ValueError("Select a primary model first")
@@ -92,7 +93,7 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         profile = "agent"
     elif image_count:
         profile = "vision"
-    elif _ROBLOX.search(prompt):
+    elif roblox_topic:
         profile = "roblox"
     elif research:
         profile = "research"
@@ -114,7 +115,7 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         chosen = configured["roblox_model"] or configured["reasoning_model"] or primary
     elif profile == "vision":
         chosen = configured["vision_model"] or configured["reasoning_model"] or primary
-    elif profile == "agent" and is_roblox_task(prompt) and configured["roblox_model"]:
+    elif profile == "agent" and roblox_topic and configured["roblox_model"]:
         chosen = configured["roblox_model"]
     else:
         chosen = configured["reasoning_model"] or primary
