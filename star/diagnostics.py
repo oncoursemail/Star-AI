@@ -53,6 +53,7 @@ def _read_activity(home: Path, *, days: int = 14) -> dict:
         "period_days": days,
         "events": {},
         "duration_ms": {"count": 0, "p50": None, "p95": None, "max": None},
+        "first_visible_token_ms": {"count": 0, "p50": None, "p95": None},
         "failures_by_exception_type": {},
         "conversation_message_count": 0,
     }
@@ -69,12 +70,15 @@ def _read_activity(home: Path, *, days: int = 14) -> dict:
             events = Counter()
             failures = Counter()
             times = []
+            first_tokens = []
             for kind, elapsed_ms, detail in rows:
-                if kind not in {"run_started","run_succeeded","run_failed","tool_completed","tool_rejected"}:
+                if kind not in {"run_started","run_succeeded","run_failed","tool_completed","tool_rejected","first_token"}:
                     continue
                 events[kind] += 1
                 if kind == "run_succeeded" and type(elapsed_ms) is int and 0 <= elapsed_ms <= 86_400_000:
                     times.append(elapsed_ms)
+                if kind == "first_token" and type(elapsed_ms) is int and 0 <= elapsed_ms <= 86_400_000:
+                    first_tokens.append(elapsed_ms)
                 if kind == "run_failed":
                     exc = str(detail or "").strip()
                     # Only a Python exception type is safe. No arbitrary message text.
@@ -84,6 +88,13 @@ def _read_activity(home: Path, *, days: int = 14) -> dict:
                         failures["Other"] += 1
             summary["events"] = dict(events)
             summary["failures_by_exception_type"] = dict(failures)
+            if first_tokens:
+                first_tokens.sort()
+                summary["first_visible_token_ms"] = {
+                    "count": len(first_tokens),
+                    "p50": first_tokens[(len(first_tokens)-1)//2],
+                    "p95": first_tokens[max(0, (95*len(first_tokens)+99)//100-1)],
+                }
             if times:
                 times.sort()
                 summary["duration_ms"] = {
