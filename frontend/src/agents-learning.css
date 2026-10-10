@@ -1,0 +1,47 @@
+/* STAR Teams and reviewed memory controls. Minimal interruption to the primary chat. */
+.team-mode-toggle{
+ display:inline-flex;align-items:center;gap:7px;flex:0 0 auto;
+ min-height:30px;padding:6px 10px;border:1px solid #3c4446;border-radius:8px;
+ background:#1b2124;color:#acb8b8;font-size:10px;font-weight:720;
+ transition:color .16s,background .16s,border-color .16s;
+}
+.team-mode-toggle:hover{background:#2a3030;color:#f0e0bb}
+.team-mode-toggle.active{border-color:#937951;color:#f3d59d;background:#333024}
+.team-mode-toggle.active svg{color:#efc782}
+.team-mode-toggle:focus-visible{outline:2px solid var(--gold);outline-offset:3px}
+.project-learning{margin-top:28px;background:#14191b;border:1px solid #333c3d}
+.project-learning .section-heading{margin-bottom:9px}
+.project-learning>p{max-width:760px}
+.learning-label{display:block;font-size:11px;color:#c7d0ce;font-weight:700;margin:20px 0 9px}
+.learning-textarea{display:block;resize:vertical;min-height:87px;max-height:240px;width:100%;
+ background:#1a2023;border:1px solid #434c4d;border-radius:11px;padding:14px 16px;
+ color:#f1f2ef;font-size:13px;line-height:1.7;
+ transition:border-color .17s,box-shadow .17s}
+.learning-textarea::placeholder{color:#899698}
+.learning-textarea:focus{outline:0;border-color:#aa895d;box-shadow:0 0 0 3px #ceab6b19}
+.learning-actions{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;margin-top:14px}
+.learning-actions small{color:#929fa0}
+.learning-actions .primary-button{min-height:39px}
+.learning-replace{background:#29241e;border:1px solid #695337;padding:11px 14px;
+ color:#e9d2a5;border-radius:8px;display:flex;justify-content:space-between;gap:15px;
+ font-size:11px;align-items:center}
+.learning-replace button{border:1px solid #735e40;background:#3e3425;
+ color:#f4dfbb;border-radius:6px;padding:5px 8px;font-size:11px}
+.saved-learning{margin-top:27px;border-top:1px solid #333c3d;padding-top:18px}
+.saved-learning h3{font-size:11px;letter-spacing:.07em;color:#c5ccca;text-transform:uppercase;margin:0 0 11px}
+.saved-learning-row{display:flex;align-items:flex-start;justify-content:space-between;
+ gap:12px;padding:12px 0;border-top:1px solid #293031;color:#acb6b5;
+ font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.saved-learning-row span{max-width:680px}
+.saved-learning-row button{display:inline-flex;align-items:center;gap:6px;
+ background:#262b2b;border:1px solid #42494a;border-radius:7px;
+ padding:7px 9px;color:#c9ccca;font-size:10px;flex:0 0 auto}
+.saved-learning-row button:hover{border-color:#927954;color:#f2d49d}
+@media(max-width:1150px){.team-mode-toggle{padding:6px 7px;font-size:10px}}
+@media(max-width:600px){
+ .team-mode-toggle{font-size:0;gap:0;min-height:32px;min-width:34px;justify-content:center}
+ .team-mode-toggle svg{width:16px;height:16px}
+ .learning-actions .primary-button{width:100%;justify-content:center}
+ .saved-learning-row{flex-direction:column;align-items:flex-start}
+}
+@media(prefers-reduced-motion:reduce){.team-mode-toggle,.learning-textarea{transition:none}}
