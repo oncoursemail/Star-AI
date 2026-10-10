@@ -4,6 +4,8 @@
 
 STAR brings local model inference, a real chat workspace, image/video/audio references, persistent project memory, Roblox Studio MCP tools, and measured analytics into one app. It uses **no mandatory hosted model API key**. Starting with v0.7, the desktop interface and the public website share a React + TypeScript + Vite visual system, while all existing Python AI and storage modules stay intact.
 
+> **In development:** The [Fast Brain provider/web/image/subagent candidate](docs/STAR_FAST_BRAIN_RESEARCH.md) is not yet included in public downloads. Cloud/web APIs require their own user-provided credentials and quotas. The local model remains the default.
+
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
 > **Shipping status:** **STAR Genesis v0.8.0 was published as a public Windows release**, including Setup, portable ZIP and SHA-256 manifest. This v0.8.1 branch is a *maintenance release candidate* (compatible dependency updates and Node 24 GitHub Actions); its new installer is not public until the Windows publisher succeeds. See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).

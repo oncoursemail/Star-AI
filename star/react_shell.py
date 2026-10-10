@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 import uuid
 
@@ -22,11 +23,14 @@ from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
 from .intelligence import for_settings
+from .providers import credential_status, save_api_key, clear_api_key
+from .chat_images import chat_image, generate_chat_image
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
+    'generateImage','saveProviderKey','clearProviderKey','cancelMessage',
 })
 
 
@@ -66,14 +70,20 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
-    messages = [{'id':f'saved-{i}', 'role':role, 'text':text, 'created':created}
-                for i,(role,text,created) in enumerate(recent)]
+    messages = []
+    for i, (role, body, created) in enumerate(recent):
+        entry = {'id': f'saved-{i}', 'role': role, 'text': body, 'created': created}
+        preview = chat_image(home, body) if role == 'assistant' else None
+        if preview:
+            entry.update(preview)
+        messages.append(entry)
     brain = BrainInstall.load(home / 'brain.json')
     return {
         'version':__version__, 'project':settings.project, 'projects':projects,
         'messages':messages, 'settings':asdict(settings),
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
         'analytics':get_dashboard(home, settings.project),
+        'credentials':credential_status(),
         'intelligence':for_settings(settings,home).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
@@ -124,6 +134,7 @@ def launch():
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
             self.active_task = False
+            self.cancel_chat = threading.Event()
             self.active_update = False
 
         def _emit(self, request_id: str, kind: str, data):
@@ -146,7 +157,7 @@ def launch():
                         detail = f'{type(exc).__name__}: {str(exc)[:350]}'
                     self._emit(request_id, 'error', detail)
                 finally:
-                    if action=='sendMessage':self.active_task=False
+                    if action in {'sendMessage','generateImage'}:self.active_task=False
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -166,6 +177,7 @@ def launch():
                     if models:
                         settings=Settings.load(settings_file)
                         settings.endpoint=probe.endpoint
+                        settings.provider='local'
                         settings.model=models[0]
                         settings.llama_server=info.executable
                         settings.gguf_model=info.model
@@ -181,12 +193,15 @@ def launch():
                                                + explain_model_failure(exc)) from exc
                         return {'model':models[0], 'brain_running':True,
                                 'chat_ready':True, 'sample':probe['sample']}
+                except RuntimeError as exc:
+                    if 'failed its chat test' in str(exc):
+                        raise
                 except Exception:
                     pass
                 time.sleep(2)
             raise TimeoutError('Local model did not become ready. See STAR/logs/star-brain-react.log')
 
-        def _run_chat(self, request_id, prompt, selected):
+        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
@@ -214,13 +229,30 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True)
+                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
             finally:
                 chats.close()
             return {'answer':answer}
+
+        def _run_image(self, request_id, prompt):
+            settings=Settings.load(self.settings_file)
+            home=app_data()
+            self._emit(request_id,'progress',{'phase':'Generating image using local ComfyUI…'})
+            chats=Conversations(home/'conversations.sqlite3')
+            try:
+                chats.add(settings.project,'user',prompt)
+            finally:
+                chats.close()
+            result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
+            chats=Conversations(home/'conversations.sqlite3')
+            try:
+                chats.add(settings.project,'assistant',result['message'])
+            finally:
+                chats.close()
+            return {'answer':result['answer'],'image':result['image']}
 
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
@@ -233,9 +265,6 @@ def launch():
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
-                if action=='selectFolder':
-                    selected=QFileDialog.getExistingDirectory(self.host, 'Choose a local notes or project folder')
-                    return json.dumps({'ok':True,'data':{'path':str(selected) if selected else ''}})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -261,11 +290,23 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
+                if action=='saveProviderKey':
+                    name=str(body.get('provider',''))
+                    token=body.get('key','')
+                    save_api_key(name,token)
+                    return json.dumps({'ok':True,'data':{'connected':True}})
+                if action=='clearProviderKey':
+                    name=str(body.get('provider',''))
+                    clear_api_key(name)
+                    return json.dumps({'ok':True,'data':{'connected':False}})
+                if action=='selectFolder':
+                    selected=QFileDialog.getExistingDirectory(self.host, 'Choose a local notes or project folder')
+                    return json.dumps({'ok':True,'data':{'path':str(selected) if selected else ''}})
                 if action=='openLegacy':
                     if getattr(sys, 'frozen', False):
                         command=[sys.executable, '--legacy-ui']
@@ -284,6 +325,10 @@ def launch():
                     path=app_data();path.mkdir(parents=True,exist_ok=True)
                     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
                     return json.dumps({'ok':True,'data':True})
+                if action=='cancelMessage':
+                    if self.active_task:
+                        self.cancel_chat.set()
+                    return json.dumps({'ok':True,'data':{'cancel_requested':self.active_task}})
                 if action=='sendMessage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
@@ -291,8 +336,33 @@ def launch():
                     files=body.get('files') or []
                     if not isinstance(files,list) or len(files)>8:raise ValueError('Too many attachments')
                     selected=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
+                    mode=body.get('mode','auto')
+                    if mode not in ('fast','auto','agent'):
+                        raise ValueError('Choose Fast, Auto, or Agent mode')
+                    research=body.get('research',False)
+                    if not isinstance(research,bool):
+                        raise ValueError('Invalid research flag')
+                    github=body.get('github',False)
+                    if not isinstance(github,bool) or (github and mode != 'agent'):
+                        raise ValueError('GitHub inspection requires Agent mode')
+                    self.cancel_chat = threading.Event()
                     self.active_task=True
-                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected))
+                    try:
+                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
+                    except Exception:
+                        self.active_task=False
+                        raise
+                elif action=='generateImage':
+                    if self.active_task:raise RuntimeError('STAR is already handling a task')
+                    prompt=str(body.get('prompt','')).strip()
+                    if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    self.active_task=True
+                    self.cancel_chat = threading.Event()
+                    try:
+                        self._run(rid,action,lambda:self._run_image(rid,prompt))
+                    except Exception:
+                        self.active_task=False
+                        raise
                 elif action=='installBrain':
                     def worker():
                         info=install_brain(app_data(),progress=lambda e:self._emit(rid,'progress',e))
@@ -347,6 +417,7 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            self.cancel_chat.set()
             self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)
 

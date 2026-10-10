@@ -42,7 +42,7 @@ def load_workflow(path: Path, *, prompt_text: str, prompt_node: str):
 
 
 def generate(workflow_file: Path, *, prompt: str, node_id: str, output: Path, port: int = 8188,
-             timeout_seconds: int = 360):
+             timeout_seconds: int = 360, cancel_event=None):
     if not 1<=port<=65535:
         raise ValueError('Invalid local ComfyUI port')
     flow=load_workflow(workflow_file, prompt_text=prompt, prompt_node=node_id)
@@ -58,6 +58,8 @@ def generate(workflow_file: Path, *, prompt: str, node_id: str, output: Path, po
         finish=time.monotonic()+timeout_seconds
         images=[]
         while time.monotonic()<finish:
+            if cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError('STAR image generation cancelled by user; the ComfyUI server may still finish the queued job')
             history=client.get(url+'/history/'+job)
             history.raise_for_status()
             detail=history.json().get(job)
