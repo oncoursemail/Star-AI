@@ -269,6 +269,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                        "description":t["description"],"parameters":t["inputSchema"]}}
                        for t in specialist_definitions)
     enabled_specialists = {t["name"] for t in specialist_definitions}
+    # Qwen templates render the tool list before the system text. Tools that are attached on
+    # every turn stay first and the Studio tools (present only for a Studio request) go last,
+    # so a change at the end of the list leaves the start of the request cached.
+    definitions = sorted(definitions, key=lambda item: item["function"]["name"] in registry)
     tools_attached = bool(definitions)
     # Per-turn context is appended to the user's own words, never to the system message.
     context = volatile_context(turn_sections or (), tools_attached=tools_attached, studio_id=studio_id,

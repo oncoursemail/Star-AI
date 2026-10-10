@@ -400,3 +400,15 @@ def test_chat_history_is_the_same_for_a_turn_and_for_the_warm_up(desk):
     busy, rows = chat_history(desk.settings, desk.home, desk.chat)
     assert idle == busy == [{"role": "user", "content": "one"}, {"role": "assistant", "content": "first answer"}]
     assert rows[-1][:2] == ("user", "two")
+
+
+def test_studio_tools_come_after_the_tools_every_turn_has():
+    """Qwen templates render tools before the system text: the stable ones must lead."""
+    async def run():
+        models = Models([reply("ok")])
+        await execute(client=Client(models), model="m", prompt="inspect", image_paths=[], studio=Studio(),
+                      studio_id="sandbox", discovered=[schema_tool("script_read")],
+                      subagents_enabled=True, web_search_enabled=True)
+        names = [tool["function"]["name"] for tool in models.requests[0]["tools"]]
+        assert names == ["star_delegate", "star_web_search", "script_read"]
+    asyncio.run(run())
