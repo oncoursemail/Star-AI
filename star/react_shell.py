@@ -192,46 +192,11 @@ def launch():
             self.pool.submit(task)
 
         def _start_brain(self, info: BrainInstall):
-            from .desktop_core import query_models
-            settings_file=self.settings_file
-            if self.runtime.router_running():
-                raise RuntimeError('Stop the managed model router before starting the single-model Brain')
-            if self.runtime.status()!='running':
-                self.runtime.start(Path(info.executable),Path(info.model),
-                    app_data()/'logs'/'star-brain-react.log',port=8080,context=4096,
-                    gpu_layers=30,projector=Path(info.projector))
-            probe=Settings(endpoint='http://127.0.0.1:8080/v1')
-            for _ in range(70):
-                if self.runtime.status()!='running':
-                    raise RuntimeError('STAR Brain stopped. Check the STAR logs folder.')
-                try:
-                    models=query_models(probe)
-                    if models:
-                        settings=Settings.load(settings_file)
-                        settings.endpoint=probe.endpoint
-                        settings.provider='local'
-                        settings.model=models[0]
-                        settings.llama_server=info.executable
-                        settings.gguf_model=info.model
-                        settings.save(settings_file)
-                        # A /models response is not proof the chat template actually works.
-                        # Verify one real text completion before claiming the AI is ready.
-                        from .model_health import probe_chat_endpoint, explain_model_failure
-                        import asyncio
-                        try:
-                            probe = asyncio.run(probe_chat_endpoint(settings))
-                        except Exception as exc:
-                            raise RuntimeError('STAR Brain started but failed its chat test: '
-                                               + explain_model_failure(exc)) from exc
-                        return {'model':models[0], 'brain_running':True,
-                                'chat_ready':True, 'sample':probe['sample']}
-                except RuntimeError as exc:
-                    if 'failed its chat test' in str(exc):
-                        raise
-                except Exception:
-                    pass
-                time.sleep(2)
-            raise TimeoutError('Local model did not become ready. See STAR/logs/star-brain-react.log')
+            # This helper performs an actual completion before changing settings
+            # and stops a newly launched engine if validation fails.
+            from .brain_runtime_health import start_verified_brain
+            return start_verified_brain(
+                self.runtime, info, self.settings_file, app_data())
 
         def _start_model_router(self):
             if self.active_task:
