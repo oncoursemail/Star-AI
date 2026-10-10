@@ -8,6 +8,7 @@ import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
+type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
@@ -24,7 +25,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [busy,setBusy]=useState(false)
  const [notice,setNotice]=useState('')
  const [brainProgress,setBrainProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
- const [update,setUpdate]=useState<{available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}|null>(null)
+ const [update,setUpdate]=useState<UpdateInfo|null>(null)
+ const [updateBusy,setUpdateBusy]=useState(false)
+ const [updateProgress,setUpdateProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [studio,setStudio]=useState('')
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
@@ -33,6 +36,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const running=useRef<Map<string,string>>(new Map())
  const scrollTo=useRef<HTMLDivElement>(null)
+ const composerRef=useRef<HTMLTextAreaElement>(null)
  const lastProject=useRef(data.project)
  const inactive=preview||!initial
  const sync=useCallback(async()=>{
@@ -59,13 +63,21 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      if(action==='installBrain'){
        const obj=(event.data||{}) as Record<string,unknown>
        setBrainProgress({phase:String(obj.phase||'Preparing your AI'),downloaded:Number(obj.overall_downloaded??obj.downloaded??0),total:Number(obj.overall_total??obj.total??0)})
-     }else if(action==='sendMessage')setNotice(truncate(typeof event.data==='string'?event.data:'STAR is working…',120))
+     }else if(action==='sendMessage'){
+       const detail=typeof event.data==='string'?event.data:String((event.data as {phase?:string})?.phase||'STAR is working…')
+       setNotice(truncate(detail,120))
+     }else if(action==='installUpdate'){
+       const detail=(event.data||{}) as {phase?:string;downloaded?:number;total?:number}
+       setUpdateProgress({phase:String(detail.phase||'Downloading update'),downloaded:Number(detail.downloaded||0),total:Number(detail.total||0)})
+     }
      return
    }
    running.current.delete(event.requestId)
    if(event.kind==='error'){
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'){setBusy(false);setMessages(m=>[...m,makeMsg('event',msg)])}
+     if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
+     if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
    }
    const result=event.data as Record<string,unknown>
@@ -74,9 +86,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='checkUpdates'){
-     setUpdate(result as unknown as typeof update)
+     setUpdateBusy(false)
+     setUpdate(result as unknown as UpdateInfo)
      if(result.requires_browser)setNotice(String(result.explanation||'Download this version from GitHub Releases.'))
-   }else if(action==='installUpdate')setNotice('Verified update downloaded. Windows Setup will upgrade STAR and restart it.')
+     else setNotice(result.available?`STAR v${result.version} is ready to install.`:'STAR is up to date.')
+   }else if(action==='installUpdate'){
+     setUpdateBusy(false);setUpdateProgress(null)
+     setNotice('Verified setup launched. STAR will restart after installation.')
+   }
    else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='generateImage')setNotice('Image generation completed. Check your generated images folder.')
@@ -92,9 +109,37 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const res=await act('sendMessage',{prompt:value,files:selected})
    if(!res){setBusy(false);setMessages(m=>[...m,makeMsg('event','Could not connect to STAR Brain. Open STAR Brain and check that it is running.')])}
  },[prompt,busy,files,inactive,act])
+
+ useEffect(()=>{
+   const onShortcut=(e:KeyboardEvent)=>{
+     const mod=e.ctrlKey||e.metaKey
+     if(mod&&e.key.toLowerCase()==='k'){
+       e.preventDefault();setTab('chat');composerRef.current?.focus()
+     }else if(mod&&e.key===','){
+       e.preventDefault();setTab('settings')
+     }else if(e.key==='Escape'){
+       setLeftOpen(false);setNotice('')
+     }
+   }
+   window.addEventListener('keydown',onShortcut)
+   return ()=>window.removeEventListener('keydown',onShortcut)
+ },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
  const changeProject=async(name:string)=>{const v=await act('switchProject',{project:name});if(v){const b=v as BootData;setData(b);setDraft(b.settings);setMessages(b.messages);lastProject.current=name;setTab('chat')}setLeftOpen(false)}
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');void sync()}}
+ const checkForUpdates=async()=>{
+   if(updateBusy)return
+   setUpdateBusy(true);setUpdateProgress(null)
+   const response=await act('checkUpdates')
+   if(!response)setUpdateBusy(false)
+ }
+ const installVerifiedUpdate=async()=>{
+   if(updateBusy||!update?.available||update.requires_browser)return
+   setUpdateBusy(true)
+   setUpdateProgress({phase:'Checking trusted release details',downloaded:0,total:0})
+   const response=await act('installUpdate')
+   if(!response){setUpdateBusy(false);setUpdateProgress(null)}
+ }
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
  const wrapper='shell '+(!leftOpen?'':'shell-open')
  return <div className={wrapper} data-preview={preview}>
@@ -107,7 +152,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      <div className="sidebar-footer"><div className="sidebar-engine"><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{data.brain_running?'STAR Brain online':'Brain not running'}</span><button className="icon-button" aria-label="Go to STAR Brain" onClick={()=>nav('brain')}><ChevronRight size={14}/></button></div><div className="sidebar-version"><span>STAR GENESIS</span><span>v{data.version}</span></div></div>
    </aside>
    <div className="shell-main">
-     <header className="topbar"><div className="topbar-left"><button className="hamburger icon-button" aria-label="Open navigation" onClick={()=>setLeftOpen(true)}><MoreHorizontal size={20}/></button><span className="crumb-muted">Workspace</span><ChevronRight size={13}/><strong>{sections.find(x=>x[0]===tab)?.[1]}</strong></div><div className="topbar-right"><span className="topbar-private"><ShieldCheck size={14}/> Local-first</span><span className="topbar-pill"><span className={'status-dot '+(data.brain_running?'ok':'')}/>{data.brain_running?'Brain ready':'Engine offline'}</span><button className="avatar-button" onClick={()=>nav('settings')} title="Settings">S</button></div></header>
+     <header className="topbar"><div className="topbar-left"><button className="hamburger icon-button" aria-label="Open navigation" onClick={()=>setLeftOpen(true)}><MoreHorizontal size={20}/></button><span className="crumb-muted">Workspace</span><ChevronRight size={13}/><strong>{sections.find(x=>x[0]===tab)?.[1]}</strong></div><div className="topbar-right"><span className="topbar-private"><ShieldCheck size={14}/> Local-first</span><button className="topbar-update" type="button" onClick={()=>nav('settings')} title="Open version and update settings"><Download size={14}/> v{data.version}</button><span className="topbar-pill"><span className={'status-dot '+(data.brain_running?'ok':'')}/>{data.brain_running?'Brain ready':'Engine offline'}</span><button className="avatar-button" onClick={()=>nav('settings')} title="Settings">S</button></div></header>
      {preview&&<div className="demo-ribbon"><Info size={14}/> Interactive interface preview — real AI features are available only in STAR Desktop.</div>}
      <AnimatePresence mode="wait" initial={false}>
        <motion.main key={tab} className="page-stage" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.16}}>
@@ -118,9 +163,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          <div className="composer-zone"><div className="composer">
            {!!files.length&&<div className="file-chips">{files.map((f,i)=><span key={f}><File size={14}/>{truncate(f.split(/[\\/]/).pop()||f,40)}<button title="Remove attachment" aria-label="Remove attachment" onClick={()=>setFiles(x=>x.filter((_,j)=>i!==j))}><X size={13}/></button></span>)}</div>}
            <label className="sr-only" htmlFor="star-prompt">Message STAR</label>
-           <textarea id="star-prompt" rows={2} placeholder="Ask STAR anything. Build, design, research, create…" value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
+           <textarea ref={composerRef} id="star-prompt" rows={2} placeholder="Ask STAR anything. Build, design, research, create…" value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
            <div className="composer-tools"><div className="composer-left"><button className="attach-button" onClick={attach} title="Attach references"><Plus size={17}/> Add reference</button><span className="composer-separator"/><button className="icon-button" aria-label="Start voice transcription" onClick={async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/></button><span className="composer-model"><span className="status-dot"/>{truncate(data.settings.model||'No model selected',22)}</span></div><div className="composer-right"><span>Enter to send</span><button className="send-button" aria-label="Send message" disabled={!prompt.trim()||busy} onClick={()=>send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={19}/>}</button></div></div>
-         </div><div className="composer-hint"><PrivacyNote/><span>STAR may make mistakes. Verify consequential changes.</span></div></div></div>}
+         </div><div className="composer-hint"><PrivacyNote/><span>Enter sends · Shift+Enter new line · Ctrl+K chat · Ctrl+, settings</span></div></div></div>}
          {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="YOUR AI, ON YOUR PC" title="STAR Brain" description="One click to your private local intelligence. No separate chat application. No paid model API key."/><Panel className="brain-hero"><div className="brain-art"><div className="brain-core"><Star size={38} fill="currentColor"/></div><span className="brain-orbit orbit-one"/><span className="brain-orbit orbit-two"/></div><div><Tag kind={data.brain_running?'green':'gold'}>{data.brain_running?'Ready to create':'LOCAL INTELLIGENCE'}</Tag><h2>{data.brain_installed?'Your brain is installed.':'A real AI, running on your machine.'}</h2><p>Download a small vision-capable model with a verified engine. STAR manages the model and stores it locally.</p><button className="primary-button" disabled={brainProgress!==null} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}><Download size={17}/>{data.brain_installed?'Start STAR Brain':'Download & launch STAR Brain'}<ArrowRight size={17}/></button></div></Panel>
@@ -130,7 +175,19 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Image and media workflows</h2><p>STAR accepts image references, sampled video frames and optional audio transcripts in chat. Image generation uses an optional locally configured ComfyUI workflow.</p><button className="secondary-button" onClick={()=>void act('openLegacy')}>Open advanced Image Lab <ArrowRight size={15}/></button><small>Uses STAR's previous native tools while the React Image Lab is being migrated.</small></Panel></div></div>}
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PERSONALIZE YOUR WORKSPACE" title="Settings" description="Keep daily work simple; advanced integrations stay here when you need them."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>Check model connection <RefreshCcw size={14}/></button>{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel>
            <Panel className="settings-section"><h2>Developer permissions</h2><div className="field-grid"><label>Workspace folder<input value={draft.workspace} onChange={e=>setDraft(d=>({...d,workspace:e.target.value}))} placeholder="Choose a project folder"/></label><label>Roblox Studio instance ID<input value={draft.studio_id} onChange={e=>setDraft(d=>({...d,studio_id:e.target.value}))}/></label></div><label className="setting-switch"><span><strong>Allow workspace writes</strong><small>Only inside your selected workspace</small></span><input type="checkbox" checked={draft.workspace_edit} onChange={e=>setDraft(d=>({...d,workspace_edit:e.target.checked}))}/></label><label className="setting-switch"><span><strong>Allow Studio edits</strong><small>Use an unpublished disposable test place first</small></span><input type="checkbox" checked={draft.studio_edit} onChange={e=>setDraft(d=>({...d,studio_edit:e.target.checked}))}/></label></Panel>
-           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Reduce interface motion</strong><small>Respect your preference for quieter transitions</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>{setDraft(d=>({...d,reduced_motion:e.target.checked}));setThemeMotion(!e.target.checked)}}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
+           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Reduce interface motion</strong><small>Respect your preference for quieter transitions</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>{setDraft(d=>({...d,reduced_motion:e.target.checked}));setThemeMotion(!e.target.checked)}}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel><Panel className="settings-section updater-panel">
+            <div className="section-heading"><div><span className="eyebrow">VERSION & UPDATES</span><h2>Stay up to date</h2></div><Tag kind={update?.available?'gold':'neutral'}>{update?.available?'Update ready':`v${data.version}`}</Tag></div>
+            <p>STAR downloads official Windows releases, checks the exact file size and SHA-256 checksum, and replaces application files. Your chats, projects, memories, settings, and downloaded models remain in your local profile.</p>
+            <div className="update-version-line"><span><strong>Installed</strong> v{data.version}</span><span><strong>Latest checked</strong> {update? `v${update.version}` : 'Not checked yet'}</span></div>
+            {update?.available&&<div className="update-found"><Download size={18}/><div><strong>STAR v{update.version} is available</strong><small>Verify the installer, upgrade in place, and relaunch STAR.</small></div></div>}
+            {update&&!update.available&&!update.requires_browser&&<div className="update-current"><Check size={16}/> You have the latest published STAR release.</div>}
+            <div className="update-actions"><button className="secondary-button" type="button" disabled={updateBusy} onClick={()=>void checkForUpdates()}>{updateBusy&&!updateProgress?<LoaderCircle size={15} className="spin"/>:<RefreshCcw size={15}/>} {updateBusy&&!updateProgress?'Checking…':'Check for updates'}</button>
+              {update?.available&&!update.requires_browser&&<button className="primary-button" type="button" disabled={updateBusy} onClick={()=>void installVerifiedUpdate()}><Download size={16}/> {updateBusy?'Preparing upgrade…':'Install & restart'}</button>}
+              {update?.requires_browser&&<a className="secondary-button" href={WEBSITE_RELEASES} rel="noopener noreferrer" target="_blank"><ExternalLink size={15}/> Open public releases</a>}
+            </div>
+            {updateProgress&&<div className="update-download" role="status" aria-live="polite"><div className="update-download-label"><span>{updateProgress.phase}</span><strong>{updateProgress.total?Math.round(updateProgress.downloaded/updateProgress.total*100)+'%':'Preparing…'}</strong></div><div className="progress-track"><div className={updateProgress.total?'':'progress-indeterminate'} style={updateProgress.total?{width:`${Math.min(100,Math.round(updateProgress.downloaded/updateProgress.total*100))}%`}:undefined}/></div></div>}
+            <small>Upgrades start only after you choose Install & restart. Installing does not erase your local data.</small>
+           </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
        </motion.main>
      </AnimatePresence>
      {notice&&<div role="status" className="toast"><Info size={16}/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
