@@ -1,0 +1,1323 @@
+/* STAR chat — the conversation canvas, messages, composer and activity timeline.
+ * Tokens come from tokens.css; nothing here hard-codes a palette.
+ *
+ * Layout: one centred reading column (--star-read, 768px). The message column
+ * and the composer share exactly the same left and right edges at every width.
+ */
+
+/* ---------- Canvas ---------- */
+.thread {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--star-bg);
+}
+.thread-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A fixed 10px gutter on both sides keeps the column centred whether or not it scrolls. */
+  scrollbar-gutter: stable both-edges;
+}
+.thread-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.thread-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid var(--star-bg);
+  border-radius: 5px;
+  background: var(--star-stroke);
+}
+.thread-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--star-stroke-strong);
+}
+.thread-column {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: calc(var(--star-read) + 2 * var(--star-gutter) - 20px);
+  min-height: 100%;
+  margin: 0 auto;
+  /* gutter minus the 10px scrollbar gutter, so text lines up with the composer below */
+  padding: var(--star-5) calc(var(--star-gutter) - 10px) var(--star-10);
+}
+.thread-turns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-4);
+}
+.thread-none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--star-2);
+  padding: var(--star-10) 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.thread-rest {
+  flex: 0 0 0;
+  transition: flex-grow var(--star-dur-page) var(--star-ease);
+}
+
+/* Empty: the greeting and the composer sit together, slightly above centre. */
+.thread.is-empty .thread-scroll {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+}
+.thread.is-empty .thread-column {
+  min-height: 0;
+  padding-bottom: var(--star-6);
+}
+.thread.is-empty .thread-rest {
+  flex-grow: 1.3;
+}
+.thread-hello {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--star-4);
+  text-align: center;
+}
+.thread-hello h2 {
+  margin: 0;
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+/* ---------- Dock: composer, banner, starters ---------- */
+.dock {
+  position: relative;
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: calc(var(--star-read) + 2 * var(--star-gutter));
+  margin: 0 auto;
+  padding: 0 var(--star-gutter) var(--star-3);
+}
+/* Text scrolling under the top bar or the composer fades out instead of being cut. */
+.thread:not(.is-empty)::before {
+  position: absolute;
+  top: 0;
+  right: 10px;
+  left: 10px;
+  z-index: 2;
+  height: var(--star-4);
+  background: linear-gradient(to bottom, var(--star-bg), transparent);
+  content: '';
+  pointer-events: none;
+}
+.thread:not(.is-empty) .dock::before {
+  position: absolute;
+  right: var(--star-gutter);
+  bottom: 100%;
+  left: var(--star-gutter);
+  height: var(--star-6);
+  background: linear-gradient(to top, var(--star-bg), transparent);
+  content: '';
+  pointer-events: none;
+}
+.dock-hint {
+  margin: var(--star-2) 0 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.4;
+  text-align: center;
+}
+.dock-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-2);
+  margin-bottom: var(--star-2);
+  padding: var(--star-2) var(--star-3);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.dock-banner > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-gold);
+}
+.dock-banner.is-offline > svg {
+  color: var(--star-danger);
+}
+.dock-banner > span {
+  flex: 1;
+  min-width: 0;
+}
+.dock-banner strong {
+  color: var(--star-text);
+  font-weight: 600;
+}
+.dock-banner button,
+.cmp-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--star-1);
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  text-decoration: underline;
+  text-decoration-color: var(--star-stroke-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--star-dur-hover) var(--star-ease);
+}
+.dock-banner button:hover,
+.cmp-link:hover {
+  text-decoration-color: var(--star-text);
+}
+.chat-jump {
+  position: absolute;
+  bottom: calc(100% + var(--star-2));
+  left: 50%;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  transform: translateX(-50%);
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.chat-jump:hover {
+  background: var(--star-stroke);
+}
+.starters {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--star-2);
+  margin-top: var(--star-4);
+}
+.starter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 36px;
+  padding: 0 var(--star-3);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  text-align: left;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.starter svg {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+}
+.starter:hover {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.starter:active {
+  background: var(--star-surface-3);
+  transition-duration: var(--star-dur-press);
+}
+
+/* ---------- Composer ---------- */
+.cmp {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-2);
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-lg);
+  background: var(--star-surface-2);
+  transition: border-color var(--star-dur-hover) var(--star-ease);
+}
+.cmp:focus-within {
+  border-color: var(--star-stroke-focus);
+}
+.shell .cmp-input {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  max-height: 208px;
+  padding: 2px var(--star-1) 0;
+  overflow-y: auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--star-text);
+  caret-color: var(--star-gold);
+  font-size: var(--star-fs-prose);
+  line-height: 1.6;
+  resize: none;
+  scrollbar-color: var(--star-stroke-strong) transparent;
+  scrollbar-width: thin;
+}
+.cmp-input::placeholder {
+  color: var(--star-faint);
+}
+.cmp-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cmp-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  height: 28px;
+  padding: 0 var(--star-1) 0 var(--star-2);
+  border-radius: 6px;
+  background: var(--star-surface-3);
+  color: var(--star-body);
+  font-size: var(--star-fs-meta);
+}
+.cmp-file > svg {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+}
+.cmp-file > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-file > button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--star-faint);
+}
+.cmp-file > button:hover {
+  background: var(--star-stroke);
+  color: var(--star-text);
+}
+.cmp-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--star-2);
+}
+.cmp-bar-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+}
+.cmp-bar-right {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+  margin-left: auto;
+}
+.cmp-pop-wrap {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+.cmp-icon-button {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-muted);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.cmp-icon-button svg {
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.cmp-icon-button:not(:disabled):hover,
+.cmp-icon-button.is-open {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.cmp-icon-button.is-open svg {
+  transform: rotate(45deg);
+}
+/* Fast / Auto / Agent: one segmented choice, not a native select. */
+.cmp-modes {
+  display: inline-flex;
+  gap: 2px;
+  height: 32px;
+  padding: 2px;
+  border-radius: var(--star-r-sm);
+  background: var(--star-bg);
+}
+.cmp-mode {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  font-weight: 500;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.cmp-mode:not(:disabled):hover {
+  color: var(--star-text);
+}
+.cmp-mode.is-on {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.cmp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--star-2) 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+  font-size: var(--star-fs-nav);
+  font-weight: 500;
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.cmp-chip:not(:disabled):hover {
+  background: var(--star-gold-wash-strong);
+}
+.cmp-link {
+  color: var(--star-muted);
+}
+.cmp-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.cmp-status:hover,
+.cmp-status[aria-expanded='true'] {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.cmp-status > svg {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+}
+.cmp-status-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-status-state {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+  white-space: nowrap;
+}
+.cmp-status-state::before {
+  margin-right: 6px;
+  content: '·';
+}
+/* When connected, the filled dot says so; the word appears for every other state. */
+.cmp-status.is-ready .cmp-status-state {
+  display: none;
+}
+.cmp-status.is-offline .cmp-status-state {
+  color: var(--star-danger);
+}
+.cmp-status.is-attention .cmp-status-state {
+  color: var(--star-gold);
+}
+/* The dot changes shape as well as colour: ring = unknown, filled = known. */
+.cmp-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--star-faint);
+  border-radius: 50%;
+}
+.is-ready > .cmp-dot {
+  border-color: var(--star-success);
+  background: var(--star-success);
+}
+.is-offline > .cmp-dot {
+  border-color: var(--star-danger);
+  background: var(--star-danger);
+}
+.is-attention > .cmp-dot {
+  border-color: var(--star-gold);
+}
+/* Send is the one gold control on the screen. */
+.cmp-send {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-gold);
+  color: var(--star-on-gold);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-press) var(--star-ease);
+}
+.cmp-send:not(:disabled):hover {
+  background: var(--star-gold-hover);
+}
+.cmp-send:not(:disabled):active {
+  transform: scale(0.94);
+}
+.shell .cmp-send:disabled {
+  background: var(--star-surface-3);
+  color: var(--star-faint);
+  opacity: 1;
+}
+.cmp-send.is-stop {
+  background: var(--star-text);
+  color: var(--star-bg);
+}
+.cmp-send.is-stop:not(:disabled):hover {
+  background: var(--star-text-hover);
+}
+.cmp-menu,
+.cmp-status-pop {
+  position: absolute;
+  bottom: calc(100% + var(--star-2));
+  z-index: 30;
+  width: 304px;
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+}
+.cmp-menu {
+  left: 0;
+  padding: var(--star-1);
+  transform-origin: bottom left;
+}
+.cmp-menu[data-side='below'],
+.cmp-status-pop[data-side='below'] {
+  top: calc(100% + var(--star-2));
+  bottom: auto;
+  transform-origin: top left;
+}
+.cmp-status-pop[data-side='below'] {
+  transform-origin: top right;
+}
+.cmp-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  line-height: 1.4;
+  text-align: left;
+}
+.cmp-menu-item:hover,
+.cmp-menu-item:focus-visible {
+  background: var(--star-veil);
+}
+.shell .cmp-menu-item:focus-visible {
+  outline-offset: -2px;
+}
+.cmp-menu-icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--star-muted);
+}
+.cmp-menu-text {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+}
+.cmp-menu-item small {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp-menu-check {
+  flex: 0 0 auto;
+  color: var(--star-gold);
+}
+.cmp-menu-item.is-blocked {
+  color: var(--star-faint);
+  cursor: default;
+}
+.cmp-menu-item.is-blocked:hover {
+  background: transparent;
+}
+.cmp-menu-item.is-blocked :is(.cmp-menu-icon, small) {
+  color: var(--star-faint);
+}
+.cmp-menu-rule {
+  height: 1px;
+  margin: var(--star-1) var(--star-2);
+  background: var(--star-stroke-strong);
+}
+.cmp-status-pop {
+  right: 0;
+  padding: var(--star-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+  transform-origin: bottom right;
+}
+.cmp-status-pop p {
+  margin: 0;
+}
+.cmp-status-head {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  color: var(--star-text);
+  font-weight: 600;
+}
+.cmp-status-note {
+  margin-top: var(--star-1) !important;
+}
+.cmp-status-pop dl {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--star-1) var(--star-4);
+  margin: var(--star-3) 0;
+  padding: var(--star-3) 0;
+  border-top: 1px solid var(--star-stroke-strong);
+  border-bottom: 1px solid var(--star-stroke-strong);
+}
+.cmp-status-pop dt {
+  color: var(--star-muted);
+}
+.cmp-status-pop dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--star-text);
+}
+
+/* ---------- Messages ---------- */
+.msg {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.msg-user {
+  align-items: flex-end;
+}
+/* You: a quiet tone step, no border. */
+.msg-bubble {
+  max-width: min(82%, 620px);
+  padding: 10px var(--star-4);
+  border-radius: var(--star-r-lg) var(--star-r-lg) var(--star-1) var(--star-r-lg);
+  background: var(--star-surface-2);
+  color: var(--star-text);
+  font-size: var(--star-fs-prose);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.msg-files {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.msg-files li {
+  max-width: 220px;
+  padding: 4px var(--star-2);
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--star-surface-1);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Actions keep their space, so revealing them never moves the text. */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  margin-top: var(--star-1);
+  opacity: 0;
+  transition: opacity var(--star-dur-hover) var(--star-ease);
+}
+.msg:hover .msg-actions,
+.msg:focus-within .msg-actions,
+.msg.is-pinned .msg-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .msg-actions {
+    opacity: 1;
+  }
+}
+.msg-star .msg-actions {
+  margin-left: calc(-1 * var(--star-2));
+}
+/* While an answer streams, the same row says so. It is replaced by the actions without moving anything. */
+.msg-actions.is-live {
+  gap: 6px;
+  margin-left: 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  opacity: 1;
+}
+.msg-user .msg-actions {
+  margin-right: calc(-1 * var(--star-2));
+}
+.msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.msg-action:hover {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.msg-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: var(--star-2);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+
+/* STAR: prose straight on the canvas. */
+.msg-prose {
+  min-width: 0;
+  color: var(--star-body);
+  font-size: var(--star-fs-prose);
+  line-height: var(--star-lh-prose);
+  overflow-wrap: anywhere;
+}
+.msg-prose > :first-child {
+  margin-top: 0;
+}
+.msg-prose > :last-child {
+  margin-bottom: 0;
+}
+.msg-prose p {
+  margin: 0 0 var(--star-3);
+}
+.msg-prose :is(h1, h2, h3, h4) {
+  margin: var(--star-6) 0 var(--star-2);
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+}
+.msg-prose h1 {
+  font-size: 22px;
+}
+.msg-prose h2 {
+  font-size: var(--star-fs-h2);
+}
+.msg-prose h3 {
+  font-size: 17px;
+}
+.msg-prose h4 {
+  font-size: var(--star-fs-prose);
+}
+.msg-prose :is(ul, ol) {
+  margin: 0 0 var(--star-3);
+  padding-left: var(--star-6);
+}
+.msg-prose li {
+  margin: var(--star-1) 0;
+}
+.msg-prose li::marker {
+  color: var(--star-faint);
+}
+.msg-prose li > :is(ul, ol) {
+  margin: var(--star-1) 0 0;
+}
+.msg-prose strong {
+  color: var(--star-text);
+  font-weight: 600;
+}
+.msg-prose a {
+  color: var(--star-gold);
+  text-decoration: underline;
+  text-decoration-color: var(--star-gold-line);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--star-dur-hover) var(--star-ease);
+}
+.msg-prose a:hover {
+  text-decoration-color: var(--star-gold);
+}
+.msg-prose blockquote {
+  margin: var(--star-4) 0;
+  padding: 2px 0 2px var(--star-4);
+  border-left: 2px solid var(--star-stroke-strong);
+  color: var(--star-muted);
+}
+.msg-prose hr {
+  margin: var(--star-6) 0;
+  border: 0;
+  border-top: 1px solid var(--star-stroke-soft);
+}
+.msg-prose :not(pre) > code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--star-surface-2);
+  border: 0;
+  color: var(--star-text);
+  font-family: var(--star-mono);
+  font-size: 0.875em;
+  font-weight: var(--star-mono-weight);
+}
+.md-image-note {
+  color: var(--star-muted);
+  font-style: italic;
+}
+/* Tables scroll sideways inside their own frame; the page never does. */
+.md-table {
+  margin: var(--star-4) 0;
+  overflow-x: auto;
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-sm);
+  scrollbar-color: var(--star-stroke-strong) transparent;
+  scrollbar-width: thin;
+}
+.md-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--star-fs-ui);
+  line-height: 1.5;
+}
+.md-table th {
+  padding: var(--star-2) var(--star-3);
+  background: var(--star-surface-1);
+  color: var(--star-text);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+.md-table td {
+  padding: var(--star-2) var(--star-3);
+  border-top: 1px solid var(--star-stroke-soft);
+  vertical-align: top;
+}
+/* Cells wrap between words only, and identifiers never split: a wide table scrolls instead. */
+.md-table :is(th, td) {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.md-table code {
+  white-space: nowrap;
+}
+.codeblock {
+  margin: var(--star-4) 0;
+  overflow: hidden;
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+}
+.codeblock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 36px;
+  padding: 0 var(--star-1) 0 var(--star-4);
+  color: var(--star-faint);
+  font-family: var(--star-mono);
+  font-size: var(--star-fs-meta);
+}
+.codeblock-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-muted);
+  font-family: var(--star-font);
+  font-size: var(--star-fs-meta);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.codeblock-copy:hover {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.codeblock pre {
+  margin: 0;
+  padding: var(--star-1) var(--star-4) var(--star-4);
+  overflow-x: auto;
+  background: none;
+  color: var(--star-body);
+  font-family: var(--star-mono);
+  font-size: 13px;
+  font-weight: var(--star-mono-weight);
+  line-height: 1.6;
+  scrollbar-color: var(--star-stroke-strong) transparent;
+  scrollbar-width: thin;
+  tab-size: 2;
+  white-space: pre;
+}
+.codeblock pre code {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+.shell .generated-image-button {
+  display: block;
+  width: min(100%, 520px);
+  margin: var(--star-3) 0 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  cursor: zoom-in;
+}
+.shell .generated-image-button img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  object-fit: contain;
+}
+
+/* ---------- Status line and recovery ---------- */
+.thread-status {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 28px;
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.thread-status-time {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+.act-spin {
+  color: var(--star-gold-soft);
+  animation: act-spin 0.9s linear infinite;
+}
+@keyframes act-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* A turn that ended without an answer. Past ones are a quiet line of history;
+ * the newest one, which can still be retried, gets a tone step and its actions. */
+.msg-note {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--star-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.note-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-faint);
+}
+.msg-note.is-failed .note-icon {
+  color: var(--star-danger);
+}
+.note-main {
+  flex: 1;
+  min-width: 0;
+}
+.msg-note strong {
+  display: block;
+  color: var(--star-body);
+  font-weight: 600;
+}
+.msg-note p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.msg-note.is-actionable {
+  gap: var(--star-3);
+  font-size: var(--star-fs-ui);
+}
+.msg-note.is-actionable.is-failed {
+  padding: var(--star-3) var(--star-4);
+  border-radius: var(--star-r-md);
+  background: var(--star-danger-wash);
+}
+.msg-note.is-actionable strong {
+  color: var(--star-text);
+}
+.msg-note.is-actionable .note-icon {
+  margin-top: 3px;
+}
+.note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+  margin-top: var(--star-3);
+}
+/* Stopping is your choice, not a fault: no alarm colour, text and actions on one line. */
+.msg-note.is-actionable.is-cancelled .note-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2) var(--star-3);
+}
+.msg-note.is-actionable.is-cancelled p {
+  flex: 1 1 260px;
+  font-size: var(--star-fs-nav);
+}
+.msg-note.is-actionable.is-cancelled .note-actions {
+  margin: 0;
+}
+.msg-note.is-actionable.is-cancelled .note-icon {
+  margin-top: 8px;
+}
+.note-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.note-button:hover {
+  background: var(--star-surface-2);
+}
+.note-button.is-primary {
+  border-color: transparent;
+  background: var(--star-text);
+  color: var(--star-bg);
+  font-weight: 500;
+}
+.note-button.is-primary:hover {
+  background: var(--star-text-hover);
+}
+
+/* ---------- Activity timeline ---------- */
+/* One tone step, no border; its edges are the reading column's edges in both states. */
+.act {
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+}
+.act-head {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 40px;
+  padding-right: var(--star-2);
+}
+.act-toggle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+  height: 40px;
+  padding: 0 var(--star-3);
+  border: 0;
+  border-radius: var(--star-r-md);
+  background: none;
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+  text-align: left;
+}
+.shell .act-toggle:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.act-title {
+  flex: 0 0 auto;
+  color: var(--star-text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.act-meta {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--star-faint);
+  font-size: var(--star-fs-nav);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.act-chevron {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.act.is-open .act-chevron {
+  transform: rotate(180deg);
+}
+.act-clock {
+  flex: 0 0 auto;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  font-variant-numeric: tabular-nums;
+}
+.act-stop {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.act-stop:not(:disabled):hover {
+  background: var(--star-surface-3);
+}
+.act-glyph {
+  display: grid;
+  flex: 0 0 20px;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--star-faint);
+}
+.act-run-glyph.is-done,
+.act-step.is-done .act-glyph {
+  color: var(--star-success);
+}
+.act-run-glyph.is-failed,
+.act-step.is-failed .act-glyph,
+.act-step.is-blocked .act-glyph {
+  color: var(--star-danger);
+}
+.act-step.is-waiting .act-glyph {
+  color: var(--star-gold);
+}
+.act-body {
+  overflow: hidden;
+}
+.act-steps {
+  margin: 0;
+  padding: 0 var(--star-3) var(--star-3);
+  list-style: none;
+}
+.act-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto minmax(36px, auto);
+  align-items: start;
+  column-gap: var(--star-2);
+  min-height: 28px;
+  padding: var(--star-1) 0;
+}
+.act-step-main {
+  min-width: 0;
+}
+.act-step-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0 var(--star-2);
+  max-width: 100%;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font-size: var(--star-fs-ui);
+  line-height: 20px;
+  text-align: left;
+}
+.act-step-title {
+  color: var(--star-body);
+}
+.act-step.is-running .act-step-title,
+.act-step.is-waiting .act-step-title {
+  color: var(--star-text);
+  font-weight: 500;
+}
+.act-step:is(.is-queued, .is-cancelled) .act-step-title {
+  color: var(--star-muted);
+}
+/* Finished model turns recede; the tools and specialists between them are the story. */
+.act-step.kind-think.is-done .act-step-title {
+  color: var(--star-faint);
+}
+.act-step.kind-think.is-done .act-glyph {
+  color: var(--star-faint);
+}
+.act-step-role {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--star-faint);
+  font-size: var(--star-fs-nav);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.act-step-chevron {
+  flex: 0 0 auto;
+  align-self: center;
+  color: var(--star-faint);
+  opacity: 0;
+  transition:
+    opacity var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-menu) var(--star-ease);
+}
+.act-step-line:hover .act-step-chevron,
+.act-step-line:focus-visible .act-step-chevron {
+  opacity: 1;
+}
+.act-step-line[aria-expanded='true'] .act-step-chevron {
+  transform: rotate(180deg);
+}
+.act-step-detail {
+  max-width: 62ch;
+  margin: 2px 0 var(--star-1);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.act-step-detail.is-code {
+  color: var(--star-faint);
+  font-family: var(--star-mono);
+  font-size: var(--star-fs-meta);
+  font-weight: var(--star-mono-weight);
+}
+.act-step-state,
+.act-step-time {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 20px;
+  white-space: nowrap;
+}
+.act-step-time {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.act-step.is-running .act-step-state,
+.act-step.is-waiting .act-step-state {
+  color: var(--star-gold);
+}
+.act-step:is(.is-failed, .is-blocked) .act-step-state {
+  color: var(--star-danger);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 850px) {
+  .shell {
+    --star-gutter: 16px;
+  }
+}
+@media (max-width: 600px) {
+  .shell {
+    --star-gutter: 12px;
+  }
+  .thread-hello h2 {
+    font-size: 24px;
+  }
+  .starters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .msg-bubble {
+    max-width: 88%;
+  }
+  .cmp-status-label {
+    display: none;
+  }
+  .cmp-status-state {
+    display: none;
+  }
+  .cmp-status {
+    padding: 0 6px;
+  }
+  .cmp-mode {
+    padding: 0 var(--star-2);
+  }
+  .cmp-menu,
+  .cmp-status-pop {
+    width: min(304px, calc(100vw - 48px));
+  }
+  .act-meta {
+    display: none;
+  }
+}

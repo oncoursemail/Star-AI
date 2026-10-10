@@ -209,18 +209,18 @@ describe('duplicate sends', () => {
     expect(desktop.sent('sendMessage')[1].payload).toMatchObject({prompt: 'impatient follow-up'})
   })
 
-  // KNOWN DEFECT (found while writing these tests, not fixable from here because Desktop.tsx is off limits):
-  // Send and Stop are the same button in the same place. A real double-click sends the message, the page
-  // re-renders the button as Stop, and the second click lands on it and cancels the turn it just started
-  // (observed: 1 sendMessage + 1 cancelMessage). Enable this once Stop ignores clicks for a short moment
-  // after a send, or is not the element under the pointer.
-  it.skip('a double-click on Send does not cancel the turn it just started', async () => {
+  // Send and Stop share one place, so the second click of a double-click lands on Stop.
+  // Stop ignores a click whose click count is above one; a later single click still stops the turn.
+  it('a double-click on Send does not cancel the turn it just started', async () => {
     const user = await openChat()
     await user.type(composer(), 'hello')
     await user.dblClick(sendButton()!)
     await new Promise(resolve => setTimeout(resolve, 50))
     expect(desktop.sent('sendMessage')).toHaveLength(1)
     expect(desktop.sent('cancelMessage')).toHaveLength(0)
+    // The turn is still running and can be stopped deliberately.
+    await user.click(stopButton()!)
+    await waitFor(() => expect(desktop.sent('cancelMessage')).toHaveLength(1))
   })
 
   it('sends one request when Enter is pressed repeatedly on a single message', async () => {
@@ -249,6 +249,36 @@ describe('history after a restart', () => {
   })
 
   // Backend contract (star/react_shell.py _get_state): `retry` = {status, detail, prompt, ...} survives restarts.
-  // The current page only keeps Retry in memory; wiring it to `retry.prompt` is the front-end follow-up.
-  it.todo('offers Retry for the unanswered question straight after a restart, using state.retry')
+  it('offers Retry for the unanswered question straight after a restart, using state.retry', async () => {
+    const user = await openChat(
+      [{id: '', role: 'user', text: 'make the lobby', created: ''},
+       {id: '', role: 'event', text: failed, created: '', status: 'failed'}],
+      {status: 'failed', detail: failed, prompt: 'make the lobby', message_id: 1, created: ''})
+    await user.click(await waitFor(() => retryButton()!))
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+    expect(retryButton()).toBeNull() // hidden while the retry runs
+  })
+
+  it('offers Retry when STAR was closed before any reply or failure was recorded', async () => {
+    const detail = 'No reply was recorded for this message. STAR may have been closed before it finished.'
+    const user = await openChat(
+      [{id: '', role: 'user', text: 'make the lobby', created: ''}],
+      {status: 'interrupted', detail, prompt: 'make the lobby', message_id: 1, created: ''})
+    expect((await screen.findAllByText(detail)).length).toBeGreaterThan(0)
+    await user.click(retryButton()!)
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+  })
+
+  it('does not offer Retry on an old failure once a later question was answered', async () => {
+    await openChat(
+      [{id: '', role: 'user', text: 'make the lobby', created: ''},
+       {id: '', role: 'event', text: failed, created: '', status: 'failed'},
+       {id: '', role: 'user', text: 'make the lobby', created: ''},
+       {id: '', role: 'assistant', text: 'Here is the lobby.', created: ''}],
+      null)
+    expect((await screen.findAllByText(failed)).length).toBeGreaterThan(0) // history keeps the failed attempt
+    expect(retryButton()).toBeNull()
+  })
 })

@@ -1,31 +1,69 @@
-import {useCallback,useEffect,useRef,useState} from 'react'
+import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,MotionConfig,motion} from 'motion/react'
-import {Activity,ArrowRight,ArrowUp,BookOpen,Boxes,BrainCircuit,Check,ChevronDown,ChevronRight,Command,Copy,Download,ExternalLink,File,Folder,FolderOpen,Globe,HardDrive,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,Mic,Monitor,MoreHorizontal,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Send,Settings2,Shield,ShieldCheck,SlidersHorizontal,Sparkles,SquarePen,Star,Terminal,Trash2,Upload,Workflow,X, Zap} from 'lucide-react'
+import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,ExternalLink,Folder,FolderOpen,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
-import {Brand,EmptyState,Message,Panel,PrivacyNote,Starlight,Tag} from './components'
-import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
+import {Message,Panel,StarMark,Tag} from './components'
+import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,CustomToolRecipe,CustomToolCatalog} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog} from './types'
+import './tokens.css'
 import './stellar-ui.css'
+import './chat.css'
 import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
+import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
-import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
+import {Composer,type Availability,type ChatMode} from './Composer'
+import {ActivityTimeline,RunStatus} from './ActivityTimeline'
+import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
+import {classifyFailure,describeConnection,type LastOutcome} from './connection'
+import {pageFade} from './motion'
+import type {Fixture,FixtureScript} from './previewFixtures'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
-const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
+const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['library','Library',BookOpen],['tools','Tools',Workflow],['analytics','Analytics',Activity],['brain','Model & connection',BrainCircuit],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
-const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
+const fileName=(path:string)=>path.split(/[\\/]/).pop()||path
 const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,roblox_research_enabled:true,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
+const CHAT_ACTIONS=['sendMessage','generateImage','runTeam']
+
+/** Starter prompts for things STAR can really do. They fill the composer so you can finish the sentence. */
+const starters=[
+ {label:'Design a Roblox inventory UI',icon:LayoutDashboard,prompt:'Design a Roblox inventory UI for my game. Cover the layout, the instance hierarchy, component states and how it adapts to phones.'},
+ {label:'Review my Luau script',icon:Braces,prompt:'Review this Luau script for bugs, exploitable remotes and performance problems:\n\n'},
+ {label:'Research a Roblox game',icon:Search,prompt:'Research this Roblox game and tell me what is publicly known about it, with sources: '},
+ {label:'Plan a Blender model',icon:Box,prompt:'Plan a Blender model of '},
+]
 
 function initialPreviewTab(preview:boolean):Tab {
  const value=new URLSearchParams(window.location.search).get('tab')
  if(preview&&value&&['chat','projects','brain','analytics','tools','library','settings'].includes(value))return value as Tab
  return 'chat'
 }
+/** Scripted fixtures exist only for the browser preview; the Qt desktop can never select one. */
+function requestedFixture(preview:boolean):string {
+ if(!preview||window.qt?.webChannelTransport)return ''
+ return (new URLSearchParams(window.location.search).get('fixture')||'').replace(/[^a-z]/g,'').slice(0,20)
+}
+/** View preferences only (never chats, settings or secrets). Storage can be unavailable on file:// pages. */
+function readPreference(key:string):string {try{return window.localStorage.getItem(key)||''}catch{return ''}}
+function writePreference(key:string,value:string){try{window.localStorage.setItem(key,value)}catch{/* preference simply does not persist */}}
+/** Recent chats grouped the way people look for them: by when they last touched them. */
+function groupChats(chats:ChatThread[]):Array<{label:string;chats:ChatThread[]}> {
+ const start=new Date();start.setHours(0,0,0,0)
+ const today=start.getTime(),day=86400000
+ const groups:Array<{label:string;chats:ChatThread[]}>=[{label:'Today',chats:[]},{label:'Yesterday',chats:[]},{label:'Previous 7 days',chats:[]},{label:'Older',chats:[]}]
+ for(const chat of chats){
+   const time=Date.parse(chat.updated||chat.created||'')
+   const index=Number.isNaN(time)?3:time>=today?0:time>=today-day?1:time>=today-7*day?2:3
+   groups[index].chats.push(chat)
+ }
+ return groups.filter(group=>group.chats.length)
+}
+
 export function Desktop({initial=null,preview=false}:{initial?:BootData|null;preview?:boolean}) {
  const [tab,setTab]=useState<Tab>(()=>initialPreviewTab(preview))
  const [data,setData]=useState<BootData>(initial??{version:'0.9.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
@@ -33,12 +71,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [prompt,setPrompt]=useState('')
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
- const [chatMode,setChatMode]=useState<'fast'|'auto'|'agent'>('auto')
+ const [stopping,setStopping]=useState(false)
+ const [chatMode,setChatMode]=useState<ChatMode>('auto')
  const [research,setResearch]=useState(false)
  const [githubSource,setGithubSource]=useState(false)
  const [teamMode,setTeamMode]=useState(false)
  const [notice,setNotice]=useState('')
- const [workPhase,setWorkPhase]=useState('')
+ const [run,setRun]=useState<ActivityRun|null>(null)
+ const [lastRun,setLastRun]=useState<{chat:string;run:ActivityRun}|null>(null)
+ const [lastOutcome,setLastOutcome]=useState<LastOutcome>(null)
  const [streamingText,setStreamingText]=useState('')
  const [chatSearch,setChatSearch]=useState('')
  const [showChatSearch,setShowChatSearch]=useState(false)
@@ -60,23 +101,34 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
  const [leftOpen,setLeftOpen]=useState(false)
- const [sidebarCollapsed,setSidebarCollapsed]=useState(false)
+ const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>readPreference('star.sidebar')==='collapsed')
  const [showJump,setShowJump]=useState(false)
  const [imageMode,setImageMode]=useState(false)
- const [composerMenu,setComposerMenu]=useState(false)
- const [toolsOpen,setToolsOpen]=useState(false)
  const [historySearchOpen,setHistorySearchOpen]=useState(false)
  const [historyQuery,setHistoryQuery]=useState('')
  const [modelList,setModelList]=useState<string[]>([])
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
- const composerMenuRef=useRef<HTMLDivElement>(null)
+ const [fixture]=useState(()=>requestedFixture(preview))
  const running=useRef<Map<string,string>>(new Map())
  const chatScroll=useRef<HTMLDivElement>(null)
  const followBottom=useRef(true)
  const composerRef=useRef<HTMLTextAreaElement>(null)
  const lastSent=useRef('')
+ const lastFiles=useRef<string[]>([])
+ const sending=useRef(false)
  const lastProject=useRef(data.project)
+ const runRef=useRef<ActivityRun|null>(null)
+ const streamRef=useRef('')
+ const chatRef=useRef(data.active_chat)
+ const cancelRequested=useRef(false)
+ const lastError=useRef('')
+ const fresh=useRef<Set<string>>(new Set())
+ const fixtureStop=useRef<(()=>void)|null>(null)
  const inactive=preview||!initial
+ // The collapsed sidebar is a view preference: it survives restarts.
+ useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
+ chatRef.current=data.active_chat
+ const updateRun=useCallback((next:ActivityRun|null)=>{runRef.current=next;setRun(next)},[])
  const sync=useCallback(async()=>{
    if(inactive)return
    const r=await request<BootData>('bootstrap')
@@ -84,21 +136,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
  useEffect(()=>{
-   if(!composerMenu)return
-   const close=(event:PointerEvent)=>{if(composerMenuRef.current&&!composerMenuRef.current.contains(event.target as Node))setComposerMenu(false)}
-   document.addEventListener('pointerdown',close)
-   return ()=>document.removeEventListener('pointerdown',close)
- },[composerMenu])
- useEffect(()=>{
    const node=chatScroll.current
    if(tab==='chat'&&node&&followBottom.current){node.scrollTop=node.scrollHeight;setShowJump(false)}
- },[messages.length,streamingText,busy,tab,data.active_chat])
- useEffect(()=>{
-   const node=composerRef.current
-   if(!node)return
-   node.style.height='auto'
-   node.style.height=Math.min(Math.max(node.scrollHeight,48),176)+'px'
- },[prompt,files.length])
+ },[messages.length,streamingText,busy,run,tab,data.active_chat])
  const onChatScroll=()=>{
    const node=chatScroll.current
    if(!node)return
@@ -112,31 +152,37 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setShowJump(false)
  }
  const act=useCallback(async(action:string,params:Record<string,unknown>={})=>{
-   if(inactive){setNotice('This is a preview. Install STAR Desktop to use local AI and tools.');return null}
+   if(inactive){setNotice('This preview is not connected. Open STAR Desktop to use models and tools.');return null}
    const requestId=crypto.randomUUID()
    running.current.set(requestId,action) // Subscribe before a very fast worker can respond.
    const result=await request<unknown>(action,params,requestId)
-   if(!result.ok){running.current.delete(requestId);setNotice(result.error||'STAR could not complete this action.');return null}
+   if(!result.ok){
+     running.current.delete(requestId)
+     lastError.current=result.error||'STAR could not complete this action.'
+     // A chat request that fails to start is explained inline, next to the message it belongs to.
+     if(!CHAT_ACTIONS.includes(action))setNotice(lastError.current)
+     return null
+   }
    if(result.pending)return result
    running.current.delete(requestId)
    return result.data
  },[inactive])
- useEffect(()=>onBackendEvent((event:BackendEvent)=>{
+ /** Every backend event (and every preview-fixture event) goes through this one handler. */
+ const handleEvent=useCallback((event:BackendEvent)=>{
    const action=running.current.get(event.requestId)
    if(!action)return
    if(event.kind==='progress'){
      if(action==='installBrain'){
        const obj=(event.data||{}) as Record<string,unknown>
        setBrainProgress({phase:String(obj.phase||'Preparing your AI'),downloaded:Number(obj.overall_downloaded??obj.downloaded??0),total:Number(obj.overall_total??obj.total??0)})
-     }else if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){
-       const info=(event.data||{}) as {phase?:string;delta?:string}
-       if(typeof info.delta==='string'&&info.delta){
-         setStreamingText(previous=>previous+info.delta)
-         setWorkPhase('Writing your response…')
-       }else{
-         const detail=typeof event.data==='string'?event.data:String(info.phase||'STAR is working…')
-         setWorkPhase(truncate(detail,120))
+     }else if(CHAT_ACTIONS.includes(action)){
+       const info=(typeof event.data==='string'?event.data:(event.data||{})) as ProgressPayload|string
+       // Text is appended to the one live message; it is never re-animated per token.
+       if(typeof info!=='string'&&typeof info.delta==='string'&&info.delta){
+         streamRef.current+=info.delta
+         setStreamingText(streamRef.current)
        }
+       if(runRef.current)updateRun(applyProgress(runRef.current,info,Date.now()))
      }else if(action==='testModelTeam'){
        const detail=(event.data||{}) as {phase?:string;model?:string}
        setNotice(String(detail.phase||'Testing models')+(detail.model?' · '+detail.model:''))
@@ -147,10 +193,28 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      return
    }
    running.current.delete(event.requestId)
+   const endRun=(outcome:'done'|'failed'|'cancelled')=>{
+     const current=runRef.current
+     if(current)setLastRun({chat:chatRef.current,run:settleRun(current,outcome,Date.now())})
+     updateRun(null)
+   }
    if(event.kind==='error'){
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
-     setNotice(msg);if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
-     if(action==='testModel')setModelChecking(false)
+     if(CHAT_ACTIONS.includes(action)){
+       const found=classifyFailure(msg)
+       const cancelled=cancelRequested.current||found.kind==='cancelled'
+       cancelRequested.current=false
+       endRun(cancelled?'cancelled':'failed')
+       // The backend stores this outcome as a terminal record of the turn; the same row is shown now.
+       // The unfinished draft is dropped, because it was not saved and would vanish on the next reload.
+       streamRef.current='';sending.current=false
+       const row:ChatMessage={...makeMsg('event',msg),status:cancelled?'cancelled':'failed'}
+       fresh.current.add(row.id)
+       setMessages(m=>[...m,row])
+       setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
+       if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind})
+     }else setNotice(msg)
+     if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind})}
      if(action==='testModelTeam')setTeamChecking(false)
      if(['listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool'].includes(action))setCustomBusy('')
      if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
@@ -159,18 +223,22 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      return
    }
    const result=event.data as Record<string,unknown>
-   if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){
-     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');
-      if(action==='runTeam'&&Number.isInteger(result.peak_concurrency))setNotice(`STAR Teams: ${result.agents} stages · peak ${result.peak_concurrency} concurrent · ${(Number(result.elapsed_ms||0)/1000).toFixed(1)}s`);else setNotice('');setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
+   if(CHAT_ACTIONS.includes(action)){
+     cancelRequested.current=false
+     endRun('done')
+     streamRef.current='';sending.current=false
+     setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
+     if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now()})
+     setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
-     setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
+     setBrainProgress(null);setNotice('The local model is running.');void sync()
    }else if(action==='testModel'){
-     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setNotice('STAR Brain responded successfully to a real prompt.')
+     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setLastOutcome({ok:true,at:Date.now()});setNotice('The model answered a real test prompt.')
    }else if(action==='startModelRouter'){
      setRouterBusy(false);setModelList(Array.isArray(result.models)?result.models as string[]:[])
      setNotice('Local router is reachable; select a model and test its actual completion.');void sync()
    }else if(action==='stopBrain'){
-     setRouterBusy(false);setNotice('Managed STAR Brain stopped; chats and weights are preserved.');void sync()
+     setRouterBusy(false);setNotice('The local model server stopped; chats and weights are preserved.');void sync()
    }else if(action==='testModelTeam'){
      setTeamChecking(false)
      const report=result as ModelTeamReport
@@ -205,24 +273,97 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='transcribe')setPrompt(p=>p+(p?'\n':'')+String(result.text||''))
    else void sync()
- }),[sync])
+ },[sync,updateRun])
+ useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
 
- const send=useCallback(async(text=prompt)=>{
-   const value=text.trim();if(busy||!value)return
-   if(imageMode&&!data.settings.comfy_workflow){setNotice('To create images, choose a local ComfyUI workflow in Settings first.');setTab('settings');return}
-   if(inactive){setNotice('This preview does not run a model. Download STAR to chat locally.');return}
-   const selected=files.slice()
-   if(teamMode&&selected.length){setNotice('STAR Teams supports text prompts only. Remove attachments or disable Teams.');return}
-   if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
-   lastSent.current=value
-   setComposerMenu(false)
+ const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
+   lastSent.current=value;lastFiles.current=attachments
+   cancelRequested.current=false
+   streamRef.current=''
    followBottom.current=true;setShowJump(false)
-   setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false)
-   setMessages(m=>[...m,makeMsg('user',value,selected.map(f=>f.split(/[\\/]/).pop()||f))]);setFiles([]);setPrompt('');setBusy(true);setWorkPhase('Preparing your response…');setNotice('');setTab('chat')
+   setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false);setStopping(false)
+   const mine=makeMsg('user',value,attachments.map(fileName))
+   fresh.current.add(mine.id)
+   setBusy(true);setNotice('');setTab('chat');setLastRun(null)
+   updateRun(startRun(crypto.randomUUID(),mode,Date.now()))
+   return mine
+ },[updateRun])
+
+ const send=useCallback(async(text=prompt,attachments=files)=>{
+   // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
+   const value=text.trim();if(busy||sending.current||!value)return
+   if(imageMode&&!data.settings.comfy_workflow){setNotice('To create images, choose a local ComfyUI workflow in Settings first.');setTab('settings');return}
+   if(inactive){setNotice('This preview is not connected to a model. Open STAR Desktop to chat.');return}
+   const selected=attachments.slice()
+   if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
+   if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
+   sending.current=true
+   const mine=beginRun(value,selected,imageMode?'image':teamMode?'team':'chat')
+   setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
    const res=await act(action,imageMode?{prompt:value}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
-   if(!res){setBusy(false);setWorkPhase('');setRetryText(value);setMessages(m=>[...m,makeMsg('event',imageMode?'Image generation could not start. Check your ComfyUI settings.':'STAR could not connect. Check your model settings.')])}
- },[prompt,busy,files,inactive,act,imageMode,data.settings.comfy_workflow,data.settings.provider,chatMode,teamMode,research,githubSource])
+   if(!res){
+     // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
+     sending.current=false
+     updateRun(null);setBusy(false);setRetryText(value)
+     const row:ChatMessage={...makeMsg('event',lastError.current||'STAR could not start this request.'),status:'failed'}
+     fresh.current.add(row.id)
+     setMessages(m=>[...m,row])
+   }
+ },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,data.settings,chatMode,teamMode,research,githubSource])
+
+ const stop=useCallback(()=>{
+   if(!busy||stopping)return
+   cancelRequested.current=true
+   setStopping(true)
+   if(fixtureStop.current){fixtureStop.current();return}
+   void act('cancelMessage')
+ },[busy,stopping,act])
+
+ // Browser preview only: play a scripted fixture through the same handler as real events.
+ useEffect(()=>{
+   if(!fixture)return
+   let live=true
+   const timers:number[]=[]
+   const query=new URLSearchParams(window.location.search)
+   const hold=Number(query.get('hold')||0)
+   const speed=Math.max(0.05,Number(query.get('speed')||1))
+   const play=(script:FixtureScript,base:ChatMessage[])=>{
+     const requestId='fixture-'+crypto.randomUUID()
+     running.current.set(requestId,script.action)
+     if(script.mode)setChatMode(script.mode)
+     setTeamMode(script.action==='runTeam')
+     const mine=beginRun(script.prompt,[],script.action==='runTeam'?'team':'chat')
+     setMessages([...base,mine])
+     let delay=0
+     const events=hold>0?script.events.slice(0,hold):script.events
+     events.forEach(step=>{
+       delay+=step.wait/speed
+       timers.push(window.setTimeout(()=>{if(live)handleEvent({requestId,kind:step.kind,data:step.data})},delay))
+     })
+     fixtureStop.current=()=>{
+       timers.forEach(timer=>window.clearTimeout(timer))
+       window.setTimeout(()=>{if(live)handleEvent({requestId,kind:'error',data:'Request stopped. The draft answer has not been saved as a completed result.'})},180)
+     }
+   }
+   void import('./previewFixtures').then(module=>{
+     if(!live)return
+     const chosen:Fixture|undefined=module.FIXTURES[fixture]
+     if(!chosen)return
+     setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
+     setDraft(d=>({...d,...module.fixtureSettings,...chosen.settings}))
+     setMessages(chosen.messages)
+     if(chosen.finishedRun)setLastRun({chat:'fx-1',run:chosen.finishedRun})
+     if(chosen.script)play(chosen.script,chosen.messages)
+   })
+   return ()=>{
+     live=false
+     timers.forEach(timer=>window.clearTimeout(timer))
+     fixtureStop.current=null
+     running.current.clear()
+     updateRun(null);setBusy(false);setStreamingText('');streamRef.current=''
+   }
+ },[fixture,handleEvent,beginRun,updateRun])
 
  useEffect(()=>{
    const onShortcut=(e:KeyboardEvent)=>{
@@ -232,20 +373,27 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      }else if(mod&&e.key===','){
        e.preventDefault();setTab('settings')
      }else if(e.key==='Escape'){
-       setLeftOpen(false);setComposerMenu(false);setToolsOpen(false);setNotice('')
+       setLeftOpen(false);setNotice('')
      }
    }
    window.addEventListener('keydown',onShortcut)
    return ()=>window.removeEventListener('keydown',onShortcut)
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
- const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setStreamingText('');setWorkPhase('');setComposerMenu(false);followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const transcribe=async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}
+ const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
- const startNewChat=async()=>{if(busy)return;const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([]);composerRef.current?.focus()}}
- const openChat=async(id:string)=>{if(busy||id===data.active_chat){setTab('chat');return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
+ const openChat=async(id:string)=>{if(busy&&id!==data.active_chat)setNotice('Stop the current answer before switching chats.');if(busy||id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
  const filteredChats=data.chats.filter(c=>c.title.toLowerCase().includes(historyQuery.toLowerCase()))
+ const chatGroups=groupChats(filteredChats.slice(0,60))
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
+ /** Reduced motion applies at once and is stored straight away, not only on Save. */
+ const setReducedMotion=(reduced:boolean)=>{
+   setDraft(d=>({...d,reduced_motion:reduced}));setThemeMotion(!reduced)
+   if(!inactive)void act('saveSettings',{settings:{reduced_motion:reduced}})
+ }
  const testActualModel=async()=>{
    if(modelChecking)return
    setModelChecking(true);setModelCheck(null)
@@ -313,136 +461,158 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(!response){setUpdateBusy(false);setUpdateProgress(null)}
  }
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
+ const fillComposer=(text:string)=>{
+   setPrompt(text);setTab('chat')
+   window.requestAnimationFrame(()=>{const node=composerRef.current;if(node){node.focus();node.setSelectionRange(text.length,text.length)}})
+ }
+ const narrow=()=>window.matchMedia('(max-width: 850px)').matches
  const wrapper='shell '+(!leftOpen?'':'shell-open')+(sidebarCollapsed?' shell-sidebar-collapsed':'')
- const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
+ const query=chatSearch.trim().toLowerCase()
+ const matchingMessages=query?messages.filter(m=>m.text.toLowerCase().includes(query)):messages
  const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
  const serverMode=usesStarServer(data.settings)
+ const serverDraft=usesStarServer(draft)
  const brain=brainStatus(data)
- return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview}>
-   <aside className="sidebar" aria-label="STAR navigation">
-      <div className="brand-area">
-        <Brand/>
-        <button className="sidebar-collapse icon-button" type="button" aria-label="Hide sidebar" onClick={()=>{if(window.matchMedia('(max-width: 850px)').matches)setLeftOpen(false);else setSidebarCollapsed(true)}}><PanelLeftClose size={18}/></button>
-      </div>
-      <div className="sidebar-actions">
-        <button className="new-chat-button" type="button" disabled={busy} onClick={()=>void startNewChat()}><SquarePen size={18}/><span>New chat</span></button>
-        <button className="sidebar-search-button" type="button" aria-label="Search conversations" title="Search conversations" aria-expanded={historySearchOpen} onClick={()=>{setHistorySearchOpen(v=>!v);setHistoryQuery('')}}><Search size={18}/></button>
-      </div>
-      {historySearchOpen&&<div className="sidebar-search-row"><Search size={15}/><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat…" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={15}/></button></div>}
-      <button className="current-workspace" type="button" onClick={()=>nav('projects')} title="Switch project workspace"><Folder size={15}/><span>{data.project}</span><ChevronDown size={14}/></button>
-      <div className="sidebar-history" aria-label="Saved conversations">
-        <div className="history-heading"><span>Chats</span></div>
-        <div className="history-list">
-          {filteredChats.slice(0,40).map(chat=><button type="button" key={chat.id} title={chat.title} className={'history-item '+(data.active_chat===chat.id&&tab==='chat'?'selected':'')} onClick={()=>void openChat(chat.id)} disabled={busy}><span>{chat.title}</span></button>)}
-          {!filteredChats.length&&<span className="history-empty">{historyQuery?'No conversations found':'Your conversations appear here'}</span>}
-        </div>
-      </div>
-      <div className="sidebar-footer">
-        <button type="button" className={'sidebar-more '+(toolsOpen?'is-open':'')} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(v=>!v)}><Boxes size={17}/><span>Workspace tools</span><ChevronDown size={15}/></button>
-        <AnimatePresence initial={false}>{toolsOpen&&<motion.div className="sidebar-tools" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:.17}}>
-          {sections.filter(([id])=>id!=='chat').map(([id,name,Icon])=><button className={'tool-nav-item '+(tab===id?'active':'')} type="button" key={id} onClick={()=>{nav(id);setToolsOpen(false)}}><Icon size={16}/><span>{name}</span></button>)}
-        </motion.div>}</AnimatePresence>
-        <button className="sidebar-engine" type="button" onClick={()=>nav('brain')}><span className={'status-dot '+(brain.online?'ok':'')}/><span>{brain.label}</span><ChevronRight size={15}/></button>
-      </div>
-    </aside>
+ const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brain,server:data.server,ownHardware:runsOnOwnHardware(data.settings),credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
+ const web:Availability=data.credentials?.brave||data.credentials?.tavily?{ok:true}:{ok:false,reason:'Needs a search key'}
+ const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
+ const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
+ // The timeline belongs to the turn that started it: right after the last message you sent.
+ const shownRun=busy?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
+ const timeline=!query&&shownRun&&(isRich(shownRun)||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
+ let lastUser=-1,lastStar=-1
+ messages.forEach((m,i)=>{if(m.role==='user')lastUser=i;else if(m.role==='assistant')lastStar=i})
+ // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
+ const turns:ChatMessage[]=busy&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
+ const empty=!messages.length&&!busy
+ // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
+ const pending=data.retry&&data.retry.prompt?data.retry:null
+ const retryPrompt=retryText||pending?.prompt||''
+ const lastMessage=messages[messages.length-1]
+ const failedLast=!busy&&lastMessage?.role==='event'&&!!lastMessage.status
+ // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
+ const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
+ const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[])
+ const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
+ const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
+ return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview} data-reduced-motion={!themeMotion}>
+   <aside className="rail" aria-label="STAR navigation">
+     <div className="rail-head">
+       <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span>STAR</span></button>
+       <button className="rail-icon" type="button" aria-label="Hide sidebar" title="Hide sidebar" onClick={()=>{if(narrow())setLeftOpen(false);else setSidebarCollapsed(true)}}><PanelLeftClose size={17}/></button>
+     </div>
+     <div className="rail-group">
+       <button className="rail-item rail-new" type="button" onClick={()=>void startNewChat()}><SquarePen size={16}/><span>New chat</span></button>
+       <button className="rail-item" type="button" aria-expanded={historySearchOpen} onClick={()=>{setHistorySearchOpen(v=>!v);setHistoryQuery('')}}><Search size={16}/><span>Search chats</span></button>
+       {historySearchOpen&&<div className="rail-search"><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setHistorySearchOpen(false);setHistoryQuery('')}}}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={14}/></button></div>}
+     </div>
+     <nav className="rail-group" aria-label="Workspace">
+       <div className="rail-label">Workspace</div>
+       {sections.filter(([id])=>id!=='chat'&&id!=='settings').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{id==='brain'?'Model':name}</span>{id==='projects'&&<small title={'Current project: '+data.project}>{data.project}</small>}</button>)}
+     </nav>
+     <div className="rail-chats" aria-label="Saved conversations">
+       <div className="rail-label">Chats</div>
+       {chatGroups.map(group=><Fragment key={group.label}>
+         {chatGroups.length>1&&<div className="rail-sublabel">{group.label}</div>}
+         {group.chats.map(chat=><button type="button" key={chat.id} title={chat.title} className={'rail-item rail-chat '+(data.active_chat===chat.id&&tab==='chat'?'is-current':'')} aria-current={data.active_chat===chat.id&&tab==='chat'?'page':undefined} onClick={()=>void openChat(chat.id)}><span>{chat.title}</span></button>)}
+       </Fragment>)}
+       {!filteredChats.length&&<p className="rail-empty">{historyQuery?'No chats match that search.':'Chats you start are saved here.'}</p>}
+     </div>
+     <div className="rail-foot">
+       <button className={'rail-item '+(tab==='settings'?'is-current':'')} type="button" aria-current={tab==='settings'?'page':undefined} onClick={()=>nav('settings')}><Settings2 size={16}/><span>Settings</span><small>v{data.version}</small></button>
+     </div>
+   </aside>
    <div className="shell-main">
-     <header className="topbar">
-        <div className="topbar-left">
-          <button className="hamburger icon-button" type="button" aria-label={sidebarCollapsed?'Show sidebar':'Toggle sidebar'} onClick={()=>{if(window.matchMedia('(max-width: 850px)').matches)setLeftOpen(true);else setSidebarCollapsed(v=>!v)}}>{sidebarCollapsed?<PanelLeftOpen size={19}/>:<PanelLeftClose size={19}/>}</button>
-          <button className="topbar-title" type="button" title="Back to chat" onClick={()=>nav('chat')}>{tab==='chat'?'STAR':sections.find(x=>x[0]===tab)?.[1]}</button>
-          {tab==='chat'&&<span className="topbar-subtitle" title={chatTitle}>{chatTitle==='New chat'?'':truncate(chatTitle,56)}</span>}
-        </div>
-        <div className="topbar-right">
-          {tab==='chat'&&<>
-            {showChatSearch&&<input className="chat-find-input" type="search" aria-label="Search messages in this chat" placeholder="Find in chat…" autoFocus value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>}
-            <button className="icon-button header-action" type="button" title="Find in this chat" aria-label="Find in this chat" aria-pressed={showChatSearch} onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={18}/></button>
-            <button className="icon-button header-action" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={17}/></button>
-            <button className="icon-button header-action" type="button" title="New chat" aria-label="New chat" disabled={busy} onClick={()=>void startNewChat()}><SquarePen size={18}/></button>
-          </>}
-          {tab!=='chat'&&<button className="icon-button header-action" type="button" title="Settings" aria-label="Open settings" onClick={()=>nav('settings')}><Settings2 size={18}/></button>}
-        </div>
-      </header>
-     {preview&&<div className="demo-ribbon"><Info size={14}/> Interactive interface preview — real AI features are available only in STAR Desktop.</div>}
+     <header className="bar">
+       <div className="bar-left">
+         <button className="bar-action bar-reveal" type="button" aria-label="Show sidebar" title="Show sidebar" onClick={()=>{if(narrow())setLeftOpen(true);else setSidebarCollapsed(false)}}><PanelLeftOpen size={18}/></button>
+         {tab==='chat'?<div className="bar-title"><span className="bar-crumb">{data.project}</span><span className="bar-sep" aria-hidden="true">/</span><h1 title={chatTitle}>{chatTitle}</h1></div>
+           :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
+       </div>
+       <div className="bar-right">
+         {tab==='chat'&&<>
+           {showChatSearch&&<input className="bar-find" type="search" aria-label="Search messages in this chat" placeholder="Find in this chat" autoFocus value={chatSearch} onChange={e=>setChatSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setShowChatSearch(false);setChatSearch('')}}}/>}
+           <button className="bar-action" type="button" title="Find in this chat" aria-label="Find in this chat" aria-pressed={showChatSearch} disabled={!messages.length} onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={17}/></button>
+           <button className="bar-action" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={16}/></button>
+           <button className="bar-action bar-reveal" type="button" title="New chat" aria-label="New chat" onClick={()=>void startNewChat()}><SquarePen size={17}/></button>
+         </>}
+       </div>
+     </header>
+     {preview&&<div className="preview-ribbon" role="note"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
-       <motion.main key={tab} className="page-stage" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.14}}>
-         {tab==='chat'&&<div className="chat-page">
-            <div className="chat-scroll" ref={chatScroll} onScroll={onChatScroll}>
-              <div className="chat-inner">
-                {!messages.length?<div className="welcome">
-                  <motion.div className="welcome-logo" initial={false} animate={{opacity:1}}><Star size={27} fill="currentColor" strokeWidth={1.2}/></motion.div>
-                  <h1>What can I help you with?</h1>
-                  <p>Ask, create, or build something with STAR.</p>
-                  <div className="suggestions">{examples.slice(0,3).map((ex,i)=><button key={ex.title} type="button" disabled={busy} onClick={()=>void send(ex.prompt)}>{i===0?<Sparkles size={16}/>:i===1?<Workflow size={16}/>:<Terminal size={16}/>}<span>{ex.title}</span><ArrowRight size={14}/></button>)}</div>
-                </div>:<div className="conversation" role="log" aria-label="Conversation">
-                  {matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
-                  {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={18}/><span>No messages found</span></div>}
-                  {busy&&streamingText&&<Message key="stream-live" animated={false} entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
-                  {busy&&<div className="thinking" role="status" aria-live="polite"><span className="pulse-bar"><i/><i/><i/></span><span>{imageMode?'Creating image…':workPhase||'Thinking…'}</span></div>}
-                  {!busy&&retryText&&<div className="chat-recovery"><span>The last request stopped.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={15}/> Retry</button></div>}
-                </div>}
-              </div>
-            </div>
-            {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={17}/> Latest</button>}
-            <div className="composer-zone">
-              <div className="composer" aria-label="STAR message composer">
-                {imageMode&&<div className="composer-mode-row"><button className="composer-image-chip" type="button" aria-label="Stop creating an image" onClick={()=>setImageMode(false)}><ImagePlus size={15}/> Create image <X size={14}/></button>{!data.settings.comfy_workflow&&<button className="composer-setup" type="button" onClick={()=>nav('settings')}>Set up image generation <ArrowRight size={13}/></button>}</div>}
-                {!!files.length&&<div className="file-chips">{files.map((f,i)=><span key={f}><File size={14}/>{truncate(f.split(/[\\/]/).pop()||f,40)}<button type="button" title="Remove attachment" aria-label="Remove attachment" onClick={()=>setFiles(x=>x.filter((_,j)=>i!==j))}><X size={13}/></button></span>)}</div>}
-                <label className="sr-only" htmlFor="star-prompt">Message STAR</label>
-                <textarea id="star-prompt" ref={composerRef} rows={1} placeholder={imageMode?'Describe the image you want to create…':'Message STAR…'} value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
-                <div className="composer-tools">
-                  <div className="composer-left">
-                    <div className="composer-menu-wrap" ref={composerMenuRef}>
-                      <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} disabled={busy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
-                      <AnimatePresence>{composerMenu&&<motion.div className="composer-menu" role="menu" initial={{opacity:0,y:6,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:4,scale:.99}} transition={{duration:.15}}>
-                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setImageMode(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
-                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setFiles([]);setImageMode(true);setTeamMode(false);composerRef.current?.focus()}}><ImagePlus size={18}/><span>Create image</span>{imageMode&&<Check size={15}/>}</button>
-                        <button role="menuitem" type="button" onClick={async()=>{setComposerMenu(false);const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/><span>Transcribe audio</span></button>
-                      </motion.div>}</AnimatePresence>
-                    </div>
-                    <div className="integrated-mode-controls">
-                     <select aria-label="STAR reasoning mode" value={chatMode} disabled={busy||imageMode||teamMode}
-                       onChange={e=>{const v=e.target.value as 'fast'|'auto'|'agent';setChatMode(v);if(v!=='agent')setGithubSource(false)}}>
-                       <option value="fast">Fast</option><option value="auto">Auto</option><option value="agent">Agent</option>
-                     </select>
-                     <button type="button" className={'integrated-chip '+(teamMode?'active':'')} aria-pressed={teamMode} disabled={busy||imageMode}
-                       title="Four local read-only specialist stages" onClick={()=>setTeamMode(x=>!x)}><Boxes size={15}/> Teams</button>
-                     <button type="button" className={'integrated-chip '+(research?'active':'')} aria-pressed={research} disabled={busy||imageMode||teamMode}
-                       title="Web research with your configured provider" onClick={()=>setResearch(x=>!x)}><Globe size={15}/> Web</button>
-                     {chatMode==='agent'&&<button type="button" className={'integrated-chip '+(githubSource?'active':'')} aria-pressed={githubSource} disabled={busy||imageMode||teamMode}
-                       title="Read public STAR source; no editing or credentials" onClick={()=>setGithubSource(x=>!x)}><BookOpen size={14}/> Source</button>}
-                   </div>
-                   <button className="composer-model" type="button" title="View local model" onClick={()=>nav('brain')}><span className={'status-dot '+(brain.online?'ok':'')}/><span>{imageMode?'Local image creation':truncate(data.settings.model||'STAR Brain',25)}</span><ChevronDown size={13}/></button>
-                  </div>
-                  <div className="composer-right">{busy&&!teamMode?<button className="send-button" type="button" title="Stop generating" aria-label="Stop response" onClick={()=>void act('cancelMessage')}><X size={18}/></button>:
-                     <button className="send-button" type="button" aria-label={busy?'STAR Teams is working':'Send message'} disabled={busy||!prompt.trim()} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={20}/>}</button>}</div>
-                </div>
-              </div>
-              <div className="composer-hint">{teamMode?"Teams: four read-only stages; two concurrent local model calls.":"STAR can make mistakes. Check important information."}</div>
-            </div>
-          </div>}
+       <motion.main key={tab} className="page-stage" variants={pageFade} initial="hidden" animate="shown" exit="exit">
+         {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
+           <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
+             <div className="thread-column">
+               {empty?<div className="thread-hello"><StarMark size={26}/><h2>What are we making?</h2></div>
+               :<section className="thread-turns" role="log" aria-live="off" aria-label="Conversation">
+                 {turns.map((m,index)=>{
+                   const live=m.id==='stream-live'
+                   const at=query?-1:index
+                   const newest=at>=0&&at===messages.length-1&&!busy
+                   // Only the newest unanswered turn offers Retry; older failure rows are history.
+                   const recover=newest&&m.role==='event'&&!!m.status&&!!retryPrompt
+                   return <Fragment key={data.active_chat+':'+(query?m.id:index)}>
+                     <Message entry={m} animated={live||fresh.current.has(m.id)} partial={live} pinned={newest}
+                       onEdit={m.role==='user'&&!busy?()=>fillComposer(m.text):recover?()=>fillComposer(retryPrompt):undefined}
+                       onRetry={recover?retryNow:undefined}
+                       onAskAgain={m.role==='assistant'&&at===lastStar&&at>lastUser&&!busy&&lastUser>=0?()=>void send(messages[lastUser].text,[]):undefined}
+                       onConnection={recover?()=>nav('brain'):undefined}/>
+                     {at===lastUser&&timelineNode}
+                   </Fragment>
+                 })}
+                 {query&&!matchingMessages.length&&<div className="thread-none"><Search size={18} aria-hidden="true"/><span>No messages match “{chatSearch.trim()}”.</span></div>}
+                 {busy&&run&&!timeline&&!streamingText&&<RunStatus run={run} label={stopping?'Stopping':undefined}/>}
+                 {interrupted&&<Message entry={{id:'interrupted',role:'event',text:interrupted.detail,status:'cancelled'}} animated={false} pinned onRetry={retryNow} onEdit={()=>fillComposer(interrupted.prompt)}/>}
+               </section>}
+             </div>
+           </div>
+           <div className="dock">
+             {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={15} aria-hidden="true"/> Latest</button>}
+             {(!inactive||!!fixture)&&!failedLast&&(connection.tone==='offline'||connection.tone==='attention')&&<div className={'dock-banner is-'+connection.tone} role="status"><CircleAlert size={15} aria-hidden="true"/><span><strong>{connection.state}.</strong> {connection.note}</span><button type="button" onClick={()=>nav('brain')}>Model &amp; connection</button></div>}
+             <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
+               files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>{setImageMode(false);void attach()}} onTranscribe={()=>void transcribe()}
+               mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
+               imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles([]);setTeamMode(false)}composerRef.current?.focus()}} imageReady={!!data.settings.comfy_workflow} onImageSetup={()=>nav('settings')}
+               teamMode={teamMode} onTeamMode={on=>{setTeamMode(on);composerRef.current?.focus()}} team={team}
+               research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
+               connection={connection} onOpenConnection={()=>nav('brain')}/>
+             {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
+               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.`:'STAR can make mistakes. Check important information.'}</p>}
+           </div>
+           <div className="thread-rest" aria-hidden="true"/>
+           <div className="sr-only" role="status" aria-live="polite">{announce}</div>
+         </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
-            <PageTitle eyebrow="LOCAL MODEL" title="STAR Brain" description="Your private AI, running on your computer."/>
+            <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
             {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
-            <LocalBrainFallback optional={serverMode}>
-            <Panel className="brain-simple">
-              <div className="brain-simple-head"><span className="brain-simple-icon"><Star size={25} fill="currentColor"/></span>
-                <div className="brain-simple-copy"><h2>{data.brain_installed?'Your local AI is installed':'Set up your local AI'}</h2><p>{data.brain_running?'STAR is ready for your next conversation.':data.brain_installed?'Start your installed model to begin chatting.':'Download a verified local model to get started. A few gigabytes of disk space are required.'}</p></div>
-                <Tag kind={data.brain_running?'green':'neutral'}>{data.brain_running?'Ready':'Offline'}</Tag>
+            {!serverMode&&<Panel className="conn-card">
+              <div className="conn-head">
+                <span className={'conn-dot is-'+connection.tone} aria-hidden="true"/>
+                <div className="conn-copy"><h2>{connection.label}</h2><p>{connection.note}</p></div>
+                <Tag kind={connection.tone==='ready'?'green':connection.tone==='offline'?'red':connection.tone==='attention'?'gold':'neutral'}>{connection.state}</Tag>
               </div>
-              {!data.brain_running&&<button type="button" className="primary-button brain-start" disabled={brainProgress!==null} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={17}/>:<Download size={17}/>} {brainProgress?'Preparing STAR Brain…':data.brain_installed?'Start model':'Download and start'}<ArrowRight size={16}/></button>}
+              <dl className="conn-facts">
+                <div><dt>Provider</dt><dd>{connection.provider}</dd></div>
+                <div><dt>Model</dt><dd>{connection.model||'None selected'}</dd></div>
+                {connection.endpoint&&<div><dt>Address</dt><dd>{connection.endpoint}</dd></div>}
+              </dl>
+              <div className="conn-actions">
+                <button type="button" className="primary-button" disabled={modelChecking||inactive||!data.settings.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={16}/>:<Zap size={16}/>} {modelChecking?'Testing…':'Test connection'}</button>
+                <button type="button" className="secondary-button" onClick={()=>nav('settings')}><Settings2 size={16}/> Connection settings</button>
+              </div>
+              {modelCheck&&<div className="health-result" role="status"><Check size={16}/><span>{modelCheck.sample}</span></div>}
+            </Panel>}
+            <LocalBrainFallback optional={serverMode}>
+            <Panel className="conn-card conn-local">
+              <h2>Model on this PC</h2>
+              <p>{data.brain_running?'The local engine is running on this PC.':data.brain_installed?'A local model is installed but not started.':'No local model is installed. Installing downloads a verified model of a few gigabytes.'}</p>
+              {!data.brain_running&&<button type="button" className="secondary-button" disabled={brainProgress!==null||inactive} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={16}/>:<Download size={16}/>} {brainProgress?'Preparing the local model…':data.brain_installed?'Start local model':'Download and start'}</button>}
               {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={{duration:.2}}/></div></div>}
             </Panel>
             </LocalBrainFallback>
-            <details className="settings-expander brain-details"><summary><span><strong>Model and connection details</strong><small>View your model, run a response test, or update its settings.</small></span><ChevronDown size={17}/></summary>
-              <div className="settings-expander-body">
-                <p><strong>Model:</strong> {data.settings.model||'None selected'}</p><p><strong>Local endpoint:</strong> {data.settings.endpoint}</p>
-                <button type="button" className="secondary-button" disabled={modelChecking||inactive||!data.settings.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={16}/>:<Zap size={16}/>} {modelChecking?'Testing…':'Test model response'}</button>
-                {modelCheck&&<div className="health-result" role="status"><Check size={16}/><span>{modelCheck.sample}</span></div>}
-                <button type="button" className="secondary-button" onClick={()=>nav('settings')}><Settings2 size={16}/> Model settings</button>
-              </div>
-            </details>
           </div></div>}
           {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><Panel className="settings-section"><div className="tool-icon"><Workflow size={22}/></div><h2>Roblox Studio</h2><p>Connect to the official Roblox Studio MCP server. Start in an unpublished test place.</p><button className="secondary-button" onClick={()=>void act('discoverStudio')}><RefreshCcw size={15}/> Discover Studio instances</button>{studio&&<pre className="tool-output">{truncate(studio,2400)}</pre>}</Panel><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
@@ -465,7 +635,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/>
            <ReviewToolsPanel settings={draft} onChange={setDraft} status={data.tool_workshop} recipes={customTools} query={customQuery} onQuery={setCustomQuery} preview={customPreview} busy={customBusy} disabled={inactive} refresh={refreshCustomTools} runPreview={id=>customAction('previewCustomTool',id)} approve={id=>customAction('approveCustomTool',id)} disable={id=>customAction('disableCustomTool',id)}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}
-         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
+         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>{serverDraft?'STAR Server model':'Local model'}</h2><p>{serverDraft?'The model your STAR Server runs. Its address, key and limits are under Model & provider below.':'STAR Brain configures these automatically after installation.'}</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>{serverDraft?'Server model ID':'Model ID'}<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder={serverDraft?'Model on your STAR Server':'Installed model'}/></label>{!serverDraft&&<label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label>}</div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
          <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Create images directly from the chat composer</small></span><ChevronDown size={18}/></summary>
@@ -488,7 +658,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <div className="intelligence-folder-row"><label>Obsidian vault folder<input aria-label="Obsidian vault folder" value={draft.obsidian_vault??''} onChange={e=>setDraft(d=>({...d,obsidian_vault:e.target.value}))} placeholder="Choose an Obsidian Markdown vault"/></label><button type="button" className="secondary-button" onClick={async()=>{const result=await act('selectFolder');if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){setDraft(d=>({...d,obsidian_vault:result.path as string}))}}}><FolderOpen size={15}/> Browse folder</button></div>
              <small>Note contents stay local, are not promoted into trusted memory without review, and cannot override tool permissions.</small>
            </Panel>
-           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Reduce interface motion</strong><small>Respect your preference for quieter transitions</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>{setDraft(d=>({...d,reduced_motion:e.target.checked}));setThemeMotion(!e.target.checked)}}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
+           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Reduced motion</strong><small>Turns off animation everywhere in STAR. Applied and saved immediately.</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>setReducedMotion(e.target.checked)}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
             <div className="section-heading"><div><span className="eyebrow">VERSION & UPDATES</span><h2>Stay up to date</h2></div><Tag kind={update?.available?'gold':'neutral'}>{update?.available?'Update ready':`v${data.version}`}</Tag></div>
             <p>STAR downloads official Windows releases, checks the exact file size and SHA-256 checksum, and replaces application files. Your chats, projects, memories, settings, and downloaded models remain in your local profile.</p>
             <div className="update-version-line"><span><strong>Installed</strong> v{data.version}</span><span><strong>Latest checked</strong> {update? `v${update.version}` : 'Not checked yet'}</span></div>
@@ -504,9 +674,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
        </motion.main>
      </AnimatePresence>
-     {notice&&<div role="status" className="toast"><Info size={16}/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
+     {notice&&<div role="status" className="toast"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
  </div></MotionConfig>
 }
-function PageTitle({eyebrow,title,description}:{eyebrow:string;title:string;description:string}) {return <div className="page-intro"><span className="eyebrow">{eyebrow}</span><h1>{title}<span className="gold-dot">.</span></h1><p>{description}</p></div>}
+function PageTitle({eyebrow,title,description}:{eyebrow:string;title:string;description:string}) {return <div className="page-intro"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>}

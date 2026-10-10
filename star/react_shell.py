@@ -9,8 +9,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import hashlib
 import json
 import os
+import re
 import sys
 import tempfile
 import threading
@@ -103,26 +105,114 @@ def react_index(root: Path | None = None) -> Path:
     return Path(base) / 'frontend' / 'dist' / 'index.html'
 
 
+_SPECIALIST_ROLES = frozenset({'planner','research','luau','ui','animation',
+                               'environment','review','integration'})
+_TEAM_STAGES = frozenset({'evidence','design','critic','synthesis'})
+_ROUTE_PROFILES = frozenset({'fast','reasoning','roblox','vision','research','agent'})
+_STEP_STATES = {'completed':'done','done':'done','failed':'failed','blocked':'blocked',
+                'cancelled':'cancelled'}
+_TOOL_NAME = re.compile(r'[A-Za-z][A-Za-z0-9_.-]{0,47}')
+
+
+def _opaque_id(value) -> str:
+    """Stable row key for the activity view that never reveals a model-authored id."""
+    return 't' + hashlib.sha256(str(value).encode('utf-8', 'replace')).hexdigest()[:10]
+
+
+def _bounded_int(value, top: int):
+    return value if type(value) is int and 0 <= value <= top else None
+
+
 def sanitize_event(event: dict) -> dict:
-    """Never forward raw tool results/secret tokens to an unrestricted webpage."""
+    """Never forward raw tool results/secret tokens to an unrestricted webpage.
+
+    `phase` stays a short human sentence. `activity` is the structured form the
+    chat's activity timeline renders: only enumerated kinds, states and roles,
+    bounded integers, an opaque step key, and the name of a tool that already
+    passed authorization. Goals, arguments, outputs and model-authored task ids
+    are never included.
+    """
     kind = str(event.get('event', 'working'))[:36]
+    if kind == 'team_planned':
+        steps = []
+        tasks = event.get('tasks')
+        for item in (tasks if isinstance(tasks, list) else [])[:8]:
+            if not isinstance(item, dict) or item.get('id') not in _TEAM_STAGES:
+                continue
+            needs = item.get('dependencies')
+            steps.append({
+                'id': item['id'],
+                'role': item.get('role') if item.get('role') in _SPECIALIST_ROLES else 'research',
+                'needs': [d for d in (needs if isinstance(needs, (list, tuple)) else ())[:8]
+                          if d in _TEAM_STAGES],
+            })
+        return {'phase': 'STAR Teams: plan ready',
+                'activity': {'type': 'plan', 'group': 'team', 'steps': steps}}
     if kind in {'agent_started','agent_finished','agent_blocked'}:
         role=str(event.get('role','agent'))[:24]
+        if role not in _SPECIALIST_ROLES:
+            role='agent'
         status=str(event.get('status','working'))[:18]
-        return {'phase':f'STAR Teams: {role} — {status if kind != "agent_started" else "working"}'}
+        task=event.get('task')
+        state=('running' if kind == 'agent_started' else 'blocked' if kind == 'agent_blocked'
+               else _STEP_STATES.get(status, 'failed'))
+        activity={'type':'agent','group':'team',
+                  'id':task if task in _TEAM_STAGES else _opaque_id(task),
+                  'role':role if role != 'agent' else 'specialist','state':state}
+        elapsed=_bounded_int(event.get('elapsed_ms'), 3_600_000)
+        if kind == 'agent_finished' and elapsed is not None:
+            activity['elapsed_ms']=elapsed
+        return {'phase':f'STAR Teams: {role} — {state if kind != "agent_started" else "working"}',
+                'activity':activity}
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
     if kind in {'subagent_started','subagent_finished'}:
         role=str(event.get('role','research'))[:30]
-        if role not in {'planner','research','luau','ui','animation',
-                        'environment','review','integration'}:
+        if role not in _SPECIALIST_ROLES:
             role='research'
         status='working' if kind=='subagent_started' else str(event.get('status','done'))[:16]
-        return {'phase':f'STAR {role} specialist · {status}'}
+        if kind == 'subagent_finished' and status not in _STEP_STATES:
+            status='failed'
+        state='running' if kind == 'subagent_started' else _STEP_STATES[status]
+        return {'phase':f'STAR {role} specialist · {status}',
+                'activity':{'type':'agent','group':'specialist',
+                            'id':_opaque_id(event.get('task_id')),'role':role,'state':state}}
     if kind == 'route_selected':
-        return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90]}
+        activity={'type':'route'}
+        if event.get('profile') in _ROUTE_PROFILES:
+            activity['profile']=event['profile']
+        return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90],
+                'activity':activity}
+    if kind in {'search_started','search_finished'}:
+        started = kind == 'search_started'
+        return {'phase':'Searching the web' if started else 'Web search finished',
+                'activity':{'type':'search','state':'running' if started else 'done'}}
+    if kind == 'model_turn':
+        activity={'type':'turn'}
+        for key in ('step','max_steps'):
+            count=_bounded_int(event.get(key), 64)
+            if count:
+                activity[key]=count
+        return {'phase':'Thinking','activity':activity}
+    if kind == 'finished':
+        activity={'type':'finished'}
+        for key in ('model_calls','tool_calls'):
+            count=_bounded_int(event.get(key), 999)
+            if count is not None:
+                activity[key]=count
+        return {'phase':'Finishing the answer','activity':activity}
     if kind in {'saved','run_completed'}:
-        return {'phase':'Saving verified task record'}
+        return {'phase':'Saving verified task record','activity':{'type':'saved'}}
+    if kind in {'tool_started','tool_finished','tool_rejected'}:
+        state=('running' if kind == 'tool_started' else 'blocked' if kind == 'tool_rejected'
+               else 'failed' if event.get('is_error') else 'done')
+        activity={'type':'tool','state':state}
+        name=event.get('tool')
+        # A rejected name never passed authorization and may be invented by the model.
+        if kind != 'tool_rejected' and isinstance(name, str) and _TOOL_NAME.fullmatch(name):
+            activity['tool']=name
+        return {'phase':'A tool request was not permitted' if kind == 'tool_rejected'
+                else 'Using an authorized local tool','activity':activity}
     if kind in {'tool_call','tool_result','tool_output'}:
         return {'phase':'Using an authorized local tool'}
     return {'phase':('STAR is working · '+kind)[:110]}
