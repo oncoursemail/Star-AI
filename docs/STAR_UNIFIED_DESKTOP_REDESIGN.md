@@ -1,42 +1,53 @@
-# STAR Intelligence — Unified Stellar Desktop
+# STAR Intelligence — Quiet Chat redesign
 
-Status: feature branch / review candidate. Do not advertise a shipped Windows executable until CI, real Windows GPU/model checks and owner acceptance pass.
+**Status:** React + Python source implementation candidate. This is **not** a new installer, not a published binary, and not a claim of GPU/ComfyUI Windows end-to-end verification.
 
-## Diagnosis from the owner's October 2026 screenshots
+## Product requirement
 
-- React desktop and legacy PySide6 desktop expose distinct navigation and styling. The old React Library image action opens the legacy executable, creating an unexpected second STAR window.
-- The chat store historically keyed all turns to a project, not independent chat threads, so New Chat could not isolate conversations.
-- Conversation rows were separated by heavy full-width borders. Type and composer appeared small and repetitive status badges competed for attention.
+STAR should feel closer to the calm everyday chat experience of ChatGPT and Claude, *not* like an analytics dashboard that happens to contain a conversation. The owner explicitly rejects extra panels, giant gold bars, decorative rings, navigation clutter, AI-generated-looking gradients, and the independent Image Lab page.
 
-## Research and design decisions
+Primary surface: **one STAR window; conversation first; images in chat; advanced developer tools available but not permanently occupying the main navigation.**
 
-- Creative Tim Vision UI Dashboard React: https://demos.creative-tim.com/vision-ui-dashboard-react/#/dashboard — use layered dark surfaces, navigation hierarchy and subtle tonal changes, not copied dashboard components or invented analytics.
-- Aceternity UI: https://ui.aceternity.com/components — take contextual hover, entrance motion and tactile buttons while avoiding continuous glowing backgrounds, GPU-heavy effects and decorative noise.
-- HeroUI: https://heroui.com/ — adopt consistent form focus states and accessibility principles, but don't add a second heavyweight React component framework alongside STAR's Radix controls and custom CSS.
-- Chakra UI: https://chakra-ui.com/ — consistent readable typography, spacing and component states. Avoid mixing Chakra, HeroUI and other competing design foundations in the same app.
-- Supernova comparison: https://www.supernova.io/blog/top-10-pre-built-react-frontend-ui-libraries-for-2025 — select a single owned design system; component libraries and effect libraries serve different purposes.
-- Motion accessibility: https://motion.dev/docs/react-accessibility — respect reduced motion and avoid movement that interrupts reading.
+### Source review (October 2026)
 
-## Architecture
+- [Claude official upload guide](https://support.claude.com/en/articles/8241126-upload-files-to-claude) uses a small **+** action in the lower-left corner of the composer. STAR maps that to a keyboard-friendly menu for attachments, image creation, and audio transcription. No separate media tab.
+- [ChatGPT Images help](https://help.openai.com/en/articles/11084440-im) documents creating images by asking in the conversation and viewing them in the same thread. STAR maps the explicit Create image composer choice to a local, core-node-only ComfyUI workflow; the full original stays in the user's STAR data folder. STAR does *not* claim ChatGPT's hosted image model or editing capabilities.
+- [shadcn/ui chat primitives](https://ui.shadcn.com/docs/changelog/2026-06-chat-components) explain message-scroller anchoring, right-aligned user bubbles, inline attachments, stream visibility and jump-to-bottom controls. STAR implements those behaviors in its existing React view without a second styling framework.
+- [Motion for React accessibility](https://motion.dev/docs/react-accessibility) recommends disabling transform animations in reduced-motion mode and keeping orientation cues. STAR retains subtle 140–190ms opacity, menu, hover and sidebar transitions and honors the OS/UI reduced motion controls.
+- [Claude appearance options](https://support.claude.com/en/articles/8887527-customizing-your-appearance-settings) emphasize typographic readability and color consistency; STAR uses OS-provided fonts and one neutral dark theme, not mixed neon/color kits.
+- [HeroUI](https://heroui.com/), [Chakra](https://chakra-ui.com/), [Aceternity](https://ui.aceternity.com/components) remain useful reference libraries for accessibility, spacing and interaction feedback. **Do not install all libraries at once:** it would increase offline bundle size and create inconsistent component systems.
 
-1. Keep the primary Windows launch path as React + Qt WebEngine with the existing restricted QWebChannel. Do not introduce a second standalone desktop frontend.
-2. Use frontend/src/stellar-ui.css as a narrowly scoped, STAR-owned dark theme overlay. Background is obsidian/navy; accent is restrained warm gold. All sections share navigation, typography, field focus, surface and motion treatments.
-3. The conversation is the primary view: unboxed assistant answers, right-aligned user bubbles, readable Markdown, code copy and no horizontal line per message. The multiline composer autosizes and stays docked; near-bottom scroll follows generation while manually scrolled readers are not yanked away.
-4. Persist real threads in project-scoped SQLite chats/active_chats tables. Add chat_id to the legacy message table defaulting to legacy. Old message content, timestamps, model paths and project storage are retained.
-5. Thread switching is blocked while a model request runs; each completion stays with its originating thread. Model recent turn context is filtered by thread. Reviewed project knowledge/memory remains project scoped (not chat isolated).
-6. Image Lab lives inside React and invokes the existing allowlisted local ComfyUI generator through the explicit Python bridge. Pick an approved API-format workflow from a native file dialog, validate node ID and loopback port and save outputs under the STAR profile. The legacy UI can still be manually invoked with --legacy-ui only for recovery.
-7. Keep credentials, file access, inference endpoints, downloads and privileged actions on the Python side. Keep the repo public and leave releases/installers untouched.
+### Exact desktop hierarchy
 
-## Acceptance criteria
+1. Left: STAR wordmark, lightweight New chat and Search, current project name, recent chat list. A collapsed **Workspace tools** menu contains Projects, STAR Brain, Analytics, Developer tools, Library and Settings. No duplicate navigation sections.
+2. Top: single 61px header with a sidebar toggle, current context and small conversation actions. No repeated breadcrumb/status badges or second chat header.
+3. Center: one maximally legible reading column (approx. 800px); assistant messages have **no colored bubble or horizontal dividers**. User prompts appear as right-aligned graphite bubbles. Copy controls are quiet; code blocks remain accessible.
+4. Empty chat: one small STAR mark, one heading and three compact horizontal suggested prompts; **no hero cards**.
+5. Bottom: a single anchored, growing multiline composer. The **+** menu contains Attach files, Create image, Transcribe audio. Selecting image creation places a removable in-composer mode chip and changes the placeholder.
+6. Generated image: a real preview appears within the originating conversation with an accessible Radix dialog for enlarged viewing. The original image persists under local STAR data and the chat record stores only a bounded filename marker. Revisiting the thread reloads its preview.
+7. AI setup and technical settings are secondary screens with progressive disclosure. STAR Brain no longer uses decorative orbit/ring imagery or repetitive health-status cards.
+8. Optional desktop sidebar collapse allows distraction-free reading. Mobile sidebar uses a slide-in drawer.
 
-- Python compileall, full pytest, React typecheck, unit tests and production build must pass.
-- Existing pre-upgrade SQLite conversations migrate safely, preserve all old rows and show as Previous conversation. Creating/switching threads must survive restarting the application.
-- One STAR window throughout the normal workflow, including Image Lab and Library navigation.
-- No user messages leak into a different thread's recent-context window. Project-scoped notes remain available by intentional design.
-- Chat panel respects keyboard focus, Shift+Enter, empty/error/loading states, long code blocks, natural scroll, reduced-motion setting and constrained window widths.
-- Live Windows application confirms working local model responses, correct tool permission checks, model download, ComfyUI workflow result, update/restart behavior and %APPDATA%/STAR user-data persistence.
-- Browser screenshots are visual evidence only; they do not substitute for an installed Windows smoke test or user visual approval.
+### Animation policy
 
-## Release guidance
+- Menu entry/exit ~150ms opacity + 4px movement. Message entry ~170ms and 5px. Header/page fade ~140ms. Sidebar width ~190ms.
+- All animation helps describe cause and effect. No continuously moving background, glowing gradients, animated geometric decoration, heavy shadows or neon lighting.
+- Streamed answers must not yank the reader down when they scroll up. Show a Jump to latest control until the user returns to the bottom.
+- Respect the existing reduced-motion preference using MotionConfig and CSS.
 
-This branch should first become a reviewed PR. Do not merge it automatically, manufacture green QA or publish a Windows installer until the real environment has been tested.
+### Local architecture and security
+
+- Retain the Qt WebEngine React shell and restricted Python QWebChannel. Do not spawn a second desktop application.
+- The default chat transport uses the existing local model; image creation is an explicit, separately authorized **generateImage** bridge action. It does not silently route the model's normal text queries.
+- ComfyUI works only on 127.0.0.1 at a validated port with an approved API-format JSON workflow and reviewed core nodes. No arbitrary workflow scripts, internet downloads or surprise paid provider calls.
+- A native file picker chooses the workflow; the path, node ID and port are saved in local settings. Image output filenames are validated, previews are downsampled and returned as bounded image data URLs, and original files never travel to an external host.
+- Image marker messages are saved under the active `chat_id`; existing conversations remain project-scoped with older rows migrated to a legacy thread. Project-level reviewed memory remains shared by design.
+- The repository stays public; source changes do not change installer secrets, release jobs, Roblox policies, model weights or user profiles. Other proposed STAR features in draft PRs require separate integration review.
+
+### QA / Release gates
+
+**Automated**: offline pytest, image traversal and persistence tests, conversation migration tests, frontend TypeScript/Vitest/Vite production build, and Chrome browser screenshot capture.
+
+**Manual Windows required**: actual Qt WebEngine image menu, model streaming/cancellation behavior, ComfyUI installed and working on the configured localhost port, first-time setup, invalid workflow rejections, image saving and reloading after restart, attachment/audio selection, fully preserved pre-upgrade SQLite chats, 850px/390px displays, correct focus and ESC behavior, keyboard and screen-reader labeling, update/install/restart and no extra standalone window.
+
+**Do not mark real ComfyUI image generation, cloud provider features or the Windows installer as verified based solely on a Linux CI run.** Release only after owner visual approval and native acceptance.
