@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from star.brain_router import select_route, validate_alias
-from star.desktop_core import Settings, needs_project_tools
+from star.desktop_core import Settings, needs_project_tools, needs_studio_connection
 
 
 def cfg(**kwargs):
@@ -126,6 +126,19 @@ def test_followup_scoped_edit_intent_preserves_conversation_context():
     assert not needs_project_tools("fix it", ["I enjoy baking bread"])
     assert not needs_project_tools("fix this error" * 30, ["Roblox Studio"])
     assert not needs_project_tools("Tell me about Roblox history", ["Edit the script"])
+
+
+def test_public_roblox_research_skips_studio_even_when_agent_mode():
+    assert not needs_studio_connection("Research Roblox game statistics and recent visits")
+    assert not needs_studio_connection("Compare Roblox public API playing counts")
+    assert not needs_studio_connection("Create a new custom research tool")
+    assert not needs_studio_connection("Inspect these Roblox DevForum announcements")
+    assert not needs_studio_connection("What are Roblox Studio features?")
+    assert needs_studio_connection("Inspect my Roblox Studio scripts")
+    assert needs_studio_connection("Build the inventory UI in my game")
+    assert needs_studio_connection("Fix Roblox camera glitches")
+    assert needs_studio_connection("fix it", ["Previously you edited my Roblox Studio scripts"])
+    assert not needs_studio_connection("fix it", ["Please search Roblox developer forums"])
 
 
 def test_strict_route_inputs():
