@@ -29,3 +29,26 @@ jobs:
         run: python -m pytest -q tests/test_star_research.py
       - name: Run all offline regression tests
         run: python -m pytest -q
+
+  react:
+    name: React UI compile and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install reviewed frontend dependencies
+        run: npm install --prefix frontend --no-audit --no-fund
+      - name: Typecheck React and validate components
+        run: |
+          npm run typecheck --prefix frontend
+          npm run test --prefix frontend
+          npm run build --prefix frontend
+      - name: Confirm built offline application entry point
+        run: test -s frontend/dist/index.html
