@@ -6,7 +6,6 @@ import pytest
 from star import updates
 from star.design_system import COLORS, contrast_ratio, MOTION_MS, stylesheet
 from star.version import REPO, __version__
-from scripts.publish_public_site import PUBLIC_FILES, PUBLIC_REPO, collect_public_files, publish
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -65,26 +64,6 @@ def test_draft_and_prerelease_are_not_auto_updates(flag):
     assert not result.available and result.requires_browser
 
 
-def test_all_public_website_files_are_allowlisted_and_copy_only(tmp_path):
-    source=ROOT/'site'
-    ready=collect_public_files(source)
-    assert set(ready)==PUBLIC_FILES
-    assert all('/'.encode() not in name.encode() for name in ready)
-    assert 'star/desktop.py' not in ready
-    assert publish(PUBLIC_REPO,'',source,dry_run=True)==sorted(PUBLIC_FILES)
-    with pytest.raises(PermissionError):
-        publish('oncoursemail/Star-AI','',source,dry_run=True)
-    extra=tmp_path/'site';extra.mkdir()
-    for name in PUBLIC_FILES:(extra/name).write_bytes(ready[name])
-    (extra/'private.pem').write_text('NEVER PUBLIC')
-    result=collect_public_files(extra)
-    assert 'private.pem' not in result
-    (extra/'index.html').unlink()
-    try:(extra/'index.html').symlink_to(ROOT/'site/index.html')
-    except (OSError, NotImplementedError):pytest.skip('Symlinks unavailable on this test host')
-    with pytest.raises(ValueError):collect_public_files(extra)
-
-
 def test_public_web_version_and_download_location():
     site=json.loads((ROOT/'site/version.json').read_text())
     assert site['version']==__version__
@@ -93,14 +72,13 @@ def test_public_web_version_and_download_location():
     assert 'site.js' in (ROOT/'site/index.html').read_text()
 
 
-def test_public_ci_path_is_independent_of_private_source():
+def test_release_workflow_has_no_separate_public_mirror_job():
     job=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
-    assert 'publish-public:' in job and 'needs: [publish-release]' in job
-    assert 'secrets.STAR_PUBLIC_RELEASE_TOKEN' in job
-    assert 'vars.STAR_PUBLIC_REPO' in job
-    assert 'publish_public_site.py' in job
+    assert 'publish-release:' in job and 'needs: windows-build' in job
+    assert 'gh release create' in job and 'SHA256SUMS.txt' in job
+    assert 'publish-public:' not in job
+    assert 'STAR_PUBLIC_REPO' not in job and 'STAR_PUBLIC_RELEASE_TOKEN' not in job
     assert 'permissions:\n      contents: read' in job
-    assert 'source' not in 'STAR-Genesis-Windows-x64.zip'
 
 
 def test_oled_palette_is_accessible_and_icons_are_real():
