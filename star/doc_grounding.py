@@ -85,9 +85,18 @@ def _emit(on_event, event: dict) -> None:
             pass
 
 
+_MARKER_WORDS = re.compile(r"UNTRUSTED_REFERENCE_DATA", re.I)
+
+
+def _inert(text: str) -> str:
+    """Retrieved text that can never close the data region or open a new one."""
+    return _MARKER_WORDS.sub("UNTRUSTED-REFERENCE-DATA", text)
+
+
 def passage_label(passage: dict) -> str:
-    label = (passage.get("heading") or passage.get("title") or "Untitled").strip()
-    return label.replace("[", "(").replace("]", ")").replace("\n", " ")[:140]
+    """One line: no brackets (it is a Markdown link text) and no line breaks of any kind."""
+    label = " ".join(str(passage.get("heading") or passage.get("title") or "").split()) or "Untitled"
+    return label.replace("[", "(").replace("]", ")")[:140]
 
 
 def reference_block(passages: list[dict], *, max_chars: int) -> str:
@@ -98,16 +107,16 @@ def reference_block(passages: list[dict], *, max_chars: int) -> str:
     remaining = max(max_chars, MIN_PASSAGE_CHARS)
     for index, passage in enumerate(passages):
         share = max(MIN_PASSAGE_CHARS, remaining // (len(passages) - index))
-        # A passage can never close the data region or open a new one.
-        text = passage["text"].replace("UNTRUSTED_REFERENCE_DATA", "UNTRUSTED-REFERENCE-DATA").strip()
+        # Nothing retrieved (text, heading or link) can close the data region or open a new one.
+        text = _inert(passage["text"]).strip()
         if len(text) > share:
             cut = text[:share].rsplit("\n", 1)[0] if "\n" in text[:share] else text[:share]
             text = (cut if len(cut) >= share // 2 else text[:share]).rstrip() + "\n[cut]"
         remaining -= len(text)
         # Title and link only: commit, licence and retrieval date are kept in the sources list and
         # the run record, where they cost no prompt time.
-        lines.append(f"[{index + 1}] {passage_label(passage)}\n"
-                     + (f"URL: {passage['url']}\n" if passage.get("url") else "") + text)
+        lines.append(f"[{index + 1}] {_inert(passage_label(passage))}\n"
+                     + (f"URL: {_inert(passage['url'])}\n" if passage.get("url") else "") + text)
     lines.append(REFERENCE_CLOSE)
     return "\n\n".join(lines[:1]) + "\n" + "\n\n".join(lines[1:]) + "\n"
 

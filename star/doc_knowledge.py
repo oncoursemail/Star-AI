@@ -40,6 +40,9 @@ CONNECT_TIMEOUT = 2.0
 # Hosts a documentation link may point at. Anything else is dropped, not shown.
 _SOURCE_HOSTS = frozenset({"create.roblox.com", "luau.org", "github.com"})
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​-‏‪-‮⁦-⁩]")
+# A documentation link is written by STAR into the prompt and into the Markdown sources list, so
+# it may only contain characters that cannot end a line, a Markdown link or the data region.
+_SOURCE_URL = re.compile(r"https://[A-Za-z0-9.-]+(?:/[A-Za-z0-9._~%/#?=&+:@,;-]*)?")
 _LABEL = "STAR Knowledge"
 
 
@@ -85,8 +88,13 @@ def clean_text(value, limit: int) -> str:
 
 
 def safe_source_url(value) -> str:
-    """An https link to one of the known documentation hosts, else ''."""
-    if not isinstance(value, str) or len(value) > 400 or _CONTROL.search(value) or " " in value:
+    """An https link to one of the known documentation hosts, else ''.
+
+    Whitespace of any kind, brackets, parentheses, quotes and angle brackets are refused: a link
+    such as `https://github.com/x)[Sign in](https://elsewhere` would otherwise add a second link
+    (or, with a line break, whole lines) to the list STAR shows under the answer.
+    """
+    if not isinstance(value, str) or len(value) > 400 or not _SOURCE_URL.fullmatch(value):
         return ""
     try:
         url = urlsplit(value)
