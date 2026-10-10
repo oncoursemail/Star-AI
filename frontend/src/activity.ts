@@ -1,0 +1,362 @@
+/** Activity model for one STAR run (a chat turn, an agent task or a team).
+ *
+ *  This is a pure reducer over the `progress` payloads that
+ *  `star/react_shell.py::sanitize_event` really emits. It never invents a
+ *  step: every row below exists because the backend reported it. Elapsed time
+ *  is measured from when the UI received the event, or taken from the
+ *  backend's own `elapsed_ms` when it sends one.
+ */
+
+export type StepState = 'queued' | 'running' | 'waiting' | 'done' | 'failed' | 'blocked' | 'cancelled'
+export type StepKind = 'search' | 'think' | 'tool' | 'agent' | 'write'
+export type RunMode = 'chat' | 'team' | 'image'
+export type RunOutcome = 'running' | 'done' | 'failed' | 'cancelled'
+
+export type ActivityStep = {
+  id: string
+  kind: StepKind
+  state: StepState
+  title: string
+  role?: string
+  detail?: string
+  startedAt?: number
+  endedAt?: number
+  /** Backend-measured duration; preferred over the UI clock when present. */
+  elapsedMs?: number
+}
+
+export type ActivityRun = {
+  id: string
+  mode: RunMode
+  /** Route chosen by the backend ("Agent workflow"), or the run type. */
+  label: string
+  outcome: RunOutcome
+  startedAt: number
+  endedAt?: number
+  steps: ActivityStep[]
+  /** Last human-readable phase sentence; used by the compact status line. */
+  phase: string
+  streaming: boolean
+  modelCalls?: number
+  toolCalls?: number
+}
+
+/** The sanitized `activity` object from the backend. All fields are enumerated or bounded there. */
+export type ActivityPayload = {
+  type?: string
+  group?: string
+  id?: string
+  role?: string
+  state?: string
+  tool?: string
+  profile?: string
+  step?: number
+  max_steps?: number
+  elapsed_ms?: number
+  model_calls?: number
+  tool_calls?: number
+  steps?: Array<{id?: string; role?: string; needs?: string[]}>
+}
+export type ProgressPayload = {phase?: string; delta?: string; activity?: ActivityPayload}
+
+const ROUTES: Record<string, string> = {
+  fast: 'Fast answer',
+  reasoning: 'Deeper reasoning',
+  roblox: 'Roblox engineering',
+  vision: 'Visual analysis',
+  research: 'Source-grounded research',
+  agent: 'Agent workflow',
+}
+
+const ROLES: Record<string, string> = {
+  planner: 'Planner',
+  research: 'Researcher',
+  luau: 'Luau engineer',
+  ui: 'UI designer',
+  animation: 'Animator',
+  environment: 'Environment artist',
+  review: 'Reviewer',
+  integration: 'Synthesis lead',
+  specialist: 'Specialist',
+}
+
+/** Mirrors the fixed, app-defined plan in star/team_service.py (SPECIALISTS + synthesis). */
+const TEAM_STAGES: Record<string, {title: string; detail: string}> = {
+  evidence: {title: 'Evidence', detail: 'Sorts what is supported by your project context from what is still unknown.'},
+  design: {title: 'Plan', detail: 'Drafts a practical plan with dependencies, trade-offs and testable milestones.'},
+  critic: {title: 'Critique', detail: 'Challenges the assumptions: security, performance, UX and reliability.'},
+  synthesis: {title: 'Synthesis', detail: 'Combines the three findings into one answer and keeps disagreements visible.'},
+}
+
+const STATES: readonly StepState[] = ['queued', 'running', 'waiting', 'done', 'failed', 'blocked', 'cancelled']
+const asState = (value: unknown, fallback: StepState): StepState =>
+  STATES.includes(value as StepState) ? (value as StepState) : fallback
+const isOpen = (state: StepState) => state === 'running' || state === 'waiting'
+
+export const roleLabel = (role?: string) => ROLES[role || ''] || 'Specialist'
+
+/** Friendly name for a tool the backend already authorized. Unknown names are shown as-is. */
+export function toolLabel(name?: string): string {
+  if (!name) return 'Using a tool'
+  if (name === 'star_web_search') return 'Searching the web'
+  if (name.startsWith('star_github_')) return 'Reading STAR source on GitHub'
+  if (name === 'workspace_write') return 'Writing to your workspace'
+  if (name === 'workspace_search') return 'Searching your workspace'
+  if (name === 'workspace_list') return 'Listing workspace files'
+  if (name.startsWith('workspace_')) return 'Reading a workspace file'
+  if (name.startsWith('star_delegate')) return 'Briefing specialists'
+  if (name.startsWith('star_mcp_')) return 'Using a connected MCP tool'
+  if (name.startsWith('star_toolforge_')) return 'Running a reviewed custom tool'
+  if (name.startsWith('star_skill_')) return 'Loading an Agent Skill'
+  if (name.startsWith('star_obsidian_')) return 'Reading your Obsidian notes'
+  if (name.startsWith('star_graphify_')) return 'Querying the code graph'
+  if (name.startsWith('star_roblox_docs')) return 'Reading Roblox documentation'
+  if (name.startsWith('star_roblox_forum_')) return 'Searching the Roblox Developer Forum'
+  if (name.startsWith('star_roblox_youtube_')) return 'Looking up video metadata'
+  if (name.startsWith('star_roblox_')) return 'Looking up public Roblox game data'
+  return 'Using a tool'
+}
+
+export function startRun(id: string, mode: RunMode, now: number): ActivityRun {
+  return {
+    id,
+    mode,
+    label: mode === 'team' ? 'Team of specialists' : mode === 'image' ? 'Image' : '',
+    outcome: 'running',
+    startedAt: now,
+    steps: [],
+    phase: mode === 'image' ? 'Creating image' : 'Sending',
+    streaming: false,
+  }
+}
+
+function close(step: ActivityStep, state: StepState, now: number, elapsedMs?: number): ActivityStep {
+  return {...step, state, endedAt: now, ...(elapsedMs != null ? {elapsedMs} : {})}
+}
+
+/** Finish whichever model-thinking step is still open; the next real event has arrived. */
+function closeThinking(steps: ActivityStep[], now: number): ActivityStep[] {
+  return steps.map(step => (step.kind === 'think' && step.state === 'running' ? close(step, 'done', now) : step))
+}
+
+function listNames(ids: string[]): string {
+  const names = ids.map(id => TEAM_STAGES[id]?.title || id)
+  if (names.length <= 1) return names.join('')
+  return names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]
+}
+
+/** Apply one real progress event. Returns the same object when nothing changed. */
+export function applyProgress(run: ActivityRun, data: ProgressPayload | string | null | undefined, now: number): ActivityRun {
+  if (run.outcome !== 'running' || data == null) return run
+  if (typeof data === 'string') return {...run, phase: data.slice(0, 120)}
+  if (typeof data.delta === 'string' && data.delta) {
+    if (run.streaming) return run
+    const steps = closeThinking(run.steps, now)
+    steps.push({id: 'write', kind: 'write', state: 'running', title: 'Writing the answer', startedAt: now})
+    return {...run, steps, streaming: true, phase: 'Writing the answer'}
+  }
+  const phase = typeof data.phase === 'string' && data.phase ? data.phase.slice(0, 120) : run.phase
+  const activity = data.activity
+  if (!activity || typeof activity !== 'object') return phase === run.phase ? run : {...run, phase}
+  let steps = run.steps
+  const next: ActivityRun = {...run, phase}
+  switch (activity.type) {
+    case 'route':
+      if (activity.profile && ROUTES[activity.profile]) next.label = ROUTES[activity.profile]
+      next.phase = 'Choosing how to answer'
+      break
+    case 'search': {
+      const found = steps.findIndex(step => step.id === 'search')
+      if (activity.state === 'running' && found < 0) {
+        steps = [...steps, {id: 'search', kind: 'search', state: 'running', title: 'Searching the web', startedAt: now}]
+      } else if (found >= 0 && isOpen(steps[found].state)) {
+        steps = steps.map((step, index) => (index === found ? close(step, 'done', now) : step))
+      }
+      next.phase = activity.state === 'running' ? 'Searching the web' : 'Reading the search results'
+      break
+    }
+    case 'turn': {
+      const turn = activity.step || steps.filter(step => step.kind === 'think').length + 1
+      steps = closeThinking(steps, now)
+      steps.push({
+        id: 'think-' + turn + '-' + steps.length,
+        kind: 'think',
+        state: 'running',
+        title: 'Thinking',
+        detail:
+          activity.max_steps && activity.max_steps > 1 ? `Model call ${turn} of up to ${activity.max_steps}` : undefined,
+        startedAt: now,
+      })
+      next.phase = 'Thinking'
+      break
+    }
+    case 'tool': {
+      const state = asState(activity.state, 'failed')
+      if (state === 'running') {
+        steps = closeThinking(steps, now)
+        steps.push({
+          id: 'tool-' + steps.length,
+          kind: 'tool',
+          state: 'running',
+          title: toolLabel(activity.tool),
+          detail: activity.tool,
+          startedAt: now,
+        })
+        next.phase = toolLabel(activity.tool)
+      } else if (state === 'blocked') {
+        steps = closeThinking(steps, now)
+        steps.push({
+          id: 'tool-' + steps.length,
+          kind: 'tool',
+          state: 'blocked',
+          title: 'A tool request was blocked',
+          detail: 'STAR asked for a tool this task is not permitted to use. Nothing was run.',
+          startedAt: now,
+          endedAt: now,
+        })
+      } else {
+        let target = -1
+        for (let index = steps.length - 1; index >= 0; index--) {
+          const step = steps[index]
+          if (step.kind === 'tool' && step.state === 'running' && (!activity.tool || step.detail === activity.tool)) {
+            target = index
+            break
+          }
+        }
+        if (target >= 0) steps = steps.map((step, index) => (index === target ? close(step, state, now) : step))
+        else {
+          steps = [
+            ...steps,
+            {id: 'tool-' + steps.length, kind: 'tool', state, title: toolLabel(activity.tool), detail: activity.tool, startedAt: now, endedAt: now},
+          ]
+        }
+      }
+      break
+    }
+    case 'plan': {
+      const planned = (Array.isArray(activity.steps) ? activity.steps : []).filter(item => item && typeof item.id === 'string')
+      const known = new Set(steps.map(step => step.id))
+      const queued: ActivityStep[] = planned
+        .filter(item => !known.has('agent-' + item.id))
+        .map(item => {
+          const stage = TEAM_STAGES[item.id as string]
+          const needs = Array.isArray(item.needs) ? item.needs : []
+          return {
+            id: 'agent-' + item.id,
+            kind: 'agent' as const,
+            state: 'queued' as const,
+            title: stage?.title || roleLabel(item.role),
+            role: roleLabel(item.role),
+            detail: (stage?.detail || '') + (needs.length ? ` Starts after ${listNames(needs)}.` : ''),
+          }
+        })
+      if (queued.length) steps = [...steps, ...queued]
+      next.phase = 'Plan ready'
+      break
+    }
+    case 'agent': {
+      if (!activity.id) break
+      const id = 'agent-' + activity.id
+      const state = asState(activity.state, 'failed')
+      const stage = activity.group === 'team' ? TEAM_STAGES[activity.id] : undefined
+      const found = steps.findIndex(step => step.id === id)
+      const base: ActivityStep =
+        found >= 0
+          ? steps[found]
+          : {
+              id,
+              kind: 'agent',
+              state: 'queued',
+              title: stage?.title || roleLabel(activity.role),
+              role: stage ? roleLabel(activity.role) : 'Read-only specialist',
+              detail: stage?.detail || 'Analyses the evidence it was given. It has no tools and cannot change anything.',
+            }
+      const updated: ActivityStep =
+        state === 'running'
+          ? {...base, state, startedAt: now, endedAt: undefined}
+          : close(
+              state === 'blocked' && !base.startedAt ? {...base, detail: 'Not started: a stage it depends on did not finish.'} : base,
+              state,
+              now,
+              typeof activity.elapsed_ms === 'number' ? activity.elapsed_ms : undefined,
+            )
+      steps = found >= 0 ? steps.map((step, index) => (index === found ? updated : step)) : [...steps, updated]
+      next.phase = state === 'running' ? `${updated.title} is working` : next.phase
+      break
+    }
+    case 'finished':
+      steps = closeThinking(steps, now)
+      if (typeof activity.model_calls === 'number') next.modelCalls = activity.model_calls
+      if (typeof activity.tool_calls === 'number') next.toolCalls = activity.tool_calls
+      next.phase = 'Finishing'
+      break
+    case 'saved':
+      next.phase = 'Saving to this chat'
+      break
+    default:
+      break
+  }
+  next.steps = steps
+  return next
+}
+
+/** The run ended. Open steps take the run's outcome; queued steps never started. */
+export function settleRun(run: ActivityRun, outcome: Exclude<RunOutcome, 'running'>, now: number): ActivityRun {
+  if (run.outcome !== 'running') return run
+  const steps = run.steps.map(step => {
+    if (isOpen(step.state)) return close(step, outcome === 'done' ? 'done' : outcome === 'cancelled' ? 'cancelled' : 'failed', now)
+    if (step.state === 'queued') return {...step, state: 'cancelled' as const}
+    return step
+  })
+  return {...run, steps, outcome, endedAt: now, streaming: false}
+}
+
+/** Only multi-step work earns a timeline; a plain answer keeps the one-line status. */
+export function isRich(run: ActivityRun): boolean {
+  if (run.mode === 'team') return true
+  return (
+    run.steps.some(step => step.kind === 'tool' || step.kind === 'agent' || step.kind === 'search') ||
+    run.steps.filter(step => step.kind === 'think').length > 1
+  )
+}
+
+export function stepElapsed(step: ActivityStep, now: number): number | null {
+  if (step.elapsedMs != null) return step.elapsedMs
+  if (step.startedAt == null) return null
+  return Math.max(0, (step.endedAt ?? now) - step.startedAt)
+}
+export const runElapsed = (run: ActivityRun, now: number) => Math.max(0, (run.endedAt ?? now) - run.startedAt)
+
+/** 0.4s · 4.2s · 42s · 1m 05s. Live values pass `live` to avoid a jittering decimal. */
+export function formatElapsed(ms: number, live = false): string {
+  if (!live && ms < 100) return '<0.1s'
+  const seconds = ms / 1000
+  if (seconds < 60) return live || seconds >= 10 ? Math.floor(seconds) + 's' : seconds.toFixed(1) + 's'
+  const minutes = Math.floor(seconds / 60)
+  return minutes + 'm ' + String(Math.floor(seconds % 60)).padStart(2, '0') + 's'
+}
+
+export const STATE_WORD: Record<StepState, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  waiting: 'Waiting for approval',
+  done: 'Done',
+  failed: 'Failed',
+  blocked: 'Blocked',
+  cancelled: 'Stopped',
+}
+/** A step the run ended before reaching is not "stopped": it never began. */
+export const stateWord = (step: ActivityStep) => (step.state === 'cancelled' && step.startedAt == null ? 'Not started' : STATE_WORD[step.state])
+
+export function countDone(run: ActivityRun) {
+  return run.steps.filter(step => step.state === 'done').length
+}
+
+/** One-line summary shown on the collapsed timeline. */
+export function headline(run: ActivityRun, now: number): string {
+  const time = formatElapsed(runElapsed(run, now), run.outcome === 'running')
+  if (run.outcome === 'running') return 'Working'
+  if (run.outcome === 'done') return 'Worked for ' + time
+  if (run.outcome === 'cancelled') return 'Stopped after ' + time
+  return 'Stopped by an error after ' + time
+}
