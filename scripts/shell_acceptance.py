@@ -21,6 +21,7 @@ Phases (default: all, in this order)
     afterclose relaunch after that: what was recorded
     upgrade    first start on a profile left by the released v0.8 app (old settings,
                old message table, on-device provider): nothing is lost or rewritten
+    testclose  the window is closed while "Test actual response" is still waiting
 
 Safety
     * APPDATA is a fresh folder made by this script; a phase refuses to start
@@ -62,7 +63,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = '.star-shell-acceptance-profile'
-PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade')
+PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade', 'testclose')
+CONSOLE_PROBE = 'shell-acceptance console probe'
 ENV_KEY = 'STAR_SERVER_API_KEY'
 ENV_SERVER = 'STAR_ACCEPTANCE_SERVER'
 ENV_MODEL = 'STAR_ACCEPTANCE_MODEL'
@@ -632,6 +634,10 @@ def step_boot(d: Driver, expect_history: bool = False) -> None:
         s.fact('platform', d.app.platformName())
         s.check(d.shell.isVisible(), 'the real react_shell window is shown')
         s.check(d.js("!!window.qt && !!window.starBridge"), 'the page is connected to the Qt WebChannel bridge')
+        d.js(f"(console.info({json.dumps(CONSOLE_PROBE)}), true)")
+        d.pump(0.2)
+        s.check(any(c['message'] == CONSOLE_PROBE for c in d.console),
+                'console messages of the page reach this tool (so "no console errors" is measured)')
         if not expect_history:
             s.check(d.js("__acc.text('.thread-hello h2')") == 'What are we making?', 'chat empty state renders')
             s.check(d.js("document.querySelectorAll('.starters .starter').length") == 4, 'four starter prompts render')
@@ -1232,6 +1238,18 @@ def step_upgrade(d: Driver) -> None:
         s.shots.append(d.shot('upgrade-send'))
 
 
+def step_close_during_test(d: Driver) -> None:
+    with d.step('close-during-test') as s:
+        d.open_page('Settings', 'Settings')
+        d.click('.settings-page button', 'Test actual response')
+        d.pump(0.4)
+        waiting = bool(d.js("!!__acc.find('.settings-page button .spin')")) or bool(d.js(
+            "(__acc.find('.settings-page button', 'Test actual response') || {}).disabled"))
+        s.check(waiting, 'a model test is waiting for the server when the window is closed')
+        s.fact('note', 'the window is closed right after this step; errors-and-exit reports how long the process lived on')
+        s.shots.append(d.shot('testclose'))
+
+
 def run_phase(d: Driver) -> None:
     phase = d.phase
     step_boot(d, expect_history=phase != 'first')
@@ -1255,6 +1273,8 @@ def run_phase(d: Driver) -> None:
         step_after_close(d)
     elif phase == 'upgrade':
         step_upgrade(d)
+    elif phase == 'testclose':
+        step_close_during_test(d)
 
 
 # ---------------------------------------------------------------------- child
@@ -1404,6 +1424,7 @@ def parent_main(options) -> int:
         info = {'exit_code': code, 'seconds': round(ended - began, 1), 'log_has_traceback': 'Traceback (most recent call last)' in text,
                 'key_in_log': leaked, 'leaks': report.get('leaks', []), 'python_errors': len(report.get('python_errors', [])),
                 'console_errors': sum(1 for c in report.get('console', []) if 'Error' in c.get('level', '')),
+                'console_messages': sum(1 for c in report.get('console', []) if c.get('message') != CONSOLE_PROBE),
                 'page_errors': len(report.get('page_errors', [])), 'crashed': report.get('crashed', '')}
         loop_end = (report.get('exit') or {}).get('loop_ended_at')
         if loop_end:
@@ -1414,9 +1435,16 @@ def parent_main(options) -> int:
         if not report.get('steps'):
             steps.append({'phase': phase, 'name': '(phase)', 'status': 'FAIL', 'seconds': info['seconds'],
                           'error': f'the phase produced no result (exit code {code})', 'checks': []})
+        linger = info.get('window_close_to_process_exit_s', 0)
+        gone = {'ok': linger <= 5, 'label': 'the process is gone within 5 s of closing the window', 'detail': f'{linger} s'}
+        if not gone['ok'] and phase == 'testclose':
+            # Chat turns stop at once; a model or server test has no cancel path and is waited for.
+            gone.update(ok=True, known='a model test cannot be cancelled: after the window closes, the process stays until '
+                                       f'the server answers or the request times out (here {linger} s)')
         hygiene = {'phase': phase, 'name': 'errors-and-exit', 'seconds': 0, 'error': '', 'facts': info, 'shots': [], 'checks': [
             {'ok': code in (0, 1), 'label': 'the app process ended by itself', 'detail': f'exit code {code}'},
             {'ok': not info.get('forced_quit'), 'label': 'closing the window ended the app without help', 'detail': ''},
+            gone,
             {'ok': not leaked and not info['leaks'], 'label': 'the server key never appeared in a log or bridge event', 'detail': str(info['leaks'])},
             {'ok': info['python_errors'] == 0 and not info['log_has_traceback'], 'label': 'no Python exception', 'detail': f'{info["python_errors"]} recorded'},
             {'ok': info['console_errors'] == 0 and info['page_errors'] == 0, 'label': 'no JavaScript console error',
