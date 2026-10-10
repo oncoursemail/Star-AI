@@ -68,6 +68,15 @@
 4. Existing conversations, checkpoints, reviewed project knowledge, references, models and updater files remain in the user data directory. Installing a new version must not erase them.
 5. GitHub access remains via separately approved GitHub App installation tokens and review-gated draft PRs. Do not give model code unchecked ability to force-push, manage credentials, change branch protection, merge itself, rewrite evaluation cases or auto-publish Roblox places.
 
+## Stop and GitHub source intelligence
+
+- Active chat requests now use an explicit **Stop** control. The desktop sends a \`cancelMessage\` request, sets a local cancellation event and the async model task cancels during its next <=150ms poll. ComfyUI local image generation stops polling at the next step; its already enqueued generation **may keep running** in ComfyUI, so cancellation is not a remote queue deletion.
+- Warm text-chat task budgets: up to 55s for configured hosted providers and up to 85s for slow local inference (including initial model load); complicated Auto remains 180s and explicit Agent 480s. These are limits, not latency promises.
+- In explicit **Agent + GitHub** mode the model can request **read-only** source file lists and content from the **public \`oncoursemail/Star-AI\` repository at main**, not from this unmerged feature branch. No GitHub API credentials are exposed to the model, and no arbitrary repository URLs, secret files, write, force push, merge, or release actions are available through these tools.
+- GitHub App branch/PR authoring exists separately in \`star/github_app.py\` and requires owner setup and limited installation permissions. Source-reading does **not** grant autonomous GitHub writes. Any future AI-proposed source edits must be made as isolated draft candidates, scanned/tested and independently reviewed.
+- The currently open Obsidian/Graphify/Agent Skills PR #26 overlaps with this branch. Feature integration must retain existing memory, UI permission checks and the conservative skill execution boundaries.
+
+
 ## Known limitations and release blockers
 
 - No access to private cloud accounts without owner credentials; no model/API keys bundled in public builds.
