@@ -398,6 +398,19 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
 
+def model_context_char_budget(settings: Settings) -> int:
+    """Conservative CHAR proxy, not an exact tokenizer, for managed local router.
+
+    The router's ctx-size is in tokens; complex Luau/MCP schemas can have many
+    tokens per character. Keep a reserve for the active user prompt, tools and
+    response. Other inference endpoints retain their existing settings.
+    """
+    if settings.provider == 'local' and settings.router_models_dir:
+        # Even 8-GB GPUs can page heavily when the KV cache is oversized.
+        return min(settings.context_chars, max(3000, 2 * (settings.router_context - 512)))
+    return settings.context_chars
+
+
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
@@ -470,6 +483,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # transcript from the persistent conversation DB as well as compacted memory.
         prior_turns = recent_context(recent_all[-(6 if quick else 12):], prompt)
         use_tools = route.use_tools
+        allowed_context_chars = model_context_char_budget(settings)
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
         if use_tools and settings.tool_workshop_enabled:
@@ -498,16 +512,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 ) if use_tools and settings.specialists_enabled else None)
                 memory_context = (memory.get(memory_scope) + '\nREVIEWED KNOWLEDGE:\n' + notes
                     + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)
-                if quick:
-                    memory_context = memory_context[-5000:]
-                else:
-                    memory_context = memory_context[-14000:]
+                # Reserve room for the system instructions, user text and
+                # discovered tool schemas before injecting recalled memory.
+                memory_limit = max(700, allowed_context_chars - 3200)
+                memory_context = memory_context[-min(5000 if quick else 14000, memory_limit):]
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=memory_context + snippets +
                                   (ROBLOX_QUALITY_NOTES if
                                   (is_roblox_task(prompt) or roblox_context) else ''),
                               max_calls=route.max_calls,
-                              context_chars=settings.context_chars,
+                              context_chars=allowed_context_chars,
                               checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
                               stream_tokens=stream_tokens, response_tokens=route.response_tokens,
