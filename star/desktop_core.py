@@ -143,7 +143,8 @@ def redact_for_logs(value):
 
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
-             on_event: Callable[[dict], None] | None = None) -> str:
+             on_event: Callable[[dict], None] | None = None,
+             stream_tokens: bool = False) -> str:
     """Called from a Qt worker thread. No API key needed for localhost engines."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -192,7 +193,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               project_memory=(memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)[-14000:],
                               max_calls=settings.max_calls, context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
-                              workspace=workspace, workspace_edit=settings.workspace_edit)
+                              workspace=workspace, workspace_edit=settings.workspace_edit,
+                              stream_tokens=stream_tokens)
                 if allow_studio:
                     async with connect() as session:
                         answer, msgs, archive = await execute(**kwargs, studio=session,
