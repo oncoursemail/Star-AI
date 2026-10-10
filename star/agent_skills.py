@@ -110,6 +110,7 @@ def _frontmatter(text: str) -> tuple[dict[str, str], str]:
 
 class SkillLibrary:
     def __init__(self, *, workspace: Path | None, home: Path):
+        self.workspace = workspace.resolve() if workspace is not None else None
         self.roots: list[tuple[str, Path]] = []
         if workspace is not None:
             self.roots.extend([
@@ -124,6 +125,10 @@ class SkillLibrary:
             if not root.is_dir() or root.is_symlink():
                 continue
             real_root = root.resolve()
+            if source in {"project", "workspace"} and (self.workspace is None or not real_root.is_relative_to(self.workspace)):
+                # A symlink in the .agents parent must not redirect reads out of
+                # the user-approved project, even when the skills leaf isn't a link.
+                continue
             for directory in sorted(root.iterdir(), key=lambda p: p.name):
                 if len(found) >= _MAX_SKILLS:
                     return list(found.values())
