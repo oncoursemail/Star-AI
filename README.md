@@ -6,11 +6,13 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
+> **Shipping status:** v0.7.0 is currently the source-code version. The latest verified public downloadable installer is still v0.6.1 until the Windows release publisher succeeds. The React code is not automatically present in the older installer. See [v0.7 release gates and Windows QA checklist](docs/STAR_V07_RELEASE_GATE.md).
+
 ## Download / Updates
 
 **[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
 
-The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater can stage publicly available installers.
+The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the v0.7 source branch), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
 ### Three-step start
 
