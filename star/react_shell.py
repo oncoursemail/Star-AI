@@ -45,6 +45,8 @@ def sanitize_event(event: dict) -> dict:
     kind = str(event.get('event', 'working'))[:36]
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
+    if kind == 'route_selected':
+        return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90]}
     if kind in {'saved','run_completed'}:
         return {'phase':'Saving verified task record'}
     if kind in {'tool_call','tool_result','tool_output'}:
@@ -290,7 +292,7 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
