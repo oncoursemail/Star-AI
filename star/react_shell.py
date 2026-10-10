@@ -31,6 +31,7 @@ ALLOWED_ACTIONS = frozenset({
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage',
+    'startModelRouter','stopBrain','testModelTeam',
 })
 
 
@@ -84,6 +85,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         'version':__version__, 'project':settings.project, 'projects':projects,
         'messages':messages, 'settings':asdict(settings),
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
+        'model_router_running':runtime.router_running(),
         'analytics':get_dashboard(home, settings.project),
         'credentials':credential_status(),
         'intelligence':for_settings(settings,home).status(),
@@ -166,6 +168,8 @@ def launch():
         def _start_brain(self, info: BrainInstall):
             from .desktop_core import query_models
             settings_file=self.settings_file
+            if self.runtime.router_running():
+                raise RuntimeError('Stop the managed model router before starting the single-model Brain')
             if self.runtime.status()!='running':
                 self.runtime.start(Path(info.executable),Path(info.model),
                     app_data()/'logs'/'star-brain-react.log',port=8080,context=4096,
@@ -202,6 +206,53 @@ def launch():
                     pass
                 time.sleep(2)
             raise TimeoutError('Local model did not become ready. See STAR/logs/star-brain-react.log')
+
+        def _start_model_router(self):
+            """Start the locally selected model directory, not a remote service."""
+            if self.active_task:
+                raise RuntimeError('Stop the active chat before switching STAR models')
+            settings = Settings.load(self.settings_file)
+            settings.validate()
+            if settings.provider != 'local':
+                raise ValueError('Select the Local model provider before starting its router')
+            if not settings.router_models_dir:
+                raise ValueError('Choose a folder containing GGUF model weights first')
+            info = BrainInstall.load(app_data()/'brain.json')
+            engine = Path(info.executable if info is not None else settings.llama_server)
+            if not str(settings.llama_server or (info.executable if info is not None else '')).strip():
+                raise RuntimeError('Install STAR Brain before starting the local model router')
+            self.runtime.start_router(engine, Path(settings.router_models_dir),
+                                      app_data()/'logs'/'star-router-react.log',
+                                      port=8080, context=settings.router_context,
+                                      gpu_layers=settings.gpu_layers)
+            probe = Settings(endpoint='http://127.0.0.1:8080/v1')
+            try:
+                for _ in range(35):
+                    if self.runtime.status() != 'running':
+                        raise RuntimeError('STAR model router exited; inspect STAR/logs/star-router-react.log')
+                    try:
+                        models = query_models(probe)
+                    except Exception:
+                        models = []
+                    if models:
+                        # Keep the existing selected model where possible.
+                        updated = Settings.load(self.settings_file)
+                        updated.endpoint = probe.endpoint
+                        updated.provider = 'local'
+                        updated.llama_server = str(engine)
+                        if updated.model not in models:
+                            updated.model = (updated.fast_model if updated.fast_model in models
+                                             else models[0])
+                        updated.save(self.settings_file)
+                        return {'brain_running': True, 'model_router_running': True,
+                                'model': updated.model, 'models': models,
+                                'chat_ready': False,
+                                'note': 'Router reachable. Select and test a model; heavy GGUFs may still need loading.'}
+                    time.sleep(1)
+                raise TimeoutError('Model router did not become ready; inspect the router log')
+            except Exception:
+                self.runtime.stop()
+                raise
 
         def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
             home=app_data()
@@ -292,7 +343,7 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','router_models_dir','router_context','gpu_layers','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
@@ -375,6 +426,26 @@ def launch():
                         info=BrainInstall.load(app_data()/'brain.json')
                         if info is None:raise RuntimeError('Download STAR Brain first')
                         return self._start_brain(info)
+                    self._run(rid,action,worker)
+                elif action=='startModelRouter':
+                    if self.active_task:
+                        raise RuntimeError('Stop the current chat before switching models')
+                    self._run(rid,action,self._start_model_router)
+                elif action=='stopBrain':
+                    if self.active_task:
+                        raise RuntimeError('Stop the current chat before stopping the model server')
+                    if self.runtime.status() != 'running':
+                        return json.dumps({'ok':True,'data':{'stopped':False,'note':'No managed STAR Brain is running'}})
+                    self._run(rid,action,lambda:(self.runtime.stop() or {'stopped':True}))
+                elif action=='testModelTeam':
+                    if self.active_task:
+                        raise RuntimeError('Finish the current chat before probing other models')
+                    def worker():
+                        import asyncio
+                        from .model_fleet import check_configured_team
+                        settings=Settings.load(self.settings_file)
+                        return asyncio.run(check_configured_team(settings,
+                            on_progress=lambda e:self._emit(rid,'progress',e)))
                     self._run(rid,action,worker)
                 elif action=='listModels':
                     def worker():return {'models':query_models(Settings.load(self.settings_file))}
