@@ -46,6 +46,9 @@ class Settings:
     obsidian_enabled: bool = False
     skills_enabled: bool = True
     graphify_enabled: bool = True
+    comfy_workflow: str = ''
+    comfy_prompt_node: str = '6'
+    comfy_port: int = 8188
 
     @classmethod
     def load(cls, file: Path):
@@ -71,6 +74,12 @@ class Settings:
             raise ValueError('Obsidian vault must be an existing folder')
         if self.obsidian_enabled and not self.obsidian_vault:
             raise ValueError('Select an Obsidian vault before enabling read access')
+        if type(self.comfy_port) is not int or not 1 <= self.comfy_port <= 65535:
+            raise ValueError('Invalid local ComfyUI port')
+        if not isinstance(self.comfy_prompt_node, str) or not re.fullmatch(r'[0-9]{1,12}', self.comfy_prompt_node):
+            raise ValueError('ComfyUI prompt node ID must be numeric')
+        if not isinstance(self.comfy_workflow, str) or len(self.comfy_workflow) > 1024:
+            raise ValueError('Invalid ComfyUI workflow path')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 0 <= self.gpu_layers <= 1000:
