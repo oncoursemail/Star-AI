@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .knowledge import KnowledgeStore, _project
+from .knowledge import KnowledgeStore, _project, now
 
 
 ALLOWED_DECISIONS = frozenset({"requirement", "decision", "fix"})
@@ -60,21 +60,35 @@ def approve_learning(
             ).fetchone()
             if previous is None or not previous["reviewed"]:
                 raise ValueError("Superseded note is not a reviewed fact in this project")
-        note_id = with_store.add_note(
-            project=project, kind=kind, text=text.strip(),
-            source="user:explicit-approved-decision", revision="user-reviewed",
-        )
-        with_store.review_note(
-            project=project, note_id=note_id,
-            evidence="User explicitly approved saving this note in the STAR desktop UI",
-        )
-        if replaces_note_id is not None:
-            # Retain original source and review record for audit, stop retrieval.
-            with_store.db.execute(
-                "UPDATE notes SET reviewed=0 WHERE id=? AND project=?",
-                (replaces_note_id, project),
+        # One SQLite transaction: the replacement is never simultaneously
+        # trusted with an old conflicting decision after an interrupted write.
+        db = with_store.db
+        stamp = now()
+        try:
+            db.execute("BEGIN IMMEDIATE")
+            created = db.execute(
+                """INSERT INTO notes(project,kind,text,source,revision,reviewed,created)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (project, kind, text.strip(),
+                 "user:explicit-approved-decision", "user-reviewed", 1, stamp),
             )
-            with_store.db.commit()
+            note_id = int(created.lastrowid)
+            db.execute(
+                """INSERT INTO notes(project,kind,text,source,revision,reviewed,created)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (project, "observation",
+                 f"Reviewed note {note_id}: User explicitly approved the decision in STAR",
+                 f"review:{note_id}", "accepted", 0, stamp),
+            )
+            if replaces_note_id is not None:
+                db.execute(
+                    "UPDATE notes SET reviewed=0 WHERE id=? AND project=?",
+                    (replaces_note_id, project),
+                )
+            db.commit()
+        except BaseException:
+            db.rollback()
+            raise
         return LearningReceipt(project, note_id, kind, replaces_note_id,
                                "user:explicit-approved-decision")
     finally:
