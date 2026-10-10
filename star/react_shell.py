@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import tempfile
+import threading
 import time
 import uuid
 
@@ -28,7 +29,7 @@ ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
-    'generateImage','saveProviderKey','clearProviderKey',
+    'generateImage','saveProviderKey','clearProviderKey','cancelMessage',
 })
 
 
@@ -131,6 +132,7 @@ def launch():
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
             self.active_task = False
+            self.cancel_chat = threading.Event()
             self.active_update = False
 
         def _emit(self, request_id: str, kind: str, data):
@@ -225,7 +227,7 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True, mode=mode, research=research)
+                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
@@ -242,7 +244,7 @@ def launch():
                 chats.add(settings.project,'user',prompt)
             finally:
                 chats.close()
-            result=generate_chat_image(settings,prompt,home)
+            result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',result['message'])
@@ -318,6 +320,10 @@ def launch():
                     path=app_data();path.mkdir(parents=True,exist_ok=True)
                     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
                     return json.dumps({'ok':True,'data':True})
+                if action=='cancelMessage':
+                    if self.active_task:
+                        self.cancel_chat.set()
+                    return json.dumps({'ok':True,'data':{'cancel_requested':self.active_task}})
                 if action=='sendMessage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
@@ -326,6 +332,7 @@ def launch():
                     if not isinstance(files,list) or len(files)>8:raise ValueError('Too many attachments')
                     selected=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
                     self.active_task=True
+                    self.cancel_chat = threading.Event()
                     mode=body.get('mode','auto')
                     if mode not in ('fast','auto','agent'):
                         raise ValueError('Choose Fast, Auto, or Agent mode')
@@ -338,6 +345,7 @@ def launch():
                     prompt=str(body.get('prompt','')).strip()
                     if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
                     self.active_task=True
+                    self.cancel_chat = threading.Event()
                     self._run(rid,action,lambda:self._run_image(rid,prompt))
                 elif action=='installBrain':
                     def worker():
@@ -393,6 +401,7 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            self.cancel_chat.set()
             self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)
 
