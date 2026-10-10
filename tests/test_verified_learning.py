@@ -122,3 +122,14 @@ def test_implicit_recall_of_reviewed_decisions_without_matching_keywords(tmp_pat
         assert store.find_contextual("OtherProject","What did we decide last time?") == []
     finally:
         store.close()
+
+
+def test_workspace_names_with_spaces_retrieve_their_own_memory(tmp_path):
+    receipt=approve_learning(tmp_path,project="My Roblox Game",
+         text="Use polished low-noise dark interface",human_approved=True)
+    assert receipt.project=="My Roblox Game"
+    assert "dark interface" in learned_context(tmp_path,"My Roblox Game","dark interface")
+    assert not learned_context(tmp_path,"Another Roblox Game","dark interface")
+    with pytest.raises(ValueError):
+        approve_learning(tmp_path,project="Bad / Path",text="Invalid path",
+                         human_approved=True)
