@@ -308,4 +308,31 @@ describe('connection status with a STAR Server', () => {
     await user.click(screen.getByRole('button', {name: /back to chat/i}))
     await waitFor(() => expect(statusLine()).toMatch(/Not checked$/))
   })
+
+  it('tells the Model page about a failed send, so the page the failure row leads to agrees with the chat', async () => {
+    const unreachable = 'Cannot reach STAR Server. Check that the server is switched on, that this PC is on the same network, and that the address and port are right.'
+    const user = await openChat([], null, {settings: server, server: check(null)})
+    await say(user, 'hello')
+    const id = await waitFor(() => desktop.requestOf('sendMessage'))
+    desktop.host({server: check(false)}) // the host records the failed request before it emits the error
+    desktop.fail(id, unreachable)
+    expect((await screen.findAllByText(unreachable)).length).toBeGreaterThan(0)
+    expect(seen('hello')).toHaveLength(1) // re-reading the connection must not touch the conversation
+
+    await user.click(conversation().getByRole('button', {name: 'Model & connection'}))
+    expect(await screen.findByText(/Status: needs attention/)).toBeTruthy()
+    expect(screen.queryByText(/Status: not checked yet/)).toBeNull()
+  })
+
+  it('tells the Model page about a passed "Test actual response"', async () => {
+    const user = await openChat([], null, {settings: server, server: check(null)})
+    desktop.onAction('testModel', () => ({ok: true, pending: true})) // the real host answers on a worker thread
+    await user.click(screen.getByRole('button', {name: /^Settings/}))
+    await user.click(await screen.findByRole('button', {name: /test actual response/i}))
+    const id = await waitFor(() => desktop.requestOf('testModel'))
+    desktop.host({server: check(true)})
+    desktop.emitRaw(id, 'result', {ok: true, model: 'star-fast', sample: 'STAR is ready.'})
+    await user.click(screen.getByRole('button', {name: 'Model'}))
+    expect(await screen.findByText(/Status: ready/)).toBeTruthy()
+  })
 })

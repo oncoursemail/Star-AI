@@ -139,6 +139,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
+ /** Re-read only what the host knows about the connection. The conversation on screen is left alone. */
+ const refreshConnection=useCallback(async()=>{
+   if(inactive)return
+   const r=await request<BootData>('bootstrap')
+   if(r.ok&&r.data){const now=r.data;setData(d=>({...d,server:now.server,brain_running:now.brain_running,model_router_running:now.model_router_running,credentials:now.credentials}))}
+ },[inactive])
  useEffect(()=>{
    const node=chatScroll.current
    if(tab==='chat'&&node&&followBottom.current){node.scrollTop=node.scrollHeight;setShowJump(false)}
@@ -217,8 +223,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
+       // The host has just recorded this failure; without this the Model page would still say "not checked yet".
+       if(!cancelled)void refreshConnection()
      }else setNotice(msg)
-     if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind,target:askedTarget.current})}
+     if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind,target:askedTarget.current});void refreshConnection()}
      if(action==='testModelTeam')setTeamChecking(false)
      if(['listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool'].includes(action))setCustomBusy('')
      if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
@@ -237,7 +245,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('The local model is running.');void sync()
    }else if(action==='testModel'){
-     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current});setNotice('The model answered a real test prompt.')
+     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current});setNotice('The model answered a real test prompt.');void refreshConnection()
    }else if(action==='startModelRouter'){
      setRouterBusy(false);setModelList(Array.isArray(result.models)?result.models as string[]:[])
      setNotice('Local router is reachable; select a model and test its actual completion.');void sync()
@@ -277,7 +285,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='transcribe')setPrompt(p=>p+(p?'\n':'')+String(result.text||''))
    else void sync()
- },[sync,updateRun])
+ },[sync,updateRun,refreshConnection])
  useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
