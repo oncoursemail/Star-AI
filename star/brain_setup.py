@@ -23,6 +23,8 @@ import zipfile
 
 import httpx
 
+from .version import __version__
+
 ENGINE_RELEASE = 'https://api.github.com/repos/ggml-org/llama.cpp/releases/latest'
 ENGINE_BUILDS = 'https://api.github.com/repos/ggml-org/llama.cpp/releases'
 ENGINE_FALLBACK_TAG = 'b11429'  # Verified by inspection of the official GitHub release API.
@@ -37,7 +39,7 @@ MODEL_SHAS = {
 MODEL_SIZES = {MODEL_FILES[0]: 2_707_513_696, MODEL_FILES[1]: 675_900_000}
 MODEL_TREE = f'https://huggingface.co/api/models/{MODEL_REPO}/tree/main?expand=true'
 MODEL_URL = f'https://huggingface.co/{MODEL_REPO}/resolve/{MODEL_REVISION}/'
-USER_AGENT = 'STAR-Intelligence/0.5.1 (Local installation)'
+USER_AGENT = f'STAR-Intelligence/{__version__} (Local installation)'
 CHUNK = 1024 * 1024
 MAX_ENGINE_ARCHIVE = 1_500_000_000
 MAX_UNPACKED_ENGINE = 2_000_000_000

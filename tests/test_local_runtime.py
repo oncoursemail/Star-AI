@@ -9,6 +9,7 @@ def test_local_runtime_args(tmp_path):
     args=Runtime.arguments(exe,gguf,port=8080,context=4096,gpu_layers=20)
     assert '--host' in args and '127.0.0.1' in args
     assert args[args.index('-ngl')+1]=='20'
+    assert args.count('--jinja')==1
 
 
 def test_local_runtime_refuses_nonserver_exe(tmp_path):

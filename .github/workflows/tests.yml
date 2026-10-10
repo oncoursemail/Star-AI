@@ -29,3 +29,55 @@ jobs:
         run: python -m pytest -q tests/test_star_research.py
       - name: Run all offline regression tests
         run: python -m pytest -q
+
+  react:
+    name: React UI compile and tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install reviewed frontend dependencies
+        run: npm install --prefix frontend --no-audit --no-fund
+      - name: Typecheck React and validate components
+        run: |
+          npm run typecheck --prefix frontend
+          npm run test --prefix frontend
+          npm run build --prefix frontend
+      - name: Confirm built offline application entry point
+        run: test -s frontend/dist/index.html
+      - name: Capture actual React website, desktop and mobile screenshots
+        if: always()
+        continue-on-error: true
+        run: |
+          test -s frontend/dist/index.html || exit 0
+          mkdir -p react-qa
+          python3 -m http.server 8931 --bind 127.0.0.1 --directory frontend/dist >/tmp/star-react-qa.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true' EXIT
+          sleep 2
+          BROWSER="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$BROWSER" ]; then
+            echo "::notice::Chrome not available for React visual QA"
+            exit 0
+          fi
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-desktop.png" 'http://127.0.0.1:8931/?visualqa=1'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/chat-desktop.png" 'http://127.0.0.1:8931/?preview=1'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/brain-desktop.png" 'http://127.0.0.1:8931/?preview=1&tab=brain'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-mobile.png" 'http://127.0.0.1:8931/?visualqa=1'
+          test -s react-qa/website-desktop.png
+          test -s react-qa/chat-desktop.png
+      - name: Upload actual React browser renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-v08-React-Visual-QA
+          path: react-qa/*.png
+          if-no-files-found: ignore
+          retention-days: 30

@@ -1,5 +1,5 @@
 import type {ReactNode} from 'react'
-import {useState} from 'react'
+import {isValidElement,useState} from 'react'
 import {Check, CheckCheck, Copy, ArrowUpRight, Sparkles, LockKeyhole, Terminal} from 'lucide-react'
 import {motion} from 'motion/react'
 import ReactMarkdown from 'react-markdown'
@@ -18,24 +18,61 @@ export function Panel({children,className=''}:{children:ReactNode;className?:str
 export function EmptyState({icon,heading,description}:{icon:ReactNode;heading:string;description:string}) {return <div className="empty-state"><div className="empty-icon">{icon}</div><strong>{heading}</strong><span>{description}</span></div>}
 export function LinkExternal({href,children}:{href:string;children:ReactNode}) {return <a target="_blank" rel="noopener noreferrer" href={href}>{children}<ArrowUpRight size={13} aria-hidden="true"/></a>}
 
-export function Message({entry,animated=true}:{entry:ChatMessage;animated?:boolean}) {
+
+function safeExternalUrl(href?:string){
+  if(!href)return null
+  try {
+    const target=new URL(href,window.location.href)
+    return ['http:','https:','mailto:'].includes(target.protocol)?target.href:null
+  } catch {return null}
+}
+function toCodeText(children:ReactNode):string{
+  if(typeof children==='string'||typeof children==='number')return String(children)
+  if(Array.isArray(children))return children.map(toCodeText).join('')
+  if(isValidElement<{children?:ReactNode}>(children))return toCodeText(children.props.children)
+  return ''
+}
+async function copySafe(text:string):Promise<boolean>{
+  try{
+    if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(text);return true}
+  }catch{/* File-based Qt WebEngine may deny clipboard API; fall back to the explicit native action. */}
+  const reply=await request('copyText',{text})
+  return reply.ok
+}
+function CodePanel({children}:{children:ReactNode}){
+  const [copied,setCopied]=useState(false)
+  const code=toCodeText(children).replace(/\n$/,'')
+  const language=isValidElement<{className?:string}>(children)
+    ?String(children.props.className||'').replace(/^language-/,''):''
+  return <div className="code-container">
+    <div className="code-label"><Terminal size={14} aria-hidden="true"/><span>{language||'Code'}</span>
+      <button className="code-copy" type="button" aria-label="Copy code" onClick={async()=>{
+        if(await copySafe(code)){setCopied(true);window.setTimeout(()=>setCopied(false),1500)}
+      }}>{copied?<CheckCheck size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy code'}</button>
+    </div>
+    <pre>{children}</pre>
+  </div>
+}
+
+export function Message({entry,animated=true,partial=false}:{entry:ChatMessage;animated?:boolean;partial?:boolean}) {
   const [copied,setCopied]=useState(false)
   const isUser=entry.role==='user'
   const isError=entry.role==='event'
   return <motion.article initial={animated?{opacity:0,y:8}:false} animate={{opacity:1,y:0}} transition={{duration:.2}} className={'message '+(isUser?'message-user':isError?'message-event':'message-star')}>
     <div className={'message-avatar '+(isUser?'avatar-user':'avatar-star')} aria-hidden="true">{isUser?'Y':<Sparkles size={16}/>}</div>
     <div className="message-content">
-      <div className="message-head"><strong>{isUser?'You':isError?'System':'STAR'}</strong><span>{entry.created?new Date(entry.created).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
+      <div className="message-head"><strong>{isUser?'You':isError?'System':'STAR'}</strong>{partial&&<span className="message-streaming-label">WRITING</span>}<span>{entry.created?new Date(entry.created).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
       <div className={'message-body '+(isError?'error-text':'')}>
         {isUser||isError?<p className="preserve-white-space">{entry.text}</p>:
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-            a: ({href,children})=><a href={href||'#'} rel="noopener noreferrer" target="_blank">{children}<ArrowUpRight size={12} aria-hidden="true"/></a>,
+            a: ({href,children})=>{const safe=safeExternalUrl(href);return safe?<a href={safe} rel="noopener noreferrer" target="_blank">{children}<ArrowUpRight size={12} aria-hidden="true"/></a>:<span>{children}</span>},
+            img: ({alt})=><span className="external-image-note">{alt||'External image'} (open original reference instead)</span>,
             code: ({className,children})=><code className={className}>{children}</code>,
-            pre: ({children})=><div className="code-container"><div className="code-label"><Terminal size={13}/> Code</div><pre>{children}</pre></div>
+            pre: ({children})=><CodePanel>{children}</CodePanel>
           }}>{entry.text}</ReactMarkdown>}
       </div>
       {entry.attachments?.length? <div className="attachment-view">{entry.attachments.map(name=><span key={name}>{name}</span>)}</div>:null}
-      {!isError&&!isUser&&<button className="message-copy" type="button" aria-label="Copy response" onClick={async()=>{try{await navigator.clipboard.writeText(entry.text)}catch{await request('copyText',{text:entry.text})}setCopied(true);setTimeout(()=>setCopied(false),1400)}}>{copied?<CheckCheck size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy'}</button>}
+      {!isError&&!isUser&&!partial&&<button className="message-copy" type="button" aria-label="Copy response" onClick={async()=>{if(await copySafe(entry.text)){setCopied(true);window.setTimeout(()=>setCopied(false),1400)}}}>{copied?<CheckCheck size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy'}</button>}
     </div>
   </motion.article>
 }

@@ -13,6 +13,17 @@ on:
       - 'scripts/build_windows.ps1'
       - '.github/workflows/windows-desktop.yml'
       - 'tests/**'
+  pull_request:
+    paths:
+      - 'star/**'
+      - 'frontend/**'
+      - 'star_desktop.py'
+      - 'assets/**'
+      - 'installer/**'
+      - 'requirements*.txt'
+      - 'scripts/build_windows.ps1'
+      - '.github/workflows/windows-desktop.yml'
+      - 'tests/**'
   workflow_dispatch:
 
 concurrency:
@@ -149,6 +160,14 @@ jobs:
           set -euo pipefail
           VERSION="$(python -c 'from star.version import __version__;print(__version__)')"
           TAG="v$VERSION"
+          # A delayed build from an old main SHA must not create a release tag
+          # pointing at an outdated workflow commit. GitHub denies those writes
+          # with 403 even when this job has contents: write.
+          MAIN_SHA="$(gh api "repos/$STAR_REPO/commits/main" --jq .sha)"
+          if [[ "$MAIN_SHA" != "$STAR_COMMIT" ]]; then
+            echo "::notice::Skipping superseded build $STAR_COMMIT; main is $MAIN_SHA"
+            exit 0
+          fi
           if gh release view "$TAG" --repo "$STAR_REPO" >/dev/null 2>&1; then
             echo "Release $TAG already exists; keeping existing verified binaries."
             exit 0

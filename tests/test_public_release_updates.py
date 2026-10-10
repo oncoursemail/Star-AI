@@ -131,3 +131,41 @@ def test_site_downloads_match_an_existing_release_channel():
     root=Path(__file__).resolve().parents[1]
     link=json.loads((root/'site/version.json').read_text())['download']
     assert link == f'https://github.com/{REPO}/releases/latest'
+
+
+def test_newer_source_release_beats_older_public_mirror():
+    """A lagging download mirror must not mask a newer verified public release."""
+    payload=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+400)
+    responses={
+        updates.PUBLIC_API:Response(200,sample_release(PUBLIC_REPO,payload,'0.6.1')),
+        updates.API:Response(200,sample_release(REPO,payload,'0.9.0')),
+    }
+    result=updates.get_latest(Client(responses))
+    assert result.available
+    assert result.version=='0.9.0'
+    assert result.repository==REPO
+
+
+def test_checked_download_progress_and_local_cache(tmp_path,monkeypatch):
+    """Progress uses actual bytes and never deletes the user's model or chats."""
+    monkeypatch.setattr(updates.sys,'platform','win32')
+    user_data=tmp_path/'conversations.sqlite3';user_data.write_text('existing chat')
+    model=tmp_path/'models'/'installed.gguf';model.parent.mkdir();model.write_text('weights')
+    payload=b'MZ'+b'P'*(updates.MIN_INSTALLER_BYTES+400)
+    release=sample_release(REPO,payload)
+    uri=release['assets'][0]['browser_download_url']
+    client=Client({uri:Response(200,data=payload)})
+    result=updates.UpdateResult(True,'0.8.2',release['html_url'],
+       repository=REPO,anonymous_access=True,assets=tuple(release['assets']))
+    events=[]
+    one=updates.stage_installer(result,tmp_path,client,progress=lambda done,total:events.append((done,total)))
+    assert events[-1]==(len(payload),len(payload))
+    assert all(0<=done<=total for done,total in events)
+    assert one.checksum_verified
+    events.clear()
+    two=updates.stage_installer(result,tmp_path,client,progress=lambda done,total:events.append((done,total)))
+    assert two.path==one.path
+    assert events==[(len(payload),len(payload))]
+    assert client.called.count(uri)==1  # Cached file was hash-checked, not redownloaded.
+    assert user_data.read_text()=='existing chat'
+    assert model.read_text()=='weights'

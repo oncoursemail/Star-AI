@@ -106,7 +106,8 @@ def test_local_agent_answer():
         fake=SimpleNamespace(chat=SimpleNamespace(completions=FakeModels([reply("STAR ready")])) )
         answer, transcript, _=await execute(client=fake,model="local",prompt="hello",image_paths=[])
         assert answer == "STAR ready"
-        assert transcript[2]["role"]=="user"
+        assert transcript[1]["role"]=="user"
+        assert [i for i,m in enumerate(transcript) if m["role"]=="system"] == [0]
     asyncio.run(run())
 
 
@@ -132,6 +133,100 @@ def test_agent_blocks_wrong_studio_even_in_auto_mode():
         assert answer=="blocked"
         assert not fake_studio.calls
     asyncio.run(run())
+
+
+def test_qwen_chat_template_has_one_first_system_message():
+    """Regression: Qwen3.5 Jinja returns HTTP 500 for a later system role."""
+    async def run():
+        responder=FakeModels([reply("It works")])
+        client=SimpleNamespace(chat=SimpleNamespace(completions=responder))
+        answer, _, _=await execute(client=client,model="qwen-local",prompt="hello",
+            image_paths=[],project_memory="old project notes")
+        assert answer=="It works"
+        messages=responder.requests[0]["messages"]
+        assert [i for i,m in enumerate(messages) if m["role"]=="system"]==[0]
+        assert "old project notes" in messages[0]["content"]
+        assert messages[1]["role"]=="user"
+    asyncio.run(run())
+
+
+def test_qwen_compaction_never_adds_second_system(monkeypatch):
+    import star.agent as agent
+    updates=[]
+    async def pretend_compact(client,model,project,prior,history):
+        assert history and all(msg["role"]!="system" for msg in history)
+        return "Verified task checkpoint after inspecting a Studio script"
+    monkeypatch.setattr(agent,"compact",pretend_compact)
+    async def run():
+        model=FakeModels([
+            reply(calls=[call("script_read",{"studio_id":"sandbox"})]),
+            reply("Finished inspection"),
+        ])
+        client=SimpleNamespace(chat=SimpleNamespace(completions=model))
+        answer,messages,archive=await execute(client=client,model="qwen-local",
+            prompt="inspect script",image_paths=[],studio=FakeStudio(),
+            studio_id="sandbox",discovered=[schema_tool("script_read")],
+            context_chars=100,checkpoint=lambda summary:updates.append(summary))
+        assert answer=="Finished inspection"
+        assert updates and archive
+        assert "checkpoint" in messages[0]["content"].lower()
+        for request in model.requests:
+            assert [i for i,m in enumerate(request["messages"]) if m["role"]=="system"]==[0]
+    asyncio.run(run())
+
+
+def test_model_roles_validate_locally():
+    from star.agent import validate_model_roles
+    with pytest.raises(ValueError,match="one system message"):
+        validate_model_roles([{"role":"system"},{"role":"system"},{"role":"user"}])
+    with pytest.raises(ValueError,match="one system message"):
+        validate_model_roles([{"role":"user"},{"role":"system"}])
+
+
+
+def test_plain_chat_streams_visible_deltas_without_exposing_reasoning():
+    async def streaming_reply():
+        for item in ['STAR ', 'is ', 'working.']:
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+                content=item, reasoning_content='private reasoning not for display'))])
+    async def run():
+        calls=[]
+        class StreamingModels:
+            async def create(self, **kwargs):
+                calls.append(kwargs)
+                return streaming_reply()
+        events=[]
+        fake=SimpleNamespace(chat=SimpleNamespace(completions=StreamingModels()))
+        answer, messages, _=await execute(client=fake, model='local', prompt='say hi',
+            image_paths=[], stream_tokens=True, on_event=events.append)
+        assert answer=='STAR is working.'
+        assert calls[0]['stream'] is True
+        streamed=''.join(e['text'] for e in events if e.get('event')=='assistant_delta')
+        assert streamed==answer
+        assert 'private reasoning' not in streamed
+        assert messages[-1]['role']=='assistant'
+    asyncio.run(run())
+
+
+def test_stream_rejection_falls_back_to_nonstream_response():
+    class UnsupportedStream(Exception):
+        status_code=400
+    async def run():
+        calls=[]
+        class ConditionalModels:
+            async def create(self, **kwargs):
+                calls.append(kwargs)
+                if kwargs.get('stream'):
+                    raise UnsupportedStream('stream unsupported')
+                return reply('Fallback response')
+        fake=SimpleNamespace(chat=SimpleNamespace(completions=ConditionalModels()))
+        answer, messages, _=await execute(client=fake,model='local',prompt='hello',
+            image_paths=[],stream_tokens=True)
+        assert answer=='Fallback response'
+        assert len(calls)==2
+        assert calls[0]['stream'] is True and not calls[1].get('stream')
+    asyncio.run(run())
+
 
 from star.selfbuild import skill_path, read_source, write_source
 

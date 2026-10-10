@@ -97,6 +97,18 @@ class Conversations:
         self.connection.close()
 
 
+def recent_context(recent: list[tuple[str, str, str]], current_prompt: str) -> str:
+    """Exclude the current turn if the UI already saved it to the conversation DB.
+
+    This prevents the local model receiving the exact same new user request
+    as both system-context history and the actual user message.
+    """
+    turns = list(recent)
+    if turns and turns[-1][0] == 'user' and turns[-1][1] == current_prompt:
+        turns.pop()
+    return '\n'.join(f'{role}: {body[:1500]}' for role, body, _ in turns)
+
+
 def query_models(settings: Settings) -> list[str]:
     settings.validate()
     import httpx
@@ -131,7 +143,8 @@ def redact_for_logs(value):
 
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
-             on_event: Callable[[dict], None] | None = None) -> str:
+             on_event: Callable[[dict], None] | None = None,
+             stream_tokens: bool = False) -> str:
     """Called from a Qt worker thread. No API key needed for localhost engines."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -169,7 +182,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
             recent = dialogue.recent(settings.project, limit=12)
-            prior_turns = '\n'.join(f'{role}: {body[:1500]}' for role, body, _ in recent)
+            prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
         workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
@@ -180,7 +193,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               project_memory=(memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)[-14000:],
                               max_calls=settings.max_calls, context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
-                              workspace=workspace, workspace_edit=settings.workspace_edit)
+                              workspace=workspace, workspace_edit=settings.workspace_edit,
+                              stream_tokens=stream_tokens)
                 if allow_studio:
                     async with connect() as session:
                         answer, msgs, archive = await execute(**kwargs, studio=session,

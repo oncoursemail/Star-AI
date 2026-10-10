@@ -24,7 +24,7 @@ from .version import __version__
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
-    'installBrain','startBrain','listModels','discoverStudio',
+    'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
 })
 
@@ -38,6 +38,8 @@ def react_index(root: Path | None = None) -> Path:
 def sanitize_event(event: dict) -> dict:
     """Never forward raw tool results/secret tokens to an unrestricted webpage."""
     kind = str(event.get('event', 'working'))[:36]
+    if kind == 'assistant_delta':
+        return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
     if kind in {'saved','run_completed'}:
         return {'phase':'Saving verified task record'}
     if kind in {'tool_call','tool_result','tool_output'}:
@@ -120,6 +122,7 @@ def launch():
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
             self.active_task = False
+            self.active_update = False
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -131,9 +134,18 @@ def launch():
                     data=worker()
                     self._emit(request_id, 'result', data)
                 except Exception as exc:
-                    self._emit(request_id, 'error', f'{type(exc).__name__}: {str(exc)[:350]}')
+                    if (action in {'sendMessage', 'startBrain', 'testModel'}
+                        and (getattr(exc, 'status_code', None) is not None
+                             or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
+                             or 'System message must be at the beginning' in str(exc))):
+                        from .model_health import explain_model_failure
+                        detail = explain_model_failure(exc)
+                    else:
+                        detail = f'{type(exc).__name__}: {str(exc)[:350]}'
+                    self._emit(request_id, 'error', detail)
                 finally:
                     if action=='sendMessage':self.active_task=False
+                    if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
         def _start_brain(self, info: BrainInstall):
@@ -156,7 +168,17 @@ def launch():
                         settings.llama_server=info.executable
                         settings.gguf_model=info.model
                         settings.save(settings_file)
-                        return {'model':models[0], 'brain_running':True}
+                        # A /models response is not proof the chat template actually works.
+                        # Verify one real text completion before claiming the AI is ready.
+                        from .model_health import probe_chat_endpoint, explain_model_failure
+                        import asyncio
+                        try:
+                            probe = asyncio.run(probe_chat_endpoint(settings))
+                        except Exception as exc:
+                            raise RuntimeError('STAR Brain started but failed its chat test: '
+                                               + explain_model_failure(exc)) from exc
+                        return {'model':models[0], 'brain_running':True,
+                                'chat_ready':True, 'sample':probe['sample']}
                 except Exception:
                     pass
                 time.sleep(2)
@@ -188,7 +210,9 @@ def launch():
                     pics=pics[:4]
                     extras.append('Only the first 4 visual attachments were sent to respect context limits.')
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
-                answer=run_task(settings,full_prompt,pics,on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)))
+                answer=run_task(settings,full_prompt,pics,
+                    on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
+                    stream_tokens=True)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
@@ -278,6 +302,12 @@ def launch():
                 elif action=='listModels':
                     def worker():return {'models':query_models(Settings.load(self.settings_file))}
                     self._run(rid,action,worker)
+                elif action=='testModel':
+                    def worker():
+                        import asyncio
+                        from .model_health import probe_chat_endpoint
+                        return asyncio.run(probe_chat_endpoint(Settings.load(self.settings_file)))
+                    self._run(rid,action,worker)
                 elif action=='discoverStudio':
                     self._run(rid,action,lambda:{'studios':check_studio()})
                 elif action=='checkUpdates':
@@ -285,11 +315,21 @@ def launch():
                     self._run(rid,action,lambda:asdict(get_latest()))
                 elif action=='installUpdate':
                     from .updates import stage_installer, launch_installer, get_latest
+                    if self.active_update:
+                        raise RuntimeError('STAR is already installing an update')
+                    self.active_update = True
                     def worker():
                         result=get_latest()
                         if not result.available:raise RuntimeError('No newer update is available')
-                        candidate=stage_installer(result,app_data())
-                        launch_installer(candidate)
+                        self._emit(rid,'progress',{'phase':'Downloading and verifying STAR Setup','downloaded':0,'total':0})
+                        candidate=stage_installer(result,app_data(),progress=lambda done,total:
+                            self._emit(rid,'progress',{'phase':'Downloading verified update',
+                                                      'downloaded':done,'total':total}))
+                        self._emit(rid,'progress',{'phase':'SHA-256 verified — starting Windows Setup',
+                                                  'downloaded':1,'total':1})
+                        # Only checksum-verified GitHub assets may run unattended.
+                        # Setup replaces the application and relaunches STAR; user data is outside {app}.
+                        launch_installer(candidate,unattended=True)
                         self.shutdownRequested.emit()
                         return {'status':'launched_installer','version':candidate.version}
                     self._run(rid,action,worker)

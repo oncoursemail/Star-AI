@@ -33,10 +33,11 @@ python -m pytest -q
 
 Do not force-push, bypass main protection, auto-merge, alter the GitHub App's own permissions, or publish the Roblox experience.
 
-## Public/private release separation (STAR v0.6)
+## Public distribution and release safety (STAR v0.7)
 
-- `oncoursemail/Star-AI` remains private; never change its visibility or upload its full history to a public repository.
-- `oncoursemail/Star-Intelligence-Downloads` is the planned public binary+website destination. It is **not** an agent scratchpad.
-- No unreviewed agent-generated source, prompts, SQLite memory, `.env`, model weights or secrets may be copied to the public repo.
-- Only the GitHub Actions post-test publisher can upload compiled release assets and the seven explicitly listed static website files. The publisher receives an independent repository-scoped credential, never accessible to the model.
-- Analytics visualizations must display real local observations and zero-state labels; never fabricate performance metrics or use fake data in screenshots marketed as live usage.
+- The owner has chosen to keep `oncoursemail/Star-AI` **PUBLIC**. Do not change its visibility. Do not commit credentials, private keys, SQLite chats, memory, local project files, reference media, `.env` files, or model weights.
+- The working public distribution channel is GitHub Releases on this repository. A build artifact is not a public release; verify anonymous access to the published Setup, ZIP and checksum before claiming availability.
+- `oncoursemail/Star-Intelligence-Downloads` is a proposed optional binary-only distribution repository, not yet configured. Do not claim the planned repository exists.
+- Compiled releases should include the Windows Setup, portable ZIP, and SHA-256 hashes only. Never publish unreviewed model-generated source, secrets, user data, or internal prompts as release attachments.
+- Scope each publishing credential to its workflow job and purpose. If the repository lacks GitHub Pages settings or release permissions, report the blocked operation accurately instead of silently claiming success.
+- Analytics must display real local observations or honest zero states; do not fabricate metrics or user activity.
