@@ -29,7 +29,7 @@ class Runtime:
         if not 1024<=port<=65535 or not 512<=context<=32768 or not 0<=gpu_layers<=1000:
             raise ValueError('Invalid port, context length or GPU layers')
         args = [str(executable), '-m', str(model), '--host', '127.0.0.1',
-                '--port', str(port), '--ctx-size', str(context), '-ngl', str(gpu_layers)]
+                '--port', str(port), '--ctx-size', str(context), '-ngl', str(gpu_layers), '--jinja']
         if projector is not None:
             proj = projector.expanduser().resolve(strict=True)
             if proj.suffix.lower() != '.gguf':
