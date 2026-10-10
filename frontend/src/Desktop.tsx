@@ -7,13 +7,14 @@ import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
 import './stellar-ui.css'
+import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -24,11 +25,15 @@ function initialPreviewTab(preview:boolean):Tab {
 }
 export function Desktop({initial=null,preview=false}:{initial?:BootData|null;preview?:boolean}) {
  const [tab,setTab]=useState<Tab>(()=>initialPreviewTab(preview))
- const [data,setData]=useState<BootData>(initial??{version:'0.8.1',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES})
+ const [data,setData]=useState<BootData>(initial??{version:'0.8.1',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
+ const [chatMode,setChatMode]=useState<'fast'|'auto'|'agent'>('auto')
+ const [research,setResearch]=useState(false)
+ const [githubSource,setGithubSource]=useState(false)
+ const [teamMode,setTeamMode]=useState(false)
  const [notice,setNotice]=useState('')
  const [workPhase,setWorkPhase]=useState('')
  const [streamingText,setStreamingText]=useState('')
@@ -113,7 +118,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      if(action==='installBrain'){
        const obj=(event.data||{}) as Record<string,unknown>
        setBrainProgress({phase:String(obj.phase||'Preparing your AI'),downloaded:Number(obj.overall_downloaded??obj.downloaded??0),total:Number(obj.overall_total??obj.total??0)})
-     }else if(action==='sendMessage'||action==='generateImage'){
+     }else if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){
        const info=(event.data||{}) as {phase?:string;delta?:string}
        if(typeof info.delta==='string'&&info.delta){
          setStreamingText(previous=>previous+info.delta)
@@ -131,15 +136,16 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    running.current.delete(event.requestId)
    if(event.kind==='error'){
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
-     setNotice(msg);if(action==='sendMessage'||action==='generateImage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
+     setNotice(msg);if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
    }
    const result=event.data as Record<string,unknown>
-   if(action==='sendMessage'||action==='generateImage'){
-     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');setNotice('');setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
+   if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){
+     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');
+      if(action==='runTeam'&&Number.isInteger(result.peak_concurrency))setNotice(`STAR Teams: ${result.agents} stages · peak ${result.peak_concurrency} concurrent · ${(Number(result.elapsed_ms||0)/1000).toFixed(1)}s`);else setNotice('');setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
@@ -164,14 +170,17 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(imageMode&&!data.settings.comfy_workflow){setNotice('To create images, choose a local ComfyUI workflow in Settings first.');setTab('settings');return}
    if(inactive){setNotice('This preview does not run a model. Download STAR to chat locally.');return}
    const selected=files.slice()
+   if(teamMode&&selected.length){setNotice('STAR Teams supports text prompts only. Remove attachments or disable Teams.');return}
+   if(teamMode&&data.settings.provider!=='local'){setNotice('STAR Teams uses the local model. Choose Local in Settings.');return}
    lastSent.current=value
    setComposerMenu(false)
    followBottom.current=true;setShowJump(false)
    setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false)
    setMessages(m=>[...m,makeMsg('user',value,selected.map(f=>f.split(/[\\/]/).pop()||f))]);setFiles([]);setPrompt('');setBusy(true);setWorkPhase('Preparing your response…');setNotice('');setTab('chat')
-   const res=await act(imageMode?'generateImage':'sendMessage',imageMode?{prompt:value}:{prompt:value,files:selected})
+   const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
+   const res=await act(action,imageMode?{prompt:value}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
    if(!res){setBusy(false);setWorkPhase('');setRetryText(value);setMessages(m=>[...m,makeMsg('event',imageMode?'Image generation could not start. Check your ComfyUI settings.':'STAR could not connect. Check your model settings.')])}
- },[prompt,busy,files,inactive,act,imageMode,data.settings.comfy_workflow])
+ },[prompt,busy,files,inactive,act,imageMode,data.settings.comfy_workflow,data.settings.provider,chatMode,teamMode,research,githubSource])
 
  useEffect(()=>{
    const onShortcut=(e:KeyboardEvent)=>{
@@ -304,7 +313,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                       <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} disabled={busy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
                       <AnimatePresence>{composerMenu&&<motion.div className="composer-menu" role="menu" initial={{opacity:0,y:6,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:4,scale:.99}} transition={{duration:.15}}>
                         <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setImageMode(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
-                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setFiles([]);setImageMode(true);composerRef.current?.focus()}}><ImagePlus size={18}/><span>Create image</span>{imageMode&&<Check size={15}/>}</button>
+                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setFiles([]);setImageMode(true);setTeamMode(false);composerRef.current?.focus()}}><ImagePlus size={18}/><span>Create image</span>{imageMode&&<Check size={15}/>}</button>
                         <button role="menuitem" type="button" onClick={async()=>{setComposerMenu(false);const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/><span>Transcribe audio</span></button>
                       </motion.div>}</AnimatePresence>
                     </div>
