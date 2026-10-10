@@ -18,8 +18,12 @@ an app start (cold, and after STAR's warm-up).
     agent   one real tool-using turn through star.agent.execute, to time the
             first streamed progress
 
+A "cold" request starts with a one-line session marker the server has never
+seen, so neither a slot nor llama-server's RAM prompt cache can help it: that
+is what a first message costs. Turns of one conversation share their marker.
+
 The server key is read from STAR_SERVER_API_KEY or --key-file and never printed.
-Only run this while you hold the server lock: it empties the slots it uses.
+Only run this while you hold the server lock: timings are ruined by overlap.
 
   python scripts/measure_first_token.py --endpoint http://10.17.0.146:8080/v1 \
       --model star-fast --key-file ~/.star/server_api_key --out ttft.json
@@ -72,6 +76,16 @@ def stable_messages(settings: Settings, turns: list[tuple[str, str]], prompt: st
     history = conversation_window(rows, budget_chars=history_char_budget(settings))
     return assemble(make_system_message("", tools_attached=False), history,
                     {"role": "user", "content": [{"type": "text", "text": prompt}]})[0]
+
+
+def marked(messages: list[dict], marker: str) -> list[dict]:
+    """The same request for a session the server has never seen (see the module text)."""
+    first = {**messages[0], "content": f"Session {marker}.\n" + messages[0]["content"]}
+    return [first, *messages[1:]]
+
+
+def new_marker() -> str:
+    return uuid.uuid4().hex[:10]
 
 
 class Server:
@@ -132,11 +146,10 @@ class Server:
             "gen_tok_s": round(timings["predicted_per_second"], 2) if timings.get("predicted_per_second") else None,
         }
 
-    def empty_slots(self, count: int) -> None:
-        """Make every slot forget what it holds, as after a server or app restart."""
-        for slot in range(count):
-            self.chat([{"role": "user", "content": f"unrelated {uuid.uuid4().hex}"}], max_tokens=1,
-                      extras={"id_slot": slot, "cache_prompt": True})
+    def reuse_slot(self, slot: int) -> None:
+        """Let other work take a slot, as another chat or a helper request would."""
+        self.chat([{"role": "user", "content": f"unrelated {uuid.uuid4().hex}"}], max_tokens=1,
+                  extras={"id_slot": slot, "cache_prompt": True})
 
 
 def show(label: str, row: dict) -> None:
@@ -147,14 +160,14 @@ def show(label: str, row: dict) -> None:
 
 
 def run_chat(server: Server, settings: Settings, layout: str, turns_wanted: int, max_tokens: int,
-             slots: int, conversation: str) -> tuple[list[dict], list[tuple[str, str]]]:
-    server.empty_slots(slots)
+             conversation: str) -> tuple[list[dict], list[tuple[str, str]], str]:
+    marker = new_marker()
     extras = llama_request_fields(settings, conversation=conversation) if layout == "stable" else None
     turns, rows = [], []
     for number, prompt in enumerate(PROMPTS[:turns_wanted], 1):
         messages = stable_messages(settings, turns, prompt) if layout == "stable" else legacy_messages(turns, prompt)
         tasks = server.slot_tasks()
-        row = server.chat(messages, max_tokens=max_tokens, extras=extras)
+        row = server.chat(marked(messages, marker), max_tokens=max_tokens, extras=extras)
         turns.append((prompt, row.pop("text").strip()))
         # Which slot did the server use? (Its task counter is the one that moved.)
         used = [slot for slot, task in server.slot_tasks().items() if tasks.get(slot) != task]
@@ -162,11 +175,11 @@ def run_chat(server: Server, settings: Settings, layout: str, turns_wanted: int,
                    prompt_chars=sum(len(json.dumps(m["content"])) for m in messages))
         rows.append(row)
         show(f"{layout} turn {number}", row)
-    return rows, turns
+    return rows, turns, marker
 
 
 def run_resume(server: Server, settings: Settings, turns: list[tuple[str, str]], max_tokens: int,
-               slots: int, conversation: str) -> list[dict]:
+               conversation: str, known_marker: str = "") -> list[dict]:
     """STAR was closed and reopened on this chat; the owner sends one more message."""
     prompt, rows = PROMPTS[len(turns) % len(PROMPTS)], []
     extras = llama_request_fields(settings, conversation=conversation)
@@ -178,18 +191,21 @@ def run_resume(server: Server, settings: Settings, turns: list[tuple[str, str]],
         rows.append(row)
         show(label, row)
 
-    server.empty_slots(slots)
-    measure("legacy, cold", legacy_messages(turns, prompt), None)
-    server.empty_slots(slots)
-    measure("stable, cold", stable_messages(settings, turns, prompt), extras)
-    server.empty_slots(slots)
+    measure("legacy, cold", marked(legacy_messages(turns, prompt), new_marker()), None)
+    measure("stable, cold", marked(stable_messages(settings, turns, prompt), new_marker()), extras)
     # STAR's warm-up: the same start, one token, then the real message.
-    measure("warm-up request itself", stable_messages(settings, turns, "."), extras)
-    measure("stable, after warm-up", stable_messages(settings, turns, prompt), extras)
+    marker = new_marker()
+    measure("warm-up request itself", marked(stable_messages(settings, turns, "."), marker), {**extras, "max_tokens": 1})
+    measure("stable, after warm-up", marked(stable_messages(settings, turns, prompt), marker), extras)
     # A warm-up that the owner interrupts by sending early: is the part already read kept?
-    server.empty_slots(slots)
-    server.chat(stable_messages(settings, turns, "."), max_tokens=1, extras=extras, stop_after=2.0)
-    measure("stable, warm-up cut at 2 s", stable_messages(settings, turns, prompt), extras)
+    marker = new_marker()
+    server.chat(marked(stable_messages(settings, turns, "."), marker), max_tokens=1, extras=extras, stop_after=4.0)
+    measure("stable, warm-up cut at 4 s", marked(stable_messages(settings, turns, prompt), marker), extras)
+    if known_marker and "id_slot" in extras:
+        # The slot was used by other work since this conversation was last seen. llama-server
+        # keeps evicted prompts in RAM, which only helps a request whose start is unchanged.
+        server.reuse_slot(extras["id_slot"])
+        measure("stable, slot was reused", marked(stable_messages(settings, turns, prompt), known_marker), extras)
     return rows
 
 
@@ -260,20 +276,21 @@ def main() -> int:
               "busy_slots_at_start": sum(1 for slot in server.slots() if slot.get("is_processing"))}
     print(f"{args.model} on {facts.get('build_info')}: {slots} slot(s) x {context} tokens; "
           f"{report['busy_slots_at_start']} busy at start. {args.note}", flush=True)
-    phases, turns = args.phases.split(","), []
+    phases, turns, known = args.phases.split(","), [], ""
     conversation = "measure::" + uuid.uuid4().hex
     if "chat" in phases:
         report["chat"] = {}
         for layout in args.layouts.split(","):
-            print(f"\n{args.turns}-turn conversation, {layout} layout (slots emptied first)", flush=True)
-            report["chat"][layout], turns = run_chat(server, settings, layout, args.turns, args.max_tokens,
-                                                     slots, conversation)
+            print(f"\n{args.turns}-turn conversation, {layout} layout (first turn cold)", flush=True)
+            report["chat"][layout], turns, marker = run_chat(server, settings, layout, args.turns, args.max_tokens,
+                                                             conversation)
+            known = marker if layout == "stable" else known
     if "resume" in phases:
         if not turns:   # a fixed stand-in conversation when the chat phase was skipped
             turns = [(prompt, "Use a ProximityPrompt and TweenService; validate on the server. " * 6)
                      for prompt in PROMPTS[:args.turns]]
         print(f"\nFirst message after an app start, on a chat with {len(turns)} earlier turns", flush=True)
-        report["resume"] = run_resume(server, settings, turns, args.max_tokens, slots, conversation)
+        report["resume"] = run_resume(server, settings, turns, args.max_tokens, conversation, known)
     if "agent" in phases:
         print("\nOne tool-using turn through star.agent.execute (streamed)", flush=True)
         report["agent"] = run_agent(settings, key, max(args.max_tokens, 120))
