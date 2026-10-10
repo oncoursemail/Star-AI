@@ -170,7 +170,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(reviewBusy||inactive)return
    setReviewBusy(true)
    const result=await act('exportReviewBundle',{includeScreenshot:includeReviewScreenshot})
-   if(!result||'cancelled' in result){setReviewBusy(false)}
+   if(!result||(typeof result==='object'&&'cancelled' in result)){setReviewBusy(false)}
  }
  const stopChat=async()=>{if(!busy)return;setWorkPhase('Stopping request…');await act('cancelMessage')}
  const saveKey=async()=>{if(!providerKey.trim())return;const result=await act('saveProviderKey',{provider:keyProvider,key:providerKey.trim()});if(result){setProviderKey('');setNotice('API key saved securely on this computer.');void sync()}}
