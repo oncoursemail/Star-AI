@@ -46,3 +46,34 @@ describe('composer focus', () => {
     expect(specificity('.shell .cmp .cmp-input:focus-visible')).toEqual([0, 4, 0])
   })
 })
+
+describe('every class the desktop pages use has a style', () => {
+  const sheets = ['./styles.css', './tokens.css', './stellar-ui.css', './chat.css', './integrated-tools.css'].map(source).join('\n')
+  const styled = new Set(Array.from(sheets.matchAll(/\.([A-Za-z_][\w-]*)/g), match => match[1]))
+  /** Class names written as plain string literals in a component (dynamic `is-*` suffixes are skipped). */
+  const used = (file: string) => {
+    const names = new Set<string>()
+    for (const match of source(file).matchAll(/className=(?:"([^"]+)"|\{'([^']+)')/g)) {
+      for (const name of (match[1] || match[2]).split(/\s+/)) {
+        if (/^[A-Za-z_][\w-]*$/.test(name) && !name.endsWith('-')) names.add(name)
+      }
+    }
+    return names
+  }
+  // Names that are only hooks for scripts and tests, or are styled through another selector.
+  const hooks = new Set(['rail-chat', 'composer-image-chip', 'composer-menu', 'dashboard', 'starlight'])
+
+  it('leaves no page element unstyled (the Tools cards lost their layout this way)', () => {
+    const missing: string[] = []
+    for (const file of ['./Desktop.tsx', './components.tsx', './Composer.tsx', './ActivityTimeline.tsx', './IntegrationPanels.tsx', './ModelFleetPanel.tsx', './ReviewToolsPanel.tsx', './Charts.tsx']) {
+      for (const name of used(file)) if (!styled.has(name) && !hooks.has(name)) missing.push(`${file}: .${name}`)
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('lays the Tools knowledge cards out as a grid with the status tag beside the icon', () => {
+    const shell = source('./stellar-ui.css')
+    expect(shell).toMatch(/\.shell \.intelligence-grid\s*\{[^}]*display:\s*grid/)
+    expect(shell).toMatch(/\.shell \.integration-head\s*\{[^}]*justify-content:\s*space-between/)
+  })
+})

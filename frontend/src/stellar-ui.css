@@ -713,13 +713,111 @@
   border-color: var(--star-stroke-soft);
   background: var(--star-surface-1);
 }
+/* Tools page: the knowledge cards, their heading, the vault folder row and the model test result.
+ * Their layout rules lived in desktop-v2.css, which is no longer part of the app; without them the
+ * three cards stack at full width with the status tag under the icon and the result line has no shape. */
+.shell .intelligence-heading {
+  margin: var(--star-8) 0 var(--star-4);
+}
+.shell .intelligence-heading .eyebrow {
+  display: block;
+  margin-bottom: var(--star-2);
+}
+.shell .intelligence-heading h2 {
+  margin: 0 0 var(--star-2);
+  color: var(--star-text);
+  font-size: var(--star-fs-h3);
+}
+.shell .intelligence-heading p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.6;
+}
+.shell .intelligence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--star-4);
+  margin: 0 0 var(--star-4);
+}
 .shell .intelligence-grid .panel {
   border: 1px solid var(--star-stroke-soft);
   border-radius: var(--star-r-md);
   background: var(--star-surface-1);
 }
 .shell .integration-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-3);
+  min-width: 0;
   padding: var(--star-5);
+}
+.shell .integration-panel p {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.shell .integration-panel code {
+  overflow-wrap: anywhere;
+}
+.shell .integration-panel .secondary-button {
+  align-self: flex-start;
+}
+.shell .integration-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--star-3);
+}
+.shell .integration-head .tag {
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shell .intelligence-folder-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--star-3);
+  margin: var(--star-4) 0 var(--star-3);
+}
+.shell .intelligence-folder-row label {
+  flex: 1;
+  min-width: 0;
+}
+.shell .intelligence-folder-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.shell .health-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-2);
+  margin-top: var(--star-3);
+  padding: var(--star-3) var(--star-4);
+  border-radius: var(--star-r-sm);
+  background: var(--star-success-wash);
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.shell .health-result svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-success);
+}
+@media (max-width: 1120px) {
+  .shell .intelligence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 710px) {
+  .shell .intelligence-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell .intelligence-folder-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
 }
 
 /* Provider, server and connector panels (IntegrationPanels) take the same tokens as every other page. */
