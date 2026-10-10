@@ -58,7 +58,7 @@ class Speaker(Protocol):
 @dataclass
 class CallConfig:
     turn: TurnConfig = field(default_factory=TurnConfig)
-    history_messages: int = 12            # user+assistant messages kept as context
+    history_messages: int = 40            # most user+assistant messages sent as context (see _context)
     system_extra: str = ""                # optional extra context appended to the voice prompt
     speculative_asr: bool = True          # start transcribing at the first pause
     partial_transcripts: bool = True      # live transcript while the user is talking
@@ -303,14 +303,26 @@ class CallSession:
                 return                           # the user kept talking: _finish_reply carries these words over
             self._emit({"type": "final_transcript", "turn": metrics.turn, "text": reply.user_text})
             self.speaker.reset()
-            messages = ([system_message(self.config.system_extra)]
-                        + self.history[-self.config.history_messages:]
-                        + [{"role": "user", "content": reply.user_text}])
+            messages = self._context() + [{"role": "user", "content": reply.user_text}]
             self._generate_and_speak(reply, messages)
         except Exception as exc:
             reply.error = exc
         finally:
             self._finish_reply(reply)
+
+    def _context(self) -> list[dict]:
+        """System prompt plus history, trimmed in big blocks rather than a little every turn.
+
+        The server caches the prompt prefix. A window that slides by one exchange per turn would change
+        that prefix every time and make the server re-read the whole conversation before each reply;
+        dropping the oldest half once in a while costs one slow turn instead of all of them.
+        """
+        limit = max(4, self.config.history_messages)
+        with self._lock:
+            if len(self.history) > limit:
+                keep = (limit // 2) // 2 * 2
+                del self.history[: len(self.history) - keep]
+            return [system_message(self.config.system_extra)] + list(self.history)
 
     def _generate_and_speak(self, reply: _Reply, messages: list[dict]) -> None:
         metrics = reply.metrics

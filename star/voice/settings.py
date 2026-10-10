@@ -15,7 +15,7 @@ from .turn import TurnConfig
 
 TTS_ENGINES = ("kokoro",)
 ASR_ENGINES = ("faster-whisper",)
-ASR_MODELS = ("tiny.en", "base.en", "small.en", "medium.en", "distil-large-v3", "large-v3-turbo",
+ASR_MODELS = ("auto", "tiny.en", "base.en", "small.en", "medium.en", "distil-large-v3", "large-v3-turbo",
               "tiny", "base", "small", "medium", "large-v3")
 VAD_ENGINES = ("silero", "energy")
 ENDPOINTERS = ("smart-turn", "silence")
@@ -29,13 +29,14 @@ class VoiceSettings:
     voice: str = "heart"                 # id from the audition page, or an engine-specific recipe
     speed: float = 0.92                  # a little slower than neutral: calmer
     asr_engine: str = "faster-whisper"
-    asr_model: str = "small.en"
+    asr_model: str = "auto"              # auto = small.en on an NVIDIA GPU, base.en on the CPU
     asr_prompt: str = "Star, Roblox, Luau, RemoteEvent."     # spellings the transcript should prefer
     device: str = "auto"                 # auto | cuda | cpu
     vad: str = "silero"
     endpointer: str = "smart-turn"
     output: str = "headphones"           # "speakers" turns the echo gate on
     end_silence_ms: int = 640            # silence that ends a turn when the end-of-turn model is off
+    min_end_silence_ms: int = 608        # shortest wait after you stop talking, even when Star is sure you are done
     max_silence_ms: int = 2000           # silence that always ends a turn
     barge_in_ms: int = 288               # speech needed to interrupt Star
     max_reply_tokens: int = 220
@@ -56,6 +57,7 @@ class VoiceSettings:
                   (self.endpointer in ENDPOINTERS, "Unknown end-of-turn setting"),
                   (self.output in OUTPUT_MODES, "Output must be headphones or speakers"),
                   (300 <= int(self.end_silence_ms) <= 3000, "end_silence_ms must be 300-3000"),
+                  (256 <= int(self.min_end_silence_ms) <= 2000, "min_end_silence_ms must be 256-2000"),
                   (int(self.end_silence_ms) <= int(self.max_silence_ms) <= 6000, "max_silence_ms must be up to 6000"),
                   (96 <= int(self.barge_in_ms) <= 2000, "barge_in_ms must be 96-2000"),
                   (16 <= int(self.max_reply_tokens) <= 800, "max_reply_tokens must be 16-800"),
@@ -92,6 +94,7 @@ class VoiceSettings:
 
     def call_config(self) -> CallConfig:
         turn = TurnConfig(end_silence_ms=int(self.end_silence_ms), max_silence_ms=int(self.max_silence_ms),
+                          min_end_silence_ms=min(int(self.min_end_silence_ms), int(self.max_silence_ms)),
                           barge_in_ms=int(self.barge_in_ms))
         return CallConfig(turn=turn, system_extra=self.system_extra, partial_transcripts=self.partial_transcripts,
                           use_echo_gate=self.output == "speakers")

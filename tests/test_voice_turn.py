@@ -79,12 +79,28 @@ class Model:
 
 def test_end_of_turn_model_can_end_the_turn_at_the_pause():
     model = Model([0.93])
-    f = Feeder(TurnDetector(TurnConfig(pause_ms=256), model))
+    f = Feeder(TurnDetector(TurnConfig(pause_ms=256, min_end_silence_ms=256), model))
     f.feed(0.9, 20)
     events = f.feed(0.0, ms(256))
     assert [e.kind for e in events] == ["pause", "turn_end"]
     assert events[1].reason == "model" and events[1].complete_probability == 0.93
     assert events[1].at - events[1].speech_end < 0.3          # far sooner than a fixed silence timer
+
+
+def test_a_sure_model_still_waits_a_moment_so_a_second_sentence_is_not_cut_off():
+    cfg = TurnConfig(pause_ms=256, min_end_silence_ms=608, max_silence_ms=2000)
+    f = Feeder(TurnDetector(cfg, Model([0.95, 0.95])))
+    f.feed(0.9, 20)                                # "Hi Star, it's me."
+    assert [e.kind for e in f.feed(0.0, ms(256))] == ["pause"]
+    f.feed(0.0, ms(608) - ms(256) - 1)             # 0.58 s of silence: still the same turn
+    f.feed(0.9, 10)                                # "I just got home from school."
+    assert f.kinds() == ["speech_start", "pause", "resume"]
+    f.feed(0.0, ms(608) - 1)
+    assert f.kinds() == ["speech_start", "pause", "resume", "pause"]
+    end = f.feed(0.0, 1)                           # now the turn ends, 0.61 s after the last word
+    assert [e.kind for e in end] == ["turn_end"] and end[0].reason == "model"
+    assert abs((end[0].at - end[0].speech_end) - 0.608) < 1e-6
+    assert len(end[0].audio) > 50 * FRAME_BYTES    # both sentences are in the one turn
 
 
 def test_model_is_asked_again_as_silence_grows_and_needs_less_proof_each_time():

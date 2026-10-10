@@ -201,15 +201,22 @@ class SmartTurnEndpointer:
 
 
 # -- speech to text ---------------------------------------------------------------------------
+# Measured on this project's PC (voice-lab/asr_bench.py): small.en is fast enough on the GPU, but takes
+# seconds per sentence on the CPU, where base.en keeps the transcript inside the end-of-turn wait.
+AUTO_ASR_MODEL = {"cuda": "small.en", "cpu": "base.en"}
+
+
 class FasterWhisperASR:
     """faster-whisper (CTranslate2). On the GPU: float16; on the CPU: int8."""
 
-    def __init__(self, model: str = "small.en", device: str = "auto", language: str | None = "en",
+    def __init__(self, model: str = "auto", device: str = "auto", language: str | None = "en",
                  prompt: str = "") -> None:
         add_nvidia_dll_dirs()
         from faster_whisper import WhisperModel
         if device == "auto":
             device = "cuda" if gpu_available() else "cpu"
+        if model in ("", "auto"):
+            model = AUTO_ASR_MODEL[device]
         self.device, self.language, self.prompt = device, language, prompt
         self.model_name = model
         self._lock = threading.Lock()
@@ -330,7 +337,7 @@ def make_endpointer(name: str = "smart-turn"):
 
 def make_asr(name: str = "faster-whisper", model: str = "", device: str = "auto", prompt: str = ""):
     if name == "faster-whisper":
-        return FasterWhisperASR(model or "small.en", device=device, prompt=prompt)
+        return FasterWhisperASR(model or "auto", device=device, prompt=prompt)
     raise ValueError(f"Unknown speech-to-text engine: {name}")
 
 

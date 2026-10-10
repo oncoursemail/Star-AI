@@ -166,6 +166,20 @@ def test_empty_transcript_mute_manual_interrupt_and_stop():
     assert len(events.items) == before
 
 
+def test_history_is_trimmed_in_blocks_so_the_server_prompt_cache_keeps_working():
+    config = CallConfig(turn=TurnConfig(), partial_transcripts=False, history_messages=8)
+    session, events, brain, tts, speaker = make(["Okay."], config=config, tts_kwargs={"seconds_per_word": 0.01})
+    for _ in range(9):
+        feed(session, speech(1, 20) + END)
+        assert session.wait_idle(5)
+    sizes = [len(request) for request in brain.requests]
+    # system + history + new user message: grows by one exchange per turn, then drops by half in one go
+    assert sizes == [2, 4, 6, 8, 10, 6, 8, 10, 6]
+    for earlier, later in zip(brain.requests, brain.requests[1:]):
+        if len(later) > len(earlier):
+            assert later[:len(earlier)] == earlier          # the prefix the server cached is unchanged
+
+
 def test_live_transcript_and_level_events_reach_the_listener():
     config = CallConfig(turn=TurnConfig(), partial_transcripts=True, partial_interval=0.05, level_interval=0.0)
     session, events, brain, tts, speaker = make(["Lovely."], config=config)

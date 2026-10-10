@@ -106,7 +106,7 @@ def cmd_file_call(args) -> int:
         return build_session(settings, engines, speaker, brain=brain, on_event=both)
 
     call = FileCall(make, echo_db=args.echo_db, base_dir=scenario_path.parent, step_timeout=args.step_timeout)
-    print(f"Running {scenario_path.name} (voice {settings.voice}, speech-to-text {settings.asr_model} on "
+    print(f"Running {scenario_path.name} (voice {settings.voice}, speech-to-text {engines.asr.model_name} on "
           f"{engines.asr.device}, voice engine on {engines.tts.device}, end of turn: {settings.endpointer})", flush=True)
     result = call.run(scenario)
     print()

@@ -31,8 +31,16 @@ def list_devices() -> list[dict]:
     """Microphones and speakers as plain dicts (for the settings screen)."""
     sd = _sounddevice()
     default_in, default_out = sd.default.device
+    # Windows lists every device once per audio API (MME, DirectSound, WASAPI, ...). Show only the default
+    # API's copies: that is the one the call opens, and it converts sample rates by itself.
+    try:
+        host_api = sd.query_devices(default_in if default_in >= 0 else default_out)["hostapi"]
+    except Exception:
+        host_api = None
     found = []
     for index, info in enumerate(sd.query_devices()):
+        if host_api is not None and info["hostapi"] != host_api:
+            continue
         if info["max_input_channels"] > 0:
             found.append({"index": index, "kind": "input", "name": info["name"], "default": index == default_in})
         if info["max_output_channels"] > 0:
