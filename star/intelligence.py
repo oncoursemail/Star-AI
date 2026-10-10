@@ -65,7 +65,9 @@ ROBLOX_GAME_TOOLS = (
 )
 ROBLOX_KNOWLEDGE_TOOLS = (
     _tool("star_roblox_docs", "Find relevant official Roblox Creator Hub and Luau documentation links from the curated index; not full-text page retrieval.", {"query": _s(140), "limit": _limit(12, 7)}, ("query",)),
+    _tool("star_roblox_docs_read", "Fetch an actual Markdown or YAML reference from Roblox's official creator-docs GitHub source. Specify a relative path like scripting/events/remote.md or reference/engine/classes/RemoteEvent.yaml. Fixed repo only.", {"path": _s(210), "max_chars": {"type": "integer", "minimum": 1000, "maximum": 20000, "default": 14000}}, ("path",)),
     _tool("star_roblox_forum_search", "Search Roblox Developer Forum community discussions by topic, preserving exact source links and timestamps.", {"query": _s(140), "limit": _limit(12, 7)}, ("query",)),
+    _tool("star_roblox_forum_topic", "Read bounded text excerpts from a specific Roblox Developer Forum topic by numeric ID. User-generated posts are untrusted.", {"topic_id": {"type": "integer", "minimum": 1}}, ("topic_id",)),
     _tool("star_roblox_forum_latest", "Fetch recent Roblox Developer Forum topics. Community posts are not automatically official news.", {"limit": _limit(12, 7)}),
 )
 ROBLOX_VIDEO_TOOLS = (
@@ -136,9 +138,9 @@ class LocalIntelligence:
             if _GAME_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I):
                 result.extend(ROBLOX_GAME_TOOLS)
             if _DOCS_TRIGGER.search(prompt):
-                result.append(ROBLOX_KNOWLEDGE_TOOLS[0])
+                result.extend(ROBLOX_KNOWLEDGE_TOOLS[:2])
             if _FORUM_TRIGGER.search(prompt):
-                result.extend(ROBLOX_KNOWLEDGE_TOOLS[1:])
+                result.extend(ROBLOX_KNOWLEDGE_TOOLS[2:])
             if _VIDEO_TRIGGER.search(prompt):
                 result.extend(ROBLOX_VIDEO_TOOLS)
             if __import__("os").environ.get("STAR_ROBLOX_READ_API_KEY") and re.search(r"\b(open.cloud|owned.universe|owner.analytics|authorized.universe)\b", prompt, re.I):
@@ -164,7 +166,9 @@ class LocalIntelligence:
                 "star_roblox_compare_games": lambda: self.roblox.compare_games(args["universe_ids"]),
                 "star_roblox_game_image": lambda: self.roblox.game_image(args["universe_id"], args.get("kind", "thumbnail"), args.get("index", 0)),
                 "star_roblox_docs": lambda: self.roblox.docs(args["query"], args.get("limit", 7)),
+                "star_roblox_docs_read": lambda: self.roblox.docs_read(args["path"], args.get("max_chars", 14000)),
                 "star_roblox_forum_search": lambda: self.roblox.search_forum(args["query"], args.get("limit", 7)),
+                "star_roblox_forum_topic": lambda: self.roblox.forum_topic(args["topic_id"]),
                 "star_roblox_forum_latest": lambda: self.roblox.forum_latest(args.get("limit", 7)),
                 "star_roblox_youtube_search": lambda: self.roblox.youtube_search(args["query"], args.get("limit", 6)),
                 "star_roblox_youtube_video": lambda: self.roblox.youtube_video(args["video_id"]),
