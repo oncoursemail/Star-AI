@@ -160,7 +160,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
  const changeProject=async(name:string)=>{const v=await act('switchProject',{project:name});if(v){const b=v as BootData;setData(b);setDraft(b.settings);setMessages(b.messages);lastProject.current=name;setTab('chat')}setLeftOpen(false)}
- const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
+ const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);setMcpChecks({});void sync()}}
  const testActualModel=async()=>{
    if(modelChecking)return
    setModelChecking(true);setModelCheck(null)
