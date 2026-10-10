@@ -300,7 +300,10 @@ class Conversations:
             ).lastrowid
             # Name new chats from their first prompt, without altering legacy titles.
             if role == 'user' and target != 'legacy':
-                first_line = ' '.join(body.split())[:64].strip() or 'New chat'
+                text = ' '.join(body.split())
+                # A long first message is shortened for the title; the ellipsis says so
+                # (the top bar used to show a title that simply stopped mid-word).
+                first_line = (text if len(text) <= 64 else text[:63].rstrip() + '…') or 'New chat'
                 self.connection.execute(
                     'UPDATE chats SET title=? WHERE project=? AND id=? AND title=?',
                     (first_line, project, target, 'New chat')

@@ -70,3 +70,22 @@ def test_cross_project_access_rejected(tmp_path):
         assert store.active_chat("Beta") == second
     finally:
         store.close()
+
+
+def test_a_long_first_message_gives_a_title_that_ends_with_an_ellipsis(tmp_path):
+    """Seen in the real shell: "Write a detailed 400 word essay about the history of the Roman E"."""
+    store = Conversations(tmp_path / "messages.db")
+    try:
+        long_chat = store.active_chat("STAR")
+        store.add("STAR", "user", "Write a detailed 400 word essay about the history of the Roman Empire.", chat_id=long_chat)
+        title = store.list_chats("STAR")[0]["title"]
+        assert title == "Write a detailed 400 word essay about the history of the Roman…"
+        assert len(title) <= 64
+        exact = store.new_chat("STAR")
+        store.add("STAR", "user", "x" * 64, chat_id=exact)
+        assert store.list_chats("STAR")[0]["title"] == "x" * 64  # fits: nothing is cut, no ellipsis
+        short = store.new_chat("STAR")
+        store.add("STAR", "user", "  Say   hello\nin three words.  ", chat_id=short)
+        assert store.list_chats("STAR")[0]["title"] == "Say hello in three words."
+    finally:
+        store.close()
