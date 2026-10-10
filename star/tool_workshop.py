@@ -119,8 +119,26 @@ class ToolWorkshop:
         return name in OWN_NAMES
 
     def definitions(self, prompt: str) -> list[dict]:
-        # No additional tool definitions in ordinary chat.
-        return list(TOOL_SCHEMAS) if TRIGGER.search(prompt) else []
+        # Explicit tool-building intent exposes proposal + preview tools. In
+        # ordinary chat, expose only list/run when a HUMAN-approved recipe is
+        # relevant, so a useful custom tool can be reused without typing "tool".
+        if TRIGGER.search(prompt):
+            return list(TOOL_SCHEMAS)
+        stop = {"with", "this", "that", "from", "have", "what", "would",
+                "about", "make", "your", "mine", "project", "research",
+                "notes", "using", "please", "explain"}
+        terms = set(re.findall(r"[a-z0-9]{4,}", prompt.lower())) - stop
+        if not terms:
+            return []
+        approved = self.db.execute(
+            "SELECT name,description FROM recipes WHERE project=? AND status='approved' LIMIT 15",
+            (self.project,)).fetchall()
+        for row in approved:
+            source_terms = set(re.findall(r"[a-z0-9]{4,}", (
+                row["name"] + " " + row["description"]).lower())) - stop
+            if terms & source_terms:
+                return [TOOL_SCHEMAS[0], TOOL_SCHEMAS[3]]
+        return []
 
     def status(self) -> dict:
         counts = dict(self.db.execute(
@@ -174,7 +192,7 @@ class ToolWorkshop:
         if source == "knowledge":
             if self.knowledge is None:
                 raise RuntimeError("Approved project knowledge is not configured")
-            results = self.knowledge.find(self.project, query, reviewed_only=True, limit=limit)
+            results = self.knowledge.find_ranked(self.project, query, reviewed_only=True, limit=limit)
             return {"records": [{"note_id": n.id, "text": n.text[:500], "source": n.source,
                                  "revision": n.revision, "reviewed": True} for n in results],
                     "source": "reviewed-project-knowledge"}
