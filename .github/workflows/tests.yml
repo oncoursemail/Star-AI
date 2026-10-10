@@ -75,7 +75,7 @@ jobs:
           test -s react-qa/chat-desktop.png
       - name: Upload actual React browser renders
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-v08-React-Visual-QA
           path: react-qa/*.png
