@@ -55,6 +55,7 @@ const fadeUp = {initial:{opacity:0,y:18},whileInView:{opacity:1,y:0},viewport:{o
 
 export function Landing(){
  const [menu,setMenu]=useState(false)
+ const immediateEntrance=new URLSearchParams(window.location.search).has('visualqa') || window.matchMedia('(prefers-reduced-motion: reduce)').matches
  const [tour,setTour]=useState<TourId>('chat')
  const [track,setTrack]=useState<TrackId>('design')
  const onTourKeys=(event:ReactKeyboardEvent<HTMLDivElement>)=>{
@@ -95,7 +96,7 @@ export function Landing(){
   <main>
    <section className="sv-hero" aria-labelledby="sv-title">
     <div className="sv-hero-grid" aria-hidden="true"/>
-    <motion.div className="sv-hero-copy" initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
+    <motion.div className="sv-hero-copy" initial={immediateEntrance?false:{opacity:0,y:20}} animate={{opacity:1,y:0}}
       transition={{duration:.55,ease:'easeOut'}}>
      <span className="sv-overline"><span className="sv-overline-mark">✦</span> INTRODUCING STAR INTELLIGENCE <span className="sv-overline-line"/></span>
      <h1 id="sv-title">Make space for <span>your next big idea.</span></h1>
@@ -110,7 +111,7 @@ export function Landing(){
        <span><Monitor size={14}/> Windows 11</span>
      </div>
     </motion.div>
-    <motion.div className="sv-hero-visual" initial={{opacity:0,x:22}} animate={{opacity:1,x:0}}
+    <motion.div className="sv-hero-visual" initial={immediateEntrance?false:{opacity:0,x:22}} animate={{opacity:1,x:0}}
       transition={{duration:.65,delay:.12,ease:'easeOut'}}>
       <div className="sv-visual-caption"><span>FIG 01.</span> AN INTELLIGENCE WORKSPACE</div>
       <div className="sv-concept-window">
