@@ -202,6 +202,13 @@ describe('connection status and failures are stated truthfully', () => {
     expect(classifyFailure('TimeoutError: STAR exceeded its 85s task budget. Try Fast mode, a smaller prompt, or a hosted provider.').kind).toBe('slow')
     expect(classifyFailure('Your selected model provider denied access. Check its API key, model access and account limits in Settings.').kind).toBe('access')
     expect(classifyFailure('The AI provider reached its rate limit. Free tiers are limited; try again when your quota resets, or switch provider in Settings.').kind).toBe('limit')
+    // STAR Server wording from star/model_health.py SERVER_FAILURES.
+    expect(classifyFailure('Cannot reach STAR Server. Check that the server is switched on, that this PC is on the same network, and that the address and port are right.').kind).toBe('unreachable')
+    expect(classifyFailure('STAR Server did not answer in time. It may be busy with another request or still loading its model. Try again, or raise the server timeout in Settings.').kind).toBe('slow')
+    expect(classifyFailure('STAR Server refused the API key (401). Paste the correct server key in Settings → STAR Server.').kind).toBe('access')
+    expect(classifyFailure('STAR Server needs its API key. Paste it in Settings → STAR Server and save it.').kind).toBe('setup')
+    expect(classifyFailure('STAR Server is busy (429). Wait for the current request to finish, then try again.').kind).toBe('limit')
+    expect(classifyFailure('STAR Server is reachable but still loading its model (503). Wait a minute, then test again.').title).toBe('The model is still loading')
     const team = classifyFailure('RuntimeError: STAR Teams could not finish: critic:failed, synthesis:blocked')
     expect(team.title).toBe("The team couldn't finish")
     expect(team.message).toBe('STAR Teams could not finish: critic:failed, synthesis:blocked') // the exception class is not shown to people

@@ -722,6 +722,46 @@
   padding: var(--star-5);
 }
 
+/* Provider, server and connector panels (IntegrationPanels) take the same tokens as every other page. */
+.shell .integrated-panel {
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  color: var(--star-body);
+}
+.shell .integrated-heading > svg {
+  color: var(--star-gold-soft);
+}
+.shell .integrated-heading strong,
+.shell .integrated-connector strong,
+.shell .integrated-notes > strong {
+  color: var(--star-text);
+}
+.shell .integrated-heading span,
+.shell .integrated-help,
+.shell .integrated-actions,
+.shell .integrated-connector small,
+.shell .integrated-note {
+  color: var(--star-muted);
+}
+.shell .integrated-field {
+  color: var(--star-body);
+}
+.shell .integrated-field :is(select, input, textarea) {
+  border-color: var(--star-stroke);
+  background: var(--star-bg);
+  color: var(--star-text);
+}
+.shell :is(.integrated-connectors, .integrated-connector, .integrated-notes, .integrated-note) {
+  border-color: var(--star-stroke-soft);
+}
+.shell .integrated-error {
+  color: var(--star-danger);
+}
+.shell :is(.integrated-confirm, .integrated-connected, .integrated-connector small.integrated-connected) {
+  color: var(--star-success);
+}
+
 /* Model & connection: one status card, facts in a row, one primary action. */
 .brain-page {
   max-width: 800px;

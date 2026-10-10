@@ -350,7 +350,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      if(!live)return
      const chosen:Fixture|undefined=module.FIXTURES[fixture]
      if(!chosen)return
-     setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',brain_running:!!chosen.brainRunning,settings:{...d.settings,model:chosen.model||'qwen3.5-4b-q4_k_m'}}))
+     setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
+     setDraft(d=>({...d,...module.fixtureSettings,...chosen.settings}))
      setMessages(chosen.messages)
      if(chosen.finishedRun)setLastRun({chat:'fx-1',run:chosen.finishedRun})
      if(chosen.script)play(chosen.script,chosen.messages)

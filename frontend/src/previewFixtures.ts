@@ -9,19 +9,31 @@
  *  same activity reducer as real backend events. Nothing here is a claim that
  *  a model produced this text.
  */
-import type {ChatMessage, ChatThread} from './types'
+import type {AppSettings, ChatMessage, ChatThread, RetryState, ServerStatus} from './types'
 import type {ActivityRun} from './activity'
 
 export type FixtureEvent = {wait: number; kind: 'progress' | 'result' | 'error'; data: unknown}
 export type FixtureScript = {action: 'sendMessage' | 'runTeam'; mode?: 'fast' | 'auto' | 'agent'; prompt: string; events: FixtureEvent[]}
 export type Fixture = {
   messages: ChatMessage[]
-  model?: string
-  brainRunning?: boolean
+  /** Overrides for the preview's settings (the default is a STAR Server on the local network). */
+  settings?: Partial<AppSettings>
+  server?: ServerStatus
+  retry?: RetryState
   script?: FixtureScript
   /** A finished run shown above the last answer (for static timeline review). */
   finishedRun?: ActivityRun
 }
+
+/** The preview shows the owner's real topology: the model runs on a STAR Server, not on this PC. */
+export const fixtureSettings: Partial<AppSettings> = {
+  provider: 'star_server',
+  model: 'star-main',
+  server_endpoint: 'http://192.168.1.20:8080/v1',
+  server_parallel: 2,
+}
+export const fixtureServer: ServerStatus = {selected: true, configured: true, key_present: true, model_selected: true, ok: true, code: 'ok', checked_at: ''}
+const unreachable = 'Cannot reach STAR Server. Check that the server is switched on, that this PC is on the same network, and that the address and port are right.'
 
 const day = 86_400_000
 const at = (offset: number) => new Date(Date.now() - offset).toISOString()
@@ -141,12 +153,10 @@ None of this was tested in Studio; it is analysis of the context you have approv
 export const FIXTURES: Record<string, Fixture> = {
   /** Finished conversation with a long Markdown answer. */
   chat: {
-    brainRunning: true,
     messages: [...history, {id: 'saved-2', role: 'user', text: inventoryQuestion}, {id: 'saved-3', role: 'assistant', text: inventoryAnswer}],
   },
   /** Plain answer arriving as coalesced text deltas. */
   streaming: {
-    brainRunning: true,
     messages: history,
     script: {
       action: 'sendMessage',
@@ -164,7 +174,6 @@ export const FIXTURES: Record<string, Fixture> = {
   },
   /** Agent mode: model turns, authorized tools, read-only specialists, one blocked request. */
   agent: {
-    brainRunning: true,
     messages: history,
     script: {
       action: 'sendMessage',
@@ -198,7 +207,6 @@ export const FIXTURES: Record<string, Fixture> = {
   },
   /** STAR Teams: the fixed four-stage plan, two stages in parallel. */
   team: {
-    brainRunning: true,
     messages: history,
     script: {
       action: 'runTeam',
@@ -224,7 +232,6 @@ export const FIXTURES: Record<string, Fixture> = {
   },
   /** A stage fails, so the stage that depends on it is blocked and the run ends in an error. */
   teamfail: {
-    brainRunning: true,
     messages: history,
     script: {
       action: 'runTeam',
@@ -249,7 +256,6 @@ export const FIXTURES: Record<string, Fixture> = {
   },
   /** The model cannot be reached: recovery inline, typed text kept, status turns to "Not reachable". */
   error: {
-    brainRunning: false,
     messages: history,
     script: {
       action: 'sendMessage',
@@ -258,13 +264,12 @@ export const FIXTURES: Record<string, Fixture> = {
       events: [
         progress(250, {type: 'route', profile: 'roblox'}, 'STAR · Roblox engineering'),
         progress(60, {type: 'turn', step: 1, max_steps: 1}, 'Thinking'),
-        {wait: 900, kind: 'error', data: 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'},
+        {wait: 900, kind: 'error', data: unreachable},
       ],
     },
   },
   /** The user pressed Stop part-way through an answer. */
   stopped: {
-    brainRunning: true,
     messages: history,
     script: {
       action: 'sendMessage',
@@ -278,9 +283,22 @@ export const FIXTURES: Record<string, Fixture> = {
       ],
     },
   },
+  /** Reopened after a restart: an older failed attempt is history, the newest unanswered turn offers Retry. */
+  restart: {
+    messages: [
+      ...history,
+      {id: 'saved-2', role: 'user', text: 'Add a weight bar under the grid.'},
+      {id: 'saved-3', role: 'event', text: 'STAR Server did not answer in time. It may be busy with another request or still loading its model. Try again, or raise the server timeout in Settings.', status: 'failed'},
+      {id: 'saved-4', role: 'user', text: 'Add a weight bar under the grid.'},
+      {id: 'saved-5', role: 'assistant', text: 'Put the weight bar inside `Detail`, under the item actions, so it is visible only when an item is selected. Use a `Frame` with a child `Frame` whose `Size.X.Scale` is the carried weight divided by the limit.'},
+      {id: 'saved-6', role: 'user', text: inventoryQuestion},
+      {id: 'saved-7', role: 'event', text: unreachable, status: 'failed'},
+    ],
+    server: {...fixtureServer, ok: false, code: 'unreachable'},
+    retry: {status: 'failed', detail: unreachable, prompt: inventoryQuestion, message_id: 7, created: ''},
+  },
   /** Every step state side by side, including "waiting for approval", which no backend event produces yet. */
   states: {
-    brainRunning: true,
     messages: [...history, {id: 'saved-2', role: 'user', text: 'Show every activity state.'}],
     finishedRun: {
       id: 'fx-states',

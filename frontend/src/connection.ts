@@ -113,14 +113,20 @@ export function classifyFailure(raw: string): Failure {
   if (/cannot reach|could not connect|connection (error|refused)|not respond(ing)?\b(?!.*in time)|is offline|unavailable/.test(text)) {
     return {kind: 'unreachable', title: "Can't reach the model", message}
   }
-  if (/denied access|api key|needs an api key|401|403/.test(text)) {
-    return {kind: 'access', title: 'The provider refused the request', message}
+  if (/needs (its|an) api key/.test(text)) {
+    return {kind: 'setup', title: 'A key is needed first', message}
   }
-  if (/rate limit|quota|429/.test(text)) {
-    return {kind: 'limit', title: 'The provider is rate-limiting requests', message}
+  if (/denied access|refused the api key|api key|401|403/.test(text)) {
+    return {kind: 'access', title: 'The key or access was refused', message}
   }
-  if (/in time|time limit|task budget|timed out|timeout/.test(text)) {
+  if (/rate limit|quota|429|is busy/.test(text)) {
+    return {kind: 'limit', title: 'The model is busy right now', message}
+  }
+  if (/in time|time limit|task budget|timed out/.test(text)) {
     return {kind: 'slow', title: 'That took too long', message}
+  }
+  if (/still loading|503/.test(text)) {
+    return {kind: 'slow', title: 'The model is still loading', message}
   }
   if (/select a model|choose a|workflow|not available on this provider/.test(text)) {
     return {kind: 'setup', title: 'Something needs setting up first', message}
