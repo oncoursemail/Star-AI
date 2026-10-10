@@ -1,5 +1,6 @@
 """A working local vision + tool-calling agent loop with bounded autonomy."""
 import json
+from time import monotonic
 from pathlib import Path
 from .media import image_part, mcp_images
 from .policy import allowed_registry, enforce
@@ -67,7 +68,7 @@ def text_size(messages: list[dict]) -> int:
 async def execute(*, client, model: str, prompt: str, image_paths: list[Path], studio=None,
                   discovered=None, studio_id="", may_edit=False, project_memory="", max_calls=12,
                   context_chars=25000, checkpoint=None, on_event=None, allow_luau=False,
-                  workspace=None, workspace_edit=False):
+                  workspace=None, workspace_edit=False, stream_tokens=False):
     if not prompt.strip():
         raise ValueError("Prompt is empty")
     if len(image_paths) > 4:
@@ -100,7 +101,50 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         # Some local model servers do not accept null tools/tool_choice values.
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         validate_model_roles(messages)
-        response = await client.chat.completions.create(**kwargs)
+        response = None
+        if stream_tokens and not definitions:
+            # Stream only plain chat. With tool definitions we need the complete
+            # structured tool-call message to preserve protocol and call IDs.
+            try:
+                stream = await client.chat.completions.create(**kwargs, stream=True)
+            except Exception as exc:
+                # Rejection of the *stream mode* is safe to retry without streaming:
+                # the server did not accept the request, so no output was emitted.
+                if getattr(exc, 'status_code', None) not in (400, 422, 501):
+                    raise
+                stream_tokens = False
+            else:
+                if hasattr(stream, '__aiter__'):
+                    chunks = []
+                    pending = ''
+                    last_flush = monotonic()
+                    async for chunk in stream:
+                        if not chunk.choices:
+                            continue
+                        delta = chunk.choices[0].delta
+                        text = getattr(delta, 'content', None)
+                        # Do not surface internal reasoning_content as answer text.
+                        if not isinstance(text, str) or not text:
+                            continue
+                        chunks.append(text)
+                        pending += text
+                        if len(pending) >= 90 or monotonic() - last_flush >= .075:
+                            event({'event': 'assistant_delta', 'text': pending})
+                            pending = ''
+                            last_flush = monotonic()
+                    if pending:
+                        event({'event': 'assistant_delta', 'text': pending})
+                    answer = ''.join(chunks)
+                    if not answer.strip():
+                        raise RuntimeError('Local model streamed no visible answer')
+                    messages.append({'role': 'assistant', 'content': answer})
+                    event({'event': 'finished', 'model_calls': step + 1, 'tool_calls': calls_count})
+                    return answer, messages, archive
+                # Defensive compatibility: an adapter may ignore stream=True
+                # and return an ordinary ChatCompletion rather than AsyncStream.
+                response = stream
+        if response is None:
+            response = await client.chat.completions.create(**kwargs)
         choice = response.choices[0]
         msg = choice.message
         if msg.tool_calls:
