@@ -58,6 +58,7 @@ class KnowledgeStore:
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA foreign_keys=ON")
+        self.db.execute("PRAGMA busy_timeout=10000")
         self.db.execute("""CREATE TABLE IF NOT EXISTS notes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL,
@@ -74,6 +75,36 @@ class KnowledgeStore:
             PRIMARY KEY(project,digest,origin),
             FOREIGN KEY(digest) REFERENCES artifacts(digest)
         )""")
+        # FTS5 is optional on minimal system Python builds. The fallback is
+        # parameterized LIKE; original notes are never dropped or migrated away.
+        self._fts = False
+        try:
+            self.db.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts
+                USING fts5(text, source, content='notes', content_rowid='id', tokenize='unicode61')""")
+            self.db.executescript("""
+                CREATE TRIGGER IF NOT EXISTS note_fts_add AFTER INSERT ON notes BEGIN
+                  INSERT INTO notes_fts(rowid,text,source) VALUES(new.id,new.text,new.source);
+                END;
+                CREATE TRIGGER IF NOT EXISTS note_fts_delete AFTER DELETE ON notes BEGIN
+                  INSERT INTO notes_fts(notes_fts,rowid,text,source)
+                  VALUES('delete',old.id,old.text,old.source);
+                END;
+                CREATE TRIGGER IF NOT EXISTS note_fts_update AFTER UPDATE ON notes BEGIN
+                  INSERT INTO notes_fts(notes_fts,rowid,text,source)
+                  VALUES('delete',old.id,old.text,old.source);
+                  INSERT INTO notes_fts(rowid,text,source) VALUES(new.id,new.text,new.source);
+                END;
+            """)
+            self.db.execute("CREATE TABLE IF NOT EXISTS index_meta(name TEXT PRIMARY KEY, value TEXT)")
+            if not self.db.execute(
+                "SELECT 1 FROM index_meta WHERE name='fts5_initialized'"
+            ).fetchone():
+                # One-time safe backfill for old installations.
+                self.db.execute("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
+                self.db.execute("INSERT INTO index_meta(name,value) VALUES('fts5_initialized','1')")
+            self._fts = True
+        except sqlite3.OperationalError:
+            self._fts = False
         self.db.commit()
 
     def add_note(self, *, project: str, kind: str, text: str, source: str, revision: str = "unknown") -> int:
@@ -108,10 +139,41 @@ class KnowledgeStore:
         self.db.commit()
 
     def find(self, project: str, query: str = "", *, reviewed_only: bool = True, limit: int = 12) -> list[Note]:
+        """Retrieve relevant evidence first, not just the most recent matching note.
+
+        Uses SQLite FTS5 BM25 with a reviewed/project filter. A robust
+        parameterized LIKE fallback supports older SQLite builds without FTS5.
+        Never promotes unreviewed notes to trusted context.
+        """
         project = _project(project)
         if not 1 <= limit <= 50:
             raise ValueError("limit must be 1..50")
-        tokens = re.findall(r"[A-Za-z0-9_]{2,}", query.lower())[:8]
+        if not isinstance(query, str) or len(query) > 4000:
+            raise ValueError("Search query must be text up to 4,000 characters")
+        tokens = re.findall(r"[A-Za-z0-9_]{2,}", query.lower())[:12]
+        if tokens and self._fts:
+            # Quoted, regex-validated terms cannot inject FTS5 operators.
+            match_query = " OR ".join('"' + token + '"' for token in tokens)
+            sql = """SELECT notes.* FROM notes_fts
+                JOIN notes ON notes.id=notes_fts.rowid
+                WHERE notes_fts MATCH ? AND notes.project=?"""
+            values: list[object] = [match_query, project]
+            if reviewed_only:
+                sql += " AND notes.reviewed=1"
+            sql += " ORDER BY notes_fts.rank ASC, notes.id DESC LIMIT ?"
+            values.append(limit)
+            try:
+                rows = self.db.execute(sql, values).fetchall()
+            except sqlite3.OperationalError:
+                rows = self._find_like(project, tokens, reviewed_only, limit)
+        else:
+            rows = self._find_like(project, tokens, reviewed_only, limit)
+        return [Note(id=int(row["id"]), project=row["project"], kind=row["kind"],
+                     text=row["text"], source=row["source"], revision=row["revision"],
+                     reviewed=bool(row["reviewed"]), created=row["created"])
+                for row in rows]
+
+    def _find_like(self, project: str, tokens: list[str], reviewed_only: bool, limit: int):
         sql = "SELECT * FROM notes WHERE project=?"
         params: list[object] = [project]
         if reviewed_only:
@@ -121,10 +183,7 @@ class KnowledgeStore:
             params.extend("%" + t.replace("_", "\\_").replace("%", "\\%") + "%" for t in tokens)
         sql += " ORDER BY id DESC LIMIT ?"
         params.append(limit)
-        return [Note(id=int(row["id"]), project=row["project"], kind=row["kind"],
-                     text=row["text"], source=row["source"], revision=row["revision"],
-                     reviewed=bool(row["reviewed"]), created=row["created"])
-                for row in self.db.execute(sql, params)]
+        return self.db.execute(sql, params).fetchall()
 
     def ingest_artifact(self, *, project: str, path: Path, origin: str, media_type: str) -> tuple[str, Path]:
         """Store original bytes by SHA256; never treat file content as executable instructions."""
