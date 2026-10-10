@@ -14,7 +14,7 @@ from time import perf_counter
 
 from .desktop_core import Settings
 from .providers import (STAR_SERVER, call_limits, get_api_key, open_client, provider_kind,
-                        remember_server_limits, validate_lan_endpoint)
+                        remember_server_limits, uses_star_server, validate_lan_endpoint)
 
 
 SERVER_FAILURES = {
@@ -134,11 +134,7 @@ def explain_model_failure(error: Exception, provider_kind: str | None = None) ->
 
 def missing_model_message(settings, *, teams: bool = False) -> str:
     """What to do when no model ID is saved. A server user is never sent to a download."""
-    try:
-        lan = provider_kind(settings) == 'lan'
-    except ValueError:
-        lan = False
-    if lan:
+    if uses_star_server(settings):
         return ('No STAR Server model is selected. Open Settings → STAR Server, run Test server, '
                 'and choose one of the models it lists.')
     if teams:
@@ -184,7 +180,7 @@ _LAST_SERVER_CHECK: dict = {}
 
 def note_server_result(settings, ok: bool, code: str = '') -> None:
     """Remember whether the selected server last answered (after a probe or a chat)."""
-    _LAST_SERVER_CHECK.clear()
+    # One update call with every key: a reader on another thread never sees half a record.
     _LAST_SERVER_CHECK.update({
         'target': (str(getattr(settings, 'server_endpoint', '')).rstrip('/'), str(getattr(settings, 'model', ''))),
         'ok': bool(ok), 'code': str(code)[:40],
@@ -194,20 +190,17 @@ def note_server_result(settings, ok: bool, code: str = '') -> None:
 
 def server_status(settings) -> dict:
     """Nonsecret STAR Server summary for the interface. Makes no network call."""
-    try:
-        selected = provider_kind(settings) == 'lan'
-    except ValueError:  # a hand-edited settings file must not break startup
-        selected = False
     endpoint = str(getattr(settings, 'server_endpoint', ''))
-    current = _LAST_SERVER_CHECK.get('target') == (endpoint.rstrip('/'), str(getattr(settings, 'model', '')))
+    last = dict(_LAST_SERVER_CHECK)  # snapshot: worker threads update the original
+    current = last.get('target') == (endpoint.rstrip('/'), str(getattr(settings, 'model', '')))
     return {
-        'selected': selected,
+        'selected': uses_star_server(settings),  # never raises on a hand-edited settings file
         'configured': bool(endpoint),
         'key_present': bool(get_api_key(STAR_SERVER)),
         'model_selected': bool(str(getattr(settings, 'model', '')).strip()),
-        'ok': _LAST_SERVER_CHECK['ok'] if current else None,   # None = not checked yet
-        'code': _LAST_SERVER_CHECK['code'] if current else '',
-        'checked_at': _LAST_SERVER_CHECK['checked_at'] if current else '',
+        'ok': last.get('ok') if current else None,   # None = not checked yet
+        'code': last.get('code', '') if current else '',
+        'checked_at': last.get('checked_at', '') if current else '',
     }
 
 

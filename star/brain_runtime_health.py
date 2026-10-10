@@ -19,15 +19,7 @@ import httpx
 
 from .desktop_core import Settings, query_models
 from .model_health import explain_model_failure, probe_chat_endpoint
-from .providers import provider_kind
-
-
-def _uses_server(settings) -> bool:
-    """True when the saved provider is the LAN server (an unknown id is not)."""
-    try:
-        return provider_kind(settings) == "lan"
-    except ValueError:
-        return False
+from .providers import provider_kind, uses_star_server
 
 
 def start_verified_brain(
@@ -69,7 +61,7 @@ def start_verified_brain(
                 # Build a candidate in memory. Do NOT save an unverified model,
                 # overwrite an existing cloud provider or clobber chat settings.
                 saved = Settings.load(Path(settings_file))
-                keep_server = _uses_server(saved)
+                keep_server = uses_star_server(saved)
                 # The readiness test always talks to the local engine itself,
                 # even when STAR Server is the selected provider.
                 candidate = replace(
@@ -152,7 +144,7 @@ def start_model_router(
                 updated = Settings.load(Path(settings_file))
                 updated.endpoint = probe.endpoint
                 updated.llama_server = str(engine)
-                if not _uses_server(updated):
+                if not uses_star_server(updated):
                     updated.provider = "local"
                     if updated.model not in models:
                         updated.model = (updated.fast_model if updated.fast_model in models

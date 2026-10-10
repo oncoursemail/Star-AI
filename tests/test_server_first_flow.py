@@ -447,7 +447,7 @@ def test_legacy_ui_cannot_wipe_the_server_configuration():
     assert "new=replace(self.cfg,endpoint=self.endpoint.text().strip()" in source
     assert "new=Settings(endpoint=self.endpoint.text().strip()" not in source
     # Starting the local brain there does not replace the server's model either.
-    assert "if provider_kind(self.cfg)!='lan':\n            self.cfg.model=model" in source.replace("\r\n", "\n")
+    assert "if not uses_star_server(self.cfg):\n            self.cfg.model=model" in source.replace("\r\n", "\n")
 
 
 def test_review_bundle_reports_the_server_as_a_boolean_only(monkeypatch, tmp_path):

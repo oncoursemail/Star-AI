@@ -118,6 +118,14 @@ def provider_kind(settings) -> ProviderKind:
     """`local`, `lan` or `cloud` for the selected provider. Compare this, not the id."""
     return provider_spec(getattr(settings, "provider", LOCAL)).kind
 
+def uses_star_server(settings) -> bool:
+    """True when STAR Server (LAN) is the selected provider. Never raises, even
+    for a hand-edited settings file with an unknown provider id."""
+    try:
+        return provider_kind(settings) == "lan"
+    except ValueError:
+        return False
+
 @dataclass(frozen=True)
 class CallLimits:
     request_timeout: float   # seconds without a byte before one model request is dropped

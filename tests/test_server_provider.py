@@ -79,6 +79,13 @@ def test_provider_kind_replaces_string_comparisons():
             provider_kind(SimpleNamespace(provider=unknown))
 
 
+def test_uses_star_server_never_raises():
+    assert providers.uses_star_server(SimpleNamespace(provider="star_server")) is True
+    for other in ("local", "groq", "mystery", "", None, 3):
+        assert providers.uses_star_server(SimpleNamespace(provider=other)) is False
+    assert providers.uses_star_server(SimpleNamespace()) is False
+
+
 def test_catalog_lists_server_without_any_address_or_key(monkeypatch):
     monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
     catalog = provider_catalog()

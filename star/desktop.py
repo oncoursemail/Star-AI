@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabe
     QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QProgressBar, QGraphicsOpacityEffect)
 
 from .desktop_core import Settings, app_data, Conversations, query_models, run_task, check_studio
-from .providers import provider_kind
+from .providers import uses_star_server
 from .media_features import video_frames, transcribe_audio, local_speak
 from .memory import Memory
 from .local_runtime import Runtime
@@ -594,7 +594,7 @@ class MainWindow(QMainWindow):
         self.side_brain.setText('STAR Brain · Ready')
         self.cfg.endpoint='http://127.0.0.1:8080/v1'
         # With STAR Server selected, the local brain is only a fallback: keep the server model.
-        if provider_kind(self.cfg)!='lan':
+        if not uses_star_server(self.cfg):
             self.cfg.model=model
         self.cfg.llama_server=info.executable
         self.cfg.gguf_model=info.model
