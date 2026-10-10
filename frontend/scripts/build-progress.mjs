@@ -8,7 +8,11 @@
  *   api.github.com and nowhere else, and it is never written to disk.
  * - Never fails the build: if GitHub cannot be read completely, the existing file is left as it is.
  *
- * Usage: node frontend/scripts/build-progress.mjs [--out <file>] [--check]
+ * `npm run build` calls it with --pages-only, which does nothing unless the build is the website deployment
+ * (the website-pages.yml workflow) or STAR_REFRESH_PROGRESS=1 is set. Desktop and local builds therefore make no
+ * network request and ship the committed snapshot.
+ *
+ * Usage: node frontend/scripts/build-progress.mjs [--out <file>] [--check] [--pages-only]
  */
 import {readFile,writeFile} from 'node:fs/promises'
 import {fileURLToPath,pathToFileURL} from 'node:url'
@@ -67,6 +71,11 @@ export const PICK={
  }))
 }
 
+/** True for the website deployment build, or when a refresh is asked for explicitly. */
+export function shouldRefresh(env){
+ return env.STAR_REFRESH_PROGRESS==='1'||(env.GITHUB_WORKFLOW_REF||'').includes('/.github/workflows/website-pages.yml@')
+}
+
 export function pickProgress(answers,generatedAt){
  const raw={}
  for(const part of Object.keys(ENDPOINTS))raw[part]=PICK[part](answers[part])
@@ -99,6 +108,10 @@ async function main(){
   const saved=JSON.parse(await readFile(out,'utf8'))
   if(saved.schema!==1||saved.repo!==REPO_SLUG||!isDict(saved.raw))throw new Error('progress.json is not a valid snapshot')
   console.log('progress.json is valid, generated '+saved.generatedAt)
+  return
+ }
+ if(args.includes('--pages-only')&&!shouldRefresh(process.env)){
+  console.log('progress.json: using the committed snapshot (not a website deployment build)')
   return
  }
  const token=process.env.GITHUB_TOKEN||''

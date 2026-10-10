@@ -8,6 +8,7 @@ import {
 import type {ProgressSnapshot} from './githubPublic'
 import {releaseFiles} from './siteContent'
 import * as generator from '../scripts/build-progress.mjs'
+import pkg from '../package.json'
 
 afterEach(()=>vi.unstubAllGlobals())
 
@@ -215,6 +216,14 @@ describe('the build-time snapshot',()=>{
  it('is written by a generator that reads the same endpoints as the page',()=>{
   expect(generator.ENDPOINTS).toEqual(ENDPOINTS)
   expect(generator.REPO_SLUG).toBe(REPO_SLUG)
+ })
+ it('is refreshed by the website deployment build and by nothing else',()=>{
+  // `npm run build` is what .github/workflows/website-pages.yml runs, so the existing workflow produces the snapshot.
+  expect(pkg.scripts.build.startsWith('node scripts/build-progress.mjs --pages-only && ')).toBe(true)
+  expect(generator.shouldRefresh({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/website-pages.yml@refs/heads/main'})).toBe(true)
+  expect(generator.shouldRefresh({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/windows-desktop.yml@refs/heads/main'})).toBe(false)
+  expect(generator.shouldRefresh({})).toBe(false)
+  expect(generator.shouldRefresh({STAR_REFRESH_PROGRESS:'1'})).toBe(true)
  })
  it('lets only allowlisted fields through the generator',()=>{
   const noisy={

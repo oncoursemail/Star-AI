@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/build-progress.mjs --pages-only && tsc -b && vite build",
     "typecheck": "tsc -b",
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run"
