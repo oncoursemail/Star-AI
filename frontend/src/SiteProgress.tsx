@@ -12,14 +12,15 @@ import {buildBoard,pullStage} from './githubPublic'
 import type {Board,IssueInfo,PullInfo} from './githubPublic'
 import {LINKS,formatAgo,formatDate,formatDateTime} from './siteContent'
 import type {ProgressState} from './siteHooks'
-import {delay} from './siteHooks'
+import {delay,useHydrated} from './siteHooks'
 
 const VISIBLE_ROWS=5
 const plural=(count:number,one:string,many:string)=>count+' '+(count===1?one:many)
 
-function syncMessage(progress:ProgressState):{tone:'live'|'wait'|'stale';line:string;detail:string|null}{
+function syncMessage(progress:ProgressState,localTime:boolean):{tone:'live'|'wait'|'stale';line:string;detail:string|null}{
  const {snapshot,status}=progress
- const asOf=snapshot?formatDateTime(snapshot.generatedAt):null
+ // Prerendered markup carries a plain UTC date; the visitor's own clock takes over once the page is interactive.
+ const asOf=snapshot?(localTime?formatDateTime(snapshot.generatedAt):formatDate(snapshot.generatedAt)):null
  if(!snapshot){
   return status.kind==='loading'
    ?{tone:'wait',line:'Checking GitHub…',detail:null}
@@ -39,7 +40,7 @@ function syncMessage(progress:ProgressState):{tone:'live'|'wait'|'stale';line:st
  }
 }
 
-function PullRow({pull,merged}:{pull:PullInfo;merged?:boolean}){
+function PullRow({pull,merged,relative}:{pull:PullInfo;merged?:boolean;relative:boolean}){
  const stage=pullStage(pull)
  return <li>
   <a className="sw-row" href={pull.url} target="_blank" rel="noopener noreferrer">
@@ -47,7 +48,7 @@ function PullRow({pull,merged}:{pull:PullInfo;merged?:boolean}){
    <span className="sw-row-title">{pull.title}</span>
    <span className="sw-row-meta">
     {!merged&&<span className={'sw-chip sw-chip-'+stage}>{stage==='draft'?'Draft':'In review'}</span>}
-    {merged?'Merged '+formatDate(pull.mergedAt):'Updated '+formatAgo(pull.updatedAt)}
+    {merged?'Merged '+formatDate(pull.mergedAt):'Updated '+(relative?formatAgo(pull.updatedAt):formatDate(pull.updatedAt))}
    </span>
   </a>
  </li>
@@ -110,7 +111,8 @@ function ReleaseRail({board}:{board:Board}){
 
 export function SiteProgress({progress}:{progress:ProgressState}){
  const board=useMemo(()=>buildBoard(progress.snapshot),[progress.snapshot])
- const sync=syncMessage(progress)
+ const hydrated=useHydrated()
+ const sync=syncMessage(progress,hydrated)
  const snapshot=progress.snapshot
  const loading=progress.status.kind==='loading'
  const openCount=board.tasks.length+board.ideas.length
@@ -141,14 +143,14 @@ export function SiteProgress({progress}:{progress:ProgressState}){
      <Lane id="sw-lane-active" title="In progress" count={board.active.length+board.activeMaintenance} capped={snapshot.pullsCapped}
       unavailable={!snapshot.pulls} empty="No open pull requests right now."
       hint="Open pull requests. A draft is unfinished work, not a feature you can download."
-      rows={[...board.active.map(pull=><PullRow key={pull.number} pull={pull}/>),
+      rows={[...board.active.map(pull=><PullRow key={pull.number} pull={pull} relative={hydrated}/>),
        ...(board.activeMaintenance?[<li key="bots" className="sw-row-plain">+ {plural(board.activeMaintenance,'dependency update','dependency updates')} open</li>]:[])]}/>
 
      <Lane id="sw-lane-merged" title="Merged, not released" count={board.unreleased.length+board.unreleasedMaintenance}
       unavailable={!snapshot.pulls||!snapshot.releases}
       empty={'Everything merged so far is in '+(board.latest?.tag||'a release')+'.'}
       hint={board.latest?'In the source on main since '+board.latest.tag+'. It reaches you with the next release.':'Merged work that no release contains yet.'}
-      rows={[...board.unreleased.map(pull=><PullRow key={pull.number} pull={pull} merged/>),
+      rows={[...board.unreleased.map(pull=><PullRow key={pull.number} pull={pull} merged relative={hydrated}/>),
        ...(board.unreleasedMaintenance?[<li key="bots" className="sw-row-plain">+ {plural(board.unreleasedMaintenance,'dependency update','dependency updates')}</li>]:[])]}/>
 
      <Lane id="sw-lane-next" title="Tasks and ideas" count={openCount} capped={snapshot.issuesCapped}

@@ -2,7 +2,7 @@
  * The public STAR website. It never talks to the native Qt bridge and never reads local data:
  * everything on the page is editorial content, captures of the interface, or public GitHub data.
  */
-import {useEffect,useMemo,useRef,useState} from 'react'
+import {Suspense,useEffect,useMemo,useRef,useState} from 'react'
 import {ArrowDown,ArrowUpRight,Github,Menu,X} from 'lucide-react'
 import {StarConstruction,StarLockup,StarMark} from './SiteBrand'
 import {SiteShowcase} from './SiteShowcase'
@@ -32,7 +32,9 @@ export function Landing(){
  const files=useMemo(()=>releaseFiles(latest),[latest])
  const header=useHeaderState(menu)
  const active=useActiveSection(sectionIds)
- const still=useMemo(staticMode,[])
+ // `?visualqa` freezes motion for screenshots. Read after mount so prerendered markup matches the first render.
+ const [still,setStill]=useState(false)
+ useEffect(()=>{setStill(staticMode())},[])
  useReveal(root)
 
  useEffect(()=>{
@@ -99,11 +101,12 @@ export function Landing(){
     </div>
    </section>
 
-   <SiteShowcase latest={latest}/>
-   <SiteChapters latest={latest} setupSize={files.setup?.size??null}/>
-   <SiteProgress progress={progress}/>
-   <SiteLimits/>
-   <SiteDownload latest={latest} files={files} status={progress.status} snapshotAt={progress.snapshot?.generatedAt??null}/>
+   {/* Each boundary hydrates as its own task, so the prerendered page never blocks input for long. */}
+   <Suspense><SiteShowcase latest={latest}/></Suspense>
+   <Suspense><SiteChapters latest={latest} setupSize={files.setup?.size??null}/></Suspense>
+   <Suspense><SiteProgress progress={progress}/></Suspense>
+   <Suspense><SiteLimits/></Suspense>
+   <Suspense><SiteDownload latest={latest} files={files} status={progress.status} snapshotAt={progress.snapshot?.generatedAt??null}/></Suspense>
   </main>
 
   <footer className="sw-footer">

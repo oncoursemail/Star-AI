@@ -9,6 +9,10 @@ import type {ProgressSnapshot} from './githubPublic'
 import {releaseFiles} from './siteContent'
 import * as generator from '../scripts/build-progress.mjs'
 import pkg from '../package.json'
+import {createElement} from 'react'
+import {renderToString} from 'react-dom/server'
+import {Landing} from './Landing'
+import * as prerender from '../scripts/prerender-site.mjs'
 
 afterEach(()=>vi.unstubAllGlobals())
 
@@ -220,6 +224,7 @@ describe('the build-time snapshot',()=>{
  it('is refreshed by the website deployment build and by nothing else',()=>{
   // `npm run build` is what .github/workflows/website-pages.yml runs, so the existing workflow produces the snapshot.
   expect(pkg.scripts.build.startsWith('node scripts/build-progress.mjs --pages-only && ')).toBe(true)
+  expect(pkg.scripts.build.endsWith(' && node scripts/prerender-site.mjs --pages-only')).toBe(true)
   expect(generator.shouldRefresh({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/website-pages.yml@refs/heads/main'})).toBe(true)
   expect(generator.shouldRefresh({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/windows-desktop.yml@refs/heads/main'})).toBe(false)
   expect(generator.shouldRefresh({})).toBe(false)
@@ -240,6 +245,46 @@ describe('the build-time snapshot',()=>{
   expect(parsed?.pulls?.[0]).toMatchObject({number:39,draft:true})
   expect(parsed?.milestones?.[0]).toMatchObject({title:'v1',open:2,closed:1})
   expect(parsed?.commits?.[0].title).toBe('Title')
+ })
+})
+
+describe('prerendering',()=>{
+ // Vitest runs in Node here, so this is the same no-browser render the website build performs.
+ const markup=renderToString(createElement(Landing))
+ it('renders the whole page without a browser',()=>{
+  expect(markup.startsWith('<div class="sw')).toBe(true)
+  expect(markup).toContain('Make the things you')
+  expect(markup).toContain('id="download"')
+  expect(markup).toContain('id="progress"')
+  expect(markup).not.toMatch(/undefined|NaN|\[object Object\]/)
+ })
+ it('offers the published release, not the source version, in the static markup',()=>{
+  const snapshot=parseStoredProgress(committed as unknown,'build')
+  const setup=releaseFiles(latestStable(snapshot)).setup
+  expect(setup).not.toBeNull()
+  expect(markup).toContain('href="'+setup!.url+'"')
+  expect(markup).not.toContain('STAR-Setup-v'+pkg.version+'.exe')
+ })
+ it('contains nothing that depends on the visitor clock or time zone',()=>{
+  expect(markup).not.toMatch(/\d+ (min|hours?|days?) ago|just now/)
+  expect(markup).not.toMatch(/\d{1,2}:\d{2} (AM|PM)/)
+ })
+ it('labels every open draft as a draft in the static markup too',()=>{
+  const drafts=(parseStoredProgress(committed as unknown,'build')?.pulls||[]).filter(pull=>pull.state==='open'&&pull.draft&&!pull.bot)
+  if(drafts.length)expect(markup).toContain('sw-chip-draft')
+  expect(markup).toContain('A draft is unfinished work')
+ })
+ it('only touches a built document with an empty root',()=>{
+  const page='<html><body><div id="root"></div></body></html>'
+  expect(prerender.injectMarkup(page,'<div class="sw">x</div>')).toBe('<html><body><div id="root"><div class="sw">x</div></div></body></html>')
+  expect(prerender.injectMarkup(page,'<p>not the page</p>')).toBeNull()
+  expect(prerender.injectMarkup('<html><body><div id="root">already</div></body></html>','<div class="sw">x</div>')).toBeNull()
+  expect(prerender.injectMarkup(page,'<div class="sw">$1 $& kept literally</div>')).toContain('$1 $& kept literally')
+ })
+ it('runs for the website deployment and not for desktop builds',()=>{
+  expect(prerender.isSiteBuild({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/website-pages.yml@refs/heads/main'})).toBe(true)
+  expect(prerender.isSiteBuild({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/windows-desktop.yml@refs/tags/v0.9.0'})).toBe(false)
+  expect(prerender.isSiteBuild({})).toBe(false)
  })
 })
 

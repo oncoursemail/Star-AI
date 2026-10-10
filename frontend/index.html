@@ -11,6 +11,10 @@
     <meta property="og:type" content="website" />
     <title>STAR Intelligence: a local-first AI workspace for Windows</title>
     <link rel="icon" type="image/svg+xml" href="./star-mark.svg" />
+    <!-- The website build prerenders the landing page into #root. The desktop shell and the read-only preview
+         load this same file with ?desktop=1 or ?preview=1 and must never show that markup, not even for a frame. -->
+    <script>if(/[?&](desktop|preview)(=|&|$)/.test(location.search))document.documentElement.setAttribute('data-star-app','')</script>
+    <style>html{background:#090B0E}[data-star-app] #root>.sw{display:none}</style>
   </head>
   <body>
     <div id="root"></div>

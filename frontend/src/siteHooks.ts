@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useRef,useState} from 'react'
+import {startTransition,useCallback,useEffect,useRef,useState,useSyncExternalStore} from 'react'
 import type {CSSProperties} from 'react'
 import buildSnapshot from './progress.json'
 import {
@@ -26,17 +26,33 @@ export const builtSnapshot:ProgressSnapshot|null=parseStoredProgress(buildSnapsh
 
 const MIN_MANUAL_GAP_MS=15_000
 
+const noSubscription=()=>()=>undefined
+/**
+ * False while React is hydrating prerendered HTML, true afterwards (and always true without prerendering).
+ * Anything that depends on the visitor's clock or time zone waits for it, so server and browser markup agree.
+ */
+export const useHydrated=()=>useSyncExternalStore(noSubscription,()=>true,()=>false)
+
 export function useProgress():ProgressState{
- const [snapshot,setSnapshot]=useState<ProgressSnapshot|null>(()=>newest(builtSnapshot,readCachedProgress()))
- const [status,setStatus]=useState<ProgressStatus>({kind:'snapshot'})
- const snapshotRef=useRef(snapshot)
+ // The first render always uses the build-time snapshot, which is also what the prerendered HTML contains.
+ const [snapshot,setSnapshotNow]=useState<ProgressSnapshot|null>(builtSnapshot)
+ const [status,setStatusNow]=useState<ProgressStatus>({kind:'snapshot'})
+ // Transitions let sections that are still hydrating finish first instead of being re-rendered from scratch.
+ const snapshotRef=useRef<ProgressSnapshot|null>(builtSnapshot)
+ const setSnapshot=useCallback((value:ProgressSnapshot|null)=>{
+  snapshotRef.current=value
+  startTransition(()=>setSnapshotNow(value))
+ },[])
+ const setStatus=useCallback((value:ProgressStatus)=>startTransition(()=>setStatusNow(value)),[])
  const busy=useRef(false)
  const lastAttempt=useRef(0)
- snapshotRef.current=snapshot
 
  const load=useCallback((manual:boolean)=>{
   const now=Date.now()
   if(busy.current)return
+  // A copy this browser read more recently than the site was built replaces the build-time snapshot.
+  const cached=readCachedProgress()
+  if(cached&&newest(snapshotRef.current,cached)===cached)setSnapshot(cached)
   const retryAt=readRetryAt(now)
   if(retryAt){setStatus({kind:'limited',retryAt});return}
   if(!manual&&isFresh(snapshotRef.current,now)){setStatus({kind:'live',partial:false});return}
@@ -55,7 +71,7 @@ export function useProgress():ProgressState{
    if(error instanceof RateLimitError){writeRetryAt(error.retryAt);setStatus({kind:'limited',retryAt:error.retryAt})}
    else setStatus({kind:'failed'})
   }).finally(()=>{busy.current=false})
- },[])
+ },[setSnapshot,setStatus])
 
  useEffect(()=>{
   if(staticMode()){return}
