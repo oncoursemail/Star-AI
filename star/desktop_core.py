@@ -34,7 +34,7 @@ def app_data() -> Path:
 
 @dataclass
 class Settings:
-    endpoint: str = 'http://127.0.0.1:1234/v1'
+    endpoint: str = 'http://127.0.0.1:8080/v1'
     provider: str = 'local'
     model: str = ''
     fast_model: str = ''
