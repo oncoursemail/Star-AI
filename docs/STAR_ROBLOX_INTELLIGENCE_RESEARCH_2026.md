@@ -12,8 +12,9 @@ STAR now has a read-only, task-scoped Roblox research module in star/roblox_rese
 | star_roblox_game_image | Fetch a selected official Roblox CDN icon/thumbnail as bounded JPEG pixels and forward into a vision-capable STAR chat | Marketing art is not actual gameplay; requires a vision-capable local model |
 | star_roblox_game_report | Officially hosted public game data: creator, description, creation/update, playing snapshot, cumulative visits, favorites, votes, image URLs, genre hypothesis | Auxiliary errors are surfaced; genre is not proven gameplay |
 | star_roblox_compare_games | Same public metrics for 2–4 universes | Snapshot data, not DAU, revenue or retention |
-| star_roblox_docs | Search a curated official Creator Hub/Luau link index | Not a complete documentation crawler |
-| star_roblox_forum_search / star_roblox_forum_latest | Source-linked community discussions and topics | Anti-bot/rate limits possible; not every topic is official |
+| star_roblox_docs | Search a curated official Creator Hub/Luau link index | Discover official source links |
+| star_roblox_docs_read | Fetch actual bounded Markdown/YAML engine documentation from Roblox/creator-docs main | Exact relative path only under content/en-us; untrusted source text |
+| star_roblox_forum_search / star_roblox_forum_latest / star_roblox_forum_topic | Source-linked discussions, listings and sanitized, bounded text excerpts of actual posts | Anti-bot/rate limits possible; not every topic is official |
 | star_roblox_youtube_search | Video search metadata and source links with optional API key | Without API key, returns a search link and no fabricated results |
 | star_roblox_youtube_video | YouTube oEmbed or Data API metadata, thumbnail and available stats | Does not watch footage or obtain arbitrary transcripts |
 | star_roblox_cloud_universe | Owner-authorized read of universe metadata | Requires locally configured least-privilege key; no writes |
