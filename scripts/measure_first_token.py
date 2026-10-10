@@ -90,6 +90,9 @@ class Server:
         answer = self.http.get(self.root + "/slots", params={"model": self.model})
         return answer.json() if answer.status_code == 200 else []
 
+    def slot_tasks(self) -> dict:
+        return {slot.get("id"): slot.get("id_task") for slot in self.slots()}
+
     def chat(self, messages: list[dict], *, max_tokens: int, extras: dict | None = None,
              stop_after: float | None = None) -> dict:
         """One streamed completion. Returns the text and what the server measured."""
@@ -137,9 +140,10 @@ class Server:
 
 
 def show(label: str, row: dict) -> None:
+    slot = f"  slot {row['slot_used']} (asked {row['slot_asked']})" if "slot_used" in row else ""
     print(f"  {label:<26} read {str(row['prompt_read']):>5}  cached {str(row['prompt_cached']):>5}  "
           f"first token {row['ttft_s']:>6.2f} s  read {str(row['prompt_tok_s']):>6} tok/s  "
-          f"gen {str(row['gen_tok_s']):>5} tok/s ({row['gen_tokens']} tok, {row['total_s']} s)", flush=True)
+          f"gen {str(row['gen_tok_s']):>5} tok/s ({row['gen_tokens']} tok, {row['total_s']} s){slot}", flush=True)
 
 
 def run_chat(server: Server, settings: Settings, layout: str, turns_wanted: int, max_tokens: int,
@@ -149,9 +153,13 @@ def run_chat(server: Server, settings: Settings, layout: str, turns_wanted: int,
     turns, rows = [], []
     for number, prompt in enumerate(PROMPTS[:turns_wanted], 1):
         messages = stable_messages(settings, turns, prompt) if layout == "stable" else legacy_messages(turns, prompt)
+        tasks = server.slot_tasks()
         row = server.chat(messages, max_tokens=max_tokens, extras=extras)
         turns.append((prompt, row.pop("text").strip()))
-        row.update(turn=number, layout=layout, prompt_chars=sum(len(json.dumps(m["content"])) for m in messages))
+        # Which slot did the server use? (Its task counter is the one that moved.)
+        used = [slot for slot, task in server.slot_tasks().items() if tasks.get(slot) != task]
+        row.update(turn=number, layout=layout, slot_used=used, slot_asked=(extras or {}).get("id_slot"),
+                   prompt_chars=sum(len(json.dumps(m["content"])) for m in messages))
         rows.append(row)
         show(f"{layout} turn {number}", row)
     return rows, turns
