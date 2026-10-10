@@ -164,7 +164,7 @@ def needs_project_tools(prompt: str) -> bool:
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
-             cancel_event=None) -> str:
+             cancel_event=None, github_enabled: bool = False) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -239,7 +239,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
-                              subagent_parallelism=(1 if settings.provider == 'local' else 2))
+                              subagent_parallelism=(1 if settings.provider == 'local' else 2),
+                              github_enabled=bool(mode == 'agent' and github_enabled))
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
