@@ -325,3 +325,9 @@ def test_live_service_answers_search_lookup_and_luau_check():
     bad = client.luau_check("local n: number = 'text'\nprint(n)\n", strict=True)
     assert good["ok"] and good["executed"] is False
     assert not bad["ok"] and bad["errors"] and bad["executed"] is False
+    # Idiomatic typed Roblox code: engine type names are not errors in the code, a misspelled type is.
+    typed = client.luau_check('--!strict\nlocal Players = game:GetService("Players")\n'
+                              "Players.PlayerAdded:Connect(function(player: Player)\n\tprint(player.Name)\nend)\n")
+    typo = client.luau_check("local function f(x: strng)\n\treturn x\nend\nreturn f\n")
+    assert typed["ok"] and any("Player" in note for note in typed["notes"])
+    assert not typo["ok"] and "strng" in typo["errors"][0]["message"]
