@@ -25,7 +25,10 @@ def summarize_probes(samples: list[Probe], wall_ms: int, *, parallel: int) -> di
         raise ValueError("No valid measurements")
     succeeded = [x for x in samples if x.ok]
     durations = sorted(s.elapsed_ms for s in succeeded)
-    tokens = [x.output_tokens for x in succeeded if x.output_tokens is not None]
+    # Partial usage metadata would undercount output and mislead comparisons.
+    tokens = [x.output_tokens for x in succeeded] if all(
+        x.output_tokens is not None for x in succeeded
+    ) and succeeded else []
     p95 = durations[max(0, (len(durations) * 95 + 99) // 100 - 1)] if durations else None
     return {
         "requests": len(samples),
