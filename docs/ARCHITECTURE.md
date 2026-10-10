@@ -28,6 +28,28 @@ Development: isolated branches + reviewable PRs, never silent agent self-merges
 - Project-scoped chat/knowledge, local models and reference assets persist in the user's app-data profile, **not** in GitHub, public Pages, or the replaceable installed application folder.
 - New skill generation/benchmarks/evaluations are bounded candidate workflows; tests and independently reviewed Roblox game results are required before calling them production-ready.
 
+## Request layout and the model server's prompt cache
+
+A CPU llama.cpp server reads new prompt tokens slowly but reuses, for free, the tokens of the previous request in the
+same slot as long as the new request starts with the same bytes. Every model request is therefore laid out as
+(`star/context_layout.py`, `star/agent.py`):
+
+1. one system message: the rules, then the stable checkpoint (`system_prefix`). Plain chat gets the short
+   `FAST_RULES`; any request with tools gets the full `RULES`.
+2. earlier turns as real user/assistant messages in append-only order (`conversation_window`). The window is cut in
+   segments measured from the first message of the chat, so it moves rarely instead of sliding every turn.
+3. the new user message, followed by everything that changes per turn: retrieved notes, web sources, the selected
+   Studio, mode and date. `star.agent.volatile_context` is the only place per-turn text enters a request; a new
+   retrieval source appends one `(heading, text)` pair to `turn_sections` in `desktop_core.run_task`.
+
+Rules that keep this working: never put per-turn text in the system message or in an earlier turn; trim history from
+the oldest end in whole blocks; keep the tool list in a fixed order with rarely attached tools last (Qwen templates
+render tools before the system text). `providers.llama_request_fields` adds `cache_prompt`, `preserve_thinking` and a
+steady `id_slot` for the owner's own llama.cpp servers only; cloud providers never receive them. `star/warmup.py`
+checks the selected server at start and sends the start of the open chat once, with `max_tokens=1`, so the first real
+message does not pay for it; it writes nothing and any real request cancels it.
+`scripts/measure_first_token.py` measures the effect against a live server.
+
 ## Paths worth preserving
 
 | Path | Role |
