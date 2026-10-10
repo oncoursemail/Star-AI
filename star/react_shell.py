@@ -331,8 +331,6 @@ def launch():
                     files=body.get('files') or []
                     if not isinstance(files,list) or len(files)>8:raise ValueError('Too many attachments')
                     selected=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
-                    self.active_task=True
-                    self.cancel_chat = threading.Event()
                     mode=body.get('mode','auto')
                     if mode not in ('fast','auto','agent'):
                         raise ValueError('Choose Fast, Auto, or Agent mode')
@@ -342,14 +340,24 @@ def launch():
                     github=body.get('github',False)
                     if not isinstance(github,bool) or (github and mode != 'agent'):
                         raise ValueError('GitHub inspection requires Agent mode')
-                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
+                    self.cancel_chat = threading.Event()
+                    self.active_task=True
+                    try:
+                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
+                    except Exception:
+                        self.active_task=False
+                        raise
                 elif action=='generateImage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
                     if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
                     self.active_task=True
                     self.cancel_chat = threading.Event()
-                    self._run(rid,action,lambda:self._run_image(rid,prompt))
+                    try:
+                        self._run(rid,action,lambda:self._run_image(rid,prompt))
+                    except Exception:
+                        self.active_task=False
+                        raise
                 elif action=='installBrain':
                     def worker():
                         info=install_brain(app_data(),progress=lambda e:self._emit(rid,'progress',e))
