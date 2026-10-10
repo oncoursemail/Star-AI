@@ -18,7 +18,7 @@ from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
 from .providers import PROVIDERS, connection_for
-from .brain_router import select_route, validate_alias, ROBLOX_QUALITY_NOTES
+from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
 
 def app_data() -> Path:
@@ -256,7 +256,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     memory_context = memory_context[-14000:]
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=memory_context + snippets +
-                                  (ROBLOX_QUALITY_NOTES if route.profile == 'roblox' else ''),
+                                  (ROBLOX_QUALITY_NOTES if is_roblox_task(prompt) else ''),
                               max_calls=route.max_calls,
                               context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
