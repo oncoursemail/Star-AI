@@ -70,13 +70,22 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   discovered=None, studio_id="", may_edit=False, project_memory="", max_calls=12,
                   context_chars=25000, checkpoint=None, on_event=None, allow_luau=False,
                   workspace=None, workspace_edit=False, stream_tokens=False,
-                  response_tokens=1600, web_search_enabled=False):
+                  response_tokens=1600, web_search_enabled=False,
+                  subagents_enabled=False, subagent_parallelism=1):
     if not prompt.strip():
         raise ValueError("Prompt is empty")
     if len(image_paths) > 4:
         raise ValueError("Maximum four images per task")
     registry = allowed_registry(discovered or [], may_edit, allow_luau=allow_luau)
     definitions = [{"type": "function", "function": {"name": name, "description": t.get("description", ""), "parameters": t["inputSchema"]}} for name, t in registry.items()]
+    if subagents_enabled:
+        definitions.append({"type": "function", "function": {
+            "name": "star_delegate",
+            "description": "Delegate 2–3 independent read-only analysis questions to bounded subagents. They cannot access tools or verify claims; synthesize their drafts.",
+            "parameters": {"type": "object", "properties": {
+                "tasks": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 3}
+            }, "required": ["tasks"], "additionalProperties": False}
+        }})
     if web_search_enabled:
         definitions.append({"type": "function", "function": {
             "name": "star_web_search",
@@ -93,6 +102,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 {"role": "user", "content": content}]
     archive = []
     calls_count = 0
+    delegations = 0
     event = on_event or (lambda _: None)
     for step in range(max_calls):
         if text_size(messages) > context_chars and len(messages) > 2:
@@ -167,7 +177,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 name = tool_call.function.name
                 try:
                     args = json.loads(tool_call.function.arguments)
-                    if name == 'star_web_search':
+                    if name == 'star_delegate':
+                        if not subagents_enabled or not isinstance(args,dict) or set(args) != {'tasks'}:
+                            raise PermissionError('Subagents not authorized')
+                    elif name == 'star_web_search':
                         if not web_search_enabled or not isinstance(args, dict) or set(args) != {'query'}:
                             raise PermissionError('Web search is not authorized')
                         if not isinstance(args['query'], str) or not 1 <= len(args['query'].strip()) <= 600:
@@ -181,7 +194,18 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     images = []
                     event({"event": "tool_rejected", "tool": name})
                 else:
-                    if name == 'star_web_search':
+                    if name == 'star_delegate':
+                        try:
+                            if delegations >= 2:
+                                raise RuntimeError('Subagent delegation limit reached')
+                            from .subagents import delegate
+                            pieces = await delegate(client,model,args['tasks'],parallelism=subagent_parallelism)
+                            delegations += 1
+                            data = {"isError":False,"content":[{"type":"text","text":json.dumps(
+                                {"status":"unverified drafts; review before use","results":pieces},ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError":True,"content":[{"type":"text","text":f"Delegation failed: {type(exc).__name__}: {str(exc)[:180]}"}]}
+                    elif name == 'star_web_search':
                         try:
                             from .web_search import search_web, source_context
                             found = await search_web(args['query'], limit=5)
