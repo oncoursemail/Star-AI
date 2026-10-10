@@ -165,3 +165,18 @@ def test_selfbuilder_protects_security_and_research_documents():
     assert not skill_path("docs/GITHUB_APP_SETUP.md")
     assert not skill_path("docs/FRONTIER_RESEARCH_VOL2.md")
     assert skill_path("docs/skills/approved_skill_guide.md")
+
+
+def test_github_app_source_writes_restricted_to_canonical_repo(tmp_path):
+    """An agent cannot accidentally write a development branch in another repo."""
+    import asyncio
+    from star.github_app import GitHubApp
+    key=tmp_path/"test.pem"
+    key.write_text("non-secret test fixture")
+    app=GitHubApp("123", "456", key, "someone/other-repo")
+    with pytest.raises(PermissionError):
+        asyncio.run(app.create_branch("star/demo"))
+    with pytest.raises(PermissionError):
+        asyncio.run(app.write_branch_file("star/demo", "README.md", b"fixture", "test"))
+    with pytest.raises(PermissionError):
+        asyncio.run(app.open_pr("main", "star/demo", "test", "test"))
