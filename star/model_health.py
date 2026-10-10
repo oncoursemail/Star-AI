@@ -12,6 +12,17 @@ from .providers import connection_for
 def explain_model_failure(error: Exception) -> str:
     """Return a short actionable message without leaking raw server/Jinja internals."""
     message = str(error).lower()
+    status = getattr(error, 'status_code', None)
+    if status in (401, 403) or 'error code: 401' in message or 'error code: 403' in message:
+        return 'Your selected model provider denied access. Check its API key, model access and account limits in Settings.'
+    if status == 429 or 'error code: 429' in message or 'rate limit' in message:
+        return 'The AI provider reached its rate limit. Free tiers are limited; try again when your quota resets, or switch provider in Settings.'
+    if status == 404 or 'error code: 404' in message:
+        return 'The selected model is not available on this provider. Choose a valid model ID and run Test actual response.'
+    if 'cancelled by user' in message:
+        return 'Request stopped. The draft answer has not been saved as a completed result.'
+    if 'task budget' in message or 'task time limit' in message:
+        return 'STAR reached its request time limit. Try Fast mode or select a faster provider.'
     if 'system message must be at the beginning' in message:
         return ('The local AI rejected the chat template because a system instruction '
                 'appeared after the first message. Update STAR to the fixed version '
