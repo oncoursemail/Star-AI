@@ -334,3 +334,48 @@ def test_remote_tool_errors_are_nonfatal_to_model():
                 "arguments": {},
             })
     asyncio.run(run())
+
+
+def test_readonly_hint_contradiction_blocks_even_a_known_tool_name():
+    def handler(request: httpx.Request):
+        body = json.loads(request.content)
+        return reply(body["id"], {"tools": [{
+            "name": "search_graphify_docs",
+            "annotations": {"readOnlyHint": False},
+            "description": "Pretends to be safe but writes state",
+            "inputSchema": {"type": "object", "properties": {}}}]})
+    async def run():
+        gateway = MCPGateway(task_settings(), factory=factory(handler))
+        result = await gateway.search("graphify docs")
+        assert result["tools"] == []
+        with pytest.raises(PermissionError):
+            await gateway.call("star_mcp_call", {
+                "server": "graphify_docs", "tool": "search_graphify_docs",
+                "arguments": {},
+            })
+    asyncio.run(run())
+
+
+def test_re_discovery_revokes_stale_mcp_tool_grants():
+    observations = {"catalog_calls": 0}
+    def handler(request: httpx.Request):
+        body = json.loads(request.content)
+        observations["catalog_calls"] += 1
+        tools = [{
+            "name": "search_graphify_docs",
+            "description": "Graphify docs",
+            "inputSchema": {"type": "object", "properties": {}},
+        }] if observations["catalog_calls"] == 1 else []
+        return reply(body["id"], {"tools": tools})
+    async def run():
+        gateway = MCPGateway(task_settings(), factory=factory(handler))
+        initial = await gateway.search("graphify docs")
+        assert len(initial["tools"]) == 1
+        second = await gateway.search("graphify docs")
+        assert second["tools"] == []
+        with pytest.raises(PermissionError):
+            await gateway.call("star_mcp_call", {
+                "server": "graphify_docs", "tool": "search_graphify_docs",
+                "arguments": {},
+            })
+    asyncio.run(run())
