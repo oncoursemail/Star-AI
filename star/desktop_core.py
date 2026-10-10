@@ -23,6 +23,8 @@ from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, call_limits, connection_for, open_client, provider_kind,
                         server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
+from .doc_knowledge import validate_knowledge_endpoint
+from . import doc_grounding
 
 
 def app_data() -> Path:
@@ -76,6 +78,9 @@ class Settings:
     server_timeout: int = 600        # seconds of silence allowed for one server request
     server_parallel: int = 1         # match the server's llama.cpp -np slot count
     server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
+    # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
+    # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
+    knowledge_endpoint: str = ''
 
     @classmethod
     def load(cls, file: Path):
@@ -137,6 +142,10 @@ class Settings:
             validate_lan_endpoint(self.server_endpoint)
         elif provider_kind(self) == 'lan':
             validate_lan_endpoint('')  # raises the "enter your server address" message
+        if not isinstance(self.knowledge_endpoint, str):
+            raise ValueError('STAR Knowledge address must be text')
+        if self.knowledge_endpoint and self.knowledge_endpoint != 'off':
+            validate_knowledge_endpoint(self.knowledge_endpoint)
         if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
             raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
         if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
@@ -630,6 +639,12 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # discovered tool schemas before injecting recalled memory.
                 memory_limit = max(700, allowed_context_chars - 3200)
                 memory_context = memory_context[-min(5000 if quick else 14000, memory_limit):]
+                # >>> STAR Knowledge (star/doc_grounding.py): official-docs passages for Roblox/Luau
+                # questions, added as delimited UNTRUSTED reference data. Never raises; '' when unused.
+                docs = await asyncio.to_thread(doc_grounding.prepare, settings, route, prompt,
+                                               recent_users, audited_event, mode=mode)
+                memory_context += docs.block
+                # <<< STAR Knowledge
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=memory_context + snippets +
                                   (ROBLOX_QUALITY_NOTES if
@@ -649,10 +664,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
-                        return await execute(**kwargs, studio=session,
+                        result = await execute(**kwargs, studio=session,
                             discovered=await list_tools(session), studio_id=settings.studio_id,
                             may_edit=settings.studio_edit)
-                return await execute(**kwargs)
+                else:
+                    result = await execute(**kwargs)
+                # STAR Knowledge: static Luau check of the answer's code, then the sources list.
+                return await doc_grounding.finalize(docs, route, result, model_client=client, prompt=prompt,
+                                                    started=started, on_event=audited_event)
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
