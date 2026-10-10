@@ -292,6 +292,27 @@ describe('connection status with a STAR Server', () => {
   /** The composer's status control; its title is "<provider · model> — <state>". */
   const statusLine = () => screen.getByTitle(/^STAR Server/).getAttribute('title') ?? ''
 
+  it('asks the host to check the server at start and shows the result without a message being sent', async () => {
+    desktop.reset()
+    desktop.host({settings: server, server: check(null)})
+    desktop.onAction('warmUp', () => ({ok: true, pending: true}))
+    render(<App/>)
+    await screen.findByRole('textbox', {name: /message star/i})
+    expect(statusLine()).toMatch(/Not checked$/)
+    const id = await waitFor(() => desktop.requestOf('warmUp'))
+    expect(desktop.sent('warmUp')).toHaveLength(1)
+    // The host finished its cheap check; priming the prompt cache is still running.
+    desktop.host({server: check(true)})
+    await desktop.emitRaw(id, 'progress', {phase: 'Server checked'})
+    await waitFor(() => expect(statusLine()).toMatch(/Ready$/))
+    await desktop.emitRaw(id, 'result', {primed: true, ok: true})
+    // It was not a turn: nothing was sent, nothing was added to the conversation, no notice.
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(screen.queryByText(/primed|Server checked/)).toBeNull()
+    expect(sendButton()).not.toBeNull()
+    expect(desktop.sent('warmUp')).toHaveLength(1)
+  })
+
   it('stops saying Connected once another server address is saved', async () => {
     const user = await openChat([], null, {settings: server, server: check(null)})
     expect(statusLine()).toMatch(/Not checked$/)
