@@ -1,7 +1,8 @@
 """On-device, measured local inference benchmarking (never fabricated metrics).
 
-Run explicitly against an already-started loopback model. Benchmark requests
-contain no chats, project data, credentials or tool calls; nothing is uploaded.
+Run explicitly against an already-started loopback model, or with `server=True`
+against the owner's STAR Server on the LAN. Benchmark requests contain no chats,
+project data or tool calls; nothing leaves the owner's machines.
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ def summarize_probes(samples: list[Probe], wall_ms: int, *, parallel: int) -> di
         "requests_per_second": round(len(succeeded) * 1000 / wall_ms, 3),
         "output_tokens": sum(tokens) if tokens else None,
         "output_tokens_per_second": round(sum(tokens) * 1000 / wall_ms, 2) if tokens else None,
-        "note": "Measured localhost requests only. No GPU speedup or model-quality claim is implied.",
+        "note": "Measured requests to the owner's own model only. No GPU speedup or model-quality claim is implied.",
     }
 
 
@@ -52,16 +53,21 @@ async def benchmark_local_model(
     requests: int = 4,
     parallel: int = 1,
     client=None,
+    server: bool = False,
 ) -> dict:
-    config = Settings(endpoint=endpoint, model=model)
+    """Measure real requests. `server=True` treats `endpoint` as the STAR Server address."""
+    if server:
+        # Same private-IP validation and keyring key as normal STAR Server chat.
+        config = Settings(provider="star_server", server_endpoint=endpoint, model=model)
+    else:
+        config = Settings(endpoint=endpoint, model=model)
     config.validate()
     if not model.strip() or not 1 <= requests <= 12 or not 1 <= parallel <= 4:
         raise ValueError("Benchmark requires a model, 1..12 requests and 1..4 slots")
     own = client is None
     if own:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(base_url=endpoint, api_key="local-only",
-                             timeout=90.0, max_retries=0)
+        from .providers import open_client
+        client = open_client(config, request_timeout=None if server else 90.0)
     sem = asyncio.Semaphore(parallel)
 
     async def one() -> Probe:

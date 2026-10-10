@@ -24,7 +24,9 @@ from .local_runtime import Runtime
 from .version import __version__
 from .build_info import read_build_info
 from .intelligence import for_settings
-from .providers import credential_status, save_api_key, clear_api_key
+from .providers import credential_status, save_api_key, clear_api_key, provider_kind
+from .model_health import (explain_model_failure, missing_model_message, note_server_result,
+                           probe_server, server_status)
 from .chat_images import chat_image, generate_chat_image
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
@@ -37,8 +39,62 @@ ALLOWED_ACTIONS = frozenset({
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam',
+    'startModelRouter','stopBrain','testModelTeam','testServer',
 })
+
+# Settings the React interface may change. Never a credential: provider and
+# server keys go straight to the OS keyring through saveProviderKey.
+PERMITTED_SETTINGS = frozenset({
+    'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model',
+    'router_models_dir','router_context','gpu_layers','roblox_research_enabled',
+    'tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider',
+    'project','workspace','studio_id','studio_edit','workspace_edit','max_calls',
+    'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
+    'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
+    'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
+    'server_endpoint','server_timeout','server_parallel','server_context_tokens',
+})
+
+
+def apply_setting_changes(settings: Settings, changes: dict) -> Settings:
+    """Copy only allowlisted fields from the interface onto saved settings."""
+    if not isinstance(changes, dict):
+        raise ValueError('Invalid settings')
+    for key, value in changes.items():
+        if key in PERMITTED_SETTINGS:
+            setattr(settings, key, value)
+    return settings
+
+
+def server_settings_for(action: str, settings_file: Path) -> Settings | None:
+    """Saved settings when `action` talks to the selected STAR Server, else None."""
+    if action not in {'sendMessage','testModel','listModels','runTeam','testModelTeam'}:
+        return None
+    try:
+        current = Settings.load(settings_file)
+        return current if provider_kind(current) == 'lan' else None
+    except Exception:
+        return None
+
+
+def describe_failure(action: str, exc: Exception, settings_file: Path) -> str:
+    """One short, secret-free line for the interface when a worker fails."""
+    model_error = (getattr(exc, 'status_code', None) is not None
+                   or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
+                   or 'System message must be at the beginning' in str(exc))
+    server = server_settings_for(action, settings_file)
+    if server is not None:
+        import httpx
+        if model_error or isinstance(exc, httpx.HTTPError):
+            status = getattr(exc, 'status_code', None)
+            if status is None or status in (401, 403, 503):
+                # Unreachable, timed out, wrong key or still loading: the status
+                # light should stop claiming the server is ready.
+                note_server_result(server, False, 'request_failed')
+            return explain_model_failure(exc, provider_kind='lan')
+    elif action in {'sendMessage', 'startBrain', 'testModel'} and model_error:
+        return explain_model_failure(exc)
+    return f'{type(exc).__name__}: {str(exc)[:350]}'
 
 
 def react_index(root: Path | None = None) -> Path:
@@ -114,6 +170,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         'tool_workshop':tool_workshop_status,
         'analytics':get_dashboard(home,settings.project),
         'credentials':credential_status(),
+        'server':server_status(settings),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
@@ -178,15 +235,7 @@ def launch():
                     data=worker()
                     self._emit(request_id, 'result', data)
                 except Exception as exc:
-                    if (action in {'sendMessage', 'startBrain', 'testModel'}
-                        and (getattr(exc, 'status_code', None) is not None
-                             or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
-                             or 'System message must be at the beginning' in str(exc))):
-                        from .model_health import explain_model_failure
-                        detail = explain_model_failure(exc)
-                    else:
-                        detail = f'{type(exc).__name__}: {str(exc)[:350]}'
-                    self._emit(request_id, 'error', detail)
+                    self._emit(request_id, 'error', describe_failure(action, exc, self.settings_file))
                 finally:
                     if action in {'sendMessage','generateImage','runTeam'}:self.active_task=False
                     if action=='installUpdate':self.active_update=False
@@ -202,52 +251,18 @@ def launch():
         def _start_model_router(self):
             if self.active_task:
                 raise RuntimeError('Stop the active chat before switching STAR models')
-            settings = Settings.load(self.settings_file)
-            settings.validate()
-            if settings.provider != 'local':
-                raise ValueError('Select Local as the inference provider')
-            if not settings.router_models_dir:
-                raise ValueError('Choose a local GGUF model folder first')
+            # The helper refuses non-local providers and never switches the
+            # owner away from STAR Server while the router is loading.
+            from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
-            source = info.executable if info is not None else settings.llama_server
-            if not source:
-                raise RuntimeError('Install the verified STAR Brain llama.cpp engine first')
-            engine = Path(source)
-            self.runtime.start_router(engine, Path(settings.router_models_dir),
-                app_data()/'logs'/'star-router-react.log',port=8080,
-                context=settings.router_context,gpu_layers=settings.gpu_layers)
-            probe = Settings(endpoint='http://127.0.0.1:8080/v1')
-            try:
-                for _ in range(35):
-                    if self.runtime.status() != 'running':
-                        raise RuntimeError('Router exited; inspect STAR/logs/star-router-react.log')
-                    try:
-                        models=query_models(probe)
-                    except Exception:
-                        models=[]
-                    if models:
-                        updated=Settings.load(self.settings_file)
-                        updated.endpoint=probe.endpoint
-                        updated.provider='local'
-                        updated.llama_server=str(engine)
-                        if updated.model not in models:
-                            updated.model=(updated.fast_model if updated.fast_model in models
-                                           else models[0])
-                        updated.save(self.settings_file)
-                        return {'brain_running':True,'model_router_running':True,
-                                'model':updated.model,'models':models,'chat_ready':False,
-                                'note':'Router ready; actual model completion is not yet verified'}
-                    time.sleep(1)
-                raise TimeoutError('Model router did not respond; check its log')
-            except Exception:
-                self.runtime.stop()
-                raise
+            source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
+            return start_model_router(self.runtime, self.settings_file, app_data(), source)
 
         def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
-                raise ValueError('STAR Brain is offline. Go to STAR Brain and start your model.')
+                raise ValueError(missing_model_message(settings))
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
@@ -273,6 +288,8 @@ def launch():
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat)
+            if provider_kind(settings)=='lan':
+                note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer,chat_id=active_chat)
@@ -306,9 +323,9 @@ def launch():
             home = app_data()
             settings = Settings.load(self.settings_file)
             if not settings.model.strip():
-                raise ValueError("Start STAR Brain before running a specialist team")
-            if getattr(settings,'provider','local') != 'local':
-                raise ValueError('STAR Teams currently requires the local STAR Brain model')
+                raise ValueError(missing_model_message(settings, teams=True))
+            if provider_kind(settings) == 'cloud':
+                raise ValueError('STAR Teams runs on your own hardware. Select On-device or STAR Server as the provider.')
             chats = Conversations(home / "conversations.sqlite3")
             try:
                 active_chat = chats.active_chat(settings.project)
@@ -319,9 +336,7 @@ def launch():
             async def run():
                 return await run_until_cancelled(
                     run_research_team(
-                        endpoint=settings.endpoint, model=settings.model,
-                        project=settings.project, prompt=prompt, home=home,
-                        parallel=2,
+                        settings=settings, prompt=prompt, home=home,
                         on_event=lambda event: self._emit(
                             request_id, 'progress', sanitize_event(event)),
                     ),
@@ -411,12 +426,7 @@ def launch():
                         store.close()
                     return json.dumps({'ok':True,'data':{'notes':notes}})
                 if action=='saveSettings':
-                    changes=body.get('settings')
-                    if not isinstance(changes,dict):raise ValueError('Invalid settings')
-                    old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','router_models_dir','router_context','gpu_layers','roblox_research_enabled','tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled','mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live'}
-                    for key,value in changes.items():
-                        if key in permitted:setattr(old,key,value)
+                    old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action=='saveProviderKey':
@@ -558,6 +568,11 @@ def launch():
                             Settings.load(self.settings_file),
                             on_progress=lambda e:self._emit(rid,'progress',e)))
                     self._run(rid,action,worker)
+                elif action=='testServer':
+                    # Timed health -> key -> limits -> tiny chat check of the saved
+                    # STAR Server. The key stays in the keyring; only step names,
+                    # timings and model IDs go back to the interface.
+                    self._run(rid,action,lambda:probe_server(Settings.load(self.settings_file)))
                 elif action=='listModels':
                     def worker():return {'models':query_models(Settings.load(self.settings_file))}
                     self._run(rid,action,worker)
@@ -565,7 +580,11 @@ def launch():
                     def worker():
                         import asyncio
                         from .model_health import probe_chat_endpoint
-                        return asyncio.run(probe_chat_endpoint(Settings.load(self.settings_file)))
+                        current=Settings.load(self.settings_file)
+                        result=asyncio.run(probe_chat_endpoint(current))
+                        if provider_kind(current)=='lan':
+                            note_server_result(current,True,'ok')
+                        return result
                     self._run(rid,action,worker)
                 elif action in {'listCustomTools','previewCustomTool',
                                   'approveCustomTool','disableCustomTool'}:

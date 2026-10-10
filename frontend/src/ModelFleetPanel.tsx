@@ -28,6 +28,8 @@ type Props = {
 export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunning,disabled,busy,
   routerBusy,teamChecking,teamResult,chooseFolder,startRouter,stopBrain,testTeam}:Props){
   const isLocal=draft.provider==='local'
+  // STAR Server loads and swaps its own models, so the PC-side router controls do not apply to it.
+  const onServer=draft.provider==='star_server'
   const update=(key:keyof AppSettings,value:string|number)=>{
     onChange({...draft,[key]:value})
   }
@@ -47,6 +49,7 @@ export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunnin
       </label>)}
     </div>
     <datalist id="star-model-ids">{models.map(id=><option key={id} value={id}/>)}</datalist>
+    {onServer?<p className="integrated-help">STAR Server manages its own models. Each ID above must be a model the server offers; run Test server in the provider section to list them. No GGUF folder or local router is needed.</p>:<>
     <div className="integrated-heading"><ShieldCheck size={18}/><div>
       <strong>Managed local GGUF runtime</strong>
       <span>{routerRunning?'Model router is running':'Optional; current single-model STAR Brain still works'}</span>
@@ -66,16 +69,16 @@ export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunnin
         <input type="number" min={0} max={1000} value={draft.gpu_layers??25}
           disabled={disabled} onChange={e=>update('gpu_layers',Number(e.target.value))}/>
       </label>
-    </div>
+    </div></>}
     <div className="integrated-actions">
-      <button type="button" className="secondary-button" onClick={chooseFolder}
-        disabled={disabled||routerBusy}><FolderOpen size={15}/> Choose folder</button>
-      <button type="button" className="secondary-button" onClick={startRouter}
+      {!onServer&&<button type="button" className="secondary-button" onClick={chooseFolder}
+        disabled={disabled||routerBusy}><FolderOpen size={15}/> Choose folder</button>}
+      {!onServer&&<button type="button" className="secondary-button" onClick={startRouter}
         disabled={disabled||routerBusy||busy||brainRunning||!isLocal||!draft.router_models_dir}>
         {routerBusy?<LoaderCircle size={15} className="spin"/>:<Play size={15}/>} Start router
-      </button>
-      <button type="button" className="secondary-button" onClick={stopBrain}
-        disabled={disabled||routerBusy||busy||!brainRunning}><Square size={14}/> Stop managed Brain</button>
+      </button>}
+      {(!onServer||brainRunning)&&<button type="button" className="secondary-button" onClick={stopBrain}
+        disabled={disabled||routerBusy||busy||!brainRunning}><Square size={14}/> Stop managed Brain</button>}
       <button type="button" className="secondary-button" onClick={testTeam}
         disabled={disabled||teamChecking||busy||!draft.model}>
         {teamChecking?<LoaderCircle size={15} className="spin"/>:<ShieldCheck size={15}/>} Test team
@@ -88,6 +91,6 @@ export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunnin
       </small>)}
       <small>{teamResult.note}</small>
     </div>}
-    <p className="integrated-help"><Check size={13}/> A text response is not proof of image, tools or Roblox Studio capability. Benchmark Qwen3.8-27B locally before assigning it to everyday requests.</p>
+    <p className="integrated-help"><Check size={13}/> A text response is not proof of image, tools or Roblox Studio capability.{onServer?'':' Benchmark Qwen3.8-27B locally before assigning it to everyday requests.'}</p>
   </section>
 }

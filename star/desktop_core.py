@@ -20,7 +20,8 @@ from .intelligence import for_settings
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
-from .providers import PROVIDERS, connection_for
+from .providers import (ALL_PROVIDERS, call_limits, connection_for, open_client, provider_kind,
+                        server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
 
@@ -69,6 +70,12 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    # STAR Server (provider 'star_server'): an owner-entered private LAN address.
+    # The server key is never stored here; it lives in the OS keyring.
+    server_endpoint: str = ''
+    server_timeout: int = 600        # seconds of silence allowed for one server request
+    server_parallel: int = 1         # match the server's llama.cpp -np slot count
+    server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
 
     @classmethod
     def load(cls, file: Path):
@@ -80,13 +87,14 @@ class Settings:
     def validate(self):
         for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
             validate_alias(getattr(self, field), field=field)
-        if self.provider != 'local' and self.provider not in PROVIDERS:
+        if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
             raise ValueError('Use a loopback local inference URL ending in /v1')
         port = int(self.endpoint.split(':')[-1].split('/')[0])
         if not 1 <= port <= 65535:
             raise ValueError('Invalid local inference port')
+        self._validate_server()
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
@@ -120,6 +128,22 @@ class Settings:
             raise ValueError('Choose a local folder for the GGUF model router')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
+
+    def _validate_server(self):
+        """STAR Server (LAN) settings. The loopback `endpoint` rule above is separate."""
+        if not isinstance(self.server_endpoint, str):
+            raise ValueError('STAR Server address must be text')
+        if self.server_endpoint:
+            validate_lan_endpoint(self.server_endpoint)
+        elif provider_kind(self) == 'lan':
+            validate_lan_endpoint('')  # raises the "enter your server address" message
+        if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
+            raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
+        if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
+            raise ValueError('STAR Server parallel requests must be 1 to 4')
+        if (type(self.server_context_tokens) is not int
+                or not (self.server_context_tokens == 0 or 1024 <= self.server_context_tokens <= 1_048_576)):
+            raise ValueError('STAR Server context must be 0 (automatic) or 1024 to 1048576 tokens')
 
     def save(self, file: Path):
         self.validate()
@@ -405,9 +429,16 @@ def model_context_char_budget(settings: Settings) -> int:
     tokens per character. Keep a reserve for the active user prompt, tools and
     response. Other inference endpoints retain their existing settings.
     """
-    if settings.provider == 'local' and settings.router_models_dir:
+    kind = provider_kind(settings)
+    if kind == 'local' and settings.router_models_dir:
         # Even 8-GB GPUs can page heavily when the KV cache is oversized.
         return min(settings.context_chars, max(3000, 2 * (settings.router_context - 512)))
+    if kind == 'lan':
+        # Each llama-server slot has its own context. Use the owner's value or
+        # the size the server itself reported; unknown keeps the saved budget.
+        tokens = server_context_tokens(settings)
+        if tokens:
+            return min(settings.context_chars, max(3000, 2 * (tokens - 1024)))
     return settings.context_chars
 
 
@@ -492,19 +523,18 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         allow_studio = bool(use_tools and settings.studio_id and
                             needs_studio_connection(prompt,recent_users))
         mcp_gateway = MCPGateway(settings) if use_tools else None
-        endpoint, key = connection_for(settings)
+        connection_for(settings)  # fail early (missing key, bad address) before any work
+        limits = call_limits(settings)
         async def run():
-            from openai import AsyncOpenAI
             from .web_search import search_web, source_context
-            import httpx
             snippets = ''
             if research:
                 audited_event({'event': 'search_started'})
                 found = await search_web(prompt[:600], limit=5)
                 snippets = '\n\n' + source_context(found)
                 audited_event({'event': 'search_finished'})
-            timeout = httpx.Timeout(95.0 if settings.provider == 'local' else 55.0, connect=8.0)
-            async with AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0) as client:
+            # One client per task, with the selected provider's own time limits.
+            async with open_client(settings) as client:
                 specialists = (ResearchTeam(
                     client=client,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
@@ -528,7 +558,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               subagent_model=route.subagent_model,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
-                              subagent_parallelism=(1 if settings.provider == 'local' else 2),
+                              subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
                               tool_workshop=workshop, specialists=specialists)
@@ -562,7 +592,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         try:
             answer, msgs, archive = asyncio.run(controlled_run())
         except TimeoutError as exc:
-            raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. Try Fast mode, a smaller prompt, or a hosted provider.') from exc
+            advice = ('Try Fast mode or a smaller prompt, or raise the STAR Server timeout in Settings.'
+                      if provider_kind(settings) == 'lan' else
+                      'Try Fast mode, a smaller prompt, or a hosted provider.')
+            raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
