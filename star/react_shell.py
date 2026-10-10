@@ -189,6 +189,9 @@ def launch():
                                                + explain_model_failure(exc)) from exc
                         return {'model':models[0], 'brain_running':True,
                                 'chat_ready':True, 'sample':probe['sample']}
+                except RuntimeError as exc:
+                    if 'failed its chat test' in str(exc):
+                        raise
                 except Exception:
                     pass
                 time.sleep(2)
