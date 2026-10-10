@@ -16,6 +16,7 @@ from jsonschema.exceptions import ValidationError
 from star.agent import execute
 from star.agent_skills import SkillLibrary, install_starters
 from star.desktop_core import Settings
+from star.react_shell import sanitize_event
 from star.intelligence import LocalIntelligence
 from star.knowledge import KnowledgeStore
 from star.specialist_agents import ResearchTeam, DELEGATE_TOOL
@@ -363,3 +364,16 @@ def test_approved_custom_tool_is_relevant_without_always_on_schemas(tmp_path):
     finally:
         workshop.close()
         knowledge.close()
+
+
+def test_specialist_progress_is_readable_and_does_not_expose_untrusted_goal():
+    raw = {"event": "subagent_started", "role": "ui",
+           "goal": "secret-local-file", "task_id": "private-string"}
+    progress = sanitize_event(raw)
+    assert "ui specialist" in progress["phase"]
+    assert "secret-local-file" not in str(progress)
+    assert "private-string" not in str(progress)
+    forged = sanitize_event({"event": "subagent_finished",
+                             "role": "dangerous\ncredential",
+                             "status": "completed"})
+    assert "dangerous" not in str(forged)
