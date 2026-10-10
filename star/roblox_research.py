@@ -124,18 +124,15 @@ class RobloxResearch:
 
     def __init__(self, *, home: Path, client: httpx.Client | None = None, now=None):
         self.home = Path(home)
-        self.client = client or httpx.Client(
-            timeout=httpx.Timeout(6.0, connect=3.0),
-            follow_redirects=False, trust_env=False,
-            headers={"User-Agent": "STAR-Intelligence-Research/1.0", "Accept": "application/json"},
-        )
+        self.client = client
         self._owns_client = client is None
         self.now = now or time.time
         self._cache: dict[tuple, tuple[float, dict]] = {}
 
     def close(self):
-        if self._owns_client:
+        if self._owns_client and self.client is not None:
             self.client.close()
+            self.client = None
 
     def status(self) -> dict:
         return {
@@ -156,6 +153,12 @@ class RobloxResearch:
         if cached and self.now() < cached[0]:
             return cached[1]
         headers = {"x-api-key": api_key} if api_key else None
+        if self.client is None:
+            self.client = httpx.Client(
+                timeout=httpx.Timeout(6.0, connect=3.0), follow_redirects=False,
+                trust_env=False,
+                headers={"User-Agent": "STAR-Intelligence-Research/1.0", "Accept": "application/json"},
+            )
         try:
             with self.client.stream("GET", _HOSTS[host] + path, params=params, headers=headers,
                                     follow_redirects=False) as response:
