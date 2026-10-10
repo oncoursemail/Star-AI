@@ -175,6 +175,15 @@ class KnowledgeStore:
                      reviewed=bool(row["reviewed"]), created=row["created"])
                 for row in rows]
 
+    def find_ranked(self, project: str, query: str, *, reviewed_only: bool = True,
+                    limit: int = 12) -> list[Note]:
+        """Alias onto the already-ranked FTS5 retrieval from verified memory.
+
+        Preserve v0.9's reviewed-only, project-scoped BM25/LIKE fallback rather
+        than replacing its FTS tables with an incompatible older index format.
+        """
+        return self.find(project, query, reviewed_only=reviewed_only, limit=limit)
+
     def find_contextual(self, project: str, prompt: str, *, limit: int = 8) -> list[Note]:
         """Read only reviewed facts, with recall-intent fallback for implicit queries.
 
