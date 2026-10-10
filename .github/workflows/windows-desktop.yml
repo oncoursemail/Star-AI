@@ -124,13 +124,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'STAR installer build failed' }
           $setup = "dist/STAR-Setup-v$version.exe"
           if (-not (Test-Path $setup)) { throw "Missing $setup" }
+      - name: Create standalone SHA-256 file for manual preview downloads
+        shell: pwsh
+        run: |
+          $version = (python -c "from star.version import __version__;print(__version__)").Trim()
+          $setup = "dist/STAR-Setup-v$version.exe"
+          $portable = 'STAR-Genesis-Windows-x64.zip'
+          if (-not (Test-Path $setup) -or -not (Test-Path $portable)) { throw 'Preview build files are missing' }
+          $setupHash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          $zipHash = (Get-FileHash -Path $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          @("$setupHash  STAR-Setup-v$version.exe", "$zipHash  STAR-Genesis-Windows-x64.zip") |
+            Set-Content -Encoding utf8 'STAR-PREVIEW-SHA256SUMS.txt'
       - name: Upload testable executables
         uses: actions/upload-artifact@v7
         with:
-          name: STAR-Windows-vNext
+          name: ${{ github.event_name == 'pull_request' && 'STAR-Fast-Brain-Preview' || 'STAR-Windows-vNext' }}
           path: |
             STAR-Genesis-Windows-x64.zip
             dist/STAR-Setup-v*.exe
+            STAR-PREVIEW-SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
 
