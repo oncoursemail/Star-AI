@@ -103,8 +103,11 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
 
     quick = mode == "fast" or profile == "fast"
     use_tools = mode == "agent" or (mode == "auto" and project_tools)
-    if image_count and configured["vision_model"]:
-        chosen = configured["vision_model"]
+    # Image tasks must never silently fall through to a configured text-only
+    # reasoning model. Use an explicit vision specialist or the primary model
+    # that the owner chose for image-capable work.
+    if image_count:
+        chosen = configured["vision_model"] or primary
     elif profile == "fast":
         chosen = configured["fast_model"] or primary
     elif profile == "roblox":
