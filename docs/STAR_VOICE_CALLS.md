@@ -239,7 +239,95 @@ Choice: **faster-whisper**.
 
 ## 7. Measured latency
 
-<!-- LATENCY -->
+All numbers come from `file-call` runs on the owner's PC (Ryzen 5 5500, RTX 3060 Ti; Kokoro and `small.en` on the
+GPU, Smart Turn on the CPU), 10 Oct 2026. A synthetic caller speaks five prepared lines into a virtual microphone in
+real time and Star answers through a virtual speaker, so every figure is a clock reading, not an estimate. The
+microphone and a real loudspeaker were never used. The files are in `voice-lab/call-tests/<run>/`
+(`latency.txt`, `turns.json` with every event, `user.wav`, `star.wav`).
+
+How to read the columns (all in seconds, per turn, from the moment the caller stops speaking):
+
+- **end-of-turn wait**: the caller stopped; Star waits until she is sure the turn is over. It cannot be shorter than
+  `min_end_silence_ms` (608 ms) even when the end-of-turn model is certain, because people pause mid-sentence.
+- **transcribe**: speech recognition time that is *not* already hidden inside that wait. It starts at the first 0.26 s
+  pause and takes 0.17 s on the GPU, so it is usually 0.00 to 0.08 s.
+- **transcript -> first token**: the brain. **first token -> first audio**: the wait for the first clause (4 words,
+  see `first_clause_words`) plus Kokoro (about 0.3 s once the clause exists).
+- **TOTAL**: the caller stops talking until Star's first sound.
+
+### 7.1 Four runs
+
+| Run | Brain | End-of-turn wait | Speech end -> transcript | Transcript -> first token | First token -> first audio | TOTAL | Tokens/s |
+|---|---|---|---|---|---|---|---|
+| `run-server-3`: real server, 5 turns, 1 barge-in | `star-fast` on the server, load average 13.6 then 50.4 (other jobs) | 0.61 | 0.63 | **11.27** | **7.39** | **19.28** | 1.6 |
+| `run-offline-3`: same call, `--offline-brain` | scripted: 0.9 s to first token, 4.6 tokens/s | 0.61 | 0.62 | 0.91 | 0.84 | 2.37 | 4.4 |
+| `run-echo-gate-final`: echo at -15 dB, speakers, gate on | scripted | 0.61 | 0.62 | 0.91 | 0.84 | 2.37 | 4.4 |
+| `run-echo-nogate-final`: echo at -15 dB, gate off (control) | scripted | 0.70 | 0.72 | 0.91 | 0.81 | 2.43 | 4.3 |
+
+The real call, turn by turn (this is the file `run-server-3/latency.txt`):
+
+```
+turn  end-of-turn  transcribe  speech end ->  transcript ->  first token ->   TOTAL  tok/s  note
+             wait                 transcript    first token     first audio
+------------------------------------------------------------------------------------------------
+   1         0.64        0.06           0.70          10.33            2.25   13.28    2.3  end=model, early transcript
+   2         0.61        0.00           0.61           8.84            3.09   12.55    2.7  end=model, early transcript
+   3         0.59        0.03           0.62          16.80           14.25   31.67    1.2  interrupted after 2.4s (barge_in)
+   4         0.59        0.00           0.59          10.58           11.28   22.45    0.8  end=model, early transcript
+   5         0.61        0.00           0.61           9.78            6.08   16.47    0.9  end=model, early transcript
+------------------------------------------------------------------------------------------------
+mean         0.61        0.02           0.63          11.27            7.39   19.28    1.6
+```
+
+What the four runs show:
+
+1. **Star's own part is about 1.5 s.** With the scripted brain the whole chain, from the caller's last word to Star's
+   first sound, takes 2.37 s, of which 0.9 s is the pretend brain. Waiting to be sure the turn is over is 0.61 s,
+   speech recognition adds 0.01 s on average (it is done before the wait ends), the first 4 words arrive about
+   0.5 s after the first token and Kokoro adds about 0.3 s (turn 1 of `run-offline-3`: first token, first clause and first audio at
+   +0.00, +0.47 and +0.74 s).
+2. **The real server was the whole problem.** On the real call the brain took 11.3 s to the first token and the
+   slow token stream (0.8 to 2.7 tokens/s while the load average rose from 13.6 to 50.4) made the first clause take
+   another 7.4 s. Nothing on the PC side accounts for that: transcription finished 0.00 to 0.06 s after the end of
+   the turn, and Kokoro needed 0.4 to 1.4 s for each whole reply (1.5 to 9.9 s of audio). Waiting for the first
+   clause took 1.8 to 2.6 s in turns 1 and 2 and 5.6 to 13.6 s in turns 3 to 5, when the token stream stalled. The server was never measured idle in this work, so this is
+   the figure for a server shared with other jobs, not for the server at its best.
+3. **The server probe** (`voice-lab/server_probe.py`, 15:43 UTC, load 13 to 28) explains why. The prompt cache works
+   (310 and more cached tokens), but the *new* prompt tokens of each turn are read at only 1.7 to 3.4 tokens/s on
+   this CPU-only host, so 27 to 34 new tokens (the caller's words plus the previous reply, which is re-read every
+   turn) cost 10 to 12 s before the first token, and generation ran at 3.8 to 4.6 tokens/s. Two consequences are
+   built into the call code: a request is never sent that may be thrown away (the 608 ms floor on the end-of-turn
+   wait exists for this), and the history is trimmed in blocks (`CallSession._context`) so the cached prefix stays
+   valid instead of changing every turn.
+4. **The echo gate does its job in simulation.** The control run (speakers without the gate) lets Star hear
+   herself: six turns were logged for the five caller lines, and every one was interrupted although the caller
+   interrupted only once (five `barge_in` between 0.7 and 1.2 s into her reply, one `user_kept_talking`). With the
+   gate on there were five turns and the only interruption was the caller's real one, after 2.6 s of the reply. Star stops talking in the same frame in which the interruption is
+   confirmed (0.00 s after the `speech_started` event with headphones, 0.14 s with the gate, which waits for a few
+   louder frames); the time the detector needs to confirm speech from the caller's first sound was not timed
+   separately.
+
+### 7.2 Other measurements
+
+- **Start-up** (models already on disk): voice activity detector 2.3 s, end-of-turn model 0.1 s, speech recognition
+  7.8 s, voice 5.8 s, warm-up 3.5 s: about 19 s from the command to "listening".
+- **Speech recognition** `small.en` on the GPU: 0.17 s per sentence (section 6). **Voice**: Kokoro 0.33 s per
+  sentence on the GPU, 1.1 s on the CPU (`voice-lab/kokoro-latency.json`).
+- **Check on the audio.** `--verify` transcribed `run-offline-3/star.wav` and missed the words "First, we'll look" in
+  one reply. Transcribing the same file again in 10 s windows found them, so it was a long-recording artefact of the
+  check and the audio is complete (checked for that run only).
+
+### 7.3 What this does not show
+
+- The echo simulation mixes Star's own audio back into the virtual microphone at -15 dB and 80 ms late. That is not a
+  room: a real loudspeaker adds reflections, distortion and a different delay. The gate was only run at -15 dB after
+  its last change; the earlier -6 dB and -20 dB runs used the previous version of the gate and were not repeated.
+- Nothing was measured with a real microphone, a real child's voice, Bluetooth output (the default output on the
+  owner's PC is a Bluetooth speaker, which adds its own delay of tens to hundreds of milliseconds) or an idle
+  server.
+- A live-sounding call needs the brain's first token well under a second: people answer about 200 ms after the other
+  person stops and a gap of 700 ms or more already reads as hesitation (`docs/research/voice.md`, section 7). With
+  the server as measured here that is not reachable; with the scripted brain the chain takes 2.4 s.
 
 ## 8. Hand-off notes and open problems
 
