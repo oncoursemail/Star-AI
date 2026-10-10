@@ -96,7 +96,7 @@ class ResearchTeam:
                 if source == "knowledge":
                     if self.knowledge is None:
                         continue
-                    records = self.knowledge.find(self.project, goal, reviewed_only=True, limit=3)
+                    records = self.knowledge.find_ranked(self.project, goal, reviewed_only=True, limit=3)
                     data = [{"id": n.id, "text": n.text[:550],
                              "source": n.source, "revision": n.revision}
                             for n in records]
