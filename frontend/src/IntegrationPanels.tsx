@@ -24,6 +24,9 @@ export function brainStatus(state:{settings?:{provider?:string}|null;brain_runni
 }
 export const formatStepTime=(ms:number)=>ms<1000?`${Math.max(0,Math.round(ms))} ms`:`${(ms/1000).toFixed(1)} s`
 const stepNames:Record<string,string>={health:'Server reachable',models:'Key and model list',limits:'Context and slots',chat:'Real test reply'}
+/** One readable line per connector. A connector that is off has no protocol yet ("Protocol: · disabled" before). */
+export const connectorState=(info:{protocol:string;state:string})=>
+ info.state==='disabled'||!info.protocol?'Off':`Protocol ${info.protocol} · ${info.state==='configured_not_tested'?'enabled, not tested yet':info.state.replace(/_/g,' ')}`
 const failedReport=(message:string):ServerReport=>({ok:false,code:'error',message,steps:[],models:[],model:'',context_tokens:null,slots:null,first_token_ms:null,sample:''})
 
 /** Runs the host's timed server check. With `settings`, they are saved first so the check uses what is on screen. */
@@ -251,7 +254,7 @@ export function McpPanel({draft,onChange,status,invoke,disabled=false}:{draft:Ap
        return <div className="integrated-connector" key={target.name}>
          <div><strong>{target.label}</strong><small>{target.note}</small>
            {results[target.name]&&<small className="integrated-connected">{results[target.name]}</small>}
-           {info&&<small>Protocol: {info.protocol} · {info.state}</small>}
+           {info&&<small>{connectorState(info)}</small>}
          </div>
          <div className="integrated-connector-actions">
            <label className="integrated-switch"><input type="checkbox" disabled={disabled} checked={active} onChange={e=>onChange({...draft,[target.flag]:e.target.checked})}/><span>Enable</span></label>

@@ -5,6 +5,7 @@
  */
 import {afterEach, describe, expect, it} from 'vitest'
 import {cleanup, render, screen} from '@testing-library/react'
+import {connectorState} from './IntegrationPanels'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {backendSettings} from './fake-desktop'
 import type {AppSettings} from './types'
@@ -28,5 +29,17 @@ describe('specialist concurrency', () => {
     panel('local')
     expect(screen.getByLabelText('Local specialist concurrency')).toBeTruthy()
     expect(screen.getByRole('option', {name: /recommended for 8 GB VRAM/})).toBeTruthy()
+  })
+})
+
+describe('connector state line', () => {
+  it('says Off for a connector that is not enabled, instead of an empty protocol', () => {
+    expect(connectorState({protocol: '', state: 'disabled'})).toBe('Off')
+    expect(connectorState({protocol: '2025-06-18', state: 'disabled'})).toBe('Off')
+  })
+
+  it('names the protocol and a readable state once a connector is enabled', () => {
+    expect(connectorState({protocol: '2025-06-18', state: 'configured_not_tested'})).toBe('Protocol 2025-06-18 · enabled, not tested yet')
+    expect(connectorState({protocol: '2025-06-18', state: 'some_new_state'})).toBe('Protocol 2025-06-18 · some new state')
   })
 })
