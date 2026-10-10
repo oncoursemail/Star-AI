@@ -23,9 +23,13 @@ async def run_until_cancelled(
     Caller owns the independent, per-run cancellation event. This helper never
     spawns background threads and never retries model requests after Stop.
     """
-    if not callable(is_cancelled):
-        raise TypeError("Cancellation probe must be callable")
-    if not 0.01 <= poll_seconds <= 1.0:
+    if not callable(is_cancelled) or not 0.01 <= poll_seconds <= 1.0:
+        # Fail before scheduling any worker; explicitly close a raw coroutine
+        # to avoid leaving a ResourceWarning in an otherwise green test suite.
+        if asyncio.iscoroutine(operation):
+            operation.close()
+        if not callable(is_cancelled):
+            raise TypeError("Cancellation probe must be callable")
         raise ValueError("Polling interval outside supported bounds")
     job = asyncio.ensure_future(operation)
     try:
