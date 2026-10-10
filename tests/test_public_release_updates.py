@@ -9,7 +9,7 @@ import hashlib
 import pytest
 
 from star import updates
-from star.version import REPO, PUBLIC_REPO, __version__
+from star.version import REPO, __version__
 
 
 class Response:
@@ -49,7 +49,7 @@ def sample_release(repo, data, version='0.9.2'):
 
 def test_source_release_public_without_github_cli():
     payload=b'MZ'+b'X'*(updates.MIN_INSTALLER_BYTES + 400)
-    response={updates.PUBLIC_API:Response(404),updates.API:Response(200,sample_release(REPO,payload))}
+    response={updates.API:Response(200,sample_release(REPO,payload))}
     result=updates.get_latest(Client(response))
     assert result.available and not result.requires_browser
     assert result.anonymous_access and result.repository==REPO
@@ -58,7 +58,7 @@ def test_source_release_public_without_github_cli():
 
 
 def test_private_source_returns_manual_browser_fallback():
-    result=updates.get_latest(Client({updates.PUBLIC_API:Response(404),updates.API:Response(404)}))
+    result=updates.get_latest(Client({updates.API:Response(404)}))
     assert result.requires_browser and not result.available
     assert not result.anonymous_access
 
@@ -74,7 +74,7 @@ def test_source_public_installer_download_is_hash_verified(tmp_path, monkeypatch
     monkeypatch.setattr(updates.sys,'platform','win32')
     data=b'MZ'+b'Y'*(updates.MIN_INSTALLER_BYTES + 400)
     meta=sample_release(REPO,data)
-    c=Client({updates.PUBLIC_API:Response(404),updates.API:Response(200,meta),
+    c=Client({updates.API:Response(200,meta),
               meta['assets'][0]['browser_download_url']:Response(200,data=data)})
     detected=updates.get_latest(c)
     saved=updates.stage_installer(detected,tmp_path,c)
@@ -133,17 +133,15 @@ def test_site_downloads_match_an_existing_release_channel():
     assert link == f'https://github.com/{REPO}/releases/latest'
 
 
-def test_newer_source_release_beats_older_public_mirror():
-    """A lagging download mirror must not mask a newer verified public release."""
+def test_updater_queries_only_the_official_release_endpoint():
+    """Public Star-AI Releases, not a deprecated second channel, are authoritative."""
     payload=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+400)
-    responses={
-        updates.PUBLIC_API:Response(200,sample_release(PUBLIC_REPO,payload,'0.6.1')),
-        updates.API:Response(200,sample_release(REPO,payload,'0.9.5')),
-    }
-    result=updates.get_latest(Client(responses))
-    assert result.available
-    assert result.version=='0.9.5'
+    client=Client({updates.API:Response(200,sample_release(REPO,payload,'0.9.5'))})
+    result=updates.get_latest(client)
+    assert result.available and result.version=='0.9.5'
     assert result.repository==REPO
+    assert client.called==[updates.API]
+    assert not hasattr(updates, 'PUBLIC_API')
 
 
 def test_checked_download_progress_and_local_cache(tmp_path,monkeypatch):
