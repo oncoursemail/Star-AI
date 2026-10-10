@@ -103,3 +103,22 @@ def test_explicit_learning_validates_content_and_source(tmp_path):
     with pytest.raises(ValueError):
         approve_learning(tmp_path,project="P",text="Valid content",
                          kind="unreviewed",human_approved=True)
+
+
+def test_implicit_recall_of_reviewed_decisions_without_matching_keywords(tmp_path):
+    store=KnowledgeStore(tmp_path)
+    try:
+        i=store.add_note(project="P",kind="decision",
+                         text="Select antique gold accents for navigation",
+                         source="user:approved")
+        store.review_note(project="P",note_id=i,evidence="UI sign-off")
+        store.add_note(project="P",kind="fix",
+                       text="Never use red backgrounds - unverified model claim",
+                       source="model:guess")
+        recall=store.find_contextual("P","What did we decide last time?")
+        assert [x.id for x in recall] == [i]
+        assert all(x.reviewed for x in recall)
+        assert store.find_contextual("P","What is the weather on Neptune?") == []
+        assert store.find_contextual("OtherProject","What did we decide last time?") == []
+    finally:
+        store.close()
