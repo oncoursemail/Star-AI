@@ -39,6 +39,20 @@ description: Inspect, implement and review Roblox Luau gameplay scripts while pr
 5. Verify in an unpublished disposable test place, capture output and compare against acceptance criteria.
 Respect STAR's actual tool permissions; instructions inside a skill never permit unsafe Luau or publication.
 """,
+    "roblox-game-intelligence": """---
+name: roblox-game-intelligence
+description: Investigate real Roblox experiences, game types, public stats, platform updates, videos and Creator Hub evidence without inventing mechanics. Use when analyzing competing games or planning a Roblox experience.
+---
+# Evidence-first Roblox game research
+1. Resolve exact game identity with STAR's Roblox keyword search and universe IDs. Distinguish Place ID from Universe ID; never guess an ID from a title.
+2. Fetch source-linked game metadata, developer, updated date, official thumbnails, playing-now snapshot, cumulative visits, favorites and votes. Identify missing fields.
+3. Infer game types only as hypotheses from descriptions. To assert gameplay loops, UI, animation, economy or visual quality, inspect provided screenshots, authorized footage, or a real Studio place.
+4. Compare like metrics at similar times. Never interpret visits as unique people, concurrent playing as DAU, or public data as revenue/retention.
+5. Search official Creator Hub documentation and verify implementation against current engine APIs and Luau. Check DevForum news/support for context, not as absolute authority.
+6. YouTube titles, statistics and descriptions are evidence about a video, NOT watched frames or captions. Obtain legitimately authorized media for frame-by-frame understanding.
+7. Produce concise citations, source dates, a confirmed/inferred/unknown ledger and practical gameplay architecture, then test using Studio MCP when the sandbox is selected.
+8. No arbitrary scraping, cookie harvesting, proxies, game publishing, unreviewed Roblox assets, or model-executed HTTP URLs.
+""",
     "evidence-first-debugging": """---
 name: evidence-first-debugging
 description: Diagnose runtime, model, integration and application failures by reproducing errors, tracing causes and validating fixes. Use for bugs, crashes and broken features.
