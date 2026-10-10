@@ -12,7 +12,7 @@ def test_inline_image_generation_not_separate_lab():
     assert "tab==='image'" not in ui
     assert "Image Lab" not in ui
     assert "Create image" in ui
-    assert "imageMode?'generateImage':'sendMessage'" in ui
+    assert "imageMode?'generateImage':teamMode?'runTeam':'sendMessage'" in ui
     assert "comfy_workflow" in ui
     assert "openLegacy" not in ui
 
