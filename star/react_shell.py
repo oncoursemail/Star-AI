@@ -21,6 +21,7 @@ from .analytics import get_dashboard
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
+from .chat_images import chat_image, generate_chat_image
 from .intelligence import for_settings
 
 ALLOWED_ACTIONS = frozenset({
@@ -68,8 +69,14 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
-    messages = [{'id':f'saved-{i}', 'role':role, 'text':text, 'created':created}
-                for i,(role,text,created) in enumerate(recent)]
+    messages = []
+    for i, (role, body, created) in enumerate(recent):
+        row = {'id': f'saved-{i}', 'role': role, 'text': body, 'created': created}
+        if role == 'assistant':
+            image = chat_image(home, body)
+            if image:
+                row.update(image)
+        messages.append(row)
     brain = BrainInstall.load(home / 'brain.json')
     return {
         'version':__version__, 'project':settings.project, 'projects':projects,
@@ -128,7 +135,6 @@ def launch():
             self.allowed_files: set[Path] = set()
             self.active_task = False
             self.active_update = False
-            self.active_image = False
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -152,7 +158,7 @@ def launch():
                 finally:
                     if action=='sendMessage':self.active_task=False
                     if action=='installUpdate':self.active_update=False
-                    if action=='generateImage':self.active_image=False
+                    if action=='generateImage':self.active_task=False
             self.pool.submit(task)
 
         def _start_brain(self, info: BrainInstall):
@@ -228,6 +234,25 @@ def launch():
                 chats.close()
             return {'answer':answer}
 
+        def _run_image(self, request_id: str, prompt: str):
+            """Generate in the active conversation; image references survive restarts."""
+            settings = Settings.load(self.settings_file)
+            home = app_data()
+            chats = Conversations(home / 'conversations.sqlite3')
+            try:
+                chat_id = chats.active_chat(settings.project)
+                chats.add(settings.project, 'user', prompt, chat_id=chat_id)
+            finally:
+                chats.close()
+            self._emit(request_id, 'progress', {'phase': 'Creating your image…'})
+            result = generate_chat_image(settings, prompt, home)
+            chats = Conversations(home / 'conversations.sqlite3')
+            try:
+                chats.add(settings.project, 'assistant', result['message'], chat_id=chat_id)
+            finally:
+                chats.close()
+            return {'answer': result['answer'], 'image': result['image']}
+
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
             try:
@@ -284,7 +309,7 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled','comfy_workflow','comfy_prompt_node','comfy_port'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
@@ -355,42 +380,11 @@ def launch():
                         return {'status':'launched_installer','version':candidate.version}
                     self._run(rid,action,worker)
                 elif action=='generateImage':
-                    if self.active_image:raise RuntimeError('An Image Lab job is already running')
-                    workflow=file_allowed(Path(str(body.get('workflow',''))),self.allowed_files)
-                    if workflow.suffix.lower()!='.json' or workflow.stat().st_size>2_000_000:
-                        raise ValueError('Choose a ComfyUI API-format JSON workflow under 2 MB')
+                    if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
-                    if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
-                    node=str(body.get('node','')).strip()
-                    if not node.isdecimal() or len(node)>12:raise ValueError('Enter the numeric CLIPTextEncode node ID')
-                    port=int(body.get('port',8188))
-                    if not 1<=port<=65535:raise ValueError('Invalid loopback ComfyUI port')
-                    self.active_image=True
-                    def image_worker():
-                        from .comfy import generate
-                        images=generate(workflow,prompt=prompt,node_id=node,
-                            output=app_data()/'generated',port=port)
-                        import base64
-                        from io import BytesIO
-                        from PIL import Image
-                        previews=[]
-                        for path in images[:4]:
-                            entry={'filename':path.name,'preview':''}
-                            try:
-                                with Image.open(path) as opened:
-                                    opened.thumbnail((640,640))
-                                    thumbnail=opened.convert('RGB')
-                                    buf=BytesIO()
-                                    thumbnail.save(buf,format='JPEG',quality=65,optimize=True)
-                                data=buf.getvalue()
-                                if len(data)<=300_000:
-                                    entry['preview']='data:image/jpeg;base64,'+base64.b64encode(data).decode('ascii')
-                            except (OSError,ValueError):
-                                # Keep saved originals available even if a thumbnail cannot be decoded.
-                                pass
-                            previews.append(entry)
-                        return {'images':previews,'total':len(images)}
-                    self._run(rid,action,image_worker)
+                    if not 1<=len(prompt)<=1500:raise ValueError('Describe an image in 1–1500 characters')
+                    self.active_task=True
+                    self._run(rid,action,lambda:self._run_image(rid,prompt))
                 elif action=='transcribe':
                     path=file_allowed(Path(str(body.get('file',''))),self.allowed_files)
                     from .media_features import transcribe_audio
