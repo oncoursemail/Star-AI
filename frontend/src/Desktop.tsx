@@ -61,10 +61,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const inactive=preview||!initial
  const brainReady=data.settings.provider==='local'?data.brain_running:Boolean(data.credentials?.[data.settings.provider])
  const brainLabel=data.settings.provider==='local'?'STAR Brain':'Cloud model'
- const sync=useCallback(async()=>{
+ const sync=useCallback(async(refreshChat=true)=>{
    if(inactive)return
    const r=await request<BootData>('bootstrap')
-   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
+   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);if(refreshChat)setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
  useEffect(()=>{scrollTo.current?.scrollIntoView({block:'end',behavior:themeMotion?'smooth':'auto'})},[messages.length,themeMotion,tab])
@@ -111,7 +111,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }
    const result=event.data as Record<string,unknown>
    if(action==='sendMessage'||action==='generateImage'){
-     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');setNotice('');setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
+     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');setNotice('');setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync(false)
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
