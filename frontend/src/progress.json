@@ -1,0 +1,864 @@
+{
+ "schema": 1,
+ "repo": "oncoursemail/Star-AI",
+ "generatedAt": "2026-10-10T14:42:50.376Z",
+ "raw": {
+  "releases": [
+   {
+    "tag_name": "v0.8.1",
+    "name": "STAR Intelligence v0.8.1",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v0.8.1",
+    "published_at": "2026-10-10T02:34:23Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.1/SHA256SUMS.txt",
+      "digest": "sha256:3e8442a081864adb72b995aed4893718737150e7e61547c942b439e826d46baf"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 344663240,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.1/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:1f08eb2ba85e93c3c82e947d96a461848eb90a9b867723372bf0315216052add"
+     },
+     {
+      "name": "STAR-Setup-v0.8.1.exe",
+      "size": 226619305,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.1/STAR-Setup-v0.8.1.exe",
+      "digest": "sha256:d59d8484feac03e9dc2c27f2c70b2bd0035613a2832d912f8c0045299eab77e0"
+     }
+    ]
+   },
+   {
+    "tag_name": "v0.8.0",
+    "name": "STAR Intelligence v0.8.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v0.8.0",
+    "published_at": "2026-10-10T02:11:48Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.0/SHA256SUMS.txt",
+      "digest": "sha256:ee627d90cd95d327ffa711ca0b5d3302f2969dcc4f2f0ea6e9538e15c9df7ba4"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 344663125,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.0/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:73311f721f190bbcfd93c704e729b9b2ae37fd1a344894d294833516b05a4bf2"
+     },
+     {
+      "name": "STAR-Setup-v0.8.0.exe",
+      "size": 226587873,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.8.0/STAR-Setup-v0.8.0.exe",
+      "digest": "sha256:0080976e5c31f9d0cc88a9852292a8e27be37fab7eb3c97c697ff00b18583b5b"
+     }
+    ]
+   },
+   {
+    "tag_name": "v0.6.1",
+    "name": "STAR Intelligence v0.6.1",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v0.6.1",
+    "published_at": "2026-10-09T22:21:30Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.1/SHA256SUMS.txt",
+      "digest": "sha256:6d3bb3c138cbc79eb747950c90e30e4d0ed4a9f73783e6135056e46b0bb1cf1a"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 164974762,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.1/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:5b1937b80f8c3650b5568e3522a21390948120421b62ec72732f28636ab0d683"
+     },
+     {
+      "name": "STAR-Setup-v0.6.1.exe",
+      "size": 109837915,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.1/STAR-Setup-v0.6.1.exe",
+      "digest": "sha256:aea181fea8bb6321eb9152d4b76646452a09a62a63afa2ca59c4a8a731c0fa87"
+     }
+    ]
+   },
+   {
+    "tag_name": "v0.6.0",
+    "name": "STAR Intelligence v0.6.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v0.6.0",
+    "published_at": "2026-10-09T22:06:52Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.0/SHA256SUMS.txt",
+      "digest": "sha256:b2e3394cbf59086511c1b71369627098173c2de16efd23f544204a4e4a453d66"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 164974380,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.0/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:25fe55eb86774ec3d45f9c817849f1354fca4832aaafc0bfb60942dec2619998"
+     },
+     {
+      "name": "STAR-Setup-v0.6.0.exe",
+      "size": 109838817,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.6.0/STAR-Setup-v0.6.0.exe",
+      "digest": "sha256:3b43db1a0522e7072bcbc7ac0a7d0ec95844c83f5c34de8fc8df9c15f63684ab"
+     }
+    ]
+   }
+  ],
+  "pulls": [
+   {
+    "number": 39,
+    "title": "STAR Ultimate Integration: model fleet, Roblox intelligence, reviewed tool forge and unified chat",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/39",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T04:02:36Z",
+    "updated_at": "2026-10-10T13:37:28Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 38,
+    "title": "STAR Ultimate Brain v2: managed local multi-model router, probes and Windows QA",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/38",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:51:37Z",
+    "updated_at": "2026-10-10T03:51:37Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 35,
+    "title": "Integration: unified STAR chat, Fast Brain, MCP Hub, parallel Teams and reviewed memory",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/35",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:32:07Z",
+    "updated_at": "2026-10-10T03:49:45Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 37,
+    "title": "STAR Agent Forge: real read-only subagents, reviewed custom tools, ranked memory",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/37",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:37:49Z",
+    "updated_at": "2026-10-10T03:44:15Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 36,
+    "title": "STAR Roblox Intelligence — game stats, real images, docs, forums, Place IDs, YouTube research",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/36",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:34:07Z",
+    "updated_at": "2026-10-10T03:42:39Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 31,
+    "title": "STAR Fast Brain: fast chat, hosted models, web, images, subagents, and integrated Agent Skills",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/31",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:11:12Z",
+    "updated_at": "2026-10-10T03:36:38Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 34,
+    "title": "STAR Ultimate Brain v1: specialist model routing, honest speed benchmarks, Roblox expert skills and training prep",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/34",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:29:02Z",
+    "updated_at": "2026-10-10T03:34:31Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 33,
+    "title": "chore: clean up obsolete public-download mirror and organize STAR source",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/33",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:26:28Z",
+    "updated_at": "2026-10-10T03:31:12Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 27,
+    "title": "STAR Quiet Chat: minimal React UI with image generation inside conversations",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/27",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T02:49:34Z",
+    "updated_at": "2026-10-10T03:28:44Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 32,
+    "title": "feat: STAR website intelligence hub, live stats, tool catalog & verified roadmap",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/32",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T03:19:17Z",
+    "created_at": "2026-10-10T03:15:06Z",
+    "updated_at": "2026-10-10T03:19:17Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 29,
+    "title": "STAR Next Intelligence — real parallel teams, verified memory and measured performance",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/29",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:03:36Z",
+    "updated_at": "2026-10-10T03:16:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 30,
+    "title": "STAR Frontier MCP Hub — 2026/legacy protocols, Obsidian & Graphify, bounded tool search",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/30",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T03:10:07Z",
+    "updated_at": "2026-10-10T03:13:45Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 28,
+    "title": "Superseded: STAR Fast Brain initial candidate (see #31)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/28",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-10T02:52:13Z",
+    "updated_at": "2026-10-10T03:11:22Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 26,
+    "title": "STAR Intelligence: Obsidian notes, Graphify graphs and Agent Skills",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/26",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:48:03Z",
+    "created_at": "2026-10-10T02:33:27Z",
+    "updated_at": "2026-10-10T02:48:03Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 18,
+    "title": "chore(deps): bump actions/setup-python from 6 to 7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/18",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:45:24Z",
+    "created_at": "2026-10-10T02:24:46Z",
+    "updated_at": "2026-10-10T02:45:32Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 19,
+    "title": "chore(deps): bump actions/upload-artifact from 6 to 7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/19",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:45:11Z",
+    "created_at": "2026-10-10T02:24:49Z",
+    "updated_at": "2026-10-10T02:45:21Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 20,
+    "title": "chore(deps): update openai requirement from <3,>=2.0 to >=2.54.0,<3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/20",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:45:06Z",
+    "created_at": "2026-10-10T02:24:55Z",
+    "updated_at": "2026-10-10T02:45:16Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 21,
+    "title": "chore(deps): bump actions/download-artifact from 7 to 8",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/21",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:44:49Z",
+    "created_at": "2026-10-10T02:24:59Z",
+    "updated_at": "2026-10-10T02:44:58Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 22,
+    "title": "chore(deps-dev): update pytest requirement from <10,>=8 to >=9.1.1,<10",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/22",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:44:45Z",
+    "created_at": "2026-10-10T02:25:02Z",
+    "updated_at": "2026-10-10T02:44:53Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 23,
+    "title": "chore(deps): update jsonschema requirement from <5,>=4.23 to >=4.26.0,<5",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/23",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:44:24Z",
+    "created_at": "2026-10-10T02:25:07Z",
+    "updated_at": "2026-10-10T02:44:32Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 24,
+    "title": "chore(deps): update httpx requirement from <1,>=0.27 to >=0.28.1,<1",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/24",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:44:19Z",
+    "created_at": "2026-10-10T02:25:10Z",
+    "updated_at": "2026-10-10T02:44:28Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 25,
+    "title": "chore(deps): update pillow requirement from <13,>=11 to >=12.3.0,<13",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/25",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:43:55Z",
+    "created_at": "2026-10-10T02:25:16Z",
+    "updated_at": "2026-10-10T02:44:04Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 1,
+    "title": "chore(deps): bump actions/checkout from 4 to 7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/1",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:06Z",
+    "updated_at": "2026-10-10T02:25:40Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 2,
+    "title": "chore(deps): bump actions/upload-pages-artifact from 4 to 5",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/2",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:07Z",
+    "updated_at": "2026-10-10T02:25:38Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 3,
+    "title": "build(deps): bump actions/download-artifact from 4 to 7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/3",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:10Z",
+    "updated_at": "2026-10-10T02:25:11Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 4,
+    "title": "chore(deps): bump actions/upload-artifact from 4 to 7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/4",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:12Z",
+    "updated_at": "2026-10-10T02:25:01Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 6,
+    "title": "build(deps): update faster-whisper requirement from <2,>=1.1 to >=1.2.1,<2",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/6",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:17Z",
+    "updated_at": "2026-10-10T02:25:00Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 9,
+    "title": "build(deps): update pyside6 requirement from <7,>=6.8 to >=6.11.2,<7",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/9",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:32Z",
+    "updated_at": "2026-10-10T02:24:56Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 10,
+    "title": "build(deps): update pyjwt requirement from <3,>=2.9 to >=2.15.1,<3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/10",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:34Z",
+    "updated_at": "2026-10-10T02:24:55Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 11,
+    "title": "build(deps): update python-dotenv requirement from <2,>=1 to >=1.2.4,<2",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/11",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:37Z",
+    "updated_at": "2026-10-10T02:24:53Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 17,
+    "title": "STAR v0.8.1 maintenance — Node 24 Actions, security and desktop dependencies",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/17",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:23:51Z",
+    "created_at": "2026-10-10T02:05:36Z",
+    "updated_at": "2026-10-10T02:23:51Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 7,
+    "title": "build(deps): update mcp requirement from <2,>=1.19 to >=2.3.0,<3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/7",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:23Z",
+    "updated_at": "2026-10-10T02:10:14Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 8,
+    "title": "build(deps): update openai requirement from <3,>=2.0 to >=3.26.0,<4",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/8",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:31Z",
+    "updated_at": "2026-10-10T02:10:10Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   },
+   {
+    "number": 16,
+    "title": "STAR Genesis v0.8 RC — Qwen 500 fix, live chat, React website and Windows build",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/16",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-10T02:01:15Z",
+    "created_at": "2026-10-10T01:08:21Z",
+    "updated_at": "2026-10-10T02:01:15Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 5,
+    "title": "build(deps): bump actions/configure-pages from 5 to 6",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/5",
+    "state": "closed",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-09T21:52:13Z",
+    "updated_at": "2026-10-09T22:56:47Z",
+    "user": {
+     "login": "dependabot[bot]",
+     "type": "Bot"
+    },
+    "labels": []
+   }
+  ],
+  "issues": [
+   {
+    "number": 39,
+    "title": "STAR Ultimate Integration: model fleet, Roblox intelligence, reviewed tool forge and unified chat",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/39",
+    "state": "open",
+    "created_at": "2026-10-10T04:02:36Z",
+    "updated_at": "2026-10-10T13:37:28Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 38,
+    "title": "STAR Ultimate Brain v2: managed local multi-model router, probes and Windows QA",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/38",
+    "state": "open",
+    "created_at": "2026-10-10T03:51:37Z",
+    "updated_at": "2026-10-10T03:51:37Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 37,
+    "title": "STAR Agent Forge: real read-only subagents, reviewed custom tools, ranked memory",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/37",
+    "state": "open",
+    "created_at": "2026-10-10T03:37:49Z",
+    "updated_at": "2026-10-10T03:44:15Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 36,
+    "title": "STAR Roblox Intelligence — game stats, real images, docs, forums, Place IDs, YouTube research",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/36",
+    "state": "open",
+    "created_at": "2026-10-10T03:34:07Z",
+    "updated_at": "2026-10-10T03:42:39Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 35,
+    "title": "Integration: unified STAR chat, Fast Brain, MCP Hub, parallel Teams and reviewed memory",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/35",
+    "state": "open",
+    "created_at": "2026-10-10T03:32:07Z",
+    "updated_at": "2026-10-10T03:49:45Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 34,
+    "title": "STAR Ultimate Brain v1: specialist model routing, honest speed benchmarks, Roblox expert skills and training prep",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/34",
+    "state": "open",
+    "created_at": "2026-10-10T03:29:02Z",
+    "updated_at": "2026-10-10T03:34:31Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 33,
+    "title": "chore: clean up obsolete public-download mirror and organize STAR source",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/33",
+    "state": "open",
+    "created_at": "2026-10-10T03:26:28Z",
+    "updated_at": "2026-10-10T03:31:12Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 31,
+    "title": "STAR Fast Brain: fast chat, hosted models, web, images, subagents, and integrated Agent Skills",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/31",
+    "state": "open",
+    "created_at": "2026-10-10T03:11:12Z",
+    "updated_at": "2026-10-10T03:36:38Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 30,
+    "title": "STAR Frontier MCP Hub — 2026/legacy protocols, Obsidian & Graphify, bounded tool search",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/30",
+    "state": "open",
+    "created_at": "2026-10-10T03:10:07Z",
+    "updated_at": "2026-10-10T03:13:45Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 29,
+    "title": "STAR Next Intelligence — real parallel teams, verified memory and measured performance",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/29",
+    "state": "open",
+    "created_at": "2026-10-10T03:03:36Z",
+    "updated_at": "2026-10-10T03:16:56Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 27,
+    "title": "STAR Quiet Chat: minimal React UI with image generation inside conversations",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/27",
+    "state": "open",
+    "created_at": "2026-10-10T02:49:34Z",
+    "updated_at": "2026-10-10T03:28:44Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 15,
+    "title": "P0 — Real Windows 11 acceptance of STAR v0.8, GPU, AI and updater",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/15",
+    "state": "open",
+    "created_at": "2026-10-09T22:48:36Z",
+    "updated_at": "2026-10-10T02:15:44Z",
+    "comments": 0,
+    "labels": []
+   }
+  ],
+  "commits": [
+   {
+    "sha": "f05f292d7ca94efc088d6db456fe2b02e2253fa3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/f05f292d7ca94efc088d6db456fe2b02e2253fa3",
+    "commit": {
+     "message": "feat(site): launch STAR public intelligence dashboard and roadmap (#32)",
+     "committer": {
+      "date": "2026-10-10T03:19:17Z"
+     }
+    }
+   },
+   {
+    "sha": "19b7f78ba3d920369ec6a92798e626fbb7f69ef0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/19b7f78ba3d920369ec6a92798e626fbb7f69ef0",
+    "commit": {
+     "message": "STAR Intelligence: Obsidian notes, Graphify graphs and Agent Skills (#26)",
+     "committer": {
+      "date": "2026-10-10T02:48:03Z"
+     }
+    }
+   },
+   {
+    "sha": "9931e0b4fd069543bf59f08f32cbfed5e5d4f61d",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/9931e0b4fd069543bf59f08f32cbfed5e5d4f61d",
+    "commit": {
+     "message": "chore(deps): bump actions/setup-python from 6 to 7 (#18)",
+     "committer": {
+      "date": "2026-10-10T02:45:23Z"
+     }
+    }
+   },
+   {
+    "sha": "87e946657df4495cbee996fdfb67b2f34f62008b",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/87e946657df4495cbee996fdfb67b2f34f62008b",
+    "commit": {
+     "message": "chore(deps): bump actions/upload-artifact from 6 to 7 (#19)",
+     "committer": {
+      "date": "2026-10-10T02:45:11Z"
+     }
+    }
+   },
+   {
+    "sha": "e031996b1b5f39a55dc176255a0ff75bcf02b5e3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/e031996b1b5f39a55dc176255a0ff75bcf02b5e3",
+    "commit": {
+     "message": "chore(deps): update openai requirement from <3,>=2.0 to >=2.54.0,<3 (#20)",
+     "committer": {
+      "date": "2026-10-10T02:45:06Z"
+     }
+    }
+   },
+   {
+    "sha": "142e1ac428163d9feff9eaf66dba39ff4dc2844e",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/142e1ac428163d9feff9eaf66dba39ff4dc2844e",
+    "commit": {
+     "message": "chore(deps): bump actions/download-artifact from 7 to 8 (#21)",
+     "committer": {
+      "date": "2026-10-10T02:44:49Z"
+     }
+    }
+   },
+   {
+    "sha": "c328ca1f71a5ef05f337b301e552589df4822f22",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/c328ca1f71a5ef05f337b301e552589df4822f22",
+    "commit": {
+     "message": "chore(deps-dev): update pytest requirement from <10,>=8 to >=9.1.1,<10 (#22)",
+     "committer": {
+      "date": "2026-10-10T02:44:44Z"
+     }
+    }
+   },
+   {
+    "sha": "d891fecb903f5f5f7635ca5287c9c4b144cdd153",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/d891fecb903f5f5f7635ca5287c9c4b144cdd153",
+    "commit": {
+     "message": "chore(deps): update jsonschema requirement from <5,>=4.23 to >=4.26.0,<5 (#23)",
+     "committer": {
+      "date": "2026-10-10T02:44:23Z"
+     }
+    }
+   }
+  ],
+  "milestones": []
+ }
+}
