@@ -137,17 +137,31 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
     non-streamed reply. Returns (text, tool_calls, whether any text was shown).
     `lead` is put before the first visible text, to separate it from text an
     earlier model turn of the same task already showed.
+
+    Two early signals keep a slow server from looking idle: `model_responding`
+    when the first chunk arrives (the prompt has been read, writing has begun)
+    and `tool_requested` when the model starts to write a tool call. Neither
+    carries a name or arguments: nothing has been authorized or run yet.
     """
     chunks: list[str] = []
     calls: list[dict] = []
     by_index: dict = {}
     pending = ''
     last_flush = monotonic()
+    responding = False
     async for chunk in stream:
         if not getattr(chunk, 'choices', None):
             continue
+        if not responding:
+            responding = True
+            event({'event': 'model_responding'})
         delta = chunk.choices[0].delta
         for part in getattr(delta, 'tool_calls', None) or []:
+            if not calls:
+                if pending:   # show the text that came before the call first
+                    event({'event': 'assistant_delta', 'text': pending})
+                    pending = ''
+                event({'event': 'tool_requested'})
             function = getattr(part, 'function', None)
             index = getattr(part, 'index', None)
             call_id = getattr(part, 'id', None)

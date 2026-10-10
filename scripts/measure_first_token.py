@@ -17,6 +17,8 @@ an app start (cold, and after STAR's warm-up).
     resume  the app restarts on that chat: one more message, cold / after warm-up
     agent   one real tool-using turn through star.agent.execute, to time the
             first streamed progress
+    app     the desktop's own path in a throwaway profile: star.warmup.warm_up,
+            then two messages through desktop_core.run_task
 
 A "cold" request starts with a one-line session marker the server has never
 seen, so neither a slot nor llama-server's RAM prompt cache can help it: that
@@ -244,12 +246,57 @@ def run_agent(settings: Settings, key: str, max_tokens: int) -> dict:
     return {"events_s": marks, "tool_called": called, "answer_chars": len(answer), "total_s": round(time.perf_counter() - began, 2)}
 
 
+def run_app(settings: Settings, turns: list[tuple[str, str]]) -> dict:
+    """What the desktop does after a start, with its own functions and a throwaway profile."""
+    import tempfile
+    import threading
+    from star.desktop_core import Conversations, app_data, run_task
+    from star.model_health import server_status
+    from star.warmup import warm_up
+    result: dict = {"messages": []}
+    with tempfile.TemporaryDirectory(prefix="star-ttft-", ignore_cleanup_errors=True) as folder:
+        os.environ["APPDATA"] = os.environ["XDG_DATA_HOME"] = folder     # never the owner's real profile
+        home = app_data()
+        home.mkdir(parents=True, exist_ok=True)
+        chats = Conversations(home / "conversations.sqlite3")
+        try:
+            chat = chats.new_chat(settings.project)
+            marker = new_marker()                                        # a chat the server has never seen
+            for number, (user, answer) in enumerate(turns):
+                chats.add(settings.project, "user", (f"(session {marker}) " if number == 0 else "") + user, chat_id=chat)
+                chats.add(settings.project, "assistant", answer, chat_id=chat)
+            result["status_before"] = server_status(settings)["ok"]
+            result["warm_up"] = warm_up(settings, home=home, chat_id=chat)
+            result["status_after"] = server_status(settings)["ok"]
+            print("  warm-up: " + json.dumps(result["warm_up"]), flush=True)
+            for prompt in PROMPTS[len(turns) % len(PROMPTS):][:1] + PROMPTS[:1]:
+                chats.add(settings.project, "user", prompt, chat_id=chat)    # as the bridge does
+                began, first, stop = time.perf_counter(), [], threading.Event()
+
+                def on_event(event):
+                    if event.get("event") == "assistant_delta" and not first:
+                        first.append(time.perf_counter() - began)
+                        stop.set()      # the first visible text is what is measured; do not wait for the rest
+                try:
+                    run_task(settings, prompt, on_event=on_event, stream_tokens=True, mode="fast",
+                             chat_id=chat, cancel_event=stop)
+                except RuntimeError as exc:
+                    if "cancelled by user" not in str(exc):
+                        raise
+                row = {"first_text_s": round(first[0], 2) if first else None}
+                result["messages"].append(row)
+                print("  message through run_task: " + json.dumps(row), flush=True)
+        finally:
+            chats.close()
+    return result
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--endpoint", required=True, help="for example http://10.17.0.146:8080/v1")
     parser.add_argument("--model", required=True)
     parser.add_argument("--key-file", default="")
-    parser.add_argument("--phases", default="chat,resume,agent")
+    parser.add_argument("--phases", default="chat,resume,agent,app")
     parser.add_argument("--layouts", default="legacy,stable")
     parser.add_argument("--turns", type=int, default=5)
     parser.add_argument("--max-tokens", type=int, default=64)
@@ -295,6 +342,11 @@ def main() -> int:
         print("\nOne tool-using turn through star.agent.execute (streamed)", flush=True)
         report["agent"] = run_agent(settings, key, max(args.max_tokens, 120))
         print("  " + json.dumps(report["agent"]), flush=True)
+    if "app" in phases:
+        stand_in = turns or [(prompt, "Use a ProximityPrompt and TweenService; validate on the server. " * 3)
+                             for prompt in PROMPTS[:args.turns]]
+        print(f"\nThe desktop path: warm_up, then two messages through run_task ({len(stand_in)} earlier turns)", flush=True)
+        report["app"] = run_app(settings, stand_in)
     report["ended_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if args.out:
         Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")

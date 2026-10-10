@@ -224,6 +224,12 @@ def sanitize_event(event: dict) -> dict:
                 else 'Using an authorized local tool','activity':activity}
     if kind in {'tool_call','tool_result','tool_output'}:
         return {'phase':'Using an authorized local tool'}
+    if kind == 'model_responding':
+        # First streamed chunk: the server has read the prompt and started to write.
+        return {'phase':'The model is writing'}
+    if kind == 'tool_requested':
+        # The model began to write a tool call. Nothing is authorized or run yet, so no name.
+        return {'phase':'Preparing a tool request'}
     if kind == 'model_started':
         # Routing and context are ready; the request goes out next (after Studio connects, if it is used).
         return {'phase':'Contacting the model'}

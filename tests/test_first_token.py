@@ -356,7 +356,10 @@ def test_tool_using_turn_streams_text_and_rebuilds_the_tool_call():
         assert replay[-1]["role"] == "tool" and replay[-1]["tool_call_id"] == "call-7"
         # Progress in order: the turn starts, its text streams, the tool runs, the answer streams.
         kinds = [e["event"] for e in events]
-        assert kinds.index("model_turn") < kinds.index("assistant_delta") < kinds.index("tool_started")
+        assert kinds.index("model_turn") < kinds.index("model_responding") < kinds.index("assistant_delta")
+        assert kinds.index("assistant_delta") < kinds.index("tool_requested") < kinds.index("tool_started")
+        assert events[kinds.index("tool_requested")] == {"event": "tool_requested"}   # no name before authorization
+        assert kinds.count("model_responding") == 2 and kinds.count("tool_requested") == 1
         assert kinds.index("tool_finished") < len(kinds) - 1 - kinds[::-1].index("assistant_delta")
         shown = "".join(e["text"] for e in events if e["event"] == "assistant_delta")
         assert shown == "Let me read the script.\n\nIt prints hello." and "private" not in shown
@@ -412,3 +415,10 @@ def test_studio_tools_come_after_the_tools_every_turn_has():
         names = [tool["function"]["name"] for tool in models.requests[0]["tools"]]
         assert names == ["star_delegate", "star_web_search", "script_read"]
     asyncio.run(run())
+
+
+def test_early_progress_events_have_wording_and_reveal_nothing():
+    from star.react_shell import sanitize_event
+    assert sanitize_event({"event": "model_responding"}) == {"phase": "The model is writing"}
+    assert sanitize_event({"event": "tool_requested", "tool": "execute_luau", "arguments": "secret"}) == {
+        "phase": "Preparing a tool request"}
