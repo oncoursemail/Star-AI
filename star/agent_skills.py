@@ -39,6 +39,42 @@ description: Inspect, implement and review Roblox Luau gameplay scripts while pr
 5. Verify in an unpublished disposable test place, capture output and compare against acceptance criteria.
 Respect STAR's actual tool permissions; instructions inside a skill never permit unsafe Luau or publication.
 """,
+    "roblox-animation-pipeline": """---
+name: roblox-animation-pipeline
+description: Design and validate authored Roblox character and UI animations with proper rigs, easing, transitions and reproducible playtests.
+---
+# Roblox animation pipeline
+1. Identify the real R6/R15 rig, Humanoid/Animator owner, Motor6D joints, attachments and any imported skeleton. Never construct a fake block-based person in place of the requested avatar.
+2. Plan poses, anticipation, timing, transition graphs, looping and cancellation. Match camera framing and actual design references before keyframing.
+3. Keep gameplay authority on the server; replicate animation state, but run presentation and input-responsive transitions on the client.
+4. Use Animator and documented engine animation APIs. For UI, use TweenService with bounded durations and reduced-motion fallback.
+5. Preview actual clips in Studio, verify tool/prop alignment to the proper hand or attachment, and inspect first/last frames for snapping and clipping.
+6. Measure animation/FX cost on low-end mobile and desktop. Report untested camera angles and rigs instead of inventing footage.
+""",
+    "roblox-asset-pipeline": """---
+name: roblox-asset-pipeline
+description: Build and review high-quality meshes, PBR materials and textures for Roblox Studio with real source files, licensing and optimization.
+---
+# Roblox asset pipeline
+1. Create a concept and silhouette sheet from approved references. Do not treat a generated 2D image as a usable editable 3D mesh.
+2. Model with Blender or equivalent: clean topology, normals, pivots, UVs, smoothing and readable scale. Avoid part-built substitutions or mismatched shapes.
+3. Prepare albedo, roughness, normal and metallic maps within platform budgets; use licensed source material and record provenance.
+4. Export FBX or glTF with transforms, skeletons and expected file names, then use Studio 3D Importer and inspect warnings.
+5. Validate material appearance, mesh collisions, hand attachments, rig deformation and silhouette across lighting conditions.
+6. Optimize draw calls, triangle counts and texture resolution against a representative scene and hardware. Do not claim AAA or production-ready without rendered evidence.
+""",
+    "roblox-performance-audit": """---
+name: roblox-performance-audit
+description: Profile Roblox experience frame time, memory, streaming, networking and UI responsiveness before tuning or claiming optimization.
+---
+# Roblox performance review
+1. Capture a repeatable baseline on target devices: frame rate distributions, memory, server timing, network traffic and place load time.
+2. Use Studio profiler and script performance diagnostics to identify the largest observed bottleneck rather than guessing.
+3. Review script loops, RenderStepped handlers, remote frequency, NPC/physics replication, instance count, StreamingEnabled and texture budgets.
+4. Apply one reversible change, collect before/after evidence, and verify visual quality and gameplay behavior did not regress.
+5. Compare low-end mobile and desktop; include cold-load and high-player scenarios when available.
+6. Do not invent FPS gains or hide slow devices. Record exact test build, settings, device and traces.
+""",
     "evidence-first-debugging": """---
 name: evidence-first-debugging
 description: Diagnose runtime, model, integration and application failures by reproducing errors, tracing causes and validating fixes. Use for bugs, crashes and broken features.
