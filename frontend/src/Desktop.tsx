@@ -10,6 +10,7 @@ import './stellar-ui.css'
 import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
+import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
@@ -212,7 +213,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(inactive){setNotice('This preview does not run a model. Download STAR to chat locally.');return}
    const selected=files.slice()
    if(teamMode&&selected.length){setNotice('STAR Teams supports text prompts only. Remove attachments or disable Teams.');return}
-   if(teamMode&&data.settings.provider!=='local'){setNotice('STAR Teams uses the local model. Choose Local in Settings.');return}
+   if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
    lastSent.current=value
    setComposerMenu(false)
    followBottom.current=true;setShowJump(false)
@@ -315,6 +316,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const wrapper='shell '+(!leftOpen?'':'shell-open')+(sidebarCollapsed?' shell-sidebar-collapsed':'')
  const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
  const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
+ const serverMode=usesStarServer(data.settings)
+ const brain=brainStatus(data)
  return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview}>
    <aside className="sidebar" aria-label="STAR navigation">
       <div className="brand-area">
@@ -339,7 +342,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
         <AnimatePresence initial={false}>{toolsOpen&&<motion.div className="sidebar-tools" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:.17}}>
           {sections.filter(([id])=>id!=='chat').map(([id,name,Icon])=><button className={'tool-nav-item '+(tab===id?'active':'')} type="button" key={id} onClick={()=>{nav(id);setToolsOpen(false)}}><Icon size={16}/><span>{name}</span></button>)}
         </motion.div>}</AnimatePresence>
-        <button className="sidebar-engine" type="button" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{data.brain_running?'STAR Brain ready':'STAR Brain offline'}</span><ChevronRight size={15}/></button>
+        <button className="sidebar-engine" type="button" onClick={()=>nav('brain')}><span className={'status-dot '+(brain.online?'ok':'')}/><span>{brain.label}</span><ChevronRight size={15}/></button>
       </div>
     </aside>
    <div className="shell-main">
@@ -408,7 +411,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                      {chatMode==='agent'&&<button type="button" className={'integrated-chip '+(githubSource?'active':'')} aria-pressed={githubSource} disabled={busy||imageMode||teamMode}
                        title="Read public STAR source; no editing or credentials" onClick={()=>setGithubSource(x=>!x)}><BookOpen size={14}/> Source</button>}
                    </div>
-                   <button className="composer-model" type="button" title="View local model" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{imageMode?'Local image creation':truncate(data.settings.model||'STAR Brain',25)}</span><ChevronDown size={13}/></button>
+                   <button className="composer-model" type="button" title="View local model" onClick={()=>nav('brain')}><span className={'status-dot '+(brain.online?'ok':'')}/><span>{imageMode?'Local image creation':truncate(data.settings.model||'STAR Brain',25)}</span><ChevronDown size={13}/></button>
                   </div>
                   <div className="composer-right">{busy&&!teamMode?<button className="send-button" type="button" title="Stop generating" aria-label="Stop response" onClick={()=>void act('cancelMessage')}><X size={18}/></button>:
                      <button className="send-button" type="button" aria-label={busy?'STAR Teams is working':'Send message'} disabled={busy||!prompt.trim()} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={20}/>}</button>}</div>
@@ -421,6 +424,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="LOCAL MODEL" title="STAR Brain" description="Your private AI, running on your computer."/>
+            {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
+            <LocalBrainFallback optional={serverMode}>
             <Panel className="brain-simple">
               <div className="brain-simple-head"><span className="brain-simple-icon"><Star size={25} fill="currentColor"/></span>
                 <div className="brain-simple-copy"><h2>{data.brain_installed?'Your local AI is installed':'Set up your local AI'}</h2><p>{data.brain_running?'STAR is ready for your next conversation.':data.brain_installed?'Start your installed model to begin chatting.':'Download a verified local model to get started. A few gigabytes of disk space are required.'}</p></div>
@@ -429,6 +434,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               {!data.brain_running&&<button type="button" className="primary-button brain-start" disabled={brainProgress!==null} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={17}/>:<Download size={17}/>} {brainProgress?'Preparing STAR Brain…':data.brain_installed?'Start model':'Download and start'}<ArrowRight size={16}/></button>}
               {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={{duration:.2}}/></div></div>}
             </Panel>
+            </LocalBrainFallback>
             <details className="settings-expander brain-details"><summary><span><strong>Model and connection details</strong><small>View your model, run a response test, or update its settings.</small></span><ChevronDown size={17}/></summary>
               <div className="settings-expander-body">
                 <p><strong>Model:</strong> {data.settings.model||'None selected'}</p><p><strong>Local endpoint:</strong> {data.settings.endpoint}</p>
