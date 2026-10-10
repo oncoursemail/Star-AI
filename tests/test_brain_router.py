@@ -62,6 +62,17 @@ def test_roblox_agent_prefers_roblox_specialist_and_preserves_agent_tools():
     assert select_route(s, "Reason about pure mathematics", mode="agent").model == "general-reasoner"
 
 
+def test_roblox_followup_uses_specialist_without_direct_keyword():
+    s = cfg(model="main", reasoning_model="reasoner", roblox_model="specialist")
+    auto = select_route(s, "fix it", mode="auto", project_tools=True, roblox_context=True)
+    assert auto.profile == "roblox" and auto.model == "specialist" and auto.use_tools
+    agent = select_route(s, "continue that", mode="agent", roblox_context=True)
+    assert agent.model == "specialist"
+    assert select_route(s, "fix it", mode="auto").model == "reasoner"
+    with pytest.raises(ValueError):
+        select_route(s, "fix it", roblox_context="yes")
+
+
 def test_images_select_vision_model_even_for_manual_agent():
     selection = select_route(cfg(reasoning_model="text-only", vision_model="image-capable"),
                              "Audit screenshot", mode="agent", image_count=2)
