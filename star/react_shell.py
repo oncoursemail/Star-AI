@@ -30,6 +30,7 @@ from .providers import credential_status, save_api_key, clear_api_key, provider_
 from .model_health import (explain_model_failure, missing_model_message, note_server_result,
                            probe_server, server_status)
 from .chat_images import chat_image, generate_chat_image
+from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
@@ -41,7 +42,15 @@ ALLOWED_ACTIONS = frozenset({
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam','testServer',
+    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
+})
+
+# A background warm-up (server check + prompt-cache priming) gives way at once to
+# anything that talks to the model server or changes what it would talk to.
+WARM_UP_STOPPERS = frozenset({
+    'sendMessage','runTeam','generateImage','testServer','testModel','testModelTeam','listModels',
+    'startModelRouter','stopBrain','startBrain','installBrain','saveSettings','switchProject',
+    'saveProviderKey','clearProviderKey','newChat','switchChat',
 })
 
 # Settings the React interface may change. Never a credential: provider and
@@ -396,6 +405,29 @@ def launch():
             self.cancel_chat = threading.Event()
             self.turn: TurnRef | None = None
             self.active_update = False
+            self.warmer = Warmer()
+
+        def _warm_target(self):
+            """What a message sent now would talk to. Runs on the warm-up thread."""
+            settings=Settings.load(self.settings_file)
+            home=app_data()
+            chat_id=None
+            if (home/'conversations.sqlite3').is_file():
+                chats=Conversations(home/'conversations.sqlite3')
+                try: chat_id=chats.active_chat(settings.project)
+                finally: chats.close()
+            return settings,home,chat_id
+
+        def _warm(self, request_id: str = '', check: bool = True):
+            """Check the selected model server and prime its prompt cache, off the UI thread.
+
+            It is not a turn: nothing is saved, `active_task` stays False, and any
+            real request cancels it (see WARM_UP_STOPPERS). Cloud providers are skipped.
+            """
+            self.warmer.start(
+                self._warm_target, check=check,
+                on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
+                on_done=(lambda report:self._emit(request_id,'result',report)) if request_id else None)
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -469,6 +501,9 @@ def launch():
                 chats.add(settings.project,'assistant',answer,chat_id=active_chat)
             finally:
                 chats.close()
+            # While the owner reads the answer, let the server read it too: the next
+            # message then starts from a fully cached conversation. Cancelled by any request.
+            self._warm(check=False)
             return {'answer':answer}
 
         def _run_image(self, request_id, prompt):
@@ -541,6 +576,12 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
+                if action in WARM_UP_STOPPERS:self.warmer.cancel()
+                if action=='warmUp':
+                    if self.active_task:
+                        return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
+                    self._warm(rid)
+                    return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
@@ -569,6 +610,7 @@ def launch():
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.new_chat(settings.project)
                     finally: conversations.close()
+                    self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='switchChat':
                     if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
@@ -577,6 +619,7 @@ def launch():
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.switch_chat(settings.project,chat_id)
                     finally: conversations.close()
+                    self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='rememberDecision':
                     from .learning import approve_learning
@@ -837,6 +880,7 @@ def launch():
 
         def close(self):
             self.cancel_chat.set()
+            self.warmer.cancel()
             self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)
 
