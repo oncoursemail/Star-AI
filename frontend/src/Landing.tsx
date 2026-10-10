@@ -8,8 +8,10 @@ import {
  Workflow,X,Zap
 } from 'lucide-react'
 import {Brand} from './components'
+import {StatusHub} from './StatusHub'
 import {WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import './site-v2.css'
+import './site-v3.css'
 
 const tourViews = [
  {id:'chat',label:'Conversation',eyebrow:'01 / THINK',title:'A conversation that stays out of your way.',
@@ -80,13 +82,14 @@ export function Landing(){
   <header className="sv-header">
    <a className="sv-home" href="#top" aria-label="STAR Intelligence home"><Brand small/></a>
    <nav className={'sv-navigation'+(menu?' sv-navigation-open':'')} aria-label="Main navigation">
-     <a href="#experience" onClick={()=>setMenu(false)}>Workspace</a>
-     <a href="#capabilities" onClick={()=>setMenu(false)}>Capabilities</a>
-     <a href="#process" onClick={()=>setMenu(false)}>How it works</a>
+     <a href="#status" onClick={()=>setMenu(false)}>Live stats</a>
+     <a href="#intelligence" onClick={()=>setMenu(false)}>Intelligence</a>
+     <a href="#tools" onClick={()=>setMenu(false)}>Tools</a>
+     <a href="#roadmap" onClick={()=>setMenu(false)}>Roadmap</a>
      <a href={WEBSITE_REPO} target="_blank" rel="noopener noreferrer" onClick={()=>setMenu(false)}>GitHub <ArrowUpRight size={14}/></a>
    </nav>
    <div className="sv-header-actions">
-    <span className="sv-header-platform"><span className="sv-spark-small">✦</span> WINDOWS 11</span>
+    <span className="sv-header-platform"><span className="sv-spark-small">✦</span> OPEN DEVELOPMENT</span>
     <a className="sv-nav-download" href={WEBSITE_RELEASES}><Download size={15}/> Get STAR</a>
     <button className="sv-menu-button" aria-label={menu?'Close menu':'Open menu'} aria-expanded={menu}
       onClick={()=>setMenu(!menu)}>{menu?<X size={20}/>:<Menu size={20}/>}</button>
@@ -98,17 +101,17 @@ export function Landing(){
     <div className="sv-hero-grid" aria-hidden="true"/>
     <motion.div className="sv-hero-copy" initial={immediateEntrance?false:{opacity:0,y:20}} animate={{opacity:1,y:0}}
       transition={{duration:.55,ease:'easeOut'}}>
-     <span className="sv-overline"><span className="sv-overline-mark">✦</span> INTRODUCING STAR INTELLIGENCE <span className="sv-overline-line"/></span>
-     <h1 id="sv-title">Make space for <span>your next big idea.</span></h1>
-     <p className="sv-hero-lede">The local-first AI workspace for people who make things. Think clearly, turn references into plans, and bring ideas into real projects—with tools you control.</p>
+     <span className="sv-overline"><span className="sv-overline-mark">✦</span> THE NEXT GENERATION OF STAR <span className="sv-overline-line"/></span>
+     <h1 id="sv-title">One AI.<br/><span>Endless ways to create.</span></h1>
+     <p className="sv-hero-lede">Meet STAR Intelligence—your local-first AI workspace for building, researching and bringing ambitious ideas to life. Explore the tools it has now, the intelligence coming next, and every real step forward.</p>
      <div className="sv-hero-cta">
        <a className="sv-button sv-button-primary" href={WEBSITE_RELEASES}><ArrowDownToLine size={18}/> Download for Windows <ArrowRight size={17}/></a>
-       <a className="sv-button sv-button-quiet" href="#experience">Explore the experience <ArrowUpRight size={17}/></a>
+       <a className="sv-button sv-button-quiet" href="#status">See development progress <ArrowUpRight size={17}/></a>
      </div>
      <div className="sv-proof-line">
-       <span><Check size={14}/> No required cloud API key</span>
-       <span><LockKeyhole size={14}/> Local conversation history</span>
-       <span><Monitor size={14}/> Windows 11</span>
+       <span><Check size={14}/> Your own local brain</span>
+       <span><LockKeyhole size={14}/> Permissioned tools</span>
+       <span><Monitor size={14}/> Windows desktop</span>
      </div>
     </motion.div>
     <motion.div className="sv-hero-visual" initial={immediateEntrance?false:{opacity:0,x:22}} animate={{opacity:1,x:0}}
@@ -147,10 +150,11 @@ export function Landing(){
          onClick={()=>setTrack(item.id)}>{item.label}{track===item.id&&<motion.span layoutId="sv-track-active" className="sv-concept-choice-indicator"/>}</button>)}
       </div>
     </motion.div>
-    <div className="sv-hero-bottom" aria-hidden="true"><span>STAR / GENESIS</span><span>01 — THINK. CREATE. BUILD.</span></div>
+    <div className="sv-hero-bottom" aria-hidden="true"><span>STAR / INTELLIGENCE</span><span>CREATE · CONNECT · EVOLVE</span></div>
    </section>
 
-   <div className="sv-divider-band"><span>ONE WORKSPACE</span><span> / </span><span>EVERY IDEA STARTS SOMEWHERE</span><span className="sv-band-star">✦</span></div>
+   <div className="sv-divider-band"><span>ONE STAR INTELLIGENCE</span><span> / </span><span>VISIBLE PROGRESS</span><span> / </span><span>REAL TOOLS</span><span className="sv-band-star">✦</span></div>
+   <StatusHub/>
 
    <section id="experience" className="sv-experience" aria-labelledby="sv-experience-title">
     <motion.div {...fadeUp} className="sv-section-heading">
@@ -187,22 +191,6 @@ export function Landing(){
     </div>
    </section>
 
-   <section id="capabilities" className="sv-capabilities" aria-labelledby="sv-cap-title">
-    <motion.div {...fadeUp} className="sv-section-heading sv-feature-heading">
-     <span className="sv-section-kicker">02 / BUILT WITH PURPOSE</span>
-     <h2 id="sv-cap-title">Made for creators.<br/><span>Not dashboards for dashboards.</span></h2>
-     <p>Thoughtfully designed tools for real projects. Restrained visuals, meaningful feedback and a system you can understand.</p>
-    </motion.div>
-    <div className="sv-feature-grid">
-      {features.map((feature,i)=><motion.article key={feature.number} className="sv-feature"
-        initial={{opacity:0,y:10}} whileInView={{opacity:1,y:0}} viewport={{once:true,amount:.1}}
-        transition={{duration:.32,delay:(i%3)*.07}}>
-       <div className="sv-feature-top"><span>{feature.number} /</span><feature.icon size={21} strokeWidth={1.65}/></div>
-       <h3>{feature.title}</h3><p>{feature.description}</p>
-      </motion.article>)}
-    </div>
-   </section>
-
    <section id="process" className="sv-process" aria-labelledby="sv-process-title">
     <motion.div {...fadeUp} className="sv-process-intro">
       <span className="sv-section-kicker">03 / SIMPLE FROM THE START</span>
@@ -227,6 +215,8 @@ export function Landing(){
       <details><summary>Do I need to pay for a cloud model?<ChevronRight size={17}/></summary><p>No. STAR can run an open model locally. You still need sufficient PC resources and an initial model download.</p></details>
       <details><summary>Does it build Roblox games automatically?<ChevronRight size={17}/></summary><p>STAR helps inspect, plan and edit a selected Studio sandbox with permitted tools. Results need real testing and human review; it does not guarantee a complete production game.</p></details>
       <details><summary>Will updating remove my chats and models?<ChevronRight size={17}/></summary><p>The installer replaces application files and is designed to preserve separate local STAR data. Always keep backups of important projects.</p></details>
+      <details><summary>Are the public statistics actual model benchmarks?<ChevronRight size={17}/></summary><p>No. Website statistics come from GitHub releases, pull requests, issues and repository activity. Local response speed and task outcomes are only measured in the Windows application. We do not invent intelligence scores.</p></details>
+      <details><summary>When will web search, more models and subagents arrive?<ChevronRight size={17}/></summary><p>They are active development priorities, not promised release dates. The roadmap links to the code changes and review status so you can check what has actually shipped.</p></details>
     </div>
    </section>
    <section className="sv-final" aria-labelledby="sv-final-title"><span className="sv-final-mark">✦</span>
