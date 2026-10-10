@@ -38,7 +38,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: pip
@@ -78,7 +78,7 @@ jobs:
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'STAR-CI-Empty-Profile'
           python -m scripts.capture_desktop_ui
       - name: Upload rendered GUI preview screenshots
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-OLED-GUI-Previews
           path: ui-previews/*.png
@@ -125,7 +125,7 @@ jobs:
           $setup = "dist/STAR-Setup-v$version.exe"
           if (-not (Test-Path $setup)) { throw "Missing $setup" }
       - name: Upload testable executables
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-Windows-vNext
           path: |
@@ -142,11 +142,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       - name: Download tested Windows packages
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: STAR-Windows-vNext
           path: release-assets
@@ -197,10 +197,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: STAR-Windows-vNext
           path: release-assets

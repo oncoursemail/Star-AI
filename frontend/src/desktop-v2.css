@@ -180,3 +180,22 @@
  .shell .pulse-bar i{animation:none}
  .shell *,.shell *::before,.shell *::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
 }
+
+
+/* STAR Intelligence: quiet, responsive tool integration cards. */
+.intelligence-heading{margin:24px 0 16px;display:flex;align-items:flex-end;gap:16px}
+.intelligence-heading .eyebrow{display:block;margin-bottom:8px}
+.intelligence-heading h2{font-size:17px;letter-spacing:-.02em;margin:0 0 7px}
+.intelligence-heading p{font-size:12px;line-height:1.65;color:#aab3b1;max-width:68ch;margin:0}
+.intelligence-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px;margin:0 0 18px}
+.integration-panel{min-width:0;display:flex;flex-direction:column;gap:10px}
+.integration-panel p{flex:1;line-height:1.65;overflow-wrap:anywhere}
+.integration-panel code{font:inherit;font-size:.9em;color:#d4d6ce;overflow-wrap:anywhere}
+.integration-head{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:42px}
+.integration-head .tag{max-width:70%;text-overflow:ellipsis;overflow:hidden}
+.intelligence-folder-row{display:flex;gap:12px;align-items:flex-end;margin:15px 0 10px}
+.intelligence-folder-row label{flex:1;min-width:0}
+.intelligence-folder-row button{white-space:nowrap;flex-shrink:0}
+@media(max-width:1120px){.intelligence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:710px){.intelligence-grid{grid-template-columns:minmax(0,1fr)}.intelligence-folder-row{align-items:stretch;flex-direction:column}}
+@media(prefers-reduced-motion:reduce){.integration-panel *{scroll-behavior:auto}}
