@@ -163,7 +163,8 @@ def needs_project_tools(prompt: str) -> bool:
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
-             stream_tokens: bool = False, mode: str = 'auto', research: bool = False) -> str:
+             stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
+             cancel_event=None) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -247,9 +248,27 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             may_edit=settings.studio_edit)
                 return await execute(**kwargs)
         # Bound an entire task, not just each of up to 12 individual model calls.
-        task_timeout = 110 if quick else 180 if mode == 'auto' else 480
+        task_timeout = (85 if settings.provider == 'local' else 55) if quick else 180 if mode == 'auto' else 480
+        async def controlled_run():
+            """Cooperative user cancellation interrupts active async API and Studio calls."""
+            job = asyncio.create_task(run())
+            deadline = time.monotonic() + task_timeout
+            try:
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise RuntimeError('STAR task cancelled by user')
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError('Task time limit exceeded')
+                    done, _ = await asyncio.wait({job}, timeout=min(0.15, remaining))
+                    if done:
+                        return await job
+            finally:
+                if not job.done():
+                    job.cancel()
+                    await asyncio.gather(job, return_exceptions=True)
         try:
-            answer, msgs, archive = asyncio.run(asyncio.wait_for(run(), timeout=task_timeout))
+            answer, msgs, archive = asyncio.run(controlled_run())
         except TimeoutError as exc:
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. Try Fast mode, a smaller prompt, or a hosted provider.') from exc
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
