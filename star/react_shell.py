@@ -27,6 +27,7 @@ from .providers import credential_status, save_api_key, clear_api_key
 from .chat_images import chat_image, generate_chat_image
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
+from .tool_workshop import ToolWorkshop
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -34,6 +35,7 @@ ALLOWED_ACTIONS = frozenset({
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
+    'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam',
 })
 
@@ -53,6 +55,13 @@ def sanitize_event(event: dict) -> dict:
         return {'phase':f'STAR Teams: {role} — {status if kind != "agent_started" else "working"}'}
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
+    if kind in {'subagent_started','subagent_finished'}:
+        role=str(event.get('role','research'))[:30]
+        if role not in {'planner','research','luau','ui','animation',
+                        'environment','review','integration'}:
+            role='research'
+        status='working' if kind=='subagent_started' else str(event.get('status','done'))[:16]
+        return {'phase':f'STAR {role} specialist · {status}'}
     if kind == 'route_selected':
         return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90]}
     if kind in {'saved','run_completed'}:
@@ -90,12 +99,18 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
             entry.update(preview)
         messages.append(entry)
     brain = BrainInstall.load(home / 'brain.json')
+    workshop = ToolWorkshop(home=home,project=settings.project)
+    try:
+        tool_workshop_status=workshop.status()
+    finally:
+        workshop.close()
     return {
         'version':__version__,'project':settings.project,'projects':projects,
         'messages':messages,'active_chat':active_chat,'chats':chat_threads,
         'settings':asdict(settings),
         'brain_installed':brain is not None,'brain_running':runtime.status()=='running',
         'model_router_running':runtime.router_running(),
+        'tool_workshop':tool_workshop_status,
         'analytics':get_dashboard(home,settings.project),
         'credentials':credential_status(),
         'intelligence':for_settings(settings,home).status(),
@@ -427,7 +442,7 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','router_models_dir','router_context','gpu_layers','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled','mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live'}
+                    permitted={'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model','router_models_dir','router_context','gpu_layers','roblox_research_enabled','tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled','mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
@@ -574,6 +589,36 @@ def launch():
                         import asyncio
                         from .model_health import probe_chat_endpoint
                         return asyncio.run(probe_chat_endpoint(Settings.load(self.settings_file)))
+                    self._run(rid,action,worker)
+                elif action in {'listCustomTools','previewCustomTool',
+                                  'approveCustomTool','disableCustomTool'}:
+                    identifier=body.get('id')
+                    query=body.get('query')
+                    if action!='listCustomTools' and (type(identifier) is not int or identifier<1):
+                        raise ValueError('A valid custom tool ID is required')
+                    def worker():
+                        from .knowledge import KnowledgeStore
+                        from .workspace import Workspace
+                        current=Settings.load(self.settings_file)
+                        if not current.tool_workshop_enabled:
+                            raise PermissionError('Tool Workshop is disabled')
+                        home=app_data()
+                        knowledge=KnowledgeStore(home/'knowledge')
+                        workshop=ToolWorkshop(home=home,project=current.project,
+                            knowledge=knowledge,
+                            workspace=Workspace(Path(current.workspace)) if current.workspace else None,
+                            intelligence=for_settings(current,home))
+                        try:
+                            if action=='listCustomTools':
+                                return workshop.catalog()
+                            if action=='previewCustomTool':
+                                return workshop.run(identifier,query,preview=True)
+                            if action=='approveCustomTool':
+                                return workshop.approve(identifier)
+                            return workshop.disable(identifier)
+                        finally:
+                            workshop.close()
+                            knowledge.close()
                     self._run(rid,action,worker)
                 elif action=='testMcpConnection':
                     server=str(body.get('server',''))
