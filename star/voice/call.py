@@ -413,10 +413,10 @@ class CallSession:
         self._close_stream(reply)
 
     @staticmethod
-    def _heard_text(reply: _Reply) -> str:
-        """The part of the reply that was actually played before the interruption."""
+    def _heard_text(reply: _Reply) -> tuple[str, bool]:
+        """The part of the reply that was actually played before the interruption, and whether it was cut mid-sentence."""
         heard = reply.heard_seconds or 0.0
-        parts = []
+        parts, cut = [], False
         for sentence in reply.sentences:
             if sentence.end <= heard:
                 parts.append(sentence.text)
@@ -425,20 +425,24 @@ class CallSession:
                 share = (heard - sentence.start) / max(1e-6, sentence.end - sentence.start)
                 kept = words[: int(len(words) * share)]
                 if kept:
-                    parts.append(" ".join(kept).rstrip(",;:") + "…")
+                    parts.append(" ".join(kept).rstrip(",;:"))
+                    cut = True
                 break
-        return " ".join(parts)
+        return " ".join(parts), cut
 
     def _finish_reply(self, reply: _Reply) -> None:
         metrics = reply.metrics
         metrics.done_at = self.clock()
         metrics.audio_seconds = reply.audio_seconds
         interrupted = reply.cancel.is_set()
+        cut_mid_sentence = False
         if interrupted:
             metrics.heard_seconds = reply.heard_seconds or 0.0
-            spoken = self._heard_text(reply)
+            spoken, cut_mid_sentence = self._heard_text(reply)
         else:
             spoken = " ".join(s.text for s in reply.sentences) or speakable(reply.raw_text)
+        # History gets the heard words with no "..." marker: with a marker the brain copies the trailing-off
+        # style into its next reply (seen against the live server). The marker is for captions only.
         metrics.reply_text = spoken
         if reply.error is not None:
             metrics.error = f"{type(reply.error).__name__}: {str(reply.error)[:200]}"
@@ -453,7 +457,7 @@ class CallSession:
                 self.turns.append(metrics)
         if interrupted:
             self._emit({"type": "interrupted", "turn": metrics.turn, "reason": metrics.interrupt_reason,
-                        "heard_text": spoken})
+                        "heard_text": spoken + ("…" if cut_mid_sentence else "")})
         if reply.error is not None:
             self._emit({"type": "error", "turn": metrics.turn, "message": _friendly(reply.error)})
         if reply.user_text:

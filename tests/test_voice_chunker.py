@@ -57,6 +57,28 @@ def test_long_opening_sentence_is_split_at_a_clause_so_speech_starts_early():
     assert SentenceChunker(first_clause_words=0).feed(text[:60]) == []
 
 
+def test_long_unpunctuated_opening_is_split_in_front_of_a_linking_word():
+    text = "A RemoteEvent is like a secret message you send between the player and the game server. Easy."
+    chunker = SentenceChunker()
+    out, fed = [], ""
+    for word in text.split(" "):
+        fed += word + " "
+        out += chunker.feed(word + " ")
+        if out:
+            break
+    assert out == ["A RemoteEvent is like a secret message you send"]
+    assert fed.endswith("between ")                        # released at the 10th word, not at the 17th
+    assert stream(text, 3) == ["A RemoteEvent is like a secret message you send",
+                               "between the player and the game server.", "Easy."]
+    # a short opening sentence, or one without a linking word, is left whole
+    assert stream("Oh, I am so very proud of you today. Yes.") == ["Oh, I am so very proud of you today.", "Yes."]
+    assert stream("One two three four five six seven eight nine ten eleven. Yes.") == [
+        "One two three four five six seven eight nine ten eleven.", "Yes."]
+    assert stream(text, 3, first_soft_words=0)[0].endswith("game server.")
+    # only the opening is ever split this way
+    assert stream("Okay. " + text, 3)[1] == text[:-6]
+
+
 def test_run_on_text_is_force_split_and_newlines_end_chunks():
     words = " ".join(["word"] * 120)
     chunks = stream(words, 50, max_chars=100)

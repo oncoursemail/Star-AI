@@ -206,7 +206,36 @@ the words Star actually spoke), so a call appears in the conversation history li
 
 ## 6. Speech recognition choice
 
-<!-- ASR -->
+Measured on the owner's PC (Ryzen 5 5500, RTX 3060 Ti) with `voice-lab/asr_bench.py`: 120 clips, that is 20 caller
+sentences (everyday talk plus Roblox words) in 3 Kokoro stock voices, each clean and with room noise 15 dB under
+the speech; 3.5 s per clip on average.
+
+| Engine | Device | Word errors, clean | Word errors, noisy | Time per sentence (mean / 95th percentile) |
+|---|---|---|---|---|
+| faster-whisper `tiny.en` | GPU | 1.0% | 1.8% | 0.06 / 0.07 s |
+| faster-whisper `base.en` | GPU | 1.0% | 1.6% | 0.08 / 0.12 s |
+| faster-whisper `small.en` | GPU | 0.3% | 0.4% | 0.17 / 0.22 s |
+| faster-whisper `distil-large-v3` | GPU | 0.9% | 1.0% | 0.27 / 0.28 s |
+| faster-whisper `large-v3-turbo` | GPU | 0.15% | 0.15% | 0.29 / 0.31 s |
+| Qwen3-ASR 0.6B (official `qwen-asr` package) | GPU | 0.7% | 0.7% | 1.44 / 2.05 s |
+| faster-whisper `tiny.en` | CPU | 0.6% | 1.6% | 0.37 / 0.41 s |
+| faster-whisper `base.en` | CPU | 1.2% | 1.8% | 0.73 / 0.84 s |
+| faster-whisper `small.en` | CPU | 0.3% | 0.4% | 2.14 / 2.53 s |
+
+How to read this: the caller is synthetic speech, which is much easier than a real microphone and a real child's
+voice, so trust the ranking and the speed more than the error rates. An apostrophe in a different place ("player's"
+against "players'") counts as an error, and the three small models differ by only a handful of words.
+
+Choice: **faster-whisper**.
+
+- On the GPU, `small.en` is the default. Transcription starts at the first 0.26 s pause and takes 0.17 s, so the
+  transcript is ready before the turn ends at 0.6 s: it adds no delay. `large-v3-turbo` is the most accurate and at
+  0.29 s still fits inside that wait; it is the better choice when about 1 GB more video memory is free (model
+  weights at half precision: about 0.5 GB for `small.en`, about 1.6 GB for `large-v3-turbo`, from their sizes).
+- On the CPU, `small.en` takes over 2 s per sentence, so `auto` picks `base.en` (0.73 s, about 0.4 s of added
+  delay per turn). `tiny.en` (0.37 s) is the option when speed matters more than accuracy.
+- Qwen3-ASR 0.6B was 8 times slower than `small.en` here and no more accurate on this test, so it is not wired in.
+  It was measured through the official Transformers-based package only; the GGUF build under llama.cpp was not tried.
 
 ## 7. Measured latency
 

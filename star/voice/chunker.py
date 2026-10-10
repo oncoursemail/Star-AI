@@ -14,6 +14,9 @@ import re
 TERMINATORS = ".!?…。！？"
 CLOSERS = "\"')]}”’»"
 CLAUSE_BREAKS = ",;:—–"
+# Words a long opening sentence may be split in front of when it has no punctuation to split at.
+SOFT_BREAK_WORDS = frozenset({"and", "but", "or", "so", "because", "that", "which", "who", "when", "while", "if",
+                              "then", "between", "with", "for", "from", "about", "before", "after", "until"})
 # Words that end with a full stop without ending the sentence. Lower case, without the final dot.
 ABBREVIATIONS = frozenset({
     "mr", "mrs", "ms", "dr", "prof", "sr", "jr", "st", "vs", "etc", "e.g", "i.e", "eg", "ie",
@@ -66,14 +69,18 @@ class SentenceChunker:
         brain not to read file names aloud, and later chunks are never affected.
     first_clause_words: if the opening sentence runs long, release its first clause once it has at
         least this many words (0 disables clause splitting).
+    first_soft_words: if the opening sentence reaches this many words with no punctuation at all, split
+        it in front of a linking word ("and", "because", "between", ...) so speech can start (0 disables).
+        A brain that writes at speaking pace needs about four seconds for a seventeen-word sentence.
     max_chars: hard cap so a run-on sentence still reaches the speaker.
     """
 
     def __init__(self, *, first_eager: bool = True, first_clause_words: int = 4,
-                 first_clause_chars: int = 28, max_chars: int = 240) -> None:
+                 first_clause_chars: int = 28, first_soft_words: int = 9, max_chars: int = 240) -> None:
         self.first_eager = first_eager
         self.first_clause_words = first_clause_words
         self.first_clause_chars = first_clause_chars
+        self.first_soft_words = first_soft_words
         self.max_chars = max(40, max_chars)
         self._buf = ""
         self._emitted = 0
@@ -156,6 +163,10 @@ class SentenceChunker:
             cut = self._first_clause_cut(buf)
             if cut is not None:
                 return cut
+        if eager and self.first_soft_words:
+            cut = self._first_soft_cut(buf)
+            if cut is not None:
+                return cut
         if n > self.max_chars:
             return self._forced_cut(buf)
         return None
@@ -183,6 +194,17 @@ class SentenceChunker:
                 head = buf[:i]
                 if len(head) >= self.first_clause_chars and len(head.split()) >= self.first_clause_words:
                     return i + 1
+        return None
+
+    def _first_soft_cut(self, buf: str) -> int | None:
+        """Position in front of the last linking word once the opening sentence is long and unpunctuated."""
+        words = list(re.finditer(r"\S+", buf))
+        complete = len(words) if buf[-1:].isspace() else len(words) - 1     # the last word may still be growing
+        if complete <= self.first_soft_words:
+            return None
+        for index in range(min(complete, self.first_soft_words + 1) - 1, 3, -1):
+            if words[index].group().lower() in SOFT_BREAK_WORDS:
+                return words[index].start()
         return None
 
     def _forced_cut(self, buf: str) -> int:

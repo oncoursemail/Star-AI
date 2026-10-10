@@ -76,8 +76,9 @@ def test_barge_in_stops_speech_cancels_the_brain_and_keeps_only_what_was_heard()
     assert brain.streams[0].closed.is_set()
     stop_at = [t for kind, t in speaker.log if kind == "stop"][0]
     assert not [t for kind, t in speaker.log if kind == "play" and t > stop_at]      # nothing played afterwards
-    heard = interrupted["heard_text"]
-    assert heard.startswith("Oh, lovely.") and heard.endswith("…") and "word40" not in heard
+    caption = interrupted["heard_text"]
+    assert caption.startswith("Oh, lovely.") and caption.endswith("…") and "word40" not in caption
+    heard = caption.rstrip("…")                              # the history copy carries no trailing-off marker
     assert wait_for(lambda: session.history[-1:] == [{"role": "assistant", "content": heard}])
 
     feed(session, END)                                       # the user finishes: a normal second turn
