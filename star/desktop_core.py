@@ -193,8 +193,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     home.mkdir(parents=True, exist_ok=True)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
+    first_visible_token = False
     metrics.record(settings.project, 'run_started')
     def audited_event(event):
+        nonlocal first_visible_token
+        if event.get('event') == 'assistant_delta' and not first_visible_token and str(event.get('text','')).strip():
+            first_visible_token = True
+            # Approximate first *visible* text delta from request start; no prompt
+            # or model output is persisted in this operational metric.
+            metrics.record(settings.project, 'first_token', elapsed_ms=int((time.monotonic()-started)*1000))
         if event.get('event') == 'tool_finished':
             metrics.record(settings.project, 'tool_completed', detail=str(event.get('tool', ''))[:80])
         elif event.get('event') == 'tool_rejected':
