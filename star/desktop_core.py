@@ -97,6 +97,18 @@ class Conversations:
         self.connection.close()
 
 
+def recent_context(recent: list[tuple[str, str, str]], current_prompt: str) -> str:
+    """Exclude the current turn if the UI already saved it to the conversation DB.
+
+    This prevents the local model receiving the exact same new user request
+    as both system-context history and the actual user message.
+    """
+    turns = list(recent)
+    if turns and turns[-1][0] == 'user' and turns[-1][1] == current_prompt:
+        turns.pop()
+    return '\n'.join(f'{role}: {body[:1500]}' for role, body, _ in turns)
+
+
 def query_models(settings: Settings) -> list[str]:
     settings.validate()
     import httpx
@@ -169,7 +181,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
             recent = dialogue.recent(settings.project, limit=12)
-            prior_turns = '\n'.join(f'{role}: {body[:1500]}' for role, body, _ in recent)
+            prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
         workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
