@@ -300,9 +300,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <div className="composer-tools">
                   <div className="composer-left">
                     <div className="composer-menu-wrap" ref={composerMenuRef}>
-                      <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
+                      <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} disabled={busy} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
                       <AnimatePresence>{composerMenu&&<motion.div className="composer-menu" role="menu" initial={{opacity:0,y:6,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:4,scale:.99}} transition={{duration:.15}}>
-                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
+                        <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setImageMode(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
                         <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);setFiles([]);setImageMode(true);composerRef.current?.focus()}}><ImagePlus size={18}/><span>Create image</span>{imageMode&&<Check size={15}/>}</button>
                         <button role="menuitem" type="button" onClick={async()=>{setComposerMenu(false);const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/><span>Transcribe audio</span></button>
                       </motion.div>}</AnimatePresence>
