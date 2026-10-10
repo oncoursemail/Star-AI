@@ -18,6 +18,8 @@ from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
 from .mcp_connections import MCPGateway
+from .tool_workshop import ToolWorkshop
+from .specialist_agents import ResearchTeam
 
 
 def app_data() -> Path:
@@ -51,6 +53,9 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    tool_workshop_enabled: bool = True
+    specialists_enabled: bool = True
+    specialist_parallelism: int = 1
 
     @classmethod
     def load(cls, file: Path):
@@ -71,8 +76,11 @@ class Settings:
             raise ValueError('Choose an existing workspace directory')
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
-                           'mcp_graphify_docs', 'mcp_graphify_local', 'mcp_obsidian_live')):
+                           'mcp_graphify_docs', 'mcp_graphify_local', 'mcp_obsidian_live',
+                           'tool_workshop_enabled', 'specialists_enabled')):
             raise ValueError('Tool access settings must be true or false')
+        if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1, 2):
+            raise ValueError("Research specialists must be limited to 1–2 parallel model calls")
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
@@ -189,8 +197,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             on_event(event)
     memory = Memory(home / 'checkpoints.sqlite3')
     knowledge = KnowledgeStore(home / 'knowledge')
+    workshop = None
     try:
-        reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=8)
+        reviewed = knowledge.find_ranked(settings.project, prompt, reviewed_only=True, limit=8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
             path = Path(image)
@@ -208,15 +217,24 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
         intelligence = for_settings(settings, home)
         mcp_gateway = MCPGateway(settings)
+        if settings.tool_workshop_enabled:
+            workshop = ToolWorkshop(home=home, project=settings.project,
+                                    knowledge=knowledge, workspace=workspace,
+                                    intelligence=intelligence)
         allow_studio = bool(settings.studio_id)
         async def run():
             async with AsyncOpenAI(base_url=settings.endpoint, api_key='local-only', timeout=180.0, max_retries=0) as client:
+                specialists = (ResearchTeam(client=client, model=settings.model,
+                    project=settings.project, knowledge=knowledge, workspace=workspace,
+                    intelligence=intelligence, parallelism=settings.specialist_parallelism,
+                    on_event=audited_event) if settings.specialists_enabled else None)
                 kwargs = dict(client=client, model=settings.model, prompt=prompt, image_paths=images,
                               project_memory=(memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)[-14000:],
                               max_calls=settings.max_calls, context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit,
-                               intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              tool_workshop=workshop, specialists=specialists,
                               stream_tokens=stream_tokens)
                 if allow_studio:
                     async with connect() as session:
@@ -241,6 +259,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                        detail=type(exc).__name__)
         raise
     finally:
+        if workshop is not None:
+            workshop.close()
         knowledge.close()
         memory.close()
         metrics.close()
