@@ -106,7 +106,8 @@ def test_local_agent_answer():
         fake=SimpleNamespace(chat=SimpleNamespace(completions=FakeModels([reply("STAR ready")])) )
         answer, transcript, _=await execute(client=fake,model="local",prompt="hello",image_paths=[])
         assert answer == "STAR ready"
-        assert transcript[1]["role"]=="user"\n        assert [i for i,m in enumerate(transcript) if m["role"]=="system"] == [0]
+        assert transcript[1]["role"]=="user"
+        assert [i for i,m in enumerate(transcript) if m["role"]=="system"] == [0]
     asyncio.run(run())
 
 
