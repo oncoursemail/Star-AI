@@ -253,31 +253,55 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      <AnimatePresence mode="wait" initial={false}>
        <motion.main key={tab} className="page-stage" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.16}}>
          {tab==='chat'&&<div className="chat-page">
-           <div className="chat-topline">
-             <div className="chat-top-context"><span className="eyebrow">CURRENT WORKSPACE / {data.project.toUpperCase()}</span><strong>Conversation</strong><small>Think, create, inspect and build with STAR.</small></div>
-             <div className="chat-top-actions">
-               {showChatSearch&&<input type="search" aria-label="Search this conversation" className="chat-find-input" autoFocus placeholder="Find in conversation…" value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>}
-               <button type="button" className={'chat-tool-button'+(showChatSearch?' is-active':'')} title="Search messages" aria-label="Search messages" onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={17}/></button>
-               <button type="button" className="chat-tool-button chat-copy-control" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={16}/></button>
-               <button type="button" className="chat-brain-control" title="STAR Brain settings" onClick={()=>nav('brain')}><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{data.brain_running?'Brain running':'Start your brain'}</span><ChevronRight size={13}/></button>
-             </div>
-           </div>
-           <div className="chat-scroll"><div className="chat-inner">
-           {!messages.length?<div className="welcome"><div className="welcome-star"><Star size={24} fill="currentColor" strokeWidth={1}/></div><div className="eyebrow">YOUR PERSONAL INTELLIGENCE</div><h1>What shall we <em>create</em> today?</h1><p>Ideas, code, design, and Roblox creation. One workspace for everything you want to build.</p><div className="suggestions">{examples.map(ex=><button key={ex.title} onClick={()=>send(ex.prompt)} disabled={busy}><span><Sparkles size={15}/>{ex.title}</span><small>{ex.description}</small><ArrowRight className="suggest-arrow" size={15}/></button>)}</div></div>:
-           <div className="conversation">{matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
-             {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={20}/><strong>No matching messages</strong><small>Try searching for a different phrase.</small></div>}
-             {busy&&streamingText&&<Message animated={false} key="stream-live" entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
-             {busy&&<div className="thinking" role="status" aria-live="polite"><span className="pulse-bar"><i/><i/><i/></span><div><strong>STAR is working</strong><small>{workPhase||'Thinking through your request…'}</small></div></div>}
-             {!busy&&retryText&&<div className="chat-recovery"><span>The last request did not finish. Your message is still here.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={14}/> Retry message</button></div>}
-             <div ref={scrollTo}/></div>}
-         </div></div>
-         <div className="composer-zone"><div className="composer">
-           {!!files.length&&<div className="file-chips">{files.map((f,i)=><span key={f}><File size={14}/>{truncate(f.split(/[\\/]/).pop()||f,40)}<button title="Remove attachment" aria-label="Remove attachment" onClick={()=>setFiles(x=>x.filter((_,j)=>i!==j))}><X size={13}/></button></span>)}</div>}
-           <label className="sr-only" htmlFor="star-prompt">Message STAR</label>
-           <textarea ref={composerRef} id="star-prompt" rows={2} placeholder="Ask STAR anything. Build, design, research, create…" value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();void send()}}}/>
-           <div className="composer-tools"><div className="composer-left"><button className="attach-button" onClick={attach} title="Attach references"><Plus size={17}/> Add reference</button><span className="composer-separator"/><button className="icon-button" aria-label="Start voice transcription" onClick={async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/></button><span className="composer-model"><span className={'status-dot '+(data.brain_running?'ok':'')}/>{truncate(data.settings.model||'No model selected',22)}</span></div><div className="composer-right"><span>Enter to send</span><button className="send-button" aria-label="Send message" disabled={!prompt.trim()||busy} onClick={()=>send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={19}/>}</button></div></div>
-         </div><div className="composer-hint"><PrivacyNote/><span>Enter sends · Shift+Enter new line · Ctrl+K chat · Ctrl+, settings</span></div></div></div>}
-         {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
+            <div className="chat-topline">
+              <div className="chat-top-context"><span className="eyebrow">{data.project} / CONVERSATION</span><strong>{chatTitle}</strong><small>{data.brain_running?'Your local assistant is ready.':'Your conversation is saved locally.'}</small></div>
+              <div className="chat-top-actions">
+                {showChatSearch&&<input type="search" aria-label="Search this conversation" className="chat-find-input" autoFocus placeholder="Search this chat…" value={chatSearch} onChange={e=>setChatSearch(e.target.value)}/>}
+                <button className={'chat-tool-button'+(showChatSearch?' is-active':'')} type="button" title="Find in this chat" aria-label="Find in this chat" onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={17}/></button>
+                <button className="chat-tool-button chat-copy-control" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={16}/></button>
+                <button className="chat-new-action" type="button" onClick={()=>void startNewChat()} disabled={busy||inactive}><Plus size={17}/><span>New chat</span></button>
+              </div>
+            </div>
+            <div className="chat-scroll" ref={chatScroll} onScroll={onChatScroll}>
+              <div className="chat-inner">
+                {!messages.length?
+                  <div className="welcome">
+                    <div className="welcome-emblem"><span className="welcome-emblem-back"/><Star size={33} fill="currentColor" strokeWidth={1.2}/></div>
+                    <div className="welcome-eyebrow"><span className="welcome-status"/>{data.brain_running?'STAR BRAIN READY':'YOUR CREATIVE WORKSPACE'}</div>
+                    <h1>Every great idea <span>starts somewhere.</span></h1>
+                    <p>Your own intelligence workspace for better ideas, deeper research, code, game development and everything in between.</p>
+                    <div className="welcome-prompt">What are we making today?</div>
+                    <div className="suggestions">{examples.map((ex,index)=><button key={ex.title} type="button" onClick={()=>void send(ex.prompt)} disabled={busy}><span className="suggestion-icon">{index===0?<Sparkles size={18}/>:index===1?<Workflow size={18}/>:<Terminal size={18}/>}</span><strong>{ex.title}</strong><small>{ex.description}</small><ArrowRight className="suggest-arrow" size={17}/></button>)}</div>
+                    <span className="welcome-caption"><ShieldCheck size={13}/> Local-first by default. Your projects stay yours.</span>
+                  </div>:
+                  <div className="conversation" role="log" aria-label="Conversation messages">
+                    {matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
+                    {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={20}/><strong>No matching messages</strong><small>Try another phrase.</small></div>}
+                    {busy&&streamingText&&<Message animated={false} key="stream-live" entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
+                    {busy&&<div className={'thinking '+(streamingText?'thinking-compact':'')} role="status" aria-live="off"><span className="pulse-bar"><i/><i/><i/></span><div><strong>{streamingText?'STAR is responding':'STAR is thinking'}</strong><small>{workPhase||'Preparing a thoughtful response…'}</small></div></div>}
+                    {!busy&&retryText&&<div className="chat-recovery"><span>The last response could not finish. Your prompt has been saved.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={14}/> Retry message</button></div>}
+                  </div>}
+              </div>
+            </div>
+            {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={17}/> Jump to latest</button>}
+            <div className="composer-zone">
+              <div className="composer">
+                {!!files.length&&<div className="file-chips">{files.map((f,i)=><span key={f}><File size={14}/>{truncate(f.split(/[\\/]/).pop()||f,40)}<button type="button" title="Remove attachment" aria-label="Remove attachment" onClick={()=>setFiles(x=>x.filter((_,j)=>i!==j))}><X size={13}/></button></span>)}</div>}
+                <label className="sr-only" htmlFor="star-prompt">Message STAR</label>
+                <textarea ref={composerRef} id="star-prompt" rows={1} placeholder="Message STAR…" value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
+                <div className="composer-tools">
+                  <div className="composer-left">
+                    <button className="composer-action attach-button" type="button" onClick={()=>void attach()} title="Attach images, audio or video"><Plus size={17}/><span>Attach</span></button>
+                    <button className="composer-action composer-mic" type="button" title="Transcribe an audio file" aria-label="Transcribe audio" onClick={async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}}><Mic size={17}/></button>
+                    <button className="composer-model" type="button" onClick={()=>nav('brain')} title="View or change your installed model"><span className={'status-dot '+(data.brain_running?'ok':'')}/><span>{truncate(data.settings.model||'Select local model',25)}</span><ChevronDown size={13}/></button>
+                  </div>
+                  <div className="composer-right"><span className="composer-enter">Enter <ArrowRight size={12}/></span><button className="send-button" type="button" aria-label={busy?'STAR is responding':'Send message'} disabled={!prompt.trim()||busy} onClick={()=>void send()}>{busy?<LoaderCircle className="spin" size={19}/>:<ArrowUp size={20}/>}</button></div>
+                </div>
+              </div>
+              <div className="composer-hint"><span>STAR can make mistakes. Review important results.</span><span>Shift + Enter for a new line</span></div>
+            </div>
+          </div>}
+          {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="YOUR AI, ON YOUR PC" title="STAR Brain" description="One click to your private local intelligence. No separate chat application. No paid model API key."/><Panel className="brain-hero"><div className="brain-art"><div className="brain-core"><Star size={38} fill="currentColor"/></div><span className="brain-orbit orbit-one"/><span className="brain-orbit orbit-two"/></div><div><Tag kind={data.brain_running?'green':'gold'}>{data.brain_running?'Ready to create':'LOCAL INTELLIGENCE'}</Tag><h2>{data.brain_installed?'Your brain is installed.':'A real AI, running on your machine.'}</h2><p>Download a small vision-capable model with a verified engine. STAR manages the model and stores it locally.</p><button className="primary-button" disabled={brainProgress!==null} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}><Download size={17}/>{data.brain_installed?'Start STAR Brain':'Download & launch STAR Brain'}<ArrowRight size={17}/></button></div></Panel>
            <Panel className="settings-section"><div className="section-heading"><div><span className="eyebrow">INSTALLATION STATUS</span><h2>Local engine</h2></div><Tag kind={data.brain_running?'green':'neutral'}>{data.brain_running?'Running':data.brain_installed?'Installed':'Not installed'}</Tag></div><p>{brainProgress?.phase||'Model downloads are saved on your PC and checked against published SHA-256 hashes.'}</p>{brainProgress&&<div className="progress-track"><motion.div animate={{width:brainProgress.total?`${Math.max(2,brainProgress.downloaded/brainProgress.total*100)}%`:'9%'}} transition={{duration:.25}}/></div>}<div className="brain-info"><span><HardDrive size={17}/> Several GB free space required</span><span><ShieldCheck size={17}/> Verified downloads</span><span><Monitor size={17}/> Tuned for smaller local models</span></div></Panel>
