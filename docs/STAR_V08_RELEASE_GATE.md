@@ -1,3 +1,5 @@
+> **Historical release gate:** v0.8.1 is now published through public STAR Releases (verified October 10, 2026 UTC). The older release-candidate status below is retained for audit/history, not as the current shipping status. Live Windows acceptance remains a separate gate.
+
 # STAR Genesis v0.8.0 — release candidate gate
 
 **Release status update:** v0.8.0 was published successfully to the public GitHub Releases channel (verified October 10, 2026): https://github.com/oncoursemail/Star-AI/releases/tag/v0.8.0 . The separate v0.8.1 maintenance candidate includes compatible dependencies and Node 24 GitHub Actions, and must pass another Windows build and release before it is described as shipped. Public release artifacts are distinct from temporary Actions build artifacts.

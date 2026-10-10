@@ -6,13 +6,13 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status:** **STAR Genesis v0.8.0 was published as a public Windows release**, including Setup, portable ZIP and SHA-256 manifest. This v0.8.1 branch is a *maintenance release candidate* (compatible dependency updates and Node 24 GitHub Actions); its new installer is not public until the Windows publisher succeeds. See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
+> **Shipping status:** **STAR Genesis v0.8.1 is published on the public [GitHub Releases page](https://github.com/oncoursemail/Star-AI/releases/tag/v0.8.1)**, with Windows Setup, a portable ZIP, and SHA-256 checksums. An available Release is not proof of hands-on Windows/GPU/Roblox acceptance. Work in unmerged pull requests is **not** included in the public installer. See the [Windows QA gate](docs/STAR_V08_RELEASE_GATE.md).
 
 ## Download / Updates
 
 **[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
 
-The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the upcoming v0.8 release candidate), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
+The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**. GitHub Releases here are the single official download/update channel; no separate public-downloads repository, GitHub account, GitHub CLI, or mirrored publisher is needed. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel , with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
 ### STAR v0.8 AI and UI improvements
 
@@ -41,7 +41,7 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 - **Projects**, **STAR Brain**, **Tools**, **Library**, **Settings** share a consistent spacing/typography system. The previous native advanced tools remain accessible via `STAR.exe --legacy-ui` during migration.
 - **A restricted Qt WebChannel** connects the local React UI to existing Python services. External websites cannot invoke the bridge; internal Qt navigation is limited to the bundled UI. GitHub or other tokens are not accessible to the model/UI.
 
-Read the [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
+Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
 ## Architecture
 
