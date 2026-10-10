@@ -17,6 +17,7 @@ from .media import image_part
 from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .mcp_connections import MCPGateway
 from .providers import PROVIDERS, connection_for
 
 
@@ -51,6 +52,10 @@ class Settings:
     obsidian_enabled: bool = False
     skills_enabled: bool = True
     graphify_enabled: bool = True
+    mcp_graphify_docs: bool = False
+    mcp_graphify_local: bool = False
+    mcp_graphify_port: int = 8931
+    mcp_obsidian_live: bool = False
 
     @classmethod
     def load(cls, file: Path):
@@ -70,7 +75,8 @@ class Settings:
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
-               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled')):
+               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
+                            'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -78,6 +84,8 @@ class Settings:
             raise ValueError('Select an Obsidian vault before enabling read access')
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
+        if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
+            raise ValueError('Invalid local Graphify MCP port')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
@@ -95,21 +103,158 @@ class Settings:
 
 
 class Conversations:
+    """Persistent, project-scoped chat threads.
+
+    Existing messages are migrated in-place into a legacy thread without deleting
+    or rewriting their content. Callers that omit chat_id retain the historical
+    project-wide recent() behavior; React explicitly selects a thread.
+    """
     def __init__(self, db: Path):
+        import sqlite3
         db.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(db, timeout=30)
-        self.connection.execute('CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, role TEXT NOT NULL, body TEXT NOT NULL, created TEXT NOT NULL)')
+        self.connection.execute(
+            'CREATE TABLE IF NOT EXISTS messages '
+            '(id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, '
+            'role TEXT NOT NULL, body TEXT NOT NULL, created TEXT NOT NULL)'
+        )
+        columns = {row[1] for row in self.connection.execute('PRAGMA table_info(messages)')}
+        if 'chat_id' not in columns:
+            self.connection.execute(
+                "ALTER TABLE messages ADD COLUMN chat_id TEXT NOT NULL DEFAULT 'legacy'"
+            )
+        self.connection.execute(
+            'CREATE TABLE IF NOT EXISTS chats '
+            '(project TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, '
+            'created TEXT NOT NULL, updated TEXT NOT NULL, PRIMARY KEY (project,id))'
+        )
+        self.connection.execute(
+            'CREATE TABLE IF NOT EXISTS active_chats '
+            '(project TEXT PRIMARY KEY, chat_id TEXT NOT NULL)'
+        )
+        self.connection.execute(
+            'CREATE INDEX IF NOT EXISTS idx_chat_messages '
+            'ON messages(project,chat_id,id)'
+        )
+        # A pre-upgrade conversation is preserved verbatim under one stable ID.
+        self.connection.execute(
+            "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
+            "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
+            "FROM messages WHERE chat_id='legacy' GROUP BY project"
+        )
         self.connection.commit()
 
-    def add(self, project: str, role: str, body: str):
+    def new_chat(self, project: str) -> str:
+        import uuid
+        # Reuse an already blank active thread instead of filling the history with
+        # duplicate untitled chats when the New chat button is clicked repeatedly.
+        current = self.connection.execute(
+            'SELECT a.chat_id FROM active_chats a JOIN chats c '
+            'ON c.project=a.project AND c.id=a.chat_id '
+            'WHERE a.project=? AND NOT EXISTS '
+            '(SELECT 1 FROM messages m WHERE m.project=a.project AND m.chat_id=a.chat_id)',
+            (project,)
+        ).fetchone()
+        if current:
+            return current[0]
+        chat_id = uuid.uuid4().hex
+        created = datetime.now(timezone.utc).isoformat()
+        with self.connection:
+            self.connection.execute(
+                'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
+                (project, chat_id, 'New chat', created, created)
+            )
+            self.connection.execute(
+                'INSERT INTO active_chats(project,chat_id) VALUES (?,?) '
+                'ON CONFLICT(project) DO UPDATE SET chat_id=excluded.chat_id',
+                (project, chat_id)
+            )
+        return chat_id
+
+    def active_chat(self, project: str) -> str:
+        found = self.connection.execute(
+            'SELECT a.chat_id FROM active_chats a INNER JOIN chats c '
+            'ON c.project=a.project AND c.id=a.chat_id WHERE a.project=?',
+            (project,)
+        ).fetchone()
+        if found:
+            return found[0]
+        newest = self.connection.execute(
+            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC LIMIT 1',
+            (project,)
+        ).fetchone()
+        if newest:
+            self.switch_chat(project, newest[0])
+            return newest[0]
+        return self.new_chat(project)
+
+    def switch_chat(self, project: str, chat_id: str) -> None:
+        found = self.connection.execute(
+            'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
+        ).fetchone()
+        if not found:
+            raise ValueError('Conversation not found in this workspace')
+        with self.connection:
+            self.connection.execute(
+                'INSERT INTO active_chats(project,chat_id) VALUES (?,?) '
+                'ON CONFLICT(project) DO UPDATE SET chat_id=excluded.chat_id',
+                (project, chat_id)
+            )
+
+    def list_chats(self, project: str, limit: int = 60) -> list[dict]:
+        return [
+            {'id': chat_id, 'title': title, 'created': created, 'updated': updated}
+            for chat_id, title, created, updated in self.connection.execute(
+                'SELECT id,title,created,updated FROM chats WHERE project=? '
+                'ORDER BY updated DESC LIMIT ?', (project, limit)
+            )
+        ]
+
+    def add(self, project: str, role: str, body: str, chat_id: str | None = None):
         if role not in {'user', 'assistant', 'event'}:
             raise ValueError('Invalid message role')
-        self.connection.execute('INSERT INTO messages (project,role,body,created) VALUES (?,?,?,?)',
-                                (project, role, body, datetime.now(timezone.utc).isoformat()))
-        self.connection.commit()
+        stamp = datetime.now(timezone.utc).isoformat()
+        target = chat_id if chat_id is not None else 'legacy'
+        with self.connection:
+            if chat_id is None:
+                self.connection.execute(
+                    'INSERT OR IGNORE INTO chats(project,id,title,created,updated) '
+                    'VALUES (?,?,?,?,?)',
+                    (project, 'legacy', 'Previous conversation', stamp, stamp)
+                )
+            elif not self.connection.execute(
+                'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
+            ).fetchone():
+                raise ValueError('Cannot save to a missing conversation')
+            self.connection.execute(
+                'INSERT INTO messages(project,role,body,created,chat_id) '
+                'VALUES (?,?,?,?,?)', (project, role, body, stamp, target)
+            )
+            # Name new chats from their first prompt, without altering legacy titles.
+            if role == 'user' and target != 'legacy':
+                first_line = ' '.join(body.split())[:64].strip() or 'New chat'
+                self.connection.execute(
+                    'UPDATE chats SET title=? WHERE project=? AND id=? AND title=?',
+                    (first_line, project, target, 'New chat')
+                )
+            self.connection.execute(
+                'UPDATE chats SET updated=? WHERE project=? AND id=?',
+                (stamp, project, target)
+            )
 
-    def recent(self, project: str, limit: int = 70):
-        return list(reversed(self.connection.execute('SELECT role,body,created FROM messages WHERE project=? ORDER BY id DESC LIMIT ?', (project, limit)).fetchall()))
+    def recent(self, project: str, limit: int = 70, chat_id: str | None = None):
+        if chat_id is None:
+            rows = self.connection.execute(
+                'SELECT role,body,created FROM messages '
+                'WHERE project=? ORDER BY id DESC LIMIT ?', (project, limit)
+            ).fetchall()
+        else:
+            rows = self.connection.execute(
+                'SELECT role,body,created FROM messages '
+                'WHERE project=? AND chat_id=? ORDER BY id DESC LIMIT ?',
+                (project, chat_id, limit)
+            ).fetchall()
+        return list(reversed(rows))
 
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
@@ -171,12 +316,13 @@ def needs_project_tools(prompt: str) -> bool:
         'my game', 'my files', 'project folder', 'current place'))
     requests_action = any(term in text for term in ('inspect', 'modify', 'edit', 'read ', 'fix ',
         'create ', 'build ', 'implement', 'open ', 'scan ', 'add ', 'remove ', 'delete ', 'test '))
-    return mentions_project and requests_action
+    explicit_mcp = bool(re.search(r'\b(mcp|connected tools?|graphify docs|live obsidian)\b', text))
+    return explicit_mcp or (mentions_project and requests_action)
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
-             cancel_event=None, github_enabled: bool = False) -> str:
+             cancel_event=None, github_enabled: bool = False, chat_id: str | None = None) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -209,10 +355,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         if on_event:
             on_event(event)
     memory = Memory(home / 'checkpoints.sqlite3')
+    memory_scope = settings.project if chat_id in (None, 'legacy') else settings.project + '::chat::' + chat_id
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
         quick = mode == 'fast' or (mode == 'auto' and not needs_project_tools(prompt))
-        reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=4 if quick else 8)
+        reviewed = knowledge.find_contextual(settings.project, prompt, limit=4 if quick else 8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
             path = Path(image)
@@ -223,7 +370,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # transcript from the persistent conversation DB as well as compacted memory.
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
-            recent = dialogue.recent(settings.project, limit=6 if quick else 12)
+            recent = dialogue.recent(settings.project, limit=6 if quick else 12, chat_id=chat_id)
             prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
@@ -231,6 +378,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
         allow_studio = bool(use_tools and settings.studio_id)
+        mcp_gateway = MCPGateway(settings) if use_tools else None
         endpoint, key = connection_for(settings)
         async def run():
             from openai import AsyncOpenAI
@@ -244,7 +392,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'search_finished'})
             timeout = httpx.Timeout(95.0 if settings.provider == 'local' else 55.0, connect=8.0)
             async with AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0) as client:
-                memory_context = (memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes
+                memory_context = (memory.get(memory_scope) + '\nREVIEWED KNOWLEDGE:\n' + notes
                     + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)
                 if quick:
                     memory_context = memory_context[-5000:]
@@ -254,14 +402,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               project_memory=memory_context + snippets,
                               max_calls=(1 if quick else min(settings.max_calls, 5 if mode == 'auto' else 20)),
                               context_chars=settings.context_chars,
-                              checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
+                              checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
                               stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=(1 if settings.provider == 'local' else 2),
                               github_enabled=bool(mode == 'agent' and github_enabled),
-                              intelligence=intelligence)
+                              intelligence=intelligence, mcp_gateway=mcp_gateway)
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
@@ -298,7 +446,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         runs.mkdir(parents=True, exist_ok=True)
         (runs / 'transcript.json').write_text(json.dumps(redact_for_logs({'messages': msgs, 'archive': archive}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(answer, encoding='utf-8')
-        memory.event(settings.project, {'run_id': stamp, 'answer': answer[:10000]})
+        memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
         audited_event({'event': 'saved', 'run_id': stamp})
         metrics.record(settings.project, 'run_succeeded',elapsed_ms=int((time.monotonic()-started)*1000))
         return answer
