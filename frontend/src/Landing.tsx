@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react'
+import type {KeyboardEvent} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
 import {
  ArrowDownToLine,ArrowRight,ArrowUpRight,BookOpen,BrainCircuit,Check,
@@ -56,6 +57,17 @@ export function Landing(){
  const [menu,setMenu]=useState(false)
  const [tour,setTour]=useState<TourId>('chat')
  const [track,setTrack]=useState<TrackId>('design')
+ const onTourKeys=(event:KeyboardEvent<HTMLDivElement>)=>{
+   const keys=['ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Home','End']
+   if(!keys.includes(event.key))return
+   event.preventDefault()
+   const current=tourViews.findIndex(view=>view.id===tour)
+   const index=event.key==='Home'?0:event.key==='End'?tourViews.length-1:
+     (current+(event.key==='ArrowDown'||event.key==='ArrowRight'?1:-1)+tourViews.length)%tourViews.length
+   const next=tourViews[index].id
+   setTour(next)
+   document.getElementById('sv-tab-'+next)?.focus()
+ }
  const selected=tourViews.find(v=>v.id===tour)||tourViews[0]
  const chosen=creativeTracks.find(v=>v.id===track)||creativeTracks[0]
  useEffect(()=>{
@@ -146,9 +158,9 @@ export function Landing(){
      <p>From the first message to the final review, STAR keeps the important tools close—and everything else out of the way.</p>
     </motion.div>
     <div className="sv-tour-layout">
-      <div className="sv-tour-choices" role="tablist" aria-label="STAR interface areas">
+      <div className="sv-tour-choices" role="tablist" aria-label="STAR interface areas" aria-orientation="vertical" onKeyDown={onTourKeys}>
        {tourViews.map(item=><button key={item.id} id={'sv-tab-'+item.id} type="button"
-        role="tab" aria-controls="sv-tour-panel" aria-selected={tour===item.id}
+        role="tab" aria-controls="sv-tour-panel" aria-selected={tour===item.id} tabIndex={tour===item.id?0:-1}
         className={tour===item.id?'sv-tour-choice selected':'sv-tour-choice'}
         onClick={()=>setTour(item.id)}>
         <span className="sv-tour-item-icon"><item.icon size={18}/></span>
