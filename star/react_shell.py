@@ -259,10 +259,11 @@ def launch():
                 chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
+            chat_id = active_chat
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'assistant',result['message'],chat_id=active_chat)
+                chats.add(settings.project,'assistant',result['message'],chat_id=chat_id)
             finally:
                 chats.close()
             return {'answer':result['answer'],'image':result['image']}
@@ -334,11 +335,49 @@ def launch():
                     settings=Settings.load(self.settings_file)
                     settings.project=project;settings.save(self.settings_file)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='newChat':
+                    if self.active_task:raise RuntimeError('Wait for the current answer before starting a new chat')
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.new_chat(settings.project)
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='switchChat':
+                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    chat_id=str(body.get('chatId',''))[:80]
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.switch_chat(settings.project,chat_id)
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='rememberDecision':
+                    from .learning import approve_learning
+                    settings=Settings.load(self.settings_file)
+                    receipt=approve_learning(
+                        app_data(), project=settings.project,
+                        text=body.get('text'),
+                        kind=str(body.get('kind','decision')),
+                        replaces_note_id=body.get('replaces_note_id'),
+                        human_approved=body.get('approved') is True,
+                    )
+                    return json.dumps({'ok':True,'data':asdict(receipt)})
+                if action=='listLearning':
+                    from .knowledge import KnowledgeStore
+                    settings=Settings.load(self.settings_file)
+                    store=KnowledgeStore(app_data()/'knowledge')
+                    try:
+                        notes=[{'id':n.id,'kind':n.kind,'text':n.text[:1200],
+                                'created':n.created,'source':n.source}
+                               for n in store.find(settings.project,'',reviewed_only=True,limit=30)
+                               if n.source=='user:explicit-approved-decision'][:12]
+                    finally:
+                        store.close()
+                    return json.dumps({'ok':True,'data':{'notes':notes}})
                 if action=='saveSettings':
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled','mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
@@ -389,14 +428,7 @@ def launch():
                     self._run(rid,action,worker)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='openLegacy':
-                    if getattr(sys, 'frozen', False):
-                        command=[sys.executable, '--legacy-ui']
-                    else:
-                        command=[sys.executable, str(Path(__file__).resolve().parents[1]/'star_desktop.py'), '--legacy-ui']
-                    import subprocess
-                    subprocess.Popen(command, close_fds=True, stdin=subprocess.DEVNULL,
-                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW',0))
-                    return json.dumps({'ok':True,'data':True})
+                    raise PermissionError('The legacy UI is diagnostic-only; start STAR.exe --legacy-ui explicitly if necessary.')
                 if action=='copyText':
                     content=str(body.get('text',''))
                     if len(content)>300000:raise ValueError('Too much text')
@@ -410,6 +442,15 @@ def launch():
                     if self.active_task:
                         self.cancel_chat.set()
                     return json.dumps({'ok':True,'data':{'cancel_requested':self.active_task}})
+                if action=='runTeam':
+                    if self.active_task:raise RuntimeError('STAR is already handling a task')
+                    prompt=str(body.get('prompt','')).strip()
+                    if not 2 <= len(prompt) <= 12000:
+                        raise ValueError('Team prompt must be 2–12,000 characters')
+                    if body.get('files'):
+                        raise ValueError('STAR Teams currently supports text only. Turn off Team mode to attach files.')
+                    self.active_task=True
+                    self._run(rid,action,lambda:self._run_team(rid,prompt))
                 if action=='sendMessage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
@@ -463,6 +504,16 @@ def launch():
                         import asyncio
                         from .model_health import probe_chat_endpoint
                         return asyncio.run(probe_chat_endpoint(Settings.load(self.settings_file)))
+                    self._run(rid,action,worker)
+                elif action=='testMcpConnection':
+                    server=str(body.get('server',''))
+                    if server not in {'graphify_docs','graphify_local','obsidian_live'}:
+                        raise ValueError('Unknown MCP connector')
+                    def worker():
+                        import asyncio
+                        gateway=MCPGateway(Settings.load(self.settings_file))
+                        # Probe does not call any server tool or perform writes.
+                        return asyncio.run(gateway.probe(server))
                     self._run(rid,action,worker)
                 elif action=='discoverStudio':
                     self._run(rid,action,lambda:{'studios':check_studio()})
