@@ -25,7 +25,7 @@ from .version import __version__
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','newChat','switchChat','generateImage',
-    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText',
+    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
 })
 
 
@@ -284,6 +284,8 @@ def launch():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
+                if action=='openLegacy':
+                    raise PermissionError('The legacy UI is no longer launched from React. Use the diagnostic --legacy-ui command explicitly if needed.')
                 if action=='copyText':
                     content=str(body.get('text',''))
                     if len(content)>300000:raise ValueError('Too much text')
