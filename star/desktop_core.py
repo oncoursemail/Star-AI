@@ -171,14 +171,30 @@ def redact_for_logs(value):
     return value
 
 
-def needs_project_tools(prompt: str) -> bool:
-    """Avoid loading expensive Studio/MCP tools for ordinary knowledge chat."""
+def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+    """Avoid tool overhead, but preserve short follow-up edits on the current project.
+
+    Previous *user* instructions are only context hints; they never grant edits
+    beyond the current saved workspace/Studio permission settings.
+    """
     text = prompt.lower()
-    mentions_project = any(term in text for term in ('studio', 'roblox', 'workspace', 'my project',
-        'my game', 'my files', 'project folder', 'current place'))
-    requests_action = any(term in text for term in ('inspect', 'modify', 'edit', 'read ', 'fix ',
-        'create ', 'build ', 'implement', 'open ', 'scan ', 'add ', 'remove ', 'delete ', 'test '))
-    return mentions_project and requests_action
+    scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game',
+              'my files', 'project folder', 'current place')
+    actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
+               'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
+               'remove ', 'delete ', 'test ', 'make it', 'update ')
+    requests_action = any(term in text for term in actions)
+    if not requests_action:
+        return False
+    if any(term in text for term in scopes):
+        return True
+    # A bounded pronoun follow-up like "fix it" should not forget that the
+    # current conversation asked to modify Roblox Studio. Do not scan
+    # assistants, tool output, or unrelated older project messages.
+    if len(text) <= 160 and prior_user_turns:
+        return any(any(term in turn.lower() for term in scopes)
+                   for turn in prior_user_turns[-3:] if isinstance(turn, str))
+    return False
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
@@ -196,8 +212,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     images = images or []
     for image in images:
         image_part(Path(image))
-    route = select_route(settings, prompt, mode=mode, image_count=len(images),
-                         research=research, project_tools=needs_project_tools(prompt))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
@@ -213,6 +227,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory = Memory(home / 'checkpoints.sqlite3')
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
+        # Read only a small window of this project's past user turns. STAR's
+        # UI may have already persisted the new prompt, which is excluded here.
+        dialogue = Conversations(home / 'conversations.sqlite3')
+        try:
+            recent_all = dialogue.recent(settings.project, limit=12)
+        finally:
+            dialogue.close()
+        recent_users = [body for role, body, _ in recent_all[:-1]
+                        if role == 'user'] if recent_all and recent_all[-1][0] == 'user' and recent_all[-1][1] == prompt else [
+                            body for role, body, _ in recent_all if role == 'user']
+        project_tools = needs_project_tools(prompt, recent_users)
+        route = select_route(settings, prompt, mode=mode, image_count=len(images),
+                             research=research, project_tools=project_tools)
         audited_event({'event': 'route_selected', 'profile': route.profile,
                        'description': route.description})
         quick = route.quick
@@ -225,12 +252,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 origin=f'desktop:{path.name}', media_type=media_type)
         # Every chat turn is independently callable, so supply a bounded recent
         # transcript from the persistent conversation DB as well as compacted memory.
-        dialogue = Conversations(home / 'conversations.sqlite3')
-        try:
-            recent = dialogue.recent(settings.project, limit=6 if quick else 12)
-            prior_turns = recent_context(recent, prompt)
-        finally:
-            dialogue.close()
+        prior_turns = recent_context(recent_all[-(6 if quick else 12):], prompt)
         use_tools = route.use_tools
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
@@ -256,7 +278,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     memory_context = memory_context[-14000:]
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=memory_context + snippets +
-                                  (ROBLOX_QUALITY_NOTES if is_roblox_task(prompt) else ''),
+                                  (ROBLOX_QUALITY_NOTES if (is_roblox_task(prompt) or
+                                      (project_tools and any(is_roblox_task(turn) for turn in recent_users[-3:]))) else ''),
                               max_calls=route.max_calls,
                               context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
