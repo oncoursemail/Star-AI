@@ -33,6 +33,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [imageMode,setImageMode]=useState(false)
  const [keyProvider,setKeyProvider]=useState('groq')
  const [providerKey,setProviderKey]=useState('')
+ const [includeReviewScreenshot,setIncludeReviewScreenshot]=useState(false)
+ const [reviewBusy,setReviewBusy]=useState(false)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
  const [notice,setNotice]=useState('')
@@ -102,6 +104,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }
    running.current.delete(event.requestId)
    if(event.kind==='error'){
+     if(action==='exportReviewBundle')setReviewBusy(false)
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'||action==='generateImage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
@@ -125,6 +128,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setUpdateBusy(false);setUpdateProgress(null)
      setNotice('Verified setup launched. STAR will restart after installation.')
    }
+   else if(action==='exportReviewBundle'){
+     setReviewBusy(false)
+     setNotice('Review bundle saved: '+truncate(String(result.filename||'STAR-review.zip'),90)+'. Attach this ZIP here for a detailed diagnosis.')
+   }
    else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='transcribe')setPrompt(p=>p+(p?'\n':'')+String(result.text||''))
@@ -140,7 +147,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setMessages(m=>[...m,makeMsg('user',value,selected.map(f=>f.split(/[\\/]/).pop()||f))]);setFiles([]);setPrompt('');setBusy(true);setWorkPhase('Preparing your response…');setNotice('');setTab('chat')
    const res=await act(imageMode?'generateImage':'sendMessage',{prompt:value,...(imageMode?{}:{files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})})
    if(!res){setBusy(false);setWorkPhase('');setRetryText(value);setMessages(m=>[...m,makeMsg('event','STAR could not start this request. Check the model or image workflow in Settings.')])}
- },[prompt,busy,files,inactive,act,imageMode,chatMode,research])
+ },[prompt,busy,files,inactive,act,imageMode,chatMode,research,githubSource])
 
  useEffect(()=>{
    const onShortcut=(e:KeyboardEvent)=>{
@@ -159,6 +166,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
  const changeProject=async(name:string)=>{const v=await act('switchProject',{project:name});if(v){const b=v as BootData;setData(b);setDraft(b.settings);setMessages(b.messages);lastProject.current=name;setTab('chat')}setLeftOpen(false)}
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
+ const exportReview=async()=>{
+   if(reviewBusy||inactive)return
+   setReviewBusy(true)
+   const result=await act('exportReviewBundle',{includeScreenshot:includeReviewScreenshot})
+   if(!result||'cancelled' in result){setReviewBusy(false)}
+ }
  const stopChat=async()=>{if(!busy)return;setWorkPhase('Stopping request…');await act('cancelMessage')}
  const saveKey=async()=>{if(!providerKey.trim())return;const result=await act('saveProviderKey',{provider:keyProvider,key:providerKey.trim()});if(result){setProviderKey('');setNotice('API key saved securely on this computer.');void sync()}}
  const removeKey=async()=>{const result=await act('clearProviderKey',{provider:keyProvider});if(result){setProviderKey('');setNotice('Saved credential cleared.');void sync()}}
@@ -305,6 +318,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             </div>
             {updateProgress&&<div className="update-download" role="status" aria-live="polite"><div className="update-download-label"><span>{updateProgress.phase}</span><strong>{updateProgress.total?Math.round(updateProgress.downloaded/updateProgress.total*100)+'%':'Preparing…'}</strong></div><div className="progress-track"><div className={updateProgress.total?'':'progress-indeterminate'} style={updateProgress.total?{width:`${Math.min(100,Math.round(updateProgress.downloaded/updateProgress.total*100))}%`}:undefined}/></div></div>}
             <small>Upgrades start only after you choose Install & restart. Installing does not erase your local data.</small>
+           </Panel>
+           <Panel className="settings-section star-review-panel">
+             <div className="section-heading"><div><span className="eyebrow">DIAGNOSTICS & REVIEW</span><h2>Let me inspect what went wrong</h2></div><ShieldCheck size={20}/></div>
+             <p>Export a small review ZIP with real performance and failure counts, local model status, configured tools and app version. No chats, prompts, API keys, private files, source code or raw logs are included.</p>
+             <label className="setting-switch"><span><strong>Include the visible STAR screen</strong><small>Optional. A screenshot may contain private messages. Review the ZIP before sharing.</small></span><input type="checkbox" checked={includeReviewScreenshot} onChange={e=>setIncludeReviewScreenshot(e.target.checked)}/></label>
+             <div className="review-export-actions"><button type="button" className="secondary-button" onClick={()=>void exportReview()} disabled={reviewBusy||inactive}>{reviewBusy?<LoaderCircle size={16} className="spin"/>:<Download size={16}/>} {reviewBusy?'Creating review bundle…':'Export review ZIP'}</button><span>Saved only where you choose. Nothing is uploaded automatically.</span></div>
+             <small>After exporting, attach the ZIP to this ChatGPT conversation. I can then review its contents and investigate recorded errors. This does not give me live access to your PC.</small>
            </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
        </motion.main>
      </AnimatePresence>
