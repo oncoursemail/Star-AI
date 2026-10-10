@@ -194,7 +194,7 @@ def test_security_malformed_remote_schema_and_header_are_rejected():
     with pytest.raises(ValueError):
         extra_headers({"type": "object", "properties": {
             "a": {"type": "object", "properties": {
-                "b": {"type": "string", "x-mcp-header": "B"}}}}, {})
+                "b": {"type": "string", "x-mcp-header": "B"}}}}}, {})
     assert valid_schema({"type": "object", "properties": {
         "a": {"type": "string", "x-mcp-header": "Safe-Name"}}}) is not None
 
