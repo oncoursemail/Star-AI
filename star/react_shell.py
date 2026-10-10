@@ -29,6 +29,7 @@ from .chat_images import chat_image, generate_chat_image
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
+from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -39,6 +40,8 @@ ALLOWED_ACTIONS = frozenset({
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam',
 })
+# Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 
 
 def react_index(root: Path | None = None) -> Path:
@@ -167,6 +170,20 @@ def launch():
             self.active_task = False
             self.cancel_chat = threading.Event()
             self.active_update = False
+            self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
+                                     settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _save_voice_turn(self, user_text: str, reply_text: str):
+            # A call shows up in the active chat like typed messages do.
+            settings = Settings.load(self.settings_file)
+            chats = Conversations(app_data() / 'conversations.sqlite3')
+            try:
+                active_chat = chats.active_chat(settings.project)
+                chats.add(settings.project, 'user', user_text, chat_id=active_chat)
+                if reply_text:
+                    chats.add(settings.project, 'assistant', reply_text, chat_id=active_chat)
+            finally:
+                chats.close()
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -350,6 +367,8 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
+                if action in VOICE_ACTIONS:
+                    return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
@@ -641,6 +660,7 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            self.voice.close()
             self.cancel_chat.set()
             self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)

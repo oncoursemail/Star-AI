@@ -1,5 +1,6 @@
 """Command line for STAR voice calls.
 
+    python -m star.voice setup              download the voice model files (checked by size and SHA-256)
     python -m star.voice call               talk to Star with the microphone (Ctrl+C to hang up)
     python -m star.voice make-test-audio    synthesise the test questions for file-driven calls
     python -m star.voice file-call          run a scripted call from WAV files and print the latency table
@@ -178,6 +179,12 @@ def cmd_say(args) -> int:
     return 0
 
 
+def cmd_setup(_args) -> int:
+    from .setup_models import download
+    download()
+    return 0
+
+
 def cmd_devices(_args) -> int:
     from .devices import list_devices
     for item in list_devices():
@@ -218,6 +225,9 @@ def main(argv: list[str] | None = None) -> int:
     say.add_argument("--device", choices=["auto", "cuda", "cpu"])
     say.add_argument("--output-device", dest="output_device")
     say.set_defaults(run=cmd_say)
+
+    setup = sub.add_parser("setup", help="download the voice model files")
+    setup.set_defaults(run=cmd_setup)
 
     devices = sub.add_parser("devices", help="list microphones and speakers")
     devices.set_defaults(run=cmd_devices)

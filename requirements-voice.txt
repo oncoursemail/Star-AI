@@ -1,2 +1,15 @@
+# Optional voice features. Install on top of requirements.txt:
+#   pip install -r requirements.txt -r requirements-voice.txt
+# Media transcription and the old system voice (existing features)
 faster-whisper>=1.2.1,<2
 pyttsx3>=2.99,<3
+# Voice calls (star/voice, see docs/STAR_VOICE_CALLS.md): microphone and speaker, voice activity,
+# end-of-turn model and the Kokoro voice. These defaults run on the CPU.
+numpy>=2.0,<2.3
+sounddevice>=0.5,<1
+kokoro-onnx>=0.4.9,<0.6
+onnxruntime>=1.20,<2
+# NVIDIA GPU (optional, about 14x real time for the voice instead of 2.5x): install
+#   onnxruntime-gpu[cuda,cudnn]==1.26.*
+# INSTEAD of onnxruntime. The two packages share one import name and overwrite each other, so the CPU
+# wheel must not be installed next to it (docs/STAR_VOICE_CALLS.md, "GPU").
