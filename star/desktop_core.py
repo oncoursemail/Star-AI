@@ -270,7 +270,7 @@ def redact_for_logs(value):
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
-             stream_tokens: bool = False) -> str:
+             stream_tokens: bool = False, chat_id: str | None = None) -> str:
     """Called from a Qt worker thread. No API key needed for localhost engines."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
@@ -307,7 +307,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # transcript from the persistent conversation DB as well as compacted memory.
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
-            recent = dialogue.recent(settings.project, limit=12)
+            recent = dialogue.recent(settings.project, limit=12, chat_id=chat_id)
             prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
