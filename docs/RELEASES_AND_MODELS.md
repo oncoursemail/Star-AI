@@ -20,17 +20,19 @@ GitHub CLI `gh release create`: https://cli.github.com/manual/gh_release_create
 Inno Setup official: https://jrsoftware.org/isinfo.php
 PyInstaller: https://pyinstaller.org/en/stable/
 
-## Updating privately hosted STAR
+## Updating STAR from its public Releases
 
-GitHub Release assets in a private repository require authorization. The `star/updates.py` checker tries the GitHub Release API and falls back to an authenticated **GitHub CLI** installation (it never copies its token into the model's context). If authorized, in-app updates can download a versioned portable archive and validate its GitHub-provided SHA-256 before staging. A helper process waits for STAR to stop, switches the folders, invokes the packaged doctor and rolls back if it fails. Otherwise users simply download the latest `STAR-Setup-v...exe` while signed into GitHub and run it to upgrade in place.
+`oncoursemail/Star-AI` is intentionally public. `star/updates.py` checks the unauthenticated, official `/repos/oncoursemail/Star-AI/releases/latest` API endpoint; it does **not** need GitHub CLI, a login, or a separate mirror repository. It accepts only a newer release from this exact repository, validates the named Windows installer, its advertised size, HTTPS URL and SHA-256, and downloads the installer to versioned staging storage. If the API is unavailable or inaccessible, the user is directed to the official Releases page in a browser rather than silently installing something else.
 
-These updater flows require real Windows acceptance testing, particularly locked files, antivirus interference and failure recovery; they should not replace code signing or an externally signed update manifest for wide distribution. Never delete the old installation before verifying the replacement or store app data next to the executable.
+A user-approved Setup run upgrades the application in place. Only a manifest-verified installer can use unattended mode. `prune_obsolete_update_packages` may remove outdated **versioned update downloads**, never chats, models, references, projects, or other user files under `%APPDATA%\\STAR`.
 
-## GitHub Pages limitations
+The Windows workflow publishes the Setup EXE, portable ZIP and `SHA256SUMS.txt` from its successful build into the same repository's GitHub Releases. It never overwrites an existing tag. Automated tests and packaged `--doctor` checks are valuable but **cannot substitute** for live Windows upgrade, antivirus, GPU inference, and Roblox Studio acceptance.
 
-The website is purely static (`site/`), doesn't upload chat data, and publishes only its own vetted files. `website-pages.yml` produces a GitHub artifact for preview on every change. Automatic Pages deployment is disabled until a repository variable `STAR_DEPLOY_PAGES=true` is set and **Settings → Pages** uses `GitHub Actions`.
+## GitHub Pages and website
 
-GitHub Free supports Pages from public repositories, but not from private repos. Private repo support requires a GitHub plan that includes it. If unavailable, use a **separate public website-only repository**. Do not expose STAR's full private source code or credentials to publish a marketing website.
+The canonical public website is built from `frontend/` (React/TypeScript/Vite) by `.github/workflows/website-pages.yml` and deployed from the successful `frontend/dist` artifact when GitHub Pages is configured and not disabled by `STAR_DEPLOY_PAGES=false`. `site/` holds historical standalone static-site assets kept for compatibility tests, **not** a second downloads repository or current React deployment source.
+
+GitHub Pages must be enabled using **Settings → Pages → Source: GitHub Actions** and verified at its actual public URL. No website or build preview may include local conversations, credentials, model weights, or other private device data.
 
 Sources: https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-github-pages-site , https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages , https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/tree/main , https://github.com/ggml-org/llama.cpp/releases .
 

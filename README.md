@@ -8,13 +8,13 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status:** The source version is v0.9.0. The authoritative public binary is the [latest GitHub Release](https://github.com/oncoursemail/Star-AI/releases/latest); a source commit or passing PR build is not evidence that a new installer has been released. Native Windows model/GPU, credentials, Roblox Studio, and upgrade acceptance still require device testing; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
+> **Shipping status:** The source version is v0.9.0, but the latest public binary is currently **STAR Genesis v0.8.1** on the [GitHub Releases page](https://github.com/oncoursemail/Star-AI/releases/latest), with Windows Setup, a portable ZIP, and SHA-256 checksums. The latest GitHub Release is the only authoritative public binary: a source commit, an unmerged pull request, or a passing PR build is not evidence that a new installer has been released, and work in unmerged pull requests is **not** included in the public installer. A published Release is also not proof of hands-on Windows/GPU/Roblox acceptance. Native Windows model/GPU, credentials, Roblox Studio, and upgrade acceptance still require device testing; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md) and the [Windows QA gate](docs/STAR_V08_RELEASE_GATE.md).
 
 ## Download / Updates
 
 **[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
 
-The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the React desktop), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
+The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**. GitHub Releases here are the single official download/update channel; no separate public-downloads repository, GitHub account, GitHub CLI, or mirrored publisher is needed. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the React desktop), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
 ### STAR v0.9 AI and UI improvements
 
@@ -45,7 +45,7 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 - **Projects**, **STAR Brain**, **Tools**, **Library**, **Settings** share a consistent spacing/typography system. The previous native advanced tools remain accessible via `STAR.exe --legacy-ui` during migration.
 - **A restricted Qt WebChannel** connects the local React UI to existing Python services. External websites cannot invoke the bridge; internal Qt navigation is limited to the bundled UI. GitHub or other tokens are not accessible to the model/UI.
 
-Read the [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
+Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
 ## Architecture
 
