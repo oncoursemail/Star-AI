@@ -100,7 +100,7 @@ Implementation files: \`star/agent_skills.py\`, \`star/obsidian_bridge.py\`, \`s
 1. Keep your existing Obsidian vault local as usual.
 2. In STAR Settings → Knowledge & expert tools, choose the vault root folder; check **Allow read-only Obsidian vault access**; Save.
 3. Ask: "Search my Obsidian notes for VALEN design decisions; cite the note paths you used."
-4. STAR returns search results and may read the matched note. For better recall, put project names and clear headings into notes.
+4. STAR returns search results and may read the matched note in bounded line-numbered pages. For better recall, put project names and clear headings into notes.
 5. Optional *future extension:* the Local REST API with MCP adds live metadata, full-text search, tags/frontmatter editing and notes creation. This will require separate local-only authentication, UI permissions, secret storage outside settings.json, transport compatibility tests and confirmation for writes. It is not implemented.
 
 **Step C: Graphify export**
