@@ -474,7 +474,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const response=await act('installUpdate')
    if(!response){setUpdateBusy(false);setUpdateProgress(null)}
  }
- const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
+ // A notice belongs to the page where the action happened: it must not follow to another page and cover it.
+ const nav=(id:Tab)=>{if(id!==tab)setNotice('');setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
  const fillComposer=(text:string)=>{
    setPrompt(text);setTab('chat')
    window.requestAnimationFrame(()=>{const node=composerRef.current;if(node){node.focus();node.setSelectionRange(text.length,text.length)}})

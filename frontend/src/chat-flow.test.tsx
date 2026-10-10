@@ -336,3 +336,18 @@ describe('connection status with a STAR Server', () => {
     expect(await screen.findByText(/Status: ready/)).toBeTruthy()
   })
 })
+
+describe('notices', () => {
+  it('does not carry a notice from another page over the conversation', async () => {
+    const user = await openChat([{id: '', role: 'user', text: 'hello', created: ''}, {id: '', role: 'assistant', text: 'Hi.', created: ''}])
+    desktop.onAction('saveSettings', call => ({ok: true, data: call.payload.settings}))
+    await user.click(screen.getByRole('button', {name: /^Settings/}))
+    await user.click(await screen.findByRole('button', {name: /save settings/i}))
+    expect(await screen.findByText('Settings saved.')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', {name: /back to chat/i}))
+    await screen.findByRole('textbox', {name: /message star/i})
+    expect(screen.queryByText('Settings saved.')).toBeNull()
+    expect(seen('Hi.')).toHaveLength(1)
+  })
+})
