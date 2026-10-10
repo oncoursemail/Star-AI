@@ -21,11 +21,12 @@ from .analytics import get_dashboard
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
+from .intelligence import for_settings
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
-    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
+    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
 })
 
 
@@ -73,6 +74,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         'messages':messages, 'settings':asdict(settings),
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
         'analytics':get_dashboard(home, settings.project),
+        'intelligence':for_settings(settings,home).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -231,6 +233,9 @@ def launch():
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='selectFolder':
+                    selected=QFileDialog.getExistingDirectory(self.host, 'Choose a local notes or project folder')
+                    return json.dumps({'ok':True,'data':{'path':str(selected) if selected else ''}})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -256,7 +261,7 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion'}
+                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
