@@ -13,6 +13,7 @@ interface QtBridge {
 }
 
 let bridge:QtBridge|null = null
+let initializing:Promise<boolean>|null = null
 const watchers = new Set<(event:BackendEvent) => void>()
 export const isDesktop = () => bridge !== null
 
@@ -22,41 +23,62 @@ export function onBackendEvent(fn:(event:BackendEvent)=>void) {
 }
 function parseEvent(raw:string) {
   try { const event = JSON.parse(raw) as BackendEvent; watchers.forEach(fn=>fn(event)) }
-  catch { /* Untrusted tool output cannot crash React. */ }
+  catch { /* Invalid native events cannot crash the React render tree. */ }
 }
-export function initializeBridge(): Promise<boolean> {
-  if (!window.qt?.webChannelTransport) return Promise.resolve(false)
-  return new Promise(resolve=>{
-    const finish = () => {
-      if (!window.QWebChannel) { resolve(false); return }
-      new window.QWebChannel(window.qt!.webChannelTransport, channel=>{
-        bridge = channel.objects.starBridge
-        window.starBridge = bridge
-        bridge.event.connect(parseEvent)
-        resolve(true)
-      })
+/** StrictMode and fast reloads must not establish duplicate WebChannel subscriptions. */
+export function initializeBridge():Promise<boolean>{
+  if(bridge)return Promise.resolve(true)
+  if(!window.qt?.webChannelTransport)return Promise.resolve(false)
+  if(initializing)return initializing
+  initializing=new Promise(resolve=>{
+    const finish=(ready:boolean)=>{
+      if(!ready)initializing=null
+      resolve(ready)
     }
-    if (window.QWebChannel) finish()
-    else {
+    const connect=()=>{
+      if(!window.QWebChannel){finish(false);return}
+      try{
+        new window.QWebChannel(window.qt!.webChannelTransport,channel=>{
+          const native=channel.objects?.starBridge
+          if(!native){finish(false);return}
+          bridge=native
+          window.starBridge=native
+          native.event.connect(parseEvent)
+          finish(true)
+        })
+      }catch{finish(false)}
+    }
+    if(window.QWebChannel)connect()
+    else{
       const script=document.createElement('script')
       script.src='qrc:///qtwebchannel/qwebchannel.js'
-      script.onload=finish
-      script.onerror=()=>resolve(false)
+      script.async=true
+      script.onload=connect
+      script.onerror=()=>finish(false)
       document.head.append(script)
     }
   })
+  return initializing
 }
 
 export type BackendReply<T> = {ok:boolean;data?:T; pending?:boolean;requestId?:string;error?:string}
 export function request<T=unknown>(action:string, payload:Record<string,unknown>={}, providedId?:string):Promise<BackendReply<T>> {
-  if (!bridge) return Promise.resolve({ok:false,error:'Open STAR Desktop to use your local AI. This website is only a preview.'})
+  if(!bridge)return Promise.resolve({ok:false,error:'Open STAR Desktop to use your local AI. This website is only a preview.'})
   return new Promise(resolve=>{
     const requestId=providedId||crypto.randomUUID()
-    try {
-      bridge!.invoke(JSON.stringify({requestId,action,...payload}), raw=>{
-        try {resolve(JSON.parse(raw) as BackendReply<T>)}
-        catch {resolve({ok:false,error:'STAR returned an invalid response.'})}
+    let settled=false
+    const finish=(response:BackendReply<T>)=>{
+      if(settled)return
+      settled=true
+      window.clearTimeout(timeout)
+      resolve(response)
+    }
+    const timeout=window.setTimeout(()=>finish({ok:false,error:'STAR local bridge did not respond. Restart the desktop app and try again.'}),30000)
+    try{
+      bridge!.invoke(JSON.stringify({requestId,action,...payload}),raw=>{
+        try{finish(JSON.parse(raw) as BackendReply<T>)}
+        catch{finish({ok:false,error:'STAR returned an invalid desktop response.'})}
       })
-    } catch {resolve({ok:false,error:'STAR desktop connection is unavailable.'})}
+    }catch{finish({ok:false,error:'STAR desktop connection is unavailable.'})}
   })
 }
