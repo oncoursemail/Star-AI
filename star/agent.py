@@ -73,7 +73,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   workspace=None, workspace_edit=False, stream_tokens=False,
                   response_tokens=1600, web_search_enabled=False,
                   subagents_enabled=False, subagent_parallelism=1,
-                  github_enabled=False, intelligence=None):
+                  github_enabled=False, intelligence=None, mcp_gateway=None):
     if not prompt.strip():
         raise ValueError("Prompt is empty")
     if len(image_paths) > 4:
@@ -120,6 +120,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                        "description": tool["description"], "parameters": tool["inputSchema"]}}
                        for tool in intelligence_definitions)
     enabled_intelligence = {tool["name"] for tool in intelligence_definitions}
+    mcp_definitions = mcp_gateway.definitions(prompt) if mcp_gateway is not None else []
+    definitions.extend({"type": "function", "function": {
+        "name": tool["name"], "description": tool["description"],
+        "parameters": tool["inputSchema"]}} for tool in mcp_definitions)
+    enabled_mcp = {tool["name"] for tool in mcp_definitions}
     content = [{"type": "text", "text": prompt}]
     content.extend(image_part(path) for path in image_paths)
     messages = [make_system_message(studio_id, may_edit, project_memory),
@@ -221,6 +226,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     elif intelligence is not None and intelligence.owns(name):
                         if name not in enabled_intelligence:
                             raise PermissionError("Intelligence tool not authorized for this task")
+                    elif mcp_gateway is not None and mcp_gateway.owns(name):
+                        if name not in enabled_mcp:
+                            raise PermissionError("MCP tool not authorized for this task")
                     elif name not in TOOL_NAMES:
                         enforce(name, args, registry, studio_id, may_edit, allow_luau=allow_luau)
                     elif workspace is None or (name == "workspace_write" and not workspace_edit):
@@ -265,6 +273,15 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             data = {"isError": False, "content": [{"type": "text", "text": json.dumps(local_output, ensure_ascii=False)}]}
                         except (ValueError, PermissionError, OSError, UnicodeError) as exc:
                             data = {"isError": True, "content": [{"type": "text", "text": f"Intelligence tool failed: {type(exc).__name__}: {exc}"}]}
+                    elif mcp_gateway is not None and mcp_gateway.owns(name):
+                        try:
+                            local_output = await mcp_gateway.call(name, args)
+                            data = {"isError": bool(local_output.get("result", {}).get("isError", False)),
+                                    "content": [{"type": "text", "text": json.dumps(local_output, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            # Never relay external bearer tokens, response bodies or server errors.
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"MCP tool unavailable: {type(exc).__name__}"}]}
                     elif name in TOOL_NAMES:
                         try:
                             local_output = workspace.call(name, args, allow_write=workspace_edit)
