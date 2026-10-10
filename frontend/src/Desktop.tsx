@@ -6,7 +6,6 @@ import {Brand,EmptyState,Message,Panel,PrivacyNote,Starlight,Tag} from './compon
 import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
-import './desktop-v2.css'
 import './stellar-ui.css'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
@@ -54,6 +53,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [historyQuery,setHistoryQuery]=useState('')
  const [modelList,setModelList]=useState<string[]>([])
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
+ const composerMenuRef=useRef<HTMLDivElement>(null)
  const running=useRef<Map<string,string>>(new Map())
  const chatScroll=useRef<HTMLDivElement>(null)
  const followBottom=useRef(true)
@@ -67,6 +67,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
+ useEffect(()=>{
+   if(!composerMenu)return
+   const close=(event:PointerEvent)=>{if(composerMenuRef.current&&!composerMenuRef.current.contains(event.target as Node))setComposerMenu(false)}
+   document.addEventListener('pointerdown',close)
+   return ()=>document.removeEventListener('pointerdown',close)
+ },[composerMenu])
  useEffect(()=>{
    const node=chatScroll.current
    if(tab==='chat'&&node&&followBottom.current){node.scrollTop=node.scrollHeight;setShowJump(false)}
@@ -266,7 +272,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
       </header>
      {preview&&<div className="demo-ribbon"><Info size={14}/> Interactive interface preview — real AI features are available only in STAR Desktop.</div>}
      <AnimatePresence mode="wait" initial={false}>
-       <motion.main key={tab} className="page-stage" initial={{opacity:0,y:8}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-5}} transition={{duration:.16}}>
+       <motion.main key={tab} className="page-stage" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} transition={{duration:.14}}>
          {tab==='chat'&&<div className="chat-page">
             <div className="chat-scroll" ref={chatScroll} onScroll={onChatScroll}>
               <div className="chat-inner">
@@ -293,7 +299,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <textarea id="star-prompt" ref={composerRef} rows={1} placeholder={imageMode?'Describe the image you want to create…':'Message STAR…'} value={prompt} onChange={e=>setPrompt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();void send()}}}/>
                 <div className="composer-tools">
                   <div className="composer-left">
-                    <div className="composer-menu-wrap">
+                    <div className="composer-menu-wrap" ref={composerMenuRef}>
                       <button className={'composer-plus '+(composerMenu?'is-open':'')} type="button" title="Add tools or attachments" aria-label="Add tools or attachments" aria-haspopup="menu" aria-expanded={composerMenu} onClick={()=>setComposerMenu(v=>!v)}><Plus size={20}/></button>
                       <AnimatePresence>{composerMenu&&<motion.div className="composer-menu" role="menu" initial={{opacity:0,y:6,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:4,scale:.99}} transition={{duration:.15}}>
                         <button role="menuitem" type="button" onClick={()=>{setComposerMenu(false);void attach()}}><FolderOpen size={17}/><span>Attach files</span></button>
