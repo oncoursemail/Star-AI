@@ -138,3 +138,11 @@ def test_team_run_emits_its_plan_before_any_stage_starts(tmp_path):
     rows = [sanitize_event(e)["activity"] for e in seen]
     assert rows[0]["type"] == "plan" and len(rows[0]["steps"]) == 4
     assert all(r["type"] == "agent" for r in rows[1:])
+
+
+def test_the_status_line_never_shows_an_internal_event_name():
+    """Seen in the real shell: "STAR is working · model_started" while the model was being contacted."""
+    assert sanitize_event({"event": "model_started"}) == {"phase": "Contacting the model"}
+    for name in ("model_started", "something_new", "internal_step_v2"):
+        phase = sanitize_event({"event": name})["phase"]
+        assert name not in phase and "_" not in phase

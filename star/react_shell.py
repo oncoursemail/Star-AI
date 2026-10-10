@@ -215,7 +215,11 @@ def sanitize_event(event: dict) -> dict:
                 else 'Using an authorized local tool','activity':activity}
     if kind in {'tool_call','tool_result','tool_output'}:
         return {'phase':'Using an authorized local tool'}
-    return {'phase':('STAR is working · '+kind)[:110]}
+    if kind == 'model_started':
+        # Routing and context are ready; the request goes out next (after Studio connects, if it is used).
+        return {'phase':'Contacting the model'}
+    # An event without wording of its own still reads as a sentence, never as an internal name.
+    return {'phase':'STAR is working'}
 
 
 # Bridge actions that save a user message first and then try to answer it.
