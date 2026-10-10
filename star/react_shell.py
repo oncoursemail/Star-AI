@@ -22,6 +22,7 @@ from .analytics import get_dashboard
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
+from .build_info import read_build_info
 from .intelligence import for_settings
 from .providers import credential_status, save_api_key, clear_api_key
 from .chat_images import chat_image, generate_chat_image
@@ -105,7 +106,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     finally:
         workshop.close()
     return {
-        'version':__version__,'project':settings.project,'projects':projects,
+        'version':__version__,'build':read_build_info(),'project':settings.project,'projects':projects,
         'messages':messages,'active_chat':active_chat,'chats':chat_threads,
         'settings':asdict(settings),
         'brain_installed':brain is not None,'brain_running':runtime.status()=='running',

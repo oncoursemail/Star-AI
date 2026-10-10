@@ -10,7 +10,10 @@ def main():
         from star.desktop_core import Settings, app_data
         from star.media import image_part
         from star.version import __version__
+        from star.build_info import read_build_info
         print(f'STAR v{__version__} packaged backend OK')
+        build=read_build_info()
+        print('Build source:',build['head_commit'][:12] if build['stamped'] else 'local source / unstamped')
         print('Local data:', app_data())
         Settings().validate()
         # Packaged Windows binaries must include the OS-backed credential

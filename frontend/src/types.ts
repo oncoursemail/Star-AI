@@ -13,5 +13,6 @@ export type ChatThread = { id:string; title:string; created:string; updated:stri
 export type CustomToolRecipe = { id:number;name:string;description:string;status:'pending'|'approved'|'rejected'|'disabled';tests:number;created_at:string;last_tested_at?:string|null;reviewed_at?:string|null;sources:string[] }
 export type CustomToolCatalog = {project:string;tools:CustomToolRecipe[];notice:string}
 export type WorkshopStatus = {pending:number;approved:number;rejected:number;disabled:number;read_only:boolean}
-export type BootData = { version:string; project:string; projects:string[]; messages:ChatMessage[]; active_chat:string; chats:ChatThread[]; settings:AppSettings; brain_installed:boolean; brain_running:boolean; model_router_running?:boolean; analytics:Analytics; release_url:string; intelligence?:IntelligenceStatus; credentials:Record<string,boolean>; mcp?:McpStatus; tool_workshop?:WorkshopStatus }
+export type BuildInfo = {stamped:boolean; source_commit:string; head_commit:string; run_url:string; build_event:string; note:string}
+export type BootData = { version:string; build?:BuildInfo; project:string; projects:string[]; messages:ChatMessage[]; active_chat:string; chats:ChatThread[]; settings:AppSettings; brain_installed:boolean; brain_running:boolean; model_router_running?:boolean; analytics:Analytics; release_url:string; intelligence?:IntelligenceStatus; credentials:Record<string,boolean>; mcp?:McpStatus; tool_workshop?:WorkshopStatus }
 export type BackendEvent = { requestId:string; kind:'result'|'progress'|'error'; data:unknown }

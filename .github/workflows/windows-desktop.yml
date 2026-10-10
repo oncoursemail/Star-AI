@@ -38,6 +38,22 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Stamp exact source provenance for app diagnostics
+        shell: pwsh
+        env:
+          STAR_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $source = (git rev-parse HEAD).Trim()
+          $head = $env:STAR_PR_HEAD_SHA
+          if (-not $head) { $head = $source }
+          $payload = @{
+            schema = 1
+            source_commit = $source
+            head_commit = $head
+            build_event = $env:GITHUB_EVENT_NAME
+            run_id = [string]$env:GITHUB_RUN_ID
+          } | ConvertTo-Json -Compress
+          [System.IO.File]::WriteAllText('star/build-info.json', $payload, (New-Object System.Text.UTF8Encoding $false))
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
@@ -89,7 +105,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
-            --add-data 'frontend/dist;frontend/dist' `
+            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' `
             --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `

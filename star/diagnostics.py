@@ -23,6 +23,7 @@ from PIL import Image
 
 from .providers import credential_status
 from .version import __version__
+from .build_info import read_build_info
 
 _ALLOWED_MODEL = re.compile(r"^[A-Za-z0-9._/:+-]{1,160}$")
 _MAX_SCREENSHOT_BYTES = 8_000_000
@@ -149,6 +150,7 @@ def review_snapshot(home: Path, settings, runtime_status: str) -> dict[str, dict
         "manifest.json": {
             "format": "star-review-v1",
             "star_version": __version__,
+            "build": read_build_info(),
             "created_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "screenshot_included": False,  # explicitly updated for screenshot exports
             "privacy": "No prompts, chat text, paths, account names, raw logs or API keys",
