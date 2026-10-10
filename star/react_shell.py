@@ -349,13 +349,19 @@ def launch():
                 chats.add(settings.project, "user", prompt, chat_id=active_chat)
             finally:
                 chats.close()
-            answer, team = asyncio.run(run_research_team(
-                endpoint=settings.endpoint, model=settings.model,
-                project=settings.project, prompt=prompt, home=home,
-                parallel=2,
-                on_event=lambda event: self._emit(
-                    request_id, 'progress', sanitize_event(event)),
-            ))
+            from .team_cancellation import run_until_cancelled
+            async def run():
+                return await run_until_cancelled(
+                    run_research_team(
+                        endpoint=settings.endpoint, model=settings.model,
+                        project=settings.project, prompt=prompt, home=home,
+                        parallel=2,
+                        on_event=lambda event: self._emit(
+                            request_id, 'progress', sanitize_event(event)),
+                    ),
+                    is_cancelled=self.cancel_chat.is_set,
+                )
+            answer, team = asyncio.run(run())
             chats = Conversations(home / "conversations.sqlite3")
             try:
                 chats.add(settings.project, "assistant", answer, chat_id=active_chat)
@@ -514,8 +520,13 @@ def launch():
                         raise ValueError('Team prompt must be 2–12,000 characters')
                     if body.get('files'):
                         raise ValueError('STAR Teams currently supports text only. Turn off Team mode to attach files.')
+                    self.cancel_chat = threading.Event()
                     self.active_task=True
-                    self._run(rid,action,lambda:self._run_team(rid,prompt))
+                    try:
+                        self._run(rid,action,lambda:self._run_team(rid,prompt))
+                    except Exception:
+                        self.active_task=False
+                        raise
                 if action=='sendMessage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
