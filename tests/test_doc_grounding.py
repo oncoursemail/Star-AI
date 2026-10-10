@@ -491,6 +491,75 @@ def test_finalize_repairs_only_in_a_deep_turn_with_time_left():
     assert late_model.calls == [] and "shown unchanged" in late              # not enough of the 600 s left
 
 
+class SlowModel:
+    """A repair call that takes far longer than the turn has left."""
+
+    def __init__(self, seconds):
+        self.seconds, self.calls = seconds, 0
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+    async def create(self, **kwargs):
+        self.calls += 1
+        await asyncio.sleep(self.seconds)
+        message = SimpleNamespace(content='```luau\nlocal x: string = "1"\n```')
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+def bounded_finalize(found, limit=3.0, **kwargs):
+    """finalize must come back by itself; the outer limit only keeps a failing test short."""
+    route = SimpleNamespace(quick=False, task_timeout=600, model="m", response_tokens=1600)
+    messages = [{"role": "system", "content": "s"}, {"role": "assistant", "content": ANSWER}]
+
+    async def run():
+        return await asyncio.wait_for(finalize(found, route, (ANSWER, messages, []), **kwargs), limit)
+
+    return asyncio.run(run())
+
+
+def test_a_repair_that_outlives_the_turn_is_stopped_and_the_answer_survives(monkeypatch):
+    """The whole task has one deadline. A repair still running at that deadline would turn a
+    finished answer into "STAR exceeded its task budget"."""
+    from time import monotonic
+    monkeypatch.setattr(doc_grounding, "REPAIR_RESERVE_SECONDS", 499.8)      # 500 s left: 0.2 s for the repair
+    model = SlowModel(30)
+    answer, _, archive = bounded_finalize(grounding(FakeKnowledge(reports=[failed()])), model_client=model,
+                                          started=monotonic() - 100, prompt="Make x a string")
+    assert model.calls == 1
+    assert "shown unchanged" in answer and "Expected this to be 'string'" in answer     # diagnostics kept
+    assert "STAR corrected it" not in answer and SOURCES_MARKER in answer
+    assert archive[-1]["star_knowledge"]["luau_checks"][0]["repaired"] is False
+
+
+def test_the_self_check_is_skipped_when_the_turn_is_out_of_time():
+    import time
+
+    class SlowCheck(FakeKnowledge):
+        def luau_check(self, code, *, strict=False):
+            time.sleep(0.5)
+            return super().luau_check(code, strict=strict)
+
+    knowledge = SlowCheck(reports=[failed()])
+    answer, _, _ = bounded_finalize(grounding(knowledge), started=time.monotonic() - 595)   # 5 s of 600 left
+    assert knowledge.checked == [] and CHECK_MARKER not in answer            # no check, so no claim
+    assert SOURCES_MARKER in answer                                          # the sources list costs nothing
+
+
+def test_a_check_that_hangs_is_abandoned_before_the_deadline_and_nothing_is_claimed(monkeypatch):
+    import time
+
+    class HungCheck(FakeKnowledge):
+        def luau_check(self, code, *, strict=False):
+            time.sleep(1.5)
+            return super().luau_check(code, strict=strict)
+
+    monkeypatch.setattr(doc_grounding, "REVIEW_RESERVE_SECONDS", 99.8)       # 100 s left: 0.2 s for the check
+    events = []
+    answer, _, _ = bounded_finalize(grounding(HungCheck(reports=[passed()])), limit=1.0,   # back within 1 s
+                                    started=time.monotonic() - 500, on_event=events.append)
+    assert CHECK_MARKER not in answer and SOURCES_MARKER in answer
+    assert events[-1] == {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0}
+
+
 def test_finalize_never_fails_the_turn_and_never_claims_an_unrun_check():
     broken = FakeKnowledge(check_error=RuntimeError("unexpected"))
     result = run_finalize(grounding(broken))

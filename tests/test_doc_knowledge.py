@@ -159,6 +159,27 @@ def test_every_bad_reply_is_one_quiet_error(reply):
     assert isinstance(caught.value, OSError)                               # what the tool loop already tolerates
 
 
+def test_a_reply_that_trickles_in_is_cut_off_at_the_request_time_limit(monkeypatch):
+    """httpx's read timeout is per read, so a service that sends a few bytes every second
+    could hold a chat turn for as long as it liked."""
+    import time
+
+    class Trickle(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b'{"ok": true, "pad": "'
+            for _ in range(60):                    # 3 s in all, never 0.2 s between two reads
+                time.sleep(0.05)
+                yield b"a"
+            yield b'"}'
+
+    monkeypatch.setattr(doc_knowledge, "CONNECT_TIMEOUT", 0.0)
+    client = client_with(lambda request: httpx.Response(200, stream=Trickle()))
+    started = time.monotonic()
+    with pytest.raises(KnowledgeUnavailable):
+        client._request("GET", "/health", None, 0.3)
+    assert time.monotonic() - started < 1.5
+
+
 def test_connection_failure_is_the_same_quiet_error():
     def handler(request):
         raise httpx.ConnectTimeout("timed out", request=request)

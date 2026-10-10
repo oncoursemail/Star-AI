@@ -28,6 +28,11 @@ REFERENCE_CLOSE = "<<<END_UNTRUSTED_REFERENCE_DATA>>>"
 SOURCES_MARKER = "**Sources retrieved by STAR**"
 CHECK_MARKER = "**Luau check by STAR:**"
 MAX_CHECKED_BLOCKS = 2
+# The whole task has one deadline (route.task_timeout) and an answer that is already written must
+# never be lost to it. The self-check gets what is left of the turn minus REVIEW_RESERVE, and a
+# repair call is stopped REPAIR_RESERVE before the deadline (time for the re-check and the save).
+REVIEW_RESERVE_SECONDS = 10.0
+REPAIR_RESERVE_SECONDS = 45.0
 MIN_PASSAGE_CHARS = 300
 _FENCE = re.compile(r"```[ \t]*(?:lua|luau)\b[^\n]*\n(.*?)```", re.S | re.I)
 _ANY_FENCE = re.compile(r"```.*?```", re.S)
@@ -325,18 +330,31 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
     try:
         answer = answer.replace(SOURCES_MARKER, "Sources").replace(CHECK_MARKER, "Luau check:")
         knowledge = grounding.client
-        if grounding.plan.check_luau and knowledge is not None and luau_blocks(answer):
+        budget = getattr(route, "task_timeout", 0) or 0
+        timed = started is not None and budget > 0      # False: the caller gave no deadline to respect
+
+        def left() -> float:
+            return budget - (monotonic() - started) if timed else 0.0
+
+        if (grounding.plan.check_luau and knowledge is not None and luau_blocks(answer)
+                and (not timed or left() > REVIEW_RESERVE_SECONDS)):
             repair = None
-            budget = getattr(route, "task_timeout", 0) or 0
-            left = budget - (monotonic() - started) if started is not None else 0
             # A repair is another model call; only when the turn has clearly enough time left.
             if (model_client is not None and not getattr(route, "quick", True)
-                    and left >= max(90, 0.35 * budget)):
+                    and left() >= max(90, 0.35 * budget)):
                 async def repair(code: str, errors: list[dict]) -> str:
-                    return await _repair(model_client, route.model, prompt, code, errors,
-                                         min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220))
-            answer, grounding.checks = await review_luau(answer, knowledge.luau_check, repair=repair,
-                                                         on_event=on_event)
+                    # Stopped before the task deadline: the block then stays with its diagnostics.
+                    return await asyncio.wait_for(
+                        _repair(model_client, route.model, prompt, code, errors,
+                                min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)),
+                        timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS))
+            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event)
+            try:
+                answer, grounding.checks = await (
+                    asyncio.wait_for(review, timeout=left() - REVIEW_RESERVE_SECONDS) if timed else review)
+            except asyncio.TimeoutError:
+                # The check did not finish in the time the turn had left: no claim about the code.
+                _emit(on_event, {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0})
         answer = answer.rstrip() + sources_footer(grounding.passages, answer) if grounding.passages else answer
         if grounding.status != "off" or grounding.checks:
             archive = [*archive, {"star_knowledge": grounding.record()}]

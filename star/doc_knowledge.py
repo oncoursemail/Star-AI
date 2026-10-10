@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import ipaddress
 import json
 import re
+from time import monotonic
 from urllib.parse import urlsplit
 
 from .providers import STAR_SERVER, get_api_key, validate_lan_endpoint
@@ -148,6 +149,9 @@ class KnowledgeClient:
 
     def _request(self, method: str, path: str, body: dict | None, timeout: float) -> dict:
         import httpx
+        # httpx applies its read timeout to each read, not to the reply as a whole. This is the
+        # limit for the whole reply, so a service that trickles bytes cannot hold a chat turn.
+        deadline = monotonic() + CONNECT_TIMEOUT + timeout
         try:
             with httpx.Client(trust_env=False, follow_redirects=False, transport=self.transport,
                               timeout=httpx.Timeout(timeout, connect=CONNECT_TIMEOUT)) as client:
@@ -160,6 +164,8 @@ class KnowledgeClient:
                         size += len(chunk)
                         if size > MAX_REPLY_BYTES:
                             raise KnowledgeUnavailable(f"{_LABEL} reply is too large")
+                        if monotonic() > deadline:
+                            raise KnowledgeUnavailable(f"{_LABEL} answered too slowly")
                         chunks.append(chunk)
             data = json.loads(b"".join(chunks))
         except KnowledgeUnavailable:
