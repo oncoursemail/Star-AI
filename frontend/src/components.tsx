@@ -1,3 +1,4 @@
+import {splitSources, type AnswerSource} from './sources'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
 import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, X} from 'lucide-react'
@@ -126,6 +127,32 @@ const Prose = memo(function Prose({text}: {text: string}) {
   )
 })
 
+/** Official documentation STAR retrieved for this answer. Links are https and host-checked in sources.ts. */
+function SourcesRow({sources}: {sources: AnswerSource[]}) {
+  return (
+    <div className="msg-sources" role="group" aria-label="Sources for this answer">
+      <span className="msg-sources-label">Sources</span>
+      <ol>
+        {sources.map(source => (
+          <li key={source.index} className={source.cited ? 'is-cited' : undefined}>
+            <span className="msg-source-index" aria-hidden="true">
+              {source.index}
+            </span>
+            {source.url ? (
+              <a href={source.url} rel="noopener noreferrer" target="_blank" title={source.url}>
+                {source.title}
+              </a>
+            ) : (
+              <span>{source.title}</span>
+            )}
+            <span className="sr-only">{source.cited ? ' (cited in the answer)' : ' (retrieved, not cited)'}</span>
+          </li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
 export type MessageProps = {
   entry: ChatMessage
   /** The answer is still streaming: no actions yet, and screen readers are told it is busy. */
@@ -189,6 +216,8 @@ export function Message(props: MessageProps) {
   if (entry.role === 'event') return <TurnNotice {...props} animated={animated} />
   const isUser = entry.role === 'user'
   const hasImage = Boolean(entry.image?.startsWith('data:image/webp;base64,'))
+  // The sources list is part of the stored answer; show it as a row, not as prose.
+  const {body, sources} = isUser || partial ? {body: entry.text, sources: []} : splitSources(entry.text)
   return (
     <motion.article
       variants={messageIn}
@@ -209,9 +238,10 @@ export function Message(props: MessageProps) {
         <div className="msg-bubble">{entry.text}</div>
       ) : (
         <div className="msg-prose">
-          <Prose text={entry.text} />
+          <Prose text={body} />
         </div>
       )}
+      {sources.length > 0 && <SourcesRow sources={sources} />}
       {hasImage && (
         <Dialog.Root>
           <Dialog.Trigger asChild>

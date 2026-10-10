@@ -455,3 +455,60 @@ def test_run_task_still_answers_when_knowledge_is_missing_or_broken(monkeypatch,
     answer, model, _ = run_turn(monkeypatch, tmp_path, knowledge, "How do I tween a part in Roblox?")
     assert answer == ANSWER, "the turn completes with the model's own answer and no claims"
     assert len(model.requests) == 1 and REFERENCE_OPEN not in model.requests[0]["messages"][0]["content"]
+
+
+# --- what the interface is told, and the contract with its sources row ------------------------
+
+def test_progress_for_the_interface_carries_states_and_counts_only():
+    from star.react_shell import sanitize_event
+    assert sanitize_event({"event": "knowledge_started", "query": "secret question"}) == {
+        "phase": "Reading the official documentation", "activity": {"type": "docs", "state": "running"}}
+    done = sanitize_event({"event": "knowledge_finished", "state": "ok", "passages": 4, "elapsed_ms": 212,
+                           "query": "secret question", "text": "passage text"})
+    assert done == {"phase": "Documentation ready",
+                    "activity": {"type": "docs", "state": "done", "passages": 4, "elapsed_ms": 212}}
+    down = sanitize_event({"event": "knowledge_finished", "state": "unavailable", "passages": 0, "elapsed_ms": 9})
+    assert down["phase"] == "Documentation unavailable" and down["activity"]["state"] == "failed"
+    assert sanitize_event({"event": "luau_check_started", "blocks": 2}) == {
+        "phase": "Checking the Luau code", "activity": {"type": "luau_check", "state": "running"}}
+    assert sanitize_event({"event": "luau_repair_started", "block": 1})["activity"] == {
+        "type": "luau_check", "state": "running", "repair": True}
+    assert sanitize_event({"event": "luau_check_finished", "state": "repaired", "blocks": 1, "errors": 0}) == {
+        "phase": "Luau check finished", "activity": {"type": "luau_check", "state": "done", "result": "repaired"}}
+    assert sanitize_event({"event": "luau_check_finished", "state": "unavailable"})["activity"]["state"] == "failed"
+    # An unexpected state string never reaches the page.
+    assert sanitize_event({"event": "luau_check_finished", "state": "<img src=x>"})["activity"] == {
+        "type": "luau_check", "state": "done"}
+
+
+def test_the_sources_list_matches_what_the_interface_parses():
+    """frontend/src/sources.ts recognises exactly what sources_footer writes."""
+    import re
+    from pathlib import Path
+    source = (Path(__file__).resolve().parents[1] / "frontend" / "src" / "sources.ts").read_text(encoding="utf-8")
+    assert "export const SOURCES_MARKER = '" + SOURCES_MARKER + "'" in source
+    item = re.compile(re.search(r"const ITEM = /(.+)/\n", source).group(1))
+    footer = sources_footer([passage(1), passage(2, url=""), passage(3, heading="A [bracketed] title")],
+                            "Uses [1] and [3].")
+    assert footer.startswith("\n\n---\n" + SOURCES_MARKER)
+    lines = [line for line in footer.split("\n")[4:] if line.strip()]
+    assert len(lines) == 3 and all(item.match(line) for line in lines), lines
+    assert item.match(lines[0]).group(5) == "cited" and item.match(lines[1]).group(5) == "retrieved, not cited"
+    assert item.match(lines[2]).group(2) == "A (bracketed) title"
+
+
+def test_documentation_events_reach_the_listener_in_order_on_the_loop_thread():
+    import threading
+    seen = []
+
+    async def scenario():
+        loop_thread = threading.get_ident()
+        found = await doc_grounding.prepare_async(
+            Settings(model="m"), route_for("How do I tween a part in Roblox?"), "How do I tween a part in Roblox?",
+            [], lambda event: seen.append((event["event"], threading.get_ident() == loop_thread)),
+            client=FakeKnowledge())
+        await asyncio.sleep(0)
+        return found
+
+    assert asyncio.run(scenario()).status == "ok"
+    assert seen == [("knowledge_started", True), ("knowledge_finished", True)]

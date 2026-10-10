@@ -173,6 +173,19 @@ def prepare(settings, route, prompt: str, prior_user_turns: list[str] | None = N
                      retrieval_ms=elapsed, query=query)
 
 
+async def prepare_async(settings, route, prompt: str, prior_user_turns: list[str] | None = None,
+                        on_event=None, *, mode: str = "auto", client=_UNSET) -> Grounding:
+    """`prepare` off the event loop (it does blocking HTTP), with its progress events delivered
+    on the loop's own thread, in order, like every other event of the turn."""
+    loop = asyncio.get_running_loop()
+
+    def relay(event: dict) -> None:
+        loop.call_soon_threadsafe(_emit, on_event, event)
+
+    return await asyncio.to_thread(prepare, settings, route, prompt, prior_user_turns,
+                                   relay if on_event is not None else None, mode=mode, client=client)
+
+
 # --- after the answer -----------------------------------------------------------------------
 
 def luau_blocks(answer: str) -> list[tuple[int, int, str]]:

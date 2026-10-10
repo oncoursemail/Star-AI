@@ -641,8 +641,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 memory_context = memory_context[-min(5000 if quick else 14000, memory_limit):]
                 # >>> STAR Knowledge (star/doc_grounding.py): official-docs passages for Roblox/Luau
                 # questions, added as delimited UNTRUSTED reference data. Never raises; '' when unused.
-                docs = await asyncio.to_thread(doc_grounding.prepare, settings, route, prompt,
-                                               recent_users, audited_event, mode=mode)
+                docs = await doc_grounding.prepare_async(settings, route, prompt, recent_users,
+                                                         audited_event, mode=mode)
                 memory_context += docs.block
                 # <<< STAR Knowledge
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
