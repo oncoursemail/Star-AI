@@ -109,6 +109,10 @@ def get_latest(client: httpx.Client | None = None) -> UpdateResult:
                 candidate = UpdateResult(version > Version(__version__), tag, expected_url,
                     assets=tuple(release.get('assets', ())), repository=repo,
                     anonymous_access=True)
+                if repo == PUBLIC_REPO and candidate.available:
+                    # Prefer the dedicated distribution channel when it has an actual upgrade.
+                    # Do not consult the source repo in that case.
+                    return candidate
                 if newest is None or Version(candidate.version) > Version(newest.version):
                     newest = candidate
             except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError):
