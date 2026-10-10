@@ -48,6 +48,8 @@ class Settings:
     llama_server: str = ''
     gguf_model: str = ''
     gpu_layers: int = 25
+    router_models_dir: str = ''
+    router_context: int = 4096
     reduced_motion: bool = False
     comfy_workflow: str = ''
     comfy_prompt_node: str = '6'
@@ -89,8 +91,15 @@ class Settings:
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
             raise ValueError('Invalid local image generation configuration')
-        if not 0 <= self.gpu_layers <= 1000:
+        if type(self.gpu_layers) is not int or not 0 <= self.gpu_layers <= 1000:
             raise ValueError('GPU layers must be between 0 and 1000')
+        if type(self.router_context) is not int or not 512 <= self.router_context <= 32768:
+            raise ValueError('Router context must be between 512 and 32768')
+        if (not isinstance(self.router_models_dir, str)
+                or len(self.router_models_dir) > 2048
+                or '\x00' in self.router_models_dir
+                or self.router_models_dir.lower().startswith(('http:', 'https:', 'file:'))):
+            raise ValueError('Choose a local folder for the GGUF model router')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
 
