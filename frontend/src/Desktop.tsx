@@ -187,7 +187,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    return ()=>window.removeEventListener('keydown',onShortcut)
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
- const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setStreamingText('');setWorkPhase('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
  const startNewChat=async()=>{if(busy)return;const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setFiles([]);composerRef.current?.focus()}}
  const openChat=async(id:string)=>{if(busy||id===data.active_chat){setTab('chat');return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
