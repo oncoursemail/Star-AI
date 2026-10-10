@@ -139,7 +139,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else if(action==='approveCustomTool'||action==='disableCustomTool'){
      setCustomBusy('')
      const id=Number(result.id||0)
-     const newStatus=action==='approveCustomTool'?'approved':'disabled'
+     const newStatus:'approved'|'disabled'=action==='approveCustomTool'?'approved':'disabled'
      setCustomTools(v=>v.map(t=>t.id===id?{...t,status:newStatus}:t))
      setNotice(newStatus==='approved'?'Custom tool approved for this project.':'Custom tool disabled.')
      void sync()
@@ -291,6 +291,32 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <button className="secondary-button" onClick={()=>nav('library')}>View knowledge library <ArrowRight size={14}/></button>
               </Panel>
             </div>
+            <Panel className="settings-section workshop-panel">
+              <div className="section-heading"><div><span className="eyebrow">STAR TOOL WORKSHOP</span><h2>Tools STAR can create</h2></div><Sparkles size={19}/></div>
+              <p>Ask STAR in chat to propose a new tool. It can combine approved read-only knowledge, project-file search, Obsidian notes, Graphify graphs and Agent Skills. Proposed tools are inactive until you preview and explicitly approve them.</p>
+              <div className="workshop-counts"><span>{data.tool_workshop?.approved??0} approved</span><span>{data.tool_workshop?.pending??0} pending</span><span>{customTools.length} listed for {data.project}</span></div>
+              {!data.settings.tool_workshop_enabled?<div className="workshop-empty">Enable Tool Workshop in Settings before creating or reviewing tools.</div>:
+                <>
+                  <div className="workshop-actions"><label htmlFor="workshop-query">Preview search query</label><div><input id="workshop-query" value={customQuery} onChange={e=>setCustomQuery(e.target.value)} placeholder="e.g. inventory interface" maxLength={200}/><button type="button" className="secondary-button" onClick={()=>void act('listCustomTools')}><RefreshCcw size={14}/> Refresh</button></div></div>
+                  {customTools.length? <div className="workshop-list">{customTools.map(tool=><div className="workshop-recipe" key={tool.id}>
+                    <div className="workshop-recipe-heading"><div><strong>{tool.name}</strong><small>{tool.description}</small></div><span className={'workshop-state '+tool.status}>{tool.status}</span></div>
+                    <div className="workshop-recipe-meta">{tool.sources.join(' · ')} <span>·</span> {tool.tests} successful preview{tool.tests===1?'':'s'}</div>
+                    {tool.status==='pending'&&<div className="workshop-buttons"><button type="button" className="secondary-button" disabled={!customQuery.trim()||!!customBusy||inactive} onClick={()=>customAction('previewCustomTool',tool.id)}>{customBusy==='previewCustomTool:'+tool.id?<LoaderCircle className="spin" size={14}/>:<Search size={14}/>} Test preview</button>
+                      <button type="button" className="primary-button" disabled={tool.tests<1||!!customBusy||inactive} onClick={()=>customAction('approveCustomTool',tool.id)}><Check size={14}/> Approve</button>
+                      <button type="button" className="secondary-button" disabled={!!customBusy||inactive} onClick={()=>customAction('disableCustomTool',tool.id)}>Disable</button></div>}
+                    {tool.status==='approved'&&<div className="workshop-buttons"><span>Available to STAR in this project</span><button type="button" className="secondary-button" disabled={!!customBusy||inactive} onClick={()=>customAction('disableCustomTool',tool.id)}>Disable tool</button></div>}
+                  </div>)}</div>:
+                  <div className="workshop-empty">No tools have been proposed in this project yet. Try asking STAR: “Create a read-only research tool that combines my reviewed notes and Obsidian.”</div>}
+                  {!!customPreview&&<div className="workshop-preview" role="status"><strong>Latest preview — inspect source evidence</strong><pre>{customPreview}</pre></div>}
+                </>}
+              <small>No downloaded scripts are executed. Existing Roblox Studio and workspace editing permissions remain unchanged.</small>
+            </Panel>
+            <Panel className="settings-section specialist-panel">
+              <div className="section-heading"><div><span className="eyebrow">SPECIALIST RESEARCH</span><h2>Bounded subagents</h2></div><BrainCircuit size={19}/></div>
+              <p>For a separable research task, STAR can delegate to up to three limited specialists. Each uses the selected model, receives only relevant local excerpts and returns candidate analysis to the main assistant. Default concurrency is one to protect local RAM/VRAM.</p>
+              <span className="workshop-state">{data.settings.specialists_enabled?'Enabled · '+data.settings.specialist_parallelism+' worker'+(data.settings.specialist_parallelism===1?'':'s'):'Disabled'}</span>
+              <button className="secondary-button" type="button" onClick={()=>nav('settings')}>Specialist settings <ArrowRight size={14}/></button>
+            </Panel>
             <Panel className="settings-section mcp-panel">
               <div className="section-heading"><div><span className="eyebrow">MODEL CONTEXT PROTOCOL</span><h2>Connected tools</h2></div><Workflow size={20}/></div>
               <p>MCP sources run inside STAR's existing chat, not a second AI. Only explicitly enabled, reviewed read-only tools are discoverable.</p>
@@ -322,7 +348,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <div className="intelligence-folder-row"><label>Obsidian vault folder<input aria-label="Obsidian vault folder" value={draft.obsidian_vault??''} onChange={e=>setDraft(d=>({...d,obsidian_vault:e.target.value}))} placeholder="Choose an Obsidian Markdown vault"/></label><button type="button" className="secondary-button" onClick={async()=>{const result=await act('selectFolder');if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){setDraft(d=>({...d,obsidian_vault:result.path as string}))}}}><FolderOpen size={15}/> Browse folder</button></div>
              <small>Note contents stay local, are not promoted into trusted memory without review, and cannot override tool permissions.</small>
            </Panel>
-           <Panel className="settings-section mcp-settings">
+           <Panel className="settings-section">
+              <div className="section-heading"><div><span className="eyebrow">INTELLIGENCE ORCHESTRATION</span><h2>Tool Workshop and subagents</h2></div><BrainCircuit size={19}/></div>
+              <p>New tool recipes can read from authorized sources but never execute model-generated scripts. Human approval follows a successful dry run. Specialist model calls are separate read-only analyses.</p>
+              <label className="setting-switch"><span><strong>Enable Tool Workshop</strong><small>Let STAR propose read-only custom recipes; you approve them in Developer tools.</small></span><input type="checkbox" checked={draft.tool_workshop_enabled??true} onChange={e=>setDraft(d=>({...d,tool_workshop_enabled:e.target.checked}))}/></label>
+              <label className="setting-switch"><span><strong>Enable research subagents</strong><small>Separate, bounded local-model calls. No tool access, file editing, or privileges passed to workers.</small></span><input type="checkbox" checked={draft.specialists_enabled??true} onChange={e=>setDraft(d=>({...d,specialists_enabled:e.target.checked}))}/></label>
+              <label className="workshop-concurrency">Maximum simultaneous specialists<select value={draft.specialist_parallelism??1} onChange={e=>setDraft(d=>({...d,specialist_parallelism:Number(e.target.value)}))}><option value={1}>1 — Best for one local model</option><option value={2}>2 — For capable inference servers</option></select></label>
+              <small>STAR restricts each delegation to three specialist tasks and two parallel workers. This does not multiply your model weights or make your hardware infinitely fast.</small>
+            </Panel>
+            <Panel className="settings-section mcp-settings">
              <div className="section-heading"><div><span className="eyebrow">APPROVED MCP SOURCES</span><h2>MCP connections</h2></div><Workflow size={20}/></div>
              <p>Select only the tools you need. Plain conversation streaming stays fast when MCP isn't requested.</p>
              <label className="setting-switch"><span><strong>Graphify documentation MCP</strong><small>Remote docs search: graphify.com/api/mcp</small></span><input type="checkbox" checked={draft.mcp_graphify_docs??false} onChange={e=>setDraft(d=>({...d,mcp_graphify_docs:e.target.checked}))}/></label>
