@@ -59,6 +59,7 @@ class Settings:
     obsidian_enabled: bool = False
     skills_enabled: bool = True
     graphify_enabled: bool = True
+    roblox_research_enabled: bool = True
     mcp_graphify_docs: bool = False
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
@@ -85,7 +86,8 @@ class Settings:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
-                            'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live')):
+                            'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
+                            'roblox_research_enabled')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
