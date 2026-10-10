@@ -22,11 +22,12 @@ from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
 from .intelligence import for_settings
+from .mcp_connections import MCPGateway
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
-    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
+    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder', 'testMcpConnection',
 })
 
 
@@ -75,6 +76,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
         'analytics':get_dashboard(home, settings.project),
         'intelligence':for_settings(settings,home).status(),
+        'mcp':MCPGateway(settings).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -261,7 +263,8 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled'}
+                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
+                                'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
@@ -312,6 +315,16 @@ def launch():
                         import asyncio
                         from .model_health import probe_chat_endpoint
                         return asyncio.run(probe_chat_endpoint(Settings.load(self.settings_file)))
+                    self._run(rid,action,worker)
+                elif action=='testMcpConnection':
+                    server=str(body.get('server',''))
+                    if server not in {'graphify_docs','graphify_local','obsidian_live'}:
+                        raise ValueError('Unknown MCP connector')
+                    def worker():
+                        import asyncio
+                        gateway=MCPGateway(Settings.load(self.settings_file))
+                        # Probe does not call any server tool or perform writes.
+                        return asyncio.run(gateway.probe(server))
                     self._run(rid,action,worker)
                 elif action=='discoverStudio':
                     self._run(rid,action,lambda:{'studios':check_studio()})
