@@ -106,7 +106,7 @@ def test_local_agent_answer():
         fake=SimpleNamespace(chat=SimpleNamespace(completions=FakeModels([reply("STAR ready")])) )
         answer, transcript, _=await execute(client=fake,model="local",prompt="hello",image_paths=[])
         assert answer == "STAR ready"
-        assert transcript[2]["role"]=="user"
+        assert transcript[1]["role"]=="user"\n        assert [i for i,m in enumerate(transcript) if m["role"]=="system"] == [0]
     asyncio.run(run())
 
 
@@ -132,6 +132,55 @@ def test_agent_blocks_wrong_studio_even_in_auto_mode():
         assert answer=="blocked"
         assert not fake_studio.calls
     asyncio.run(run())
+
+
+def test_qwen_chat_template_has_one_first_system_message():
+    """Regression: Qwen3.5 Jinja returns HTTP 500 for a later system role."""
+    async def run():
+        responder=FakeModels([reply("It works")])
+        client=SimpleNamespace(chat=SimpleNamespace(completions=responder))
+        answer, _, _=await execute(client=client,model="qwen-local",prompt="hello",
+            image_paths=[],project_memory="old project notes")
+        assert answer=="It works"
+        messages=responder.requests[0]["messages"]
+        assert [i for i,m in enumerate(messages) if m["role"]=="system"]==[0]
+        assert "old project notes" in messages[0]["content"]
+        assert messages[1]["role"]=="user"
+    asyncio.run(run())
+
+
+def test_qwen_compaction_never_adds_second_system(monkeypatch):
+    import star.agent as agent
+    updates=[]
+    async def pretend_compact(client,model,project,prior,history):
+        assert history and all(msg["role"]!="system" for msg in history)
+        return "Verified task checkpoint after inspecting a Studio script"
+    monkeypatch.setattr(agent,"compact",pretend_compact)
+    async def run():
+        model=FakeModels([
+            reply(calls=[call("script_read",{"studio_id":"sandbox"})]),
+            reply("Finished inspection"),
+        ])
+        client=SimpleNamespace(chat=SimpleNamespace(completions=model))
+        answer,messages,archive=await execute(client=client,model="qwen-local",
+            prompt="inspect script",image_paths=[],studio=FakeStudio(),
+            studio_id="sandbox",discovered=[schema_tool("script_read")],
+            context_chars=100,checkpoint=lambda summary:updates.append(summary))
+        assert answer=="Finished inspection"
+        assert updates and archive
+        assert "checkpoint" in messages[0]["content"].lower()
+        for request in model.requests:
+            assert [i for i,m in enumerate(request["messages"]) if m["role"]=="system"]==[0]
+    asyncio.run(run())
+
+
+def test_model_roles_validate_locally():
+    from star.agent import validate_model_roles
+    with pytest.raises(ValueError,match="one system message"):
+        validate_model_roles([{"role":"system"},{"role":"system"},{"role":"user"}])
+    with pytest.raises(ValueError,match="one system message"):
+        validate_model_roles([{"role":"user"},{"role":"system"}])
+
 
 from star.selfbuild import skill_path, read_source, write_source
 
