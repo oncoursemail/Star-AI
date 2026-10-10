@@ -218,7 +218,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 else:
                     answer, msgs, archive = await execute(**kwargs)
                 return answer, msgs, archive
-        answer, msgs, archive = asyncio.run(run())
+        try:
+            answer, msgs, archive = asyncio.run(run())
+        finally:
+            if intelligence.roblox is not None:
+                intelligence.roblox.close()
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
