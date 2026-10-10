@@ -331,6 +331,9 @@ class MCPGateway:
 
     async def _discover(self, name: str) -> list[dict]:
         server = self.servers[name]
+        # Refuse stale grants on a failed reconnect or a changed server catalog.
+        self.catalog = {key: item for key, item in self.catalog.items() if key[0] != name}
+        self.disclosed = {key for key in self.disclosed if key[0] != name}
         entries = await self.factory(server).list_tools()
         visible = []
         for entry in entries:
@@ -338,6 +341,13 @@ class MCPGateway:
                 continue
             key = entry.get("name", "")
             if not isinstance(key, str) or not NAME.fullmatch(key) or key not in server.allowed:
+                continue
+            annotations = entry.get("annotations")
+            if annotations is not None and not isinstance(annotations, dict):
+                continue
+            if isinstance(annotations, dict) and annotations.get("readOnlyHint") is False:
+                # A known read-only preset cannot override a server's explicit
+                # warning that the advertised tool mutates external state.
                 continue
             schema = valid_schema(entry.get("inputSchema"))
             if schema is None:
