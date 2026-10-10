@@ -24,7 +24,7 @@ from .version import __version__
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
-    'installBrain','startBrain','listModels','testModel','discoverStudio',
+    'installBrain','startBrain','listModels','testModel','discoverStudio','newChat','switchChat','generateImage',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
 })
 
@@ -61,7 +61,9 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     home = app_data()
     chats = Conversations(home / 'conversations.sqlite3')
     try:
-        recent = chats.recent(settings.project, limit=80)
+        active_chat = chats.active_chat(settings.project)
+        chat_threads = chats.list_chats(settings.project)
+        recent = chats.recent(settings.project, limit=80, chat_id=active_chat)
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
@@ -71,6 +73,7 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     return {
         'version':__version__, 'project':settings.project, 'projects':projects,
         'messages':messages, 'settings':asdict(settings),
+        'active_chat':active_chat, 'chats':chat_threads,
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
         'analytics':get_dashboard(home, settings.project),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
@@ -123,6 +126,7 @@ def launch():
             self.allowed_files: set[Path] = set()
             self.active_task = False
             self.active_update = False
+            self.active_image = False
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -146,6 +150,7 @@ def launch():
                 finally:
                     if action=='sendMessage':self.active_task=False
                     if action=='installUpdate':self.active_update=False
+                    if action=='generateImage':self.active_image=False
             self.pool.submit(task)
 
         def _start_brain(self, info: BrainInstall):
@@ -191,7 +196,8 @@ def launch():
                 raise ValueError('STAR Brain is offline. Go to STAR Brain and start your model.')
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'user',prompt)
+                active_chat=chats.active_chat(settings.project)
+                chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
             from .media_features import VIDEO_EXTENSIONS,AUDIO_EXTENSIONS,video_frames,transcribe_audio
@@ -212,10 +218,10 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True)
+                    stream_tokens=True,chat_id=active_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'assistant',answer)
+                chats.add(settings.project,'assistant',answer,chat_id=active_chat)
             finally:
                 chats.close()
             return {'answer':answer}
@@ -234,7 +240,9 @@ def launch():
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
-                    if kind=='audio':
+                    if kind=='workflow':
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Choose ComfyUI API workflow','','JSON workflow (*.json)')
+                    elif kind=='audio':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Select audio references','','Audio files (*.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
                     else:
                         names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','Media (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
@@ -251,6 +259,21 @@ def launch():
                         raise ValueError('Project name must be 1–60 characters without path separators')
                     settings=Settings.load(self.settings_file)
                     settings.project=project;settings.save(self.settings_file)
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='newChat':
+                    if self.active_task:raise RuntimeError('Wait for the current answer before starting a new chat')
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.new_chat(settings.project)
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='switchChat':
+                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    chat_id=str(body.get('chatId',''))[:80]
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.switch_chat(settings.project,chat_id)
+                    finally: conversations.close()
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='saveSettings':
                     changes=body.get('settings')
@@ -333,6 +356,24 @@ def launch():
                         self.shutdownRequested.emit()
                         return {'status':'launched_installer','version':candidate.version}
                     self._run(rid,action,worker)
+                elif action=='generateImage':
+                    if self.active_image:raise RuntimeError('An Image Lab job is already running')
+                    workflow=file_allowed(Path(str(body.get('workflow',''))),self.allowed_files)
+                    if workflow.suffix.lower()!='.json' or workflow.stat().st_size>2_000_000:
+                        raise ValueError('Choose a ComfyUI API-format JSON workflow under 2 MB')
+                    prompt=str(body.get('prompt','')).strip()
+                    if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    node=str(body.get('node','')).strip()
+                    if not node.isdecimal() or len(node)>12:raise ValueError('Enter the numeric CLIPTextEncode node ID')
+                    port=int(body.get('port',8188))
+                    if not 1<=port<=65535:raise ValueError('Invalid loopback ComfyUI port')
+                    self.active_image=True
+                    def image_worker():
+                        from .comfy import generate
+                        images=generate(workflow,prompt=prompt,node_id=node,
+                            output=app_data()/'generated',port=port)
+                        return {'images':[str(path) for path in images]}
+                    self._run(rid,action,image_worker)
                 elif action=='transcribe':
                     path=file_allowed(Path(str(body.get('file',''))),self.allowed_files)
                     from .media_features import transcribe_audio
