@@ -199,3 +199,6 @@
 .generated-figure figcaption{font-size:10px;color:#959e9b;padding:9px 12px;border-top:1px solid #28302c}
 @media(max-width:900px){.composer-left{flex-wrap:wrap;gap:5px}.composer-feature{padding:6px}.composer-hint .privacy{display:none}}
 @media(max-width:520px){.composer-feature{font-size:0;gap:0}.composer-feature svg{height:17px;width:17px}.mode-picker select{font-size:10px;width:65px}.credential-row{align-items:stretch;flex-direction:column}.credential-row>input{width:100%;min-width:0}}
+
+.send-button.send-stop{background:#292b2a;color:#e3e8e5;border:1px solid #535b58}
+.send-button.send-stop:hover{background:#393d3b;color:#fff}
