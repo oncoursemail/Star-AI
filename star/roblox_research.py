@@ -290,6 +290,32 @@ class RobloxResearch:
             "warnings": warnings[:3],
         }
 
+    def resolve_place(self, place_id) -> dict:
+        """Map a known Place ID to a Universe ID using a fixed public Roblox API."""
+        place_id = _positive_id(place_id, name="place_id")
+        payload = self._get("apis", f"/universes/v1/places/{place_id}/universe", ttl=3600)
+        raw_id = payload.get("universeId")
+        universe_id = _positive_id(raw_id)
+        return {
+            "place_id": place_id, "universe_id": universe_id,
+            "url": f"https://www.roblox.com/games/{place_id}",
+            "source": f"https://apis.roblox.com/universes/v1/places/{place_id}/universe",
+            "note": "Roblox public place mapping; experimental availability. Place and Universe IDs are different.",
+        }
+
+    def resolve_game_url(self, url: str) -> dict:
+        """Roblox games URLs are parsed locally; only the numeric ID is requested."""
+        if not isinstance(url, str) or len(url) > 600:
+            raise ValueError("Enter a Roblox experience URL")
+        parsed = urlsplit(url.strip())
+        if (parsed.scheme != "https" or parsed.hostname not in ("www.roblox.com", "roblox.com")
+                or parsed.username or parsed.password or parsed.port not in (None, 443)):
+            raise ValueError("Only https://www.roblox.com/games/{PlaceID} links are accepted")
+        match = re.fullmatch(r"/games/([1-9][0-9]{0,17})(?:/[^/?#]{1,170})?/?", parsed.path)
+        if not match:
+            raise ValueError("URL must contain a valid Roblox experience Place ID")
+        return self.resolve_place(match.group(1))
+
     def compare_games(self, universe_ids: list) -> dict:
         if not isinstance(universe_ids, list) or not 2 <= len(universe_ids) <= 4:
             raise ValueError("Compare 2 to 4 Universe IDs")
