@@ -49,7 +49,7 @@ def test_when_public_missing_private_stays_browser_only():
 
 
 def test_private_update_assets_never_auto_downloaded():
-    new=updates.UpdateResult(True,'0.8.0',updates.RELEASES_URL,repository=REPO,assets=())
+    new=updates.UpdateResult(True,'0.9.0',updates.RELEASES_URL,repository=REPO,assets=())
     with pytest.raises(PermissionError):
         updates._trusted_setup_asset(new)
 
