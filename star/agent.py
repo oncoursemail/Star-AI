@@ -73,7 +73,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   workspace=None, workspace_edit=False, stream_tokens=False,
                   response_tokens=1600, web_search_enabled=False,
                   subagents_enabled=False, subagent_parallelism=1,
-                  github_enabled=False, intelligence=None):
+                  github_enabled=False, intelligence=None, subagent_model=None):
     if not prompt.strip():
         raise ValueError("Prompt is empty")
     if len(image_paths) > 4:
@@ -246,7 +246,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             if delegations >= 2:
                                 raise RuntimeError('Subagent delegation limit reached')
                             from .subagents import delegate
-                            pieces = await delegate(client,model,args['tasks'],parallelism=subagent_parallelism)
+                            pieces = await delegate(client,subagent_model or model,args['tasks'],parallelism=subagent_parallelism)
                             delegations += 1
                             data = {"isError":False,"content":[{"type":"text","text":json.dumps(
                                 {"status":"unverified drafts; review before use","results":pieces},ensure_ascii=False)}]}
