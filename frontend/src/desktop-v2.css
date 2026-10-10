@@ -222,3 +222,46 @@
  .mcp-connector-summary button{align-self:flex-start;min-width:132px}
 }
 @media(prefers-reduced-motion:reduce){.mcp-connector{transition:none}}
+
+
+/* STAR Tool Workshop: calm, native-looking tools within the single desktop. */
+.workshop-panel,.specialist-panel{min-width:0}
+.workshop-panel>p,.specialist-panel>p{color:#aab8b4;font-size:12px;line-height:1.73;max-width:79ch}
+.workshop-counts{display:flex;gap:9px;flex-wrap:wrap;margin:14px 0 18px}
+.workshop-counts span{padding:6px 10px;border:1px solid #39423f;color:#c7d0c9;border-radius:8px;font-size:11px}
+.workshop-actions{display:flex;flex-direction:column;gap:8px;margin:8px 0 17px}
+.workshop-actions label{font-size:11px;color:#bcc4bd;font-weight:550}
+.workshop-actions>div{display:flex;align-items:center;gap:10px}
+.workshop-actions input{flex:1;min-width:0;max-width:580px}
+.workshop-actions .secondary-button{flex:0 0 auto}
+.workshop-list{display:grid;gap:10px;margin:14px 0}
+.workshop-recipe{border:1px solid #343e40;border-radius:12px;background:#181e20;padding:15px 16px;min-width:0}
+.workshop-recipe-heading{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.workshop-recipe-heading>div{min-width:0;display:flex;flex-direction:column;gap:7px}
+.workshop-recipe-heading strong{color:#e5eae6;font-weight:650;font-size:13px;overflow-wrap:anywhere}
+.workshop-recipe-heading small{font-size:11px;line-height:1.6;color:#aab7b2;overflow-wrap:anywhere}
+.workshop-state{align-self:flex-start;white-space:nowrap;display:inline-flex;align-items:center;border:1px solid #535044;background:#24241f;padding:5px 9px;border-radius:7px;font-size:10px;font-weight:550;color:#dbcb9d}
+.workshop-state.approved{border-color:#3b5949;background:#1b2a23;color:#afdbc1}
+.workshop-state.disabled{border-color:#4c4e4e;background:#242829;color:#9caaa7}
+.workshop-recipe-meta{font-size:10px;color:#9ca9a4;margin-top:12px;overflow-wrap:anywhere}
+.workshop-recipe-meta span{padding:0 5px}
+.workshop-buttons{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:15px}
+.workshop-buttons button{display:flex;align-items:center;gap:7px;min-width:0}
+.workshop-buttons>span{font-size:11px;color:#aed2bc;flex:1}
+.workshop-buttons .primary-button:disabled{opacity:.38;cursor:not-allowed}
+.workshop-empty{border:1px dashed #454e4b;background:#1b2022;border-radius:10px;padding:18px;color:#aab6b2;font-size:12px;line-height:1.7;margin:14px 0}
+.workshop-preview{border:1px solid #414d48;background:#171e1c;padding:13px 15px;border-radius:10px;margin-top:12px}
+.workshop-preview strong{display:block;font-size:12px;color:#c5d3c9;margin-bottom:10px}
+.workshop-preview pre{max-height:250px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.62;font-size:11px;color:#aeb8b3}
+.workshop-panel>small,.specialist-panel>small{display:block;line-height:1.65;color:#91a29a;font-size:10px;margin-top:12px}
+.specialist-panel>.workshop-state{margin:8px 0 13px}
+.workshop-concurrency{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:12px 0;font-size:12px;color:#bbc8c1}
+.workshop-concurrency select{min-width:180px;max-width:100%;color:#dae5db;background:#1d2525;border:1px solid #47524d;border-radius:8px;padding:9px 12px}
+@media(max-width:690px){
+ .workshop-actions>div,.workshop-concurrency{flex-direction:column;align-items:stretch}
+ .workshop-actions input{max-width:none}
+ .workshop-actions .secondary-button{align-self:flex-start}
+ .workshop-recipe-heading{flex-wrap:wrap}
+ .workshop-concurrency select{min-width:0}
+}
+@media(prefers-reduced-motion:reduce){.workshop-buttons button,.workshop-recipe{transition:none}}
