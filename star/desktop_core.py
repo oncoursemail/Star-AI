@@ -128,6 +128,9 @@ class Settings:
         file.write_text(json.dumps(asdict(self), indent=2), encoding='utf-8')
 
 
+TERMINAL_STATUSES = ('failed', 'cancelled')
+
+
 class Conversations:
     """Persistent, project-scoped chat threads.
 
@@ -149,6 +152,15 @@ class Conversations:
             self.connection.execute(
                 "ALTER TABLE messages ADD COLUMN chat_id TEXT NOT NULL DEFAULT 'legacy'"
             )
+        # Turn outcome (additive; old rows and older STAR versions stay valid).
+        # status is 'complete' except on the terminal 'event' record of a turn that
+        # failed or was cancelled; reply_to is the user message row that record answers.
+        if 'status' not in columns:
+            self.connection.execute(
+                "ALTER TABLE messages ADD COLUMN status TEXT NOT NULL DEFAULT 'complete'"
+            )
+        if 'reply_to' not in columns:
+            self.connection.execute('ALTER TABLE messages ADD COLUMN reply_to INTEGER')
         self.connection.execute(
             'CREATE TABLE IF NOT EXISTS chats '
             '(project TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, '
@@ -236,9 +248,14 @@ class Conversations:
             )
         ]
 
-    def add(self, project: str, role: str, body: str, chat_id: str | None = None):
+    def add(self, project: str, role: str, body: str, chat_id: str | None = None, *,
+            status: str = 'complete', reply_to: int | None = None) -> int:
+        """Store one message and return its row id."""
         if role not in {'user', 'assistant', 'event'}:
             raise ValueError('Invalid message role')
+        if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
+                                     or type(reply_to) is not int):
+            raise ValueError('Only an event record that answers a user message can be failed or cancelled')
         stamp = datetime.now(timezone.utc).isoformat()
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
@@ -252,10 +269,11 @@ class Conversations:
                 'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
             ).fetchone():
                 raise ValueError('Cannot save to a missing conversation')
-            self.connection.execute(
-                'INSERT INTO messages(project,role,body,created,chat_id) '
-                'VALUES (?,?,?,?,?)', (project, role, body, stamp, target)
-            )
+            row = self.connection.execute(
+                'INSERT INTO messages(project,role,body,created,chat_id,status,reply_to) '
+                'VALUES (?,?,?,?,?,?,?)',
+                (project, role, body, stamp, target, status, reply_to)
+            ).lastrowid
             # Name new chats from their first prompt, without altering legacy titles.
             if role == 'user' and target != 'legacy':
                 first_line = ' '.join(body.split())[:64].strip() or 'New chat'
@@ -267,20 +285,82 @@ class Conversations:
                 'UPDATE chats SET updated=? WHERE project=? AND id=?',
                 (stamp, project, target)
             )
+        return int(row)
 
-    def recent(self, project: str, limit: int = 70, chat_id: str | None = None):
-        if chat_id is None:
-            rows = self.connection.execute(
-                'SELECT role,body,created FROM messages '
-                'WHERE project=? ORDER BY id DESC LIMIT ?', (project, limit)
-            ).fetchall()
-        else:
-            rows = self.connection.execute(
-                'SELECT role,body,created FROM messages '
-                'WHERE project=? AND chat_id=? ORDER BY id DESC LIMIT ?',
-                (project, chat_id, limit)
-            ).fetchall()
+    def add_terminal(self, project: str, chat_id: str, user_id: int, status: str, detail: str) -> int | None:
+        """Record that the turn started by user message ``user_id`` ended without an answer.
+
+        Idempotent: a turn gets at most one terminal record. Returns the new row id,
+        or None when the turn was already closed.
+        """
+        if status not in TERMINAL_STATUSES:
+            raise ValueError('Terminal status must be failed or cancelled')
+        owner = self.connection.execute(
+            "SELECT 1 FROM messages WHERE id=? AND project=? AND chat_id=? AND role='user'",
+            (user_id, project, chat_id)
+        ).fetchone()
+        if not owner:
+            raise ValueError('Terminal record must answer a user message in the same conversation')
+        if self.connection.execute(
+            "SELECT 1 FROM messages WHERE reply_to=? AND status!='complete'", (user_id,)
+        ).fetchone():
+            return None
+        return self.add(project, 'event', detail[:2000], chat_id=chat_id,
+                        status=status, reply_to=user_id)
+
+    def recent(self, project: str, limit: int = 70, chat_id: str | None = None,
+               include_events: bool = True):
+        """Newest ``limit`` messages, oldest first. Model context passes include_events=False."""
+        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
+        if not include_events:
+            scope += " AND role IN ('user','assistant')"
+        rows = self.connection.execute(
+            f'SELECT role,body,created FROM messages WHERE {scope} ORDER BY id DESC LIMIT ?',
+            (*args, limit)
+        ).fetchall()
         return list(reversed(rows))
+
+    def recent_records(self, project: str, limit: int = 70, chat_id: str | None = None) -> list[dict]:
+        """Like recent(), with row ids and turn outcome, for the UI state payload."""
+        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
+        rows = self.connection.execute(
+            'SELECT id,role,body,created,status,reply_to FROM messages '
+            f'WHERE {scope} ORDER BY id DESC LIMIT ?', (*args, limit)
+        ).fetchall()
+        return [{'id': i, 'role': role, 'body': body, 'created': created,
+                 'status': status, 'reply_to': reply_to}
+                for i, role, body, created, status, reply_to in reversed(rows)]
+
+    def retry_state(self, project: str, chat_id: str, busy: bool = False) -> dict | None:
+        """What happened to the newest user message in a chat, if it got no answer.
+
+        Returns None when the newest turn was answered (or there is no turn, or a
+        task is still running). Otherwise: status failed/cancelled from the stored
+        terminal record, or 'interrupted' when nothing at all was recorded after the
+        message (for example STAR was closed mid-reply). Derived on read, never written.
+        """
+        last = self.connection.execute(
+            "SELECT id,body,created FROM messages WHERE project=? AND chat_id=? AND role='user' "
+            'ORDER BY id DESC LIMIT 1', (project, chat_id)
+        ).fetchone()
+        if not last:
+            return None
+        user_id, prompt, created = last
+        after = self.connection.execute(
+            'SELECT role,body,created,status,reply_to FROM messages '
+            'WHERE project=? AND chat_id=? AND id>? ORDER BY id', (project, chat_id, user_id)
+        ).fetchall()
+        if any(role == 'assistant' for role, *_ in after):
+            return None
+        for role, body, stamp, status, reply_to in reversed(after):
+            if role == 'event' and status in TERMINAL_STATUSES and reply_to == user_id:
+                return {'status': status, 'detail': body, 'prompt': prompt,
+                        'message_id': user_id, 'created': stamp}
+        if busy:
+            return None
+        return {'status': 'interrupted',
+                'detail': 'No reply was recorded for this message. STAR may have been closed before it finished.',
+                'prompt': prompt, 'message_id': user_id, 'created': created}
 
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
@@ -453,7 +533,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     try:
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
-            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id)
+            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id,
+                                         include_events=False)
         finally:
             dialogue.close()
         route_history = (
