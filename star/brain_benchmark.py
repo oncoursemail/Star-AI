@@ -1,0 +1,164 @@
+"""On-device STAR latency benchmark using a real OpenAI-compatible local server.
+
+Nothing is benchmarked until this command is actually run on the owner's PC.
+Only loopback HTTP is accepted; no background jobs, uploads, or model changes.
+"""
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+import math
+import re
+import statistics
+import time
+from urllib.parse import urlsplit
+
+import httpx
+from .brain_router import validate_alias
+
+
+_PROMPTS = {
+    "chat": "In two short sentences, explain what a software regression test is.",
+    "coding": "Write a small Python function that removes duplicates while preserving order. Include a simple example.",
+    "roblox": "Write a short --!strict Luau function that validates a RemoteEvent's integer amount is between 1 and 50.",
+}
+
+
+def local_endpoint(value: str) -> str:
+    """Fail closed against arbitrary hosts, credentials, fragments and paths."""
+    if not isinstance(value, str):
+        raise ValueError("Endpoint must be a URL")
+    url = urlsplit(value)
+    if (url.scheme != "http" or url.hostname not in {"127.0.0.1", "localhost"}
+            or url.username is not None or url.password is not None
+            or url.query or url.fragment or url.path.rstrip("/") != "/v1"
+            or not re.fullmatch(r"http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?", value)):
+        raise ValueError("Use a loopback /v1 inference URL with no credentials")
+    try:
+        if url.port is None or not 1024 <= url.port <= 65535:
+            raise ValueError("Local model port must be 1024..65535")
+    except ValueError as exc:
+        raise ValueError("Invalid local model port") from exc
+    return value.rstrip("/")
+
+
+def parse_sse_data(line: str) -> dict | None:
+    """Decode one data event, tolerating comments, [DONE], and bad frames."""
+    if not line.startswith("data:"):
+        return None
+    data = line[5:].strip()
+    if not data or data == "[DONE]":
+        return None
+    try:
+        payload = json.loads(data)
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
+                *, max_tokens: int = 96) -> dict:
+    """Observe TTFT and elapsed time; token speed only when the server reports usage."""
+    validate_alias(model)
+    if not 16 <= max_tokens <= 512:
+        raise ValueError("Benchmark output token budget must be 16..512")
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": True,
+        "temperature": 0,
+        "max_tokens": max_tokens,
+    }
+    started = time.perf_counter()
+    first_visible = None
+    output_chars = 0
+    actual_tokens = None
+    with client.stream("POST", endpoint + "/chat/completions", json=payload,
+                       headers={"Authorization": "Bearer local-only"}) as response:
+        response.raise_for_status()
+        for line in response.iter_lines():
+            item = parse_sse_data(line)
+            if item is None:
+                continue
+            usage = item.get("usage")
+            if isinstance(usage, dict) and type(usage.get("completion_tokens")) is int:
+                actual_tokens = usage["completion_tokens"]
+            timings = item.get("timings")
+            if isinstance(timings, dict) and type(timings.get("predicted_n")) is int:
+                actual_tokens = timings["predicted_n"]
+            choices = item.get("choices")
+            if not isinstance(choices, list) or not choices:
+                continue
+            delta = choices[0].get("delta") if isinstance(choices[0], dict) else None
+            text = delta.get("content") if isinstance(delta, dict) else None
+            if isinstance(text, str) and text:
+                if first_visible is None:
+                    first_visible = time.perf_counter()
+                output_chars += len(text)
+    done = time.perf_counter()
+    if first_visible is None:
+        raise RuntimeError("Model returned no visible text; benchmark not scored")
+    total_s = max(done - started, 0.000001)
+    generation_s = max(done - first_visible, 0.000001)
+    return {
+        "ttft_ms": round((first_visible - started) * 1000, 1),
+        "total_ms": round(total_s * 1000, 1),
+        "output_chars": output_chars,
+        "output_chars_per_s": round(output_chars / generation_s, 2),
+        "actual_completion_tokens": actual_tokens,
+        "approx_tokens_per_s": round(actual_tokens / generation_s, 2)
+        if actual_tokens is not None and actual_tokens > 0 else None,
+    }
+
+
+def summarize(measurements: list[dict]) -> dict:
+    if not measurements:
+        raise ValueError("Provide at least one actual measurement")
+    def percentile(key: str, p: float) -> float:
+        ordered = sorted(float(row[key]) for row in measurements)
+        return round(ordered[min(len(ordered) - 1, max(0, math.ceil(p * len(ordered)) - 1))], 1)
+    return {
+        "runs": len(measurements),
+        "median_ttft_ms": round(statistics.median(row["ttft_ms"] for row in measurements), 1),
+        "p95_ttft_ms": percentile("ttft_ms", .95),
+        "median_total_ms": round(statistics.median(row["total_ms"] for row in measurements), 1),
+        "p95_total_ms": percentile("total_ms", .95),
+        "median_output_chars_per_s": round(statistics.median(row["output_chars_per_s"] for row in measurements), 2),
+        "note": "TTFT/elapsed/text throughput observed locally; token/s available only if server reports completion token counts.",
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Measure STAR's local model speed without uploading prompts")
+    parser.add_argument("--endpoint", default="http://127.0.0.1:8080/v1")
+    parser.add_argument("--model", required=True, help="Model ID shown in the local server /models endpoint")
+    parser.add_argument("--scenario", choices=sorted(_PROMPTS), default="chat")
+    parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--tokens", type=int, default=96)
+    args = parser.parse_args(argv)
+    endpoint = local_endpoint(args.endpoint)
+    validate_alias(args.model)
+    if not 1 <= args.runs <= 10:
+        parser.error("--runs must be 1..10")
+    if not 16 <= args.tokens <= 512:
+        parser.error("--tokens must be 16..512")
+    observations = []
+    with httpx.Client(timeout=httpx.Timeout(180.0, connect=5.0), trust_env=False) as client:
+        for _ in range(args.runs):
+            observations.append(measure_one(client, endpoint, args.model, _PROMPTS[args.scenario],
+                                            max_tokens=args.tokens))
+    report = {
+        "observed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model": args.model,
+        "scenario": args.scenario,
+        "endpoint": endpoint,
+        "measurements": observations,
+        "summary": summarize(observations),
+    }
+    print(json.dumps(report, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
