@@ -238,8 +238,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                         if role == 'user'] if recent_all and recent_all[-1][0] == 'user' and recent_all[-1][1] == prompt else [
                             body for role, body, _ in recent_all if role == 'user']
         project_tools = needs_project_tools(prompt, recent_users)
+        # Deictic follow-ups such as "fix it" can keep a Roblox specialist,
+        # but past user text never grants new Studio or file permissions.
+        referential = len(prompt) <= 160 and bool(re.search(
+            r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
+        roblox_context = bool(project_tools and referential and
+                              any(is_roblox_task(turn) for turn in recent_users[-3:]))
         route = select_route(settings, prompt, mode=mode, image_count=len(images),
-                             research=research, project_tools=project_tools)
+                             research=research, project_tools=project_tools,
+                             roblox_context=roblox_context)
         audited_event({'event': 'route_selected', 'profile': route.profile,
                        'description': route.description})
         quick = route.quick
@@ -278,8 +285,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     memory_context = memory_context[-14000:]
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=memory_context + snippets +
-                                  (ROBLOX_QUALITY_NOTES if (is_roblox_task(prompt) or
-                                      (project_tools and any(is_roblox_task(turn) for turn in recent_users[-3:]))) else ''),
+                                  (ROBLOX_QUALITY_NOTES if
+                                      (is_roblox_task(prompt) or roblox_context) else ''),
                               max_calls=route.max_calls,
                               context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
