@@ -69,6 +69,37 @@ def test_public_game_report_and_snapshots(tmp_path):
     assert (tmp_path / "roblox_public_snapshots.sqlite3").exists()
 
 
+def test_place_id_and_url_resolution_without_arbitrary_fetch(tmp_path):
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        assert request.url.path == "/universes/v1/places/321/universe"
+        assert request.url.host == "apis.roblox.com"
+        return httpx.Response(200, json={"universeId": 999})
+    research = RobloxResearch(home=tmp_path, client=_client(handler))
+    result = research.resolve_place(321)
+    assert result["place_id"] == 321 and result["universe_id"] == 999
+    result2 = research.resolve_game_url("https://www.roblox.com/games/321/My-Cool-Experience")
+    assert result2["universe_id"] == 999
+    assert len(calls) == 1  # local TTL cache
+    for url in [
+        "https://evil.example.com/games/321",
+        "http://www.roblox.com/games/321",
+        "https://www.roblox.com@evil.example.com/games/321",
+        "https://www.roblox.com/games/../../admin",
+        "https://www.roblox.com/games/0",
+    ]:
+        with pytest.raises(ValueError):
+            research.resolve_game_url(url)
+    assert len(calls) == 1
+
+
+def test_url_resolver_api_failure_is_explicit(tmp_path):
+    hub = RobloxResearch(home=tmp_path, client=_client(lambda r: httpx.Response(404, json={})))
+    with pytest.raises(ValueError, match="HTTP 404"):
+        hub.resolve_place(999)
+
+
 def test_unknown_genre_is_not_fabricated():
     result = infer_game_type("The Place", "Cool stuff", "")
     assert result["inferred_types"] == []
@@ -230,6 +261,7 @@ def test_intelligence_uses_task_scoping_and_schema_validation(tmp_path):
     assert hub.definitions("Hello, can you tell me a joke?") == []
     game_tools = {x["name"] for x in hub.definitions("Find Roblox game stats and compare experiences")}
     assert "star_roblox_game_report" in game_tools
+    assert "star_roblox_resolve_game_url" in game_tools
     assert "star_roblox_compare_games" in game_tools
     assert "star_roblox_youtube_search" not in game_tools
     video_tools = {x["name"] for x in hub.definitions("Search a Roblox YouTube gameplay video")}
