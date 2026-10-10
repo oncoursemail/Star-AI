@@ -14,6 +14,7 @@ import pytest
 from jsonschema.exceptions import ValidationError
 
 from star.agent import execute
+from star.agent_skills import SkillLibrary, install_starters
 from star.desktop_core import Settings
 from star.intelligence import LocalIntelligence
 from star.knowledge import KnowledgeStore
@@ -326,3 +327,18 @@ def test_desktop_settings_retain_safe_agent_and_tool_limits(tmp_path):
     saved.specialist_parallelism = 50
     with pytest.raises(ValueError):
         saved.validate()
+
+
+def test_expanded_agent_skill_pack_is_nonexecuting_and_source_disclosed(tmp_path):
+    home = tmp_path / "home"
+    install_starters(home / "skills")
+    library = SkillLibrary(workspace=None, home=home)
+    names = {x["name"] for x in library.list()["skills"]}
+    assert {"roblox-system-research", "mcp-connection-audit",
+            "project-knowledge-investigation", "custom-tool-design",
+            "specialist-research-orchestration"} <= names
+    for name in names:
+        skill = library.load(name)
+        assert skill["source"] == "personal"
+        assert len(skill["instructions"]) > 50
+        assert "no additional permissions" in skill["notice"].lower()
