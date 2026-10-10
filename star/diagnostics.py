@@ -64,7 +64,7 @@ def _read_activity(home: Path, *, days: int = 14) -> dict:
             cutoff = (datetime.now(timezone.utc)-timedelta(days=days)).isoformat()
             rows = connection.execute(
                 "SELECT kind, elapsed_ms, detail FROM events WHERE recorded_at>=? "
-                "ORDER BY id DESC LIMIT 3000", (cutoff,)
+                "ORDER BY recorded_at DESC LIMIT 3000", (cutoff,)
             ).fetchall()
             events = Counter()
             failures = Counter()

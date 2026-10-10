@@ -1,14 +1,14 @@
-# ✦ STAR Intelligence — Fast Brain v0.9.0 Preview Candidate
+# ✦ STAR Intelligence — Fast Brain Preview Candidate (v0.8.1 base)
 
 **A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
 STAR brings local model inference, a real chat workspace, image/video/audio references, persistent project memory, Roblox Studio MCP tools, and measured analytics into one app. It uses **no mandatory hosted model API key**. Starting with v0.7, the desktop interface and the public website share a React + TypeScript + Vite visual system, while all existing Python AI and storage modules stay intact.
 
-> **Fast Brain preview v0.9.0:** This candidate adds opted-in hosted models, web search, in-chat ComfyUI, bounded Agent tools and a local **Export review ZIP** feature in Settings. It is packaged for review on the GitHub PR build, **not** automatically released or proven faster on your specific PC. See [PR #31](https://github.com/oncoursemail/Star-AI/pull/31) and [research/QA](docs/STAR_FAST_BRAIN_RESEARCH.md). Cloud/web APIs require their own user-provided credentials and quotas. The local model remains the default.
+> **Fast Brain review candidate:** This candidate adds opted-in hosted models, web search, in-chat ComfyUI, bounded Agent tools and a local **Export review ZIP** feature in Settings. It is packaged for review on the GitHub PR build, **not** automatically released or proven faster on your specific PC. See [PR #31](https://github.com/oncoursemail/Star-AI/pull/31) and [research/QA](docs/STAR_FAST_BRAIN_RESEARCH.md). Cloud/web APIs require their own user-provided credentials and quotas. The local model remains the default.
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status:** STAR v0.8.1 is the most recent confirmed public download. STAR v0.9.0 is a **Windows preview candidate**, not yet merged or publicly released. The new candidate installer is published as a time-limited GitHub Actions artifact only after all Windows packaging checks pass.  See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
+> **Shipping status:** STAR v0.8.1 is the most recent confirmed public download. The Fast Brain code is a **Windows preview candidate** built from the v0.8.1 base, not yet merged or publicly released. The new candidate installer is published as a time-limited GitHub Actions artifact only after all Windows packaging checks pass.  See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
 
 ## Download / Updates
 
