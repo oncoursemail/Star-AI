@@ -68,6 +68,12 @@ def test_images_select_vision_model_even_for_manual_agent():
     assert selection.model == "image-capable"
 
 
+def test_image_without_specialist_uses_primary_not_text_only_reasoner():
+    s = cfg(model="vision-primary", reasoning_model="text-only-reasoner")
+    assert select_route(s, "What is in this screenshot?", image_count=1).model == "vision-primary"
+    assert select_route(s, "Inspect Roblox screenshots", mode="agent", image_count=1).model == "vision-primary"
+
+
 def test_research_is_not_a_permission_to_run_local_studio_tools():
     route = select_route(cfg(), "Summarize latest sources", research=True)
     assert route.profile == "research" and not route.use_tools
