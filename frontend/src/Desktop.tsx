@@ -16,7 +16,7 @@ import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
-import {classifyFailure,describeConnection,type LastOutcome} from './connection'
+import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
 import {pageFade} from './motion'
 import type {Fixture,FixtureScript} from './previewFixtures'
 
@@ -124,10 +124,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const lastError=useRef('')
  const fresh=useRef<Set<string>>(new Set())
  const fixtureStop=useRef<(()=>void)|null>(null)
+ const targetRef=useRef('')
+ const askedTarget=useRef('')
  const inactive=preview||!initial
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
  chatRef.current=data.active_chat
+ // What a request sent now would talk to. An answer or a failure is only evidence about that target.
+ targetRef.current=connectionTarget(data.settings as AppSettings&Record<string,unknown>)
  const updateRun=useCallback((next:ActivityRun|null)=>{runRef.current=next;setRun(next)},[])
  const sync=useCallback(async()=>{
    if(inactive)return
@@ -212,9 +216,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        fresh.current.add(row.id)
        setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
-       if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind})
+       if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
      }else setNotice(msg)
-     if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind})}
+     if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind,target:askedTarget.current})}
      if(action==='testModelTeam')setTeamChecking(false)
      if(['listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool'].includes(action))setCustomBusy('')
      if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
@@ -228,12 +232,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      endRun('done')
      streamRef.current='';sending.current=false
      setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
-     if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now()})
+     if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current})
      setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('The local model is running.');void sync()
    }else if(action==='testModel'){
-     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setLastOutcome({ok:true,at:Date.now()});setNotice('The model answered a real test prompt.')
+     setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current});setNotice('The model answered a real test prompt.')
    }else if(action==='startModelRouter'){
      setRouterBusy(false);setModelList(Array.isArray(result.models)?result.models as string[]:[])
      setNotice('Local router is reachable; select a model and test its actual completion.');void sync()
@@ -278,6 +282,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
    lastSent.current=value;lastFiles.current=attachments
+   askedTarget.current=targetRef.current
    cancelRequested.current=false
    streamRef.current=''
    followBottom.current=true;setShowJump(false)
@@ -396,6 +401,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  const testActualModel=async()=>{
    if(modelChecking)return
+   askedTarget.current=targetRef.current
    setModelChecking(true);setModelCheck(null)
    const response=await act('testModel')
    if(!response)setModelChecking(false)

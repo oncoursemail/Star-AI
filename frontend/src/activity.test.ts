@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest'
 import {applyProgress, formatElapsed, headline, isRich, settleRun, startRun, stateWord, toolLabel} from './activity'
 import type {ActivityRun, ProgressPayload} from './activity'
-import {classifyFailure, describeConnection} from './connection'
+import {classifyFailure, connectionTarget, describeConnection} from './connection'
 import type {LastOutcome} from './connection'
 import {brainStatus, runsOnOwnHardware} from './IntegrationPanels'
 import type {ServerStatus} from './types'
@@ -179,6 +179,22 @@ describe('connection status and failures are stated truthfully', () => {
     expect(status({settings: lan, server: server(null, false)}).state).toBe('No server address')
     // The on-device engine running says nothing about the server.
     expect(status({settings: lan, brain_running: true, server: server(null)}).tone).toBe('unverified')
+  })
+
+  it('does not carry an answer or a failure over to another address, model or provider', () => {
+    const answered: LastOutcome = {ok: true, at: 0, target: connectionTarget(lan)}
+    expect(status({settings: lan, server: server(null), last: answered}).state).toBe('Connected')
+    const moved = {...lan, server_endpoint: 'http://192.168.1.20:8080/v1'}
+    expect(status({settings: moved, server: server(null), last: answered})).toMatchObject({state: 'Not checked', tone: 'unverified'})
+    expect(status({settings: {...lan, model: 'another-model'}, server: server(null), last: answered}).state).toBe('Not checked')
+    expect(status({settings: local, brain_running: false, last: answered}).state).toBe('Offline')
+    // A failure against the old address does not paint the new one red either.
+    const failed: LastOutcome = {ok: false, at: 0, kind: 'unreachable', target: connectionTarget(lan)}
+    expect(status({settings: lan, server: server(null), last: failed}).state).toBe('Not reachable')
+    expect(status({settings: moved, server: server(null), last: failed}).state).toBe('Not checked')
+    // The same address written with a trailing slash is the same target.
+    expect(connectionTarget({...lan, server_endpoint: lan.server_endpoint + '/'})).toBe(connectionTarget(lan))
+    expect(connectionTarget(local)).not.toBe(connectionTarget({...local, endpoint: 'http://127.0.0.1:8081/v1'}))
   })
 
   it('reports missing setup before anything else', () => {

@@ -11,7 +11,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it} from 'vitest'
 import {cleanup, render, screen, waitFor, within} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import {App} from './App'
-import {installFakeDesktop, type FakeDesktop} from './fake-desktop'
+import {backendSettings, installFakeDesktop, type FakeDesktop} from './fake-desktop'
 
 let desktop: FakeDesktop
 // App loads the desktop workspace as a lazy chunk; load it once up front so the first test's
@@ -27,8 +27,9 @@ const retryButton = () => screen.queryByRole('button', {name: /retry/i})
 const seen = (text: string) => screen.queryAllByText((_, node) => node?.textContent === text && !node.children.length)
 const conversation = () => within(screen.getByRole('log'))
 
-async function openChat(messages: Parameters<FakeDesktop['reset']>[0] = [], retry: Parameters<FakeDesktop['reset']>[1] = null) {
+async function openChat(messages: Parameters<FakeDesktop['reset']>[0] = [], retry: Parameters<FakeDesktop['reset']>[1] = null, host?: Record<string, unknown>) {
   desktop.reset(messages, retry)
+  if (host) desktop.host(host)
   const user = userEvent.setup()
   render(<App/>)
   await screen.findByRole('textbox', {name: /message star/i})
@@ -282,5 +283,29 @@ describe('history after a restart', () => {
       null)
     expect((await screen.findAllByText(failed)).length).toBeGreaterThan(0) // history keeps the failed attempt
     expect(retryButton()).toBeNull()
+  })
+})
+
+describe('connection status with a STAR Server', () => {
+  const server = {...backendSettings, provider: 'star_server', model: 'star-fast', server_endpoint: 'http://192.168.1.20:8080/v1'}
+  const check = (ok: boolean | null) => ({selected: true, configured: true, key_present: true, model_selected: true, ok, code: '', checked_at: ''})
+  /** The composer's status control; its title is "<provider · model> — <state>". */
+  const statusLine = () => screen.getByTitle(/^STAR Server/).getAttribute('title') ?? ''
+
+  it('stops saying Connected once another server address is saved', async () => {
+    const user = await openChat([], null, {settings: server, server: check(null)})
+    expect(statusLine()).toMatch(/Not checked$/)
+    await say(user, 'hello')
+    desktop.complete(await waitFor(() => desktop.requestOf('sendMessage')), 'Hi.')
+    await waitFor(() => expect(statusLine()).toMatch(/Connected$/))
+
+    // The owner saves another address. Nothing has talked to it yet, so the answer above proves nothing about it.
+    const moved = {...server, server_endpoint: 'http://192.168.1.21:8080/v1'}
+    desktop.onAction('saveSettings', () => { desktop.host({settings: moved}); return {ok: true, data: moved} })
+    await user.click(screen.getByRole('button', {name: /^Settings/}))
+    await user.click(await screen.findByRole('button', {name: /save settings/i}))
+    await waitFor(() => expect(desktop.sent('saveSettings')).toHaveLength(1))
+    await user.click(screen.getByRole('button', {name: /back to chat/i}))
+    await waitFor(() => expect(statusLine()).toMatch(/Not checked$/))
   })
 })

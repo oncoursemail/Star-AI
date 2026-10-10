@@ -18,7 +18,8 @@ export type Connection = {
   endpoint: string
   note: string
 }
-export type LastOutcome = {ok: boolean; at: number; kind?: FailureKind} | null
+/** What happened to the last real request. `target` is what it talked to (see `connectionTarget`). */
+export type LastOutcome = {ok: boolean; at: number; kind?: FailureKind; target?: string} | null
 
 const PROVIDERS: Record<string, string> = {
   local: 'This PC',
@@ -40,6 +41,12 @@ const hostOf = (url: unknown) => {
   }
 }
 
+/** The provider, model and address a request goes to. An outcome is evidence about that target only. */
+export function connectionTarget(settings: {provider: string; model: string; endpoint: string} & Record<string, unknown>): string {
+  const address = settings.provider === 'local' ? settings.endpoint : settings.provider === 'star_server' ? settings.server_endpoint : ''
+  return [settings.provider, (settings.model || '').trim(), typeof address === 'string' ? address.replace(/\/+$/, '') : ''].join(' | ')
+}
+
 export function describeConnection(input: {
   settings: {provider: string; model: string; endpoint: string} & Record<string, unknown>
   /** The app-wide status light (`brainStatus` in IntegrationPanels): on-device brain or STAR Server. */
@@ -52,7 +59,9 @@ export function describeConnection(input: {
   preview: boolean
   last: LastOutcome
 }): Connection {
-  const {settings, brain, server, ownHardware, credentials, preview, last} = input
+  const {settings, brain, server, ownHardware, credentials, preview} = input
+  // An answer or a failure from another provider, model or address says nothing about this one.
+  const last = input.last && (input.last.target === undefined || input.last.target === connectionTarget(settings)) ? input.last : null
   const provider = providerLabel(settings.provider)
   const model = (settings.model || '').trim()
   const local = settings.provider === 'local'

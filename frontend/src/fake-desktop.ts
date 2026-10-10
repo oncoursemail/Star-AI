@@ -38,6 +38,7 @@ export function installFakeDesktop() {
   let listener: ((raw: string) => void) | null = null
   let db: Row[] = []
   let retry: unknown = null
+  let reported: Record<string, unknown> = {}
   const handlers = new Map<string, (call: Call) => Reply | void>()
 
   const boot = () => ({
@@ -46,6 +47,7 @@ export function installFakeDesktop() {
     messages: db.map((m, i) => ({...m, id: `saved-${i}`})), retry,
     settings: backendSettings, brain_installed: true, brain_running: true, analytics,
     release_url: 'https://github.com/oncoursemail/Star-AI/releases/latest', credentials: {},
+    ...reported,
   })
 
   const reply = (call: Call): Reply => {
@@ -103,9 +105,11 @@ export function installFakeDesktop() {
     requestOf,
     /** Start every test from a clean backend. */
     reset(messages: Row[] = [], nextRetry: unknown = null) {
-      calls.length = 0; handlers.clear(); retry = nextRetry
+      calls.length = 0; handlers.clear(); retry = nextRetry; reported = {}
       db = messages.map(m => ({...m, created: m.created || stamp()}))
     },
+    /** Change what the host reports from now on (saved settings, the server check), as a real save or check would. */
+    host(state: Record<string, unknown>) { reported = {...reported, ...state} },
     /** Override how the host answers one action (for example, refuse `sendMessage`). */
     onAction(action: string, handler: (call: Call) => Reply | void) { handlers.set(action, handler) },
     delta: (requestId: string, text: string) => emit(requestId, 'progress', {phase: 'Generating response', delta: text}),
