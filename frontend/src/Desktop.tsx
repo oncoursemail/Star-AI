@@ -13,7 +13,7 @@ type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:b
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -43,6 +43,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [retryText,setRetryText]=useState('')
  const [modelCheck,setModelCheck]=useState<{ok:boolean;model:string;sample:string}|null>(null)
  const [modelChecking,setModelChecking]=useState(false)
+ const [routerBusy,setRouterBusy]=useState(false)
+ const [teamChecking,setTeamChecking]=useState(false)
+ const [teamResult,setTeamResult]=useState<{all_text_ready:boolean;note:string;roles:Record<string,{model:string;ok:boolean;sample?:string;error_type?:string}>}|null>(null)
  const [brainProgress,setBrainProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [update,setUpdate]=useState<UpdateInfo|null>(null)
  const [updateBusy,setUpdateBusy]=useState(false)
@@ -94,6 +97,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          const detail=typeof event.data==='string'?event.data:String(info.phase||'STAR is working…')
          setWorkPhase(truncate(detail,120))
        }
+     }else if(action==='testModelTeam'){
+       const detail=(event.data||{}) as {phase?:string;model?:string}
+       setNotice(String(detail.phase||'Testing models')+(detail.model?' · '+detail.model:''))
      }else if(action==='installUpdate'){
        const detail=(event.data||{}) as {phase?:string;downloaded?:number;total?:number}
        setUpdateProgress({phase:String(detail.phase||'Downloading update'),downloaded:Number(detail.downloaded||0),total:Number(detail.total||0)})
@@ -105,6 +111,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'||action==='generateImage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
+     if(action==='testModelTeam')setTeamChecking(false)
+     if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
@@ -116,6 +124,16 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
      setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setNotice('STAR Brain responded successfully to a real prompt.')
+   }else if(action==='startModelRouter'){
+     setRouterBusy(false);setModelList(Array.isArray(result.models)?result.models as string[]:[])
+     setNotice('Local router is reachable. Select and test your model before relying on it.');void sync()
+   }else if(action==='stopBrain'){
+     setRouterBusy(false);setNotice('Managed STAR model server stopped. Conversations and model files are preserved.');void sync()
+   }else if(action==='testModelTeam'){
+     setTeamChecking(false)
+     const report=result as {all_text_ready:boolean;note:string;roles:Record<string,{model:string;ok:boolean;sample?:string;error_type?:string}>}
+     setTeamResult(report)
+     setNotice(report.all_text_ready?'Configured models passed text tests.':'Some configured models failed text tests. Check their availability.')
    }else if(action==='checkUpdates'){
      setUpdateBusy(false)
      setUpdate(result as unknown as UpdateInfo)
@@ -167,6 +185,28 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setModelChecking(true);setModelCheck(null)
    const response=await act('testModel')
    if(!response)setModelChecking(false)
+ }
+ const startLocalRouter=async()=>{
+   if(routerBusy||busy)return
+   setRouterBusy(true);setNotice('Starting the local model router…')
+   const saved=await act('saveSettings',{settings:draft})
+   if(!saved){setRouterBusy(false);return}
+   const launched=await act('startModelRouter')
+   if(!launched)setRouterBusy(false)
+ }
+ const stopLocalBrain=async()=>{
+   if(routerBusy||busy)return
+   setRouterBusy(true)
+   const stopped=await act('stopBrain')
+   if(!stopped)setRouterBusy(false)
+ }
+ const testSpecialists=async()=>{
+   if(teamChecking||busy)return
+   setTeamChecking(true);setTeamResult(null);setNotice('Testing the configured model team…')
+   const saved=await act('saveSettings',{settings:draft})
+   if(!saved){setTeamChecking(false);return}
+   const result=await act('testModelTeam')
+   if(!result)setTeamChecking(false)
  }
  const copyConversation=async()=>{
    if(!messages.length){setNotice('Nothing to copy yet.');return}
@@ -278,7 +318,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <div className="provider-credential"><div><strong>{data.credentials?.[keyProvider]?'Credential configured':'Credential not configured'}</strong><small>Keys are stored in the operating system credential vault, never in your chat or project files.</small></div><Tag kind={data.credentials?.[keyProvider]?'green':'neutral'}>{data.credentials?.[keyProvider]?'Connected':'No key'}</Tag></div>
              <div className="credential-row"><input type="password" autoComplete="off" aria-label="New provider API key" value={providerKey} onChange={e=>setProviderKey(e.target.value)} placeholder="Paste API key (not shown after saving)"/><button className="secondary-button" disabled={!providerKey.trim()||inactive} onClick={()=>void saveKey()}><ShieldCheck size={15}/> Save key</button>{data.credentials?.[keyProvider]&&<button className="secondary-button" type="button" disabled={inactive} onClick={()=>void removeKey()}>Remove key</button>}</div>
              <small>After choosing a provider, save settings and test an actual response. Search keys enable the Web button in chat; keys do not enable automatic browsing. Your local Brain remains available when Cloud is selected.</small>
-           </Panel><Panel className="settings-section"><div className="section-heading"><div><h2>AI model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel>
+           </Panel><Panel className="settings-section"><div className="section-heading"><div><h2>AI model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input list="star-known-models" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel>
            <Panel className="settings-section"><div className="section-heading"><div><span className="eyebrow">SPECIALIST MODELS</span><h2>STAR model team</h2></div><BrainCircuit size={20}/></div><p>Optional model IDs for Fast, deeper reasoning, Roblox, and visual analysis. Leave fields blank to use your main model. Each ID must be available from the same selected inference provider; a standard single-model llama.cpp server cannot load several models just by naming them.</p><div className="field-grid"><label>Fast model<input list="star-known-models" value={draft.fast_model??''} placeholder="Default model" onChange={e=>setDraft(d=>({...d,fast_model:e.target.value}))}/></label><label>Reasoning model<input list="star-known-models" value={draft.reasoning_model??''} placeholder="Default model" onChange={e=>setDraft(d=>({...d,reasoning_model:e.target.value}))}/></label><label>Roblox specialist<input list="star-known-models" value={draft.roblox_model??''} placeholder="Reasoning model" onChange={e=>setDraft(d=>({...d,roblox_model:e.target.value}))}/></label><label>Vision specialist<input list="star-known-models" value={draft.vision_model??''} placeholder="Vision-capable model" onChange={e=>setDraft(d=>({...d,vision_model:e.target.value}))}/></label></div><datalist id="star-known-models">{modelList.map(id=><option key={id} value={id}/>)}</datalist><small>Auto selects a profile without another model call; Agent can delegate read-only drafts to the Fast model. No automatic cloud fallback or background model downloads. Use List available models above to see server-reported IDs. Test configured models before relying on them.</small></Panel>
            <Panel className="settings-section"><div className="section-heading"><div><span className="eyebrow">IMAGE STUDIO</span><h2>Generate images in chat</h2></div><ImagePlus size={20}/></div>
              <p>Connect a local ComfyUI server with an exported API-format workflow (core nodes only). The Image button in chat generates and displays a preview while keeping the original in STAR's data folder.</p>
