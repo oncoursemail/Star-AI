@@ -1,27 +1,29 @@
-# ✦ STAR Intelligence — Fast Brain Preview Candidate (v0.9.0 base)
+# ✦ STAR Intelligence — Genesis v0.9.0
 
 **A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
 STAR brings local model inference, a real chat workspace, image/video/audio references, persistent project memory, Roblox Studio MCP tools, and measured analytics into one app. It uses **no mandatory hosted model API key**. Starting with v0.7, the desktop interface and the public website share a React + TypeScript + Vite visual system, while all existing Python AI and storage modules stay intact.
 
-> **Fast Brain review candidate:** This candidate adds opted-in hosted models, web search, in-chat ComfyUI, bounded Agent tools and a local **Export review ZIP** feature in Settings. It is packaged for review on the GitHub PR build, **not** automatically released or proven faster on your specific PC. See [PR #31](https://github.com/oncoursemail/Star-AI/pull/31) and [research/QA](docs/STAR_FAST_BRAIN_RESEARCH.md). Cloud/web APIs require their own user-provided credentials and quotas. The local model remains the default.
+> **Combined intelligence integration:** v0.9.0 unifies saved conversation threads, fast local chat, optional cloud providers, source-grounded web research, in-chat ComfyUI images, the read-only MCP Hub, four-stage STAR Teams and human-approved project memory. The local model is the default. Cloud/web APIs require your explicit configuration and credentials. Development details and release checks: [v0.9.0 integration acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status:** STAR v0.8.1 is the most recent confirmed public download. The Fast Brain code is a **Windows preview candidate** built from the v0.8.1 base, not yet merged or publicly released. The new candidate installer is published as a time-limited GitHub Actions artifact only after all Windows packaging checks pass.  See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
+> **Shipping status:** The source version is v0.9.0. The authoritative public binary is the [latest GitHub Release](https://github.com/oncoursemail/Star-AI/releases/latest); a source commit or passing PR build is not evidence that a new installer has been released. Native Windows model/GPU, credentials, Roblox Studio, and upgrade acceptance still require device testing; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
 
 ## Download / Updates
 
 **[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
 
-The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the upcoming v0.8 release candidate), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
+The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the React desktop), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
-### STAR v0.8 AI and UI improvements
+### STAR v0.9 AI and UI improvements
 
 - **Qwen/llama.cpp 500 repair:** one first system message per request, including memory compaction; a real completion-based model health test.
 - **Streaming local chat:** progressively renders text for basic conversations; complete protocol responses remain for authorized tool calls.
 - **React website v2:** editorial OLED design, interactive illustrative workflow, real React UI preview, keyboard-accessible tour and reduced-motion support.
 - **Desktop chat v2:** message search/copy, retry, meaningful task progress and a verified in-app updater. Chats and models stay outside the installation tree.
+
+- **Unified intelligence tools:** Read-only MCP Hub, optional hosted inference and web research, four-stage specialist Teams, source-ranked reviewed knowledge and explicit memory corrections. Prior chats and models remain outside the upgrade directory.
 
 Source-level unit/build checks cannot replace live Windows GPU, installer-upgrade and Roblox Studio acceptance testing.
 
