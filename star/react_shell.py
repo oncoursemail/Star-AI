@@ -372,7 +372,26 @@ def launch():
                         from .comfy import generate
                         images=generate(workflow,prompt=prompt,node_id=node,
                             output=app_data()/'generated',port=port)
-                        return {'images':[str(path) for path in images]}
+                        import base64
+                        from io import BytesIO
+                        from PIL import Image
+                        previews=[]
+                        for path in images[:8]:
+                            entry={'filename':path.name,'preview':''}
+                            try:
+                                with Image.open(path) as opened:
+                                    opened.thumbnail((840,840))
+                                    thumbnail=opened.convert('RGB')
+                                    buf=BytesIO()
+                                    thumbnail.save(buf,format='JPEG',quality=70,optimize=True)
+                                data=buf.getvalue()
+                                if len(data)<=450_000:
+                                    entry['preview']='data:image/jpeg;base64,'+base64.b64encode(data).decode('ascii')
+                            except (OSError,ValueError):
+                                # Keep saved originals available even if a thumbnail cannot be decoded.
+                                pass
+                            previews.append(entry)
+                        return {'images':previews,'total':len(images)}
                     self._run(rid,action,image_worker)
                 elif action=='transcribe':
                     path=file_allowed(Path(str(body.get('file',''))),self.allowed_files)
