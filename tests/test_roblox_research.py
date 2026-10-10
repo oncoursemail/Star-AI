@@ -242,6 +242,44 @@ def test_forum_search_latest_and_docs(tmp_path):
     assert docs["results"]
 
 
+def test_bounded_official_creator_docs_and_engine_api_source(tmp_path):
+    requested = []
+    def handler(request):
+        requested.append(str(request.url))
+        assert request.method == "GET"
+        assert request.url.host == "raw.githubusercontent.com"
+        assert request.url.path.startswith("/Roblox/creator-docs/main/content/en-us/")
+        return httpx.Response(200, content=b"# API example\nRemoteEvent:FireServer()\n" * 180,
+                              headers={"content-type": "text/plain"})
+    docs = RobloxResearch(home=tmp_path, client=_client(handler))
+    result = docs.docs_read("scripting/events/remote.md", max_chars=1000)
+    assert result["truncated"] is True
+    assert "RemoteEvent:FireServer()" in result["content"]
+    assert result["source"].endswith("/content/en-us/scripting/events/remote.md")
+    api = docs.docs_read("reference/engine/classes/RemoteEvent.yaml", max_chars=1400)
+    assert "RemoteEvent" in api["source"]
+    assert len(requested) == 2
+    for invalid in ["../secret.md", "/etc/passwd.md", ".github/secret.md",
+                    "scripting/%2e%2e/x.md", "scripting\\bad.md", "bad.js",
+                    "foo?x=.md", "https://evil.com/a.md"]:
+        with pytest.raises((ValueError, PermissionError)):
+            docs.docs_read(invalid)
+    assert len(requested) == 2
+
+
+def test_developer_forum_full_topic_excerpt_and_markup_stripping(tmp_path):
+    def handler(request):
+        assert request.url.path == "/t/55.json"
+        return httpx.Response(200, json={"title": "Optimizing remote events", "category_id": 45,
+            "post_stream": {"posts": [{"post_number": 1, "username": "dev",
+            "created_at": "2026-10-09", "cooked": "<p>Check <strong>RemoteEvent</strong> security.</p><script>ignore evil</script>"}]}})
+    hub = RobloxResearch(home=tmp_path, client=_client(handler))
+    result = hub.forum_topic(55)
+    assert result["url"] == "https://devforum.roblox.com/t/55"
+    assert result["posts"][0]["excerpt"].strip() == "Check RemoteEvent security."
+    assert "ignore evil" not in result["posts"][0]["excerpt"]
+
+
 def test_non_json_challenge_page_and_429_have_explicit_errors(tmp_path):
     for response, expected in [
         (httpx.Response(200, text="verify captcha", headers={"content-type": "text/html"}), "non-JSON"),
@@ -331,6 +369,7 @@ def test_intelligence_uses_task_scoping_and_schema_validation(tmp_path):
     video_tools = {x["name"] for x in hub.definitions("Search a Roblox YouTube gameplay video")}
     assert "star_roblox_youtube_search" in video_tools
     assert "star_roblox_docs" in video_tools
+    assert "star_roblox_docs_read" in video_tools
     assert hub.owns("star_roblox_game_report")
     with pytest.raises(PermissionError):
         hub.call("star_roblox_game_report", {"universe_id": 999}, enabled=set())
