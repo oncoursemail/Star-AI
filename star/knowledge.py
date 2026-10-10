@@ -151,7 +151,9 @@ class KnowledgeStore:
         if not isinstance(query, str) or len(query) > 4000:
             raise ValueError("Search query must be text up to 4,000 characters")
         tokens = re.findall(r"[A-Za-z0-9_]{2,}", query.lower())[:12]
-        if tokens and self._fts:
+        if tokens and self._fts and not any('_' in token for token in tokens):
+            # Underscores are FTS token separators; use escaped LIKE to preserve
+            # exact identifier semantics and avoid matching `hello_world` to `hello world`.
             # Quoted, regex-validated terms cannot inject FTS5 operators.
             match_query = " OR ".join('"' + token + '"' for token in tokens)
             sql = """SELECT notes.* FROM notes_fts
