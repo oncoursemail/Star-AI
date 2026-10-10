@@ -1,0 +1,1461 @@
+#!/usr/bin/env python3
+"""Drive the real STAR Desktop shell against a real STAR Server, without a human.
+
+This is an acceptance tool, not a unit test. Each phase starts the same window
+the owner gets (`star.react_shell.launch()`: PySide6 Qt WebEngine, the Qt
+WebChannel bridge and the built React bundle in frontend/dist), uses real mouse
+and key events to exercise it, saves a screenshot of the window after each
+step, and checks the result in the page and in the profile's SQLite database.
+
+Nothing here is a stub: the bridge, the worker threads, the provider code and
+the model server are the real ones. A phase is one process, so "restart" is a
+real restart on the same profile.
+
+Phases (default: all, in this order)
+    first      boot, Model page + Test server, Fast send, Stop, failed send, Retry
+    restart    relaunch: history, cancelled/failed rows and Retry survive; Retry works
+    agent      Agent mode with a read-only tool call; the activity timeline
+    pages      every sidebar page, live Settings checks, small-window layout
+    wrongkey   a wrong server key: Test server and a send both explain it
+    midclose   the window is closed while a reply streams
+    afterclose relaunch after that: what was recorded
+    upgrade    first start on a profile left by the released v0.8 app (old settings,
+               old message table, on-device provider): nothing is lost or rewritten
+
+Safety
+    * APPDATA is a fresh folder made by this script; a phase refuses to start
+      when APPDATA is not such a folder, so the owner's real STAR data is never
+      read or written.
+    * The keyring is replaced by keyring's null backend for the run, so the
+      Windows Credential Manager is never read or written either.
+    * The server key comes from STAR_SERVER_API_KEY (or --key-file). It is never
+      printed. The run fails if the key appears in the page, in a bridge event
+      or in a log.
+    * It never clicks anything that leaves the app: no file dialogs, no Studio
+      discovery, no update install, no clipboard writes.
+
+Skipped automatically (exit 0, "SKIPPED: ...") when PySide6 with QtWebEngine,
+the built interface, or the server settings are absent:
+
+    STAR_SERVER_API_KEY       the server's bearer key (or --key-file PATH)
+    STAR_ACCEPTANCE_SERVER    e.g. http://192.168.1.20:8080/v1
+    STAR_ACCEPTANCE_MODEL     a model ID that server offers
+
+Example
+    python scripts/shell_acceptance.py --key-file ~/.star/server_api_key --shots out/screenshots
+"""
+from __future__ import annotations
+
+import argparse
+import contextlib
+import json
+import os
+import socket
+import sqlite3
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import traceback
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+MARKER = '.star-shell-acceptance-profile'
+PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade')
+ENV_KEY = 'STAR_SERVER_API_KEY'
+ENV_SERVER = 'STAR_ACCEPTANCE_SERVER'
+ENV_MODEL = 'STAR_ACCEPTANCE_MODEL'
+WRONG_KEY = 'acceptance-wrong-key-not-a-secret'
+
+PROMPT_FAST = 'Reply with one short sentence: what is 2+2?'
+PROMPT_LONG = 'Write a detailed 400 word essay about the history of the Roman Empire.'
+PROMPT_FAIL = 'Say hello in three words.'
+# "tool" makes the read-only Agent Skills tools available; nothing here asks for Studio or a workspace.
+PROMPT_AGENT = ('Call the star_skill_catalog tool once, then tell me in one short sentence '
+                'how many Agent Skills it returned.')
+TYPED_WHILE_STREAMING = 'typing while it streams'
+PAGES = (('Projects', 'Your workspaces'), ('Library', 'Your library'), ('Tools', 'Connect your tools'),
+         ('Analytics', 'Analytics'), ('Model', 'Model & connection'), ('Settings', 'Settings'))
+
+
+# ----------------------------------------------------------------- preflight
+def skip_reason(env=None) -> str | None:
+    """Why this run cannot happen here, or None when everything needed is present."""
+    env = os.environ if env is None else env
+    missing = [name for name in (ENV_KEY, ENV_SERVER, ENV_MODEL) if not str(env.get(name, '')).strip()]
+    if missing:
+        return 'set ' + ', '.join(missing) + ' to run against a STAR Server'
+    try:
+        import PySide6.QtWebEngineWidgets  # noqa: F401
+        import PySide6.QtWebChannel  # noqa: F401
+        import PySide6.QtTest  # noqa: F401
+    except Exception as exc:  # ImportError, or a broken Qt install
+        return f'PySide6 with QtWebEngine is not installed ({type(exc).__name__})'
+    if not (ROOT / 'frontend' / 'dist' / 'index.html').is_file():
+        return 'frontend/dist is not built (run tsc -b and vite build in frontend/)'
+    return None
+
+
+def owner_data_roots() -> list[Path]:
+    """Folders that hold the owner's real application data. A run never uses them."""
+    home = Path.home()
+    return [home / 'AppData' / 'Roaming', home / 'AppData' / 'Local', home / '.local' / 'share']
+
+
+def is_acceptance_profile(folder) -> bool:
+    """True only for a folder this tool created: it carries the marker and is not a real data root."""
+    try:
+        path = Path(folder).resolve()
+    except (OSError, TypeError, ValueError):
+        return False
+    if not (path / MARKER).is_file():
+        return False
+    return all(path != root.resolve() for root in owner_data_roots())
+
+
+def new_profile(evidence: Path) -> Path:
+    profile = Path(tempfile.mkdtemp(prefix='profile-', dir=str(evidence)))
+    (profile / MARKER).write_text('Created by scripts/shell_acceptance.py. Safe to delete.\n', encoding='utf-8')
+    return profile
+
+
+RELEASED_MESSAGES = (
+    ('user', 'How do I tween a GUI frame in Roblox?'),
+    ('assistant', 'Use TweenService:Create(frame, TweenInfo.new(0.3), {Position = goal}):Play().'),
+    ('user', 'And how do I cancel it?'),
+    ('assistant', 'Keep the Tween object and call :Cancel() on it.'),
+)
+
+
+def seed_released_profile(profile: Path, endpoint: str) -> None:
+    """A profile as the released v0.8 app leaves it, for the upgrade phase.
+
+    settings.json has only the fields that release knew (no provider, no server
+    fields) plus one it has since dropped; the database is the first message
+    table, without chat threads or turn outcomes.
+    """
+    home = profile / 'STAR'
+    home.mkdir(parents=True, exist_ok=True)
+    (home / 'settings.json').write_text(json.dumps({
+        'endpoint': endpoint, 'model': 'released-local-model', 'project': 'STAR', 'workspace': '', 'studio_id': '',
+        'studio_edit': False, 'workspace_edit': False, 'max_calls': 12, 'context_chars': 26000, 'llama_server': '',
+        'gguf_model': '', 'gpu_layers': 25, 'reduced_motion': False, 'obsidian_vault': '', 'obsidian_enabled': False,
+        'skills_enabled': True, 'graphify_enabled': True, 'a_setting_this_build_no_longer_has': 'kept out of the way',
+    }, indent=2), encoding='utf-8')
+    connection = sqlite3.connect(home / 'conversations.sqlite3')
+    try:
+        with connection:
+            connection.execute('CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, '
+                               'role TEXT NOT NULL, body TEXT NOT NULL, created TEXT NOT NULL)')
+            connection.executemany('INSERT INTO messages (project,role,body,created) VALUES (?,?,?,?)',
+                                   [('STAR', role, body, f'2026-09-0{index + 1}T10:00:00+00:00')
+                                    for index, (role, body) in enumerate(RELEASED_MESSAGES)])
+    finally:
+        connection.close()
+
+
+def closed_loopback_endpoint() -> str:
+    """An address on this PC where nothing listens, so a failed send never leaves the machine."""
+    for _ in range(20):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(('127.0.0.1', 0))
+            port = probe.getsockname()[1]
+        if port < 1024:
+            continue
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as check:
+            check.settimeout(1.0)
+            if check.connect_ex(('127.0.0.1', port)) != 0:
+                return f'http://127.0.0.1:{port}/v1'
+    raise RuntimeError('Could not find a closed loopback port')
+
+
+def scrub(text: str, key: str) -> str:
+    return text.replace(key, '[key hidden]') if key and len(key) >= 8 else text
+
+
+def read_messages(profile: Path) -> list[dict]:
+    """Every stored message of the acceptance profile, oldest first (read-only)."""
+    db = profile / 'STAR' / 'conversations.sqlite3'
+    if not db.is_file():
+        return []
+    connection = sqlite3.connect(f'file:{db.as_posix()}?mode=ro', uri=True, timeout=10)
+    try:
+        rows = connection.execute(
+            'SELECT id,project,chat_id,role,body,status,reply_to,created FROM messages ORDER BY id').fetchall()
+    finally:
+        connection.close()
+    names = ('id', 'project', 'chat_id', 'role', 'body', 'status', 'reply_to', 'created')
+    return [dict(zip(names, row)) for row in rows]
+
+
+def summarize(numbers: list[float]) -> dict:
+    if not numbers:
+        return {'n': 0}
+    ordered = sorted(numbers)
+    pick = lambda q: ordered[min(len(ordered) - 1, int(q * len(ordered)))]
+    return {'n': len(ordered), 'median': round(pick(0.5), 1), 'p95': round(pick(0.95), 1),
+            'max': round(ordered[-1], 1)}
+
+
+def format_table(steps: list[dict]) -> str:
+    """Plain pass/fail table: one line per step, then every failed check."""
+    lines = [f'{"phase":<11}{"step":<22}{"result":<7}{"time":>8}  notes', '-' * 78]
+    for step in steps:
+        failed = [c for c in step.get('checks', []) if not c['ok']]
+        note = step.get('error') or ('; '.join(c['label'] for c in failed) if failed else
+                                     f'{len(step.get("checks", []))} checks')
+        lines.append(f'{step["phase"]:<11}{step["name"]:<22}{step["status"]:<7}{step.get("seconds", 0):>7}s  {note[:120]}')
+    known = [(step, c) for step in steps for c in step.get('checks', []) if c.get('known')]
+    if known:
+        lines += ['', 'Known defects seen again (not counted as failures):']
+        lines += [f'  {step["phase"]}/{step["name"]}: {c["label"]} -- {c["known"]}' for step, c in known]
+    return '\n'.join(lines)
+
+
+# ---------------------------------------------------------------- page helpers
+PAGE_HELPERS = r"""
+(() => {
+  if (window.__acc) return true;
+  const acc = window.__acc = {errors: [], keys: [], calls: [], frames: {on: false, gaps: []},
+                              lag: {on: false, n: 0, max: 0, over100: 0}, stream: null};
+  window.addEventListener('error', e => acc.errors.push({type: 'error', message: String(e.message),
+    source: String(e.filename || ''), line: e.lineno || 0}));
+  window.addEventListener('unhandledrejection', e => acc.errors.push({type: 'unhandledrejection',
+    message: String(e.reason && (e.reason.stack || e.reason.message || e.reason))}));
+  acc.visible = el => !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  acc.find = (selector, text) => {
+    for (const el of document.querySelectorAll(selector)) {
+      if (!acc.visible(el)) continue;
+      if (text && !((el.innerText || '') + ' ' + (el.getAttribute('aria-label') || '')).includes(text)) continue;
+      return el;
+    }
+    return null;
+  };
+  acc.box = (selector, text) => {
+    const el = acc.find(selector, text);
+    if (!el) return null;
+    el.scrollIntoView({block: 'center', inline: 'nearest'});
+    const r = el.getBoundingClientRect();
+    return {x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height,
+            disabled: !!el.disabled || el.getAttribute('aria-disabled') === 'true',
+            text: (el.innerText || '').trim().slice(0, 160)};
+  };
+  acc.text = selector => { const el = document.querySelector(selector); return el ? (el.innerText || '').trim() : null };
+  acc.resetStream = () => { acc.stream = {firstAt: 0, paintedAt: 0, samples: []}; return true };
+  acc.resetStream();
+  // When does text of the live (still streaming) answer really exist in the page?
+  new MutationObserver(() => {
+    const live = document.querySelector('.msg-star[aria-busy="true"] .msg-prose');
+    if (!live) return;
+    const n = (live.textContent || '').length;
+    if (!n) return;
+    const s = acc.stream;
+    if (!s.firstAt) { s.firstAt = Date.now(); requestAnimationFrame(() => { s.paintedAt = Date.now() }) }
+    if (!s.samples.length || s.samples[s.samples.length - 1][1] !== n) s.samples.push([Date.now(), n]);
+  }).observe(document.documentElement, {subtree: true, childList: true, characterData: true});
+  let last = 0;
+  const frame = t => {
+    if (acc.frames.on) { if (last) acc.frames.gaps.push(Math.round(t - last)); last = t } else last = 0;
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  let tick = performance.now();
+  setInterval(() => {
+    const now = performance.now();
+    if (acc.lag.on) { const late = now - tick - 50; acc.lag.n++; if (late > acc.lag.max) acc.lag.max = late; if (late > 100) acc.lag.over100++ }
+    tick = now;
+  }, 50);
+  document.addEventListener('keydown', e => {
+    if (!e.target || e.target.id !== 'star-prompt') return;
+    const rec = {key: e.key, down: Date.now(), input: 0, painted: 0};
+    acc.keys.push(rec);
+    requestAnimationFrame(() => requestAnimationFrame(() => { rec.painted = Date.now() }));
+  }, true);
+  document.addEventListener('input', e => {
+    if (!e.target || e.target.id !== 'star-prompt' || !acc.keys.length) return;
+    const rec = acc.keys[acc.keys.length - 1];
+    if (!rec.input) rec.input = Date.now();
+  }, true);
+  // Every bridge call the page makes: action, how long the synchronous answer took, and any refusal.
+  const native = window.starBridge;
+  if (native && typeof native.invoke === 'function' && !native.__accWrapped) {
+    const invoke = native.invoke;
+    native.invoke = function (raw, done) {
+      const began = performance.now();
+      let action = '';
+      try { action = JSON.parse(raw).action } catch (error) { /* not ours to judge */ }
+      return invoke.call(this, raw, answer => {
+        const rec = {action, ms: Math.round(performance.now() - began), ok: null, error: ''};
+        try { const body = JSON.parse(answer); rec.ok = !!body.ok; rec.pending = !!body.pending; rec.error = String(body.error || '').slice(0, 300) } catch (error) { rec.error = 'unparseable answer' }
+        acc.calls.push(rec);
+        done(answer);
+      });
+    };
+    native.__accWrapped = true;
+  }
+  return true;
+})()
+"""
+
+TRANSCRIPT_JS = r"""
+[...document.querySelectorAll('.thread-turns > .msg')].map(el => ({
+  role: el.classList.contains('msg-user') ? 'user' : el.classList.contains('msg-star') ? 'assistant' : 'event',
+  status: el.classList.contains('is-failed') ? 'failed' : el.classList.contains('is-cancelled') ? 'cancelled' : 'complete',
+  text: (el.classList.contains('msg-note') ? (el.querySelector('.note-main p') || el).innerText
+        : (el.querySelector('.msg-bubble, .msg-prose') || el).innerText).trim(),
+  title: el.querySelector('.note-main strong') ? el.querySelector('.note-main strong').innerText.trim() : '',
+  buttons: [...el.querySelectorAll('.note-button')].map(b => b.innerText.trim()),
+}))
+"""
+
+OVERFLOW_JS = r"""
+(() => {
+  const wide = [];
+  for (const el of document.querySelectorAll('.shell-main *')) {
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height && (r.right > window.innerWidth + 1 || r.left < -1) && wide.length < 8)
+      wide.push((el.className && el.className.baseVal === undefined ? String(el.className) : el.tagName).slice(0, 60));
+  }
+  return {scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth, outside: wide};
+})()
+"""
+
+
+class Step:
+    def __init__(self, phase: str, name: str):
+        self.phase, self.name = phase, name
+        self.checks: list[dict] = []
+        self.facts: dict = {}
+        self.shots: list[str] = []
+        self.error = ''
+        self.started = time.time()
+        self.seconds = 0.0
+
+    def check(self, ok, label: str, detail='', known: str = '') -> bool:
+        """Record one check. `known` names a defect that is documented and not fixed yet: such a
+        check is listed as KNOWN instead of failing the run, and becomes a plain pass once it is fixed."""
+        entry = {'ok': bool(ok), 'label': label, 'detail': str(detail)[:500]}
+        if known and not ok:
+            entry.update(ok=True, known=known)
+        self.checks.append(entry)
+        mark = '  ok   ' if ok else '  KNOWN ' if known else '  FAIL '
+        print(mark + label + (f'  [{str(detail)[:200]}]' if detail != '' and not ok else ''), flush=True)
+        return bool(ok)
+
+    def fact(self, name: str, value) -> None:
+        self.facts[name] = value
+
+    @property
+    def status(self) -> str:
+        return 'FAIL' if self.error or any(not c['ok'] for c in self.checks) else 'PASS'
+
+    def as_dict(self) -> dict:
+        return {'phase': self.phase, 'name': self.name, 'status': self.status, 'seconds': round(self.seconds, 1),
+                'error': self.error, 'checks': self.checks, 'facts': self.facts, 'shots': self.shots}
+
+
+class Driver:
+    """Sequential steps on top of Qt's event loop: every wait runs a nested loop, so the app keeps working."""
+
+    def __init__(self, app, shell, options):
+        from PySide6.QtCore import QEventLoop, QPoint, Qt, QTimer
+        from PySide6.QtTest import QTest
+        self.Qt, self.QTimer, self.QEventLoop, self.QPoint, self.QTest = Qt, QTimer, QEventLoop, QPoint, QTest
+        self.app, self.shell, self.options = app, shell, options
+        self.view = shell.view
+        self.page = shell.view.page()
+        self.phase = options.child
+        self.profile = Path(os.environ['APPDATA'])
+        self.shots_dir = Path(options.shots)
+        self.key = os.environ.get(ENV_KEY, '')
+        self.real_key = os.environ.get('STAR_ACCEPTANCE_REAL_KEY', '') or self.key
+        self.steps: list[Step] = []
+        self.console: list[dict] = []
+        self.events: list[dict] = []
+        self.python_errors: list[str] = []
+        self.qt_messages: list[str] = []
+        self.leaks: list[str] = []
+        self.marks: dict = {}
+        self.crashed = ''
+
+    # ---- plumbing
+    def install_hooks(self) -> None:
+        from PySide6.QtCore import qInstallMessageHandler
+
+        def on_console(_page, level, message, line, source):
+            self.console.append({'level': getattr(level, 'name', str(level)), 'message': str(message)[:600],
+                                 'line': int(line), 'source': str(source)[-80:], 't': round(time.time(), 3)})
+        # RestrictedPage is created inside launch(); patch its class so every console line reaches us.
+        type(self.page).javaScriptConsoleMessage = on_console
+        self.page.renderProcessTerminated.connect(
+            lambda status, code: setattr(self, 'crashed', f'render process ended: {status} ({code})'))
+        self.shell.bridge.event.connect(self.on_bridge_event)
+
+        def on_qt(_mode, _context, message):
+            self.qt_messages.append(str(message)[:400])
+        qInstallMessageHandler(on_qt)
+
+        def on_exception(kind, value, trace):
+            self.python_errors.append(''.join(traceback.format_exception(kind, value, trace))[-3000:])
+        sys.excepthook = on_exception
+        threading.excepthook = lambda args: on_exception(args.exc_type, args.exc_value, args.exc_traceback)
+        sys.unraisablehook = lambda info: on_exception(type(info.exc_value), info.exc_value, info.exc_traceback)
+
+    def on_bridge_event(self, raw: str) -> None:
+        if self.real_key and self.real_key in raw:
+            self.leaks.append('bridge event')
+        record = {'t': time.time()}
+        try:
+            body = json.loads(raw)
+        except ValueError:
+            self.events.append({**record, 'kind': 'unparseable'})
+            return
+        record.update(kind=body.get('kind'), request=str(body.get('requestId', ''))[:8])
+        data = body.get('data')
+        if isinstance(data, dict):
+            if isinstance(data.get('delta'), str):
+                record['delta_chars'] = len(data['delta'])
+            for name in ('phase', 'activity'):
+                if name in data:
+                    record[name] = data[name]
+            if body.get('kind') == 'result':
+                record['data'] = data if len(raw) < 6000 else {k: (v if not isinstance(v, str) else v[:1500])
+                                                               for k, v in data.items()}
+        elif isinstance(data, str):
+            record['text'] = data[:600]
+        self.events.append(record)
+
+    def pump(self, seconds: float) -> None:
+        loop = self.QEventLoop()
+        self.QTimer.singleShot(max(1, int(seconds * 1000)), loop.quit)
+        loop.exec()
+
+    def js(self, expression: str, timeout: float = 15.0):
+        """Evaluate one JavaScript expression in the page and return its JSON value (None if unavailable)."""
+        loop = self.QEventLoop()
+        box: dict = {}
+
+        def done(value):
+            box['value'] = value
+            loop.quit()
+        code = 'JSON.stringify((()=>{try{return (' + expression + ')}catch(e){return {__error:String(e)}}})())'
+        self.page.runJavaScript(code, 0, done)
+        self.QTimer.singleShot(int(timeout * 1000), loop.quit)
+        loop.exec()
+        value = box.get('value')
+        if not isinstance(value, str) or not value:
+            return None
+        try:
+            return json.loads(value)
+        except ValueError:
+            return None
+
+    def helpers(self) -> None:
+        self.js(PAGE_HELPERS.strip())
+
+    def wait_for(self, expression: str, timeout: float, what: str, poll: float = 0.1):
+        deadline = time.time() + timeout
+        while True:
+            value = self.js(expression)
+            if value and not (isinstance(value, dict) and '__error' in value):
+                return value
+            if self.crashed:
+                raise RuntimeError(self.crashed)
+            if time.time() > deadline:
+                raise TimeoutError(f'waited {timeout:.0f}s for {what}')
+            self.pump(poll)
+
+    def box(self, selector: str, text: str | None = None):
+        return self.js(f'__acc.box({json.dumps(selector)}, {json.dumps(text)})')
+
+    def click(self, selector: str, text: str | None = None, timeout: float = 15.0) -> dict:
+        """A real left click at the centre of the first visible match."""
+        what = selector + (f' "{text}"' if text else '')
+        self.wait_for(f'!!__acc.find({json.dumps(selector)}, {json.dumps(text)})', timeout, what)
+        self.box(selector, text)          # scrolls it into view
+        self.pump(0.25)                   # let a smooth scroll or a page fade settle
+        target = self.box(selector, text)
+        if not target:
+            raise RuntimeError(f'{what} disappeared before the click')
+        if target['disabled']:
+            raise RuntimeError(f'{what} is disabled')
+        point = self.QPoint(int(target['x']), int(target['y']))
+        proxy = self.view.focusProxy()
+        self.QTest.mouseMove(proxy, point)
+        self.QTest.mouseClick(proxy, self.Qt.MouseButton.LeftButton, self.Qt.KeyboardModifier.NoModifier, point)
+        self.pump(0.15)
+        return target
+
+    def type_text(self, text: str) -> None:
+        self.QTest.keyClicks(self.view.focusProxy(), text)
+        self.pump(0.15)
+
+    def press(self, key, modifier=None) -> None:
+        self.QTest.keyClick(self.view.focusProxy(), key, modifier or self.Qt.KeyboardModifier.NoModifier)
+        self.pump(0.1)
+
+    def select_all_and_type(self, text: str) -> None:
+        self.press(self.Qt.Key.Key_A, self.Qt.KeyboardModifier.ControlModifier)
+        self.press(self.Qt.Key.Key_Delete)
+        if text:
+            self.type_text(text)
+
+    def shot(self, name: str) -> str:
+        self.shots_dir.mkdir(parents=True, exist_ok=True)
+        self.pump(0.3)  # one more paint, so the picture shows the state the checks just read
+        path = self.shots_dir / f'shell-{name}.png'
+        if not self.shell.grab().save(str(path)):
+            raise RuntimeError(f'could not save {path.name}')
+        print(f'  shot {path.name}', flush=True)
+        return str(path)
+
+    @contextlib.contextmanager
+    def step(self, name: str):
+        current = Step(self.phase, name)
+        self.steps.append(current)
+        print(f'--- {self.phase}/{name}', flush=True)
+        try:
+            yield current
+        except Exception as exc:  # a step that cannot continue is a failed step, not a dead run
+            current.error = scrub(f'{type(exc).__name__}: {exc}', self.real_key)[:600]
+            print('  FAIL ' + current.error, flush=True)
+            with contextlib.suppress(Exception):
+                current.shots.append(self.shot(f'{name}-FAILED'))
+        finally:
+            current.seconds = time.time() - current.started
+            self.save()
+
+    def save(self) -> None:
+        page = self.js('({errors: __acc.errors, calls: __acc.calls})') or {}
+        report = {
+            'phase': self.phase, 'steps': [s.as_dict() for s in self.steps], 'marks': self.marks,
+            'console': self.console, 'page_errors': page.get('errors', []), 'bridge_calls': page.get('calls', []),
+            'bridge_events': self.events[-4000:], 'python_errors': self.python_errors,
+            'qt_messages': self.qt_messages, 'leaks': self.leaks, 'crashed': self.crashed,
+        }
+        text = scrub(json.dumps(report, indent=1, default=str), self.real_key)
+        (Path(self.options.evidence) / f'{self.phase}.json').write_text(text, encoding='utf-8')
+
+    # ---- reading the app
+    def status(self) -> dict:
+        return self.js("({label: __acc.text('.cmp-status-label'), state: __acc.text('.cmp-status-state'),"
+                       " tone: (document.querySelector('.cmp-status')||{className:''}).className})") or {}
+
+    def transcript(self) -> list[dict]:
+        return self.js(TRANSCRIPT_JS.strip()) or []
+
+    def busy(self) -> bool:
+        return bool(self.js("!!document.querySelector('.cmp.is-busy')"))
+
+    def key_in_page(self) -> bool:
+        return bool(self.real_key) and bool(self.js(
+            f'document.documentElement.outerHTML.includes({json.dumps(self.real_key)})'))
+
+    def settings_file(self) -> dict:
+        return json.loads((self.profile / 'STAR' / 'settings.json').read_text(encoding='utf-8'))
+
+    def open_page(self, name: str, heading: str) -> None:
+        self.click('.rail-foot .rail-item' if name == 'Settings' else 'nav.rail-group .rail-item', name)
+        self.wait_for(f"(__acc.text('.page-stage .page-intro h1')||'').startsWith({json.dumps(heading)})", 15, f'{name} page')
+        self.pump(0.4)
+
+    def open_chat(self) -> None:
+        self.click('.rail-brand')
+        self.wait_for("!!document.querySelector('#star-prompt')", 15, 'chat page')
+        self.pump(0.4)
+
+    # ---- turns
+    def start_turn(self, step: Step, prompt: str, mode: str | None = None) -> dict:
+        if mode:
+            self.click(f'.cmp-mode[data-mode="{mode}"]')
+            step.check(self.js(f"document.querySelector('.cmp-mode[data-mode=\"{mode}\"]').getAttribute('aria-checked')") == 'true',
+                       f'{mode} mode is selected')
+        self.js('__acc.resetStream()')
+        self.click('#star-prompt')
+        self.select_all_and_type(prompt)
+        typed = self.js("document.querySelector('#star-prompt').value")
+        step.check(typed == prompt, 'real key events typed the prompt into the composer', typed)
+        mark = len(self.events)
+        sent_at = time.time()
+        self.press(self.Qt.Key.Key_Return)
+        return {'sent_at': sent_at, 'mark': mark, 'prompt': prompt}
+
+    def stream_metrics(self, turn: dict) -> dict:
+        stream = self.js('__acc.stream') or {}
+        events = self.events[turn['mark']:]
+        deltas = [e for e in events if e.get('delta_chars')]
+        ended = next((e for e in events if e.get('kind') in ('result', 'error')), None)
+        samples = stream.get('samples') or []
+        sent_ms = turn['sent_at'] * 1000
+        facts = {'bridge_delta_events': len(deltas), 'visible_updates': len(samples)}
+        if deltas:
+            facts['send_to_first_bridge_delta_ms'] = round(deltas[0]['t'] * 1000 - sent_ms)
+        if stream.get('firstAt'):
+            facts['send_to_first_visible_text_ms'] = round(stream['firstAt'] - sent_ms)
+            if stream.get('paintedAt'):
+                facts['first_text_to_paint_ms'] = round(stream['paintedAt'] - stream['firstAt'])
+        if ended:
+            facts['send_to_end_ms'] = round(ended['t'] * 1000 - sent_ms)
+        if len(samples) >= 2:
+            seconds = (samples[-1][0] - samples[0][0]) / 1000
+            chars = samples[-1][1] - samples[0][1]
+            facts.update(stream_seconds=round(seconds, 2), stream_chars=samples[-1][1])
+            if seconds > 0:
+                facts['visible_chars_per_s'] = round(chars / seconds, 1)
+                # One bridge delta is one model token while the server is slower than the 75 ms coalescing window.
+                facts['bridge_deltas_per_s'] = round((len(deltas) - 1) / seconds, 2) if len(deltas) > 1 else 0
+                facts['tokens_per_s_estimate_chars_div_4'] = round(chars / 4 / seconds, 2)
+        return facts
+
+    def wait_idle(self, timeout: float) -> None:
+        self.wait_for("!document.querySelector('.cmp.is-busy')", timeout, 'the turn to end', poll=0.2)
+        self.pump(0.6)  # the result handler re-reads state from the host
+
+
+# ------------------------------------------------------------------- the steps
+def step_boot(d: Driver, expect_history: bool = False) -> None:
+    with d.step('boot') as s:
+        d.wait_for("!!document.querySelector('#star-prompt') && !!document.querySelector('.cmp-status')", 90,
+                   'the chat composer', poll=0.05)
+        ready = time.time()
+        d.helpers()
+        d.marks['interactive_at'] = ready
+        spawned = float(d.options.spawned_at or 0)
+        if spawned:
+            s.fact('process_start_to_interactive_s', round(ready - spawned, 2))
+        s.fact('python_main_to_interactive_s', round(ready - d.marks['python_main'], 2))
+        s.fact('qt_app_to_interactive_s', round(ready - d.marks['qt_app'], 2))
+        profile = d.page.profile()
+        s.fact('webengine_profile_off_the_record', bool(profile.isOffTheRecord()))
+        s.fact('window', d.js('({w: innerWidth, h: innerHeight, dpr: devicePixelRatio})'))
+        s.fact('platform', d.app.platformName())
+        s.check(d.shell.isVisible(), 'the real react_shell window is shown')
+        s.check(d.js("!!window.qt && !!window.starBridge"), 'the page is connected to the Qt WebChannel bridge')
+        if not expect_history:
+            s.check(d.js("__acc.text('.thread-hello h2')") == 'What are we making?', 'chat empty state renders')
+            s.check(d.js("document.querySelectorAll('.starters .starter').length") == 4, 'four starter prompts render')
+        status = d.status()
+        s.fact('status', status)
+        settings = d.settings_file()
+        on_server = settings.get('provider') == 'star_server'
+        s.check(('STAR Server' if on_server else 'This PC') in (status.get('label') or '')
+                and settings['model'] in (status.get('label') or ''),
+                'status names ' + ('STAR Server' if on_server else 'this PC') + ' and the model', status)
+        if on_server:
+            # Nothing has talked to the server yet unless the app checked it by itself during start.
+            checked = any(e.get('kind') == 'result' and 'steps' in (e.get('data') or {}) for e in d.events)
+            s.fact('server_checked_during_start', checked)
+            s.check(status.get('state') == ('Ready' if checked else 'Not checked'),
+                    'status is truthful at start: "Not checked" until a real check or reply', status.get('state'))
+        else:
+            s.check(status.get('state') == 'Offline', 'status says the model on this PC is not running', status.get('state'))
+        s.check(not d.key_in_page(), 'the server key is not in the page')
+        s.shots.append(d.shot('boot' if d.phase == 'first' else f'boot-{d.phase}'))
+        d.click('#star-prompt')
+        focus = d.js("(()=>{const f=getComputedStyle(document.querySelector('#star-prompt'));"
+                     "return {active: document.activeElement.id, outline: f.outlineStyle, width: f.outlineWidth}})()") or {}
+        s.fact('composer_focus', focus)
+        s.check(focus.get('active') == 'star-prompt' and (focus.get('outline') == 'none' or focus.get('width') == '0px'),
+                'a real click focuses the composer and no second outline is drawn inside it', focus)
+        if d.phase == 'first':
+            d.click('.cmp-status')
+            d.wait_for("!!document.querySelector('.cmp-status-pop')", 5, 'the status popover')
+            popover = d.js("__acc.text('.cmp-status-pop')") or ''
+            s.fact('status_popover', popover)
+            s.check(settings['server_endpoint'].split('//')[1].split('/')[0] in popover,
+                    'status popover shows the server address', popover)
+            s.shots.append(d.shot('boot-status'))
+            d.press(d.Qt.Key.Key_Escape)
+
+
+def step_model_page(d: Driver) -> None:
+    with d.step('model-page') as s:
+        d.open_page('Model', 'Model & connection')
+        card = "section[aria-label=\"STAR Server\"]"
+        d.wait_for(f"!!document.querySelector('{card}')", 10, 'the STAR Server card')
+        text = d.js(f"__acc.text('{card}')") or ''
+        s.fact('card_text', text)
+        settings = d.settings_file()
+        s.check('STAR Server is your AI brain' in text, 'server card is shown')
+        s.check(settings['server_endpoint'] in text, 'card shows the saved server address')
+        s.check('Key: saved' in text, 'card says a key is present')
+        s.check('not checked yet' in text, 'card says the server has not been checked yet')
+        s.check(d.js("(document.querySelector('details.brain-details')||{}).open") is False,
+                'the local-model download is folded away as an optional backup')
+        s.shots.append(d.shot('model'))
+        mark = len(d.events)
+        began = time.time()
+        d.click(f'{card} button', 'Test server')
+        d.wait_for(f"(__acc.text('{card}')||'').includes('Testing server')", 5, 'the testing state')
+        s.shots.append(d.shot('model-testing'))
+        d.wait_for(f"!!document.querySelector('{card} [role=\"status\"]')", d.options.turn_timeout, 'the server report', poll=0.25)
+        s.fact('test_server_seconds', round(time.time() - began, 1))
+        d.pump(0.6)
+        rows = d.js(f"[...document.querySelectorAll('{card} .integrated-note')].map(r=>r.innerText.replace(/\\s+/g,' ').trim())") or []
+        s.fact('rows', rows)
+        result = next((e.get('data') for e in d.events[mark:] if e.get('kind') == 'result' and isinstance(e.get('data'), dict)
+                       and 'steps' in e['data']), None) or {}
+        s.fact('report', {k: result.get(k) for k in ('ok', 'code', 'message', 'models', 'context_tokens', 'slots',
+                                                     'first_token_ms', 'sample', 'steps')})
+        s.check(result.get('ok') is True, 'Test server passed', result.get('message'))
+        for label in ('Server reachable', 'Key and model list', 'Context and slots', 'Real test reply'):
+            s.check(any(row.startswith(label) for row in rows), f'step "{label}" is shown with its result')
+        s.check(len(rows) == len(result.get('steps') or []), 'the page shows every step the host reported', rows)
+        s.check(not d.key_in_page(), 'the server key is not in the page after the test')
+        s.shots.append(d.shot('model-tested'))
+        d.open_chat()
+        status = d.status()
+        s.fact('status_after_test', status)
+        s.check(status.get('state') == 'Ready', 'status light is Ready after a passed test', status)
+        s.shots.append(d.shot('status-ready'))
+
+
+def step_fast_send(d: Driver, name: str = 'fast-send', prompt: str = PROMPT_FAST) -> None:
+    with d.step(name) as s:
+        before = read_messages(d.profile)
+        turn = d.start_turn(s, prompt, 'fast')
+        d.pump(1.5)
+        waiting = d.js("__acc.text('.thread-status')") or ''
+        s.fact('status_line_while_waiting', waiting)
+        if not (d.js('__acc.stream.firstAt') or 0):
+            s.check(bool(waiting) and '_' not in waiting, 'a plain status line with a clock shows while waiting for the first words', waiting)
+            s.shots.append(d.shot(f'{name}-waiting'))
+        d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
+        s.shots.append(d.shot(f'{name}-streaming'))
+        d.wait_idle(d.options.turn_timeout)
+        facts = d.stream_metrics(turn)
+        s.facts.update(facts)
+        events = d.events[turn['mark']:]
+        result = next((e for e in events if e.get('kind') == 'result'), None)
+        answer = ((result or {}).get('data') or {}).get('answer', '')
+        s.fact('answer', answer[:400])
+        s.fact('activity', [e.get('phase') for e in events if e.get('phase') and not e.get('delta_chars')])
+        s.check(facts.get('bridge_delta_events', 0) >= 1, 'token deltas arrived over the bridge', facts)
+        s.check(facts.get('visible_updates', 0) >= 1, 'the streamed text was visible in the page before the end', facts)
+        s.check(bool(answer.strip()), 'the worker returned an answer')
+        shown = d.transcript()
+        last = shown[-1] if shown else {}
+        s.check(last.get('role') == 'assistant' and bool(last.get('text')),
+                'the final answer is rendered as the last message', last)
+        s.fact('rendered', last.get('text', '')[:400])
+        s.check(not d.busy() and bool(d.js("!!document.querySelector('.cmp-send:not(.is-stop)')")),
+                'the composer is back to Send')
+        rows = read_messages(d.profile)
+        new = rows[len(before):]
+        s.fact('db_new_rows', [{k: (v if k != 'body' else v[:120]) for k, v in row.items()} for row in new])
+        s.check([r['role'] for r in new] == ['user', 'assistant'], 'SQLite has the user message and the answer', [r['role'] for r in new])
+        s.check(bool(new) and new[0]['body'] == prompt, 'the stored user message is the prompt')
+        s.check(len(new) == 2 and new[1]['body'] == answer and new[1]['status'] == 'complete',
+                'the stored answer equals the answer shown')
+        status = d.status()
+        s.fact('status', status)
+        s.check(status.get('state') == 'Connected', 'status light says Connected after a real answer', status)
+        s.shots.append(d.shot(f'{name}-done'))
+
+
+def measure_typing(d: Driver, text: str) -> dict:
+    """Type into the composer with real key events and measure how long each one takes to reach the page."""
+    d.js("(__acc.keys.length = 0, __acc.frames.gaps.length = 0, __acc.frames.on = true,"
+         " __acc.lag.n = 0, __acc.lag.max = 0, __acc.lag.over100 = 0, __acc.lag.on = true)")
+    d.click('#star-prompt')
+    d.select_all_and_type('')
+    d.js('(__acc.keys.length = 0, true)')
+    sent = []
+    proxy = d.view.focusProxy()
+    for char in text:
+        sent.append(time.time() * 1000)
+        d.QTest.keyClicks(proxy, char)
+        d.pump(0.12)
+    d.pump(0.3)
+    page = d.js('({keys: __acc.keys, gaps: __acc.frames.gaps, lag: __acc.lag})') or {}
+    d.js('(__acc.frames.on = false, __acc.lag.on = false, true)')
+    keys = [k for k in page.get('keys', []) if len(k.get('key', '')) == 1]
+    delivery = [k['down'] - at for k, at in zip(keys, sent)]
+    painted = [k['painted'] - at for k, at in zip(keys, sent) if k.get('painted')]
+    gaps = page.get('gaps', [])
+    return {'chars_sent': len(text), 'chars_seen_by_page': len(keys),
+            'value': d.js("document.querySelector('#star-prompt').value"),
+            'key_to_page_ms': summarize(delivery), 'key_to_painted_ms': summarize(painted),
+            'frame_gap_ms': summarize(gaps), 'frames': len(gaps),
+            'frames_over_50ms': sum(1 for g in gaps if g > 50),
+            'timer_lag': {k: round(v, 1) if isinstance(v, float) else v for k, v in (page.get('lag') or {}).items() if k != 'on'}}
+
+
+def step_stop(d: Driver) -> None:
+    with d.step('stop') as s:
+        before = read_messages(d.profile)
+        idle = measure_typing(d, TYPED_WHILE_STREAMING)
+        s.fact('typing_idle', idle)
+        turn = d.start_turn(s, PROMPT_LONG, 'fast')
+        d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
+        d.wait_for('__acc.stream.samples.length >= 8', 120, 'a few streamed updates', poll=0.1)
+        typing = measure_typing(d, TYPED_WHILE_STREAMING)
+        s.fact('typing_while_streaming', typing)
+        s.check(typing['value'] == TYPED_WHILE_STREAMING, 'the composer accepts typing while a reply streams', typing['value'])
+        s.check(typing['key_to_painted_ms'].get('p95', 9999) < 250,
+                'typed characters reach the screen within 250 ms (p95) while streaming', typing['key_to_painted_ms'])
+        s.check(d.busy(), 'the reply is still streaming')
+        s.shots.append(d.shot('stop-streaming'))
+        partial = (d.js('__acc.stream.samples.length') or 0, d.js('(__acc.stream.samples.slice(-1)[0]||[0,0])[1]') or 0)
+        s.fact('visible_before_stop', {'updates': partial[0], 'chars': partial[1]})
+        stopped_at = time.time()
+        d.click('.cmp-send.is-stop')
+        d.wait_for("!!document.querySelector('.msg-note.is-cancelled')", 60, 'the stopped row', poll=0.05)
+        s.fact('stop_click_to_row_ms', round((time.time() - stopped_at) * 1000))
+        d.wait_idle(30)
+        s.facts.update({'stream_' + k: v for k, v in d.stream_metrics(turn).items()})
+        shown = d.transcript()
+        last = shown[-1] if shown else {}
+        s.fact('row', last)
+        s.check(last.get('status') == 'cancelled' and last.get('text', '').startswith('Request stopped'),
+                'the page shows the turn as stopped', last)
+        s.check('Retry' in last.get('buttons', []) and 'Edit message' in last.get('buttons', []),
+                'the stopped row offers Retry and Edit message', last.get('buttons'))
+        s.check(len(shown) >= 2 and shown[-2]['role'] == 'user' and shown[-2]['text'] == PROMPT_LONG,
+                'the stopped row follows the question directly; the unsaved draft is not left as an answer')
+        rows = read_messages(d.profile)
+        new = rows[len(before):]
+        s.fact('db_new_rows', [{k: (v if k != 'body' else v[:120]) for k, v in row.items()} for row in new])
+        s.check([r['role'] for r in new] == ['user', 'event'], 'SQLite has the user message and one terminal record',
+                [r['role'] for r in new])
+        s.check(len(new) == 2 and new[1]['status'] == 'cancelled' and new[1]['reply_to'] == new[0]['id'],
+                'the terminal record is cancelled and answers that user message')
+        s.check(len(new) == 2 and new[1]['body'] == last.get('text'), 'the stored text equals the text shown')
+        s.check(not d.busy() and bool(d.js("!!document.querySelector('.cmp-send:not(.is-stop)')")),
+                'the composer is back to Send')
+        d.click('#star-prompt')
+        d.select_all_and_type('still usable')
+        s.check(d.js("document.querySelector('#star-prompt').value") == 'still usable' and
+                d.js("document.querySelector('.cmp-send').disabled") is False,
+                'the composer takes text and Send is enabled again')
+        d.select_all_and_type('')
+        status = d.status()
+        s.fact('status', status)
+        s.check(status.get('state') in ('Connected', 'Ready'), 'stopping does not mark the server as failing', status)
+        s.shots.append(d.shot('stop-cancelled'))
+
+
+def set_server_address(d: Driver, s: Step, address: str) -> None:
+    """Change the STAR Server address the way a person does: Settings, type, Save settings."""
+    d.open_page('Settings', 'Settings')
+    if d.js("!!document.querySelector('.toast')"):
+        d.click('.toast button')  # an older notice must not be mistaken for this save
+    field = '[aria-label="STAR Server settings"] input[inputmode="url"]'
+    d.click(field)
+    d.select_all_and_type(address)
+    s.check(d.js(f"document.querySelector('{field}').value") == address, 'the address field holds the typed address')
+    d.click('.save-button')
+    d.wait_for("(__acc.text('.toast')||'').includes('Settings saved')", 15, 'the "Settings saved" notice')
+    s.check(d.settings_file()['server_endpoint'] == address, 'settings.json holds the new address')
+    d.pump(0.5)
+
+
+def step_failure(d: Driver) -> None:
+    with d.step('failure') as s:
+        dead = d.options.dead_endpoint
+        set_server_address(d, s, dead)
+        s.shots.append(d.shot('failure-settings'))
+        d.open_chat()
+        status = d.status()
+        s.fact('status_after_address_change', status)
+        s.check(status.get('state') not in ('Connected', 'Ready'),
+                'status does not claim the new, unchecked address is connected', status)
+        before = read_messages(d.profile)
+        turn = d.start_turn(s, PROMPT_FAIL, 'fast')
+        d.wait_for("!!document.querySelector('.msg-note.is-failed')", 90, 'the failure row', poll=0.05)
+        s.fact('send_to_error_row_ms', round((time.time() - turn['sent_at']) * 1000))
+        d.wait_idle(30)
+        shown = d.transcript()
+        last = shown[-1] if shown else {}
+        s.fact('row', last)
+        s.check(last.get('status') == 'failed', 'the page shows a failed turn', last)
+        s.check(last.get('title') == "Can't reach the model", 'the row has a calm title', last.get('title'))
+        s.check(last.get('text', '').startswith('Cannot reach STAR Server'), 'the message names STAR Server, not a local brain', last.get('text'))
+        raw = json.dumps(last)
+        s.check(not any(word in raw for word in ('Traceback', 'APIConnectionError', 'httpx', 'Errno', 'Brain tab')),
+                'no exception names or local-brain advice in the row', raw)
+        s.check(last.get('buttons') == ['Model & connection', 'Retry', 'Edit message'], 'the row offers Model & connection, Retry and Edit message', last.get('buttons'))
+        rows = read_messages(d.profile)
+        new = rows[len(before):]
+        s.fact('db_new_rows', [{k: (v if k != 'body' else v[:160]) for k, v in row.items()} for row in new])
+        s.check([r['role'] for r in new] == ['user', 'event'] and new[1]['status'] == 'failed' and new[1]['reply_to'] == new[0]['id'],
+                'SQLite has the failed terminal record for that message')
+        s.check(len(new) == 2 and new[1]['body'] == last.get('text'), 'the stored text equals the text shown')
+        status = d.status()
+        s.fact('status_after_failure', status)
+        s.check(status.get('state') == 'Not reachable', 'status light says Not reachable', status)
+        s.shots.append(d.shot('failure'))
+        d.click('.msg-note.is-failed .note-button', 'Retry')
+        d.wait_for("document.querySelectorAll('.msg-note.is-failed').length >= 2", 90, 'the second failure row', poll=0.05)
+        d.wait_idle(30)
+        shown = d.transcript()
+        failed = [t for t in shown if t['status'] == 'failed']
+        s.check(len(failed) == 2 and failed[0]['buttons'] == [] and 'Retry' in failed[1]['buttons'],
+                'Retry sent the message again; only the newest failed row keeps its buttons', [f['buttons'] for f in failed])
+        rows = read_messages(d.profile)
+        retried = rows[len(before) + 2:]
+        s.check([r['role'] for r in retried] == ['user', 'event'] and retried[0]['body'] == PROMPT_FAIL,
+                'the retried turn is stored as a new message with its own failed record', [r['role'] for r in retried])
+        s.shots.append(d.shot('failure-retry'))
+        d.click('.msg-note.is-failed .note-button', 'Model & connection')
+        d.wait_for("(__acc.text('.page-stage .page-intro h1')||'').startsWith('Model')", 15, 'the Model page')
+        card = d.js("__acc.text('section[aria-label=\"STAR Server\"]')") or ''
+        s.fact('model_card_after_failure', card)
+        s.check('needs attention' in card, 'the Model page says the server needs attention', card)
+        s.shots.append(d.shot('failure-model'))
+        d.open_chat()
+
+
+def compare_history(d: Driver, s: Step) -> list[dict]:
+    """The transcript the page shows must be the rows SQLite holds for the active chat, in order."""
+    shown = d.transcript()
+    rows = read_messages(d.profile)
+    stored = [{'role': r['role'], 'status': r['status'], 'text': r['body']} for r in rows]
+    s.fact('shown', [{'role': t['role'], 'status': t['status'], 'text': t['text'][:90], 'buttons': t['buttons']} for t in shown])
+    s.check(len(shown) == len(stored), 'the page shows as many rows as SQLite holds', f'{len(shown)} shown, {len(stored)} stored')
+    same = all(a['role'] == b['role'] and a['status'] == b['status'] and
+               (a['role'] == 'assistant' or ' '.join(a['text'].split()) == ' '.join(b['text'].split()))
+               for a, b in zip(shown, stored))
+    s.check(same, 'roles, outcomes and texts match the database, in order')
+    return shown
+
+
+def step_restart_history(d: Driver) -> None:
+    with d.step('restart-history') as s:
+        shown = compare_history(d, s)
+        s.check(sum(1 for t in shown if t['status'] == 'cancelled') == 1, 'the stopped turn is still shown as stopped')
+        failed = [t for t in shown if t['status'] == 'failed']
+        s.check(len(failed) == 2, 'both failed turns are still shown', len(failed))
+        last = shown[-1] if shown else {}
+        s.check(last.get('status') == 'failed' and last.get('buttons') == ['Model & connection', 'Retry', 'Edit message'],
+                'the newest failed row still offers Model & connection, Retry and Edit message', last.get('buttons'))
+        s.check(all(t['buttons'] == [] for t in shown[:-1] if t['role'] == 'event'), 'older rows are history without buttons')
+        s.check(any(t['role'] == 'assistant' and t['text'] for t in shown), 'the earlier answer is still there')
+        s.fact('status', d.status())
+        s.shots.append(d.shot('restart'))
+
+
+def step_restart_retry(d: Driver) -> None:
+    with d.step('restart-retry') as s:
+        set_server_address(d, s, os.environ[ENV_SERVER])
+        d.open_chat()
+        before = read_messages(d.profile)
+        d.js('__acc.resetStream()')
+        mark = len(d.events)
+        sent_at = time.time()
+        d.click('.msg-note.is-failed .note-button', 'Retry')
+        turn = {'sent_at': sent_at, 'mark': mark}
+        d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
+        d.wait_idle(d.options.turn_timeout)
+        s.facts.update(d.stream_metrics(turn))
+        new = read_messages(d.profile)[len(before):]
+        s.check([r['role'] for r in new] == ['user', 'assistant'] and new[0]['body'] == PROMPT_FAIL,
+                'Retry after a restart re-sent the stored prompt and the answer was saved', [r['role'] for r in new])
+        shown = d.transcript()
+        s.check(bool(shown) and shown[-1]['role'] == 'assistant' and bool(shown[-1]['text']), 'the answer is rendered')
+        s.check(all(t['buttons'] == [] for t in shown if t['role'] == 'event'), 'no stale Retry buttons remain')
+        s.fact('answer', shown[-1]['text'][:300] if shown else '')
+        s.shots.append(d.shot('restart-retry'))
+
+
+def step_agent(d: Driver) -> None:
+    with d.step('agent') as s:
+        before = read_messages(d.profile)
+        d.click('.rail-new')
+        d.wait_for("!!document.querySelector('.thread-hello')", 15, 'a new empty chat')
+        turn = d.start_turn(s, PROMPT_AGENT, 'agent')
+        d.wait_for("!!document.querySelector('.act, .thread-status')", 30, 'the activity view', poll=0.1)
+        d.pump(4)
+        s.shots.append(d.shot('agent-running'))
+        running = d.js("__acc.text('.act') || __acc.text('.thread-status')") or ''
+        s.fact('view_while_running', running)
+        seen_tool = False
+        deadline = time.time() + d.options.agent_timeout
+        while d.busy():
+            if time.time() > deadline:
+                raise TimeoutError(f'the agent turn did not end in {d.options.agent_timeout:.0f}s')
+            if not seen_tool and any((e.get('activity') or {}).get('type') == 'tool' for e in d.events[turn['mark']:]):
+                seen_tool = True
+                s.shots.append(d.shot('agent-tool'))
+            d.pump(0.5)
+        d.pump(0.8)
+        events = d.events[turn['mark']:]
+        activity = [e['activity'] for e in events if e.get('activity')]
+        s.fact('activity_events', activity)
+        s.fact('phases', [e.get('phase') for e in events if e.get('phase') and not e.get('delta_chars')])
+        ended = next((e for e in events if e.get('kind') in ('result', 'error')), {})
+        s.fact('send_to_end_s', round(ended.get('t', time.time()) - turn['sent_at'], 1))
+        s.fact('streamed_deltas', sum(1 for e in events if e.get('delta_chars')))
+        s.check(ended.get('kind') == 'result', 'the agent turn ended with an answer', ended.get('text') or ended.get('kind'))
+        tools = [a for a in activity if a.get('type') == 'tool']
+        s.check(any(a.get('profile') == 'agent' for a in activity if a.get('type') == 'route'), 'the host chose the Agent route')
+        s.check(any(a.get('state') == 'running' for a in tools) and any(a.get('state') == 'done' for a in tools),
+                'a real tool call started and finished', tools)
+        s.check(sum(1 for a in activity if a.get('type') == 'turn') >= 2, 'the model was called again after the tool result')
+        timeline = "section[aria-label=\"What STAR did\"]"
+        s.check(bool(d.js(f"!!document.querySelector('{timeline}')")), 'the activity timeline is shown for this turn')
+        if d.js(f"!!document.querySelector('{timeline} .act-toggle[aria-expanded=\"false\"]')"):
+            d.click(f'{timeline} .act-toggle')
+            d.pump(0.6)
+        rows = d.js(f"[...document.querySelectorAll('{timeline} .act-step')].map(r=>r.innerText.replace(/\\s+/g,' ').trim())") or []
+        head = d.js(f"__acc.text('{timeline} .act-head')") or ''
+        s.fact('timeline_head', head)
+        s.fact('timeline_rows', rows)
+        s.check(len(rows) >= 2, 'the timeline lists the steps the host reported', rows)
+        s.check(any('Agent Skill' in row or 'tool' in row.lower() for row in rows), 'the tool step is in the timeline', rows)
+        new = read_messages(d.profile)[len(before):]
+        s.check([r['role'] for r in new] == ['user', 'assistant'], 'SQLite has the agent turn and its answer', [r['role'] for r in new])
+        s.fact('answer', new[1]['body'][:400] if len(new) == 2 else '')
+        s.shots.append(d.shot('agent-done'))
+
+
+def step_pages(d: Driver) -> None:
+    for name, heading in PAGES:
+        slug = name.lower()
+        with d.step(f'page-{slug}') as s:
+            errors_before = len(d.console)
+            d.open_page(name, heading)
+            d.pump(1.0)
+            text = d.js("__acc.text('.page-stage')") or ''
+            s.fact('text', text[:6000])
+            s.check(len(text) > 120, f'the {name} page has content', len(text))
+            overflow = d.js(OVERFLOW_JS.strip()) or {}
+            s.fact('overflow', overflow)
+            s.check(overflow.get('scrollWidth', 0) <= overflow.get('innerWidth', 0) + 1 and not overflow.get('outside'),
+                    'nothing is wider than the window', overflow)
+            fresh = [c for c in d.console[errors_before:] if 'Error' in c['level']]
+            s.check(not fresh, 'no console errors on this page', fresh[:3])
+            s.shots.append(d.shot(f'page-{slug}'))
+            height = d.js("(()=>{const r=document.querySelector('.page-stage .scroll-region');return r?[r.scrollHeight,r.clientHeight]:[0,0]})()") or [0, 0]
+            part = 2
+            while height[0] > height[1] * (part - 1) + 40 and part <= 6:
+                d.js(f"(document.querySelector('.page-stage .scroll-region').scrollTop = {int(height[1] * (part - 1) * 0.92)}, true)")
+                s.shots.append(d.shot(f'page-{slug}-{part}'))
+                part += 1
+            if name == 'Tools':
+                layout = d.js("({grid: getComputedStyle(document.querySelector('.intelligence-grid')).display,"
+                              " head: getComputedStyle(document.querySelector('.integration-head')).display,"
+                              " columns: getComputedStyle(document.querySelector('.intelligence-grid')).gridTemplateColumns.split(' ').length})") or {}
+                s.fact('knowledge_cards', layout)
+                s.check(layout.get('grid') == 'grid' and layout.get('columns', 0) >= 2 and layout.get('head') == 'flex',
+                        'the knowledge cards are laid out as a grid, with the status tag beside the icon', layout)
+                s.check('VRAM' not in text and 'Local specialist' not in text,
+                        'no "this PC" hardware wording while STAR Server is selected')
+                s.check('Protocol: \u00b7' not in text, 'a connector that is off says so, without an empty protocol')
+            if name == 'Analytics':
+                numbers = d.js("[...document.querySelectorAll('.metric-card')].map(c=>c.innerText.replace(/\\s+/g,' ').trim())") or []
+                s.fact('metrics', numbers)
+                users = sum(1 for r in read_messages(d.profile) if r['role'] == 'user')
+                s.check(any(card.startswith('Messages') and f' {users} ' in f' {card} ' for card in numbers),
+                        'Messages equals the user messages in SQLite', f'{users} stored; {numbers}')
+    with d.step('settings-live') as s:
+        d.open_page('Settings', 'Settings')
+        heading = d.js("__acc.text('.settings-page .settings-section h2')") or ''
+        s.check(heading == 'STAR Server model', 'Settings names the model section for STAR Server', heading)
+        s.check(not d.js("!!__acc.find('.settings-page label', 'Local endpoint')"), 'no "Local endpoint" field while STAR Server is selected')
+        mark = len(d.events)
+        d.click('.settings-page button', 'List available models')
+        d.wait_for("!!__acc.find('.settings-page small', 'Available:')", 60, 'the model list')
+        listed = d.js("__acc.find('.settings-page small', 'Available:').innerText") or ''
+        s.fact('models', listed)
+        s.check(d.settings_file()['model'] in listed, 'List available models shows the server models', listed)
+        began = time.time()
+        d.click('.settings-page button', 'Test actual response')
+        d.wait_for("!!document.querySelector('.settings-page .health-result')", d.options.turn_timeout, 'the live response', poll=0.25)
+        s.fact('test_actual_response_s', round(time.time() - began, 1))
+        s.fact('live_response', d.js("__acc.text('.settings-page .health-result')"))
+        s.check(any(e.get('kind') == 'result' for e in d.events[mark:]), 'Test actual response returned a real reply')
+        notice = d.js("__acc.text('.toast')") or ''
+        s.fact('notice', notice)
+        s.shots.append(d.shot('settings-live'))
+        d.open_page('Model', 'Model & connection')
+        card = d.js("__acc.text('section[aria-label=\"STAR Server\"]')") or ''
+        s.check('Status: ready' in card, 'the Model page knows the test passed', card)
+        d.open_chat()
+        s.check(not d.js("!!document.querySelector('.toast')"), 'the notice from Settings does not follow into the chat')
+        s.shots.append(d.shot('settings-live-chat'))
+    with d.step('small-window') as s:
+        d.shell.resize(920, 650)
+        d.pump(1.0)
+        s.fact('window', d.js('({w: innerWidth, h: innerHeight})'))
+        for name, heading in (('Settings', 'Settings'), ('Model', 'Model & connection')):
+            d.open_page(name, heading)
+            overflow = d.js(OVERFLOW_JS.strip()) or {}
+            s.check(overflow.get('scrollWidth', 0) <= overflow.get('innerWidth', 0) + 1 and not overflow.get('outside'),
+                    f'{name}: nothing is wider than the 920 px window', overflow)
+            s.shots.append(d.shot(f'small-{name.lower()}'))
+        d.open_chat()
+        overflow = d.js(OVERFLOW_JS.strip()) or {}
+        s.check(overflow.get('scrollWidth', 0) <= overflow.get('innerWidth', 0) + 1 and not overflow.get('outside'),
+                'Chat: nothing is wider than the 920 px window', overflow)
+        s.shots.append(d.shot('small-chat'))
+        d.shell.resize(1440, 900)
+        d.pump(0.8)
+    with d.step('sidebar-preference') as s:
+        d.click('.rail-icon[aria-label="Hide sidebar"]')
+        d.pump(0.5)
+        s.check(bool(d.js("!!document.querySelector('.shell.shell-sidebar-collapsed')")), 'Hide sidebar collapses the sidebar')
+        s.fact('note', 'the next phase checks whether the collapsed sidebar survives a restart')
+        s.shots.append(d.shot('sidebar-collapsed'))
+
+
+def step_wrong_key(d: Driver) -> None:
+    with d.step('sidebar-after-restart') as s:
+        collapsed = bool(d.js("!!document.querySelector('.shell.shell-sidebar-collapsed')"))
+        s.fact('collapsed_after_restart', collapsed)
+        s.check(collapsed, 'the collapsed sidebar survives a restart (the code says it does)',
+                known='the shell uses an off-the-record WebEngine profile, so localStorage is empty on every start')
+        if collapsed:
+            d.click('.bar-reveal[aria-label="Show sidebar"]')
+            d.pump(0.5)
+    with d.step('wrong-key-test') as s:
+        d.open_page('Model', 'Model & connection')
+        card = "section[aria-label=\"STAR Server\"]"
+        mark = len(d.events)
+        d.click(f'{card} button', 'Test server')
+        d.wait_for(f"!!document.querySelector('{card} [role=\"status\"]')", 120, 'the server report', poll=0.25)
+        d.pump(0.6)
+        text = d.js(f"__acc.text('{card} [role=\"status\"]')") or ''
+        s.fact('report_text', text)
+        result = next((e.get('data') for e in d.events[mark:] if e.get('kind') == 'result' and isinstance(e.get('data'), dict)), {}) or {}
+        s.check(result.get('code') == 'wrong_key', 'the host reports a refused key', result.get('code'))
+        s.check('refused the API key (401)' in text, 'the page explains that the server refused the key', text)
+        s.check(WRONG_KEY not in (d.js('document.documentElement.outerHTML') or ''), 'the key that was tried is not shown')
+        s.shots.append(d.shot('wrongkey-test'))
+        d.open_chat()
+        status = d.status()
+        s.fact('status', status)
+        s.check(status.get('state') == 'Needs attention', 'status light says Needs attention', status)
+    with d.step('wrong-key-send') as s:
+        before = read_messages(d.profile)
+        d.click('.rail-new')
+        d.wait_for("!!document.querySelector('.thread-hello')", 15, 'a new empty chat')
+        d.start_turn(s, PROMPT_FAIL, 'fast')
+        d.wait_for("!!document.querySelector('.msg-note.is-failed')", 120, 'the failure row', poll=0.05)
+        d.wait_idle(30)
+        shown = d.transcript()
+        last = shown[-1] if shown else {}
+        s.fact('row', last)
+        s.check(last.get('title') == 'The key or access was refused', 'the row has a calm title', last.get('title'))
+        s.check('refused the API key (401)' in last.get('text', ''), 'the message says the key was refused', last.get('text'))
+        s.check(last.get('buttons') == ['Model & connection', 'Retry', 'Edit message'], 'the row offers the three actions', last.get('buttons'))
+        new = read_messages(d.profile)[len(before):]
+        s.check([r['role'] for r in new] == ['user', 'event'] and new[1]['status'] == 'failed', 'SQLite has the failed record')
+        status = d.status()
+        s.fact('status_after', status)
+        s.check(status.get('state') == 'Access refused', 'status light says Access refused', status)
+        s.shots.append(d.shot('wrongkey-send'))
+
+
+def step_close_midstream(d: Driver) -> None:
+    with d.step('close-midstream') as s:
+        d.click('.rail-new')
+        d.wait_for("!!document.querySelector('.thread-hello')", 15, 'a new empty chat')
+        d.start_turn(s, PROMPT_LONG, 'fast')
+        d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
+        d.wait_for('__acc.stream.samples.length >= 5', 120, 'a few streamed updates', poll=0.1)
+        s.shots.append(d.shot('midclose-streaming'))
+        s.fact('note', 'the window is closed right after this step while the reply is still streaming')
+        s.check(d.busy(), 'a reply is streaming when the window is closed')
+
+
+def step_after_close(d: Driver) -> None:
+    with d.step('after-close') as s:
+        rows = read_messages(d.profile)
+        tail = rows[-2:]
+        s.fact('db_tail', [{k: (v if k != 'body' else v[:140]) for k, v in row.items()} for row in tail])
+        s.check(len(tail) == 2 and tail[0]['role'] == 'user' and tail[0]['body'] == PROMPT_LONG,
+                'the message sent before the window was closed is stored')
+        s.check(len(tail) == 2 and tail[1]['role'] == 'event' and tail[1]['status'] == 'cancelled',
+                'closing the window recorded the turn as stopped', tail[-1]['role'] + '/' + tail[-1]['status'])
+        shown = d.transcript()
+        last = shown[-1] if shown else {}
+        s.fact('row', last)
+        s.check(last.get('status') == 'cancelled' and 'Retry' in last.get('buttons', []),
+                'after the relaunch the turn is shown as stopped, with Retry', last)
+        title = d.js("__acc.text('.bar-title h1')") or ''
+        s.fact('title', title)
+        s.check(len(PROMPT_LONG) > 64 and title.endswith('\u2026') and PROMPT_LONG.startswith(title[:-1]),
+                'a long first message gives a chat title that ends with an ellipsis', title)
+        s.shots.append(d.shot('afterclose'))
+
+
+def step_upgrade(d: Driver) -> None:
+    with d.step('upgrade-history') as s:
+        shown = d.transcript()
+        s.fact('shown', [{'role': t['role'], 'text': t['text'][:80]} for t in shown])
+        s.check([(t['role'], ' '.join(t['text'].split())) for t in shown] ==
+                [(role, ' '.join(body.split())) for role, body in RELEASED_MESSAGES],
+                'every message of the old conversation is shown, in order')
+        chats = d.js("[...document.querySelectorAll('.rail-chats .rail-chat')].map(b => b.innerText.trim())") or []
+        s.check(chats == ['Previous conversation'], 'the old conversation is listed as "Previous conversation"', chats)
+        rows = read_messages(d.profile)
+        s.check([(r['id'], r['role'], r['body'], r['created']) for r in rows] ==
+                [(index + 1, role, body, f'2026-09-0{index + 1}T10:00:00+00:00') for index, (role, body) in enumerate(RELEASED_MESSAGES)],
+                'the stored rows are byte-for-byte what the old app wrote')
+        s.check(all(r['chat_id'] == 'legacy' and r['status'] == 'complete' and r['reply_to'] is None for r in rows),
+                'the new columns were added with neutral values')
+        settings = d.settings_file()
+        s.check(settings.get('model') == 'released-local-model' and 'provider' not in settings,
+                'opening the app did not rewrite settings.json', sorted(settings)[:6])
+        s.shots.append(d.shot('upgrade'))
+    with d.step('upgrade-model-page') as s:
+        d.open_page('Model', 'Model & connection')
+        text = d.js("__acc.text('.page-stage')") or ''
+        s.fact('text', text)
+        s.check('This PC' in text and 'released-local-model' in text, 'the Model page shows the on-device provider and the saved model')
+        s.check('STAR Server' not in text.replace('Connection settings', ''), 'nothing on the page claims a STAR Server is in use', text[:300])
+        s.check('Model on this PC' in text, 'the on-device model card is shown, not folded away')
+        s.shots.append(d.shot('upgrade-model'))
+        d.open_page('Settings', 'Settings')
+        heading = d.js("__acc.text('.settings-page .settings-section h2')") or ''
+        s.check(heading == 'Local model', 'Settings names the model section for the model on this PC', heading)
+        s.check(d.js("document.querySelector('.settings-page select').value") == 'local', 'the provider menu shows the on-device provider')
+        s.shots.append(d.shot('upgrade-settings'))
+        d.open_chat()
+    with d.step('upgrade-send') as s:
+        before = read_messages(d.profile)
+        d.start_turn(s, PROMPT_FAIL, 'fast')
+        d.wait_for("!!document.querySelector('.msg-note.is-failed')", 120, 'the failure row', poll=0.05)
+        d.wait_idle(30)
+        last = (d.transcript() or [{}])[-1]
+        s.fact('row', last)
+        s.check(last.get('status') == 'failed' and last.get('title') == "Can't reach the model", 'the engine not running is a calm failure row', last)
+        s.check('STAR Server' not in last.get('text', ''), 'the message does not mention a server the owner never set up', last.get('text'))
+        s.check('Brain tab' not in last.get('text', ''), 'the message does not point at a page that no longer exists',
+                last.get('text'), known='local-provider messages still say "Start it in the Brain tab"; the page is now "Model & connection"')
+        new = read_messages(d.profile)[len(before):]
+        s.check([r['role'] for r in new] == ['user', 'event'] and new[1]['status'] == 'failed' and new[0]['chat_id'] == 'legacy',
+                'the new turn and its failed record went into the same old conversation')
+        s.check(read_messages(d.profile)[:len(before)] == before, 'the old rows are still unchanged after a new turn')
+        s.shots.append(d.shot('upgrade-send'))
+
+
+def run_phase(d: Driver) -> None:
+    phase = d.phase
+    step_boot(d, expect_history=phase != 'first')
+    if phase == 'first':
+        step_model_page(d)
+        step_fast_send(d)
+        step_stop(d)
+        step_failure(d)
+    elif phase == 'restart':
+        step_restart_history(d)
+        step_restart_retry(d)
+    elif phase == 'agent':
+        step_agent(d)
+    elif phase == 'pages':
+        step_pages(d)
+    elif phase == 'wrongkey':
+        step_wrong_key(d)
+    elif phase == 'midclose':
+        step_close_midstream(d)
+    elif phase == 'afterclose':
+        step_after_close(d)
+    elif phase == 'upgrade':
+        step_upgrade(d)
+
+
+# ---------------------------------------------------------------------- child
+def child_main(options) -> int:
+    python_main = time.time()
+    with contextlib.suppress(Exception):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    profile = os.environ.get('APPDATA', '')
+    if not is_acceptance_profile(profile):
+        print('REFUSED: APPDATA is not a profile made by this tool; the owner\'s data is never used.')
+        return 3
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from star.desktop_core import app_data
+    if app_data().resolve() != (Path(profile) / 'STAR').resolve():
+        print('REFUSED: the app would not store its data in the acceptance profile.')
+        return 3
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication, QMainWindow
+    from star import react_shell
+
+    app = QApplication(sys.argv[:1])
+    state: dict = {'driver': None, 'closed_at': 0.0, 'forced_quit': False}
+    qt_app = time.time()
+
+    def drive():
+        shell = next((w for w in app.topLevelWidgets()
+                      if isinstance(w, QMainWindow) and hasattr(w, 'bridge') and hasattr(w, 'view')), None)
+        if shell is None:
+            print('FAILED: react_shell.launch() created no window')
+            app.exit(4)
+            return
+        driver = state['driver'] = Driver(app, shell, options)
+        driver.marks.update(python_main=python_main, qt_app=qt_app, shell_found=time.time())
+        driver.install_hooks()
+        try:
+            run_phase(driver)
+        except Exception:
+            driver.python_errors.append('harness: ' + traceback.format_exc()[-2000:])
+        finally:
+            driver.save()
+            state['closed_at'] = time.time()
+            shell.close()  # what the owner does; the app must end by itself
+
+            def force():
+                state['forced_quit'] = True
+                app.quit()
+            QTimer.singleShot(20000, force)
+
+    QTimer.singleShot(0, drive)
+    code = react_shell.launch()  # the real entry point: builds the window and runs the event loop
+    driver = state['driver']
+    if driver is None:
+        return 4
+    out = Path(options.evidence) / f'{options.child}.json'
+    report = json.loads(out.read_text(encoding='utf-8'))
+    report['exit'] = {'app_exec_code': code, 'forced_quit': state['forced_quit'],
+                      'close_to_loop_end_s': round(time.time() - state['closed_at'], 2),
+                      'loop_ended_at': time.time()}
+    report['python_errors'] = [scrub(e, driver.real_key) for e in driver.python_errors]
+    report['qt_messages'] = driver.qt_messages
+    out.write_text(json.dumps(report, indent=1, default=str), encoding='utf-8')
+    failed = any(step['status'] == 'FAIL' for step in report['steps'])
+    return 1 if failed else 0
+
+
+# --------------------------------------------------------------------- parent
+def child_environment(profile: Path, key: str, real_key: str) -> dict:
+    env = dict(os.environ)
+    env.update({
+        'APPDATA': str(profile),
+        ENV_KEY: key,
+        'STAR_ACCEPTANCE_REAL_KEY': real_key,                       # only to detect leaks; never sent anywhere
+        'PYTHON_KEYRING_BACKEND': 'keyring.backends.null.Keyring',  # never the owner's credential vault
+        'PYTHONDONTWRITEBYTECODE': '1',
+        'PYTHONUNBUFFERED': '1',
+        'PYTHONUTF8': '1',
+    })
+    return env
+
+
+def parent_main(options) -> int:
+    if options.key_file:
+        os.environ[ENV_KEY] = Path(options.key_file).expanduser().read_text(encoding='utf-8').strip()
+    reason = skip_reason()
+    if reason:
+        print('SKIPPED: ' + reason)
+        return 0
+    key = os.environ[ENV_KEY].strip()
+    endpoint, model = os.environ[ENV_SERVER].strip(), os.environ[ENV_MODEL].strip()
+    phases = [p.strip() for p in (options.phases or ','.join(PHASES)).split(',') if p.strip()]
+    unknown = [p for p in phases if p not in PHASES]
+    if unknown:
+        print('Unknown phase: ' + ', '.join(unknown))
+        return 2
+    evidence = Path(options.evidence or tempfile.mkdtemp(prefix='star-shell-acceptance-')).resolve()
+    evidence.mkdir(parents=True, exist_ok=True)
+    shots = Path(options.shots).resolve() if options.shots else evidence / 'screenshots'
+    if options.profile:
+        profile = Path(options.profile).resolve()
+        if not is_acceptance_profile(profile):
+            print('REFUSED: --profile must be a folder this tool created earlier.')
+            return 3
+    else:
+        profile = new_profile(evidence)
+        os.environ['APPDATA'] = str(profile)
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from star.desktop_core import Settings
+        # The app's own class and save path, so its validation decides whether this address is acceptable.
+        Settings(provider='star_server', server_endpoint=endpoint, model=model).save(profile / 'STAR' / 'settings.json')
+    dead = closed_loopback_endpoint()
+    print(f'evidence: {evidence}\nprofile:  {profile}\nshots:    {shots}\nserver:   {endpoint} ({model})\n'
+          f'window:   {"offscreen (no real window)" if options.offscreen else "real window"}', flush=True)
+    steps: list[dict] = []
+    summary = {'phases': {}, 'evidence': str(evidence), 'profile': str(profile), 'offscreen': bool(options.offscreen)}
+    for phase in phases:
+        phase_profile = profile
+        if phase == 'upgrade':
+            phase_profile = new_profile(evidence)
+            seed_released_profile(phase_profile, dead)
+        env = child_environment(phase_profile, WRONG_KEY if phase == 'wrongkey' else key, key)
+        if options.offscreen:
+            env['QT_QPA_PLATFORM'] = 'offscreen'
+        log = evidence / f'{phase}.log'
+        command = [sys.executable, str(Path(__file__).resolve()), '--child', phase, '--evidence', str(evidence),
+                   '--shots', str(shots), '--dead-endpoint', dead, '--spawned-at', repr(time.time()),
+                   '--turn-timeout', str(options.turn_timeout), '--agent-timeout', str(options.agent_timeout)]
+        print(f'\n=== phase {phase}', flush=True)
+        began = time.time()
+        with log.open('w', encoding='utf-8') as sink:
+            process = subprocess.Popen(command, env=env, stdout=sink, stderr=subprocess.STDOUT, cwd=str(ROOT))
+            try:
+                code = process.wait(timeout=options.phase_timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                code = -9
+        ended = time.time()
+        text = log.read_text(encoding='utf-8', errors='replace')
+        leaked = key in text
+        if leaked:
+            log.write_text(scrub(text, key), encoding='utf-8')
+        print(scrub(text, key).rstrip()[-6000:], flush=True)
+        result_file = evidence / f'{phase}.json'
+        report = json.loads(result_file.read_text(encoding='utf-8')) if result_file.is_file() else {'steps': []}
+        info = {'exit_code': code, 'seconds': round(ended - began, 1), 'log_has_traceback': 'Traceback (most recent call last)' in text,
+                'key_in_log': leaked, 'leaks': report.get('leaks', []), 'python_errors': len(report.get('python_errors', [])),
+                'console_errors': sum(1 for c in report.get('console', []) if 'Error' in c.get('level', '')),
+                'page_errors': len(report.get('page_errors', [])), 'crashed': report.get('crashed', '')}
+        loop_end = (report.get('exit') or {}).get('loop_ended_at')
+        if loop_end:
+            info['window_close_to_process_exit_s'] = round(ended - loop_end + (report['exit'].get('close_to_loop_end_s') or 0), 2)
+            info['forced_quit'] = report['exit'].get('forced_quit')
+        summary['phases'][phase] = info
+        steps.extend(report.get('steps', []))
+        if not report.get('steps'):
+            steps.append({'phase': phase, 'name': '(phase)', 'status': 'FAIL', 'seconds': info['seconds'],
+                          'error': f'the phase produced no result (exit code {code})', 'checks': []})
+        hygiene = {'phase': phase, 'name': 'errors-and-exit', 'seconds': 0, 'error': '', 'facts': info, 'shots': [], 'checks': [
+            {'ok': code in (0, 1), 'label': 'the app process ended by itself', 'detail': f'exit code {code}'},
+            {'ok': not info.get('forced_quit'), 'label': 'closing the window ended the app without help', 'detail': ''},
+            {'ok': not leaked and not info['leaks'], 'label': 'the server key never appeared in a log or bridge event', 'detail': str(info['leaks'])},
+            {'ok': info['python_errors'] == 0 and not info['log_has_traceback'], 'label': 'no Python exception', 'detail': f'{info["python_errors"]} recorded'},
+            {'ok': info['console_errors'] == 0 and info['page_errors'] == 0, 'label': 'no JavaScript console error',
+             'detail': f'{info["console_errors"]} console, {info["page_errors"]} page'},
+            {'ok': not info['crashed'], 'label': 'the render process did not crash', 'detail': info['crashed']},
+        ]}
+        hygiene['status'] = 'PASS' if all(c['ok'] for c in hygiene['checks']) else 'FAIL'
+        steps.append(hygiene)
+    summary['steps'] = steps
+    (evidence / 'report.json').write_text(scrub(json.dumps(summary, indent=1, default=str), key), encoding='utf-8')
+    table = format_table(steps)
+    (evidence / 'report.txt').write_text(table + '\n', encoding='utf-8')
+    print('\n' + table, flush=True)
+    failed = [s for s in steps if s['status'] == 'FAIL']
+    print(f'\n{len(steps) - len(failed)} passed, {len(failed)} failed. Evidence: {evidence}', flush=True)
+    return 1 if failed else 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description='Real-shell acceptance run of STAR Desktop against a STAR Server.')
+    parser.add_argument('--phases', help='comma-separated subset of: ' + ', '.join(PHASES))
+    parser.add_argument('--key-file', help=f'read the server key from this file into {ENV_KEY} (never printed)')
+    parser.add_argument('--evidence', help='folder for logs, JSON results and the temporary profile (default: a new temp folder)')
+    parser.add_argument('--shots', help='folder for shell-<step>.png screenshots (default: <evidence>/screenshots)')
+    parser.add_argument('--profile', help='reuse a profile folder made by an earlier run (to repeat single phases)')
+    parser.add_argument('--offscreen', action='store_true', help='run Qt offscreen instead of showing a real window')
+    parser.add_argument('--turn-timeout', type=float, default=900.0, help='seconds to wait for one plain reply')
+    parser.add_argument('--agent-timeout', type=float, default=2400.0, help='seconds to wait for the Agent turn')
+    parser.add_argument('--phase-timeout', type=float, default=3600.0, help='seconds before a phase process is killed')
+    parser.add_argument('--child', choices=PHASES, help=argparse.SUPPRESS)
+    parser.add_argument('--dead-endpoint', help=argparse.SUPPRESS)
+    parser.add_argument('--spawned-at', help=argparse.SUPPRESS)
+    return parser
+
+
+def main(argv=None) -> int:
+    options = build_parser().parse_args(argv)
+    return child_main(options) if options.child else parent_main(options)
+
+
+if __name__ == '__main__':
+    sys.exit(main())
