@@ -119,6 +119,9 @@ describe('activity timeline is driven only by backend events', () => {
 
   it('never shows an unknown tool name as a friendly claim', () => {
     expect(toolLabel('star_web_search')).toBe('Searching the web')
+    // Listing the catalogue loads no skill; the row must say what really ran.
+    expect(toolLabel('star_skill_catalog')).toBe('Listing Agent Skills')
+    expect(toolLabel('star_skill_load')).toBe('Loading an Agent Skill')
     expect(toolLabel('SomeStudioTool')).toBe('Using a tool')
     expect(toolLabel(undefined)).toBe('Using a tool')
   })

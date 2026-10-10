@@ -107,6 +107,7 @@ export function toolLabel(name?: string): string {
   if (name.startsWith('star_delegate')) return 'Briefing specialists'
   if (name.startsWith('star_mcp_')) return 'Using a connected MCP tool'
   if (name.startsWith('star_toolforge_')) return 'Running a reviewed custom tool'
+  if (name === 'star_skill_catalog') return 'Listing Agent Skills'
   if (name.startsWith('star_skill_')) return 'Loading an Agent Skill'
   if (name.startsWith('star_obsidian_')) return 'Reading your Obsidian notes'
   if (name.startsWith('star_graphify_')) return 'Querying the code graph'
