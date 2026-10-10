@@ -18,6 +18,8 @@ from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
 from .mcp_connections import MCPGateway
+from .tool_workshop import ToolWorkshop
+from .specialist_agents import ResearchTeam
 from .providers import PROVIDERS, connection_for
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
@@ -60,6 +62,9 @@ class Settings:
     skills_enabled: bool = True
     graphify_enabled: bool = True
     roblox_research_enabled: bool = True
+    tool_workshop_enabled: bool = True
+    specialists_enabled: bool = True
+    specialist_parallelism: int = 1
     mcp_graphify_docs: bool = False
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
@@ -87,7 +92,8 @@ class Settings:
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
-                            'roblox_research_enabled')):
+                            'roblox_research_enabled', 'tool_workshop_enabled',
+                            'specialists_enabled')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -95,6 +101,8 @@ class Settings:
             raise ValueError('Select an Obsidian vault before enabling read access')
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
+        if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1,2):
+            raise ValueError('Limit specialists to 1 or 2 concurrent model calls')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
         if self.studio_edit and not self.studio_id.strip():
@@ -342,6 +350,15 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
     requests_action = any(x in text for x in actions)
     if explicit_mcp:
         return True
+    # Public Roblox game research is an explicit request for source-backed
+    # information, not a Studio edit; load read-only tools when relevant.
+    if (re.search(r'\b(?:roblox|luau|devforum)\b', text)
+            and re.search(r'\b(?:games?|experiences?|visits|statistics|stats|playing|'
+                          r'popular|compare|research|search|news|apis?|forums?|trends?)\b', text)):
+        return True
+    if (re.search(r'\b(?:create|propose|build|make|design)\b', text)
+            and re.search(r'\b(?:custom|research|my|new|own)\s+tools?\b', text)):
+        return True
     if not requests_action:
         return False
     if any(x in text for x in scopes):
@@ -388,6 +405,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory = Memory(home / 'checkpoints.sqlite3')
     memory_scope = settings.project if chat_id in (None, 'legacy') else settings.project + '::chat::' + chat_id
     knowledge = KnowledgeStore(home / 'knowledge')
+    workshop = None
     try:
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
@@ -423,6 +441,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         use_tools = route.use_tools
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
+        if use_tools and settings.tool_workshop_enabled:
+            workshop = ToolWorkshop(home=home,project=settings.project,knowledge=knowledge,
+                                    workspace=workspace,intelligence=intelligence)
         allow_studio = bool(use_tools and settings.studio_id)
         mcp_gateway = MCPGateway(settings) if use_tools else None
         endpoint, key = connection_for(settings)
@@ -438,6 +459,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'search_finished'})
             timeout = httpx.Timeout(95.0 if settings.provider == 'local' else 55.0, connect=8.0)
             async with AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0) as client:
+                specialists = (ResearchTeam(
+                    client=client,model=route.subagent_model,project=settings.project,
+                    knowledge=knowledge,workspace=workspace,intelligence=intelligence,
+                    parallelism=settings.specialist_parallelism,on_event=audited_event
+                ) if use_tools and settings.specialists_enabled else None)
                 memory_context = (memory.get(memory_scope) + '\nREVIEWED KNOWLEDGE:\n' + notes
                     + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)
                 if quick:
@@ -458,7 +484,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=(1 if settings.provider == 'local' else 2),
                               github_enabled=bool(mode == 'agent' and github_enabled),
-                              intelligence=intelligence, mcp_gateway=mcp_gateway)
+                              intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              tool_workshop=workshop, specialists=specialists)
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
@@ -504,6 +531,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                        detail=type(exc).__name__)
         raise
     finally:
+        if workshop is not None:
+            workshop.close()
         knowledge.close()
         memory.close()
         metrics.close()
