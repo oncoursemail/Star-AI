@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 import re
 from time import monotonic
 
-from .brain_router import NO_GROUNDING, GroundingPlan, followup_grounding
+from .brain_router import NO_GROUNDING, GroundingPlan, followup_grounding, retrieval_query
 from .doc_knowledge import KnowledgeClient, client_for
 
 REFERENCE_OPEN = "<<<UNTRUSTED_REFERENCE_DATA kind=official-documentation>>>"
@@ -124,7 +124,7 @@ def _retrieve(client: KnowledgeClient, plan: GroundingPlan, query: str) -> list[
                                  "retrieved_at": hit.get("retrieved_at", ""), "text": hit["text"]})
     if len(passages) < plan.passages:
         seen = {p["url"] for p in passages if p["url"]}
-        for hit in client.search(query, top=min(10, plan.passages + len(passages))):
+        for hit in client.search(retrieval_query(query), top=min(10, plan.passages + len(passages))):
             if len(passages) >= plan.passages:
                 break
             if hit["url"] and hit["url"] in seen:

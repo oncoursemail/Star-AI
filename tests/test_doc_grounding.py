@@ -8,7 +8,7 @@ import pytest
 
 from star import desktop_core, doc_grounding
 from star.brain_router import (GROUNDING_BUDGET, NO_GROUNDING, GroundingPlan, followup_grounding, grounding_plan,
-                               select_route)
+                               retrieval_query, select_route)
 from star.desktop_core import Settings, run_task
 from star.doc_grounding import (CHECK_MARKER, REFERENCE_CLOSE, REFERENCE_OPEN, SOURCES_MARKER, Grounding,
                                 cited_numbers, finalize, luau_blocks, prepare, reference_block, review_luau,
@@ -120,6 +120,32 @@ def test_follow_up_to_a_roblox_question_reuses_the_earlier_turn_as_the_query():
     assert followup_grounding("and how do I reverse it?", ["What is the capital of France?"]) == (NO_GROUNDING, "")
     assert followup_grounding("thanks", ["How do I tween a part in Roblox?"]) == (NO_GROUNDING, "")
     assert followup_grounding("Tell me a long story about dragons", ["Roblox tween?"]) == (NO_GROUNDING, "")
+
+
+@pytest.mark.parametrize("prompt, query", [
+    ("Write a short Luau server script for Roblox that tweens a Part named Door in workspace 10 studs up over "
+     "2 seconds. Give only the code block and one sentence.",
+     "tweens a Part named Door in workspace 10 studs up over 2 seconds."),
+    ("In Roblox, what does TweenService:Create return and which arguments does it take? Answer in at most 3 "
+     "sentences.", "In Roblox, what does TweenService:Create return and which arguments does it take?"),
+    ("Can you write me a Luau function that safely reads a player's coins from a DataStore with pcall? "
+     "Keep it short.", "safely reads a player's coins from a DataStore with pcall?"),
+    ("How do I tween a part in Roblox?", "How do I tween a part in Roblox?"),          # nothing to remove
+    ("Make a leaderboard", "Make a leaderboard"),                                        # no lead-in noun
+    ("Use bullet points.", "Use bullet points."),                                        # nothing else left
+    ("Write a script that works. Be concise.", "Write a script that works. Be concise."),  # too little left
+])
+def test_the_search_query_drops_formatting_instructions_and_the_lead_in(prompt, query):
+    assert retrieval_query(prompt) == query
+    assert len(retrieval_query("word " * 400)) <= 600 and retrieval_query(None) == ""
+
+
+def test_prepare_searches_with_the_distilled_query_but_the_model_sees_the_whole_prompt():
+    knowledge = FakeKnowledge()
+    prompt = ("Write a short Luau server script for Roblox that tweens a Part named Door 10 studs up. "
+              "Give only the code block and one sentence.")
+    found = prepare(Settings(model="m"), route_for(prompt), prompt, [], None, client=knowledge)
+    assert knowledge.searches == [("tweens a Part named Door 10 studs up.", 4)] and found.query == prompt
 
 
 # --- untrusted-data delimiting ----------------------------------------------------------------

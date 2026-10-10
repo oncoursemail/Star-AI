@@ -136,6 +136,39 @@ def grounding_plan(prompt: str, *, mode: str = "auto", image_count: int = 0, res
                          symbols=symbols, reasons=tuple(reasons))
 
 
+# Sentences that only say how to format the answer ("Give only the code block and one sentence.").
+_FORMAT_ONLY = re.compile(
+    r"\b(?:code\s+blocks?|sentences?|bullet(?:s|\s+points?)?|paragraphs?|only\s+the\s+code|"
+    r"(?:at\s+most|under|in|within|no\s+more\s+than)\s+\d+\s+(?:lines?|words)|"
+    r"(?:keep|make)\s+it\s+(?:short|brief|concise|simple)|be\s+(?:brief|concise)|step\s+by\s+step)\b",
+    re.IGNORECASE,
+)
+# "Write a short Luau server script for Roblox that ..." -> what follows "that".
+_LEAD_IN = re.compile(
+    r"^\s*(?:please\s+)?(?:(?:can|could|would)\s+you\s+)?"
+    r"(?:write|make|create|build|generate|implement|code|give\s+me|show\s+me)\s+(?:me\s+)?"
+    r"(?:an?\s+|the\s+|some\s+)?(?:[a-z-]+\s+){0,5}?(?:scripts?|functions?|code|snippet|example|module|system)\s+"
+    r"(?:(?:for|in)\s+roblox\s+)?(?:that|which|to|for)\s+",
+    re.IGNORECASE,
+)
+
+
+def retrieval_query(prompt: str) -> str:
+    """The part of a prompt worth searching the documentation for.
+
+    Formatting instructions and the "write a short script that" lead-in say nothing about the
+    topic, and they pull a search towards generic "how to script" pages. Pure string work; the
+    original prompt is returned whenever too little would be left.
+    """
+    if not isinstance(prompt, str):
+        return ""
+    text = prompt.strip()
+    parts = [part.strip() for part in re.split(r"(?<=[.?!:])\s+|\n+", text) if part.strip()]
+    kept = [part for part in parts if not _FORMAT_ONLY.search(part)] or parts
+    query = _LEAD_IN.sub("", " ".join(kept), count=1).strip()
+    return (query if len(query.split()) >= 3 else text)[:600]
+
+
 def followup_grounding(prompt: str, prior_user_turns: list[str] | None, *, mode: str = "auto"
                        ) -> tuple[GroundingPlan, str]:
     """A short referential follow-up ("and how do I reverse it?") to a Roblox question.
