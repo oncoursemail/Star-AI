@@ -1,4 +1,4 @@
-# ✦ STAR Intelligence — Genesis v0.8.0
+# ✦ STAR Intelligence — Genesis v0.8.1
 
 **A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
@@ -6,7 +6,7 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status:** v0.8.0 is the candidate source version on the feature branch; it is **not** a published installer. The latest publicly verified downloadable installer is v0.6.1 until the Windows release publisher succeeds. See the [v0.8 release gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
+> **Shipping status:** **STAR Genesis v0.8.0 was published as a public Windows release**, including Setup, portable ZIP and SHA-256 manifest. This v0.8.1 branch is a *maintenance release candidate* (compatible dependency updates and Node 24 GitHub Actions); its new installer is not public until the Windows publisher succeeds. See the [release/Windows QA gate](docs/STAR_V08_RELEASE_GATE.md) and [React/local AI research](docs/STAR_V08_REACT_AI_RESEARCH.md).
 
 ## Download / Updates
 
@@ -14,7 +14,7 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**, so downloads work without a GitHub account, GitHub CLI or a special public mirror. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the upcoming v0.8 release candidate), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
-### v0.8 local AI and UI upgrades (candidate only)
+### STAR v0.8 AI and UI improvements
 
 - **Qwen/llama.cpp 500 repair:** one first system message per request, including memory compaction; a real completion-based model health test.
 - **Streaming local chat:** progressively renders text for basic conversations; complete protocol responses remain for authorized tool calls.
