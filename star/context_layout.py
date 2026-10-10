@@ -104,7 +104,9 @@ def conversation_window(rows, *, budget_chars: int) -> list[dict]:
     every turn and defeat the server's prompt cache. Instead the conversation is
     cut into segments of half the budget, measured in characters from the first
     message of the chat, and the window is the current segment plus the one
-    before it. So it holds between about half the budget and the whole budget,
+    before it, starting at the first exchange that begins inside it. So it
+    holds at most the budget and at least half the budget minus one exchange
+    (with 1600-character exchanges in a 6000 budget: one to three exchanges),
     it only moves when the conversation grows into a new segment (never back),
     and between two moves each request's history is the previous request's
     history plus the newest exchange.
