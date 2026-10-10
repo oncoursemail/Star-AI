@@ -342,3 +342,24 @@ def test_expanded_agent_skill_pack_is_nonexecuting_and_source_disclosed(tmp_path
         assert skill["source"] == "personal"
         assert len(skill["instructions"]) > 50
         assert "no additional permissions" in skill["notice"].lower()
+
+
+def test_approved_custom_tool_is_relevant_without_always_on_schemas(tmp_path):
+    workshop, knowledge, _ = _resources(tmp_path)
+    try:
+        proposal = workshop.propose(
+            "valen-inventory-review",
+            "Check VALEN inventory scripts and approved design decisions",
+            [{"source": "knowledge"}, {"source": "workspace"}])
+        ident = proposal["id"]
+        assert workshop.run(ident, "evergreen inventory", preview=True)["ok"]
+        workshop.approve(ident)
+        assert workshop.definitions("Hello there") == []
+        exposed = {entry["name"] for entry in workshop.definitions(
+            "Explain the VALEN inventory architecture")}
+        assert exposed == {"star_toolforge_list", "star_toolforge_run"}
+        assert "star_toolforge_propose" not in exposed
+        assert workshop.definitions("Create a new custom research tool")
+    finally:
+        workshop.close()
+        knowledge.close()
