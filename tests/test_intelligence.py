@@ -81,6 +81,11 @@ def test_obsidian_local_search_list_and_read(tmp_path):
     hit = obs.search("evergreen trees")
     assert hit["notes"][0]["path"] == "VALEN.md"
     assert "evergreen" in obs.read("VALEN.md")["content"]
+    page = obs.read("VALEN.md", start_line=2, max_lines=1)
+    assert page["total_lines"] == 2 and page["end_line"] == 2
+    assert "evergreen" in page["content"]
+    with pytest.raises(ValueError):
+        obs.read("VALEN.md", start_line=3)
     with pytest.raises(PermissionError):
         obs.read(".obsidian/config.md")
     with pytest.raises(PermissionError):
