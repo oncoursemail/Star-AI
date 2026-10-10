@@ -182,6 +182,27 @@
 }
 
 
+.composer-feature{display:inline-flex;align-items:center;gap:6px;border:1px solid transparent;border-radius:8px;background:transparent;color:#a5b0ae;font-size:11px;font-weight:650;padding:7px 8px;cursor:pointer;white-space:nowrap}
+.composer-feature:hover{border-color:#4a4437;color:#e5d0a3;background:#1e211f}
+.composer-feature.feature-active{color:#e8c88c;border-color:#615133;background:#29251c}
+.composer-feature:disabled{opacity:.45;cursor:not-allowed}
+.mode-picker select{border:1px solid #393f3b;border-radius:8px;background:#1d211f;color:#c1c9c4;font:inherit;font-size:11px;padding:7px 5px;max-width:84px}
+.provider-credential{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 15px;border:1px solid #323735;border-radius:11px;background:#171a19;margin:16px 0}
+.provider-credential>div{display:flex;flex-direction:column;gap:6px}
+.provider-credential strong{font-size:12px;color:#eee}
+.provider-credential small{font-size:10px;color:#8e9692}
+.credential-row{display:flex;flex-wrap:wrap;align-items:center;gap:9px;margin-bottom:12px}
+.credential-row>input{background:#141818;border:1px solid #414745;border-radius:9px;color:#f0efea;font-size:12px;padding:11px;min-width:170px;flex:1;outline:none}
+.credential-row>input:focus{border-color:#a88a52}
+.generated-figure{margin:14px 0 8px;width:min(100%,580px);border:1px solid #303833;border-radius:13px;overflow:hidden;background:#111514}
+.generated-figure img{display:block;width:100%;height:auto;max-height:540px;object-fit:contain}
+.generated-figure figcaption{font-size:10px;color:#959e9b;padding:9px 12px;border-top:1px solid #28302c}
+@media(max-width:900px){.composer-left{flex-wrap:wrap;gap:5px}.composer-feature{padding:6px}.composer-hint .privacy{display:none}}
+@media(max-width:520px){.composer-feature{font-size:0;gap:0}.composer-feature svg{height:17px;width:17px}.mode-picker select{font-size:10px;width:65px}.credential-row{align-items:stretch;flex-direction:column}.credential-row>input{width:100%;min-width:0}}
+
+.send-button.send-stop{background:#292b2a;color:#e3e8e5;border:1px solid #535b58}
+.send-button.send-stop:hover{background:#393d3b;color:#fff}
+
 /* STAR Intelligence: quiet, responsive tool integration cards. */
 .intelligence-heading{margin:24px 0 16px;display:flex;align-items:flex-end;gap:16px}
 .intelligence-heading .eyebrow{display:block;margin-bottom:8px}
@@ -199,3 +220,10 @@
 @media(max-width:1120px){.intelligence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:710px){.intelligence-grid{grid-template-columns:minmax(0,1fr)}.intelligence-folder-row{align-items:stretch;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.integration-panel *{scroll-behavior:auto}}
+
+/* User-controlled review bundle — secondary by design, never a marketing callout. */
+.star-review-panel .review-export-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin:16px 0 12px}
+.star-review-panel .review-export-actions>span{font-size:11px;color:#85918b;line-height:1.5}
+.star-review-panel .setting-switch{border-bottom:1px solid #292e2b;padding-bottom:16px}
+.star-review-panel .secondary-button{white-space:nowrap}
+@media(max-width:560px){.star-review-panel .review-export-actions{align-items:stretch;flex-direction:column}.star-review-panel .review-export-actions .secondary-button{justify-content:center}}

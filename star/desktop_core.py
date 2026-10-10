@@ -17,6 +17,7 @@ from .media import image_part
 from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .providers import PROVIDERS, connection_for
 
 
 def app_data() -> Path:
@@ -30,6 +31,7 @@ def app_data() -> Path:
 @dataclass
 class Settings:
     endpoint: str = 'http://127.0.0.1:1234/v1'
+    provider: str = 'local'
     model: str = ''
     project: str = 'STAR'
     workspace: str = ''
@@ -42,6 +44,9 @@ class Settings:
     gguf_model: str = ''
     gpu_layers: int = 25
     reduced_motion: bool = False
+    comfy_workflow: str = ''
+    comfy_prompt_node: str = '6'
+    comfy_port: int = 8188
     obsidian_vault: str = ''
     obsidian_enabled: bool = False
     skills_enabled: bool = True
@@ -55,6 +60,8 @@ class Settings:
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     def validate(self):
+        if self.provider != 'local' and self.provider not in PROVIDERS:
+            raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
             raise ValueError('Use a loopback local inference URL ending in /v1')
         port = int(self.endpoint.split(':')[-1].split('/')[0])
@@ -62,8 +69,6 @@ class Settings:
             raise ValueError('Invalid local inference port')
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
-        if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
-            raise ValueError('Choose an existing workspace directory')
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled')):
             raise ValueError('Tool access settings must be true or false')
@@ -71,8 +76,12 @@ class Settings:
             raise ValueError('Obsidian vault must be an existing folder')
         if self.obsidian_enabled and not self.obsidian_vault:
             raise ValueError('Select an Obsidian vault before enabling read access')
+        if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
+            raise ValueError('Choose an existing workspace directory')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
+        if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
+            raise ValueError('Invalid local image generation configuration')
         if not 0 <= self.gpu_layers <= 1000:
             raise ValueError('GPU layers must be between 0 and 1000')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
@@ -124,8 +133,9 @@ def recent_context(recent: list[tuple[str, str, str]], current_prompt: str) -> s
 def query_models(settings: Settings) -> list[str]:
     settings.validate()
     import httpx
+    endpoint, key = connection_for(settings)
     with httpx.Client(timeout=8, trust_env=False) as client:
-        response = client.get(settings.endpoint.rstrip('/') + '/models')
+        response = client.get(endpoint.rstrip('/') + '/models', headers={'Authorization': f'Bearer {key}'})
         response.raise_for_status()
         data = response.json()
         return [str(item['id']) for item in data.get('data', []) if isinstance(item, dict) and item.get('id')]
@@ -154,14 +164,26 @@ def redact_for_logs(value):
     return value
 
 
+def needs_project_tools(prompt: str) -> bool:
+    """Avoid loading expensive Studio/MCP tools for ordinary knowledge chat."""
+    text = prompt.lower()
+    mentions_project = any(term in text for term in ('studio', 'roblox', 'workspace', 'my project',
+        'my game', 'my files', 'project folder', 'current place'))
+    requests_action = any(term in text for term in ('inspect', 'modify', 'edit', 'read ', 'fix ',
+        'create ', 'build ', 'implement', 'open ', 'scan ', 'add ', 'remove ', 'delete ', 'test '))
+    return mentions_project and requests_action
+
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
-             stream_tokens: bool = False) -> str:
-    """Called from a Qt worker thread. No API key needed for localhost engines."""
+             stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
+             cancel_event=None, github_enabled: bool = False) -> str:
+    """User-controlled fast/automatic/agent routing; all hosted calls are opt-in."""
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from .studio import connect, list_tools
     settings.validate()
+    if mode not in {'auto', 'fast', 'agent'}:
+        raise ValueError('Invalid chat mode')
     if not settings.model.strip():
         raise ValueError('Select a model in Settings, then test the connection')
     images = images or []
@@ -171,8 +193,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     home.mkdir(parents=True, exist_ok=True)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
+    first_visible_token = False
     metrics.record(settings.project, 'run_started')
     def audited_event(event):
+        nonlocal first_visible_token
+        if event.get('event') == 'assistant_delta' and not first_visible_token and str(event.get('text','')).strip():
+            first_visible_token = True
+            # Approximate first *visible* text delta from request start; no prompt
+            # or model output is persisted in this operational metric.
+            metrics.record(settings.project, 'first_token', elapsed_ms=int((time.monotonic()-started)*1000))
         if event.get('event') == 'tool_finished':
             metrics.record(settings.project, 'tool_completed', detail=str(event.get('tool', ''))[:80])
         elif event.get('event') == 'tool_rejected':
@@ -182,7 +211,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory = Memory(home / 'checkpoints.sqlite3')
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
-        reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=8)
+        quick = mode == 'fast' or (mode == 'auto' and not needs_project_tools(prompt))
+        reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=4 if quick else 8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
             path = Path(image)
@@ -193,31 +223,76 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # transcript from the persistent conversation DB as well as compacted memory.
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
-            recent = dialogue.recent(settings.project, limit=12)
+            recent = dialogue.recent(settings.project, limit=6 if quick else 12)
             prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
-        workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
-        intelligence = for_settings(settings, home)
-        allow_studio = bool(settings.studio_id)
+        use_tools = mode == 'agent' or (mode == 'auto' and not quick)
+        intelligence = for_settings(settings, home) if use_tools else None
+        workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
+        allow_studio = bool(use_tools and settings.studio_id)
+        endpoint, key = connection_for(settings)
         async def run():
-            async with AsyncOpenAI(base_url=settings.endpoint, api_key='local-only', timeout=180.0, max_retries=0) as client:
+            from openai import AsyncOpenAI
+            from .web_search import search_web, source_context
+            import httpx
+            snippets = ''
+            if research:
+                audited_event({'event': 'search_started'})
+                found = await search_web(prompt[:600], limit=5)
+                snippets = '\n\n' + source_context(found)
+                audited_event({'event': 'search_finished'})
+            timeout = httpx.Timeout(95.0 if settings.provider == 'local' else 55.0, connect=8.0)
+            async with AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0) as client:
+                memory_context = (memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes
+                    + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)
+                if quick:
+                    memory_context = memory_context[-5000:]
+                else:
+                    memory_context = memory_context[-14000:]
                 kwargs = dict(client=client, model=settings.model, prompt=prompt, image_paths=images,
-                              project_memory=(memory.get(settings.project) + '\nREVIEWED KNOWLEDGE:\n' + notes + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)[-14000:],
-                              max_calls=settings.max_calls, context_chars=settings.context_chars,
+                              project_memory=memory_context + snippets,
+                              max_calls=(1 if quick else min(settings.max_calls, 5 if mode == 'auto' else 20)),
+                              context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
-                              workspace=workspace, workspace_edit=settings.workspace_edit,
-                               intelligence=intelligence,
-                              stream_tokens=stream_tokens)
+                              workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
+                              stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
+                              web_search_enabled=bool(research and mode == 'agent'),
+                              subagents_enabled=(mode == 'agent'),
+                              subagent_parallelism=(1 if settings.provider == 'local' else 2),
+                              github_enabled=bool(mode == 'agent' and github_enabled),
+                              intelligence=intelligence)
+                audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
-                        answer, msgs, archive = await execute(**kwargs, studio=session,
+                        return await execute(**kwargs, studio=session,
                             discovered=await list_tools(session), studio_id=settings.studio_id,
                             may_edit=settings.studio_edit)
-                else:
-                    answer, msgs, archive = await execute(**kwargs)
-                return answer, msgs, archive
-        answer, msgs, archive = asyncio.run(run())
+                return await execute(**kwargs)
+        # Bound an entire task, not just each of up to 12 individual model calls.
+        task_timeout = (85 if settings.provider == 'local' else 55) if quick else 180 if mode == 'auto' else 480
+        async def controlled_run():
+            """Cooperative user cancellation interrupts active async API and Studio calls."""
+            job = asyncio.create_task(run())
+            deadline = time.monotonic() + task_timeout
+            try:
+                while True:
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise RuntimeError('STAR task cancelled by user')
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise TimeoutError('Task time limit exceeded')
+                    done, _ = await asyncio.wait({job}, timeout=min(0.15, remaining))
+                    if done:
+                        return await job
+            finally:
+                if not job.done():
+                    job.cancel()
+                    await asyncio.gather(job, return_exceptions=True)
+        try:
+            answer, msgs, archive = asyncio.run(controlled_run())
+        except TimeoutError as exc:
+            raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. Try Fast mode, a smaller prompt, or a hosted provider.') from exc
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
