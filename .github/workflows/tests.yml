@@ -52,3 +52,32 @@ jobs:
           npm run build --prefix frontend
       - name: Confirm built offline application entry point
         run: test -s frontend/dist/index.html
+      - name: Capture actual React website, desktop and mobile screenshots
+        if: always()
+        continue-on-error: true
+        run: |
+          test -s frontend/dist/index.html || exit 0
+          mkdir -p react-qa
+          python3 -m http.server 8931 --bind 127.0.0.1 --directory frontend/dist >/tmp/star-react-qa.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true' EXIT
+          sleep 2
+          BROWSER="$(command -v google-chrome || command -v chromium || true)"
+          if [ -z "$BROWSER" ]; then
+            echo "::notice::Chrome not available for React visual QA"
+            exit 0
+          fi
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-desktop.png" 'http://127.0.0.1:8931/'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/chat-desktop.png" 'http://127.0.0.1:8931/?preview=1'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/brain-desktop.png" 'http://127.0.0.1:8931/?preview=1&tab=brain'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-mobile.png" 'http://127.0.0.1:8931/'
+          test -s react-qa/website-desktop.png
+          test -s react-qa/chat-desktop.png
+      - name: Upload actual React browser renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: STAR-v08-React-Visual-QA
+          path: react-qa/*.png
+          if-no-files-found: ignore
+          retention-days: 30
