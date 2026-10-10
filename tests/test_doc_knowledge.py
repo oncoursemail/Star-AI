@@ -212,6 +212,19 @@ def test_api_lookup_and_luau_check_are_reshaped():
     assert report["errors"][0]["line"] == 1 and report["roblox_api_types"] is False
 
 
+@pytest.mark.parametrize("reply", [
+    # What the service sends when a tool hit its time or memory limit: no verdict, no diagnostics.
+    {"ok": False, "executed": False, "compiled": False, "analyzed": False, "errors": [], "error_count": 0,
+     "notes": ["The compiler hit the time limit; nothing was verified."]},
+    {"ok": False, "executed": False, "compiled": True, "analyzed": False, "errors": [], "error_count": 0,
+     "notes": ["The type checker stopped unexpectedly (resource limit); types were not verified."]},
+])
+def test_a_check_that_reached_no_verdict_is_not_reported_as_a_failed_check(reply):
+    """Saying "did not pass" about code the checker never finished would be a false statement."""
+    with pytest.raises(KnowledgeUnavailable):
+        client_with(lambda request: httpx.Response(200, json=reply)).luau_check("local x = 1")
+
+
 def test_a_check_reply_that_does_not_say_executed_false_is_refused():
     client = client_with(lambda request: httpx.Response(200, json={"ok": True}))
     with pytest.raises(KnowledgeUnavailable):

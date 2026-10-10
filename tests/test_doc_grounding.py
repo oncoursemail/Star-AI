@@ -435,6 +435,16 @@ def test_sources_list_says_which_passages_the_answer_cites():
     assert sources_footer([], answer) == ""
 
 
+def test_an_array_index_is_not_a_citation():
+    """Luau arrays start at 1, so `waypoints[1]` is everywhere in Roblox answers."""
+    found = [passage(1), passage(2), passage(3)]
+    assert cited_numbers("The first waypoint is `waypoints[1]`, then items[2] and t[3][1].", 3) == set()
+    assert cited_numbers("Tweens are created with TweenService:Create [1]. See also [3]. ([2])", 3) == {1, 2, 3}
+    assert cited_numbers("[1] Title 1 says so, and `list[2]` is code.", 3) == {1}
+    footer = sources_footer(found, "Read `waypoints[1]` first.")
+    assert footer.count("retrieved, not cited") == 3 and "· cited" not in footer
+
+
 # --- finalize and the whole turn ----------------------------------------------------------------
 
 def grounding(knowledge, plan=None, passages=None) -> Grounding:

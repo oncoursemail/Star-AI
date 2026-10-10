@@ -237,6 +237,10 @@ class KnowledgeClient:
         if data.get("executed") is not False or type(data.get("ok")) is not bool:
             raise KnowledgeUnavailable(f"{_LABEL} sent an unexpected Luau check reply")
         errors = _diagnostics(data.get("errors"))
+        if not data["ok"] and not errors:
+            # A tool hit its time or memory limit: there is no verdict, so this is not a failed
+            # check. The caller then says nothing about the code instead of "did not pass".
+            raise KnowledgeUnavailable(f"{_LABEL} could not finish the Luau check")
         count = data.get("error_count")
         return {
             "ran": True,

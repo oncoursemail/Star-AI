@@ -36,7 +36,9 @@ REPAIR_RESERVE_SECONDS = 45.0
 MIN_PASSAGE_CHARS = 300
 _FENCE = re.compile(r"```[ \t]*(?:lua|luau)\b[^\n]*\n(.*?)```", re.S | re.I)
 _ANY_FENCE = re.compile(r"```.*?```", re.S)
-_CITATION = re.compile(r"\[(\d{1,2})\]")
+_INLINE_CODE = re.compile(r"`[^`\n]*`")
+# `[1]` as a citation, not the index in `waypoints[1]` or `grid[2][1]` (Luau arrays start at 1).
+_CITATION = re.compile(r"(?<![\w\])])\[(\d{1,2})\]")
 _UNSET = object()
 
 _RULES = (
@@ -204,8 +206,8 @@ def luau_blocks(answer: str) -> list[tuple[int, int, str]]:
 
 
 def cited_numbers(answer: str, count: int) -> set[int]:
-    """Passage numbers the answer cites as [n], ignoring anything inside code fences."""
-    prose = _ANY_FENCE.sub(" ", answer)
+    """Passage numbers the answer cites as [n], ignoring code (fenced or inline) and array indexes."""
+    prose = _INLINE_CODE.sub(" ", _ANY_FENCE.sub(" ", answer))
     return {int(n) for n in _CITATION.findall(prose) if 1 <= int(n) <= count}
 
 
