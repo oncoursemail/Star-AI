@@ -54,14 +54,14 @@ function CodePanel({children}:{children:ReactNode}){
   </div>
 }
 
-export function Message({entry,animated=true}:{entry:ChatMessage;animated?:boolean}) {
+export function Message({entry,animated=true,partial=false}:{entry:ChatMessage;animated?:boolean;partial?:boolean}) {
   const [copied,setCopied]=useState(false)
   const isUser=entry.role==='user'
   const isError=entry.role==='event'
   return <motion.article initial={animated?{opacity:0,y:8}:false} animate={{opacity:1,y:0}} transition={{duration:.2}} className={'message '+(isUser?'message-user':isError?'message-event':'message-star')}>
     <div className={'message-avatar '+(isUser?'avatar-user':'avatar-star')} aria-hidden="true">{isUser?'Y':<Sparkles size={16}/>}</div>
     <div className="message-content">
-      <div className="message-head"><strong>{isUser?'You':isError?'System':'STAR'}</strong><span>{entry.created?new Date(entry.created).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
+      <div className="message-head"><strong>{isUser?'You':isError?'System':'STAR'}</strong>{partial&&<span className="message-streaming-label">WRITING</span>}<span>{entry.created?new Date(entry.created).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):''}</span></div>
       <div className={'message-body '+(isError?'error-text':'')}>
         {isUser||isError?<p className="preserve-white-space">{entry.text}</p>:
           <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
@@ -72,7 +72,7 @@ export function Message({entry,animated=true}:{entry:ChatMessage;animated?:boole
           }}>{entry.text}</ReactMarkdown>}
       </div>
       {entry.attachments?.length? <div className="attachment-view">{entry.attachments.map(name=><span key={name}>{name}</span>)}</div>:null}
-      {!isError&&!isUser&&<button className="message-copy" type="button" aria-label="Copy response" onClick={async()=>{if(await copySafe(entry.text)){setCopied(true);window.setTimeout(()=>setCopied(false),1400)}}}>{copied?<CheckCheck size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy'}</button>}
+      {!isError&&!isUser&&!partial&&<button className="message-copy" type="button" aria-label="Copy response" onClick={async()=>{if(await copySafe(entry.text)){setCopied(true);window.setTimeout(()=>setCopied(false),1400)}}}>{copied?<CheckCheck size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy'}</button>}
     </div>
   </motion.article>
 }
