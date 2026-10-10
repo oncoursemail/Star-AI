@@ -35,6 +35,128 @@ ROBLOX_QUALITY_NOTES = (
 )
 
 
+# --- Grounding in the official documentation (STAR Knowledge) -----------------------------
+# Stricter than _ROBLOX on purpose: every retrieved passage costs seconds of prompt time on a
+# CPU server, so "studio" or "ugc" alone must not trigger a documentation search.
+_ROBLOX_DEV = re.compile(
+    r"\b(?:roblox|luau|rojo|devforum|"
+    r"remote(?:event|function)s?|bindable(?:event|function)s?|(?:ordered)?datastores?|datastoreservice|"
+    r"memorystore(?:service)?|tweenservice|runservice|userinputservice|contextactionservice|"
+    r"replicatedstorage|replicatedfirst|serverscriptservice|serverstorage|startergui|starterplayer|"
+    r"starterpack|playergui|humanoid(?:rootpart)?|(?:local|module|server)\s?scripts?|"
+    r"(?:screen|surface|billboard)gui|ui(?:list|grid|page|table)layout|uiaspectratioconstraint|"
+    r"text(?:label|button|box)|image(?:label|button)|scrollingframe|proximityprompt|clickdetector|"
+    r"pathfindingservice|collectionservice|marketplaceservice|teleportservice|messagingservice|"
+    r"httpservice|soundservice|physicsservice|textchatservice|basepart|meshpart|cframe|vector3|udim2|"
+    r"tweeninfo|raycast(?:params)?|waitforchild|findfirstchild|getservice|leaderstats|"
+    r"game\s?pass(?:es)?|developer\s+products?|animationtrack|animator|character(?:added|appearance)|"
+    r"playeradded|playerremoving|r6|r15)\b|\binstance\.new\b|\bgame:|\bworkspace[.:]|\benum\.[a-z]",
+    re.IGNORECASE,
+)
+# `TweenService:Create`, `Humanoid.WalkSpeed`, `Enum.EasingStyle`: an exact engine name.
+_API_SYMBOL = re.compile(r"\b(?:Enum\.[A-Z][A-Za-z0-9]+|[A-Z][A-Za-z0-9]{2,40}[.:][A-Z][A-Za-z0-9]{1,48})\b")
+_WANTS_CODE = re.compile(
+    r"\b(?:write|make|create|build|fix|refactor|convert|implement|script|code|add|generate|rewrite|debug)\b|```",
+    re.IGNORECASE,
+)
+# Public game statistics, not development: the documentation cannot answer these.
+_GAME_STATS = re.compile(
+    r"\b(?:how\s+many\s+(?:players|visits)|player\s+count|most\s+popular|top\s+games?|trending|"
+    r"concurrent\s+players|visits|favorites|universe\s+id)\b|roblox\.com/games/",
+    re.IGNORECASE,
+)
+_TRIVIAL = re.compile(
+    r"^\W*(?:hi|hello|hey|yo|thanks?(?:\s+you)?|thx|ty|ok(?:ay)?|cool|nice|great|good\s+(?:morning|night)|"
+    r"bye|yes|no|sure|got\s+it)\b[\s\W]*$",
+    re.IGNORECASE,
+)
+_REFERENTIAL = re.compile(
+    r"\b(?:it|this|that|same|again|those|these|them|instead)\b|^\s*(?:and|but|what about|how about)\b",
+    re.IGNORECASE)
+# (passages, character budget) per chat mode: about 500, 1,200 and 1,800 prompt tokens.
+GROUNDING_BUDGET = {"fast": (2, 1700), "auto": (4, 4080), "agent": (6, 6120)}
+
+
+@dataclass(frozen=True)
+class GroundingPlan:
+    """What to fetch from the official documentation before the model is called.
+
+    A plan is a decision about the prompt only. Whether the knowledge service is
+    configured or reachable is decided later; an unavailable service is never an error.
+    """
+    retrieve: str = "none"            # "none" | "docs" (search) | "api" (exact engine name first)
+    passages: int = 0
+    max_chars: int = 0
+    check_luau: bool = False          # statically check fenced Luau in the answer
+    symbols: tuple[str, ...] = ()     # exact engine names found in the prompt
+    reasons: tuple[str, ...] = ()
+
+
+NO_GROUNDING = GroundingPlan()
+
+
+def is_roblox_dev_prompt(prompt: str) -> bool:
+    """A Roblox or Luau *development* question (strict; see _ROBLOX_DEV)."""
+    return isinstance(prompt, str) and bool(
+        _ROBLOX_DEV.search(prompt) or (_API_SYMBOL.search(prompt) and _ROBLOX.search(prompt)))
+
+
+def grounding_plan(prompt: str, *, mode: str = "auto", image_count: int = 0, research: bool = False,
+                   roblox_context: bool = False) -> GroundingPlan:
+    """Deterministic: should this prompt be answered from the official documentation?
+
+    First match wins. No model call, no network, no clock.
+    """
+    if mode not in GROUNDING_BUDGET or not isinstance(prompt, str) or not prompt.strip():
+        return NO_GROUNDING
+    text = prompt.strip()
+    if _TRIVIAL.match(text):
+        return GroundingPlan(reasons=("greeting or acknowledgement",))
+    if not (is_roblox_dev_prompt(text) or roblox_context):
+        return GroundingPlan(reasons=("not a Roblox or Luau development question",))
+    if _GAME_STATS.search(text) and not _WANTS_CODE.search(text):
+        return GroundingPlan(reasons=("public game statistics, not documentation",))
+    passages, max_chars = GROUNDING_BUDGET[mode]
+    symbols = tuple(dict.fromkeys(_API_SYMBOL.findall(text)))[:3]
+    wants_code = bool(_WANTS_CODE.search(_API_SYMBOL.sub(" ", text)))   # "Create" in TweenService:Create is a name
+    reasons = ["Roblox or Luau development question", f"{mode} mode budget"]
+    retrieve = "docs"
+    if symbols and not wants_code:
+        # An exact engine name with a factual question: its reference entry is enough.
+        retrieve = "api"
+        passages = 1 if mode == "fast" else 2
+        max_chars = min(max_chars, 1700 if mode == "fast" else 2400)
+        reasons.append("names an exact engine API")
+    if image_count or research:
+        # The picture or the web results already take prompt time: keep the docs short.
+        passages = min(passages, 2)
+        max_chars = min(max_chars, 2040)
+        reasons.append("reduced: images or web results are also in the prompt")
+    return GroundingPlan(retrieve=retrieve, passages=passages, max_chars=max_chars, check_luau=True,
+                         symbols=symbols, reasons=tuple(reasons))
+
+
+def followup_grounding(prompt: str, prior_user_turns: list[str] | None, *, mode: str = "auto"
+                       ) -> tuple[GroundingPlan, str]:
+    """A short referential follow-up ("and how do I reverse it?") to a Roblox question.
+
+    Returns (plan, search query). The query is the earlier Roblox turn plus the new one:
+    string concatenation, not a model call. (NO_GROUNDING, "") when this is not a follow-up.
+    """
+    if (not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 160
+            or _TRIVIAL.match(prompt.strip()) or not _REFERENTIAL.search(prompt)):
+        return NO_GROUNDING, ""
+    for turn in reversed([t for t in (prior_user_turns or []) if isinstance(t, str)][-2:]):
+        if is_roblox_dev_prompt(turn):
+            plan = grounding_plan(turn + "\n" + prompt, mode=mode)
+            if plan.retrieve == "none":
+                return NO_GROUNDING, ""
+            return (GroundingPlan(retrieve="docs", passages=plan.passages, max_chars=plan.max_chars,
+                                  check_luau=True, reasons=("follow-up to a Roblox or Luau question",)),
+                    (turn.strip()[:400] + " " + prompt.strip())[:600])
+    return NO_GROUNDING, ""
+
+
 def is_roblox_task(prompt: str) -> bool:
     """Detect Roblox-specific quality constraints even in explicit Agent mode."""
     return isinstance(prompt, str) and bool(_ROBLOX.search(prompt))
@@ -60,6 +182,7 @@ class BrainRoute:
     max_calls: int
     task_timeout: int
     description: str
+    grounding: GroundingPlan = NO_GROUNDING
 
 
 def select_route(settings, prompt: str, *, mode: str = "auto",
@@ -157,4 +280,6 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
             "roblox": "Roblox engineering", "vision": "Visual analysis",
             "research": "Source-grounded research", "agent": "Agent workflow",
         }[profile],
+        grounding=grounding_plan(prompt, mode=mode, image_count=image_count, research=research,
+                                 roblox_context=roblox_context),
     )
