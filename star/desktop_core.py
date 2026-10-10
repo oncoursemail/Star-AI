@@ -18,6 +18,7 @@ from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
 from .providers import PROVIDERS, connection_for
+from .brain_router import select_route, validate_alias, ROBLOX_QUALITY_NOTES
 
 
 def app_data() -> Path:
@@ -33,6 +34,10 @@ class Settings:
     endpoint: str = 'http://127.0.0.1:1234/v1'
     provider: str = 'local'
     model: str = ''
+    fast_model: str = ''
+    reasoning_model: str = ''
+    roblox_model: str = ''
+    vision_model: str = ''
     project: str = 'STAR'
     workspace: str = ''
     studio_id: str = ''
@@ -60,6 +65,8 @@ class Settings:
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     def validate(self):
+        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, field), field=field)
         if self.provider != 'local' and self.provider not in PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -189,6 +196,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     images = images or []
     for image in images:
         image_part(Path(image))
+    route = select_route(settings, prompt, mode=mode, image_count=len(images),
+                         research=research, project_tools=needs_project_tools(prompt))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
@@ -204,7 +213,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory = Memory(home / 'checkpoints.sqlite3')
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
-        quick = mode == 'fast' or (mode == 'auto' and not needs_project_tools(prompt))
+        audited_event({'event': 'route_selected', 'profile': route.profile,
+                       'description': route.description})
+        quick = route.quick
         reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=4 if quick else 8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
@@ -220,7 +231,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             prior_turns = recent_context(recent, prompt)
         finally:
             dialogue.close()
-        use_tools = mode == 'agent' or (mode == 'auto' and not quick)
+        use_tools = route.use_tools
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
         allow_studio = bool(use_tools and settings.studio_id)
@@ -243,13 +254,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     memory_context = memory_context[-5000:]
                 else:
                     memory_context = memory_context[-14000:]
-                kwargs = dict(client=client, model=settings.model, prompt=prompt, image_paths=images,
-                              project_memory=memory_context + snippets,
-                              max_calls=(1 if quick else min(settings.max_calls, 5 if mode == 'auto' else 20)),
+                kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
+                              project_memory=memory_context + snippets +
+                                  (ROBLOX_QUALITY_NOTES if route.profile == 'roblox' else ''),
+                              max_calls=route.max_calls,
                               context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
-                              stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
+                              stream_tokens=stream_tokens, response_tokens=route.response_tokens,
+                              subagent_model=route.subagent_model,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=(1 if settings.provider == 'local' else 2),
@@ -263,7 +276,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             may_edit=settings.studio_edit)
                 return await execute(**kwargs)
         # Bound an entire task, not just each of up to 12 individual model calls.
-        task_timeout = (85 if settings.provider == 'local' else 55) if quick else 180 if mode == 'auto' else 480
+        task_timeout = route.task_timeout
         async def controlled_run():
             """Cooperative user cancellation interrupts active async API and Studio calls."""
             job = asyncio.create_task(run())
