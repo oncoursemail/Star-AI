@@ -56,6 +56,8 @@ GRAPHIFY_TOOLS = (
     _tool("star_graphify_stats", "Read the Graphify graph's actual node and edge counts and export version metadata.", {}),
 )
 ROBLOX_GAME_TOOLS = (
+    _tool("star_roblox_resolve_game_url", "Resolve a trusted Roblox experience page URL with Place ID to an actual Universe ID. Does not fetch arbitrary user URLs.", {"url": _s(600)}, ("url",)),
+    _tool("star_roblox_resolve_place", "Resolve a Roblox Place ID into its parent Universe ID for game stats and comparisons.", {"place_id": {"type": "integer", "minimum": 1}}, ("place_id",)),
     _tool("star_roblox_search_games", "Search Roblox experiences by name or keyword, with sourced public universe IDs and metadata. Search endpoint is experimental.", {"query": _s(140), "limit": _limit(12, 8)}, ("query",)),
     _tool("star_roblox_game_report", "Get an actual Roblox game's public universe metadata, currently playing snapshot, lifetime visits, favorites, votes, official thumbnail links, and explicitly tentative gameplay genre.", {"universe_id": {"type": "integer", "minimum": 1}}, ("universe_id",)),
     _tool("star_roblox_compare_games", "Compare two to four public Roblox experiences by Universe ID using comparable snapshot metrics. Never infer revenue or retention.", {"universe_ids": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 2, "maxItems": 4, "uniqueItems": True}}, ("universe_ids",)),
@@ -129,8 +131,8 @@ class LocalIntelligence:
             result.extend(OBSIDIAN_TOOLS)
         if self.graph and self.graph.path.is_file() and _GRAPH_TRIGGER.search(prompt):
             result.extend(GRAPHIFY_TOOLS)
-        if self.roblox and _ROBLOX_TRIGGER.search(prompt):
-            if _GAME_TRIGGER.search(prompt):
+        if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I)):
+            if _GAME_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I):
                 result.extend(ROBLOX_GAME_TOOLS)
             if _DOCS_TRIGGER.search(prompt):
                 result.append(ROBLOX_KNOWLEDGE_TOOLS[0])
@@ -154,6 +156,8 @@ class LocalIntelligence:
             if self.roblox is None:
                 raise PermissionError("Roblox research is disabled")
             handlers = {
+                "star_roblox_resolve_game_url": lambda: self.roblox.resolve_game_url(args["url"]),
+                "star_roblox_resolve_place": lambda: self.roblox.resolve_place(args["place_id"]),
                 "star_roblox_search_games": lambda: self.roblox.search_games(args["query"], args.get("limit", 8)),
                 "star_roblox_game_report": lambda: self.roblox.game_report(args["universe_id"]),
                 "star_roblox_compare_games": lambda: self.roblox.compare_games(args["universe_ids"]),
