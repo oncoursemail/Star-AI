@@ -44,6 +44,13 @@ def sanitize_event(event: dict) -> dict:
     kind = str(event.get('event', 'working'))[:36]
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
+    if kind in {'subagent_started', 'subagent_finished'}:
+        role=str(event.get('role', 'research'))[:30]
+        if role not in {'planner','research','luau','ui','animation',
+                        'environment','review','integration'}:
+            role='research'
+        state='working' if kind == 'subagent_started' else str(event.get('status','finished'))[:16]
+        return {'phase':f'STAR {role} specialist · {state}'}
     if kind in {'saved','run_completed'}:
         return {'phase':'Saving verified task record'}
     if kind in {'tool_call','tool_result','tool_output'}:
