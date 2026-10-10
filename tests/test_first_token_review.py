@@ -112,3 +112,57 @@ def test_plain_chat_rules_keep_the_rule_against_asking_for_credentials():
     for secret in ("password", "cookie", "api key"):
         assert secret in short
     assert len(FAST_RULES) < 0.45 * len(RULES)          # still the short form
+
+
+# ------------------------------------------------------------------ compaction
+
+def test_compaction_frees_the_room_the_reference_sections_took(monkeypatch):
+    """A summary must leave room to work in, as it did before the layout change.
+
+    The reference sections of the turn (notes, web results, documentation) stayed
+    in the request after a summary, on top of the summary itself. With a full
+    block the request was still at 80% of its limit, so a ten-step tool task was
+    summarised four times instead of twice; each summary is an extra model call
+    of up to 1300 tokens and loses detail.
+    """
+    import asyncio
+    from types import SimpleNamespace
+    import star.agent as agent
+    from test_first_token import Client, Models, Studio, schema_tool
+
+    budget, notes = 26000, "DOOR-NOTE " * 1000            # a full 10000-character block
+    handed_over = []
+
+    async def summarise(client, model, project, prior, transcript):
+        handed_over.append(prior)
+        return "S" * 4000
+
+    monkeypatch.setattr(agent, "compact", summarise)
+
+    class BigStudio(Studio):
+        async def call_tool(self, name, arguments):
+            self.calls.append((name, arguments))
+            return SimpleNamespace(model_dump=lambda **_: {"content": [{"type": "text", "text": "r" * 4000}], "isError": False})
+
+    def tool_call(number):
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="", tool_calls=[SimpleNamespace(
+            id=f"c{number}", function=SimpleNamespace(name="script_read", arguments='{"studio_id": "sandbox"}'))]))])
+
+    final = SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="done", tool_calls=None))])
+    models = Models([tool_call(number) for number in range(10)] + [final])
+    asyncio.run(agent.execute(
+        client=Client(models), model="m", prompt="Inspect the place and fix the door.", image_paths=[],
+        studio=BigStudio(), studio_id="sandbox", discovered=[schema_tool("script_read")], max_calls=14,
+        context_chars=budget, checkpoint=lambda _: None, project_memory="C" * 5000,
+        turn_sections=[("DOCS", notes)], mode="agent", today="2026-10-10"))
+    sizes = [agent.text_size(request["messages"]) for request in models.requests]
+    after_first = next(size for before, size in zip(sizes, sizes[1:]) if size < before)
+    assert after_first < 0.6 * budget                      # was 21207 of 26000
+    assert len(handed_over) == 2                           # was 4
+    assert "DOOR-NOTE" in handed_over[0]                   # the sections went into the summary instead
+    # The request itself survives: the user's words and the per-turn facts, without the sections.
+    last = models.requests[-1]["messages"]
+    assert [m["role"] for m in last[:3]] == ["system", "user", "user"]
+    assert text_of(last[1]).startswith("Inspect the place and fix the door.")
+    assert "Selected studio_id: sandbox" in text_of(last[1]) and "DOOR-NOTE" not in text_of(last[1])
+    assert last[0] == models.requests[0]["messages"][0]    # the system message is still untouched

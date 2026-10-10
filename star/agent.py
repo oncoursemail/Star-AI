@@ -294,9 +294,13 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     definitions = sorted(definitions, key=lambda item: item["function"]["name"] in registry)
     tools_attached = bool(definitions)
     # Per-turn context is appended to the user's own words, never to the system message.
-    context = volatile_context(turn_sections or (), tools_attached=tools_attached, studio_id=studio_id,
-                               may_edit=may_edit, mode=mode, limit=turn_context_chars,
-                               today=datetime.now().astimezone().strftime("%Y-%m-%d") if today is None else today)
+    today = datetime.now().astimezone().strftime("%Y-%m-%d") if today is None else today
+
+    def turn_context(sections) -> str:
+        return volatile_context(sections, tools_attached=tools_attached, studio_id=studio_id, may_edit=may_edit,
+                                mode=mode, limit=turn_context_chars, today=today)
+
+    context = turn_context(turn_sections or ())
     content = [{"type": "text", "text": final_user_text(prompt, context)}]
     content.extend(image_part(path) for path in image_paths)
     # messages[anchor] is the request being answered; messages[1:anchor] are earlier turns.
@@ -319,11 +323,24 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         if text_size(messages) > context_chars and len(messages) > anchor + 1:
             if checkpoint is None:
                 raise RuntimeError("Context near limit; task stopped because no checkpoint writer was configured")
-            summary = await compact(client, model, "current project", project_memory, messages[anchor + 1:])
+            # The turn's reference sections (notes, web results, documentation) are handed to
+            # the summary together with the earlier checkpoint, as they were before they moved
+            # out of the system message, and then leave the request. Otherwise a full block
+            # stays next to the summary and the task is back at its limit a step or two later.
+            lean = turn_context(())
+            summary = await compact(client, model, "current project",
+                                    project_memory if lean == context else project_memory + "\n\n" + context,
+                                    messages[anchor + 1:])
             checkpoint(summary)
             project_memory = summary
             # Retain the full pre-compaction transcript in a local archive; images remain in original user turn.
             archive.append({"step": step, "messages": messages, "compacted": True})
+            if lean != context:
+                # The request keeps the user's words, the per-turn facts and its images.
+                context = lean
+                messages = [*messages[:anchor], {**messages[anchor], "content": [
+                    {"type": "text", "text": final_user_text(prompt, lean)}, *messages[anchor]["content"][1:]]},
+                    *messages[anchor + 1:]]
             # The system message stays byte-identical (the checkpoint joins it on the next
             # turn, through project memory); the summary travels in the continuation turn.
             messages = [*messages[:anchor + 1],
