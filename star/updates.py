@@ -11,6 +11,7 @@ digests from the same unauthenticated GitHub API response.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Callable
 from functools import total_ordering
 from pathlib import Path
 import hashlib
@@ -90,6 +91,7 @@ def get_latest(client: httpx.Client | None = None) -> UpdateResult:
     own = client is None
     client = client or httpx.Client(timeout=15.0, trust_env=False)
     try:
+        newest: UpdateResult | None = None
         for repo, api, fallback_url in ((PUBLIC_REPO, PUBLIC_API, PUBLIC_RELEASES_URL),
                                         (REPO, API, RELEASES_URL)):
             try:
@@ -104,11 +106,15 @@ def get_latest(client: httpx.Client | None = None) -> UpdateResult:
                 tag = '.'.join(str(x) for x in version.parts)
                 expected_url = f'https://github.com/{repo}/releases/tag/v{tag}'
                 # The release URL comes from the known repository, not arbitrary JSON.
-                return UpdateResult(version > Version(__version__), tag, expected_url,
+                candidate = UpdateResult(version > Version(__version__), tag, expected_url,
                     assets=tuple(release.get('assets', ())), repository=repo,
                     anonymous_access=True)
-            except (httpx.RequestError, ValueError, KeyError, TypeError):
+                if newest is None or Version(candidate.version) > Version(newest.version):
+                    newest = candidate
+            except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError):
                 continue
+        if newest is not None:
+            return newest
         return UpdateResult(False, __version__, RELEASES_URL, requires_browser=True,
             explanation='No public STAR Release is accessible. Open GitHub Releases in your browser to download Setup. GitHub CLI is not required.',
             repository=REPO)
@@ -143,7 +149,8 @@ def _trusted_setup_asset(result: UpdateResult) -> dict:
 
 
 def stage_installer(result: UpdateResult, storage: Path,
-                    client: httpx.Client | None = None) -> InstallerCandidate:
+                    client: httpx.Client | None = None,
+                    progress: Callable[[int, int], None] | None = None) -> InstallerCandidate:
     """Download a checksum-verified Setup from an anonymously accessible Release.
 
     If the source repository becomes private again, the GitHub API will return
@@ -156,6 +163,8 @@ def stage_installer(result: UpdateResult, storage: Path,
     path.parent.mkdir(parents=True, exist_ok=True)
     expected = asset['digest'].split(':', 1)[1]
     if path.is_file() and _sha256(path) == expected:
+        if progress:
+            progress(int(asset['size']), int(asset['size']))
         return InstallerCandidate(path, result.version, checksum_verified=True, expected_sha256=expected)
 
     own = client is None
@@ -179,6 +188,8 @@ def stage_installer(result: UpdateResult, storage: Path,
                         raise ValueError('Installer exceeds trusted release size')
                     digest.update(chunk)
                     output.write(chunk)
+                    if progress:
+                        progress(count, int(asset['size']))
         if count != int(asset['size']) or digest.hexdigest() != expected:
             raise ValueError('Release installer failed size or SHA-256 verification')
         os.replace(temp, path)
