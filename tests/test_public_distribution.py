@@ -80,7 +80,8 @@ def test_all_public_website_files_are_allowlisted_and_copy_only(tmp_path):
     result=collect_public_files(extra)
     assert 'private.pem' not in result
     (extra/'index.html').unlink()
-    (extra/'index.html').symlink_to(ROOT/'site/index.html')
+    try:(extra/'index.html').symlink_to(ROOT/'site/index.html')
+    except (OSError, NotImplementedError):pytest.skip('Symlinks unavailable on this test host')
     with pytest.raises(ValueError):collect_public_files(extra)
 
 
