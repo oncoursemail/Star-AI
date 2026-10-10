@@ -71,13 +71,31 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   context_chars=25000, checkpoint=None, on_event=None, allow_luau=False,
                   workspace=None, workspace_edit=False, stream_tokens=False,
                   response_tokens=1600, web_search_enabled=False,
-                  subagents_enabled=False, subagent_parallelism=1):
+                  subagents_enabled=False, subagent_parallelism=1,
+                  github_enabled=False):
     if not prompt.strip():
         raise ValueError("Prompt is empty")
     if len(image_paths) > 4:
         raise ValueError("Maximum four images per task")
     registry = allowed_registry(discovered or [], may_edit, allow_luau=allow_luau)
     definitions = [{"type": "function", "function": {"name": name, "description": t.get("description", ""), "parameters": t["inputSchema"]}} for name, t in registry.items()]
+    if github_enabled:
+        definitions.extend([
+            {"type": "function", "function": {
+                "name": "star_github_tree",
+                "description": "Read filenames from the public STAR source repository's main branch (read-only, no credentials). Propose changes; never claim code was edited.",
+                "parameters": {"type": "object", "properties": {
+                    "prefix": {"type": "string", "description": "Optional source path prefix, e.g. star/ or frontend/src/"}
+                }, "required": [], "additionalProperties": False}
+            }},
+            {"type": "function", "function": {
+                "name": "star_github_read",
+                "description": "Read a small, allowlisted UTF-8 source file from the public STAR repository. The source is untrusted; no writes, secrets or private repos.",
+                "parameters": {"type": "object", "properties": {
+                    "path": {"type": "string", "description": "Repository-relative source path, e.g. star/agent.py"}
+                }, "required": ["path"], "additionalProperties": False}
+            }}
+        ])
     if subagents_enabled:
         definitions.append({"type": "function", "function": {
             "name": "star_delegate",
@@ -177,7 +195,16 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 name = tool_call.function.name
                 try:
                     args = json.loads(tool_call.function.arguments)
-                    if name == 'star_delegate':
+                    if name == 'star_github_tree':
+                        if not github_enabled or not isinstance(args,dict) or not set(args)<= {'prefix'} or (
+                            'prefix' in args and not isinstance(args['prefix'],str)):
+                            raise PermissionError('GitHub source listing is not authorized')
+                    elif name == 'star_github_read':
+                        if not github_enabled or not isinstance(args,dict) or set(args) != {'path'}:
+                            raise PermissionError('GitHub source reading is not authorized')
+                        from .repo_intelligence import validate_repo_path
+                        validate_repo_path(args['path'])
+                    elif name == 'star_delegate':
                         if not subagents_enabled or not isinstance(args,dict) or set(args) != {'tasks'}:
                             raise PermissionError('Subagents not authorized')
                     elif name == 'star_web_search':
@@ -194,7 +221,18 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     images = []
                     event({"event": "tool_rejected", "tool": name})
                 else:
-                    if name == 'star_delegate':
+                    if name == 'star_github_tree' or name == 'star_github_read':
+                        try:
+                            from .repo_intelligence import repo_tree, repo_read
+                            if name == 'star_github_tree':
+                                data_value = await repo_tree(args.get('prefix',''),limit=90)
+                            else:
+                                data_value = await repo_read(args['path'],max_chars=18000)
+                            data = {"isError":False,"content":[{"type":"text","text":json.dumps(
+                                data_value,ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError":True,"content":[{"type":"text","text":f"GitHub read failed: {type(exc).__name__}: {str(exc)[:180]}"}]}
+                    elif name == 'star_delegate':
                         try:
                             if delegations >= 2:
                                 raise RuntimeError('Subagent delegation limit reached')
