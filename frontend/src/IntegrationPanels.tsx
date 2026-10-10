@@ -1,15 +1,178 @@
 import {useEffect,useRef,useState} from 'react'
-import {BookOpen,Check,ChevronDown,Globe,KeyRound,LoaderCircle,RefreshCcw,ShieldCheck,Workflow,X} from 'lucide-react'
+import type {ReactNode} from 'react'
+import {BookOpen,Check,ChevronDown,Globe,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
-import type {AppSettings,McpStatus} from './types'
+import type {AppSettings,McpStatus,ServerReport,ServerStatus} from './types'
 import './integrated-tools.css'
 
 type Invoke=(action:string,params?:Record<string,unknown>)=>Promise<unknown|null>
-const providers=['local','groq','openrouter','gemini','cerebras'] as const
+const providers=['local','star_server','groq','openrouter','gemini','cerebras'] as const
 type Provider=typeof providers[number]
+type CloudProvider=Exclude<Provider,'local'|'star_server'>
+const providerNames:Record<Provider,string>={local:'Local STAR Brain',star_server:'STAR Server (LAN)',groq:'GroqCloud',openrouter:'OpenRouter',gemini:'Gemini',cerebras:'Cerebras'}
+const cloudProviders=providers.filter((x):x is CloudProvider=>x!=='local'&&x!=='star_server')
+
+/** STAR Server on the owner's network is the brain: no model download is needed on this PC. */
+export const usesStarServer=(settings?:{provider?:string}|null)=>settings?.provider==='star_server'
+/** Teams and other private work may run on the on-device brain or on STAR Server, never on a cloud vendor. */
+export const runsOnOwnHardware=(settings?:{provider?:string}|null)=>settings?.provider==='local'||usesStarServer(settings)
+/** One status light for whichever brain is selected. A server that was never checked is not called offline. */
+export function brainStatus(state:{settings?:{provider?:string}|null;brain_running?:boolean;server?:ServerStatus}):{online:boolean;label:string}{
+ if(!usesStarServer(state.settings))return {online:!!state.brain_running,label:state.brain_running?'STAR Brain ready':'STAR Brain offline'}
+ const checked=state.server?.ok
+ return {online:checked===true,label:checked===true?'STAR Server ready':checked===false?'STAR Server needs attention':'STAR Server selected'}
+}
+export const formatStepTime=(ms:number)=>ms<1000?`${Math.max(0,Math.round(ms))} ms`:`${(ms/1000).toFixed(1)} s`
+const stepNames:Record<string,string>={health:'Server reachable',models:'Key and model list',limits:'Context and slots',chat:'Real test reply'}
+const failedReport=(message:string):ServerReport=>({ok:false,code:'error',message,steps:[],models:[],model:'',context_tokens:null,slots:null,first_token_ms:null,sample:''})
+
+/** Runs the host's timed server check. With `settings`, they are saved first so the check uses what is on screen. */
+function useServerTest(invoke:Invoke,disabled:boolean){
+ const [testing,setTesting]=useState(false)
+ const [report,setReport]=useState<ServerReport|null>(null)
+ const pendingId=useRef('')
+ useEffect(()=>onBackendEvent(event=>{
+   if(!pendingId.current||event.requestId!==pendingId.current||event.kind==='progress')return
+   pendingId.current='';setTesting(false)
+   if(event.kind==='error'){setReport(failedReport(String(event.data||'The server test could not run.').slice(0,300)));return}
+   const value=event.data as ServerReport|null
+   setReport(value&&Array.isArray(value.steps)?value:failedReport('The server test returned no result.'))
+ }),[])
+ const run=async(settings?:AppSettings)=>{
+   if(disabled||testing)return
+   setTesting(true);setReport(null)
+   if(settings){const saved=await invoke('saveSettings',{settings});if(!saved){setTesting(false);return}}
+   const reply=await invoke('testServer') as {pending?:boolean;requestId?:string}|null
+   if(reply?.pending&&reply.requestId)pendingId.current=reply.requestId
+   else setTesting(false)
+ }
+ return {testing,report,run}
+}
+
+function ServerReportView({report,current,onPickModel,onUseLimits}:{report:ServerReport;current?:string;onPickModel?:(id:string)=>void;onUseLimits?:(context:number,slots:number)=>void}){
+ return <div role="status" aria-live="polite">
+   <p className={report.ok?'integrated-confirm':'integrated-error'}><strong>{report.message}</strong></p>
+   {report.steps.length>0&&<div className="integrated-notes"><strong>Server check</strong>
+     {report.steps.map(step=><div className="integrated-note" key={step.name}>
+       <span>{step.status==='ok'?<Check size={13} aria-label="Passed"/>:step.status==='failed'?<X size={13} aria-label="Failed"/>:<Minus size={13} aria-label="Skipped"/>} {stepNames[step.name]||step.name}: {step.detail}</span>
+       <small>{formatStepTime(step.ms)}</small>
+     </div>)}
+   </div>}
+   {report.ok&&report.sample&&<p className="integrated-help">Reply from {report.model}: {report.sample}{report.first_token_ms!==null?` (first words after ${formatStepTime(report.first_token_ms)})`:''}</p>}
+   {report.models.length>0&&onPickModel&&<div className="integrated-actions" role="group" aria-label="Models on this server"><span>Models on this server:</span>
+     {report.models.map(id=><button type="button" key={id} className={'integrated-chip '+(id===current?'active':'')} aria-pressed={id===current} onClick={()=>onPickModel(id)}>{id}</button>)}
+   </div>}
+   {report.context_tokens!==null&&<div className="integrated-actions"><span>Server reports {report.context_tokens} context tokens per request and {report.slots??1} parallel slot(s).</span>
+     {onUseLimits&&<button type="button" className="secondary-button" onClick={()=>onUseLimits(report.context_tokens as number,report.slots??1)}>Use and save these limits</button>}
+   </div>}
+ </div>
+}
+
+/** Address, model and key for the owner's own server. The key goes straight to the OS keyring:
+ *  it is read from the input element once and is never kept in React state or in settings. */
+function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSettings;onChange:(settings:AppSettings)=>void;credentials:Record<string,boolean>;invoke:Invoke;disabled:boolean}){
+ const keyInput=useRef<HTMLInputElement>(null)
+ const [keyTyped,setKeyTyped]=useState(false)
+ const [keyBusy,setKeyBusy]=useState(false)
+ const [keyStored,setKeyStored]=useState<boolean|null>(null)
+ const [note,setNote]=useState('')
+ const {testing,report,run}=useServerTest(invoke,disabled)
+ const hasKey=keyStored??Boolean(credentials?.star_server)
+ const change=(patch:Partial<AppSettings>)=>onChange({...draft,...patch})
+ const saveKey=async()=>{
+   const field=keyInput.current
+   if(disabled||keyBusy||!field||!field.value.trim())return
+   setKeyBusy(true);setNote('')
+   try{
+     const saved=await invoke('saveProviderKey',{provider:'star_server',key:field.value.trim()})
+     if(saved){setKeyStored(true);setNote('Server key saved in Windows Credential Manager.')}
+   }finally{field.value='';setKeyTyped(false);setKeyBusy(false)}
+ }
+ const forgetKey=async()=>{
+   if(disabled||keyBusy)return
+   setKeyBusy(true);setNote('')
+   try{const cleared=await invoke('clearProviderKey',{provider:'star_server'});if(cleared){setKeyStored(false);setNote('Stored server key removed.')}}
+   finally{setKeyBusy(false)}
+ }
+ const useLimits=async(context:number,slots:number)=>{
+   const next={...draft,server_context_tokens:context,server_parallel:Math.max(1,Math.min(4,slots))}
+   onChange(next)
+   const saved=await invoke('saveSettings',{settings:next})
+   if(saved)setNote(`Saved: ${context} context tokens per request, ${next.server_parallel} parallel request(s).`)
+ }
+ return <div role="group" aria-label="STAR Server settings">
+   <div className="integrated-heading"><Server size={18}/><div><strong>STAR Server on your network</strong><span>Your own server runs the AI. No model download is needed on this PC.</span></div></div>
+   <div className="integrated-key-controls">
+     <label className="integrated-field">Server address
+       <input type="text" inputMode="url" spellCheck={false} autoComplete="off" disabled={disabled} value={draft.server_endpoint??''} placeholder="http://192.168.1.20:8080/v1" onChange={e=>change({server_endpoint:e.target.value.trim()})}/>
+     </label>
+     <label className="integrated-field">Server model ID
+       <input list="star-server-model-ids" spellCheck={false} autoComplete="off" disabled={disabled} value={draft.model??''} placeholder="Test server to list its models" onChange={e=>change({model:e.target.value.trim()})}/>
+     </label>
+   </div>
+   <datalist id="star-server-model-ids">{(report?.models??[]).map(id=><option key={id} value={id}/>)}</datalist>
+   <div className="integrated-key-controls">
+     <label className="integrated-field">Server key (stored in Windows Credential Manager)
+       <input ref={keyInput} type="password" autoComplete="off" spellCheck={false} disabled={disabled||keyBusy} placeholder={hasKey?'A key is saved. Paste a new one to replace it.':'Paste the server key'} onInput={e=>setKeyTyped(Boolean(e.currentTarget.value.trim()))}/>
+     </label>
+     <div className="integrated-actions">
+       <button type="button" className="secondary-button" disabled={disabled||keyBusy||!keyTyped} onClick={()=>void saveKey()}>{keyBusy?<LoaderCircle size={14} className="spin"/>:<Check size={14}/>} Save key</button>
+       <button type="button" className="secondary-button" disabled={disabled||keyBusy||!hasKey} onClick={()=>void forgetKey()}><X size={14}/> Forget key</button>
+       {hasKey&&<span className="integrated-connected"><ShieldCheck size={14}/> Key present in OS vault</span>}
+     </div>
+   </div>
+   <p className="integrated-help">Use the private IP address of your server, ending in /v1. Prompts go only to that address, never to a cloud provider. Plain http is not encrypted, so use it only on a network you trust.</p>
+   <details><summary className="integrated-help">Server limits (optional)</summary>
+     <div className="integrated-key-controls">
+       <label className="integrated-field">Wait per request (seconds)
+         <input type="number" min={30} max={1800} step={30} disabled={disabled} value={draft.server_timeout??600} onChange={e=>change({server_timeout:Number(e.target.value)})}/>
+       </label>
+       <label className="integrated-field">Parallel requests (server slots)
+         <input type="number" min={1} max={4} disabled={disabled} value={draft.server_parallel??1} onChange={e=>change({server_parallel:Number(e.target.value)})}/>
+       </label>
+       <label className="integrated-field">Context tokens per request (0 = ask the server)
+         <input type="number" min={0} max={1048576} step={1024} disabled={disabled} value={draft.server_context_tokens??0} onChange={e=>change({server_context_tokens:Number(e.target.value)})}/>
+       </label>
+     </div>
+   </details>
+   <div className="integrated-actions">
+     <button type="button" className="secondary-button" disabled={disabled||testing||!draft.server_endpoint} onClick={()=>void run(draft)}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
+     <span>Saves these settings, then checks the server, the key and a real reply.</span>
+   </div>
+   {note&&<p role="status" className="integrated-confirm">{note}</p>}
+   {report&&<ServerReportView report={report} current={draft.model} onPickModel={id=>change({model:id})}
+     onUseLimits={(context,slots)=>void useLimits(context,slots)}/>}
+ </div>
+}
+
+/** Brain page card shown when STAR Server is selected, in place of any local download prompt. */
+export function ServerBrainPanel({settings,status,invoke,disabled=false,openSettings}:{settings:AppSettings;status?:ServerStatus;invoke:Invoke;disabled?:boolean;openSettings:()=>void}){
+ const {testing,report,run}=useServerTest(invoke,disabled)
+ const ready=report?report.ok:status?.ok??null
+ return <section className="integrated-panel" aria-label="STAR Server">
+   <div className="integrated-heading"><Server size={19}/><div>
+     <strong>STAR Server is your AI brain</strong>
+     <span>{settings.model?`${settings.model} runs on your own server.`:'Choose a server model in Settings to start chatting.'} Nothing needs to be downloaded to this PC.</span>
+   </div></div>
+   <p className="integrated-help">Address: {settings.server_endpoint||'not set yet'} · Key: {status?.key_present?'saved':'not saved yet'} · Status: {ready===true?'ready':ready===false?'needs attention':'not checked yet'}</p>
+   <div className="integrated-actions">
+     <button type="button" className="secondary-button" disabled={disabled||testing||!settings.server_endpoint} onClick={()=>void run()}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
+     <button type="button" className="secondary-button" onClick={openSettings}><Settings2 size={14}/> Server settings</button>
+   </div>
+   {report&&<ServerReportView report={report}/>}
+ </section>
+}
+
+/** With STAR Server selected the on-device brain is only a backup: keep it available, folded away, never a prompt. */
+export function LocalBrainFallback({optional,children}:{optional:boolean;children:ReactNode}){
+ if(!optional)return <>{children}</>
+ return <details className="settings-expander brain-details"><summary><span><strong>Optional: on-device backup brain</strong><small>Not needed while STAR Server is selected. Set it up only if you want a local model as a fallback.</small></span><ChevronDown size={17}/></summary>
+   <div className="settings-expander-body">{children}</div>
+ </details>
+}
 
 export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disabled=false}:{draft:AppSettings;onChange:(settings:AppSettings)=>void;credentials:Record<string,boolean>;invoke:Invoke;refresh:()=>void;disabled?:boolean}){
- const [selected,setSelected]=useState<Provider>('groq')
+ const [selected,setSelected]=useState<CloudProvider>('groq')
  const [apiKey,setApiKey]=useState('')
  const [pending,setPending]=useState(false)
  const [message,setMessage]=useState('')
@@ -28,17 +191,18 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
    finally{setPending(false)}
  }
  return <section className="integrated-panel" aria-label="AI provider settings">
-   <div className="integrated-heading"><KeyRound size={18}/><div><strong>Model & provider</strong><span>Local by default. Cloud providers are optional and require your own key.</span></div></div>
+   <div className="integrated-heading"><KeyRound size={18}/><div><strong>Model & provider</strong><span>Local by default. STAR Server keeps everything on your own network. Cloud providers are optional and require your own key.</span></div></div>
    <label className="integrated-field">Inference provider
      <select value={draft.provider||'local'} disabled={disabled} onChange={e=>onChange({...draft,provider:e.target.value as Provider})}>
-       {providers.map(x=><option value={x} key={x}>{x==='local'?'Local STAR Brain':x==='openrouter'?'OpenRouter':x==='groq'?'GroqCloud':x==='gemini'?'Gemini':'Cerebras'}</option>)}
+       {providers.map(x=><option value={x} key={x}>{providerNames[x]}</option>)}
      </select>
    </label>
    <p className="integrated-help">After changing provider, save Settings. STAR sends your prompt only to the provider you explicitly selected; ordinary local chat never silently falls back to a cloud model.</p>
+   {usesStarServer(draft)?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
    <div className="integrated-key-controls">
      <label className="integrated-field">Cloud key provider
-       <select value={selected} disabled={disabled||pending} onChange={e=>setSelected(e.target.value as Provider)}>
-         {providers.filter(x=>x!=='local').map(x=><option key={x} value={x}>{x==='groq'?'GroqCloud':x==='openrouter'?'OpenRouter':x==='gemini'?'Gemini':'Cerebras'}{credentials?.[x]?' — connected':''}</option>)}
+       <select value={selected} disabled={disabled||pending} onChange={e=>setSelected(e.target.value as CloudProvider)}>
+         {cloudProviders.map(x=><option key={x} value={x}>{providerNames[x]}{credentials?.[x]?' — connected':''}</option>)}
        </select>
      </label>
      <label className="integrated-field">API key (never saved in STAR settings)
@@ -51,6 +215,7 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
      {credentials?.[selected]&&<span className="integrated-connected"><ShieldCheck size={14}/> Key present in OS vault</span>}
    </div>
    {message&&<p role="status" className="integrated-confirm">{message}</p>}
+   </>}
  </section>
 }
 
