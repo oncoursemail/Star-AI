@@ -24,7 +24,7 @@ from .version import __version__
 from .intelligence import for_settings
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','switchProject','pickFiles','sendMessage','runTeam','rememberDecision','listLearning','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
 })
@@ -39,6 +39,11 @@ def react_index(root: Path | None = None) -> Path:
 def sanitize_event(event: dict) -> dict:
     """Never forward raw tool results/secret tokens to an unrestricted webpage."""
     kind = str(event.get('event', 'working'))[:36]
+    if kind in {'agent_started', 'agent_finished', 'agent_blocked'}:
+        # Task IDs/roles are fixed by the trusted team planner; never stream peer text.
+        role = str(event.get('role','agent'))[:24]
+        status = str(event.get('status','working'))[:18]
+        return {'phase': f'STAR Teams: {role} — {status if kind != "agent_started" else "working"}'}
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
     if kind in {'saved','run_completed'}:
@@ -146,7 +151,7 @@ def launch():
                         detail = f'{type(exc).__name__}: {str(exc)[:350]}'
                     self._emit(request_id, 'error', detail)
                 finally:
-                    if action=='sendMessage':self.active_task=False
+                    if action in {'sendMessage','runTeam'}:self.active_task=False
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -222,6 +227,38 @@ def launch():
                 chats.close()
             return {'answer':answer}
 
+        def _run_team(self, request_id: str, prompt: str):
+            """One user request, four bounded read-only specialists, one stored answer."""
+            from .team_service import run_research_team
+            import asyncio
+            home = app_data()
+            settings = Settings.load(self.settings_file)
+            if not settings.model.strip():
+                raise ValueError("Start STAR Brain before running a specialist team")
+            chats = Conversations(home / "conversations.sqlite3")
+            try:
+                chats.add(settings.project, "user", prompt)
+            finally:
+                chats.close()
+            answer, team = asyncio.run(run_research_team(
+                endpoint=settings.endpoint, model=settings.model,
+                project=settings.project, prompt=prompt, home=home,
+                parallel=2,
+                on_event=lambda event: self._emit(
+                    request_id, 'progress', sanitize_event(event)),
+            ))
+            chats = Conversations(home / "conversations.sqlite3")
+            try:
+                chats.add(settings.project, "assistant", answer)
+            finally:
+                chats.close()
+            return {
+                "answer": answer,
+                "agents": len(team.results),
+                "peak_concurrency": team.peak_concurrency,
+                "elapsed_ms": team.elapsed_ms,
+            }
+
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
             try:
@@ -257,6 +294,29 @@ def launch():
                     settings=Settings.load(self.settings_file)
                     settings.project=project;settings.save(self.settings_file)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action=='rememberDecision':
+                    from .learning import approve_learning
+                    settings=Settings.load(self.settings_file)
+                    receipt=approve_learning(
+                        app_data(), project=settings.project,
+                        text=body.get('text'),
+                        kind=str(body.get('kind','decision')),
+                        replaces_note_id=body.get('replaces_note_id'),
+                        human_approved=body.get('approved') is True,
+                    )
+                    return json.dumps({'ok':True,'data':asdict(receipt)})
+                if action=='listLearning':
+                    from .knowledge import KnowledgeStore
+                    settings=Settings.load(self.settings_file)
+                    store=KnowledgeStore(app_data()/'knowledge')
+                    try:
+                        notes=[{'id':n.id,'kind':n.kind,'text':n.text[:1200],
+                                'created':n.created,'source':n.source}
+                               for n in store.find(settings.project,'',reviewed_only=True,limit=30)
+                               if n.source=='user:explicit-approved-decision'][:12]
+                    finally:
+                        store.close()
+                    return json.dumps({'ok':True,'data':{'notes':notes}})
                 if action=='saveSettings':
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
@@ -284,7 +344,16 @@ def launch():
                     path=app_data();path.mkdir(parents=True,exist_ok=True)
                     QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
                     return json.dumps({'ok':True,'data':True})
-                if action=='sendMessage':
+                if action=='runTeam':
+                    if self.active_task:raise RuntimeError('STAR is already handling a task')
+                    prompt=str(body.get('prompt','')).strip()
+                    if not 2 <= len(prompt) <= 12000:
+                        raise ValueError('Team prompt must be 2–12,000 characters')
+                    if body.get('files'):
+                        raise ValueError('STAR Teams currently supports text only. Turn off Team mode to attach files.')
+                    self.active_task=True
+                    self._run(rid,action,lambda:self._run_team(rid,prompt))
+                elif action=='sendMessage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
                     if not prompt or len(prompt)>30000:raise ValueError('Message must be 1–30,000 characters')
