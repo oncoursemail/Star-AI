@@ -5,7 +5,7 @@ import {AnalyticsView} from './Charts'
 import {Brand,EmptyState,Message,Panel,PrivacyNote,Starlight,Tag} from './components'
 import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,CustomToolRecipe,CustomToolCatalog} from './types'
 import './desktop-v2.css'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
@@ -13,7 +13,7 @@ type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:b
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -42,6 +42,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [updateBusy,setUpdateBusy]=useState(false)
  const [updateProgress,setUpdateProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [studio,setStudio]=useState('')
+ const [customTools,setCustomTools]=useState<CustomToolRecipe[]>([])
+ const [customBusy,setCustomBusy]=useState('')
+ const [customQuery,setCustomQuery]=useState('')
+ const [customPreview,setCustomPreview]=useState('')
  const [mcpTesting,setMcpTesting]=useState('')
  const [mcpChecks,setMcpChecks]=useState<Record<string,{read_tool_count:number;read_tools:string[];protocol:string}>>({})
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
@@ -100,6 +104,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setNotice(msg);if(action==='sendMessage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
      if(action==='testMcpConnection')setMcpTesting('')
+     if(['listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool'].includes(action))setCustomBusy('')
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
@@ -119,6 +124,25 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }else if(action==='installUpdate'){
      setUpdateBusy(false);setUpdateProgress(null)
      setNotice('Verified setup launched. STAR will restart after installation.')
+   }
+   else if(action==='listCustomTools'){
+     setCustomBusy('')
+     setCustomTools((result as unknown as CustomToolCatalog)?.tools||[])
+   }
+   else if(action==='previewCustomTool'){
+     setCustomBusy('')
+     const id=Number(result.tool_id||0)
+     setCustomPreview(JSON.stringify({ok:result.ok,results:result.results,truncated:result.truncated||false},null,2).slice(0,3800))
+     if(result.ok)setCustomTools(v=>v.map(t=>t.id===id?{...t,tests:t.tests+1}:t))
+     setNotice(result.ok?'Preview succeeded. Review the results before approving.':'Preview failed. Check enabled source permissions.')
+   }
+   else if(action==='approveCustomTool'||action==='disableCustomTool'){
+     setCustomBusy('')
+     const id=Number(result.id||0)
+     const newStatus=action==='approveCustomTool'?'approved':'disabled'
+     setCustomTools(v=>v.map(t=>t.id===id?{...t,status:newStatus}:t))
+     setNotice(newStatus==='approved'?'Custom tool approved for this project.':'Custom tool disabled.')
+     void sync()
    }
    else if(action==='testMcpConnection'){
      const name=String(result.name||'')
@@ -160,7 +184,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
  const changeProject=async(name:string)=>{const v=await act('switchProject',{project:name});if(v){const b=v as BootData;setData(b);setDraft(b.settings);setMessages(b.messages);lastProject.current=name;setTab('chat')}setLeftOpen(false)}
- const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);setMcpChecks({});void sync()}}
+ const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);setMcpChecks({});setCustomTools([]);void sync()}}
  const testActualModel=async()=>{
    if(modelChecking)return
    setModelChecking(true);setModelCheck(null)
@@ -190,6 +214,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(!response){setUpdateBusy(false);setUpdateProgress(null)}
  }
  const testMcp=async(name:string)=>{setMcpTesting(name);const reply=await act('testMcpConnection',{server:name});if(!reply)setMcpTesting('')}
+ const customAction=(action:string,id:number)=>{
+   setCustomBusy(action+':'+id)
+   setCustomPreview('')
+   void act(action,{id,...(action==='previewCustomTool'?{query:customQuery.trim()}: {})})
+ }
+ useEffect(()=>{if(tab==='tools'&&!inactive)void act('listCustomTools')},[tab,inactive,act])
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
  const wrapper='shell '+(!leftOpen?'':'shell-open')
  const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
