@@ -2,6 +2,7 @@
 from __future__ import annotations
 import base64
 import io
+from functools import lru_cache
 from pathlib import Path
 import re
 from PIL import Image, ImageOps
@@ -10,11 +11,18 @@ PREFIX = "STAR_GENERATED_IMAGE:"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,190}$")
 
 def preview_image(path: Path) -> str:
-    """Return a small thumbnail for Qt WebChannel, not the full output bytes."""
+    """Preview bytes are cached per file revision, not regenerated every chat refresh."""
     path = path.resolve(strict=True)
-    if path.stat().st_size > 25_000_000:
+    info = path.stat()
+    if info.st_size > 25_000_000:
         raise ValueError("Generated image is too large for a chat preview")
-    with Image.open(path) as opened:
+    return _cached_preview(str(path), info.st_mtime_ns, info.st_size)
+
+
+@lru_cache(maxsize=24)
+def _cached_preview(filename: str, mtime_ns: int, source_size: int) -> str:
+    # These identity parameters ensure file changes invalidate the thumbnail cache.
+    with Image.open(filename) as opened:
         if opened.width * opened.height > 55_000_000:
             raise ValueError("Generated image dimensions exceed safety limit")
         im = ImageOps.exif_transpose(opened)
