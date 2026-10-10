@@ -73,7 +73,7 @@ def test_unknown_genre_is_not_fabricated():
     result = infer_game_type("The Place", "Cool stuff", "")
     assert result["inferred_types"] == []
     assert result["confidence"] == "insufficient evidence"
-    assert "hypoth" not in result.get("platform_label", "").lower()
+    assert result["platform_label"] is None
 
 
 @pytest.mark.parametrize("invalid", [0, -1, False, "1/../etc/passwd", "99?auth=secret", None, 1.5])
@@ -90,7 +90,7 @@ def test_partial_auxiliary_failure_is_a_warning(tmp_path):
         return httpx.Response(429, json={"message": "rate limited"})
     research = RobloxResearch(home=tmp_path, client=_client(handler))
     report = research.game_report(999)
-    assert report["metrics"]["visits"] if False else report["metrics"]["cumulative_visits"] == 10001
+    assert report["metrics"]["cumulative_visits"] == 10001
     assert report["metrics"]["votes_up"] is None
     assert report["warnings"]
     assert not report["images"]
