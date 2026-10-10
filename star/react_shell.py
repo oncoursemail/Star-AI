@@ -26,12 +26,14 @@ from .intelligence import for_settings
 from .providers import credential_status, save_api_key, clear_api_key
 from .chat_images import chat_image, generate_chat_image
 from .diagnostics import export_review_bundle
+from .mcp_connections import MCPGateway
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
+    'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
 })
 
 
@@ -44,6 +46,10 @@ def react_index(root: Path | None = None) -> Path:
 def sanitize_event(event: dict) -> dict:
     """Never forward raw tool results/secret tokens to an unrestricted webpage."""
     kind = str(event.get('event', 'working'))[:36]
+    if kind in {'agent_started','agent_finished','agent_blocked'}:
+        role=str(event.get('role','agent'))[:24]
+        status=str(event.get('status','working'))[:18]
+        return {'phase':f'STAR Teams: {role} — {status if kind != "agent_started" else "working"}'}
     if kind == 'assistant_delta':
         return {'phase':'Generating response', 'delta':str(event.get('text',''))[:2500]}
     if kind in {'saved','run_completed'}:
@@ -67,25 +73,29 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
     home = app_data()
     chats = Conversations(home / 'conversations.sqlite3')
     try:
-        recent = chats.recent(settings.project, limit=80)
+        active_chat = chats.active_chat(settings.project)
+        chat_threads = chats.list_chats(settings.project)
+        recent = chats.recent(settings.project, limit=80, chat_id=active_chat)
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
     messages = []
     for i, (role, body, created) in enumerate(recent):
-        entry = {'id': f'saved-{i}', 'role': role, 'text': body, 'created': created}
-        preview = chat_image(home, body) if role == 'assistant' else None
+        entry = {'id':f'saved-{i}', 'role':role,'text':body,'created':created}
+        preview = chat_image(home,body) if role == 'assistant' else None
         if preview:
             entry.update(preview)
         messages.append(entry)
     brain = BrainInstall.load(home / 'brain.json')
     return {
-        'version':__version__, 'project':settings.project, 'projects':projects,
-        'messages':messages, 'settings':asdict(settings),
-        'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
-        'analytics':get_dashboard(home, settings.project),
+        'version':__version__,'project':settings.project,'projects':projects,
+        'messages':messages,'active_chat':active_chat,'chats':chat_threads,
+        'settings':asdict(settings),
+        'brain_installed':brain is not None,'brain_running':runtime.status()=='running',
+        'analytics':get_dashboard(home,settings.project),
         'credentials':credential_status(),
         'intelligence':for_settings(settings,home).status(),
+        'mcp':MCPGateway(settings).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -158,7 +168,7 @@ def launch():
                         detail = f'{type(exc).__name__}: {str(exc)[:350]}'
                     self._emit(request_id, 'error', detail)
                 finally:
-                    if action in {'sendMessage','generateImage'}:self.active_task=False
+                    if action in {'sendMessage','generateImage','runTeam'}:self.active_task=False
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -209,7 +219,8 @@ def launch():
                 raise ValueError('STAR Brain is offline. Go to STAR Brain and start your model.')
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'user',prompt)
+                active_chat=chats.active_chat(settings.project)
+                chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
             from .media_features import VIDEO_EXTENSIONS,AUDIO_EXTENSIONS,video_frames,transcribe_audio
@@ -230,10 +241,10 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github)
+                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'assistant',answer)
+                chats.add(settings.project,'assistant',answer,chat_id=active_chat)
             finally:
                 chats.close()
             return {'answer':answer}
@@ -244,16 +255,52 @@ def launch():
             self._emit(request_id,'progress',{'phase':'Generating image using local ComfyUI…'})
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'user',prompt)
+                active_chat=chats.active_chat(settings.project)
+                chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
             chats=Conversations(home/'conversations.sqlite3')
             try:
-                chats.add(settings.project,'assistant',result['message'])
+                chats.add(settings.project,'assistant',result['message'],chat_id=active_chat)
             finally:
                 chats.close()
             return {'answer':result['answer'],'image':result['image']}
+
+        def _run_team(self, request_id: str, prompt: str):
+            """One user request, four bounded read-only specialists, one stored answer."""
+            from .team_service import run_research_team
+            import asyncio
+            home = app_data()
+            settings = Settings.load(self.settings_file)
+            if not settings.model.strip():
+                raise ValueError("Start STAR Brain before running a specialist team")
+            if getattr(settings,'provider','local') != 'local':
+                raise ValueError('STAR Teams currently requires the local STAR Brain model')
+            chats = Conversations(home / "conversations.sqlite3")
+            try:
+                active_chat = chats.active_chat(settings.project)
+                chats.add(settings.project, "user", prompt, chat_id=active_chat)
+            finally:
+                chats.close()
+            answer, team = asyncio.run(run_research_team(
+                endpoint=settings.endpoint, model=settings.model,
+                project=settings.project, prompt=prompt, home=home,
+                parallel=2,
+                on_event=lambda event: self._emit(
+                    request_id, 'progress', sanitize_event(event)),
+            ))
+            chats = Conversations(home / "conversations.sqlite3")
+            try:
+                chats.add(settings.project, "assistant", answer, chat_id=active_chat)
+            finally:
+                chats.close()
+            return {
+                "answer": answer,
+                "agents": len(team.results),
+                "peak_concurrency": team.peak_concurrency,
+                "elapsed_ms": team.elapsed_ms,
+            }
 
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
