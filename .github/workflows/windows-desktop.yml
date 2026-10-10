@@ -125,6 +125,16 @@ jobs:
           $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
           $ui = Start-Process -FilePath $exe -ArgumentList '--ui-doctor' -PassThru -Wait
           if ($null -eq $ui.ExitCode -or $ui.ExitCode -ne 0) { throw "STAR React UI bundle missing: $($ui.ExitCode)" }
+      - name: Verify binary source attribution matches pull request
+        shell: pwsh
+        env:
+          STAR_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
+          $build = Start-Process -FilePath $exe -ArgumentList '--build-doctor' -Wait -PassThru
+          if ($null -eq $build.ExitCode -or $build.ExitCode -ne 0) {
+            throw "STAR packaged build SHA mismatch or missing metadata: $($build.ExitCode)"
+          }
       - name: Zip portable build
         shell: pwsh
         run: |

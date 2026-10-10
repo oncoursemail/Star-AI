@@ -37,3 +37,15 @@ def test_tampered_or_oversized_build_metadata_is_not_trusted(tmp_path):
     ]:
         file.write_text(raw,encoding="utf-8")
         assert not read_build_info(tmp_path)["stamped"]
+
+
+def test_windows_release_pipeline_enforces_packaged_build_provenance():
+    from pathlib import Path
+    root=Path(__file__).resolve().parents[1]
+    workflow=(root/".github/workflows/windows-desktop.yml").read_text()
+    launcher=(root/"star_desktop.py").read_text()
+    assert "stamp exact source provenance" in workflow.lower()
+    assert "'--build-doctor'" in workflow
+    assert "STAR_EXPECTED_HEAD_SHA" in workflow
+    assert "STAR_EXPECTED_HEAD_SHA" in launcher
+    assert "--add-data 'star/build-info.json;star'" in workflow

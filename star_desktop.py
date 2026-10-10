@@ -3,9 +3,20 @@
 The --doctor command is supported in headless Windows CI to check the packaged app.
 """
 import sys
+import os
 
 
 def main():
+    if '--build-doctor' in sys.argv:
+        from star.build_info import read_build_info
+        result = read_build_info()
+        expected = os.environ.get("STAR_EXPECTED_HEAD_SHA", "").strip()
+        if not result["stamped"]:
+            raise RuntimeError("Packaged source provenance is missing or malformed")
+        if expected and result["head_commit"] != expected:
+            raise RuntimeError("Packaged source does not match the expected GitHub review commit")
+        print("STAR exact build:", result["head_commit"], result["run_url"])
+        return 0
     if '--doctor' in sys.argv:
         from star.desktop_core import Settings, app_data
         from star.media import image_part
