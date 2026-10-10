@@ -42,26 +42,34 @@ const hostOf = (url: unknown) => {
 
 export function describeConnection(input: {
   settings: {provider: string; model: string; endpoint: string} & Record<string, unknown>
-  brainRunning: boolean
+  /** The app-wide status light (`brainStatus` in IntegrationPanels): on-device brain or STAR Server. */
+  brain: {online: boolean; label: string}
+  /** STAR Server check summary from the host; `ok` is null until the server has been checked. */
+  server?: {ok: boolean | null; configured?: boolean; key_present?: boolean} | null
+  /** True for the on-device brain and STAR Server; false for hosted providers. */
+  ownHardware: boolean
   credentials: Record<string, boolean>
   preview: boolean
   last: LastOutcome
 }): Connection {
-  const {settings, brainRunning, credentials, preview, last} = input
+  const {settings, brain, server, ownHardware, credentials, preview, last} = input
   const provider = providerLabel(settings.provider)
   const model = (settings.model || '').trim()
   const local = settings.provider === 'local'
-  const hosted = !local && settings.provider !== 'star_server'
-  const endpoint = local ? hostOf(settings.endpoint) : settings.provider === 'star_server' ? hostOf(settings.server_endpoint) : ''
+  const lan = settings.provider === 'star_server'
+  const endpoint = local ? hostOf(settings.endpoint) : lan ? hostOf(settings.server_endpoint) : ''
   const base = {provider, model, endpoint}
   const label = model ? `${provider} · ${model}` : provider
   if (preview) {
     return {...base, tone: 'preview', label: 'Preview', state: 'No model', note: 'This browser preview is not connected to a model. Open STAR Desktop to chat.'}
   }
+  if (lan && server && server.configured === false) {
+    return {...base, tone: 'attention', label: provider, state: 'No server address', note: 'Enter the address of your STAR Server in Settings.'}
+  }
   if (!model) {
     return {...base, tone: 'attention', label: provider, state: 'No model selected', note: 'Choose a model in Model & connection before sending.'}
   }
-  if (hosted && !credentials[settings.provider]) {
+  if (!ownHardware && !credentials[settings.provider]) {
     return {...base, tone: 'attention', label, state: 'Key missing', note: `${provider} needs an API key. Add it in Settings.`}
   }
   if (last && !last.ok && (last.kind === 'unreachable' || last.kind === 'access')) {
@@ -76,35 +84,37 @@ export function describeConnection(input: {
   if (last?.ok) {
     return {...base, tone: 'ready', label, state: 'Connected', note: `Answered at ${clock(last.at)}.`}
   }
-  if (local && brainRunning) {
-    return {...base, tone: 'ready', label, state: 'Running', note: 'The model on this PC is running.'}
+  if (ownHardware && brain.online) {
+    return {...base, tone: 'ready', label, state: 'Ready', note: brain.label + '.'}
   }
-  return {
-    ...base,
-    tone: 'unverified',
-    label,
-    state: 'Not checked',
-    note: local
-      ? "STAR's own engine is not running on this PC. If your model runs elsewhere, send a message or test the connection."
-      : 'Not checked in this session. Send a message or test the connection.',
+  if (lan) {
+    // A server that was never checked is not called offline.
+    return server?.ok === false
+      ? {...base, tone: 'offline', label, state: 'Needs attention', note: 'The last check of your STAR Server failed. Test it in Model & connection.'}
+      : {...base, tone: 'unverified', label, state: 'Not checked', note: 'Your STAR Server has not been checked in this session. Send a message or test the connection.'}
   }
+  if (local) {
+    return {...base, tone: 'offline', label, state: 'Offline', note: 'The model on this PC is not running. Start it in Model & connection.'}
+  }
+  return {...base, tone: 'unverified', label, state: 'Not checked', note: 'Not checked in this session. Send a message or test the connection.'}
 }
 
 export type FailureKind = 'cancelled' | 'unreachable' | 'access' | 'slow' | 'limit' | 'setup' | 'other'
-export type Failure = {kind: FailureKind; title: string; message: string; /** The backend's own wording, kept for the tooltip. */ detail?: string}
+/** `message` is the backend's own sentence without the Python exception class; `title` is the UI's short reading of it. */
+export type Failure = {kind: FailureKind; title: string; message: string}
 
 /** Turn a backend error string into a calm title, a readable sentence and a recovery class. */
 export function classifyFailure(raw: string): Failure {
   const message = (raw || 'The task could not finish.').replace(/^[A-Za-z_]*(?:Error|Exception|Timeout):\s*/, '').trim()
   const text = raw.toLowerCase()
-  if (text.includes('cancelled by user') || text.startsWith('request stopped')) {
-    return {kind: 'cancelled', title: 'Stopped', message: 'You stopped this response.'}
+  if (text.includes('cancelled by user') || text.startsWith('request stopped') || text.startsWith('no reply was recorded')) {
+    return {kind: 'cancelled', title: 'Stopped', message}
   }
   if (/cannot reach|could not connect|connection (error|refused)|not respond(ing)?\b(?!.*in time)|is offline|unavailable/.test(text)) {
-    return {kind: 'unreachable', title: "Can't reach the model", message: 'Your message was sent, but no model answered. Check that the model server is running and reachable, then test the connection.', detail: message}
+    return {kind: 'unreachable', title: "Can't reach the model", message}
   }
   if (/denied access|api key|needs an api key|401|403/.test(text)) {
-    return {kind: 'access', title: 'The provider refused the request', message: 'The model provider rejected this request. Check its API key and model access in Settings.', detail: message}
+    return {kind: 'access', title: 'The provider refused the request', message}
   }
   if (/rate limit|quota|429/.test(text)) {
     return {kind: 'limit', title: 'The provider is rate-limiting requests', message}
@@ -116,7 +126,7 @@ export function classifyFailure(raw: string): Failure {
     return {kind: 'setup', title: 'Something needs setting up first', message}
   }
   if (text.includes('teams could not finish')) {
-    return {kind: 'other', title: "The team couldn't finish", message: 'One stage did not complete, so there is no combined answer. The steps above show which one.', detail: message}
+    return {kind: 'other', title: "The team couldn't finish", message}
   }
   return {kind: 'other', title: "STAR couldn't finish that", message}
 }

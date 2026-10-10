@@ -20,7 +20,8 @@ from .intelligence import for_settings
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
-from .providers import PROVIDERS, connection_for
+from .providers import (ALL_PROVIDERS, call_limits, connection_for, open_client, provider_kind,
+                        server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
 
@@ -34,7 +35,7 @@ def app_data() -> Path:
 
 @dataclass
 class Settings:
-    endpoint: str = 'http://127.0.0.1:1234/v1'
+    endpoint: str = 'http://127.0.0.1:8080/v1'
     provider: str = 'local'
     model: str = ''
     fast_model: str = ''
@@ -69,6 +70,12 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    # STAR Server (provider 'star_server'): an owner-entered private LAN address.
+    # The server key is never stored here; it lives in the OS keyring.
+    server_endpoint: str = ''
+    server_timeout: int = 600        # seconds of silence allowed for one server request
+    server_parallel: int = 1         # match the server's llama.cpp -np slot count
+    server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
 
     @classmethod
     def load(cls, file: Path):
@@ -80,13 +87,14 @@ class Settings:
     def validate(self):
         for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
             validate_alias(getattr(self, field), field=field)
-        if self.provider != 'local' and self.provider not in PROVIDERS:
+        if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
             raise ValueError('Use a loopback local inference URL ending in /v1')
         port = int(self.endpoint.split(':')[-1].split('/')[0])
         if not 1 <= port <= 65535:
             raise ValueError('Invalid local inference port')
+        self._validate_server()
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
@@ -121,11 +129,30 @@ class Settings:
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
 
+    def _validate_server(self):
+        """STAR Server (LAN) settings. The loopback `endpoint` rule above is separate."""
+        if not isinstance(self.server_endpoint, str):
+            raise ValueError('STAR Server address must be text')
+        if self.server_endpoint:
+            validate_lan_endpoint(self.server_endpoint)
+        elif provider_kind(self) == 'lan':
+            validate_lan_endpoint('')  # raises the "enter your server address" message
+        if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
+            raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
+        if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
+            raise ValueError('STAR Server parallel requests must be 1 to 4')
+        if (type(self.server_context_tokens) is not int
+                or not (self.server_context_tokens == 0 or 1024 <= self.server_context_tokens <= 1_048_576)):
+            raise ValueError('STAR Server context must be 0 (automatic) or 1024 to 1048576 tokens')
+
     def save(self, file: Path):
         self.validate()
         file.parent.mkdir(parents=True, exist_ok=True)
         # configuration is nonsecret; never write bearer tokens here
         file.write_text(json.dumps(asdict(self), indent=2), encoding='utf-8')
+
+
+TERMINAL_STATUSES = ('failed', 'cancelled')
 
 
 class Conversations:
@@ -149,6 +176,15 @@ class Conversations:
             self.connection.execute(
                 "ALTER TABLE messages ADD COLUMN chat_id TEXT NOT NULL DEFAULT 'legacy'"
             )
+        # Turn outcome (additive; old rows and older STAR versions stay valid).
+        # status is 'complete' except on the terminal 'event' record of a turn that
+        # failed or was cancelled; reply_to is the user message row that record answers.
+        if 'status' not in columns:
+            self.connection.execute(
+                "ALTER TABLE messages ADD COLUMN status TEXT NOT NULL DEFAULT 'complete'"
+            )
+        if 'reply_to' not in columns:
+            self.connection.execute('ALTER TABLE messages ADD COLUMN reply_to INTEGER')
         self.connection.execute(
             'CREATE TABLE IF NOT EXISTS chats '
             '(project TEXT NOT NULL, id TEXT NOT NULL, title TEXT NOT NULL, '
@@ -236,9 +272,14 @@ class Conversations:
             )
         ]
 
-    def add(self, project: str, role: str, body: str, chat_id: str | None = None):
+    def add(self, project: str, role: str, body: str, chat_id: str | None = None, *,
+            status: str = 'complete', reply_to: int | None = None) -> int:
+        """Store one message and return its row id."""
         if role not in {'user', 'assistant', 'event'}:
             raise ValueError('Invalid message role')
+        if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
+                                     or type(reply_to) is not int):
+            raise ValueError('Only an event record that answers a user message can be failed or cancelled')
         stamp = datetime.now(timezone.utc).isoformat()
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
@@ -252,10 +293,11 @@ class Conversations:
                 'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
             ).fetchone():
                 raise ValueError('Cannot save to a missing conversation')
-            self.connection.execute(
-                'INSERT INTO messages(project,role,body,created,chat_id) '
-                'VALUES (?,?,?,?,?)', (project, role, body, stamp, target)
-            )
+            row = self.connection.execute(
+                'INSERT INTO messages(project,role,body,created,chat_id,status,reply_to) '
+                'VALUES (?,?,?,?,?,?,?)',
+                (project, role, body, stamp, target, status, reply_to)
+            ).lastrowid
             # Name new chats from their first prompt, without altering legacy titles.
             if role == 'user' and target != 'legacy':
                 first_line = ' '.join(body.split())[:64].strip() or 'New chat'
@@ -267,20 +309,82 @@ class Conversations:
                 'UPDATE chats SET updated=? WHERE project=? AND id=?',
                 (stamp, project, target)
             )
+        return int(row)
 
-    def recent(self, project: str, limit: int = 70, chat_id: str | None = None):
-        if chat_id is None:
-            rows = self.connection.execute(
-                'SELECT role,body,created FROM messages '
-                'WHERE project=? ORDER BY id DESC LIMIT ?', (project, limit)
-            ).fetchall()
-        else:
-            rows = self.connection.execute(
-                'SELECT role,body,created FROM messages '
-                'WHERE project=? AND chat_id=? ORDER BY id DESC LIMIT ?',
-                (project, chat_id, limit)
-            ).fetchall()
+    def add_terminal(self, project: str, chat_id: str, user_id: int, status: str, detail: str) -> int | None:
+        """Record that the turn started by user message ``user_id`` ended without an answer.
+
+        Idempotent: a turn gets at most one terminal record. Returns the new row id,
+        or None when the turn was already closed.
+        """
+        if status not in TERMINAL_STATUSES:
+            raise ValueError('Terminal status must be failed or cancelled')
+        owner = self.connection.execute(
+            "SELECT 1 FROM messages WHERE id=? AND project=? AND chat_id=? AND role='user'",
+            (user_id, project, chat_id)
+        ).fetchone()
+        if not owner:
+            raise ValueError('Terminal record must answer a user message in the same conversation')
+        if self.connection.execute(
+            "SELECT 1 FROM messages WHERE reply_to=? AND status!='complete'", (user_id,)
+        ).fetchone():
+            return None
+        return self.add(project, 'event', detail[:2000], chat_id=chat_id,
+                        status=status, reply_to=user_id)
+
+    def recent(self, project: str, limit: int = 70, chat_id: str | None = None,
+               include_events: bool = True):
+        """Newest ``limit`` messages, oldest first. Model context passes include_events=False."""
+        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
+        if not include_events:
+            scope += " AND role IN ('user','assistant')"
+        rows = self.connection.execute(
+            f'SELECT role,body,created FROM messages WHERE {scope} ORDER BY id DESC LIMIT ?',
+            (*args, limit)
+        ).fetchall()
         return list(reversed(rows))
+
+    def recent_records(self, project: str, limit: int = 70, chat_id: str | None = None) -> list[dict]:
+        """Like recent(), with row ids and turn outcome, for the UI state payload."""
+        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
+        rows = self.connection.execute(
+            'SELECT id,role,body,created,status,reply_to FROM messages '
+            f'WHERE {scope} ORDER BY id DESC LIMIT ?', (*args, limit)
+        ).fetchall()
+        return [{'id': i, 'role': role, 'body': body, 'created': created,
+                 'status': status, 'reply_to': reply_to}
+                for i, role, body, created, status, reply_to in reversed(rows)]
+
+    def retry_state(self, project: str, chat_id: str, busy: bool = False) -> dict | None:
+        """What happened to the newest user message in a chat, if it got no answer.
+
+        Returns None when the newest turn was answered (or there is no turn, or a
+        task is still running). Otherwise: status failed/cancelled from the stored
+        terminal record, or 'interrupted' when nothing at all was recorded after the
+        message (for example STAR was closed mid-reply). Derived on read, never written.
+        """
+        last = self.connection.execute(
+            "SELECT id,body,created FROM messages WHERE project=? AND chat_id=? AND role='user' "
+            'ORDER BY id DESC LIMIT 1', (project, chat_id)
+        ).fetchone()
+        if not last:
+            return None
+        user_id, prompt, created = last
+        after = self.connection.execute(
+            'SELECT role,body,created,status,reply_to FROM messages '
+            'WHERE project=? AND chat_id=? AND id>? ORDER BY id', (project, chat_id, user_id)
+        ).fetchall()
+        if any(role == 'assistant' for role, *_ in after):
+            return None
+        for role, body, stamp, status, reply_to in reversed(after):
+            if role == 'event' and status in TERMINAL_STATUSES and reply_to == user_id:
+                return {'status': status, 'detail': body, 'prompt': prompt,
+                        'message_id': user_id, 'created': stamp}
+        if busy:
+            return None
+        return {'status': 'interrupted',
+                'detail': 'No reply was recorded for this message. STAR may have been closed before it finished.',
+                'prompt': prompt, 'message_id': user_id, 'created': created}
 
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
@@ -405,9 +509,16 @@ def model_context_char_budget(settings: Settings) -> int:
     tokens per character. Keep a reserve for the active user prompt, tools and
     response. Other inference endpoints retain their existing settings.
     """
-    if settings.provider == 'local' and settings.router_models_dir:
+    kind = provider_kind(settings)
+    if kind == 'local' and settings.router_models_dir:
         # Even 8-GB GPUs can page heavily when the KV cache is oversized.
         return min(settings.context_chars, max(3000, 2 * (settings.router_context - 512)))
+    if kind == 'lan':
+        # Each llama-server slot has its own context. Use the owner's value or
+        # the size the server itself reported; unknown keeps the saved budget.
+        tokens = server_context_tokens(settings)
+        if tokens:
+            return min(settings.context_chars, max(3000, 2 * (tokens - 1024)))
     return settings.context_chars
 
 
@@ -453,7 +564,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     try:
         dialogue = Conversations(home / 'conversations.sqlite3')
         try:
-            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id)
+            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id,
+                                         include_events=False)
         finally:
             dialogue.close()
         route_history = (
@@ -492,19 +604,18 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         allow_studio = bool(use_tools and settings.studio_id and
                             needs_studio_connection(prompt,recent_users))
         mcp_gateway = MCPGateway(settings) if use_tools else None
-        endpoint, key = connection_for(settings)
+        connection_for(settings)  # fail early (missing key, bad address) before any work
+        limits = call_limits(settings)
         async def run():
-            from openai import AsyncOpenAI
             from .web_search import search_web, source_context
-            import httpx
             snippets = ''
             if research:
                 audited_event({'event': 'search_started'})
                 found = await search_web(prompt[:600], limit=5)
                 snippets = '\n\n' + source_context(found)
                 audited_event({'event': 'search_finished'})
-            timeout = httpx.Timeout(95.0 if settings.provider == 'local' else 55.0, connect=8.0)
-            async with AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0) as client:
+            # One client per task, with the selected provider's own time limits.
+            async with open_client(settings) as client:
                 specialists = (ResearchTeam(
                     client=client,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
@@ -528,7 +639,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               subagent_model=route.subagent_model,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
-                              subagent_parallelism=(1 if settings.provider == 'local' else 2),
+                              subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
                               tool_workshop=workshop, specialists=specialists)
@@ -562,7 +673,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         try:
             answer, msgs, archive = asyncio.run(controlled_run())
         except TimeoutError as exc:
-            raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. Try Fast mode, a smaller prompt, or a hosted provider.') from exc
+            advice = ('Try Fast mode or a smaller prompt, or raise the STAR Server timeout in Settings.'
+                      if provider_kind(settings) == 'lan' else
+                      'Try Fast mode, a smaller prompt, or a hosted provider.')
+            raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)

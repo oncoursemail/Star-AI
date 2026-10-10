@@ -1,7 +1,10 @@
-"""On-device STAR latency benchmark using a real OpenAI-compatible local server.
+"""STAR latency benchmark using a real OpenAI-compatible server the owner runs.
 
 Nothing is benchmarked until this command is actually run on the owner's PC.
-Only loopback HTTP is accepted; no background jobs, uploads, or model changes.
+Loopback HTTP is the default. `--server` measures the owner's STAR Server on
+the private LAN instead, with the key read from the OS keyring or the
+STAR_SERVER_API_KEY environment variable (never from the command line).
+No background jobs, uploads, or model changes.
 """
 from __future__ import annotations
 
@@ -43,6 +46,25 @@ def local_endpoint(value: str) -> str:
     return value.rstrip("/")
 
 
+def benchmark_target(endpoint: str | None, *, server: bool = False) -> tuple[str, str]:
+    """Resolve `(endpoint, bearer)` for a loopback brain or the LAN STAR Server.
+
+    The server path reuses STAR's private-IP validation and keyring key. With
+    no explicit endpoint it measures the server address saved in Settings.
+    """
+    if not server:
+        return local_endpoint(endpoint or "http://127.0.0.1:8080/v1"), "local-only"
+    from .providers import STAR_SERVER, get_api_key, validate_lan_endpoint
+    if not endpoint:
+        from .desktop_core import Settings, app_data
+        endpoint = Settings.load(app_data() / "settings.json").server_endpoint
+    target = validate_lan_endpoint(endpoint)
+    key = get_api_key(STAR_SERVER)
+    if not key:
+        raise ValueError("STAR Server needs its API key. Save it in Settings or set STAR_SERVER_API_KEY.")
+    return target, key
+
+
 def parse_sse_data(line: str) -> dict | None:
     """Decode one data event, tolerating comments, [DONE], and bad frames."""
     if not line.startswith("data:"):
@@ -58,7 +80,7 @@ def parse_sse_data(line: str) -> dict | None:
 
 
 def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
-                *, max_tokens: int = 96) -> dict:
+                *, max_tokens: int = 96, api_key: str = "local-only") -> dict:
     """Observe TTFT and elapsed time; token speed only when the server reports usage."""
     validate_alias(model)
     if not 16 <= max_tokens <= 512:
@@ -75,7 +97,7 @@ def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
     output_chars = 0
     actual_tokens = None
     with client.stream("POST", endpoint + "/chat/completions", json=payload,
-                       headers={"Authorization": "Bearer local-only"}) as response:
+                       headers={"Authorization": f"Bearer {api_key}"}) as response:
         response.raise_for_status()
         for line in response.iter_lines():
             item = parse_sse_data(line)
@@ -131,28 +153,35 @@ def summarize(measurements: list[dict]) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Measure STAR's local model speed without uploading prompts")
-    parser.add_argument("--endpoint", default="http://127.0.0.1:8080/v1")
+    parser.add_argument("--endpoint", default=None,
+                        help="Loopback /v1 URL (default http://127.0.0.1:8080/v1), or with --server "
+                             "the private STAR Server address (default: the one saved in Settings)")
+    parser.add_argument("--server", action="store_true",
+                        help="Measure STAR Server on the LAN; the key comes from the keyring or STAR_SERVER_API_KEY")
     parser.add_argument("--model", required=True, help="Model ID shown in the local server /models endpoint")
     parser.add_argument("--scenario", choices=sorted(_PROMPTS), default="chat")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--tokens", type=int, default=96)
     args = parser.parse_args(argv)
-    endpoint = local_endpoint(args.endpoint)
+    endpoint, api_key = benchmark_target(args.endpoint, server=args.server)
     validate_alias(args.model)
     if not 1 <= args.runs <= 10:
         parser.error("--runs must be 1..10")
     if not 16 <= args.tokens <= 512:
         parser.error("--tokens must be 16..512")
     observations = []
-    with httpx.Client(timeout=httpx.Timeout(180.0, connect=5.0), trust_env=False) as client:
+    # A CPU server can need minutes for one answer; loopback keeps its 180 s limit.
+    read_limit = 600.0 if args.server else 180.0
+    with httpx.Client(timeout=httpx.Timeout(read_limit, connect=5.0), trust_env=False) as client:
         for _ in range(args.runs):
             observations.append(measure_one(client, endpoint, args.model, _PROMPTS[args.scenario],
-                                            max_tokens=args.tokens))
+                                            max_tokens=args.tokens, api_key=api_key))
     report = {
         "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
         "scenario": args.scenario,
         "endpoint": endpoint,
+        "target": "star_server" if args.server else "local",
         "measurements": observations,
         "summary": summarize(observations),
     }

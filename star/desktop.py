@@ -4,7 +4,7 @@ This is a real local-model client, not a static UI mockup. Heavy work always use
 worker threads; Windows .exe is produced by GitHub Actions on a Windows runner.
 """
 from __future__ import annotations
-from dataclasses import asdict
+from dataclasses import asdict, replace
 import html
 import json
 from pathlib import Path
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabe
     QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QProgressBar, QGraphicsOpacityEffect)
 
 from .desktop_core import Settings, app_data, Conversations, query_models, run_task, check_studio
+from .providers import uses_star_server
 from .media_features import video_frames, transcribe_audio, local_speak
 from .memory import Memory
 from .local_runtime import Runtime
@@ -592,7 +593,9 @@ class MainWindow(QMainWindow):
         self.install_brain_button.setText('Brain installed ✓  ·  Restart brain')
         self.side_brain.setText('STAR Brain · Ready')
         self.cfg.endpoint='http://127.0.0.1:8080/v1'
-        self.cfg.model=model
+        # With STAR Server selected, the local brain is only a fallback: keep the server model.
+        if not uses_star_server(self.cfg):
+            self.cfg.model=model
         self.cfg.llama_server=info.executable
         self.cfg.gguf_model=info.model
         self.cfg.save(self.settings_file)
@@ -1003,7 +1006,9 @@ class MainWindow(QMainWindow):
         if name:self.workspace.setText(name)
 
     def read_ui_settings(self):
-        new=Settings(endpoint=self.endpoint.text().strip(),model=self.model.currentText().strip(),
+        # Start from the saved settings so fields this legacy form does not show
+        # (provider, STAR Server address, model roles, connectors) are never wiped.
+        new=replace(self.cfg,endpoint=self.endpoint.text().strip(),model=self.model.currentText().strip(),
                      project=self.project_edit.text().strip() or self.cfg.project,
                      workspace=self.workspace.text().strip(),studio_id=self.studio_id.text().strip(),
                      workspace_edit=self.edit_workspace.isChecked(),studio_edit=self.edit_studio.isChecked(),

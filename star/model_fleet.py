@@ -128,15 +128,12 @@ async def probe_model_team(client, settings, *, on_progress: Callable[[dict], No
 
 async def check_configured_team(settings, *, on_progress=None) -> dict:
     """Use only the selected provider/endpoint and its existing credentials."""
-    from openai import AsyncOpenAI
-    import httpx
-    from .providers import connection_for
+    from .providers import open_client, provider_kind
 
     settings.validate()
-    endpoint, key = connection_for(settings)
-    local = settings.provider == "local"
-    async with AsyncOpenAI(base_url=endpoint, api_key=key,
-                           timeout=httpx.Timeout(115 if local else 35, connect=8),
-                           max_retries=0) as client:
+    # Seconds allowed per model: a LAN router may have to load each model first.
+    per_model, http_limit = {"local": (110, 115), "lan": (180, 185),
+                             "cloud": (32, 35)}[provider_kind(settings)]
+    async with open_client(settings, request_timeout=http_limit) as client:
         return await probe_model_team(client, settings, on_progress=on_progress,
-                                      per_model_timeout=110 if local else 32)
+                                      per_model_timeout=per_model)

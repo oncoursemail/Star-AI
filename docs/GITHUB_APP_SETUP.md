@@ -1,8 +1,8 @@
-# STAR GitHub App — two separate responsibilities
+# STAR GitHub App — scoped development on the public source repository
 
-**Private development repository:** `oncoursemail/Star-AI` — STAR can propose source changes on its own `star/...` branches and open Draft PRs, after you register its GitHub App and install it on that repository. The app has **Contents read/write** and **Pull requests read/write**; no Administration, Secrets, Workflows or repository deletion privileges.
+**Canonical public repository:** [`oncoursemail/Star-AI`](https://github.com/oncoursemail/Star-AI). STAR's optional development GitHub App may create source branches and draft pull requests **only within configured repository permissions**. The app does not have Administration, Secrets, Workflows, repository deletion, or release publishing privileges.
 
-**Public distribution repository:** `oncoursemail/Star-Intelligence-Downloads` — STAR's Windows CI publisher may upload **only compiled installer assets, checksums and website allowlist** after passing tests. Do not install the source-writing GitHub App on this public repository; it intentionally refuses to write there. The cross-repo publisher uses a separately scoped Actions secret (prefer eventually a short-lived GitHub App publisher token), never the AI model's own credentials.
+**Official Windows distribution:** [STAR Releases](https://github.com/oncoursemail/Star-AI/releases) in that same public repository. The trusted `.github/workflows/windows-desktop.yml` pipeline builds and validates binaries and publishes new tags with its job-scoped `GITHUB_TOKEN`. The abandoned separate public-downloads mirror and `STAR_PUBLIC_RELEASE_TOKEN` are not needed. No GitHub sign-in is required to download public releases.
 
 ## Register the source-development GitHub App
 
@@ -19,6 +19,6 @@ STAR_GITHUB_PRIVATE_KEY_FILE=C:\Users\YOU\Documents\star-keys\STAR.pem
 STAR_GITHUB_REPO=oncoursemail/Star-AI
 ```
 
-Never paste your key, token, or `.env` here. No GitHub sign-in is required for ordinary users to download STAR **after** the binary-only public release repository is set up.
+Never paste your key, token, or `.env` here. Public downloads are available at [STAR Releases](https://github.com/oncoursemail/Star-AI/releases/latest).
 
-See [Public/private distribution setup](STAR_PUBLIC_PRIVATE_GITHUB.md) and [GitHub App authentication docs](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation).
+See the [repository map](REPOSITORY_GUIDE.md) and [GitHub App authentication docs](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/authenticating-as-a-github-app-installation).

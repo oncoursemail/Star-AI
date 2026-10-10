@@ -274,7 +274,7 @@ export const FIXTURES: Record<string, Fixture> = {
         progress(250, {type: 'route', profile: 'roblox'}, 'STAR · Roblox engineering'),
         progress(60, {type: 'turn', step: 1, max_steps: 1}, 'Thinking'),
         ...streamed(inventoryAnswer.slice(0, 520), 500, 30),
-        {wait: 200, kind: 'error', data: 'RuntimeError: STAR task cancelled by user'},
+        {wait: 200, kind: 'error', data: 'Request stopped. The draft answer has not been saved as a completed result.'},
       ],
     },
   },

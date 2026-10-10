@@ -99,7 +99,7 @@ export function ActivityTimeline({run, onStop, stopping = false}: {run: Activity
         </button>
         {running && <span className="act-clock" aria-label="Elapsed time">{formatElapsed(runElapsed(run, now), true)}</span>}
         {running && onStop && (
-          <button type="button" className="act-stop" onClick={onStop} disabled={stopping}>
+          <button type="button" className="act-stop" onClick={event => event.detail <= 1 && onStop()} disabled={stopping}>
             <Square size={11} fill="currentColor" aria-hidden="true" />
             {stopping ? 'Stopping' : 'Stop'}
           </button>

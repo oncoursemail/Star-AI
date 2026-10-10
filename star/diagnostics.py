@@ -165,6 +165,7 @@ def review_snapshot(home: Path, settings, runtime_status: str) -> dict[str, dict
         },
         "configuration.json": {
             "inference_provider": settings.provider,
+            "star_server_configured": bool(getattr(settings, "server_endpoint", "")),
             "model_id": model,
             "local_brain_installed": installed,
             "local_brain_running": runtime_status == "running",

@@ -1,4 +1,4 @@
-"""Regression suite: private STAR Releases work without GitHub CLI.
+"""Regression suite: public STAR Releases work without GitHub CLI.
 
 These tests use fake HTTP responses and fake EXEs. They do not contact GitHub,
 execute installers, or claim real native Windows install has been verified.
@@ -62,7 +62,7 @@ def test_private_release_falls_back_to_browser_not_gh_cli():
 
 
 def test_public_release_detects_new_version_and_current_version():
-    body={'tag_name':'v0.9.3','html_url':updates.PUBLIC_RELEASES_URL,'assets':[]}
+    body={'tag_name':'v0.9.3','html_url':updates.RELEASES_URL,'assets':[]}
     result=updates.get_latest(FakeClient(FakeResponse(body=body)))
     assert result.available and not result.requires_browser and result.version=='0.9.3'
     body['tag_name']='v0.6.0'
@@ -93,7 +93,7 @@ def test_optional_adjacent_sha256_manifest_verification(tmp_path):
 
 def test_reject_untrusted_public_release_asset(tmp_path, monkeypatch):
     monkeypatch.setattr(updates.sys,'platform','win32')
-    result=updates.UpdateResult(True,'0.9.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=({'name': 'STAR-Setup-v0.9.3.exe','digest':'sha256:'+'a'*64,'size':15000000,'browser_download_url':'https://bad.example/install.exe'},))
+    result=updates.UpdateResult(True,'0.9.3',updates.RELEASES_URL,repository=updates.REPO,anonymous_access=True,assets=({'name': 'STAR-Setup-v0.9.3.exe','digest':'sha256:'+'a'*64,'size':15000000,'browser_download_url':'https://bad.example/install.exe'},))
     with pytest.raises(ValueError,match='Unexpected'):
         updates.stage_installer(result,tmp_path,FakeClient(FakeResponse()))
 
@@ -102,8 +102,8 @@ def test_public_installer_download_verified_sha_and_cache(tmp_path, monkeypatch)
     monkeypatch.setattr(updates.sys,'platform','win32')
     data = b'MZ'+b'Z'*(updates.MIN_INSTALLER_BYTES + 700)
     sha=hashlib.sha256(data).hexdigest()
-    meta={'name':'STAR-Setup-v0.9.3.exe','digest':'sha256:'+sha,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.9.3/STAR-Setup-v0.9.3.exe'}
-    result=updates.UpdateResult(True,'0.9.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
+    meta={'name':'STAR-Setup-v0.9.3.exe','digest':'sha256:'+sha,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-AI/releases/download/v0.9.3/STAR-Setup-v0.9.3.exe'}
+    result=updates.UpdateResult(True,'0.9.3',updates.RELEASES_URL,repository=updates.REPO,anonymous_access=True,assets=(meta,))
     fake=FakeClient(FakeResponse(data=data))
     staged=updates.stage_installer(result,tmp_path,fake)
     assert staged.path.read_bytes()==data
@@ -117,8 +117,8 @@ def test_public_installer_download_verified_sha_and_cache(tmp_path, monkeypatch)
 def test_public_download_tampered_payload_is_never_installed(tmp_path,monkeypatch):
     monkeypatch.setattr(updates.sys,'platform','win32')
     data=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+2)
-    meta={'name':'STAR-Setup-v0.9.3.exe','digest':'sha256:'+'a'*64,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-Intelligence-Downloads/releases/download/v0.9.3/STAR-Setup-v0.9.3.exe'}
-    result=updates.UpdateResult(True,'0.9.3',updates.PUBLIC_RELEASES_URL,repository=updates.PUBLIC_REPO,assets=(meta,))
+    meta={'name':'STAR-Setup-v0.9.3.exe','digest':'sha256:'+'a'*64,'size':len(data),'browser_download_url':'https://github.com/oncoursemail/Star-AI/releases/download/v0.9.3/STAR-Setup-v0.9.3.exe'}
+    result=updates.UpdateResult(True,'0.9.3',updates.RELEASES_URL,repository=updates.REPO,anonymous_access=True,assets=(meta,))
     with pytest.raises(ValueError,match='SHA-256'):
         updates.stage_installer(result,tmp_path,FakeClient(FakeResponse(data=data)))
     assert not list(tmp_path.rglob('*.part'))

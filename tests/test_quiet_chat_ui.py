@@ -83,8 +83,12 @@ def test_chat_controls_are_wired_to_real_actions():
     # Starter prompts fill the composer; Stop cancels the real backend task.
     assert "fillComposer(item.prompt)" in ui
     assert "act('cancelMessage')" in ui
-    # A request that fails to start gives the typed words back.
-    assert "setPrompt(value);setFiles(selected)" in ui
+    # A request the host refuses keeps the question on screen with Retry and Edit.
+    assert "updateRun(null);setBusy(false);setRetryText(value)" in ui
+    # Retry survives a restart through the host's retry record, and re-sends that prompt.
+    assert "const retryPrompt=retryText||pending?.prompt||''" in ui
+    # The second click of a double-click on Send must not land on Stop and cancel the turn.
+    assert "if (event.detail > 1) return" in ui
     # The timeline is reduced from backend progress events, never from a timer.
     assert "applyProgress(runRef.current,info,Date.now())" in ui
     assert "setInterval" not in read("frontend/src/activity.ts")

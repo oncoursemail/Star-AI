@@ -692,12 +692,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.msg-note-text {
-  color: var(--star-muted);
-  font-size: var(--star-fs-nav);
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
 /* Actions keep their space, so revealing them never moves the text. */
 .msg-actions {
   display: flex;
@@ -985,42 +979,77 @@
     transform: rotate(360deg);
   }
 }
-.recover {
-  display: flex;
+/* A turn that ended without an answer. Past ones are a quiet line of history;
+ * the newest one, which can still be retried, gets a tone step and its actions. */
+.msg-note {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--star-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.note-icon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-faint);
+}
+.msg-note.is-failed .note-icon {
+  color: var(--star-danger);
+}
+.note-main {
+  flex: 1;
+  min-width: 0;
+}
+.msg-note strong {
+  display: block;
+  color: var(--star-body);
+  font-weight: 600;
+}
+.msg-note p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.msg-note.is-actionable {
   gap: var(--star-3);
+  font-size: var(--star-fs-ui);
+}
+.msg-note.is-actionable.is-failed {
   padding: var(--star-3) var(--star-4);
   border-radius: var(--star-r-md);
   background: var(--star-danger-wash);
 }
-.recover-icon {
-  flex: 0 0 auto;
-  margin-top: 2px;
-  color: var(--star-danger);
-}
-.recover-main {
-  flex: 1;
-  min-width: 0;
-}
-.recover strong {
-  display: block;
+.msg-note.is-actionable strong {
   color: var(--star-text);
-  font-size: var(--star-fs-ui);
-  font-weight: 600;
 }
-.recover p {
-  margin: 2px 0 0;
-  color: var(--star-muted);
-  font-size: var(--star-fs-ui);
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.msg-note.is-actionable .note-icon {
+  margin-top: 3px;
 }
-.recover-actions {
+.note-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--star-2);
   margin-top: var(--star-3);
 }
-.recover-button {
+/* Stopping is your choice, not a fault: no alarm colour, text and actions on one line. */
+.msg-note.is-actionable.is-cancelled .note-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2) var(--star-3);
+}
+.msg-note.is-actionable.is-cancelled p {
+  flex: 1 1 260px;
+  font-size: var(--star-fs-nav);
+}
+.msg-note.is-actionable.is-cancelled .note-actions {
+  margin: 0;
+}
+.msg-note.is-actionable.is-cancelled .note-icon {
+  margin-top: 8px;
+}
+.note-button {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1033,39 +1062,17 @@
   font-size: var(--star-fs-nav);
   transition: background-color var(--star-dur-hover) var(--star-ease);
 }
-.recover-button:hover {
+.note-button:hover {
   background: var(--star-surface-2);
 }
-.recover-button.is-primary {
+.note-button.is-primary {
   border-color: transparent;
   background: var(--star-text);
   color: var(--star-bg);
   font-weight: 500;
 }
-.recover-button.is-primary:hover {
+.note-button.is-primary:hover {
   background: var(--star-text-hover);
-}
-/* Stopping is your choice, not a fault: no alarm colour, one quiet line. */
-.recover.is-quiet {
-  padding: 0;
-  background: none;
-}
-.recover.is-quiet .recover-main {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--star-2) var(--star-3);
-}
-.recover.is-quiet strong {
-  display: none;
-}
-.recover.is-quiet p {
-  flex: 1 1 240px;
-  margin: 0;
-  font-size: var(--star-fs-nav);
-}
-.recover.is-quiet .recover-actions {
-  margin: 0;
 }
 
 /* ---------- Activity timeline ---------- */

@@ -1,8 +1,11 @@
-"""STAR Teams: real, bounded local specialist inference for deep read-only answers.
+"""STAR Teams: real, bounded private specialist inference for deep read-only answers.
 
 This optional path is distinct from Studio tool agents. It does not execute
 shell commands, mutate workspaces, browse external websites or train weights.
 The trusted application builds the plan; model output never defines privileges.
+
+Teams runs only on the owner's own hardware: the on-device brain, or STAR Server
+on the LAN through the same validated address and keyring key as normal chat.
 """
 from __future__ import annotations
 
@@ -53,36 +56,51 @@ def specialist_plan(prompt: str, *, parallel: int = 2) -> TaskPlan:
 
 async def run_research_team(
     *,
-    endpoint: str,
-    model: str,
-    project: str,
+    endpoint: str = "",
+    model: str = "",
+    project: str = "",
     prompt: str,
     home: Path,
-    parallel: int = 2,
+    parallel: int | None = None,
     on_event: Callable[[dict], None] | None = None,
     client=None,
+    settings=None,
 ) -> tuple[str, TeamResult]:
     """Run 3 parallel-able specialist roles + 1 dependency-aware synthesis.
 
-    Only the official local loopback endpoint may be used. Cloud providers
-    require a separately approved implementation; no arbitrary URLs/keys.
+    Pass the saved `settings` to use the selected private provider (on-device
+    or STAR Server). Without settings, only the loopback `endpoint` is used.
+    Cloud providers require a separately approved implementation; the address
+    and key always come from `connection_for`, never from a caller or a model.
     """
     from .desktop_core import Settings
+    from .providers import call_limits, open_client, provider_kind
 
-    settings = Settings(endpoint=endpoint, model=model, project=project)
+    if settings is None:
+        settings = Settings(endpoint=endpoint, model=model, project=project)
+    else:
+        model, project = settings.model, settings.project
     settings.validate()
+    kind = provider_kind(settings)
+    if kind == "cloud":
+        raise ValueError("STAR Teams runs only on your own hardware: on-device or STAR Server")
     if not model.strip():
         raise ValueError("Start and select STAR Brain before running Agents")
+    limits = call_limits(settings)
+    if kind == "lan":
+        # A CPU server needs minutes per specialist; one call per llama.cpp slot.
+        request_seconds = limits.request_timeout
+        total_seconds = min(3600.0, request_seconds * 4)
+        parallel = limits.parallel if parallel is None else min(parallel, limits.parallel)
+    else:
+        request_seconds, total_seconds = 110.0, 300.0
+        parallel = 2 if parallel is None else parallel
     plan = specialist_plan(prompt, parallel=parallel)
     context = learned_context(home, project, prompt, max_chars=4200, limit=8)
     created_client = client is None
 
     if created_client:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(
-            base_url=settings.endpoint, api_key="local-only",
-            timeout=110.0, max_retries=0,
-        )
+        client = open_client(settings, request_timeout=request_seconds)
 
     async def model_worker(task: Task, previous):
         system = TEAM_RULES
@@ -141,7 +159,7 @@ async def run_research_team(
                 pass  # Progress display is best effort; it never blocks the run.
         result = await run_plan(
             plan, model_worker,
-            task_timeout=110.0, total_timeout=300.0,
+            task_timeout=request_seconds, total_timeout=total_seconds,
             allow_writes=False, on_event=on_event,
         )
         if not result.completed:

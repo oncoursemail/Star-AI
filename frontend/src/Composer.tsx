@@ -312,7 +312,10 @@ export function Composer(props: ComposerProps) {
             </AnimatePresence>
           </div>
           {busy ? (
-            <button type="button" className="cmp-send is-stop" title="Stop" aria-label="Stop response" disabled={stopping} onClick={() => {
+            <button type="button" className="cmp-send is-stop" title="Stop" aria-label="Stop response" disabled={stopping} onClick={event => {
+              // Send turns into Stop under the pointer, so the second click of a double-click lands here.
+              // `detail` is the click count: only a deliberate single click (or the keyboard, 0) stops the turn.
+              if (event.detail > 1) return
               onStop()
               inputRef.current?.focus() // the Stop button is about to disappear; keep focus somewhere useful
             }}>

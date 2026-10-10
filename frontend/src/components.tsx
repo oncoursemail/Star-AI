@@ -1,6 +1,6 @@
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
-import {ArrowUpRight, Check, CircleAlert, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, X} from 'lucide-react'
+import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, X} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {motion} from 'motion/react'
 import ReactMarkdown from 'react-markdown'
@@ -8,7 +8,7 @@ import remarkGfm from 'remark-gfm'
 import type {ChatMessage} from './types'
 import {request} from './bridge'
 import {messageIn} from './motion'
-import type {Failure} from './connection'
+import {classifyFailure} from './connection'
 
 /** The STAR glyph: a drawn four-point star, used wherever the brand appears on the desktop. */
 export function StarMark({size = 20}: {size?: number}) {
@@ -130,26 +130,72 @@ export type MessageProps = {
   entry: ChatMessage
   /** The answer is still streaming: no actions yet, and screen readers are told it is busy. */
   partial?: boolean
-  /** The user stopped this answer before it finished. */
-  stopped?: boolean
   /** Keep the action row visible (the newest turn) instead of revealing it on hover or focus. */
   pinned?: boolean
   animated?: boolean
-  onRetry?: () => void
+  /** Put this turn's text back in the composer. */
   onEdit?: () => void
+  /** Re-send the question behind a failed or stopped turn. Only offered on the newest one. */
+  onRetry?: () => void
+  /** Ask the last question again after a finished answer. */
+  onAskAgain?: () => void
+  onConnection?: () => void
 }
 
-export function Message({entry, partial = false, stopped = false, pinned = false, animated = true, onRetry, onEdit}: MessageProps) {
+/** A turn that ended without an answer. The backend stores this row, so it reads the same after a restart. */
+function TurnNotice({entry, animated, onRetry, onEdit, onConnection}: MessageProps) {
+  const failure = classifyFailure(entry.text)
+  const failed = entry.status === 'failed'
+  const actionable = Boolean(onRetry || onEdit)
+  const connectionFirst = failed && (failure.kind === 'unreachable' || failure.kind === 'access' || failure.kind === 'setup')
+  return (
+    <motion.article
+      variants={messageIn}
+      initial={animated ? 'hidden' : false}
+      animate="shown"
+      className={'msg msg-note is-' + (entry.status || 'plain') + (actionable ? ' is-actionable' : '')}
+      aria-label={failed ? 'STAR could not answer' : entry.status === 'cancelled' ? 'Stopped' : 'STAR notice'}
+    >
+      {failed ? <CircleAlert size={16} className="note-icon" aria-hidden="true" /> : entry.status ? <CircleSlash size={16} className="note-icon" aria-hidden="true" /> : null}
+      <div className="note-main">
+        {failed && <strong>{failure.title}</strong>}
+        <p>{failure.message}</p>
+        {actionable && (
+          <div className="note-actions">
+            {connectionFirst && onConnection && (
+              <button type="button" className="note-button is-primary" onClick={onConnection}>
+                Model &amp; connection
+              </button>
+            )}
+            {onRetry && (
+              <button type="button" className={'note-button' + (failed && !connectionFirst ? ' is-primary' : '')} onClick={onRetry}>
+                <RotateCcw size={14} aria-hidden="true" /> Retry
+              </button>
+            )}
+            {onEdit && (
+              <button type="button" className="note-button" onClick={onEdit}>
+                <Pencil size={14} aria-hidden="true" /> Edit message
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </motion.article>
+  )
+}
+
+export function Message(props: MessageProps) {
+  const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain} = props
+  if (entry.role === 'event') return <TurnNotice {...props} animated={animated} />
   const isUser = entry.role === 'user'
-  const isNote = entry.role === 'event'
   const hasImage = Boolean(entry.image?.startsWith('data:image/webp;base64,'))
   return (
     <motion.article
       variants={messageIn}
       initial={animated ? 'hidden' : false}
       animate="shown"
-      className={'msg ' + (isUser ? 'msg-user' : isNote ? 'msg-note' : 'msg-star') + (pinned ? ' is-pinned' : '') + (stopped ? ' is-incomplete' : '')}
-      aria-label={isUser ? 'You said' : isNote ? 'STAR notice' : 'STAR said'}
+      className={'msg ' + (isUser ? 'msg-user' : 'msg-star') + (pinned ? ' is-pinned' : '')}
+      aria-label={isUser ? 'You said' : 'STAR said'}
       aria-busy={partial || undefined}
     >
       {isUser && entry.attachments?.length ? (
@@ -159,8 +205,8 @@ export function Message({entry, partial = false, stopped = false, pinned = false
           ))}
         </ul>
       ) : null}
-      {isUser || isNote ? (
-        <div className={isUser ? 'msg-bubble' : 'msg-note-text'}>{entry.text}</div>
+      {isUser ? (
+        <div className="msg-bubble">{entry.text}</div>
       ) : (
         <div className="msg-prose">
           <Prose text={entry.text} />
@@ -192,7 +238,7 @@ export function Message({entry, partial = false, stopped = false, pinned = false
           <span>Writing</span>
         </div>
       )}
-      {!isNote && !partial && (
+      {!partial && (
         <div className="msg-actions">
           <CopyButton text={entry.text} label={isUser ? 'Copy your message' : 'Copy response'} className="msg-action" />
           {onEdit && (
@@ -201,10 +247,10 @@ export function Message({entry, partial = false, stopped = false, pinned = false
               <span>Edit</span>
             </button>
           )}
-          {onRetry && (
-            <button type="button" className="msg-action" title="Ask again" onClick={onRetry}>
+          {onAskAgain && (
+            <button type="button" className="msg-action" title="Send your last message again" onClick={onAskAgain}>
               <RotateCcw size={14} aria-hidden="true" />
-              <span>Retry</span>
+              <span>Ask again</span>
             </button>
           )}
           {hasImage && (
@@ -215,37 +261,5 @@ export function Message({entry, partial = false, stopped = false, pinned = false
         </div>
       )}
     </motion.article>
-  )
-}
-
-/** A failed turn: says what happened in plain words and offers the next step. The conversation stays intact. */
-export function Recovery({failure, onRetry, onEdit, onConnection}: {failure: Failure; onRetry?: () => void; onEdit?: () => void; onConnection?: () => void}) {
-  const cancelled = failure.kind === 'cancelled'
-  const connectionFirst = failure.kind === 'unreachable' || failure.kind === 'access' || failure.kind === 'setup'
-  return (
-    <motion.div className={'recover' + (cancelled ? ' is-quiet' : '')} role={cancelled ? 'status' : 'alert'} variants={messageIn} initial="hidden" animate="shown">
-      {!cancelled && <CircleAlert size={17} className="recover-icon" aria-hidden="true" />}
-      <div className="recover-main">
-        <strong>{failure.title}</strong>
-        <p title={failure.detail}>{failure.message}</p>
-        <div className="recover-actions">
-          {connectionFirst && onConnection && (
-            <button type="button" className="recover-button is-primary" onClick={onConnection}>
-              Model &amp; connection
-            </button>
-          )}
-          {onRetry && (
-            <button type="button" className={'recover-button' + (connectionFirst || cancelled ? '' : ' is-primary')} onClick={onRetry}>
-              <RotateCcw size={14} aria-hidden="true" /> Try again
-            </button>
-          )}
-          {onEdit && (
-            <button type="button" className="recover-button" onClick={onEdit}>
-              <Pencil size={14} aria-hidden="true" /> Edit message
-            </button>
-          )}
-        </div>
-      </div>
-    </motion.div>
   )
 }

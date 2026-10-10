@@ -2,7 +2,7 @@ import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,MotionConfig,motion} from 'motion/react'
 import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,ExternalLink,Folder,FolderOpen,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
-import {Message,Panel,Recovery,StarMark,Tag} from './components'
+import {Message,Panel,StarMark,Tag} from './components'
 import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog} from './types'
@@ -10,12 +10,13 @@ import './tokens.css'
 import './stellar-ui.css'
 import './chat.css'
 import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
+import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
-import {classifyFailure,describeConnection,type Failure,type LastOutcome} from './connection'
+import {classifyFailure,describeConnection,type LastOutcome} from './connection'
 import {pageFade} from './motion'
 import type {Fixture,FixtureScript} from './previewFixtures'
 
@@ -78,9 +79,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [notice,setNotice]=useState('')
  const [run,setRun]=useState<ActivityRun|null>(null)
  const [lastRun,setLastRun]=useState<{chat:string;run:ActivityRun}|null>(null)
- const [failure,setFailure]=useState<Failure|null>(null)
  const [lastOutcome,setLastOutcome]=useState<LastOutcome>(null)
- const [incomplete,setIncomplete]=useState<string[]>([])
  const [streamingText,setStreamingText]=useState('')
  const [chatSearch,setChatSearch]=useState('')
  const [showChatSearch,setShowChatSearch]=useState(false)
@@ -115,6 +114,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const followBottom=useRef(true)
  const composerRef=useRef<HTMLTextAreaElement>(null)
  const lastSent=useRef('')
+ const lastFiles=useRef<string[]>([])
+ const sending=useRef(false)
  const lastProject=useRef(data.project)
  const runRef=useRef<ActivityRun|null>(null)
  const streamRef=useRef('')
@@ -131,13 +132,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const sync=useCallback(async()=>{
    if(inactive)return
    const r=await request<BootData>('bootstrap')
-   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setIncomplete([]);setThemeMotion(!r.data.settings.reduced_motion)}
+   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
  useEffect(()=>{
    const node=chatScroll.current
    if(tab==='chat'&&node&&followBottom.current){node.scrollTop=node.scrollHeight;setShowJump(false)}
- },[messages.length,streamingText,busy,run,failure,tab,data.active_chat])
+ },[messages.length,streamingText,busy,run,tab,data.active_chat])
  const onChatScroll=()=>{
    const node=chatScroll.current
    if(!node)return
@@ -204,17 +205,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        const cancelled=cancelRequested.current||found.kind==='cancelled'
        cancelRequested.current=false
        endRun(cancelled?'cancelled':'failed')
-       // Keep whatever had already streamed, clearly marked as incomplete; the backend did not save it.
-       const partial=streamRef.current
-       streamRef.current=''
-       if(partial.trim()){
-         const kept=makeMsg('assistant',partial)
-         setIncomplete(ids=>[...ids,kept.id])
-         setMessages(m=>[...m,kept])
-       }
+       // The backend stores this outcome as a terminal record of the turn; the same row is shown now.
+       // The unfinished draft is dropped, because it was not saved and would vanish on the next reload.
+       streamRef.current='';sending.current=false
+       const row:ChatMessage={...makeMsg('event',msg),status:cancelled?'cancelled':'failed'}
+       fresh.current.add(row.id)
+       setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
-       const shown=cancelled?classifyFailure('cancelled by user'):found
-       setFailure(partial.trim()?{...shown,message:shown.message+' The partial answer above was not saved.'}:shown)
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind})
      }else setNotice(msg)
      if(action==='testModel'){setModelChecking(false);setLastOutcome({ok:false,at:Date.now(),kind:classifyFailure(msg).kind})}
@@ -229,8 +226,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(CHAT_ACTIONS.includes(action)){
      cancelRequested.current=false
      endRun('done')
-     streamRef.current=''
-     setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setFailure(null);setNotice('')
+     streamRef.current='';sending.current=false
+     setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
      if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now()})
      setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
@@ -280,11 +277,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
-   lastSent.current=value
+   lastSent.current=value;lastFiles.current=attachments
    cancelRequested.current=false
    streamRef.current=''
    followBottom.current=true;setShowJump(false)
-   setRetryText('');setFailure(null);setStreamingText('');setChatSearch('');setShowChatSearch(false);setStopping(false)
+   setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false);setStopping(false)
    const mine=makeMsg('user',value,attachments.map(fileName))
    fresh.current.add(mine.id)
    setBusy(true);setNotice('');setTab('chat');setLastRun(null)
@@ -292,24 +289,28 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    return mine
  },[updateRun])
 
- const send=useCallback(async(text=prompt)=>{
-   const value=text.trim();if(busy||!value)return
+ const send=useCallback(async(text=prompt,attachments=files)=>{
+   // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
+   const value=text.trim();if(busy||sending.current||!value)return
    if(imageMode&&!data.settings.comfy_workflow){setNotice('To create images, choose a local ComfyUI workflow in Settings first.');setTab('settings');return}
    if(inactive){setNotice('This preview is not connected to a model. Open STAR Desktop to chat.');return}
-   const selected=files.slice()
+   const selected=attachments.slice()
    if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
-   if(teamMode&&data.settings.provider!=='local'){setNotice('Team runs use the model on this PC. Choose Local in Settings.');return}
+   if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
+   sending.current=true
    const mine=beginRun(value,selected,imageMode?'image':teamMode?'team':'chat')
    setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
    const res=await act(action,imageMode?{prompt:value}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
    if(!res){
-     // The request never started: put the words back in the composer instead of losing them.
-     updateRun(null);setBusy(false)
-     setMessages(m=>m.filter(entry=>entry.id!==mine.id));setPrompt(value);setFiles(selected)
-     setFailure(classifyFailure(lastError.current||'STAR could not start this request.'))
+     // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
+     sending.current=false
+     updateRun(null);setBusy(false);setRetryText(value)
+     const row:ChatMessage={...makeMsg('event',lastError.current||'STAR could not start this request.'),status:'failed'}
+     fresh.current.add(row.id)
+     setMessages(m=>[...m,row])
    }
- },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,data.settings.comfy_workflow,data.settings.provider,chatMode,teamMode,research,githubSource])
+ },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,data.settings,chatMode,teamMode,research,githubSource])
 
  const stop=useCallback(()=>{
    if(!busy||stopping)return
@@ -342,7 +343,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      })
      fixtureStop.current=()=>{
        timers.forEach(timer=>window.clearTimeout(timer))
-       window.setTimeout(()=>{if(live)handleEvent({requestId,kind:'error',data:'RuntimeError: STAR task cancelled by user'})},180)
+       window.setTimeout(()=>{if(live)handleEvent({requestId,kind:'error',data:'Request stopped. The draft answer has not been saved as a completed result.'})},180)
      }
    }
    void import('./previewFixtures').then(module=>{
@@ -379,7 +380,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
  const transcribe=async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}
- const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setIncomplete([]);setChatSearch('');setShowChatSearch(false);setRetryText('');setFailure(null);setLastRun(null);setStreamingText('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
  const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
  const openChat=async(id:string)=>{if(busy&&id!==data.active_chat)setNotice('Stop the current answer before switching chats.');if(busy||id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
@@ -468,9 +469,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const query=chatSearch.trim().toLowerCase()
  const matchingMessages=query?messages.filter(m=>m.text.toLowerCase().includes(query)):messages
  const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
- const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brainRunning:data.brain_running,credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
+ const serverMode=usesStarServer(data.settings)
+ const serverDraft=usesStarServer(draft)
+ const brain=brainStatus(data)
+ const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brain,server:data.server,ownHardware:runsOnOwnHardware(data.settings),credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
  const web:Availability=data.credentials?.brave||data.credentials?.tavily?{ok:true}:{ok:false,reason:'Needs a search key'}
- const team:Availability=data.settings.provider!=='local'?{ok:false,reason:'This PC only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
+ const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
+ const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
  const shownRun=busy?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
  const timeline=!query&&shownRun&&(isRich(shownRun)||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
@@ -479,8 +484,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
  const turns:ChatMessage[]=busy&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
  const empty=!messages.length&&!busy
- const canRetry=!busy&&!!retryText
- const announce=busy?'STAR is working on your message.':failure?failure.title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
+ // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
+ const pending=data.retry&&data.retry.prompt?data.retry:null
+ const retryPrompt=retryText||pending?.prompt||''
+ const lastMessage=messages[messages.length-1]
+ const failedLast=!busy&&lastMessage?.role==='event'&&!!lastMessage.status
+ // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
+ const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
+ const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[])
+ const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview} data-reduced-motion={!themeMotion}>
    <aside className="rail" aria-label="STAR navigation">
@@ -532,28 +544,31 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
                {empty?<div className="thread-hello"><StarMark size={26}/><h2>What are we making?</h2></div>
-               :<section className="thread-turns" aria-label="Conversation">
+               :<section className="thread-turns" role="log" aria-live="off" aria-label="Conversation">
                  {turns.map((m,index)=>{
                    const live=m.id==='stream-live'
                    const at=query?-1:index
-                   const stoppedHere=incomplete.includes(m.id)
+                   const newest=at>=0&&at===messages.length-1&&!busy
+                   // Only the newest unanswered turn offers Retry; older failure rows are history.
+                   const recover=newest&&m.role==='event'&&!!m.status&&!!retryPrompt
                    return <Fragment key={data.active_chat+':'+(query?m.id:index)}>
-                     <Message entry={m} animated={live||fresh.current.has(m.id)} partial={live} stopped={stoppedHere}
-                       pinned={at>=0&&at===messages.length-1&&!busy}
-                       onEdit={m.role==='user'&&!busy?()=>fillComposer(m.text):undefined}
-                       onRetry={m.role==='assistant'&&at===lastStar&&at>lastUser&&!busy&&lastUser>=0&&!stoppedHere?()=>void send(messages[lastUser].text):undefined}/>
+                     <Message entry={m} animated={live||fresh.current.has(m.id)} partial={live} pinned={newest}
+                       onEdit={m.role==='user'&&!busy?()=>fillComposer(m.text):recover?()=>fillComposer(retryPrompt):undefined}
+                       onRetry={recover?retryNow:undefined}
+                       onAskAgain={m.role==='assistant'&&at===lastStar&&at>lastUser&&!busy&&lastUser>=0?()=>void send(messages[lastUser].text,[]):undefined}
+                       onConnection={recover?()=>nav('brain'):undefined}/>
                      {at===lastUser&&timelineNode}
                    </Fragment>
                  })}
                  {query&&!matchingMessages.length&&<div className="thread-none"><Search size={18} aria-hidden="true"/><span>No messages match “{chatSearch.trim()}”.</span></div>}
                  {busy&&run&&!timeline&&!streamingText&&<RunStatus run={run} label={stopping?'Stopping':undefined}/>}
-                 {!busy&&failure&&<Recovery failure={failure} onRetry={canRetry?()=>void send(retryText):undefined} onEdit={canRetry?()=>fillComposer(retryText):undefined} onConnection={()=>nav('brain')}/>}
+                 {interrupted&&<Message entry={{id:'interrupted',role:'event',text:interrupted.detail,status:'cancelled'}} animated={false} pinned onRetry={retryNow} onEdit={()=>fillComposer(interrupted.prompt)}/>}
                </section>}
              </div>
            </div>
            <div className="dock">
              {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={15} aria-hidden="true"/> Latest</button>}
-             {(!inactive||!!fixture)&&!failure&&(connection.tone==='offline'||connection.tone==='attention')&&<div className={'dock-banner is-'+connection.tone} role="status"><CircleAlert size={15} aria-hidden="true"/><span><strong>{connection.state}.</strong> {connection.note}</span><button type="button" onClick={()=>nav('brain')}>Model &amp; connection</button></div>}
+             {(!inactive||!!fixture)&&!failedLast&&(connection.tone==='offline'||connection.tone==='attention')&&<div className={'dock-banner is-'+connection.tone} role="status"><CircleAlert size={15} aria-hidden="true"/><span><strong>{connection.state}.</strong> {connection.note}</span><button type="button" onClick={()=>nav('brain')}>Model &amp; connection</button></div>}
              <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
                files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>{setImageMode(false);void attach()}} onTranscribe={()=>void transcribe()}
                mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
@@ -562,7 +577,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
-               :<p className="dock-hint">{teamMode?'Team: four read-only stages on this PC, at most two at a time.':'STAR can make mistakes. Check important information.'}</p>}
+               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
            <div className="thread-rest" aria-hidden="true"/>
            <div className="sr-only" role="status" aria-live="polite">{announce}</div>
@@ -571,7 +586,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
-            <Panel className="conn-card">
+            {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
+            {!serverMode&&<Panel className="conn-card">
               <div className="conn-head">
                 <span className={'conn-dot is-'+connection.tone} aria-hidden="true"/>
                 <div className="conn-copy"><h2>{connection.label}</h2><p>{connection.note}</p></div>
@@ -587,14 +603,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <button type="button" className="secondary-button" onClick={()=>nav('settings')}><Settings2 size={16}/> Connection settings</button>
               </div>
               {modelCheck&&<div className="health-result" role="status"><Check size={16}/><span>{modelCheck.sample}</span></div>}
+            </Panel>}
+            <LocalBrainFallback optional={serverMode}>
+            <Panel className="conn-card conn-local">
+              <h2>Model on this PC</h2>
+              <p>{data.brain_running?'The local engine is running on this PC.':data.brain_installed?'A local model is installed but not started.':'No local model is installed. Installing downloads a verified model of a few gigabytes.'}</p>
+              {!data.brain_running&&<button type="button" className="secondary-button" disabled={brainProgress!==null||inactive} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={16}/>:<Download size={16}/>} {brainProgress?'Preparing the local model…':data.brain_installed?'Start local model':'Download and start'}</button>}
+              {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={{duration:.2}}/></div></div>}
             </Panel>
-            <details className="settings-expander brain-details"><summary><span><strong>Run a model on this PC</strong><small>Optional. STAR can install and start its own local engine instead of using a server.</small></span><ChevronDown size={17}/></summary>
-              <div className="settings-expander-body">
-                <p>{data.brain_running?'The local engine is running on this PC.':data.brain_installed?'A local model is installed but not started.':'No local model is installed. Installing downloads a verified model of a few gigabytes.'}</p>
-                {!data.brain_running&&<button type="button" className="secondary-button" disabled={brainProgress!==null||inactive} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={16}/>:<Download size={16}/>} {brainProgress?'Preparing the local model…':data.brain_installed?'Start local model':'Download and start'}</button>}
-                {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={{duration:.2}}/></div></div>}
-              </div>
-            </details>
+            </LocalBrainFallback>
           </div></div>}
           {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><Panel className="settings-section"><div className="tool-icon"><Workflow size={22}/></div><h2>Roblox Studio</h2><p>Connect to the official Roblox Studio MCP server. Start in an unpublished test place.</p><button className="secondary-button" onClick={()=>void act('discoverStudio')}><RefreshCcw size={15}/> Discover Studio instances</button>{studio&&<pre className="tool-output">{truncate(studio,2400)}</pre>}</Panel><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
@@ -617,7 +634,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/>
            <ReviewToolsPanel settings={draft} onChange={setDraft} status={data.tool_workshop} recipes={customTools} query={customQuery} onQuery={setCustomQuery} preview={customPreview} busy={customBusy} disabled={inactive} refresh={refreshCustomTools} runPreview={id=>customAction('previewCustomTool',id)} approve={id=>customAction('approveCustomTool',id)} disable={id=>customAction('disableCustomTool',id)}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}
-         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
+         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>{serverDraft?'STAR Server model':'Local model'}</h2><p>{serverDraft?'The model your STAR Server runs. Its address, key and limits are under Model & provider below.':'STAR Brain configures these automatically after installation.'}</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>{serverDraft?'Server model ID':'Model ID'}<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder={serverDraft?'Model on your STAR Server':'Installed model'}/></label>{!serverDraft&&<label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label>}</div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
          <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Create images directly from the chat composer</small></span><ChevronDown size={18}/></summary>

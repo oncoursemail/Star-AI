@@ -12,7 +12,7 @@ You should not need to understand model APIs, install Python, or open another AI
 
 ## STAR updates without GitHub login
 
-The one-time public download repository setup is documented in `docs/STAR_PUBLIC_PRIVATE_GITHUB.md`. Once the public channel exists and has release assets, the app can read updates and download them anonymously with checksum checks. Until then, use GitHub private Releases through your normal browser and choose the downloaded Setup from STAR's update page. No GitHub CLI is required.
+STAR checks the official public [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest) of `oncoursemail/Star-AI`, which is the single update channel, and downloads a newer Setup anonymously with exact URL, size and SHA-256 checks. No GitHub login or GitHub CLI is required. If the release cannot be checked, STAR offers the Releases page in your browser instead.
 
 ## When something fails
 

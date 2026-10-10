@@ -802,6 +802,33 @@
   margin: 0;
   padding: 0 var(--star-4);
 }
+.shell .conn-local {
+  margin-top: var(--star-3);
+}
+.conn-local h2 {
+  margin: 0 0 var(--star-1);
+  color: var(--star-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.shell .conn-local p {
+  margin: 0 0 var(--star-4);
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.shell .conn-local > .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 36px;
+  padding: 0 var(--star-4);
+}
+.brain-details .conn-local {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
 .brain-details {
   margin-top: var(--star-3);
 }

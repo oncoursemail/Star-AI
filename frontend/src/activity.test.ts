@@ -2,6 +2,9 @@ import {describe, expect, it} from 'vitest'
 import {applyProgress, formatElapsed, headline, isRich, settleRun, startRun, stateWord, toolLabel} from './activity'
 import type {ActivityRun, ProgressPayload} from './activity'
 import {classifyFailure, describeConnection} from './connection'
+import type {LastOutcome} from './connection'
+import {brainStatus, runsOnOwnHardware} from './IntegrationPanels'
+import type {ServerStatus} from './types'
 import {FIXTURES} from './previewFixtures'
 
 /** Replay sanitized progress payloads the way Desktop.tsx does, one second apart. */
@@ -140,40 +143,68 @@ describe('preview fixtures use the real event contract', () => {
 })
 
 describe('connection status and failures are stated truthfully', () => {
-  const settings = {provider: 'local', model: 'qwen', endpoint: 'http://127.0.0.1:8080/v1'}
-  it('does not claim a connection it has not seen', () => {
-    const unknown = describeConnection({settings, brainRunning: false, credentials: {}, preview: false, last: null})
-    expect(unknown.tone).toBe('unverified')
-    expect(unknown.state).toBe('Not checked')
-    expect(describeConnection({settings, brainRunning: true, credentials: {}, preview: false, last: null}).tone).toBe('ready')
-    expect(describeConnection({settings, brainRunning: false, credentials: {}, preview: false, last: {ok: true, at: 0}}).tone).toBe('ready')
-    expect(describeConnection({settings, brainRunning: true, credentials: {}, preview: false, last: {ok: false, at: 0, kind: 'unreachable'}}).tone).toBe('offline')
+  const local = {provider: 'local', model: 'qwen', endpoint: 'http://127.0.0.1:8080/v1'}
+  const lan = {provider: 'star_server', model: 'qwen-large', endpoint: '', server_endpoint: 'http://10.17.0.146:8080/v1'}
+  /** Build the inputs the way Desktop.tsx does, from the app-wide `brainStatus` helper. */
+  const status = (state: {settings: typeof local | typeof lan | {provider: string; model: string; endpoint: string}; brain_running?: boolean; server?: ServerStatus; credentials?: Record<string, boolean>; preview?: boolean; last?: LastOutcome}) =>
+    describeConnection({
+      settings: state.settings,
+      brain: brainStatus(state),
+      server: state.server,
+      ownHardware: runsOnOwnHardware(state.settings),
+      credentials: state.credentials || {},
+      preview: !!state.preview,
+      last: state.last ?? null,
+    })
+  const server = (ok: boolean | null, configured = true): ServerStatus => ({selected: true, configured, key_present: true, model_selected: true, ok, code: '', checked_at: ''})
+
+  it('follows the shared brain status for the model on this PC', () => {
+    expect(status({settings: local, brain_running: true}).tone).toBe('ready')
+    const off = status({settings: local, brain_running: false})
+    expect(off.tone).toBe('offline')
+    expect(off.state).toBe('Offline')
+    // A real answer is stronger evidence than the engine flag; a real failure overrides it too.
+    expect(status({settings: local, brain_running: false, last: {ok: true, at: 0}}).tone).toBe('ready')
+    expect(status({settings: local, brain_running: true, last: {ok: false, at: 0, kind: 'unreachable'}}).tone).toBe('offline')
   })
+
+  it('never calls an unchecked STAR Server offline, and never calls it ready without a check', () => {
+    const unchecked = status({settings: lan, server: server(null)})
+    expect(unchecked.tone).toBe('unverified')
+    expect(unchecked.state).toBe('Not checked')
+    expect(unchecked.label).toBe('STAR Server · qwen-large')
+    expect(unchecked.endpoint).toBe('10.17.0.146:8080')
+    expect(status({settings: lan, server: server(true)}).tone).toBe('ready')
+    expect(status({settings: lan, server: server(false)}).state).toBe('Needs attention')
+    expect(status({settings: lan, server: server(null, false)}).state).toBe('No server address')
+    // The on-device engine running says nothing about the server.
+    expect(status({settings: lan, brain_running: true, server: server(null)}).tone).toBe('unverified')
+  })
+
   it('reports missing setup before anything else', () => {
-    expect(describeConnection({settings: {...settings, model: ''}, brainRunning: true, credentials: {}, preview: false, last: null}).state).toBe('No model selected')
+    expect(status({settings: {...local, model: ''}, brain_running: true}).state).toBe('No model selected')
     const hosted = {provider: 'groq', model: 'openai/gpt-oss-20b', endpoint: ''}
-    expect(describeConnection({settings: hosted, brainRunning: false, credentials: {groq: false}, preview: false, last: null}).state).toBe('Key missing')
-    expect(describeConnection({settings: hosted, brainRunning: false, credentials: {groq: true}, preview: false, last: null}).tone).toBe('unverified')
-    expect(describeConnection({settings, brainRunning: true, credentials: {}, preview: true, last: null}).tone).toBe('preview')
+    expect(status({settings: hosted, credentials: {groq: false}}).state).toBe('Key missing')
+    // A hosted provider is not "ready" just because the local engine happens to be running.
+    expect(status({settings: hosted, brain_running: true, credentials: {groq: true}}).tone).toBe('unverified')
+    expect(status({settings: local, brain_running: true, preview: true}).tone).toBe('preview')
   })
-  it('labels a LAN server provider without knowing its internals', () => {
-    const lan = {provider: 'star_server', model: 'qwen-large', endpoint: '', server_endpoint: 'http://10.17.0.146:8080/v1'}
-    const status = describeConnection({settings: lan, brainRunning: false, credentials: {}, preview: false, last: {ok: true, at: 0}})
-    expect(status.label).toBe('STAR Server · qwen-large')
-    expect(status.endpoint).toBe('10.17.0.146:8080')
-  })
-  it('classifies real backend error strings into recoveries', () => {
+
+  it('classifies real backend error strings into recoveries and shows the backend sentence', () => {
     expect(classifyFailure('RuntimeError: STAR task cancelled by user').kind).toBe('cancelled')
-    expect(classifyFailure('RuntimeError: STAR Teams request cancelled by user').kind).toBe('cancelled')
-    expect(classifyFailure('Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.').kind).toBe('unreachable')
+    const stopped = 'Request stopped. The draft answer has not been saved as a completed result.'
+    expect(classifyFailure(stopped)).toMatchObject({kind: 'cancelled', message: stopped})
+    expect(classifyFailure('No reply was recorded for this message. STAR may have been closed before it finished.').kind).toBe('cancelled')
+    const offline = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+    expect(classifyFailure(offline)).toMatchObject({kind: 'unreachable', message: offline})
     expect(classifyFailure('STAR local bridge did not respond. Restart the desktop app and try again.').kind).toBe('unreachable')
     expect(classifyFailure('STAR Brain did not respond in time. The model may still be loading or your machine may be low on memory.').kind).toBe('slow')
     expect(classifyFailure('TimeoutError: STAR exceeded its 85s task budget. Try Fast mode, a smaller prompt, or a hosted provider.').kind).toBe('slow')
     expect(classifyFailure('Your selected model provider denied access. Check its API key, model access and account limits in Settings.').kind).toBe('access')
     expect(classifyFailure('The AI provider reached its rate limit. Free tiers are limited; try again when your quota resets, or switch provider in Settings.').kind).toBe('limit')
-    const other = classifyFailure('RuntimeError: STAR Teams could not finish: critic:failed, synthesis:blocked')
-    expect(other.kind).toBe('other')
-    expect(other.detail).toBe('STAR Teams could not finish: critic:failed, synthesis:blocked') // exception class is not shown to people
+    const team = classifyFailure('RuntimeError: STAR Teams could not finish: critic:failed, synthesis:blocked')
+    expect(team.title).toBe("The team couldn't finish")
+    expect(team.message).toBe('STAR Teams could not finish: critic:failed, synthesis:blocked') // the exception class is not shown to people
     expect(classifyFailure('ValueError: Message must be 1–30,000 characters').message).toBe('Message must be 1–30,000 characters')
   })
 })

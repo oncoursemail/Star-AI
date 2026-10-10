@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .providers import provider_kind
+
 
 _ROBLOX = re.compile(r"\b(?:roblox|luau|rojo|r6|r15|studio|ugc)\b", re.IGNORECASE)
 _DEEP = re.compile(
@@ -123,16 +125,27 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
     # A configured smaller model can draft subagent analyses while the main
     # reasoning model synthesizes; this never starts several models by itself.
     subagent = (configured["fast_model"] or chosen) if mode == "agent" else chosen
-    local = getattr(settings, "provider", "local") == "local"
+    kind = provider_kind(settings)
+    # (agent, tools, quick answer, deep answer) whole-task budgets in seconds.
+    if kind == "lan":
+        # A CPU server streams a few tokens per second, so scale every budget
+        # from the owner's per-request server timeout instead of GPU numbers.
+        per_request = getattr(settings, "server_timeout", 600)
+        per_request = per_request if type(per_request) is int and 30 <= per_request <= 1800 else 600
+        budgets = tuple(min(3600, per_request * factor) for factor in (6, 3, 1, 2))
+    elif kind == "local":
+        budgets = (480, 180, 85, 180)
+    else:
+        budgets = (480, 180, 55, 100)
     if mode == "agent":
         max_calls = min(settings.max_calls, 20)
-        timeout = 480
+        timeout = budgets[0]
     elif use_tools:
         max_calls = min(settings.max_calls, 5)
-        timeout = 180
+        timeout = budgets[1]
     else:
         max_calls = 1
-        timeout = (85 if local else 55) if quick else (180 if local else 100)
+        timeout = budgets[2] if quick else budgets[3]
 
     return BrainRoute(
         profile=profile, model=chosen, subagent_model=subagent,

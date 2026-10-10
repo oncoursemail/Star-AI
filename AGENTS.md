@@ -13,6 +13,13 @@ STAR is an experimental **local-first** AI-development application. This is not 
 - Never allow agent-generated code to modify evaluation fixtures or mark unexecuted tests as passed.
 - DataModel instance selection via `studio_id` is not a security sandbox. Do not expose unrestricted `execute_luau` in normal edit mode.
 
+## Concurrent agent coordination
+
+- Start from a freshly inspected `main`, use a unique task branch, and submit reviewable PRs. Do **not** reset, force-push, auto-merge, or change another agent's working branch.
+- Inspect open PRs and file overlap before refactoring. An unmerged feature branch is **work in progress**, not cleanup debris; do not delete it, move it, or mass-rename its files.
+- Keep release/updater/security changes isolated with regression checks. Reconfirm `main` and CI status before merging; conflicts require deliberate review.
+- Historical research and release-gate notes are not active deployment instructions. Use [docs/REPOSITORY_GUIDE.md](docs/REPOSITORY_GUIDE.md) for the live directory map.
+
 ## Architecture boundaries
 
 - `star/agent.py`: model/tool-calling loop, tool outcomes and context.
@@ -33,11 +40,11 @@ python -m pytest -q
 
 Do not force-push, bypass main protection, auto-merge, alter the GitHub App's own permissions, or publish the Roblox experience.
 
-## Public distribution and release safety (STAR v0.7)
+## Public source and release safety
 
 - The owner has chosen to keep `oncoursemail/Star-AI` **PUBLIC**. Do not change its visibility. Do not commit credentials, private keys, SQLite chats, memory, local project files, reference media, `.env` files, or model weights.
 - The working public distribution channel is GitHub Releases on this repository. A build artifact is not a public release; verify anonymous access to the published Setup, ZIP and checksum before claiming availability.
-- `oncoursemail/Star-Intelligence-Downloads` is a proposed optional binary-only distribution repository, not yet configured. Do not claim the planned repository exists.
+- The obsolete separate `Star-Intelligence-Downloads` mirror/publisher is retired. Use only `oncoursemail/Star-AI` Releases and its built-in GitHub Actions publisher; never reintroduce a cross-repo publishing token without explicit owner review.
 - Compiled releases should include the Windows Setup, portable ZIP, and SHA-256 hashes only. Never publish unreviewed model-generated source, secrets, user data, or internal prompts as release attachments.
 - Scope each publishing credential to its workflow job and purpose. If the repository lacks GitHub Pages settings or release permissions, report the blocked operation accurately instead of silently claiming success.
 - Analytics must display real local observations or honest zero states; do not fabricate metrics or user activity.
