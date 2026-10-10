@@ -6,6 +6,8 @@ an authenticated Roblox client, a video downloader, or a Studio editor.
 """
 from __future__ import annotations
 
+import base64
+import io
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode, urlsplit
@@ -17,6 +19,7 @@ import time
 import uuid
 
 import httpx
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 _MAX_BYTES = 240_000
 _MAX_QUERY = 140
@@ -288,6 +291,72 @@ class RobloxResearch:
                 "Public endpoints may be changed, restricted or rate limited by Roblox.",
             ],
             "warnings": warnings[:3],
+        }
+
+    def game_image(self, universe_id, kind="thumbnail", index=0) -> dict:
+        """Fetch verified Roblox CDN image bytes for STAR's vision model.
+
+        The model chooses an official universe ID and an index, never an image URL.
+        The wrapper converts this private image payload into multimodal tool
+        content; base64 is never passed back as ordinary chat text.
+        """
+        universe_id = _positive_id(universe_id)
+        if kind not in ("icon", "thumbnail") or type(index) is not int or index < 0 or index > 3:
+            raise ValueError("Choose icon or thumbnail and an image index from 0 through 3")
+        if kind == "icon":
+            if index != 0:
+                raise ValueError("A game has one requested icon; use index 0")
+            payload = self._get("thumbnails", "/v1/games/icons", {
+                "universeIds": universe_id, "returnPolicy": "PlaceHolder",
+                "size": "512x512", "format": "Png", "isCircular": "false",
+            }, ttl=300)
+            images = payload.get("data") or []
+        else:
+            payload = self._get("thumbnails", "/v1/games/multiget/thumbnails", {
+                "universeIds": universe_id, "countPerUniverse": 4, "size": "768x432",
+                "format": "Png", "isCircular": "false",
+            }, ttl=300)
+            images = []
+            for item in (payload.get("data") or [])[:5]:
+                if isinstance(item, dict) and item.get("universeId") == universe_id:
+                    images.extend((item.get("thumbnails") or [])[:4])
+        urls = [_safe_image(x.get("imageUrl")) for x in images if isinstance(x, dict)]
+        urls = [url for url in urls if url]
+        if index >= len(urls):
+            raise ValueError("Roblox did not supply that completed image index")
+        url = urls[index]
+        try:
+            with self.client.stream("GET", url, follow_redirects=False) as response:
+                if response.status_code != 200:
+                    raise ValueError("Roblox image unavailable (HTTP %d)" % response.status_code)
+                media_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
+                if media_type not in {"image/png", "image/jpeg", "image/webp"}:
+                    raise ValueError("Roblox CDN did not return a supported image format")
+                chunks, size = [], 0
+                for chunk in response.iter_bytes():
+                    size += len(chunk)
+                    if size > 5 * 1024 * 1024:
+                        raise ValueError("Roblox image exceeded the 5 MiB limit")
+                    chunks.append(chunk)
+            with Image.open(io.BytesIO(b"".join(chunks))) as frame:
+                if (frame.format not in ("PNG", "JPEG", "WEBP") or
+                        frame.width * frame.height > 16_000_000 or
+                        getattr(frame, "n_frames", 1) != 1):
+                    raise ValueError("Roblox image size or encoding is unsupported")
+                picture = ImageOps.exif_transpose(frame).convert("RGB")
+                picture.thumbnail((960, 960), Image.Resampling.LANCZOS)
+                out = io.BytesIO()
+                picture.save(out, "JPEG", quality=83, optimize=True)
+                encoded = out.getvalue()
+                if len(encoded) > 2 * 1024 * 1024:
+                    raise ValueError("Roblox image preview too large")
+        except (httpx.RequestError, UnidentifiedImageError, OSError) as exc:
+            raise ValueError("Unable to load a valid Roblox CDN image (%s)" % type(exc).__name__) from None
+        return {
+            "universe_id": universe_id, "kind": kind, "index": index,
+            "source_url": url,
+            "notice": "Actual source pixels loaded. Game thumbnails may be promotional artwork; do not assume they depict real gameplay.",
+            "_image": {"mime_type": "image/jpeg", "data": base64.b64encode(encoded).decode("ascii")},
         }
 
     def resolve_place(self, place_id) -> dict:
