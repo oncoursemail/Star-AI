@@ -31,6 +31,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [busy,setBusy]=useState(false)
  const [notice,setNotice]=useState('')
  const [workPhase,setWorkPhase]=useState('')
+ const [streamingText,setStreamingText]=useState('')
  const [chatSearch,setChatSearch]=useState('')
  const [showChatSearch,setShowChatSearch]=useState(false)
  const [retryText,setRetryText]=useState('')
@@ -77,8 +78,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        const obj=(event.data||{}) as Record<string,unknown>
        setBrainProgress({phase:String(obj.phase||'Preparing your AI'),downloaded:Number(obj.overall_downloaded??obj.downloaded??0),total:Number(obj.overall_total??obj.total??0)})
      }else if(action==='sendMessage'){
-       const detail=typeof event.data==='string'?event.data:String((event.data as {phase?:string})?.phase||'STAR is working…')
-       setWorkPhase(truncate(detail,120))
+       const info=(event.data||{}) as {phase?:string;delta?:string}
+       if(typeof info.delta==='string'&&info.delta){
+         setStreamingText(previous=>previous+info.delta)
+         setWorkPhase('Writing your response…')
+       }else{
+         const detail=typeof event.data==='string'?event.data:String(info.phase||'STAR is working…')
+         setWorkPhase(truncate(detail,120))
+       }
      }else if(action==='installUpdate'){
        const detail=(event.data||{}) as {phase?:string;downloaded?:number;total?:number}
        setUpdateProgress({phase:String(detail.phase||'Downloading update'),downloaded:Number(detail.downloaded||0),total:Number(detail.total||0)})
@@ -88,7 +95,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    running.current.delete(event.requestId)
    if(event.kind==='error'){
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
-     setNotice(msg);if(action==='sendMessage'){setBusy(false);setWorkPhase('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
+     setNotice(msg);if(action==='sendMessage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
@@ -96,7 +103,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }
    const result=event.data as Record<string,unknown>
    if(action==='sendMessage'){
-     setBusy(false);setWorkPhase('');setRetryText('');setNotice('');setMessages(m=>[...m,makeMsg('assistant',String(result?.answer||''))]);void sync()
+     setBusy(false);setWorkPhase('');setStreamingText('');setRetryText('');setNotice('');setMessages(m=>[...m,makeMsg('assistant',String(result?.answer||''))]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
@@ -122,7 +129,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(inactive){setNotice('This preview does not run a model. Download STAR to chat locally.');return}
    const selected=files.slice()
    lastSent.current=value
-   setRetryText('');setChatSearch('');setShowChatSearch(false)
+   setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false)
    setMessages(m=>[...m,makeMsg('user',value,selected.map(f=>f.split(/[\\/]/).pop()||f))]);setFiles([]);setPrompt('');setBusy(true);setWorkPhase('Preparing your response…');setNotice('');setTab('chat')
    const res=await act('sendMessage',{prompt:value,files:selected})
    if(!res){setBusy(false);setWorkPhase('');setRetryText(value);setMessages(m=>[...m,makeMsg('event','Could not connect to STAR Brain. Open STAR Brain and test the actual model response.')])}
@@ -204,6 +211,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            {!messages.length?<div className="welcome"><div className="welcome-star"><Star size={24} fill="currentColor" strokeWidth={1}/></div><div className="eyebrow">YOUR PERSONAL INTELLIGENCE</div><h1>What shall we <em>create</em> today?</h1><p>Ideas, code, design, and Roblox creation. One workspace for everything you want to build.</p><div className="suggestions">{examples.map(ex=><button key={ex.title} onClick={()=>send(ex.prompt)} disabled={busy}><span><Sparkles size={15}/>{ex.title}</span><small>{ex.description}</small><ArrowRight className="suggest-arrow" size={15}/></button>)}</div></div>:
            <div className="conversation">{matchingMessages.map(m=><Message key={m.id} entry={m}/>)}
              {showChatSearch&&chatSearch.trim()&&!matchingMessages.length&&<div className="chat-no-results"><Search size={20}/><strong>No matching messages</strong><small>Try searching for a different phrase.</small></div>}
+             {busy&&streamingText&&<Message animated={false} key="stream-live" entry={{id:'stream-live',role:'assistant',text:streamingText}} partial/>}
              {busy&&<div className="thinking" role="status" aria-live="polite"><span className="pulse-bar"><i/><i/><i/></span><div><strong>STAR is working</strong><small>{workPhase||'Thinking through your request…'}</small></div></div>}
              {!busy&&retryText&&<div className="chat-recovery"><span>The last request did not finish. Your message is still here.</span><button type="button" onClick={()=>void send(retryText)}><RefreshCcw size={14}/> Retry message</button></div>}
              <div ref={scrollTo}/></div>}
