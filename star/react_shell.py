@@ -199,7 +199,7 @@ def launch():
                 time.sleep(2)
             raise TimeoutError('Local model did not become ready. See STAR/logs/star-brain-react.log')
 
-        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False):
+        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
@@ -227,7 +227,7 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat)
+                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
@@ -339,7 +339,10 @@ def launch():
                     research=body.get('research',False)
                     if not isinstance(research,bool):
                         raise ValueError('Invalid research flag')
-                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research))
+                    github=body.get('github',False)
+                    if not isinstance(github,bool) or (github and mode != 'agent'):
+                        raise ValueError('GitHub inspection requires Agent mode')
+                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
                 elif action=='generateImage':
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
