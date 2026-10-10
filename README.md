@@ -1,4 +1,4 @@
-# ✦ STAR Intelligence — Fast Brain Preview Candidate (v0.8.1 base)
+# ✦ STAR Intelligence — Fast Brain Preview Candidate (v0.9.0 base)
 
 **A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
@@ -89,3 +89,8 @@ Windows packaging runs `scripts/build_windows.ps1`. `STAR.exe --doctor` verifies
 - [Feedback / issues](https://github.com/oncoursemail/Star-AI/issues)
 
 The goal is to make STAR measurably better at **specific, verified Roblox workflows**, with proper tooling, memory, and testing. That is different from claiming it is already more generally intelligent than the strongest hosted models.
+
+
+## Genesis v0.9.0 integration (candidate)
+
+The combined release integrates saved conversation threads, a quiet React chat, Fast/Auto/Agent routing, optional hosted providers and web research, safe MCP tools, local image generation, four-stage read-only Teams, and explicitly approved project memory. Windows CI and offline tests verify packaging; real GPU, cloud credentials, Roblox Studio, and a live updater cycle require separate user-device acceptance. [Combined integration and testing](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
