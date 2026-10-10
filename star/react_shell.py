@@ -21,11 +21,14 @@ from .analytics import get_dashboard
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
+from .providers import credential_status, save_api_key, clear_api_key
+from .chat_images import chat_image, generate_chat_image
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
+    'generateImage','saveProviderKey','clearProviderKey',
 })
 
 
@@ -65,14 +68,20 @@ def _get_state(settings_file: Path, runtime: Runtime) -> dict:
         projects = sorted(set(chats.projects() + [settings.project]))
     finally:
         chats.close()
-    messages = [{'id':f'saved-{i}', 'role':role, 'text':text, 'created':created}
-                for i,(role,text,created) in enumerate(recent)]
+    messages = []
+    for i, (role, body, created) in enumerate(recent):
+        entry = {'id': f'saved-{i}', 'role': role, 'text': body, 'created': created}
+        preview = chat_image(home, body) if role == 'assistant' else None
+        if preview:
+            entry.update(preview)
+        messages.append(entry)
     brain = BrainInstall.load(home / 'brain.json')
     return {
         'version':__version__, 'project':settings.project, 'projects':projects,
         'messages':messages, 'settings':asdict(settings),
         'brain_installed':brain is not None, 'brain_running':runtime.status()=='running',
         'analytics':get_dashboard(home, settings.project),
+        'credentials':credential_status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -144,7 +153,7 @@ def launch():
                         detail = f'{type(exc).__name__}: {str(exc)[:350]}'
                     self._emit(request_id, 'error', detail)
                 finally:
-                    if action=='sendMessage':self.active_task=False
+                    if action in {'sendMessage','generateImage'}:self.active_task=False
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -164,6 +173,7 @@ def launch():
                     if models:
                         settings=Settings.load(settings_file)
                         settings.endpoint=probe.endpoint
+                        settings.provider='local'
                         settings.model=models[0]
                         settings.llama_server=info.executable
                         settings.gguf_model=info.model
@@ -184,7 +194,7 @@ def launch():
                 time.sleep(2)
             raise TimeoutError('Local model did not become ready. See STAR/logs/star-brain-react.log')
 
-        def _run_chat(self, request_id, prompt, selected):
+        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
@@ -212,13 +222,30 @@ def launch():
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
                 answer=run_task(settings,full_prompt,pics,
                     on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True)
+                    stream_tokens=True, mode=mode, research=research)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',answer)
             finally:
                 chats.close()
             return {'answer':answer}
+
+        def _run_image(self, request_id, prompt):
+            settings=Settings.load(self.settings_file)
+            home=app_data()
+            self._emit(request_id,'progress',{'phase':'Generating image using local ComfyUI…'})
+            chats=Conversations(home/'conversations.sqlite3')
+            try:
+                chats.add(settings.project,'user',prompt)
+            finally:
+                chats.close()
+            result=generate_chat_image(settings,prompt,home)
+            chats=Conversations(home/'conversations.sqlite3')
+            try:
+                chats.add(settings.project,'assistant',result['message'])
+            finally:
+                chats.close()
+            return {'answer':result['answer'],'image':result['image']}
 
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
@@ -256,11 +283,20 @@ def launch():
                     changes=body.get('settings')
                     if not isinstance(changes,dict):raise ValueError('Invalid settings')
                     old=Settings.load(self.settings_file)
-                    permitted={'endpoint','model','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion'}
+                    permitted={'endpoint','model','provider','project','workspace','studio_id','studio_edit','workspace_edit','max_calls','context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port'}
                     for key,value in changes.items():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
+                if action=='saveProviderKey':
+                    name=str(body.get('provider',''))
+                    token=body.get('key','')
+                    save_api_key(name,token)
+                    return json.dumps({'ok':True,'data':{'connected':True}})
+                if action=='clearProviderKey':
+                    name=str(body.get('provider',''))
+                    clear_api_key(name)
+                    return json.dumps({'ok':True,'data':{'connected':False}})
                 if action=='openLegacy':
                     if getattr(sys, 'frozen', False):
                         command=[sys.executable, '--legacy-ui']
@@ -287,7 +323,19 @@ def launch():
                     if not isinstance(files,list) or len(files)>8:raise ValueError('Too many attachments')
                     selected=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
                     self.active_task=True
-                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected))
+                    mode=body.get('mode','auto')
+                    if mode not in ('fast','auto','agent'):
+                        raise ValueError('Choose Fast, Auto, or Agent mode')
+                    research=body.get('research',False)
+                    if not isinstance(research,bool):
+                        raise ValueError('Invalid research flag')
+                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research))
+                elif action=='generateImage':
+                    if self.active_task:raise RuntimeError('STAR is already handling a task')
+                    prompt=str(body.get('prompt','')).strip()
+                    if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    self.active_task=True
+                    self._run(rid,action,lambda:self._run_image(rid,prompt))
                 elif action=='installBrain':
                     def worker():
                         info=install_brain(app_data(),progress=lambda e:self._emit(rid,'progress',e))
