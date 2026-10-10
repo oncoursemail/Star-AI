@@ -11,7 +11,7 @@ from pathlib import Path
 import sqlite3
 import time
 
-VALID_EVENTS = frozenset({'run_started', 'run_succeeded', 'run_failed', 'tool_completed', 'tool_rejected'})
+VALID_EVENTS = frozenset({'run_started', 'run_succeeded', 'run_failed', 'tool_completed', 'tool_rejected', 'first_token'})
 
 
 class AnalyticsStore:
