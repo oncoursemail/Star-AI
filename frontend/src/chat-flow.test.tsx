@@ -14,7 +14,9 @@ import {App} from './App'
 import {installFakeDesktop, type FakeDesktop} from './fake-desktop'
 
 let desktop: FakeDesktop
-beforeAll(() => { desktop = installFakeDesktop() })
+// App loads the desktop workspace as a lazy chunk; load it once up front so the first test's
+// findBy* timeout measures the UI, not the module transform.
+beforeAll(async () => { desktop = installFakeDesktop(); await import('./Desktop') }, 60_000)
 beforeEach(() => desktop.reset())
 afterEach(cleanup)
 
