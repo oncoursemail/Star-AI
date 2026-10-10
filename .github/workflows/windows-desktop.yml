@@ -78,7 +78,7 @@ jobs:
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'STAR-CI-Empty-Profile'
           python -m scripts.capture_desktop_ui
       - name: Upload rendered GUI preview screenshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-OLED-GUI-Previews
           path: ui-previews/*.png
@@ -125,7 +125,7 @@ jobs:
           $setup = "dist/STAR-Setup-v$version.exe"
           if (-not (Test-Path $setup)) { throw "Missing $setup" }
       - name: Upload testable executables
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-Windows-vNext
           path: |

@@ -48,13 +48,13 @@ jobs:
           timeout 40 "$BROWSER" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,900 --virtual-time-budget=1800 --screenshot="$PWD/site-captures/desktop-preview.png" 'http://127.0.0.1:8931/?preview=1'
       - name: Upload actual React browser renders for visual QA
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-React-Visual-QA
           path: site-captures/*.png
           if-no-files-found: ignore
           retention-days: 30
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: STAR-React-Website-Preview
           path: frontend/dist/
