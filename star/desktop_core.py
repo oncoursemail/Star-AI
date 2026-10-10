@@ -17,6 +17,7 @@ from .media import image_part
 from .memory import Memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .mcp_connections import MCPGateway
 
 
 def app_data() -> Path:
@@ -46,6 +47,10 @@ class Settings:
     obsidian_enabled: bool = False
     skills_enabled: bool = True
     graphify_enabled: bool = True
+    mcp_graphify_docs: bool = False
+    mcp_graphify_local: bool = False
+    mcp_graphify_port: int = 8931
+    mcp_obsidian_live: bool = False
 
     @classmethod
     def load(cls, file: Path):
@@ -65,10 +70,13 @@ class Settings:
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
         if any(type(getattr(self, key)) is not bool
-               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled')):
+               for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
+                           'mcp_graphify_docs', 'mcp_graphify_local', 'mcp_obsidian_live')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
+        if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
+            raise ValueError('Graphify MCP port must be 1024..65535')
         if self.obsidian_enabled and not self.obsidian_vault:
             raise ValueError('Select an Obsidian vault before enabling read access')
         if self.studio_edit and not self.studio_id.strip():
@@ -199,6 +207,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             dialogue.close()
         workspace = Workspace(Path(settings.workspace)) if settings.workspace else None
         intelligence = for_settings(settings, home)
+        mcp_gateway = MCPGateway(settings)
         allow_studio = bool(settings.studio_id)
         async def run():
             async with AsyncOpenAI(base_url=settings.endpoint, api_key='local-only', timeout=180.0, max_retries=0) as client:
@@ -207,7 +216,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               max_calls=settings.max_calls, context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(settings.project, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit,
-                               intelligence=intelligence,
+                               intelligence=intelligence, mcp_gateway=mcp_gateway,
                               stream_tokens=stream_tokens)
                 if allow_studio:
                     async with connect() as session:
