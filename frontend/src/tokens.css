@@ -1,0 +1,144 @@
+/* STAR design tokens — the single source of truth for the desktop workbench.
+ *
+ * Every desktop surface reads these `--star-*` values. The legacy short names
+ * (`--bg`, `--surface`, `--gold`, ...) that older secondary-page rules in
+ * styles.css still use are aliased to the same tokens at the bottom of this
+ * file, so there is exactly one palette on screen.
+ *
+ * Contrast (WCAG 2.2, measured against --star-bg / --star-surface-2):
+ *   text 17.7 / 15.2   body 14.7 / 12.6   muted 9.3 / 8.0   faint 5.9 / 5.0
+ *   gold 11.4 / 9.8    danger 9.3 / 8.0   success 11.9 / 10.2
+ *
+ * Scope: `.shell` (the desktop app) and `.star-layer` (dialogs that Radix
+ * portals outside the shell). Nothing is set on :root, so the public website
+ * keeps its own palette.
+ */
+.shell,
+.star-layer {
+  /* Surfaces: OLED-dark, separated by tone first and a 1px stroke second. */
+  --star-bg: #090b0e;
+  --star-sidebar: #0d1014;
+  --star-surface-1: #12161b;
+  --star-surface-2: #191d22;
+  --star-surface-3: #21262c;
+  --star-stroke: #292e33;
+  --star-stroke-soft: #1c2025;
+  --star-stroke-strong: #3a4047;
+  --star-stroke-focus: #59616a; /* composer edge while typing */
+  --star-veil: rgba(255, 255, 255, 0.06); /* hover on an already raised layer */
+  --star-scrim: rgba(5, 6, 8, 0.86);
+
+  /* Text */
+  --star-text: #f2f3f0;
+  --star-text-hover: #ffffff;
+  --star-body: #dcdfdb;
+  --star-muted: #adb3b6;
+  --star-faint: #868d91;
+
+  /* Accent: warm gold is scarce — selection, the primary action, focus. */
+  --star-gold: #e8bf76;
+  --star-gold-soft: #b99559;
+  --star-gold-hover: #f0cd8d;
+  --star-gold-wash: rgba(232, 191, 118, 0.1);
+  --star-gold-wash-strong: rgba(232, 191, 118, 0.18);
+  --star-gold-line: rgba(232, 191, 118, 0.45);
+  --star-on-gold: #17140e;
+
+  /* Status: always paired with a word or an icon, never colour alone. */
+  --star-success: #a9d3b7;
+  --star-success-wash: rgba(169, 211, 183, 0.12);
+  --star-danger: #e6a0a0;
+  --star-danger-wash: rgba(230, 160, 160, 0.08);
+  --star-info: #a3b7ca;
+
+  /* Spacing rhythm: 4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48 / 64 */
+  --star-1: 4px;
+  --star-2: 8px;
+  --star-3: 12px;
+  --star-4: 16px;
+  --star-5: 20px;
+  --star-6: 24px;
+  --star-8: 32px;
+  --star-10: 40px;
+  --star-12: 48px;
+  --star-16: 64px;
+
+  /* Shape: three radii by control scale. */
+  --star-r-sm: 8px;
+  --star-r-md: 12px;
+  --star-r-lg: 16px;
+
+  /* Type: system-first, no network fonts inside the offline desktop. */
+  --star-font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --star-font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --star-mono: 'Cascadia Code', 'Cascadia Mono', Consolas, 'SF Mono', ui-monospace, monospace;
+  --star-mono-weight: 350; /* Cascadia reads heavy on a dark canvas at its default 400 */
+  --star-fs-meta: 12px;
+  --star-fs-nav: 13px;
+  --star-fs-ui: 14px;
+  --star-fs-prose: 15px;
+  --star-fs-h3: 18px;
+  --star-fs-h2: 20px;
+  --star-fs-h1: 24px;
+  --star-lh-prose: 1.65;
+
+  /* Layout */
+  --star-sidebar-w: 248px;
+  --star-topbar-h: 52px;
+  --star-read: 768px; /* reading column; the canvas allows 720–860px */
+  --star-gutter: 24px;
+
+  /* Motion (spec 3C). motion.ts mirrors these numbers for `motion` components. */
+  --star-dur-press: 90ms;
+  --star-dur-hover: 120ms;
+  --star-dur-menu: 160ms;
+  --star-dur-message: 170ms;
+  --star-dur-page: 200ms;
+  --star-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --star-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Elevation: on OLED a shadow is nearly invisible, so it is used once (floating layers). */
+  --star-shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+
+  /* Legacy aliases — secondary pages styled by styles.css resolve to the tokens above. */
+  --bg: var(--star-bg);
+  --canvas: var(--star-bg);
+  --surface: var(--star-surface-1);
+  --surface-2: var(--star-surface-2);
+  --surface-3: var(--star-surface-3);
+  --line: var(--star-stroke);
+  --line-strong: var(--star-stroke-strong);
+  --white: var(--star-text);
+  --text: var(--star-body);
+  --sub: var(--star-muted);
+  --muted: var(--star-faint);
+  --gold: var(--star-gold);
+  --gold-bright: var(--star-gold);
+  --good: var(--star-success);
+  --bad: var(--star-danger);
+  --sidebar: var(--star-sidebar-w);
+  --top: var(--star-topbar-h);
+}
+
+/* Reduced motion: the OS preference and STAR's own persistent setting both
+ * collapse every transition and animation to an instant state change. */
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .shell *,
+  .shell *::before,
+  .shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+.shell[data-reduced-motion='true'],
+.shell[data-reduced-motion='true'] *,
+.shell[data-reduced-motion='true'] *::before,
+.shell[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
