@@ -7,10 +7,11 @@ import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
 import './desktop-v2.css'
+import './stellar-ui.css'
 
-type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
+type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'image'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
-const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
+const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['image','Image Lab',ImagePlus],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
 const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false}
@@ -19,12 +20,12 @@ const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:
 
 function initialPreviewTab(preview:boolean):Tab {
  const value=new URLSearchParams(window.location.search).get('tab')
- if(preview&&value&&['chat','projects','brain','analytics','tools','library','settings'].includes(value))return value as Tab
+ if(preview&&value&&['chat','projects','brain','analytics','tools','image','library','settings'].includes(value))return value as Tab
  return 'chat'
 }
 export function Desktop({initial=null,preview=false}:{initial?:BootData|null;preview?:boolean}) {
  const [tab,setTab]=useState<Tab>(()=>initialPreviewTab(preview))
- const [data,setData]=useState<BootData>(initial??{version:'0.8.1',project:'STAR',projects:[],messages:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES})
+ const [data,setData]=useState<BootData>(initial??{version:'0.8.1',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [files,setFiles]=useState<string[]>([])
@@ -45,10 +46,18 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
  const [leftOpen,setLeftOpen]=useState(false)
+ const [showJump,setShowJump]=useState(false)
+ const [workflowPath,setWorkflowPath]=useState('')
+ const [imagePrompt,setImagePrompt]=useState('')
+ const [imageNode,setImageNode]=useState('')
+ const [imagePort,setImagePort]=useState('8188')
+ const [imageBusy,setImageBusy]=useState(false)
+ const [generatedImages,setGeneratedImages]=useState<string[]>([])
  const [modelList,setModelList]=useState<string[]>([])
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const running=useRef<Map<string,string>>(new Map())
- const scrollTo=useRef<HTMLDivElement>(null)
+ const chatScroll=useRef<HTMLDivElement>(null)
+ const followBottom=useRef(true)
  const composerRef=useRef<HTMLTextAreaElement>(null)
  const lastSent=useRef('')
  const lastProject=useRef(data.project)
@@ -59,7 +68,28 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
- useEffect(()=>{scrollTo.current?.scrollIntoView({block:'end',behavior:themeMotion?'smooth':'auto'})},[messages.length,themeMotion,tab])
+ useEffect(()=>{
+   const node=chatScroll.current
+   if(tab==='chat'&&node&&followBottom.current){node.scrollTop=node.scrollHeight;setShowJump(false)}
+ },[messages.length,streamingText,busy,tab,data.active_chat])
+ useEffect(()=>{
+   const node=composerRef.current
+   if(!node)return
+   node.style.height='auto'
+   node.style.height=Math.min(Math.max(node.scrollHeight,48),176)+'px'
+ },[prompt,files.length])
+ const onChatScroll=()=>{
+   const node=chatScroll.current
+   if(!node)return
+   const atBottom=node.scrollHeight-node.scrollTop-node.clientHeight<125
+   followBottom.current=atBottom
+   setShowJump(!atBottom)
+ }
+ const jumpToLatest=()=>{
+   followBottom.current=true
+   if(chatScroll.current)chatScroll.current.scrollTo({top:chatScroll.current.scrollHeight,behavior:themeMotion?'smooth':'auto'})
+   setShowJump(false)
+ }
  const act=useCallback(async(action:string,params:Record<string,unknown>={})=>{
    if(inactive){setNotice('This is a preview. Install STAR Desktop to use local AI and tools.');return null}
    const requestId=crypto.randomUUID()
@@ -97,6 +127,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
+     if(action==='generateImage')setImageBusy(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
@@ -117,6 +148,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setUpdateBusy(false);setUpdateProgress(null)
      setNotice('Verified setup launched. STAR will restart after installation.')
    }
+   else if(action==='generateImage'){
+     setImageBusy(false)
+     const pictures=Array.isArray(result.images)?result.images.map(String):[]
+     setGeneratedImages(pictures)
+     setNotice(pictures.length?`${pictures.length} image${pictures.length===1?'':'s'} saved to your local STAR generated folder.`:'Image Lab finished without a generated image.')
+   }
    else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='generateImage')setNotice('Image generation completed. Check your generated images folder.')
@@ -129,6 +166,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(inactive){setNotice('This preview does not run a model. Download STAR to chat locally.');return}
    const selected=files.slice()
    lastSent.current=value
+   followBottom.current=true;setShowJump(false)
    setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false)
    setMessages(m=>[...m,makeMsg('user',value,selected.map(f=>f.split(/[\\/]/).pop()||f))]);setFiles([]);setPrompt('');setBusy(true);setWorkPhase('Preparing your response…');setNotice('');setTab('chat')
    const res=await act('sendMessage',{prompt:value,files:selected})
@@ -150,7 +188,17 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    return ()=>window.removeEventListener('keydown',onShortcut)
  },[])
  const attach=async()=>{const v=await act('pickFiles');if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,8))}
- const changeProject=async(name:string)=>{const v=await act('switchProject',{project:name});if(v){const b=v as BootData;setData(b);setDraft(b.settings);setMessages(b.messages);lastProject.current=name;setTab('chat')}setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
+ const startNewChat=async()=>{if(busy)return;const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setFiles([]);composerRef.current?.focus()}}
+ const openChat=async(id:string)=>{if(busy||id===data.active_chat){setTab('chat');return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0]){setWorkflowPath(String(v[0]));setGeneratedImages([])}}
+ const createImage=async()=>{
+   if(imageBusy||!workflowPath||!imagePrompt.trim()||!imageNode.trim())return
+   setImageBusy(true);setGeneratedImages([]);setNotice('')
+   const result=await act('generateImage',{workflow:workflowPath,prompt:imagePrompt,node:imageNode,port:Number(imagePort)})
+   if(!result)setImageBusy(false)
+ }
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
  const testActualModel=async()=>{
    if(modelChecking)return
@@ -183,6 +231,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const nav=(id:Tab)=>{setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
  const wrapper='shell '+(!leftOpen?'':'shell-open')
  const matchingMessages=chatSearch.trim()?messages.filter(m=>m.text.toLowerCase().includes(chatSearch.trim().toLowerCase())):messages
+ const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
  return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview}>
    <aside className="sidebar" aria-label="STAR navigation">
      <div className="brand-area"><Brand/><button className="sidebar-collapse icon-button" aria-label="Close menu" onClick={()=>setLeftOpen(false)}><X size={16}/></button></div>
