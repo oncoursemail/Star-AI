@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from star import providers
+from star import model_health, providers
 from star.brain_router import select_route
 from star.desktop_core import Settings, model_context_char_budget
 from star.model_health import (SERVER_FAILURES, explain_model_failure, missing_model_message,
@@ -46,7 +46,8 @@ def isolated_credentials(monkeypatch):
     monkeypatch.setitem(sys.modules, "keyring", fake)
     for variable in KEY_ENV.values():
         monkeypatch.delenv(variable, raising=False)
-    providers._SERVER_LIMITS.clear()
+    providers._SERVER_LIMITS.clear()        # process-memory caches must not leak between tests
+    model_health._LAST_SERVER_CHECK.clear()
     return fake
 
 
