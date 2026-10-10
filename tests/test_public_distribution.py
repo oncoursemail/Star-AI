@@ -33,7 +33,7 @@ class FakeClient:
 
 
 def test_public_metadata_preferred_without_authentication():
-    public={"tag_name":"v0.8.0","html_url":updates.PUBLIC_RELEASES_URL,"assets":[]}
+    public={"tag_name":"v0.9.0","html_url":updates.PUBLIC_RELEASES_URL,"assets":[]}
     client=FakeClient({updates.PUBLIC_API:FakeResponse(body=public)})
     result=updates.get_latest(client)
     assert result.available and result.repository==PUBLIC_REPO
