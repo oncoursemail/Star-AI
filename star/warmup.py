@@ -146,8 +146,14 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
                 return done(ok=False, code=str(report.get('code', '')))
     if cancelled():
         return done(cancelled=True, **({'ok': True, 'code': 'ok'} if report else {}))
+    checked = {'ok': True, 'code': 'ok'} if report else {}
     try:
         request = prefix_request(settings, home or app_data(), chat_id)
+    except Exception as exc:
+        # Nothing was sent: a chat database or setting that cannot be read is a
+        # local problem and says nothing about the server.
+        return done(skipped='no_request', error=type(exc).__name__, **checked)
+    try:
         result = asyncio.run(_prime(settings, request, cancel_event, None))
     except Exception as exc:
         status = getattr(exc, 'status_code', None)

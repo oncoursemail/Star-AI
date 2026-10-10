@@ -254,3 +254,24 @@ def test_warmer_swallows_every_failure():
     reports = []
     Warmer().start(broken, on_done=reports.append).join(5)
     assert reports == [{"primed": False, "skipped": "error"}]
+
+
+def test_a_request_that_could_not_be_built_does_not_turn_the_light_red(desk, monkeypatch):
+    """Found in review: any failure before the request was sent was blamed on the server.
+
+    The check has just passed. A chat database that cannot be read is a local
+    problem; the server was never asked, so its status must stay as checked.
+    """
+    monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
+    settings, seen = lan_settings(), []
+    broken = desk.home.parent / "broken"
+    broken.mkdir()
+    (broken / "conversations.sqlite3").write_bytes(b"this is not a database " * 64)
+    report = warm_up(settings, home=broken, chat_id=desk.chat, transport=lan_transport(seen))
+    assert report["primed"] is False and report["skipped"] == "no_request"
+    assert desk.models.requests == []                       # nothing was sent
+    assert report["ok"] is True and server_status(settings)["ok"] is True
+    # A request that was sent and failed still turns it red.
+    desk.models.answer = ConnectionError("refused")
+    assert warm_up(settings, home=desk.home, chat_id=desk.chat, transport=lan_transport(seen))["ok"] is False
+    assert server_status(settings)["ok"] is False
