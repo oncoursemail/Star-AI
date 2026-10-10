@@ -13,6 +13,12 @@ def main():
         print(f'STAR v{__version__} packaged backend OK')
         print('Local data:', app_data())
         Settings().validate()
+        # Packaged Windows binaries must include the OS-backed credential
+        # provider; discovery can otherwise appear to work but key saving fails.
+        if sys.platform == 'win32':
+            from keyring.backends.Windows import WinVaultKeyring
+            if WinVaultKeyring is None:
+                raise RuntimeError('Windows credential vault backend missing')
         return 0
     if '--ui-doctor' in sys.argv:
         from star.react_shell import react_index

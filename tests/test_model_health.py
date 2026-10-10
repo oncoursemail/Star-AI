@@ -66,3 +66,16 @@ def test_recent_context_excludes_only_duplicate_current_turn():
     assert 'hello' in context and 'hi' in context and 'new prompt' not in context
     assert 'new prompt' in recent_context(recent,'different prompt')
     assert recent[-1][1]=='new prompt'  # Non-mutating
+
+
+def test_hosted_api_failures_are_actionable_and_secret_safe():
+    from star.model_health import explain_model_failure
+    class Error(Exception):
+        def __init__(self,status_code,text):
+            self.status_code=status_code
+            super().__init__(text)
+    for status,word in [(401,"API key"),(403,"access"),(429,"rate limit"),(404,"model")]:
+        response=explain_model_failure(Error(status,"private-token-123"))
+        assert word.lower() in response.lower()
+        assert "private-token-123" not in response
+    assert "stopped" in explain_model_failure(RuntimeError("STAR task cancelled by user")).lower()
