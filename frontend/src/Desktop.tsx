@@ -5,17 +5,18 @@ import {AnalyticsView} from './Charts'
 import {Brand,EmptyState,Message,Panel,PrivacyNote,Starlight,Tag} from './components'
 import {examples,WEBSITE_RELEASES,WEBSITE_REPO} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,CustomToolRecipe,CustomToolCatalog} from './types'
 import './stellar-ui.css'
 import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
+import {ReviewToolsPanel} from './ReviewToolsPanel'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,roblox_research_enabled:true,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -46,6 +47,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [routerBusy,setRouterBusy]=useState(false)
  const [teamChecking,setTeamChecking]=useState(false)
  const [teamResult,setTeamResult]=useState<ModelTeamReport|null>(null)
+ const [customTools,setCustomTools]=useState<CustomToolRecipe[]>([])
+ const [customBusy,setCustomBusy]=useState('')
+ const [customQuery,setCustomQuery]=useState('')
+ const [customPreview,setCustomPreview]=useState('')
  const [brainProgress,setBrainProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [update,setUpdate]=useState<UpdateInfo|null>(null)
  const [updateBusy,setUpdateBusy]=useState(false)
@@ -146,6 +151,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setNotice(msg);if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
      if(action==='testModelTeam')setTeamChecking(false)
+     if(['listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool'].includes(action))setCustomBusy('')
      if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
@@ -169,6 +175,22 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const report=result as ModelTeamReport
      setTeamResult(report)
      setNotice(report.all_text_ready?'Configured model IDs passed text probes.':'Some model IDs failed text probes.')
+   }else if(action==='listCustomTools'){
+     setCustomBusy('')
+     setCustomTools((result as unknown as CustomToolCatalog)?.tools||[])
+   }else if(action==='previewCustomTool'){
+     setCustomBusy('')
+     const id=Number(result.tool_id||0)
+     setCustomPreview(JSON.stringify({ok:result.ok,results:result.results,truncated:result.truncated||false},null,2).slice(0,3800))
+     if(result.ok)setCustomTools(items=>items.map(t=>t.id===id?{...t,tests:t.tests+1}:t))
+     setNotice(result.ok?'Preview completed. Inspect source evidence before approving.':'Custom tool preview failed. Check enabled sources.')
+   }else if(action==='approveCustomTool'||action==='disableCustomTool'){
+     setCustomBusy('')
+     const id=Number(result.id||0)
+     const status:'approved'|'disabled'=action==='approveCustomTool'?'approved':'disabled'
+     setCustomTools(items=>items.map(t=>t.id===id?{...t,status}:t))
+     setNotice(status==='approved'?'Tool approved for this project.':'Tool disabled.')
+     void sync()
    }else if(action==='checkUpdates'){
      setUpdateBusy(false)
      setUpdate(result as unknown as UpdateInfo)
@@ -251,6 +273,16 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const result=await act('testModelTeam')
    if(!result)setTeamChecking(false)
  }
+ const customAction=(action:'previewCustomTool'|'approveCustomTool'|'disableCustomTool',id:number)=>{
+   if(customBusy||inactive)return
+   setCustomBusy(action+':'+id);setCustomPreview('')
+   void act(action,{id,...(action==='previewCustomTool'?{query:customQuery.trim()}: {})})
+ }
+ const refreshCustomTools=()=>{
+   if(customBusy||inactive)return
+   setCustomBusy('listCustomTools');void act('listCustomTools')
+ }
+ useEffect(()=>{if(tab==='tools'&&!inactive)void act('listCustomTools')},[tab,inactive,act])
  const selectRouterFolder=async()=>{
    const result=await act('selectFolder')
    if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){
@@ -424,7 +456,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <button className="secondary-button" onClick={()=>nav('library')}>View knowledge library <ArrowRight size={14}/></button>
               </Panel>
             </div>
-            <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
+            <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/>
+           <ReviewToolsPanel settings={draft} onChange={setDraft} status={data.tool_workshop} recipes={customTools} query={customQuery} onQuery={setCustomQuery} preview={customPreview} busy={customBusy} disabled={inactive} refresh={refreshCustomTools} runPreview={id=>customAction('previewCustomTool',id)} approve={id=>customAction('approveCustomTool',id)} disable={id=>customAction('disableCustomTool',id)}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
          <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
