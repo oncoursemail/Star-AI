@@ -183,6 +183,51 @@ def test_model_roles_validate_locally():
         validate_model_roles([{"role":"user"},{"role":"system"}])
 
 
+
+def test_plain_chat_streams_visible_deltas_without_exposing_reasoning():
+    async def streaming_reply():
+        for item in ['STAR ', 'is ', 'working.']:
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(
+                content=item, reasoning_content='private reasoning not for display'))])
+    async def run():
+        calls=[]
+        class StreamingModels:
+            async def create(self, **kwargs):
+                calls.append(kwargs)
+                return streaming_reply()
+        events=[]
+        fake=SimpleNamespace(chat=SimpleNamespace(completions=StreamingModels()))
+        answer, messages, _=await execute(client=fake, model='local', prompt='say hi',
+            image_paths=[], stream_tokens=True, on_event=events.append)
+        assert answer=='STAR is working.'
+        assert calls[0]['stream'] is True
+        streamed=''.join(e['text'] for e in events if e.get('event')=='assistant_delta')
+        assert streamed==answer
+        assert 'private reasoning' not in streamed
+        assert messages[-1]['role']=='assistant'
+    asyncio.run(run())
+
+
+def test_stream_rejection_falls_back_to_nonstream_response():
+    class UnsupportedStream(Exception):
+        status_code=400
+    async def run():
+        calls=[]
+        class ConditionalModels:
+            async def create(self, **kwargs):
+                calls.append(kwargs)
+                if kwargs.get('stream'):
+                    raise UnsupportedStream('stream unsupported')
+                return reply('Fallback response')
+        fake=SimpleNamespace(chat=SimpleNamespace(completions=ConditionalModels()))
+        answer, messages, _=await execute(client=fake,model='local',prompt='hello',
+            image_paths=[],stream_tokens=True)
+        assert answer=='Fallback response'
+        assert len(calls)==2
+        assert calls[0]['stream'] is True and not calls[1].get('stream')
+    asyncio.run(run())
+
+
 from star.selfbuild import skill_path, read_source, write_source
 
 
