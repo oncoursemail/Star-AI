@@ -145,6 +145,29 @@ jobs:
             STAR-PREVIEW-SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
+      # Review artifacts are intentionally separate so each compressed file
+      # stays below connector/download size limits and is easy to verify.
+      # Stable releases keep using STAR-Windows-vNext above unchanged.
+      - name: Upload Ultimate preview Windows installer
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: STAR-Ultimate-Windows-Setup
+          path: |
+            dist/STAR-Setup-v*.exe
+            STAR-PREVIEW-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Ultimate preview portable ZIP
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: STAR-Ultimate-Windows-Portable
+          path: |
+            STAR-Genesis-Windows-x64.zip
+            STAR-PREVIEW-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
 
   publish-release:
     needs: windows-build
