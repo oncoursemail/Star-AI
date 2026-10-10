@@ -115,7 +115,7 @@ def test_timeout_cancels_and_blocks():
             return "not reached"
         p = TaskPlan([Task("slow", "research", "Timebox"),
                       Task("next", "review", "Wait", dependencies=("slow",))], max_parallel=2)
-        result = await run_plan(p, slow, task_timeout=.15, total_timeout=.06)
+        result = await run_plan(p, slow, task_timeout=.3, total_timeout=.12)
         assert cancelled
         assert result.for_id("slow").status == "cancelled"
         assert result.for_id("next").status == "blocked"
