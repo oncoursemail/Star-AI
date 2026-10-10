@@ -6,6 +6,7 @@ Keep a single first system role in both the normal agent and this smoke test.
 from __future__ import annotations
 
 from .desktop_core import Settings
+from .providers import connection_for
 
 
 def explain_model_failure(error: Exception) -> str:
@@ -39,8 +40,9 @@ async def probe_chat_endpoint(settings: Settings, timeout: float = 120.0) -> dic
     from openai import AsyncOpenAI
     settings.validate()
     if not settings.model.strip():
-        raise ValueError('Select a local model before testing its response')
-    async with AsyncOpenAI(base_url=settings.endpoint, api_key='local-only',
+        raise ValueError('Select a model before testing its response')
+    endpoint, key = connection_for(settings)
+    async with AsyncOpenAI(base_url=endpoint, api_key=key,
                             timeout=timeout, max_retries=0) as client:
         completion = await client.chat.completions.create(
             model=settings.model,
