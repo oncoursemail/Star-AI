@@ -191,10 +191,13 @@ def test_security_malformed_remote_schema_and_header_are_rejected():
         extra_headers({"type": "object", "properties": {
             "a": {"type": "string", "x-mcp-header": "A"},
             "b": {"type": "string", "x-mcp-header": "a"}}}, {})
-    with pytest.raises(ValueError):
-        extra_headers({"type": "object", "properties": {
-            "a": {"type": "object", "properties": {
-                "b": {"type": "string", "x-mcp-header": "B"}}}}}, {})
+    # Modern MCP supports exact nested property paths; nested values are
+    # mirrored only when present and preserve their declared primitive type.
+    annotated = {"type": "object", "properties": {
+        "a": {"type": "object", "properties": {
+            "b": {"type": "string", "x-mcp-header": "B"}}}}}
+    assert extra_headers(annotated, {"a": {"b": "nested"}}) == {
+        "Mcp-Param-B": "nested"}
     assert valid_schema({"type": "object", "properties": {
         "a": {"type": "string", "x-mcp-header": "Safe-Name"}}}) is not None
 
