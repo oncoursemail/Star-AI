@@ -25,12 +25,13 @@ from .version import __version__
 from .intelligence import for_settings
 from .providers import credential_status, save_api_key, clear_api_key
 from .chat_images import chat_image, generate_chat_image
+from .diagnostics import export_review_bundle
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
-    'generateImage','saveProviderKey','clearProviderKey','cancelMessage',
+    'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
 })
 
 
@@ -307,6 +308,39 @@ def launch():
                 if action=='selectFolder':
                     selected=QFileDialog.getExistingDirectory(self.host, 'Choose a local notes or project folder')
                     return json.dumps({'ok':True,'data':{'path':str(selected) if selected else ''}})
+                if action=='exportReviewBundle':
+                    include_screen=body.get('includeScreenshot',False)
+                    if type(include_screen) is not bool:
+                        raise ValueError('Invalid screenshot selection')
+                    stamp=time.strftime('%Y%m%d',time.gmtime())
+                    suggested=str(Path.home()/f'STAR-review-v{__version__}-{stamp}.zip')
+                    filename,_=QFileDialog.getSaveFileName(
+                        self.host, 'Export STAR review bundle', suggested, 'ZIP archive (*.zip)')
+                    if not filename:
+                        return json.dumps({'ok':True,'data':{'cancelled':True}})
+                    destination=Path(filename).expanduser()
+                    if not destination.suffix:
+                        destination=destination.with_suffix('.zip')
+                    screenshot=None
+                    if include_screen:
+                        # Optional explicit screenshot may expose the currently visible
+                        # chat, so the React option defaults to unchecked.
+                        from PySide6.QtCore import QBuffer, QIODevice
+                        buffer=QBuffer()
+                        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                        if not self.host.view.grab().save(buffer,'PNG'):
+                            buffer.close()
+                            raise RuntimeError('Could not capture current screen')
+                        screenshot=bytes(buffer.data())
+                        buffer.close()
+                    def worker():
+                        result=export_review_bundle(
+                            app_data(),Settings.load(self.settings_file),destination,
+                            runtime_status=self.runtime.status(),screenshot_png=screenshot)
+                        return {'filename':result.name,'screenshot_included':bool(screenshot),
+                                'saved_to_user_selected_location':True}
+                    self._run(rid,action,worker)
+                    return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='openLegacy':
                     if getattr(sys, 'frozen', False):
                         command=[sys.executable, '--legacy-ui']
