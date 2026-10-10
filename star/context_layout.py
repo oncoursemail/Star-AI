@@ -22,6 +22,7 @@ as generated when `preserve_thinking` is on (see providers.llama_request_fields)
 These functions are pure: no I/O, no clock, no settings.
 """
 from __future__ import annotations
+import re
 
 # Inside one task, earlier turns are dropped this many messages at a time.
 TRIM_BLOCK = 4
@@ -35,6 +36,19 @@ _CUT = "\n[... shortened]"
 # Stands in for the answer of a turn that failed or was stopped, so the user's own words
 # of that turn stay in the conversation and the roles keep alternating.
 NO_REPLY = "[No reply was given to this message: the turn failed or was stopped.]"
+
+
+# The start of either block marker, in any letter case or spacing.
+_MARKER = re.compile(r"\[(\s*(?:END\s+)?STAR\s+CONTEXT)", re.I)
+
+
+def _inert(text: str) -> str:
+    """Reference text may mention the block markers but can never form one.
+
+    Whatever follows the end marker reads as the user's own words, so a web
+    snippet or note that carried the marker could place its text there.
+    """
+    return _MARKER.sub(lambda found: "(" + found.group(1), text)
 
 
 def _clip(text: str, limit: int) -> str:
@@ -121,12 +135,13 @@ def context_block(sections=(), *, facts=(), limit: int = 10000) -> str:
 
     `facts` are short one-line strings; `sections` are (heading, text) pairs.
     Empty entries are skipped, earlier sections win when space runs out, and
-    with nothing to say the result is "".
+    with nothing to say the result is "". The two markers appear exactly once:
+    a marker inside the reference text is defused (see `_inert`).
     """
-    lines = [str(fact).strip() for fact in facts if str(fact).strip()]
+    lines = [_inert(str(fact).strip()) for fact in facts if str(fact).strip()]
     room = max(0, limit - sum(len(line) + 1 for line in lines))
     for heading, text in sections:
-        text = str(text or "").strip()
+        heading, text = _inert(str(heading)), _inert(str(text or "").strip())
         if not text or room <= len(str(heading)) + 40:
             continue
         body = _clip(text, room - len(str(heading)) - 2)
