@@ -9,6 +9,7 @@ STAR now has a read-only, task-scoped Roblox research module in star/roblox_rese
 |---|---|---|
 | star_roblox_resolve_game_url / star_roblox_resolve_place | Validate a Roblox game page URL / Place ID, then resolve to Universe ID via fixed public Roblox API | Experimental public endpoint; explicit error on missing/deprecated mapping |
 | star_roblox_search_games | Public keyword discovery and grounded universe IDs | Experimental endpoint; limited search, not full catalog |
+| star_roblox_game_image | Fetch a selected official Roblox CDN icon/thumbnail as bounded JPEG pixels and forward into a vision-capable STAR chat | Marketing art is not actual gameplay; requires a vision-capable local model |
 | star_roblox_game_report | Officially hosted public game data: creator, description, creation/update, playing snapshot, cumulative visits, favorites, votes, image URLs, genre hypothesis | Auxiliary errors are surfaced; genre is not proven gameplay |
 | star_roblox_compare_games | Same public metrics for 2–4 universes | Snapshot data, not DAU, revenue or retention |
 | star_roblox_docs | Search a curated official Creator Hub/Luau link index | Not a complete documentation crawler |
@@ -63,7 +64,7 @@ Later improvements: optional search pagination, named-game ambiguity resolution,
 The thumbnails.roblox.com endpoints can return game icon/thumbnail asset URLs:
 https://create.roblox.com/docs/cloud/reference/features/thumbnails
 
-Current patch retrieves fixed-host JSON and returns only validated Roblox-CDN image URLs with source attribution. **Returning an image URL is not the same as displaying or visually analyzing pixels.** Actual image understanding requires a guarded media-fetch and decode path (known Roblox CDN origins, MIME/byte bounds, encoded image decode, resizing, cached preview, local vision support) wired into STAR's existing chat. This should not become a separate Image Lab screen.
+Current patch returns source-linked image URLs **and** implements an explicit `star_roblox_game_image` tool that fetches image bytes only from verified Roblox CDN addresses obtained from fixed Roblox thumbnail metadata calls. It checks MIME, response size, frame/pixel count, resizes to a 960-pixel bound, compresses as JPEG and injects normalized pixels into the existing STAR multimodal agent (no new Image Lab screen). STAR must use a vision-capable local model for pixel understanding. Image source, kind/index and warning are preserved; thumbnails are often promotional, not proof of observed gameplay. Other arbitrary web image retrieval remains out of scope.
 
 STAR already has a Studio MCP screenshot path that can send genuine Studio image pixels to a vision-capable model. Roblox Studio MCP official information: https://create.roblox.com/docs/studio/mcp
 
@@ -131,7 +132,7 @@ Performance strategy: only advertise relevant tool schemas in the model request.
 
 **R1 — Current review candidate.** Grounded public search/report/compare; genre uncertainty; original image URLs; curated docs; DevForum; YouTube metadata; read-only scoped Open Cloud; task-scoped STAR chat tools; regression tests.
 
-**R2 — Images and identity.** Reliable Place ID → Universe ID resolution; image display directly in chat and actual vision image analysis; source provenance; official-announcement filter; Explore categories; measured parallel/batched requests.
+**R2 — Rich visual UX.** The candidate already resolves Place IDs and forwards fetched official game thumbnails into vision-capable chat. Next: first-class React inline image presentation, visual source citations/saved preview UX, broader image provider coverage, official-announcement filter; Explore categories; measured parallel/batched requests.
 
 **R3 — Knowledge and analytics.** Incrementally index official Creator Docs and APIs with citations, retrieve relevant current API descriptions and examples, ingest Roblox engine change notices, add owner-only analytics query with careful permission scopes and asynchronous polls.
 
