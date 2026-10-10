@@ -88,7 +88,7 @@ def learned_context(home: Path, project: str, query: str, *, max_chars: int = 50
         raise ValueError("Context budget outside supported range")
     store = KnowledgeStore(Path(home) / "knowledge")
     try:
-        selected = store.find(project, query, reviewed_only=True, limit=limit)
+        selected = store.find_contextual(project, query, limit=limit)
         entries = []
         size = 0
         for note in selected:
