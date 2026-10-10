@@ -72,13 +72,15 @@ export const capabilities:Capability[]=[
 export const milestones=[
  {id:'foundation',number:'01',title:'Local-first foundation',subtitle:'Desktop, model setup, project data and Roblox tooling',
   body:'The working source foundation. Installer and GPU testing remain separate acceptance tasks.',pr:null},
- {id:'design',number:'02',title:'A more unified STAR',subtitle:'Conversation-first desktop workspace',
+ {id:'website',number:'02',title:'A transparent STAR website',subtitle:'Live development stats, intelligence layers, tools and roadmap',
+  body:'A public, verifiable view of what has shipped, what is being reviewed and what is planned.',pr:32},
+ {id:'design',number:'03',title:'A more unified STAR',subtitle:'Conversation-first desktop workspace',
   body:'Refining the React experience so intelligence and tools feel like one product.',pr:27},
- {id:'fast',number:'03',title:'Faster, wider intelligence',subtitle:'Open model routes, web research and chat images',
+ {id:'fast',number:'04',title:'Faster, wider intelligence',subtitle:'Open model routes, web research and chat images',
   body:'More useful answers and creation paths, subject to provider and performance tests.',pr:28},
- {id:'teams',number:'04',title:'Agent teams that remember',subtitle:'Concurrent specialists and source-ranked context',
+ {id:'teams',number:'05',title:'Agent teams that remember',subtitle:'Concurrent specialists and source-ranked context',
   body:'Bounded parallel execution and memory backed by observable evidence.',pr:29},
- {id:'future',number:'05',title:'Deep creation workflows',subtitle:'3D, animation, MCP expansion and automated Roblox QA',
+ {id:'future',number:'06',title:'Deep creation workflows',subtitle:'3D, animation, MCP expansion and automated Roblox QA',
   body:'Longer-term research priorities. No speculative completion dates.',pr:null}
 ] as const
 export function filterCapabilities(stage:CapabilityStage|'all',term:string):Capability[]{
