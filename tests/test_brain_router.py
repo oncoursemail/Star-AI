@@ -55,6 +55,13 @@ def test_explicit_agent_uses_fast_drafter_on_same_provider_only():
     assert select_route(s, "simple", mode="fast").task_timeout == 55
 
 
+def test_roblox_agent_prefers_roblox_specialist_and_preserves_agent_tools():
+    s = cfg(reasoning_model="general-reasoner", roblox_model="star-luau")
+    route = select_route(s, "Debug Luau code in Roblox Studio", mode="agent", project_tools=True)
+    assert route.model == "star-luau" and route.use_tools
+    assert select_route(s, "Reason about pure mathematics", mode="agent").model == "general-reasoner"
+
+
 def test_images_select_vision_model_even_for_manual_agent():
     selection = select_route(cfg(reasoning_model="text-only", vision_model="image-capable"),
                              "Audit screenshot", mode="agent", image_count=2)
@@ -72,7 +79,7 @@ def test_explicit_scoped_project_action_loads_tools_only_when_needed():
     assert not select_route(cfg(), "Give a definition", project_tools=False).use_tools
 
 
-@pytest.mark.parametrize("bad", ["a b", "\nsecret", "x"*181, 99, None, " model", "model\tname"])
+@pytest.mark.parametrize("bad", ["a b", "\nsecret", "x"*181, 99, None, " model", "model\tname", "https://evil.invalid/v1"])
 def test_invalid_model_aliases_fail_closed(bad):
     with pytest.raises(ValueError):
         validate_alias(bad)
