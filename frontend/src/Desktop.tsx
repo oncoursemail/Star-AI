@@ -52,7 +52,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [imageNode,setImageNode]=useState('')
  const [imagePort,setImagePort]=useState('8188')
  const [imageBusy,setImageBusy]=useState(false)
- const [generatedImages,setGeneratedImages]=useState<string[]>([])
+ const [generatedImages,setGeneratedImages]=useState<Array<{filename:string;preview:string}>>([])
  const [modelList,setModelList]=useState<string[]>([])
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const running=useRef<Map<string,string>>(new Map())
@@ -150,13 +150,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    }
    else if(action==='generateImage'){
      setImageBusy(false)
-     const pictures=Array.isArray(result.images)?result.images.map(String):[]
+     const pictures:Array<{filename:string;preview:string}>=Array.isArray(result.images)?result.images.filter((x:unknown)=>x&&typeof x==='object').map((x:unknown)=>{const image=x as {filename?:string;preview?:string};return {filename:String(image.filename||'Generated image'),preview:String(image.preview||'')}}):[]
      setGeneratedImages(pictures)
      setNotice(pictures.length?`${pictures.length} image${pictures.length===1?'':'s'} saved to your local STAR generated folder.`:'Image Lab finished without a generated image.')
    }
    else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
-   else if(action==='generateImage')setNotice('Image generation completed. Check your generated images folder.')
    else if(action==='transcribe')setPrompt(p=>p+(p?'\n':'')+String(result.text||''))
    else void sync()
  }),[sync])
@@ -324,7 +323,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               </Panel>
               <Panel className="image-output-panel">
                 <div className="image-output-heading"><span>OUTPUT / LOCAL FILES</span><button className="icon-button" type="button" title="Open the STAR data folder" onClick={()=>void act('openDataFolder')}><FolderOpen size={19}/></button></div>
-                {generatedImages.length?<div className="image-files"><div className="image-finished"><Check size={18}/><div><strong>Generation complete</strong><span>{generatedImages.length} image file{generatedImages.length>1?'s':''} saved under STAR / generated</span></div></div>{generatedImages.map(name=><div className="image-file" key={name}><File size={17}/><span title={name}>{name.split(/[\\/]/).pop()}</span><Check size={15}/></div>)}<button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open STAR files</button></div>:
+                {generatedImages.length?<div className="image-files"><div className="image-finished"><Check size={18}/><div><strong>Generation complete</strong><span>{generatedImages.length} image file{generatedImages.length>1?'s':''} saved under STAR / generated</span></div></div><div className="image-results-grid">{generatedImages.map(result=><div className="image-result-card" key={result.filename}>{result.preview?<img src={result.preview} alt={'STAR generated artwork: '+result.filename} loading="lazy"/>:<div className="image-thumbnail-fallback"><ImagePlus size={25}/></div>}<span><File size={14}/>{result.filename}</span></div>)}</div><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open STAR files</button></div>:
                  <div className="image-output-empty"><div className="output-emblem"><ImagePlus size={31}/></div><strong>{imageBusy?'Your image is being generated':'Your next creation goes here'}</strong><p>{imageBusy?'STAR is waiting for ComfyUI to finish. This can take a few minutes.':'Choose a workflow, write a prompt and create. Your finished images will be stored locally.'}</p>{imageBusy&&<span className="image-wait"><LoaderCircle size={15} className="spin"/> Local generation in progress</span>}</div>}
               </Panel>
             </div>
