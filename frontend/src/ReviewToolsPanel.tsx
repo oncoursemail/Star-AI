@@ -22,6 +22,8 @@ type Props = {
 export function ReviewToolsPanel({settings,onChange,status,recipes,query,onQuery,preview,busy,disabled,
   refresh,runPreview,approve,disable}:Props){
   const isOff=!settings.tool_workshop_enabled
+  // With STAR Server the specialists run on the server: this PC's graphics memory has nothing to do with it.
+  const onServer=settings.provider==='star_server'
   return <section className="integrated-panel" aria-label="Custom tools and Roblox research">
     <div className="integrated-heading"><Workflow size={18}/><div>
       <strong>STAR Tool Workshop</strong>
@@ -44,11 +46,11 @@ export function ReviewToolsPanel({settings,onChange,status,recipes,query,onQuery
         onChange={e=>onChange({...settings,specialists_enabled:e.target.checked})}/>
         <span>Enable scoped research specialists</span>
       </label>
-      <label className="integrated-field">Local specialist concurrency
+      <label className="integrated-field">{onServer?'Specialist concurrency':'Local specialist concurrency'}
         <select disabled={disabled} value={settings.specialist_parallelism??1}
           onChange={e=>onChange({...settings,specialist_parallelism:Number(e.target.value)})}>
-          <option value={1}>1 specialist (recommended for 8 GB VRAM)</option>
-          <option value={2}>2 specialists (requires measurement)</option>
+          <option value={1}>{onServer?'1 specialist at a time':'1 specialist (recommended for 8 GB VRAM)'}</option>
+          <option value={2}>{onServer?'2 specialists at a time (needs 2 free server slots)':'2 specialists (requires measurement)'}</option>
         </select>
       </label>
     </div>
