@@ -1,11 +1,13 @@
 """Offline contract tests for STAR's read-only Roblox research integration."""
 import asyncio
+import io
 import json
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
+from PIL import Image
 
 from star.agent import execute
 from star.desktop_core import Settings
@@ -98,6 +100,67 @@ def test_url_resolver_api_failure_is_explicit(tmp_path):
     hub = RobloxResearch(home=tmp_path, client=_client(lambda r: httpx.Response(404, json={})))
     with pytest.raises(ValueError, match="HTTP 404"):
         hub.resolve_place(999)
+
+
+def test_actual_roblox_cd_image_pixels_reach_vision_chat(tmp_path):
+    img = Image.new("RGB", (48, 28), (14, 54, 89))
+    memory = io.BytesIO()
+    img.save(memory, format="PNG")
+    official = "https://tr.rbxcdn.com/test/768/432/Image/Png/noFilter"
+    calls = []
+    def handler(request):
+        calls.append(str(request.url))
+        if request.url.host == "thumbnails.roblox.com":
+            return httpx.Response(200, json={"data": [{"universeId": 999,
+                "thumbnails": [{"imageUrl": official}]}]})
+        assert str(request.url) == official
+        return httpx.Response(200, content=memory.getvalue(), headers={"content-type": "image/png"})
+    hub = LocalIntelligence(home=tmp_path)
+    hub.roblox.client = _client(handler)
+    hub.roblox._owns_client = False
+    result = hub.call("star_roblox_game_image",
+                      {"universe_id": 999, "kind": "thumbnail", "index": 0},
+                      enabled={"star_roblox_game_image"})
+    assert result["source_url"] == official
+    assert result["_image"]["mime_type"] == "image/jpeg"
+    assert len(result["_image"]["data"]) > 50
+    assert len(calls) == 2
+    class FakeCompletion:
+        def __init__(self):
+            self.calls = 0
+        async def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                msg = SimpleNamespace(content="", tool_calls=[SimpleNamespace(
+                    id="image-call", function=SimpleNamespace(name="star_roblox_game_image",
+                    arguments=json.dumps({"universe_id": 999, "kind": "thumbnail", "index": 0})))])
+            else:
+                msg = SimpleNamespace(content="Image received; artwork is not proof of gameplay.", tool_calls=None)
+            return SimpleNamespace(choices=[SimpleNamespace(message=msg)])
+    stub = FakeCompletion()
+    client = SimpleNamespace(chat=SimpleNamespace(completions=stub))
+    answer, messages, _ = asyncio.run(execute(client=client, model="vision",
+                          prompt="Inspect this Roblox game thumbnail", image_paths=[], intelligence=hub))
+    assert "not proof" in answer
+    assert any(m["role"] == "user" and isinstance(m["content"], list) and
+               any(isinstance(v, dict) and v.get("type") == "image_url" for v in m["content"])
+               for m in messages)
+    assert all(not (m["role"] == "tool" and "_image" in m["content"]) for m in messages)
+    assert stub.calls == 2
+
+
+def test_source_image_rejects_unapproved_url_and_redirect(tmp_path):
+    def handler(request):
+        if request.url.host == "thumbnails.roblox.com":
+            return httpx.Response(200, json={"data": [{"universeId": 999, "thumbnails": [
+                {"imageUrl": "https://evil.example.com/file.png"},
+                {"imageUrl": "https://tr.rbxcdn.com/test.png"}]}]})
+        return httpx.Response(302, headers={"location": "https://evil.example.com/secret"})
+    research = RobloxResearch(home=tmp_path, client=_client(handler))
+    with pytest.raises(ValueError, match="image unavailable"):
+        research.game_image(999)
+    with pytest.raises(ValueError, match="index"):
+        research.game_image(999, index=4)
 
 
 def test_unknown_genre_is_not_fabricated():
@@ -261,6 +324,7 @@ def test_intelligence_uses_task_scoping_and_schema_validation(tmp_path):
     assert hub.definitions("Hello, can you tell me a joke?") == []
     game_tools = {x["name"] for x in hub.definitions("Find Roblox game stats and compare experiences")}
     assert "star_roblox_game_report" in game_tools
+    assert "star_roblox_game_image" in game_tools
     assert "star_roblox_resolve_game_url" in game_tools
     assert "star_roblox_compare_games" in game_tools
     assert "star_roblox_youtube_search" not in game_tools
