@@ -2,4 +2,3 @@
 __version__ = "0.8.1"
 APP_TITLE = "STAR Intelligence"
 REPO = "oncoursemail/Star-AI"
-PUBLIC_REPO = "oncoursemail/Star-Intelligence-Downloads"  # Planned public binary-only channel

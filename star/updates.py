@@ -1,12 +1,9 @@
-"""STAR's installer-based updater without GitHub CLI or a model API key.
+"""STAR installer updates from the single official public GitHub Releases channel.
 
-STAR first checks the binary-only public download channel and then tries its
-original source repository *anonymously*. Either public GitHub Release can be
-used for authenticated-by-checksum update downloads. If neither repository is
-publicly accessible, STAR offers a browser download, never GitHub CLI.
-
-All downloads must match exact GitHub release asset URLs, sizes, and SHA-256
-digests from the same unauthenticated GitHub API response.
+Only the unauthenticated STAR source repository Release API is trusted.
+A missing/inaccessible Release offers the browser fallback, never GitHub CLI.
+Automatic installation requires the exact official Setup URL, size and SHA-256
+verification from the same public GitHub API response.
 """
 from __future__ import annotations
 
@@ -24,12 +21,10 @@ import zipfile
 
 import httpx
 
-from .version import REPO, PUBLIC_REPO, __version__
+from .version import REPO, __version__
 
 API = f'https://api.github.com/repos/{REPO}/releases/latest'
 RELEASES_URL = f'https://github.com/{REPO}/releases/latest'
-PUBLIC_API = f'https://api.github.com/repos/{PUBLIC_REPO}/releases/latest'
-PUBLIC_RELEASES_URL = f'https://github.com/{PUBLIC_REPO}/releases/latest'
 ASSET = 'STAR-Genesis-Windows-x64.zip'  # For compatibility with older fixtures.
 MAX_INSTALLER_BYTES = 750_000_000
 MIN_INSTALLER_BYTES = 1_000_000
@@ -81,44 +76,30 @@ def _installer_name(version: str) -> str:
 
 
 def get_latest(client: httpx.Client | None = None) -> UpdateResult:
-    """Discover public Releases with no GitHub auth, source or binary-only.
+    """Check only public Star-AI Releases, without credentials or a mirror.
 
-    An unauthenticated 200 response from GitHub proves that this caller can
-    access the release without GitHub CLI. Private repos return 404 and use the
-    manual browser fallback instead. Prefer the binary-only repo when it is
-    present; use the source repo while the public mirror is being established.
+    Ignore untrusted release html_url fields: derive the browser URL from the
+    fixed canonical repository and a syntactically validated release tag.
     """
     own = client is None
     client = client or httpx.Client(timeout=15.0, trust_env=False)
     try:
-        newest: UpdateResult | None = None
-        for repo, api, fallback_url in ((PUBLIC_REPO, PUBLIC_API, PUBLIC_RELEASES_URL),
-                                        (REPO, API, RELEASES_URL)):
-            try:
-                response = client.get(api, headers={'Accept': 'application/vnd.github+json'})
-                if response.status_code in (401, 403, 404):
-                    continue
+        try:
+            response = client.get(API, headers={'Accept': 'application/vnd.github+json'})
+            if response.status_code not in (401, 403, 404):
                 response.raise_for_status()
                 release = response.json()
-                if release.get('draft') or release.get('prerelease'):
-                    continue
-                version = Version(str(release.get('tag_name', '')))
-                tag = '.'.join(str(x) for x in version.parts)
-                expected_url = f'https://github.com/{repo}/releases/tag/v{tag}'
-                # The release URL comes from the known repository, not arbitrary JSON.
-                candidate = UpdateResult(version > Version(__version__), tag, expected_url,
-                    assets=tuple(release.get('assets', ())), repository=repo,
-                    anonymous_access=True)
-                if repo == PUBLIC_REPO and candidate.available:
-                    # Prefer the dedicated distribution channel when it has an actual upgrade.
-                    # Do not consult the source repo in that case.
-                    return candidate
-                if newest is None or Version(candidate.version) > Version(newest.version):
-                    newest = candidate
-            except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError):
-                continue
-        if newest is not None:
-            return newest
+                if isinstance(release, dict) and not (release.get('draft') or release.get('prerelease')):
+                    version = Version(str(release.get('tag_name', '')))
+                    assets = release.get('assets')
+                    if not isinstance(assets, list):
+                        raise ValueError('Release assets must be a list')
+                    tag = '.'.join(str(x) for x in version.parts)
+                    expected_url = f'https://github.com/{REPO}/releases/tag/v{tag}'
+                    return UpdateResult(version > Version(__version__), tag, expected_url,
+                        assets=tuple(assets), repository=REPO, anonymous_access=True)
+        except (httpx.RequestError, httpx.HTTPStatusError, ValueError, KeyError, TypeError):
+            pass
         return UpdateResult(False, __version__, RELEASES_URL, requires_browser=True,
             explanation='No public STAR Release is accessible. Open GitHub Releases in your browser to download Setup. GitHub CLI is not required.',
             repository=REPO)
@@ -127,11 +108,10 @@ def get_latest(client: httpx.Client | None = None) -> UpdateResult:
             client.close()
 
 
-
 def _trusted_setup_asset(result: UpdateResult) -> dict:
     if not result.available or Version(result.version) <= Version(__version__):
         raise ValueError('No newer STAR version is available')
-    if result.repository != PUBLIC_REPO and not (result.repository == REPO and result.anonymous_access):
+    if result.repository != REPO or not result.anonymous_access:
         raise PermissionError('Automatic updates require an anonymously accessible official STAR Release')
     name = _installer_name(result.version)
     matches = [a for a in result.assets if a.get('name') == name]
@@ -142,7 +122,7 @@ def _trusted_setup_asset(result: UpdateResult) -> dict:
     if not re.fullmatch(r'sha256:[0-9a-f]{64}', digest):
         raise ValueError('Release does not provide a trusted SHA-256 digest')
     url = str(asset.get('browser_download_url') or '')
-    expected = f'https://github.com/{result.repository}/releases/download/v{result.version}/' + name
+    expected = f'https://github.com/{REPO}/releases/download/v{result.version}/' + name
     if url != expected:
         raise ValueError('Unexpected STAR release installer URL')
     size = int(asset.get('size') or 0)
@@ -155,10 +135,10 @@ def _trusted_setup_asset(result: UpdateResult) -> dict:
 def stage_installer(result: UpdateResult, storage: Path,
                     client: httpx.Client | None = None,
                     progress: Callable[[int, int], None] | None = None) -> InstallerCandidate:
-    """Download a checksum-verified Setup from an anonymously accessible Release.
+    """Download a SHA-256 checked installer from the official public Release.
 
-    If the source repository becomes private again, the GitHub API will return
-    404 without authentication and STAR will use the browser fallback.
+    If release metadata becomes unavailable, automatic installation is
+    refused and the user is offered the official browser fallback.
     """
     if sys.platform != 'win32':
         raise OSError('STAR installer downloads run on Windows only')
