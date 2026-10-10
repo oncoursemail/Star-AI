@@ -8,13 +8,14 @@ import {onBackendEvent,request} from './bridge'
 import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage} from './types'
 import './stellar-ui.css'
 import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
+import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['brain','STAR Brain',BrainCircuit],['analytics','Analytics',Activity],['tools','Developer tools',Workflow],['library','Library',BookOpen],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const friendly=(v:unknown)=>typeof v==='string'?v:JSON.stringify(v,null,2)
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 
@@ -42,6 +43,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [retryText,setRetryText]=useState('')
  const [modelCheck,setModelCheck]=useState<{ok:boolean;model:string;sample:string}|null>(null)
  const [modelChecking,setModelChecking]=useState(false)
+ const [routerBusy,setRouterBusy]=useState(false)
+ const [teamChecking,setTeamChecking]=useState(false)
+ const [teamResult,setTeamResult]=useState<ModelTeamReport|null>(null)
  const [brainProgress,setBrainProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
  const [update,setUpdate]=useState<UpdateInfo|null>(null)
  const [updateBusy,setUpdateBusy]=useState(false)
@@ -127,6 +131,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          const detail=typeof event.data==='string'?event.data:String(info.phase||'STAR is working…')
          setWorkPhase(truncate(detail,120))
        }
+     }else if(action==='testModelTeam'){
+       const detail=(event.data||{}) as {phase?:string;model?:string}
+       setNotice(String(detail.phase||'Testing models')+(detail.model?' · '+detail.model:''))
      }else if(action==='installUpdate'){
        const detail=(event.data||{}) as {phase?:string;downloaded?:number;total?:number}
        setUpdateProgress({phase:String(detail.phase||'Downloading update'),downloaded:Number(detail.downloaded||0),total:Number(detail.total||0)})
@@ -138,6 +145,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const msg=typeof event.data==='string'?event.data:String((event.data as {error?:string})?.error||'Task could not finish.')
      setNotice(msg);if(action==='sendMessage'||action==='generateImage'||action==='runTeam'){setBusy(false);setWorkPhase('');setStreamingText('');setRetryText(lastSent.current);setMessages(m=>[...m,makeMsg('event',msg)])}
      if(action==='testModel')setModelChecking(false)
+     if(action==='testModelTeam')setTeamChecking(false)
+     if(action==='startModelRouter'||action==='stopBrain')setRouterBusy(false)
      if(action==='checkUpdates'||action==='installUpdate'){setUpdateBusy(false);setUpdateProgress(null)}
      if(action==='installBrain'||action==='startBrain')setBrainProgress(null)
      return
@@ -150,6 +159,16 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setBrainProgress(null);setNotice('STAR Brain is ready to use.');void sync()
    }else if(action==='testModel'){
      setModelChecking(false);setModelCheck(result as {ok:boolean;model:string;sample:string});setNotice('STAR Brain responded successfully to a real prompt.')
+   }else if(action==='startModelRouter'){
+     setRouterBusy(false);setModelList(Array.isArray(result.models)?result.models as string[]:[])
+     setNotice('Local router is reachable; select a model and test its actual completion.');void sync()
+   }else if(action==='stopBrain'){
+     setRouterBusy(false);setNotice('Managed STAR Brain stopped; chats and weights are preserved.');void sync()
+   }else if(action==='testModelTeam'){
+     setTeamChecking(false)
+     const report=result as ModelTeamReport
+     setTeamResult(report)
+     setNotice(report.all_text_ready?'Configured model IDs passed text probes.':'Some model IDs failed text probes.')
    }else if(action==='checkUpdates'){
      setUpdateBusy(false)
      setUpdate(result as unknown as UpdateInfo)
@@ -209,6 +228,34 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setModelChecking(true);setModelCheck(null)
    const response=await act('testModel')
    if(!response)setModelChecking(false)
+ }
+ const startLocalRouter=async()=>{
+   if(routerBusy||busy)return
+   setRouterBusy(true);setNotice('Starting local model router…')
+   const saved=await act('saveSettings',{settings:draft})
+   if(!saved){setRouterBusy(false);return}
+   const launched=await act('startModelRouter')
+   if(!launched)setRouterBusy(false)
+ }
+ const stopLocalBrain=async()=>{
+   if(routerBusy||busy)return
+   setRouterBusy(true)
+   const done=await act('stopBrain')
+   if(!done)setRouterBusy(false)
+ }
+ const testSpecialists=async()=>{
+   if(teamChecking||busy)return
+   setTeamChecking(true);setTeamResult(null);setNotice('Testing configured models…')
+   const saved=await act('saveSettings',{settings:draft})
+   if(!saved){setTeamChecking(false);return}
+   const result=await act('testModelTeam')
+   if(!result)setTeamChecking(false)
+ }
+ const selectRouterFolder=async()=>{
+   const result=await act('selectFolder')
+   if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){
+     setDraft(d=>({...d,router_models_dir:result.path as string}))
+   }
  }
  const copyConversation=async()=>{
    if(!messages.length){setNotice('Nothing to copy yet.');return}
@@ -379,7 +426,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             </div>
             <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}
-         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
+         {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>Local model</h2><p>STAR Brain configures these automatically after installation.</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>Model ID<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder="Installed model"/></label><label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label></div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
+         <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Create images directly from the chat composer</small></span><ChevronDown size={18}/></summary>
              <div className="settings-expander-body">
