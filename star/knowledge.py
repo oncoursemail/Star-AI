@@ -74,6 +74,35 @@ class KnowledgeStore:
             PRIMARY KEY(project,digest,origin),
             FOREIGN KEY(digest) REFERENCES artifacts(digest)
         )""")
+        self._fts_ready = False
+        try:
+            # FTS is optional on custom Python/SQLite builds; preserve the
+            # original keyword retrieval if the extension is unavailable.
+            self.db.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts
+                USING fts5(text, content='notes', content_rowid='id', tokenize='unicode61')""")
+            self.db.executescript("""
+                CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
+                    INSERT INTO notes_fts(rowid,text) VALUES(new.id,new.text);
+                END;
+                CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON notes BEGIN
+                    INSERT INTO notes_fts(notes_fts,rowid,text)
+                    VALUES('delete',old.id,old.text);
+                END;
+                CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE OF text ON notes BEGIN
+                    INSERT INTO notes_fts(notes_fts,rowid,text)
+                    VALUES('delete',old.id,old.text);
+                    INSERT INTO notes_fts(rowid,text) VALUES(new.id,new.text);
+                END;
+                CREATE TABLE IF NOT EXISTS knowledge_meta (
+                    key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            """)
+            if self.db.execute("SELECT value FROM knowledge_meta WHERE key='fts_v1'").fetchone() is None:
+                self.db.execute("INSERT INTO notes_fts(notes_fts) VALUES('rebuild')")
+                self.db.execute("INSERT INTO knowledge_meta(key,value) VALUES('fts_v1','ready')")
+            self.db.commit()
+            self._fts_ready = True
+        except sqlite3.OperationalError:
+            self.db.rollback()
         self.db.commit()
 
     def add_note(self, *, project: str, kind: str, text: str, source: str, revision: str = "unknown") -> int:
@@ -125,6 +154,41 @@ class KnowledgeStore:
                      text=row["text"], source=row["source"], revision=row["revision"],
                      reviewed=bool(row["reviewed"]), created=row["created"])
                 for row in self.db.execute(sql, params)]
+
+    def find_ranked(self, project: str, query: str, *, reviewed_only: bool = True,
+                    limit: int = 12) -> list[Note]:
+        """Rank source-attributed project notes with SQLite FTS5 BM25.
+
+        Only reviewed notes become accepted project facts. An FTS index does not
+        change review state; unreviewed notes remain candidate information.
+        Unsafe MATCH operators are never interpolated from user input.
+        """
+        project = _project(project)
+        if type(limit) is not int or not 1 <= limit <= 50:
+            raise ValueError("limit must be 1..50")
+        if not isinstance(query, str) or len(query) > 6000:
+            raise ValueError("Search query is too long")
+        tokens = re.findall(r"[A-Za-z0-9_]{2,}", query.lower())[:9]
+        if not tokens or not self._fts_ready:
+            return self.find(project, query, reviewed_only=reviewed_only, limit=limit)
+        # Quoted literal tokens + prefixes: ignore arbitrary MATCH syntax and
+        # avoid letting a query inject operators or SQL into the index.
+        match = " OR ".join('"' + token + '"*' for token in tokens)
+        params: list[object] = [match, project]
+        sql = """SELECT n.* FROM notes_fts f JOIN notes n ON n.id=f.rowid
+                 WHERE notes_fts MATCH ? AND n.project=?"""
+        if reviewed_only:
+            sql += " AND n.reviewed=1"
+        sql += " ORDER BY bm25(notes_fts), n.id DESC LIMIT ?"
+        params.append(limit)
+        try:
+            rows = self.db.execute(sql, params).fetchall()
+        except sqlite3.OperationalError:
+            return self.find(project, query, reviewed_only=reviewed_only, limit=limit)
+        return [Note(id=int(row["id"]), project=row["project"], kind=row["kind"],
+                     text=row["text"], source=row["source"], revision=row["revision"],
+                     reviewed=bool(row["reviewed"]), created=row["created"])
+                for row in rows]
 
     def ingest_artifact(self, *, project: str, path: Path, origin: str, media_type: str) -> tuple[str, Path]:
         """Store original bytes by SHA256; never treat file content as executable instructions."""
