@@ -1,6 +1,6 @@
 export const WEBSITE_REPO = 'https://github.com/oncoursemail/Star-AI'
 export const WEBSITE_RELEASES = WEBSITE_REPO + '/releases/latest'
-export const FALLBACK_VERSION = '0.8.1'
+export const FALLBACK_VERSION = '0.9.0'
 export const examples = [
  {title:'Build in Roblox',description:'Turn an idea into a working gameplay system.',prompt:'Inspect my Roblox Studio sandbox, then help me plan a polished and responsive inventory UI. Do not edit anything until you inspect the project.'},
  {title:'Understand a reference',description:'Analyze spacing, typography and visual hierarchy.',prompt:'Analyze an attached UI reference. Separate visible observations from guesses, and propose an editable Roblox GUI hierarchy.'},
