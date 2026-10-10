@@ -137,7 +137,7 @@ def test_newer_source_release_beats_older_public_mirror():
     """A lagging download mirror must not mask a newer verified public release."""
     payload=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+400)
     responses={
-        updates.PUBLIC_API:Response(200,sample_release(PUBLIC_REPO,payload,'0.8.0')),
+        updates.PUBLIC_API:Response(200,sample_release(PUBLIC_REPO,payload,'0.6.1')),
         updates.API:Response(200,sample_release(REPO,payload,'0.9.0')),
     }
     result=updates.get_latest(Client(responses))
