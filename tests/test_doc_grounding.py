@@ -8,6 +8,7 @@ import pytest
 
 from star import desktop_core, doc_grounding
 from star.brain_router import (GROUNDING_BUDGET, NO_GROUNDING, GroundingPlan, followup_grounding, grounding_plan,
+                               is_roblox_dev_prompt,
                                retrieval_query, select_route)
 from star.desktop_core import Settings, run_task
 from star.doc_grounding import (CHECK_MARKER, REFERENCE_CLOSE, REFERENCE_OPEN, SOURCES_MARKER, Grounding,
@@ -95,6 +96,58 @@ def test_grounding_decision(prompt, mode, retrieve, passages):
         assert plan.max_chars <= GROUNDING_BUDGET[mode][1]
     # The same decision is what select_route attaches to the route.
     assert route_for(prompt, mode).grounding == plan
+
+
+@pytest.mark.parametrize("prompt", [
+    # Everyday chat that shares a word with Roblox. Grounding these costs seconds of prompt time and
+    # puts Roblox documentation links under an answer about something else.
+    "How much does Xbox Game Pass cost per month?",
+    "Is PC Game Pass worth it?",
+    "I want to become an animator at Pixar, what should I study?",
+    "Best loadout for Rainbow Six R6 ranked?",
+    "Is the Yamaha R15 a good first bike?",
+    "Recommend a board game: something for four players",
+    "How do I share a file in Google Workspace. I can't find the button",
+    "My VS Code workspace: how do I add a second folder?",
+    "How do I use enum.auto() in Python?",
+    "How do I use Enum.Parse in C#?",
+    "How do I clear a TextBox in WinForms?",
+    "Android ImageButton ripple effect",
+    "Unity Vector3.Lerp is jittery in C#",
+    "Unity Animator.SetTrigger does not fire",
+    "Angular HttpService interceptors",
+    "Tesla's humanoid robot news",
+    "Como se dice rojo en ingles?",
+    "Google Cloud Datastore vs Firestore pricing",
+    "In Visual Studio, Console.WriteLine prints nothing",
+    "Android Studio: my Activity.onCreate is never called by SomeClass.Start",
+])
+def test_words_roblox_shares_with_everyday_chat_do_not_ground_a_turn(prompt):
+    for mode in ("fast", "auto", "agent"):
+        plan = grounding_plan(prompt, mode=mode)
+        assert plan.retrieve == "none" and not plan.check_luau, plan.reasons
+    assert not is_roblox_dev_prompt(prompt)                # so the documentation tools are not offered either
+
+
+@pytest.mark.parametrize("prompt", [
+    "How do I make a game pass?",
+    "R6 vs R15 for my obby?",
+    "R15 rig: Motor6D.Transform resets every frame",
+    "In Studio, what does Part.Touched return?",
+    'game:GetService("Players") returns nil',
+    "workspace.Door is nil in my script",
+    "What is Enum.KeyCode.E?",
+    "Humanoid.WalkSpeed is too slow",
+    "How do I make the humanoid walk to a point?",
+    "Vector3.new(0, 5, 0) puts my part in the wrong place",
+    "Animator:LoadAnimation returns nil",
+    "My datastore is not saving player data",
+    "Where do I put a local script?",
+    "How do I raycast down from a part?",
+    "My TextBox loses focus in Roblox Studio",
+])
+def test_roblox_questions_are_still_grounded_after_the_tightening(prompt):
+    assert grounding_plan(prompt, mode="auto").retrieve in ("docs", "api")
 
 
 def test_budgets_are_the_measured_ones_and_shrink_beside_images_and_web_results():

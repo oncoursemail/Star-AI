@@ -39,20 +39,34 @@ ROBLOX_QUALITY_NOTES = (
 # Stricter than _ROBLOX on purpose: every retrieved passage costs seconds of prompt time on a
 # CPU server, so "studio" or "ugc" alone must not trigger a documentation search.
 _ROBLOX_DEV = re.compile(
-    r"\b(?:roblox|luau|rojo|devforum|"
-    r"remote(?:event|function)s?|bindable(?:event|function)s?|(?:ordered)?datastores?|datastoreservice|"
-    r"memorystore(?:service)?|tweenservice|runservice|userinputservice|contextactionservice|"
+    r"\b(?:roblox|luau|devforum|"
+    r"remote(?:event|function)s?|bindable(?:event|function)s?|(?<!cloud\s)(?:ordered)?datastores?|"
+    r"datastoreservice|memorystoreservice|tweenservice|runservice|userinputservice|contextactionservice|"
     r"replicatedstorage|replicatedfirst|serverscriptservice|serverstorage|startergui|starterplayer|"
-    r"starterpack|playergui|humanoid(?:rootpart)?|(?:local|module|server)\s?scripts?|"
+    r"starterpack|playergui|humanoid(?:rootpart)?(?!\s+robot)|(?:local|module|server)\s?scripts?|"
     r"(?:screen|surface|billboard)gui|ui(?:list|grid|page|table)layout|uiaspectratioconstraint|"
-    r"text(?:label|button|box)|image(?:label|button)|scrollingframe|proximityprompt|clickdetector|"
+    r"text(?:label|button)|imagelabel|scrollingframe|proximityprompt|clickdetector|"
     r"pathfindingservice|collectionservice|marketplaceservice|teleportservice|messagingservice|"
-    r"httpservice|soundservice|physicsservice|textchatservice|basepart|meshpart|cframe|vector3|udim2|"
-    r"tweeninfo|raycast(?:params)?|waitforchild|findfirstchild|getservice|leaderstats|"
-    r"game\s?pass(?:es)?|developer\s+products?|animationtrack|animator|character(?:added|appearance)|"
-    r"playeradded|playerremoving|r6|r15)\b|\binstance\.new\b|\bgame:|\bworkspace[.:]|\benum\.[a-z]",
+    r"soundservice|physicsservice|textchatservice|basepart|meshpart|cframe|udim2|"
+    r"tweeninfo|raycast(?:params)?|waitforchild|findfirstchild|leaderstats|"
+    r"(?<!xbox\s)(?<!pc\s)game\s?pass(?:es)?(?!\s+ultimate)|developer\s+products?|animationtrack|"
+    r"loadanimation|character(?:added|appearance)|playeradded|playerremoving)\b"
+    # Code shapes. `game:` and `workspace.` need a name right after them ("a board game: ..." and
+    # "my workspace. How ..." are prose), and `Enum.Name` is case-sensitive and not a .NET static
+    # (Python writes `enum.auto()`, C# writes `Enum.Parse`).
+    r"|\binstance\.new\b|\bvector3\.new\b|\bgame:\w|\bworkspace[.:]\w"
+    r"|(?-i:\bEnum\.(?!(?:Parse|TryParse|GetValues|GetNames?|IsDefined|ToObject|Format|HasFlag|"
+    r"GetUnderlyingType)\b)[A-Z])",
     re.IGNORECASE,
 )
+# Words Roblox shares with other things (a job title, Rainbow Six, a motorbike, Spanish for red,
+# Unity, WinForms, Android, Angular, Google Cloud). One of them alone does not make a Roblox
+# question; two different ones, or one beside "Studio"/"UGC" or an engine-style API name, do.
+_ROBLOX_DEV_WEAK = re.compile(
+    r"\b(?:rojo|r6|r15|animator|vector3|textbox|imagebutton|httpservice|memorystore|getservice)\b",
+    re.IGNORECASE)
+_OTHER_STUDIO = re.compile(r"\b(?:visual|android)\s+studio\b|\bstudio\s+code\b", re.IGNORECASE)
+_STUDIO_CONTEXT = re.compile(r"\b(?:studio|ugc)\b", re.IGNORECASE)
 # `TweenService:Create`, `Humanoid.WalkSpeed`, `Enum.EasingStyle`: an exact engine name.
 _API_SYMBOL = re.compile(r"\b(?:Enum\.[A-Z][A-Za-z0-9]+|[A-Z][A-Za-z0-9]{2,40}[.:][A-Z][A-Za-z0-9]{1,48})\b")
 _WANTS_CODE = re.compile(
@@ -96,9 +110,16 @@ NO_GROUNDING = GroundingPlan()
 
 
 def is_roblox_dev_prompt(prompt: str) -> bool:
-    """A Roblox or Luau *development* question (strict; see _ROBLOX_DEV)."""
-    return isinstance(prompt, str) and bool(
-        _ROBLOX_DEV.search(prompt) or (_API_SYMBOL.search(prompt) and _ROBLOX.search(prompt)))
+    """A Roblox or Luau *development* question (strict; see _ROBLOX_DEV and _ROBLOX_DEV_WEAK)."""
+    if not isinstance(prompt, str):
+        return False
+    if _ROBLOX_DEV.search(prompt):
+        return True
+    shared = {word.lower() for word in _ROBLOX_DEV_WEAK.findall(prompt)}
+    studio = bool(_STUDIO_CONTEXT.search(_OTHER_STUDIO.sub(" ", prompt)))
+    # `Vector3.Lerp` is the shared word again, not a second sign; `Part.Touched` is one.
+    api_name = any(not _ROBLOX_DEV_WEAK.search(name) for name in _API_SYMBOL.findall(prompt))
+    return len(shared) + studio + api_name >= 2
 
 
 def grounding_plan(prompt: str, *, mode: str = "auto", image_count: int = 0, research: bool = False,
