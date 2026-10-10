@@ -101,7 +101,7 @@ handled or documented here:
    path, the first convolution fails with "Failed to initialize CUDNN Frontend" and onnxruntime silently falls back
    to the CPU. `engines.add_nvidia_dll_dirs()` adds those folders before any model is loaded.
 
-Measured on the RTX 3060 Ti: Kokoro about 14 times faster than real time on the GPU, about 2.5 times on the CPU.
+Measured on the RTX 3060 Ti: Kokoro about 14 times faster than real time on the GPU, about 2.2 times on the CPU (`voice-lab/kokoro-latency.json`).
 
 ## 4. Running it
 
