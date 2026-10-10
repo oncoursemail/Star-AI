@@ -369,16 +369,16 @@ def launch():
                         from io import BytesIO
                         from PIL import Image
                         previews=[]
-                        for path in images[:8]:
+                        for path in images[:4]:
                             entry={'filename':path.name,'preview':''}
                             try:
                                 with Image.open(path) as opened:
-                                    opened.thumbnail((840,840))
+                                    opened.thumbnail((640,640))
                                     thumbnail=opened.convert('RGB')
                                     buf=BytesIO()
-                                    thumbnail.save(buf,format='JPEG',quality=70,optimize=True)
+                                    thumbnail.save(buf,format='JPEG',quality=65,optimize=True)
                                 data=buf.getvalue()
-                                if len(data)<=450_000:
+                                if len(data)<=300_000:
                                     entry['preview']='data:image/jpeg;base64,'+base64.b64encode(data).decode('ascii')
                             except (OSError,ValueError):
                                 # Keep saved originals available even if a thumbnail cannot be decoded.
