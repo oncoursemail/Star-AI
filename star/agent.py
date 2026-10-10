@@ -167,6 +167,10 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             call_id = getattr(part, 'id', None)
             if isinstance(index, int):
                 entry = by_index.get(index)
+                # A second, different id on the same index is another call: some
+                # compatibility endpoints send every call whole and number them all 0.
+                if entry is not None and entry['id'] and isinstance(call_id, str) and call_id not in ('', entry['id']):
+                    entry = None
             else:
                 # Some servers omit the index and send each call whole, with its id.
                 entry = None if (call_id or not calls) else calls[-1]
