@@ -75,10 +75,13 @@ def nearest_resample(pcm: bytes, source_rate: int, target_rate: int) -> bytes:
 class VirtualSpeaker:
     """A loudspeaker that exists only on the clock: real-time playback, interruption, and a recording."""
 
+    LEVEL_WINDOW = 0.032          # the loudness of the played audio is kept per 32 ms slice
+    LEVEL_HOLD = 0.4              # level() reports the loudest slice of the last 0.4 s
+
     def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
         self.clock = clock
         self._lock = threading.Lock()
-        self._segments: list[list] = []          # [start_time, pcm, sample_rate, rms]
+        self._segments: list[list] = []          # [start_time, pcm, sample_rate, loudness per slice]
         self._queue_end = 0.0
         self._queued = 0.0
         self.sample_rate = 0
@@ -89,7 +92,8 @@ class VirtualSpeaker:
             now = self.clock()
             start = max(now, self._queue_end)
             duration = len(pcm) / 2 / sample_rate
-            self._segments.append([start, pcm, sample_rate, rms(pcm[: 2 * sample_rate])])
+            step = int(self.LEVEL_WINDOW * sample_rate) * 2
+            self._segments.append([start, pcm, sample_rate, [rms(pcm[i:i + step]) for i in range(0, len(pcm), step)]])
             self._queue_end = start + duration
             self._queued += duration
             self.sample_rate = sample_rate
@@ -121,16 +125,18 @@ class VirtualSpeaker:
             return self._queued - max(0.0, self._queue_end - self.clock())
 
     def level(self) -> float:
-        """Loudness of what was audible during the last 300 ms (peak-held, so the echo gate can use it)."""
+        """Loudest 32 ms slice that was audible during the last 0.4 s (peak-held, for the echo gate)."""
         with self._lock:
             now = self.clock()
             best = 0.0
-            for start, pcm, rate, level in reversed(self._segments):
-                end = start + len(pcm) / 2 / rate
-                if end < now - 0.3:
+            for start, pcm, rate, levels in reversed(self._segments):
+                heard_until = start + len(pcm) / 2 / rate          # stop() shortens pcm to what was heard
+                if heard_until < now - self.LEVEL_HOLD:
                     break
-                if start <= now:
-                    best = max(best, level)
+                first = max(0, int((now - self.LEVEL_HOLD - start) / self.LEVEL_WINDOW))
+                last = min(len(levels), int((min(now, heard_until) - start) / self.LEVEL_WINDOW) + 1)
+                if last > first:
+                    best = max(best, max(levels[first:last]))
             return best
 
     # -- test helpers -------------------------------------------------------------------------
@@ -205,13 +211,14 @@ class FileCall:
     """Runs a scenario against a CallSession built by `make_session(speaker, on_event)`."""
 
     def __init__(self, make_session: Callable[[VirtualSpeaker, Callable[[dict], None]], CallSession], *,
-                 echo_db: float | None = None, realtime: bool = True, step_timeout: float = 90.0,
-                 base_dir: str | Path = ".") -> None:
+                 echo_db: float | None = None, echo_delay: float = 0.08, realtime: bool = True,
+                 step_timeout: float = 90.0, base_dir: str | Path = ".") -> None:
         self.speaker = VirtualSpeaker()
         self.result = FileCallResult()
         self._origin = 0.0
         self.session = make_session(self.speaker, self._on_event)
         self.echo_gain = None if echo_db is None else 10 ** (echo_db / 20.0)
+        self.echo_delay = echo_delay          # the microphone hears the speaker this much later (device + room)
         self.realtime = realtime
         self.step_timeout = step_timeout
         self.base_dir = Path(base_dir)
@@ -230,7 +237,8 @@ class FileCall:
                 time.sleep(delay)
         self._fed += 1
         if self.echo_gain:
-            echo = self.speaker.audible(time.monotonic(), FRAME_SAMPLES / SAMPLE_RATE, SAMPLE_RATE)
+            echo = self.speaker.audible(time.monotonic() - self.echo_delay, FRAME_SAMPLES / SAMPLE_RATE,
+                                        SAMPLE_RATE)
             frame = mix(frame, echo, self.echo_gain)
         self._mic.extend(frame)
         self.session.feed(frame)

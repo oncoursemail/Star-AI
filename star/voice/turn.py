@@ -219,13 +219,17 @@ class TurnDetector:
 class EchoGate:
     """Tells the user's voice apart from the loudspeaker's echo by loudness, for calls without headphones.
 
-    While the assistant is audible the microphone also hears the assistant. The gate learns how loud that
-    echo is relative to what is being played (the coupling) and only lets barge-in through when the
-    microphone is clearly louder than the echo alone would be. This is a simple energy gate, not echo
-    cancellation: it stops the assistant from interrupting itself but needs the user to speak up over it.
+    While the assistant is audible the microphone also hears the assistant. The caller passes two levels
+    per frame: the microphone level, and the loudest level the speaker played in the last few hundred
+    milliseconds (peak-held, so it does not matter exactly how late the echo arrives). The gate learns the
+    largest echo-to-playback ratio it sees (the coupling) and only lets barge-in through when the microphone
+    is clearly louder than the loudest echo could be.
+
+    This is an energy gate, not echo cancellation: it keeps the assistant from interrupting itself, and the
+    user has to speak clearly louder than the echo. Tested in simulation only, never in a real room.
     """
 
-    def __init__(self, margin_db: float = 8.0, floor: float = 0.006, warmup_frames: int = 8) -> None:
+    def __init__(self, margin_db: float = 4.0, floor: float = 0.006, warmup_frames: int = 12) -> None:
         self.margin = 10 ** (margin_db / 20.0)
         self.floor = floor
         self.warmup_frames = warmup_frames
@@ -239,12 +243,14 @@ class EchoGate:
         if self.coupling is None:
             self._warm.append(ratio)
             if len(self._warm) >= self.warmup_frames:
-                self.coupling = sorted(self._warm)[len(self._warm) // 2]
+                self.coupling = max(self._warm)        # the loudest echo seen while learning
                 self._warm = []
             return False                               # no barge-in until the echo level is known
         allowed = mic_level >= max(self.floor, self.coupling * speaker_level * self.margin)
-        # Follow the echo level quickly downwards and slowly upwards, so the user's own (louder)
-        # speech does not teach the gate that the echo is loud.
-        rate = 0.2 if ratio < self.coupling else 0.01
-        self.coupling += rate * (ratio - self.coupling)
+        if not allowed:
+            # Still just echo. Follow it upwards at once (a louder echo than any seen so far) and forget
+            # slowly downwards (the volume was turned down). Frames that pass the gate are taken to be
+            # the user and never teach the gate that the echo is that loud.
+            rate = 0.5 if ratio > self.coupling else 0.005
+            self.coupling += rate * (ratio - self.coupling)
         return allowed

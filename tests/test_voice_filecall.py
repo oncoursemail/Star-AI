@@ -87,7 +87,7 @@ def test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording():
     assert speaker.pending_seconds() == 0 and 0.2 < speaker.played_seconds() < 0.45
     recording, rate = speaker.recording(origin)
     assert rate == 16000 and 0.2 < len(recording) / 2 / rate < 0.45   # only what was heard before the stop
-    time.sleep(0.35)
+    time.sleep(0.5)
     assert speaker.level() == 0 and rms(speaker.audible(time.monotonic(), 0.032, 16000)) == 0
     speaker.reset()
     assert speaker.played_seconds() == 0

@@ -154,6 +154,6 @@ class SoundSpeaker:
             return self._played / self.sample_rate
 
     def level(self) -> float:
-        """Loudest output block of the last 300 ms (peak-held so the echo gate can compare against it)."""
-        cutoff = time.monotonic() - 0.3
+        """Loudest output block of the last 0.4 s (peak-held so the echo gate can compare against it)."""
+        cutoff = time.monotonic() - 0.4
         return max((level for at, level in list(self._levels) if at >= cutoff), default=0.0)

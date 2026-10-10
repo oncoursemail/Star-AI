@@ -52,7 +52,7 @@ class Speaker(Protocol):
     def reset(self) -> None: ...                                  # new reply: zero played_seconds
     def pending_seconds(self) -> float: ...                       # queued but not yet played
     def played_seconds(self) -> float: ...                        # played since reset()
-    def level(self) -> float: ...                                 # recent output level 0..1
+    def level(self) -> float: ...                                 # loudest 32 ms played in the last 0.4 s, 0..1
 
 
 @dataclass
@@ -66,8 +66,8 @@ class CallConfig:
     level_interval: float = 0.08          # seconds between level events
     first_clause_words: int = 4           # see SentenceChunker
     use_echo_gate: bool = False           # True when playing through loudspeakers instead of headphones
-    echo_margin_db: float = 8.0
-    echo_tail: float = 0.35               # seconds the echo gate stays armed after playback ends
+    echo_margin_db: float = 4.0           # how much louder than the loudest echo the user must be to interrupt
+    echo_tail: float = 0.5                # seconds the echo gate stays armed after playback ends
 
 
 @dataclass

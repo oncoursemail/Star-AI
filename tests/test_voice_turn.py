@@ -176,15 +176,20 @@ def test_noise_blips_are_discarded_and_runaway_turns_are_capped():
     assert g.kinds()[:2] == ["speech_start", "turn_end"] and g.events[1].reason == "max_turn"
 
 
-def test_echo_gate_learns_the_echo_level_then_lets_only_louder_speech_through():
-    gate = EchoGate(margin_db=8.0, warmup_frames=8)
-    speaker = 0.2
-    echo = speaker * 0.1                                       # the room returns a tenth of what is played
-    assert not any(gate.allows(echo, speaker) for _ in range(8))        # warming up: never open
-    assert abs(gate.coupling - 0.1) < 1e-6
-    assert not any(gate.allows(echo * 1.3, speaker) for _ in range(50))  # echo alone, with some wobble
-    assert gate.allows(echo * 4, speaker)                                # the user speaking over it
-    for _ in range(30):
-        gate.allows(echo * 4, speaker)                                   # sustained user speech...
-    assert gate.coupling < 0.2                                           # ...barely moves the echo estimate
+def test_echo_gate_learns_the_loudest_echo_then_lets_only_louder_speech_through():
+    gate = EchoGate(margin_db=8.0, warmup_frames=12)
+    speaker = 0.2                                              # loudest slice played recently (peak-held)
+    loud_echo = speaker * 0.1                                  # the room returns a tenth of what is played
+    wobble = [1.0, 0.3, 0.7, 0.1, 0.9, 0.5]                    # speech is uneven: most frames are quieter
+    assert not any(gate.allows(loud_echo * wobble[i % 6], speaker) for i in range(12))    # learning: closed
+    assert abs(gate.coupling - 0.1) < 1e-6                     # it kept the LOUDEST echo, not the typical one
+    assert not any(gate.allows(loud_echo * wobble[i % 6], speaker) for i in range(300))   # echo alone: closed
+    assert gate.coupling > 0.07                                # quiet stretches barely lower the estimate
+    assert not gate.allows(loud_echo * 1.5, speaker)           # an echo a bit louder than any before...
+    assert gate.coupling > 0.1                                 # ...is learnt at once, without opening
+    assert gate.allows(loud_echo * 6, speaker)                 # the user speaking over it opens the gate
+    before = gate.coupling
+    for _ in range(60):
+        assert gate.allows(loud_echo * 6, speaker)             # sustained user speech keeps it open...
+    assert gate.coupling == before                             # ...and does not teach it that echo is loud
     assert gate.allows(0.02, 0.0) and not gate.allows(0.001, 0.0)        # nothing playing: plain floor
