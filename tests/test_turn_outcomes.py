@@ -1,13 +1,20 @@
-"""A failed or cancelled chat turn must leave a truthful, durable record (storage layer).
+"""A failed or cancelled chat turn must leave a truthful, durable record.
 
 Before: the user message was saved first and a failure or Stop left it with no
-reply, so history after a reload silently dropped the failure.
+reply, so history after a reload (or restart) silently dropped the failure and
+the Retry affordance existed only in the page that had seen the error event.
 """
+import json
 import sqlite3
+import threading
 
 import pytest
 
-from star.desktop_core import Conversations, recent_context
+from star import react_shell
+from star.desktop_core import Conversations, Settings, recent_context
+from star.react_shell import (
+    TURN_ACTIONS, TurnRef, failure_outcome, record_turn_failure, run_worker, _get_state,
+)
 
 
 def columns(database):
@@ -152,3 +159,164 @@ def test_terminal_records_never_enter_model_context(store):
     transcript = store.recent("P", chat_id=chat, include_events=False)
     assert [role for role, *_ in transcript] == ["user", "user"]
     assert "SECRET-FAILURE-TEXT" not in recent_context(transcript, "second")
+
+
+# --- failure classification and the worker wrapper -----------------------------
+
+def test_failure_outcome_distinguishes_cancel_from_failure():
+    status, text = failure_outcome("sendMessage", RuntimeError("STAR task cancelled by user"))
+    assert status == "cancelled" and "stopped" in text.lower()
+    assert failure_outcome("runTeam", RuntimeError("STAR Teams request cancelled by user"))[0] == "cancelled"
+    assert failure_outcome("generateImage", RuntimeError("STAR image generation cancelled by user; x"))[0] == "cancelled"
+    # Pressing Stop wins even if the error that surfaced was something else.
+    assert failure_outcome("sendMessage", ConnectionError("socket closed"), cancelled=True)[0] == "cancelled"
+
+    class Denied(Exception):
+        status_code = 401
+
+    status, text = failure_outcome("sendMessage", Denied("Error code: 401"))
+    assert status == "failed" and "denied access" in text
+    assert failure_outcome("runTeam", ValueError("Team prompt must be 2-12,000 characters")) == (
+        "failed", "ValueError: Team prompt must be 2-12,000 characters")
+
+
+def _home_with_user_message(tmp_path, prompt="do the thing"):
+    home = tmp_path / "STAR"
+    chats = Conversations(home / "conversations.sqlite3")
+    try:
+        chat = chats.active_chat("P")
+        user = chats.add("P", "user", prompt, chat_id=chat)
+    finally:
+        chats.close()
+    return home, TurnRef("P", chat, user)
+
+
+def _state(home, chat):
+    chats = Conversations(home / "conversations.sqlite3")
+    try:
+        return chats.retry_state("P", chat), chats.recent_records("P", chat_id=chat)
+    finally:
+        chats.close()
+
+
+@pytest.mark.parametrize("action", sorted(TURN_ACTIONS))
+def test_failed_worker_is_stored_before_the_error_event_is_emitted(tmp_path, action):
+    home, turn = _home_with_user_message(tmp_path)
+    seen = []
+
+    def emit(request_id, kind, data):
+        # What a reload would read at the moment the UI learns of the error.
+        seen.append((request_id, kind, data, _state(home, turn.chat_id)[0]))
+
+    def worker():
+        raise RuntimeError("engine fell over")
+
+    run_worker("r1", action, worker, emit=emit, home=home,
+               current_turn=lambda: turn, cancelled=lambda: False)
+    assert len(seen) == 1 and seen[0][:2] == ("r1", "error")
+    assert seen[0][3]["status"] == "failed" and seen[0][3]["prompt"] == "do the thing"
+    assert seen[0][2] == "RuntimeError: engine fell over" == seen[0][3]["detail"]
+    events = [r for r in _state(home, turn.chat_id)[1] if r["role"] == "event"]
+    assert len(events) == 1 and events[0]["reply_to"] == turn.user_id
+
+
+def test_cancelled_worker_is_recorded_as_cancelled(tmp_path):
+    home, turn = _home_with_user_message(tmp_path)
+    stop = threading.Event()
+    emitted = []
+
+    def worker():
+        stop.set()  # user presses Stop mid-run
+        raise RuntimeError("STAR task cancelled by user")
+
+    run_worker("r2", "sendMessage", worker, emit=lambda *a: emitted.append(a), home=home,
+               current_turn=lambda: turn, cancelled=stop.is_set)
+    state, records = _state(home, turn.chat_id)
+    assert state["status"] == "cancelled"
+    assert records[-1]["status"] == "cancelled" and records[-1]["role"] == "event"
+    assert emitted == [("r2", "error", state["detail"])]
+    assert "stopped" in state["detail"].lower()
+
+
+def test_successful_and_untracked_workers_write_nothing(tmp_path):
+    home, turn = _home_with_user_message(tmp_path)
+    emitted = []
+    run_worker("ok", "sendMessage", lambda: {"answer": "hi"}, emit=lambda *a: emitted.append(a),
+               home=home, current_turn=lambda: turn, cancelled=lambda: False)
+    assert emitted == [("ok", "result", {"answer": "hi"})]
+    assert len(_state(home, turn.chat_id)[1]) == 1  # just the user message; the shell stores the answer
+
+    def boom():
+        raise ValueError("not a chat action")
+
+    # Non-chat actions never touch conversations, even if a stale turn handle exists.
+    run_worker("t", "testModel", boom, emit=lambda *a: emitted.append(a), home=home,
+               current_turn=lambda: turn, cancelled=lambda: False)
+    # A chat failure before the user message was saved has no turn and writes nothing.
+    run_worker("n", "sendMessage", boom, emit=lambda *a: emitted.append(a), home=home,
+               current_turn=lambda: None, cancelled=lambda: False)
+    assert [e[:2] for e in emitted[1:]] == [("t", "error"), ("n", "error")]
+    assert len(_state(home, turn.chat_id)[1]) == 1
+
+
+def test_storage_failure_never_hides_the_original_error(tmp_path):
+    emitted = []
+    missing = TurnRef("P", "no-such-chat", 1)
+    run_worker("r", "sendMessage", lambda: (_ for _ in ()).throw(RuntimeError("real cause")),
+               emit=lambda *a: emitted.append(a), home=tmp_path / "STAR",
+               current_turn=lambda: missing, cancelled=lambda: False)
+    assert emitted == [("r", "error", "RuntimeError: real cause")]
+    assert record_turn_failure(tmp_path / "STAR", missing, "failed", "x") is False
+
+
+# --- what the UI receives on bootstrap -----------------------------------------
+
+def test_state_payload_exposes_status_and_retry_after_a_restart(tmp_path, monkeypatch):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr(react_shell, "credential_status", lambda: {})  # never read the OS keyring
+    from star.desktop_core import app_data
+    from star.local_runtime import Runtime
+    assert str(app_data()).startswith(str(tmp_path))  # never the real profile
+    settings_file = app_data() / "settings.json"
+    Settings().save(settings_file)
+
+    chats = Conversations(app_data() / "conversations.sqlite3")
+    try:
+        chat = chats.active_chat("STAR")
+        user = chats.add("STAR", "user", "make the shop UI", chat_id=chat)
+        chats.add_terminal("STAR", chat, user, "failed", "Cannot reach STAR Brain. Start it in the Brain tab.")
+    finally:
+        chats.close()
+
+    state = _get_state(settings_file, Runtime())  # a fresh process: no client memory at all
+    assert json.loads(json.dumps(state))["retry"] == {
+        "status": "failed", "detail": "Cannot reach STAR Brain. Start it in the Brain tab.",
+        "prompt": "make the shop UI", "message_id": user, "created": state["retry"]["created"]}
+    assert [(m["role"], m.get("status")) for m in state["messages"]] == [("user", None), ("event", "failed")]
+    assert state["messages"][1]["text"].startswith("Cannot reach STAR Brain")
+
+    # While a task is running the same history must not claim the turn was lost.
+    chats = Conversations(app_data() / "conversations.sqlite3")
+    try:
+        chats.add("STAR", "user", "second try", chat_id=chat)
+    finally:
+        chats.close()
+    assert _get_state(settings_file, Runtime(), busy=True)["retry"] is None
+    assert _get_state(settings_file, Runtime())["retry"]["status"] == "interrupted"
+
+
+def test_bridge_wires_every_turn_action_through_the_tested_helpers():
+    """The Qt Bridge cannot be built without PySide6, so pin its wiring structurally.
+
+    The behaviour itself is covered above through run_worker / record_turn_failure.
+    """
+    import inspect
+    import re
+    source = inspect.getsource(react_shell.launch)
+    assert "run_worker(request_id, action, worker" in source
+    for method in ("_run_chat", "_run_image", "_run_team"):
+        body = re.search(rf"def {method}\(.*?(?=\n        def |\Z)", source, re.S).group(0)
+        assert re.search(r"user_id\s*=\s*chats\.add\(settings\.project,\s*['\"]user['\"]", body), method
+        assert re.search(r"self\.turn\s*=\s*TurnRef\(settings\.project,\s*active_chat,\s*user_id\)", body), method
+    assert source.count("busy=self.active_task") >= 2  # bootstrap and switchProject can race a running task
