@@ -234,9 +234,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             recent_all = dialogue.recent(settings.project, limit=12)
         finally:
             dialogue.close()
-        recent_users = [body for role, body, _ in recent_all[:-1]
-                        if role == 'user'] if recent_all and recent_all[-1][0] == 'user' and recent_all[-1][1] == prompt else [
-                            body for role, body, _ in recent_all if role == 'user']
+        history_for_routing = (
+            recent_all[:-1] if recent_all and recent_all[-1][0] == 'user'
+            and recent_all[-1][1] == prompt else recent_all
+        )
+        recent_users = [body for role, body, _ in history_for_routing if role == 'user']
         project_tools = needs_project_tools(prompt, recent_users)
         # Deictic follow-ups such as "fix it" can keep a Roblox specialist,
         # but past user text never grants new Studio or file permissions.
