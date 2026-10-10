@@ -1,14 +1,14 @@
 import {useEffect,useState} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
 import {
- Activity,ArrowRight,ArrowUpRight,BookOpen,Box,BrainCircuit,Check,CheckCircle2,
- ChevronRight,Clock3,Code2,Cpu,ExternalLink,GitBranch,GitCommitHorizontal,
- GitPullRequest,Globe2,Image,Layers3,Link2,LockKeyhole,RefreshCw,
+ Activity,ArrowRight,ArrowUpRight,BookOpen,BrainCircuit,Check,
+ ChevronRight,Code2,Cpu,ExternalLink,GitBranch,GitCommitHorizontal,
+ GitPullRequest,Globe2,Layers3,Link2,LockKeyhole,RefreshCw,
  Search,ShieldCheck,Sparkles,Workflow,Wrench
 } from 'lucide-react'
 import {WEBSITE_REPO,WEBSITE_RELEASES} from './constants'
 import {capabilities,filterCapabilities,milestones} from './starCatalog'
-import type {CapabilityArea,CapabilityStage} from './starCatalog'
+import type {Capability,CapabilityArea,CapabilityStage} from './starCatalog'
 import {fetchPublicStatus,milestoneState} from './githubPublic'
 import type {PublicStatus} from './githubPublic'
 import './status-hub.css'
@@ -27,10 +27,6 @@ const stageOptions=[
  {value:'planned',label:'Planned'}
 ] as const
 
-const mainCount=capabilities.filter(item=>item.stage==='main').length
-const reviewCount=capabilities.filter(item=>item.stage==='review').length
-const futureCount=capabilities.filter(item=>item.stage==='planned').length
-
 function readableDate(value:string|null|undefined){
  if(!value)return 'Date unavailable'
  const date=new Date(value)
@@ -40,14 +36,6 @@ function readableDate(value:string|null|undefined){
 function formatCount(value:number|null|undefined, capped=false){
  return value==null?'—':new Intl.NumberFormat().format(value)+(capped?'+':'')
 }
-function developmentStatus(number:number,snapshot:PublicStatus|null){
- const state=milestoneState(number,snapshot)
- if(state==='merged')return 'Merged to source'
- if(state==='review')return 'Open for review'
- if(state==='closed')return 'Closed, not merged'
- return 'Check pull request'
-}
-
 function MetricCard({value,label,detail,icon:Icon}:{
  value:string;label:string;detail:string;icon:typeof Activity
 }){
@@ -74,7 +62,12 @@ export function StatusHub(){
   })
   return ()=>controller.abort()
  },[refreshKey])
- const filtered=filterCapabilities(stage,query)
+ const effectiveStage=(item:Capability):CapabilityStage=>
+  item.stage==='review'&&item.pr&&milestoneState(item.pr,snapshot)==='merged'?'main':item.stage
+ const filtered=filterCapabilities('all',query).filter(item=>stage==='all'||effectiveStage(item)===stage)
+ const mainCount=capabilities.filter(item=>effectiveStage(item)==='main').length
+ const reviewCount=capabilities.filter(item=>effectiveStage(item)==='review').length
+ const futureCount=capabilities.filter(item=>effectiveStage(item)==='planned').length
  const loaded=state==='ready'
  return <>
   <section className="sh-dashboard" id="status" aria-labelledby="sh-status-title">
