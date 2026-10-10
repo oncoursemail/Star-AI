@@ -61,9 +61,8 @@ const VIEWS=[
  {id:'projects'},
  {id:'analytics'}
 ]
-/** Element-level crops used inside the feature chapters. */
+/** Element-level crops used inside the feature chapters. The Studio cards are only captured stacked. */
 const CROPS=[
- {id:'studio',tab:'tools',selector:'.two-up',viewport:{width:1180,height:900}},
  {id:'studio-narrow',tab:'tools',selector:'.two-up',viewport:{width:430,height:900}},
  {id:'setup',tab:'brain',selector:'.brain-simple',viewport:{width:980,height:800}},
  {id:'setup-narrow',tab:'brain',selector:'.brain-simple',viewport:{width:430,height:800}}

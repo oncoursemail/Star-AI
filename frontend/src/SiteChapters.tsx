@@ -20,14 +20,17 @@ function Status({since,latest}:{since:string;latest:ReleaseInfo|null}){
  return <span className="sw-status">Status on GitHub</span>
 }
 
-/** An element-level capture. Phones get the same element captured at a narrow window, so the text stays readable. */
-function Crop({id,alt,sizes}:{id:string;alt:string;sizes:string}){
- const files=images[id]||[]
+/**
+ * An element-level capture. Phones get the same element captured at a narrow window, so the text stays readable.
+ * `narrowOnly` uses that narrow capture at every width, for elements that read best stacked.
+ */
+function Crop({id,alt,sizes,narrowOnly=false}:{id:string;alt:string;sizes:string;narrowOnly?:boolean}){
  const narrow=(images[id+'-narrow']||[])[0]
+ const files=narrowOnly&&narrow?[narrow]:images[id]||[]
  const base=files[0]
  if(!base)return null
  return <picture>
-  {narrow&&<source media="(max-width: 640px)" srcSet={'./site/'+narrow.file} width={narrow.width} height={narrow.height}/>}
+  {narrow&&!narrowOnly&&<source media="(max-width: 640px)" srcSet={'./site/'+narrow.file} width={narrow.width} height={narrow.height}/>}
   <img src={'./site/'+base.file} srcSet={files.map(file=>'./site/'+file.file+' '+file.width+'w').join(', ')} sizes={sizes}
    width={base.width} height={base.height} alt={alt} loading="lazy" decoding="async"/>
  </picture>
@@ -87,12 +90,12 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
       })}
      </ol>
     </div>
-    <figure className="sw-figure" data-reveal style={delay(80)}>
+    <figure className="sw-figure sw-figure-slim" data-reveal style={delay(80)}>
      <div className="sw-plate">
       <i className="sw-crop sw-crop-tl" aria-hidden="true"/><i className="sw-crop sw-crop-tr" aria-hidden="true"/>
       <i className="sw-crop sw-crop-bl" aria-hidden="true"/><i className="sw-crop sw-crop-br" aria-hidden="true"/>
       <div className="sw-plate-frame">
-       <Crop id="studio" sizes="(max-width: 960px) calc(100vw - 64px), 640px"
+       <Crop id="studio" narrowOnly sizes="(max-width: 480px) calc(100vw - 56px), 400px"
         alt="Two cards from the Developer tools screen. Roblox Studio: connect to the official Roblox Studio MCP server and start in an unpublished test place. Local workspace: STAR can inspect a selected folder and edits files only with write permission."/>
       </div>
      </div>

@@ -1,5 +1,5 @@
 {
- "capturedAt": "2026-10-10T15:00:20.806Z",
+ "capturedAt": "2026-10-10T15:18:24.294Z",
  "sourceVersion": "0.9.0",
  "images": {
   "chat": [
@@ -101,7 +101,7 @@
     "file": "analytics-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 55066
+    "bytes": 55068
    }
   ],
   "analytics-narrow": [
@@ -110,20 +110,6 @@
     "width": 860,
     "height": 1240,
     "bytes": 22612
-   }
-  ],
-  "studio": [
-   {
-    "file": "studio-838.webp",
-    "width": 838,
-    "height": 256,
-    "bytes": 9954
-   },
-   {
-    "file": "studio-1676.webp",
-    "width": 1676,
-    "height": 512,
-    "bytes": 22836
    }
   ],
   "studio-narrow": [

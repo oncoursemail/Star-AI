@@ -125,6 +125,7 @@
 .sw-shot{position:absolute;inset:0;opacity:0;transform:translateY(8px);transition:opacity .22s linear,transform .34s var(--sw-ease);pointer-events:none}
 .sw-shot[data-active="true"]{opacity:1;transform:none}
 .sw-figure .sw-note{margin-top:14px;padding:0 10px}
+.sw-figure-slim{max-width:440px}
 
 /* ---------- showcase ---------- */
 .sw-showcase{padding-bottom:var(--sw-section)}
@@ -337,8 +338,24 @@
 .sw-enter{animation:sw-rise .62s var(--sw-ease) both;animation-delay:var(--sw-d,0ms)}
 .sw-pre{opacity:0}
 .sw-in{animation:sw-rise .5s var(--sw-ease) both;animation-delay:var(--sw-d,0ms)}
-.sw-still .sw-enter,.sw-still .sw-in,.sw-still .sw-tour-caption,.sw-still .sw-route{animation:none}
-.sw-still .sw-shot,.sw-still .sw-tab-bar,.sw-still .sw-header{transition:none}
+/* Details that are drawn when their block is revealed. Transform and opacity only. */
+@keyframes sw-grow-x{from{transform:scaleX(0)}to{transform:none}}
+@keyframes sw-grow-y{from{transform:scaleY(0)}to{transform:none}}
+@keyframes sw-pop{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:none}}
+@keyframes sw-mark{from{opacity:0;transform:translate(var(--sw-mx,0),var(--sw-my,0))}to{opacity:.75;transform:none}}
+.sw-crop-tl{--sw-mx:-7px;--sw-my:-7px}.sw-crop-tr{--sw-mx:7px;--sw-my:-7px}.sw-crop-bl{--sw-mx:-7px;--sw-my:7px}.sw-crop-br{--sw-mx:7px;--sw-my:7px}
+.sw-enter .sw-crop,.sw-in .sw-crop{animation:sw-mark .6s var(--sw-ease) both;animation-delay:calc(var(--sw-d,0ms) + 240ms)}
+.sw-routes.sw-in .sw-routes-dot{animation:sw-pop .45s var(--sw-ease) 120ms both}
+.sw-routes.sw-in .sw-route::after{transform-origin:top;animation:sw-grow-y .5s var(--sw-ease) both;animation-delay:var(--sw-d,0ms)}
+.sw-routes.sw-in .sw-route::before{transform-origin:left;animation:sw-grow-x .4s var(--sw-ease) both;animation-delay:calc(var(--sw-d,0ms) + 160ms)}
+.sw-steps li.sw-in::before{transform-origin:left;animation:sw-grow-x .7s var(--sw-ease) both;animation-delay:calc(var(--sw-d,0ms) + 80ms)}
+.sw-steps li.sw-in .sw-step-number{animation:sw-pop .4s var(--sw-ease) both;animation-delay:var(--sw-d,0ms)}
+.sw-in .sw-rail li{animation:sw-fade .45s var(--sw-ease) both;animation-delay:calc(var(--sw-d,0ms) + 120ms)}
+.sw-in .sw-rail-node{animation:sw-pop .4s var(--sw-ease) both;animation-delay:calc(var(--sw-d,0ms) + 160ms)}
+.sw :where(p,dd,figcaption,.sw-row-plain) a svg,.sw-link svg{transition:transform .16s var(--sw-ease)}
+.sw :where(p,dd,figcaption,.sw-row-plain) a:hover svg,.sw-link:hover svg{transform:translate(1.5px,-1.5px)}
+/* ?visualqa: every final state at once, for screenshots and audits. */
+.sw-still *,.sw-still *::before,.sw-still *::after{animation:none!important;transition:none!important}
 @media (prefers-reduced-motion:reduce){
  .sw *,.sw *::before,.sw *::after{animation-delay:0s!important;transition-delay:0s!important}
  .sw-enter,.sw-in,.sw-tour-caption,.sw-routes.sw-in .sw-route{animation:none}
@@ -404,6 +421,7 @@
  .sw-steps li{padding:0 0 30px 44px}
  .sw-steps li::before{left:12px;right:auto;top:0;bottom:0;width:1px;height:auto}
  .sw-steps li:last-child::before{display:none}
+ .sw-steps li.sw-in::before{transform-origin:top;animation-name:sw-grow-y}
  .sw-step-number{top:-2px}
  .sw-steps h3{margin-top:0}
  .sw-rail{grid-auto-flow:row;gap:0}
@@ -413,6 +431,7 @@
  .sw-rail a{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px}
  .sw-rail-node{position:absolute;left:-26px;top:6px;margin:0}
  .sw-commit{grid-template-columns:64px minmax(0,1fr)}
+ .sw-commit span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;white-space:normal}
  .sw-commit time{display:none}
  .sw-milestones li{grid-template-columns:minmax(0,1fr)}
  .sw-reqs>div,.sw-file-facts>div{grid-template-columns:minmax(0,1fr);gap:2px}

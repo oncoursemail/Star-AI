@@ -87,9 +87,9 @@ function ReleaseRail({board}:{board:Board}){
  const sinceCount=board.unreleased.length+board.unreleasedMaintenance
  if(!shown.length)return null
  return <ol className="sw-rail" aria-label="Published releases, oldest first, then unreleased work on main">
-  {shown.map(release=>{
+  {shown.map((release,index)=>{
    const isLatest=release.tag===board.latest?.tag
-   return <li key={release.tag} data-latest={isLatest}>
+   return <li key={release.tag} data-latest={isLatest} style={delay(index*80)}>
     <a href={release.url} target="_blank" rel="noopener noreferrer">
      <span className="sw-rail-node" aria-hidden="true"/>
      <span className="sw-rail-tag">{release.tag}</span>
@@ -98,7 +98,7 @@ function ReleaseRail({board}:{board:Board}){
     </a>
    </li>
   })}
-  <li data-main="true">
+  <li data-main="true" style={delay(shown.length*80)}>
    <a href={LINKS.commits} target="_blank" rel="noopener noreferrer">
     <span className="sw-rail-node" aria-hidden="true"/>
     <span className="sw-rail-tag">main</span>
