@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: 'pip'
@@ -75,7 +75,7 @@ jobs:
           test -s react-qa/chat-desktop.png
       - name: Upload actual React browser renders
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: STAR-v08-React-Visual-QA
           path: react-qa/*.png
