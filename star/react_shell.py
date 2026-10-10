@@ -25,7 +25,7 @@ from .version import __version__
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','newChat','switchChat','generateImage',
-    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy',
+    'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText',
 })
 
 
@@ -284,15 +284,6 @@ def launch():
                         if key in permitted:setattr(old,key,value)
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
-                if action=='openLegacy':
-                    if getattr(sys, 'frozen', False):
-                        command=[sys.executable, '--legacy-ui']
-                    else:
-                        command=[sys.executable, str(Path(__file__).resolve().parents[1]/'star_desktop.py'), '--legacy-ui']
-                    import subprocess
-                    subprocess.Popen(command, close_fds=True, stdin=subprocess.DEVNULL,
-                                     creationflags=getattr(subprocess, 'CREATE_NO_WINDOW',0))
-                    return json.dumps({'ok':True,'data':True})
                 if action=='copyText':
                     content=str(body.get('text',''))
                     if len(content)>300000:raise ValueError('Too much text')
