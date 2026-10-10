@@ -19,6 +19,7 @@ from .workspace import Workspace
 from .intelligence import for_settings
 from .mcp_connections import MCPGateway
 from .providers import PROVIDERS, connection_for
+from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
 
 def app_data() -> Path:
@@ -34,6 +35,10 @@ class Settings:
     endpoint: str = 'http://127.0.0.1:1234/v1'
     provider: str = 'local'
     model: str = ''
+    fast_model: str = ''
+    reasoning_model: str = ''
+    roblox_model: str = ''
+    vision_model: str = ''
     project: str = 'STAR'
     workspace: str = ''
     studio_id: str = ''
@@ -44,6 +49,8 @@ class Settings:
     llama_server: str = ''
     gguf_model: str = ''
     gpu_layers: int = 25
+    router_models_dir: str = ''
+    router_context: int = 4096
     reduced_motion: bool = False
     comfy_workflow: str = ''
     comfy_prompt_node: str = '6'
@@ -65,6 +72,8 @@ class Settings:
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     def validate(self):
+        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, field), field=field)
         if self.provider != 'local' and self.provider not in PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -90,8 +99,15 @@ class Settings:
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
             raise ValueError('Invalid local image generation configuration')
-        if not 0 <= self.gpu_layers <= 1000:
+        if type(self.gpu_layers) is not int or not 0 <= self.gpu_layers <= 1000:
             raise ValueError('GPU layers must be between 0 and 1000')
+        if type(self.router_context) is not int or not 512 <= self.router_context <= 32768:
+            raise ValueError('Router context must be between 512 and 32768')
+        if (not isinstance(self.router_models_dir, str)
+                or len(self.router_models_dir) > 2048
+                or '\x00' in self.router_models_dir
+                or self.router_models_dir.lower().startswith(('http:', 'https:', 'file:'))):
+            raise ValueError('Choose a local folder for the GGUF model router')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
 
@@ -309,15 +325,28 @@ def redact_for_logs(value):
     return value
 
 
-def needs_project_tools(prompt: str) -> bool:
-    """Avoid loading expensive Studio/MCP tools for ordinary knowledge chat."""
+def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+    """Load task tools on explicit request or scoped short edit follow-up.
+
+    User context hints are not permissions; executable scopes remain enforced.
+    """
     text = prompt.lower()
-    mentions_project = any(term in text for term in ('studio', 'roblox', 'workspace', 'my project',
-        'my game', 'my files', 'project folder', 'current place'))
-    requests_action = any(term in text for term in ('inspect', 'modify', 'edit', 'read ', 'fix ',
-        'create ', 'build ', 'implement', 'open ', 'scan ', 'add ', 'remove ', 'delete ', 'test '))
+    scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game', 'my files',
+              'project folder', 'current place')
+    actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
+               'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
+               'remove ', 'delete ', 'test ', 'make it', 'update ')
     explicit_mcp = bool(re.search(r'\b(mcp|connected tools?|graphify docs|live obsidian)\b', text))
-    return explicit_mcp or (mentions_project and requests_action)
+    requests_action = any(x in text for x in actions)
+    if explicit_mcp:
+        return True
+    if not requests_action:
+        return False
+    if any(x in text for x in scopes):
+        return True
+    return bool(len(text) <= 160 and prior_user_turns
+                and any(any(x in turn.lower() for x in scopes)
+                        for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
@@ -358,7 +387,27 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory_scope = settings.project if chat_id in (None, 'legacy') else settings.project + '::chat::' + chat_id
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
-        quick = mode == 'fast' or (mode == 'auto' and not needs_project_tools(prompt))
+        dialogue = Conversations(home / 'conversations.sqlite3')
+        try:
+            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id)
+        finally:
+            dialogue.close()
+        route_history = (
+            recent_all[:-1] if recent_all and recent_all[-1][0] == 'user'
+            and recent_all[-1][1] == prompt else recent_all
+        )
+        recent_users = [body for role,body,_ in route_history if role=='user']
+        project_tools = needs_project_tools(prompt, recent_users)
+        referential = len(prompt) <= 160 and bool(re.search(
+            r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
+        roblox_context = bool(project_tools and referential
+                              and any(is_roblox_task(turn) for turn in recent_users[-3:]))
+        route = select_route(settings,prompt,mode=mode,image_count=len(images),
+                             research=research,project_tools=project_tools,
+                             roblox_context=roblox_context)
+        audited_event({'event':'route_selected','profile':route.profile,
+                       'description':route.description})
+        quick = route.quick
         reviewed = knowledge.find_contextual(settings.project, prompt, limit=4 if quick else 8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
@@ -368,13 +417,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 origin=f'desktop:{path.name}', media_type=media_type)
         # Every chat turn is independently callable, so supply a bounded recent
         # transcript from the persistent conversation DB as well as compacted memory.
-        dialogue = Conversations(home / 'conversations.sqlite3')
-        try:
-            recent = dialogue.recent(settings.project, limit=6 if quick else 12, chat_id=chat_id)
-            prior_turns = recent_context(recent, prompt)
-        finally:
-            dialogue.close()
-        use_tools = mode == 'agent' or (mode == 'auto' and not quick)
+        prior_turns = recent_context(recent_all[-(6 if quick else 12):], prompt)
+        use_tools = route.use_tools
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
         allow_studio = bool(use_tools and settings.studio_id)
@@ -398,13 +442,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     memory_context = memory_context[-5000:]
                 else:
                     memory_context = memory_context[-14000:]
-                kwargs = dict(client=client, model=settings.model, prompt=prompt, image_paths=images,
-                              project_memory=memory_context + snippets,
-                              max_calls=(1 if quick else min(settings.max_calls, 5 if mode == 'auto' else 20)),
+                kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
+                              project_memory=memory_context + snippets +
+                                  (ROBLOX_QUALITY_NOTES if
+                                  (is_roblox_task(prompt) or roblox_context) else ''),
+                              max_calls=route.max_calls,
                               context_chars=settings.context_chars,
                               checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
-                              stream_tokens=stream_tokens, response_tokens=650 if quick else 1600,
+                              stream_tokens=stream_tokens, response_tokens=route.response_tokens,
+                              subagent_model=route.subagent_model,
                               web_search_enabled=bool(research and mode == 'agent'),
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=(1 if settings.provider == 'local' else 2),
@@ -418,7 +465,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             may_edit=settings.studio_edit)
                 return await execute(**kwargs)
         # Bound an entire task, not just each of up to 12 individual model calls.
-        task_timeout = (85 if settings.provider == 'local' else 55) if quick else 180 if mode == 'auto' else 480
+        task_timeout = route.task_timeout
         async def controlled_run():
             """Cooperative user cancellation interrupts active async API and Studio calls."""
             job = asyncio.create_task(run())
