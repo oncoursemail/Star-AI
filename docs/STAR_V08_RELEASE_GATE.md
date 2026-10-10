@@ -1,6 +1,6 @@
 # STAR Genesis v0.8.0 — release candidate gate
 
-**Not a shipped-release announcement.** Source code will declare v0.8.0 after the version bump. The latest public binary verified in this development session was v0.6.1. A GitHub Actions artifact is not a public Release.
+**Release status update:** v0.8.0 was published successfully to the public GitHub Releases channel (verified October 10, 2026): https://github.com/oncoursemail/Star-AI/releases/tag/v0.8.0 . The separate v0.8.1 maintenance candidate includes compatible dependencies and Node 24 GitHub Actions, and must pass another Windows build and release before it is described as shipped. Public release artifacts are distinct from temporary Actions build artifacts.
 
 ## Candidate contents
 

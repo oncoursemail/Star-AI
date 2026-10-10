@@ -1,5 +1,5 @@
 #ifndef StarVersion
-  #define StarVersion "0.8.0"
+  #define StarVersion "0.8.1"
 #endif
 #define STARName "STAR Intelligence"
 #define STARExe "STAR.exe"
