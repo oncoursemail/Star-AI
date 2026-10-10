@@ -182,7 +182,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory = Memory(home / 'checkpoints.sqlite3')
     knowledge = KnowledgeStore(home / 'knowledge')
     try:
-        reviewed = knowledge.find(settings.project, prompt, reviewed_only=True, limit=8)
+        reviewed = knowledge.find_contextual(settings.project, prompt, limit=8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
         for image in images:
             path = Path(image)
