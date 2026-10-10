@@ -199,3 +199,26 @@
 @media(max-width:1120px){.intelligence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:710px){.intelligence-grid{grid-template-columns:minmax(0,1fr)}.intelligence-folder-row{align-items:stretch;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.integration-panel *{scroll-behavior:auto}}
+
+
+/* STAR MCP: one cohesive, accessible connection hub, not a separate app. */
+.mcp-panel{margin-top:18px;min-width:0}
+.mcp-panel>p,.mcp-settings>p{font-size:12px;line-height:1.68;color:#aeb8b4;max-width:78ch}
+.mcp-connection-list{display:grid;grid-template-columns:1fr;gap:10px;margin:18px 0}
+.mcp-connector{background:#171c1e;border:1px solid #303a3d;border-radius:12px;padding:15px 16px;min-width:0;transition:border-color .17s}
+.mcp-connector:hover{border-color:#515c5c}
+.mcp-connector-summary{display:flex;justify-content:space-between;align-items:center;gap:20px;min-width:0}
+.mcp-connector-summary>div{display:flex;flex-direction:column;gap:6px;min-width:0;flex:1}
+.mcp-connector-summary strong{font-size:13px;color:#ecf0ec;font-weight:630}
+.mcp-connector-summary small{font-size:11px;line-height:1.65;color:#aeb9b5;overflow-wrap:anywhere}
+.mcp-connector-summary button{flex:0 0 auto;min-width:145px;justify-content:center;display:flex;align-items:center;gap:7px}
+.mcp-state{font-size:10px;color:#c8b18b;letter-spacing:.02em}
+.mcp-settings{min-width:0}
+.mcp-port-field{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:10px 0 14px;font-size:12px;color:#c6ceca}
+.mcp-port-field input{max-width:110px;min-width:0;border-radius:8px}
+.mcp-settings>small{display:block;margin:13px 0;line-height:1.7;color:#96a6a2;overflow-wrap:anywhere}
+@media(max-width:740px){
+ .mcp-connector-summary{flex-direction:column;align-items:stretch;gap:14px}
+ .mcp-connector-summary button{align-self:flex-start;min-width:132px}
+}
+@media(prefers-reduced-motion:reduce){.mcp-connector{transition:none}}
