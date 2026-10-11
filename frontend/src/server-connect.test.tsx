@@ -1,28 +1,66 @@
-import {readFileSync} from 'node:fs'
-import {describe,it,expect} from 'vitest'
+// @vitest-environment jsdom
+import {beforeAll,afterEach,describe,it,expect,vi} from 'vitest'
+import {cleanup,render,screen,waitFor} from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import {useState} from 'react'
+import {initializeBridge} from './bridge'
+import {installFakeDesktop,backendSettings,type FakeDesktop} from './fake-desktop'
+import {ProviderPanel} from './IntegrationPanels'
+import type {AppSettings,ServerReport} from './types'
 
-const source=(path:string)=>readFileSync(new URL(path,import.meta.url),'utf8')
-
+let desktop:FakeDesktop
+beforeAll(async()=>{desktop=installFakeDesktop();await initializeBridge()})
+afterEach(()=>cleanup())
+const okReport:ServerReport={ok:true,code:'ok',message:'STAR Server is ready.',steps:[],models:['model-one'],
+  model:'model-one',context_tokens:null,slots:null,first_token_ms:null,sample:''}
+function host(){
+ const calls:Array<{action:string;params:Record<string,unknown>}>=[]
+ const invoke=vi.fn(async(action:string,params:Record<string,unknown>={})=>{
+   calls.push({action,params})
+   if(action==='serverKeyFileStatus')return {found:true}
+   if(action==='importServerKeyFile')return {connected:true}
+   if(action==='saveProviderKey')return {connected:true}
+   if(action==='saveSettings')return {saved:true}
+   if(action==='testServer')return {pending:true,requestId:'server-connect-test'}
+   return null
+ })
+ return {calls,invoke}
+}
+function Harness({backend}:{backend:ReturnType<typeof host>}){
+ const [draft,setDraft]=useState(backendSettings as AppSettings)
+ return <ProviderPanel draft={draft} onChange={setDraft} credentials={{}} invoke={backend.invoke} refresh={()=>{}}/>
+}
 describe('guided STAR Server connection',()=>{
-  it('detects a key file via a native-only status action and explicitly imports it',()=>{
-    const panel=source('./IntegrationPanels.tsx')
-    expect(panel).toContain("invoke('serverKeyFileStatus')")
-    expect(panel).toContain("invoke('importServerKeyFile')")
-    expect(panel).toContain('A server key file was found on this PC')
-    expect(panel).toContain('Use it')
-    expect(panel).not.toContain('server_api_key')
-  })
-  it('keeps the existing provider until a full server test succeeds',()=>{
-    const panel=source('./IntegrationPanels.tsx')
-    expect(panel).toContain("if(!report?.ok||draft.provider==='star_server')return")
-    expect(panel).toContain("const next={...draft,provider:'star_server'}")
-    expect(panel).toContain("if(e.target.value==='star_server'){setConnecting(true)}")
-  })
-  it('registers native actions with nonsecret replies',()=>{
-    const native=source('../../star/react_shell.py')
-    const importer=source('../../star/server_key_file.py')
-    expect(native).toContain("action=='serverKeyFileStatus'")
-    expect(native).toContain("action=='importServerKeyFile'")
-    expect(importer).toContain("return {'connected': True}")
-  })
+ it('discovers local key file, imports only on click, and never supplies file contents to React',async()=>{
+   const backend=host()
+   render(<Harness backend={backend}/>)
+   await userEvent.click(screen.getByRole('button',{name:'Connect to STAR Server'}))
+   expect(await screen.findByText('A server key file was found on this PC')).toBeTruthy()
+   expect(backend.calls.filter(c=>c.action==='importServerKeyFile')).toHaveLength(0)
+   await userEvent.click(screen.getByRole('button',{name:'Use it'}))
+   await waitFor(()=>expect(backend.calls.filter(c=>c.action==='importServerKeyFile')).toHaveLength(1))
+   expect(backend.calls.find(c=>c.action==='importServerKeyFile')?.params).toEqual({})
+ })
+ it('keeps local selected after a rejected server test',async()=>{
+   const backend=host()
+   render(<Harness backend={backend}/>)
+   await userEvent.click(screen.getByRole('button',{name:'Connect to STAR Server'}))
+   await userEvent.type(screen.getByRole('textbox',{name:'Server address'}),'http://192.168.1.20:8080/v1')
+   await userEvent.click(screen.getByRole('button',{name:'Test server'}))
+   await waitFor(()=>expect(backend.calls.some(c=>c.action==='testServer')).toBe(true))
+   expect(backend.calls.find(c=>c.action==='saveSettings')?.params.settings).toMatchObject({provider:'local'})
+   desktop.emitRaw('server-connect-test','result',{...okReport,ok:false,code:'wrong_key',message:'Key rejected'})
+   expect(await screen.findByText('Key rejected')).toBeTruthy()
+   expect(backend.calls.filter(c=>c.action==='saveSettings')).toHaveLength(1)
+ })
+ it('selects STAR Server only after successful real test response',async()=>{
+   const backend=host()
+   render(<Harness backend={backend}/>)
+   await userEvent.click(screen.getByRole('button',{name:'Connect to STAR Server'}))
+   await userEvent.type(screen.getByRole('textbox',{name:'Server address'}),'http://192.168.1.20:8080/v1')
+   await userEvent.click(screen.getByRole('button',{name:'Test server'}))
+   await waitFor(()=>expect(backend.calls.some(c=>c.action==='testServer')).toBe(true))
+   desktop.emitRaw('server-connect-test','result',okReport)
+   await waitFor(()=>expect(backend.calls.filter(c=>c.action==='saveSettings').at(-1)?.params.settings).toMatchObject({provider:'star_server'}))
+ })
 })
