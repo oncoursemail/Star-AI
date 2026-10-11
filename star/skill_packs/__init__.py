@@ -89,6 +89,12 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-ui-styles": re.compile(
         r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
         r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
+    "roblox-environment-art": re.compile(
+        r"\b(?:environment art|environment design|foliage|swaying trees?|tree sway|wind sway|"
+        r"winter shrine|torii|snowy forest|volcanic crypt|catacombs?|dungeon|"
+        r"SurfaceAppearance|PBR|texture atlas|reference screenshot|art direction|"
+        r"volumetric|skinned trees?|environmental storytelling|lighting preset)\b",
+        re.IGNORECASE),
     # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
     "game-obby": re.compile(r"\b(?:obby|checkpoint|checkpoints|kill brick|stage progression|obstacle course)\b", re.IGNORECASE),
     "game-tycoon": re.compile(r"\b(?:tycoon|dropper|droppers|collector|collectors|purchase button|factory plot)\b", re.IGNORECASE),
