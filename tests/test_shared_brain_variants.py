@@ -27,7 +27,7 @@ from star.shared_brain.store import SharedBrain, serialize
 SUITE_SHA256 = "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696"
 SUITE_PATH = Path(__file__).parent / "fixtures" / "shared_brain_retrieval.json"
 SOURCE_VALIDATION_PATH = Path(__file__).parent / "fixtures" / "shared_brain_runtime_source_validation.json"
-SOURCE_VALIDATION_SHA256 = "0cc405336f98827426a326084ceb80e687b93c0da2b74bb24797aa1c15fe0296"
+SOURCE_VALIDATION_SHA256 = "14beaa290256e84e2005323a6bd74eb6ea5e6eb5444b17f15a64f55d6d6fd320"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -117,7 +117,7 @@ def current_validation_sources(frozen_suite):
     assert set(validation["changed_sources"]) == {"star/agent.py", "star/lessons.py", "star/memory.py"}
     for relative, current in validation["changed_sources"].items():
         assert current["historical_crlf_sha256"] == pins[relative]
-        assert current["source_revision_commit"] == validation["observed_integration_merge_head"]
+        assert current["source_revision_commit"] == validation["observed_source_tree_revision"]
         assert current["source_change_commit"] in validation["reviewed_dependency_commits"]
         pins[relative] = current["current_crlf_sha256"]
     return pins, validation

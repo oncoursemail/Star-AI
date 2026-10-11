@@ -7,26 +7,33 @@ the current source snapshot and cannot update historical performance claims.
 
 ## Current integration snapshot
 
-Version 2 of `tests/fixtures/shared_brain_runtime_source_validation.json`
-identifies the no-commit merge of integration revision
-`ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc` into runtime head
-`f73217cc682a1423034e4cbcb1d716d1d723506d`. This follows the initial
-lessons-only overlay, whose semantic SHA256 was
+Version 3 of `tests/fixtures/shared_brain_runtime_source_validation.json`
+identifies combined runtime revision
+`cdd1a917ebe24423b75063c3c897ad0a06ba8019`. Root normally merged integration
+`ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc`, reviewed retention head
+`42f5e3e1483c98008b0c1a15e138fcf0436cf156` and reviewed corpus head
+`384409868dadb54d8dd76d207c230299595dc068` before this independent audit.
+Unreviewed future Claude media changes are excluded.
+
+Version 3 supersedes version 2's semantic SHA256
+`0cc405336f98827426a326084ceb80e687b93c0da2b74bb24797aa1c15fe0296`.
+Version 2 followed the initial lessons-only overlay, whose semantic SHA256 was
 `0ce9202b56faa8b3a18c5404d3c263bdc11b627c4bff5eee81af13a1b236b5fb`.
-That earlier version remains in runtime head history.
+Both earlier versions remain in runtime branch history.
 
 Independent audits checked all twelve development expected-source files.
-Three files differ from the historical pins and match the incoming revision's
-staged Git blobs:
+Three files differ from the historical pins and match the combined revision's
+committed Git blobs:
 
 | Source | Last source change | Development declaration |
 | --- | --- | --- |
-| `star/agent.py` | PR42, `22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2` | `validate_model_roles`, line 112 |
-| `star/memory.py` | PR42, `22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2` | `Memory.put`, historical line 24, current line 25 |
+| `star/agent.py` | PR45 after PR42, `c8c303232851d0c028b72f1047421a8a650e217a` | `validate_model_roles`, historical line 112, current line 121 |
+| `star/memory.py` | PR45 after PR42, `c8c303232851d0c028b72f1047421a8a650e217a` | `Memory.put`, historical line 24, current line 25 |
 | `star/lessons.py` | PR41, `52a7b5147297230c265a8c5b65f5221c1395bdd4` | `LessonStore.capture_inferred`, line 527; `LessonStore.recall`, line 657 |
 
 All four development symbol identities and original grounding excerpts remain
 unchanged. PR42 adds request budgeting/document dispatch and layered compaction;
+PR45 adds scoped conversation prefix checkpoints and explicit history pressure;
 PR41 normalizes the lessons export destination. The other nine development
 source pins remain the original exact pins. `star/intelligence.py` is not an
 expected-source pin in this suite.
@@ -38,7 +45,7 @@ source records its historical SHA256, current exact CRLF SHA256, equivalent
 LF SHA256, Git blob identifier, observed source revision, last source-change
 commit, historical declaration location and independently verified current
 location/excerpt. The canonical semantic JSON SHA256 is
-`0cc405336f98827426a326084ceb80e687b93c0da2b74bb24797aa1c15fe0296`,
+`14beaa290256e84e2005323a6bd74eb6ea5e6eb5444b17f15a64f55d6d6fd320`,
 pinned in `tests/test_shared_brain_variants.py`. JSON line-ending transport
 does not change that semantic digest.
 
@@ -66,7 +73,7 @@ source snapshot.
 
 The original result remains 13/19 development and 1/5 disclosed holdout for
 each arm, with smaller capped context and higher shared-query latency. The
-current development control corpus contains reviewed PR41/PR42 bytes and is
+current development control corpus contains reviewed PR41/PR42/PR45 bytes and is
 distinct from that historical measured corpus. This maintenance adds no
 retrieval algorithm change, holdout rerun, live model evaluation or new
 unseen-performance claim. Future retrieval tuning needs a new independently

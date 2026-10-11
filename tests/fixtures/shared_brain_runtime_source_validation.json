@@ -1,40 +1,43 @@
 {
   "schema_version": 1,
   "kind": "development_source_validation",
-  "validation_id": "shared-brain-runtime-development-source-maintenance-v2",
-  "supersedes_validation_semantic_sha256": "0ce9202b56faa8b3a18c5404d3c263bdc11b627c4bff5eee81af13a1b236b5fb",
+  "validation_id": "shared-brain-runtime-development-source-maintenance-v3",
+  "supersedes_validation_semantic_sha256": "0cc405336f98827426a326084ceb80e687b93c0da2b74bb24797aa1c15fe0296",
   "purpose": "Current development-only variant controls, separate from the original frozen retrieval comparison.",
   "historical_fixture": "tests/fixtures/shared_brain_retrieval.json",
   "historical_fixture_sha256": "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696",
-  "observed_parent_commit": "f73217cc682a1423034e4cbcb1d716d1d723506d",
+  "observed_parent_commit": "cdd1a917ebe24423b75063c3c897ad0a06ba8019",
+  "observed_source_tree_revision": "cdd1a917ebe24423b75063c3c897ad0a06ba8019",
   "observed_integration_merge_head": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+  "reviewed_retention_head": "42f5e3e1483c98008b0c1a15e138fcf0436cf156",
+  "reviewed_corpus_head": "384409868dadb54d8dd76d207c230299595dc068",
   "reviewed_dependency_commits": [
     "52a7b5147297230c265a8c5b65f5221c1395bdd4",
-    "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2"
+    "c8c303232851d0c028b72f1047421a8a650e217a"
   ],
-  "provenance": "Independent audit of all 12 development expected-source files found agent.py and memory.py changed by reviewed PR42, plus lessons.py by PR41. Canonical LF bytes equal the staged integration revision blobs. Development symbol identities and grounding excerpts remain unchanged; Memory.put moved from L24 to L25. Runtime intelligence.py is not an expected-source pin in this suite.",
+  "provenance": "Independent audit of all 12 development expected-source files found agent.py and memory.py at reviewed PR45 source revision c8c3032 after PR42, plus unchanged PR41 lessons.py. Canonical LF bytes equal committed combined cdd1a91 blobs. Development symbol identities and grounding excerpts remain unchanged; validate_model_roles moved from L112 to L121 and Memory.put from L24 to L25. The other nine historical source pins are unchanged. Runtime intelligence.py is not an expected-source pin in this suite; unreviewed future media changes are excluded.",
   "transport_rule": "Restore exact canonical CRLF bytes in disposable test copies only; pure LF is accepted only if reconstruction matches the explicit SHA256. Other content drift remains an error.",
   "measurement_limits": "No holdout cases, queries, grading expectations, original source pins, archive or measurements changed. This overlay is not accepted by the benchmark and creates no new unseen-performance claim.",
   "changed_sources": {
     "star/agent.py": {
-      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
-      "source_change_commit": "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2",
-      "git_blob_sha1": "8a65528c0b97ce6c1e3443e078563a4e8a4b141a",
+      "source_revision_commit": "cdd1a917ebe24423b75063c3c897ad0a06ba8019",
+      "source_change_commit": "c8c303232851d0c028b72f1047421a8a650e217a",
+      "git_blob_sha1": "3d52728249d754487f5a1b617e93d53fcda25732",
       "historical_crlf_sha256": "18f4c3cd2f93df2167525332a3ebdcaa26ab27a4540a6fc8384da2fe94068d9b",
-      "current_crlf_sha256": "2f67e397052018e5c56b3f6bebf301ea4254f27be3fa8e190f1e961e296058a7",
-      "current_lf_sha256": "79ea235c17a047a66046ea539c962b0d21f5454e4bcc27bc47e16b94f560ef7b",
+      "current_crlf_sha256": "9d9aa0bc6fc6fde880dca46efbc14b53be9bf0bf45437c665693cf3610fe9994",
+      "current_lf_sha256": "7ddf74423a653133e7e5c6f1fae6001a5540456db61d35a0b4c814aa7c481d33",
       "development_grounding": [
         {
           "case_id": "retrieval-15",
           "qualified_symbol": "validate_model_roles",
           "historical_source_location": "L112",
-          "current_declaration_line": 112,
+          "current_declaration_line": 121,
           "unchanged_grounding_excerpt": "STAR requires exactly one system message, at the start of each model request"
         }
       ]
     },
     "star/lessons.py": {
-      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+      "source_revision_commit": "cdd1a917ebe24423b75063c3c897ad0a06ba8019",
       "source_change_commit": "52a7b5147297230c265a8c5b65f5221c1395bdd4",
       "git_blob_sha1": "013ac8fc20e86ec4f30126fdcc7f8e5f52b2a061",
       "historical_crlf_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
@@ -58,12 +61,12 @@
       ]
     },
     "star/memory.py": {
-      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
-      "source_change_commit": "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2",
-      "git_blob_sha1": "9ddcf7bcf163fed1032fd1d945086f2503443020",
+      "source_revision_commit": "cdd1a917ebe24423b75063c3c897ad0a06ba8019",
+      "source_change_commit": "c8c303232851d0c028b72f1047421a8a650e217a",
+      "git_blob_sha1": "afd78961951ad1bb5cf66336367370343637e7b7",
       "historical_crlf_sha256": "5efce497d5b03029972cefc1c4d7c82ebdb75f47e6af0516d8f135b3eb9e2a73",
-      "current_crlf_sha256": "c7cd59870e966b457e4d4397efb8de938d66b2b14f51b8464e70d1dc6bdd1444",
-      "current_lf_sha256": "8c9b257f949f04d3a0282af3322076f0f21d34a1d4bebff0e9e74b2e6019c808",
+      "current_crlf_sha256": "1f37995036ccd7431a7c255af36c8be4816559fc5ccb9592fd52437eba297a08",
+      "current_lf_sha256": "0f930bbbcd120abdf32847651c6aed4fc085268546e89774c2ea362fbc74d7a8",
       "development_grounding": [
         {
           "case_id": "retrieval-05",
