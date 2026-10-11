@@ -14,6 +14,7 @@ the numbers can and cannot tell you.
 | Suite v1 (25 tasks, unchanged copy of the research file) | `evals/roblox/golden-tasks-v1.json` |
 | Suite v2 (50 tasks = v1 + 25 new; 34 automated, 16 need Studio) | `evals/roblox/golden-tasks-v2.json` |
 | Creation suite v1 (23 automated tasks: animation, VFX, building, UI styles, engineering method) | `evals/roblox/golden-tasks-creation-v1.json` (own baseline `evals/results/baseline-creation-v1.json`; the gate only compares results of the same suite file) |
+| Holdout suite v1 (24 automated tasks, written blind and frozen 2026-10-11; only for confirming a change, never for tuning; own `HO-*` tests and references) | `evals/roblox/holdout-v1.json`, `evals/roblox/holdout-v1.sha256`, `docs/evals-holdout.md` |
 | Harness-owned Luau: prelude, 28 unit-test bodies, reference answers (`<ID>.md` must pass, `<ID>.bad.md` must fail) | `evals/roblox/prelude.luau`, `evals/roblox/tests/*.luau`, `evals/roblox/reference/*.md` |
 | Stored results | `evals/results/*.json` (no private addresses; the answers are kept so a result can be re-scored) |
 | Skill packs | `star/skill_packs/<name>/SKILL.md` + `references/sources.md` |
