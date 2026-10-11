@@ -14,6 +14,7 @@ MAX_PROMPT = 1600
 MAX_REPLY = 18000
 MAX_EMBED_DESCRIPTION = 3500
 MAX_AUDIO_TEXT = 500
+MAX_ACTIVE_SESSIONS = 64
 _MAX_SNOWFLAKE = 2**64 - 1
 
 
@@ -99,6 +100,10 @@ class SessionMemory:
 
     def remember(self, key: SessionKey, prompt: str, answer: str) -> None:
         self._expire()
+        if key not in self._sessions and len(self._sessions) >= MAX_ACTIVE_SESSIONS:
+            # Bound RAM use even if a single approved owner uses many channels.
+            oldest = min(self._sessions, key=lambda item: self._sessions[item].touched)
+            del self._sessions[oldest]
         session = self._sessions.setdefault(key, _Session(self._clock()))
         session.touched = self._clock()
         session.turns.extend((("user", prompt[:MAX_PROMPT]), ("assistant", answer[:MAX_REPLY])))

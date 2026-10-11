@@ -9,6 +9,15 @@ from .bot import BotConfig, create_bot
 
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    if len(sys.argv) > 1:
+        if sys.argv[1:] != ["doctor"]:
+            print("Usage: python -m star.discord_bot [doctor]", file=sys.stderr)
+            return 2
+        from .health import doctor_snapshot, format_checks
+        checks = doctor_snapshot()
+        print(format_checks(checks))
+        # Optional voice/research capabilities do not block chat-only startup.
+        return 2 if any(c.status == "setup" for c in checks) else 0
     try:
         config = BotConfig.from_env()
     except ValueError as exc:

@@ -24,7 +24,9 @@ _AUDIO_EXTENSIONS = {".wav", ".ogg", ".mp3", ".m4a", ".flac", ".webm", ".opus"}
 
 def validate_attachment(name: str, content_type: str | None, size: int) -> None:
     ext = Path(str(name)).suffix.lower()
-    if not (ext in _AUDIO_EXTENSIONS and (not content_type or content_type.startswith("audio/"))):
+    kind = str(content_type or "").lower()
+    if not (ext in _AUDIO_EXTENSIONS and
+            (not kind or kind.startswith("audio/") or (ext == ".webm" and kind == "video/webm"))):
         raise ValueError("Please attach a supported audio file (WAV, OGG, MP3, M4A, FLAC, WebM)")
     if not 0 < size <= MAX_ATTACHMENT_BYTES:
         raise ValueError("Audio must be nonempty and at most 8 MiB")
@@ -81,16 +83,23 @@ def synthesize_pcm(tts, text: str) -> tuple[bytes, int]:
     line = clean_text(text, max_chars=MAX_AUDIO_TEXT)
     if not line:
         raise ValueError("Text for speech is empty")
-    chunks = list(tts.synthesize(line))
-    if not chunks:
+    chunks = []
+    rate = None
+    total = 0
+    for part, chunk_rate in tts.synthesize(line):
+        if not isinstance(part, bytes) or not part or len(part) % 2:
+            raise RuntimeError("The speech engine generated invalid PCM")
+        if rate is None:
+            rate = int(chunk_rate)
+        if not 8000 <= rate <= 96000 or chunk_rate != rate:
+            raise RuntimeError("The speech engine generated inconsistent sample rates")
+        total += len(part)
+        if total > MAX_AUDIO_SECONDS * rate * 2:
+            raise ValueError("Spoken output exceeds the 45-second limit")
+        chunks.append(part)
+    if not chunks or rate is None:
         raise RuntimeError("The speech engine generated no audio")
-    rate = int(chunks[0][1])
-    if not 8000 <= rate <= 96000 or any(r != rate or len(pcm) % 2 for pcm, r in chunks):
-        raise RuntimeError("The speech engine generated inconsistent PCM samples")
-    pcm = b"".join(part for part, _ in chunks)
-    if not pcm or len(pcm) / (2 * rate) > MAX_AUDIO_SECONDS:
-        raise ValueError("Spoken output is empty or exceeds the 45-second limit")
-    return pcm, rate
+    return b"".join(chunks), rate
 
 
 def waveform(pcm: bytes, rate: int) -> str:
@@ -122,6 +131,8 @@ class NativeVoiceMessage:
 
 
 def voice_message(pcm: bytes, rate: int, *, executable: str) -> NativeVoiceMessage:
+    if not 8000 <= rate <= 96000 or len(pcm) % 2:
+        raise ValueError("Invalid PCM16 audio sample rate or frame length")
     seconds = len(pcm) / (2 * rate)
     if not 0 < seconds <= MAX_AUDIO_SECONDS:
         raise ValueError("Audio length exceeds the voice-message limit")

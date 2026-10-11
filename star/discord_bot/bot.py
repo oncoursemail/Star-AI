@@ -33,10 +33,14 @@ class BotConfig:
             raise ValueError("STAR_DISCORD_BOT_TOKEN must be set outside the repository")
         policy = AccessPolicy.from_env(vars)
         raw = vars.get("STAR_DISCORD_SYNC_GUILD_ID", "").strip()
+        sync = vars.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip()
+        if sync not in {"", "0", "1"}:
+            raise ValueError("STAR_DISCORD_SYNC_COMMANDS must be 0 or 1")
         if raw and (not raw.isdecimal() or int(raw) not in policy.guilds):
             raise ValueError("Command-sync test guild must be in STAR_DISCORD_GUILD_IDS")
-        return cls(token, policy, vars.get("STAR_DISCORD_SYNC_COMMANDS", "") == "1",
-                   int(raw) if raw else None)
+        if sync == "1" and not raw:
+            raise ValueError("Supply an approved STAR_DISCORD_SYNC_GUILD_ID before syncing commands")
+        return cls(token, policy, sync == "1", int(raw) if raw else None)
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None):
@@ -97,23 +101,40 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             _LOG.exception("STAR Discord operation failed")
             await problem(interaction, "STAR could not complete this request. Check the local bot logs and model/voice setup.")
 
-    async def publish_answer(interaction, answer: str, *, ephemeral: bool, key: tuple):
+    async def publish_answer(interaction, answer: str, *, ephemeral: bool, key: tuple,
+                             sources: tuple[dict, ...] = ()):
         chunks = embed_parts(answer)
         # Long AI answers are delivered as a real file, not silently truncated.
         attach = None
         if len(chunks) > 1:
             attach = discord.File(io.BytesIO(answer.encode("utf-8")), filename="star-answer.txt")
+        response = embed("✦ STAR · Research" if sources else "✦ STAR · Answer",
+                         chunks[0] + ("\n\n*Full reply attached.*" if attach else ""))
+        if sources:
+            # Source URLs come directly from STAR's constrained search adapter,
+            # not fabricated by the model or allowed to become executable tools.
+            links = []
+            for index, source in enumerate(sources[:5], 1):
+                url = str(source.get("url", ""))
+                if url.startswith("https://") and not any(c in url for c in "\n\r<>` )"):
+                    links.append(f"[{index}]({url})")
+            if links:
+                response.add_field(name="Sources (search excerpts, not full pages)",
+                                   value=" · ".join(links)[:1024], inline=False)
         await interaction.followup.send(
-            embed=embed("✦ STAR · Answer", chunks[0] + ("\n\n*Full reply attached.*" if attach else "")),
-            file=attach, view=AnswerActions(key, answer), ephemeral=ephemeral,
+            embed=response, file=attach,
+            view=AnswerActions(key, answer, allow_public_voice=not ephemeral), ephemeral=ephemeral,
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
     class AnswerActions(discord.ui.View):
-        def __init__(self, key: tuple, answer: str):
+        def __init__(self, key: tuple, answer: str, *, allow_public_voice: bool):
             super().__init__(timeout=600)
             self.key = key
             self.answer = answer
+            # Private responses NEVER get a one-click route into a public voice message.
+            if not allow_public_voice:
+                self.remove_item(self.speak_button)
 
         @discord.ui.button(label="Voice message (public)", emoji="🔊", style=discord.ButtonStyle.secondary)
         async def speak_button(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -154,17 +175,35 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         except Exception as exc:
             await handle_failure(interaction, exc)
 
+    @star.command(name="research", description="Research with STAR's configured web search provider")
+    @app_commands.describe(question="Question to research with cited sources", private="Keep the result private")
+    async def research(interaction: discord.Interaction, question: str, private: bool = True):
+        key = await permit(interaction)
+        if key is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=private)
+        try:
+            result = await service.research(key, question)
+            await publish_answer(interaction, result.text, ephemeral=private, key=key, sources=result.sources)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
     @star.command(name="help", description="Show the STAR command guide")
     async def help_command(interaction: discord.Interaction):
         if await permit(interaction) is None:
             return
         result = embed("✦ STAR · Command Center",
-            "**Thinking**\n`/star ask` — ask Star (private by default)\n`/star reset` — forget this channel's temporary context\n"
+            "**Thinking**\n`/star ask` — ask Star (private by default)\n"
+            "`/star research` — web-supported answer with actual search sources\n"
+            "`/star reset` — forget this channel's temporary context\n"
             "**Speech**\n`/star speak` — post an actual Discord voice message\n"
-            "`/star hear` — transcribe an attached audio file and ask Star\n"
+            "`/star hear` — privately transcribe and answer an audio file\n"
+            "`/star converse` — recorded question → PUBLIC voice reply\n"
             "**Voice channel**\n`/star join` — join your voice channel\n"
-            "`/star say` — synthesize speech in that channel\n`/star leave` — disconnect\n"
+            "`/star say` — synthesize speech in that channel\n`/star stop` — stop speaking\n"
+            "`/star leave` — disconnect\n"
             "**Operations**\n`/star status` — model configuration and permission status\n"
+            "`/star doctor` — private setup diagnostics\n"
             "Right-click a text or voice message → **Apps → Ask STAR about this**.\n\n"
             "*Discord mode is chat-only: Roblox Studio, filesystem, GitHub and MCP edits are unavailable.*")
         await interaction.response.send_message(embed=result, ephemeral=True)
@@ -187,6 +226,16 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                   "**Voice:** Kokoro + FFmpeg (optional)\n**Listening:** audio attachments by explicit request only\n"
                   "*Model availability and audio output have not been tested by this status command.*")
         await interaction.response.send_message(embed=embed("✦ STAR · Status", detail), ephemeral=True)
+
+    @star.command(name="doctor", description="Check STAR Discord installation and voice dependencies")
+    async def doctor(interaction: discord.Interaction):
+        if await permit(interaction) is None:
+            return
+        from .health import doctor_snapshot, format_checks
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        report = await __import__("asyncio").to_thread(doctor_snapshot)
+        await interaction.followup.send(embed=embed("✦ STAR · Diagnostics", format_checks(report)),
+                                        ephemeral=True)
 
     @star.command(name="reset", description="Clear the current channel's private conversation memory")
     async def reset(interaction: discord.Interaction):
@@ -236,10 +285,32 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         except Exception as exc:
             await handle_failure(interaction, exc)
 
+    @star.command(name="converse", description="Reply aloud to one recorded question (PUBLIC voice message)")
+    @app_commands.describe(audio="Audio upload; STAR posts its spoken answer PUBLICLY in this channel")
+    async def converse(interaction: discord.Interaction, audio: discord.Attachment):
+        key = await permit(interaction)
+        if key is None:
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            require_voice_message_permissions(interaction)
+            validate_attachment(audio.filename, audio.content_type, audio.size)
+            blob = await audio.read()
+            result = await service.converse(key, filename=audio.filename,
+                                             content_type=audio.content_type, data=blob)
+            await post_voice_message(config.token, interaction.channel_id, result.audio)
+            await interaction.followup.send(embed=embed("✦ STAR · Voice reply posted",
+                f"**You said:** {result.transcript[:1300]}\n\n"
+                "**Response:** A native, public voice message was posted. "
+                "Use `/star hear` for a private text-only response."), ephemeral=True)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
     @star.command(name="join", description="Join your current voice channel (speaker only)")
     async def join(interaction: discord.Interaction):
         if await permit(interaction) is None:
             return
+        await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             if interaction.guild is None or not getattr(interaction.user, "voice", None):
                 raise ValueError("Join a server voice channel first")
@@ -252,7 +323,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                     await voice.move_to(channel)
             else:
                 await channel.connect(timeout=20, reconnect=True)
-            await interaction.response.send_message(embed=embed("✦ STAR · Connected",
+            await interaction.followup.send(embed=embed("✦ STAR · Connected",
               "Joined your channel. Use `/star say` to speak. Voice-channel listening is not enabled."), ephemeral=True)
         except Exception as exc:
             await handle_failure(interaction, exc)
@@ -282,15 +353,29 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         except Exception as exc:
             await handle_failure(interaction, exc)
 
+    @star.command(name="stop", description="Immediately stop STAR's outgoing voice playback")
+    async def stop(interaction: discord.Interaction):
+        if await permit(interaction) is None:
+            return
+        voice = interaction.guild.voice_client if interaction.guild else None
+        user_voice = getattr(interaction.user, "voice", None)
+        if not voice or not voice.is_connected() or not user_voice or user_voice.channel != voice.channel:
+            await problem(interaction, "Join STAR's active voice channel to stop playback")
+            return
+        voice.stop()
+        await interaction.response.send_message(embed=embed("✦ STAR · Stopped",
+                                                   "Stopped outgoing speech. No audio is recorded."), ephemeral=True)
+
     @star.command(name="leave", description="Disconnect STAR from its voice channel")
     async def leave(interaction: discord.Interaction):
         if await permit(interaction) is None:
             return
+        await interaction.response.defer(thinking=True, ephemeral=True)
         try:
             voice = interaction.guild.voice_client if interaction.guild else None
             if voice:
                 await voice.disconnect(force=True)
-            await interaction.response.send_message(embed=embed("✦ STAR · Disconnected",
+            await interaction.followup.send(embed=embed("✦ STAR · Disconnected",
                                                        "STAR has left the voice channel."), ephemeral=True)
         except Exception as exc:
             await handle_failure(interaction, exc)
