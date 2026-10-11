@@ -13,7 +13,9 @@ from urllib.parse import urlsplit
 SOURCES_DIR = Path(__file__).resolve().parent.parent / "sources"
 SCHEMA_VERSION = 1
 _MODES = {"ingest-allowed", "link-only"}
-_KINDS = {"git", "website"}
+_KINDS = {"git", "website", "zip"}
+# This is an explicit policy gate, not a conclusion that every page in a repo is licensed alike.
+_PERMITTED_TEXT_LICENCES = frozenset({"CC-BY-4.0", "CC-BY-SA-2.5-or-later", "PSF-2.0", "MIT", "CC-BY-3.0"})
 _CADENCES = {"weekly", "monthly", "quarterly", "per-release", "as-published"}
 _NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
@@ -90,7 +92,7 @@ def validate_manifest(value: object) -> dict:
 
     source = _fields(doc["source"], {"kind", "url", "revision", "content_root", "public_base"}, "source")
     if not isinstance(source["kind"], str) or source["kind"] not in _KINDS:
-        raise ManifestError("source.kind: expected git or website")
+        raise ManifestError("source.kind: expected git, zip or website")
     _url(source["url"], "source.url")
     _text(source["revision"], "source.revision")
     _text(source["content_root"], "source.content_root")
@@ -99,7 +101,9 @@ def validate_manifest(value: object) -> dict:
     licence = _fields(doc["licence"], {"text", "code_samples"}, "licence")
     _rights(licence["text"], "licence.text")
     _rights(licence["code_samples"], "licence.code_samples")
-    if doc["mode"] == "ingest-allowed" and not licence["text"]["redistribution_allowed"]:
+    if doc["mode"] == "ingest-allowed" and (
+            not licence["text"]["redistribution_allowed"]
+            or licence["text"]["id"] not in _PERMITTED_TEXT_LICENCES):
         raise ManifestError("manifest.mode: text rights do not permit ingestion")
 
     _sections(doc["include"], "include")
