@@ -145,7 +145,7 @@ describe('stopping a turn', () => {
 })
 
 describe('failure and retry', () => {
-  const offline = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+  const offline = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
 
   it('shows the failure, keeps the question, and Retry re-sends the same text', async () => {
     const user = await openChat()
@@ -236,7 +236,7 @@ describe('duplicate sends', () => {
 })
 
 describe('history after a restart', () => {
-  const failed = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+  const failed = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
 
   it('shows a persisted failure record next to the question it belongs to', async () => {
     await openChat(

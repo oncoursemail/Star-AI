@@ -546,8 +546,9 @@ def test_lan_failures_have_their_own_actionable_messages():
         assert "brain tab" not in lowered and "download" not in lowered and "star brain" not in lowered
         assert SECRET not in message
         assert "STAR Server" in message or "address" in lowered
-    # The on-device wording is unchanged when no kind is given.
-    assert "Brain tab" in explain_model_failure(RuntimeError("Connection error."))
+    # The on-device wording names the page that exists (Model), never the removed Brain tab.
+    local = explain_model_failure(RuntimeError("Connection error."))
+    assert local.startswith("Cannot reach STAR Brain.") and "Model page" in local and "Brain tab" not in local
     assert "API key" in explain_model_failure(StatusError(401))
 
 

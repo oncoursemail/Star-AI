@@ -130,7 +130,7 @@ Expect `[PASS] W10 Prompt stored exactly once`, with a detail line such as `{"as
 
 ### W11 Install and start STAR Brain from the app [manual]
 
-STAR Brain tab > **Download and start**. Record the time it took and watch the progress text.
+**Model** page ("Model & connection") > **Download and start**. Record the time it took and watch the progress text.
 
 Expect, from the code: the pinned llama.cpp Vulkan build (`engines\<tag>`) and `Qwen3.5-4B-Q4_K_M.gguf` plus the vision projector are downloaded, hash-checked, and STAR runs a real test completion before it shows **Ready**. A failed start is rolled back and the engine is stopped. Verify the files:
 

@@ -260,9 +260,10 @@ def test_bridge_failures_use_server_wording_only_when_the_server_is_selected(tmp
     for action in ("sendMessage", "testModel", "listModels", "runTeam", "testModelTeam"):
         text = describe_failure(action, APIConnectionError("Connection error."), settings_file)
         assert "Brain tab" not in text and "download" not in text.lower()
-    # On-device users keep the previous messages.
+    # On-device users are pointed at the page that exists (Model), never at the removed Brain tab.
     Settings(model="m").save(settings_file)
-    assert "Brain tab" in describe_failure("sendMessage", APIConnectionError("Connection error."), settings_file)
+    local = describe_failure("sendMessage", APIConnectionError("Connection error."), settings_file)
+    assert "Model page" in local and "Brain tab" not in local and "STAR Server" not in local
     assert describe_failure("listModels", httpx.ConnectError("boom"), settings_file) == "ConnectError: boom"
     assert describe_failure("sendMessage", StatusError(401), settings_file).startswith("Your selected model provider")
     # A broken settings file never hides the original error.

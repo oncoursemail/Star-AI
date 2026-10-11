@@ -1241,7 +1241,7 @@ def step_upgrade(d: Driver) -> None:
         s.check(last.get('status') == 'failed' and last.get('title') == "Can't reach the model", 'the engine not running is a calm failure row', last)
         s.check('STAR Server' not in last.get('text', ''), 'the message does not mention a server the owner never set up', last.get('text'))
         s.check('Brain tab' not in last.get('text', ''), 'the message does not point at a page that no longer exists',
-                last.get('text'), known='local-provider messages still say "Start it in the Brain tab"; the page is now "Model & connection"')
+                last.get('text'))
         new = read_messages(d.profile)[len(before):]
         s.check([r['role'] for r in new] == ['user', 'event'] and new[1]['status'] == 'failed' and new[0]['chat_id'] == 'legacy',
                 'the new turn and its failed record went into the same old conversation')

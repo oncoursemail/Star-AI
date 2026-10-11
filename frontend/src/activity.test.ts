@@ -239,7 +239,7 @@ describe('connection status and failures are stated truthfully', () => {
     const stopped = 'Request stopped. The draft answer has not been saved as a completed result.'
     expect(classifyFailure(stopped)).toMatchObject({kind: 'cancelled', message: stopped})
     expect(classifyFailure('No reply was recorded for this message. STAR may have been closed before it finished.').kind).toBe('cancelled')
-    const offline = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+    const offline = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
     expect(classifyFailure(offline)).toMatchObject({kind: 'unreachable', message: offline})
     expect(classifyFailure('STAR local bridge did not respond. Restart the desktop app and try again.').kind).toBe('unreachable')
     expect(classifyFailure('STAR Brain did not respond in time. The model may still be loading or your machine may be low on memory.').kind).toBe('slow')
