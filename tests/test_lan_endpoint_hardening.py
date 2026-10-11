@@ -24,9 +24,9 @@ def test_allowed_lan_ip_ranges(host):
     "localhost", "star-server", "server.local", "server.lan", "server.home.arpa",
     "workstation.office.local", "node-2.lab.home.arpa", "local", "lan",
 ])
-def test_allowed_local_dns_names(host):
-    url = f"https://{host}:8443/v1"
-    assert validate_lan_endpoint(url + "/") == url
+def test_reject_local_dns_names_until_connections_are_pinned(host):
+    with pytest.raises(ValueError):
+        validate_lan_endpoint(f"https://{host}:8443/v1")
 
 
 @pytest.mark.parametrize("host", [
@@ -79,11 +79,11 @@ def test_rejected_endpoint_never_reads_or_returns_server_credential(monkeypatch,
 
 
 def test_knowledge_uses_the_same_rule_and_supports_local_names():
-    assert validate_knowledge_endpoint("http://docs.local:8091/") == "http://docs.local:8091"
+    assert validate_knowledge_endpoint("http://192.168.1.20:8091/") == "http://192.168.1.20:8091"
     assert knowledge_endpoint_for(SimpleNamespace(
-        knowledge_endpoint="", server_endpoint="http://star-server.home.arpa:8080/v1")
-    ) == "http://star-server.home.arpa:8091"
+        knowledge_endpoint="", server_endpoint="http://192.168.1.20:8080/v1")
+    ) == "http://192.168.1.20:8091"
     for endpoint in ("http://169.254.169.254:8091", "http://[fe80::1]:8091",
-                     "http://docs.example.com:8091"):
+                     "http://docs.example.com:8091", "http://docs.local:8091"):
         with pytest.raises(ValueError):
             validate_knowledge_endpoint(endpoint)
