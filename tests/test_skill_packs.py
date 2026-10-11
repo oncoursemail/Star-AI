@@ -41,7 +41,12 @@ def test_every_pack_cites_official_documentation_and_lists_the_api_names_it_chec
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
-        assert "verified with the knowledge service /api-lookup" in sources, pack.name
+        if pack.name == "roblox-architecture-blender":
+            # Candidate skill is opt-in pending live knowledge lookup and evaluation gate.
+            assert pack.name not in skill_packs.DEFAULT_ENABLED
+            assert "API names not yet verified by STAR Knowledge /api-lookup" in sources
+        else:
+            assert "verified with the knowledge service /api-lookup" in sources, pack.name
         assert "http://" not in sources and "10.17" not in sources
 
 
