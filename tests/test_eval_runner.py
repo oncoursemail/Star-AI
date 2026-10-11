@@ -241,3 +241,11 @@ def test_suite_files_contain_no_private_addresses_or_secrets():
             text = path.read_text(encoding="utf-8")
             assert not er._PRIVATE_IP.search(text), path
             assert "alexbuz" not in text, path
+
+
+def test_the_self_builder_cannot_write_the_graders_the_gate_or_the_packs():
+    from star.selfbuild import skill_path
+    for path in ("evals/roblox/golden-tasks-v2.json", "evals/roblox/tests/NET-01.luau", "evals/roblox/prelude.luau",
+                 "evals/results/baseline-v2.json", "star/eval_checks.py", "star/eval_gate.py", "star/eval_runner.py",
+                 "star/eval_sandbox.py", "star/skill_packs/__init__.py", "star/skill_packs/roblox-ui-layout/SKILL.md"):
+        assert not skill_path(path), path

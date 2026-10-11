@@ -219,7 +219,7 @@ def _frontmatter(text: str) -> tuple[dict[str, str], str]:
 
 
 class SkillLibrary:
-    def __init__(self, *, workspace: Path | None, home: Path):
+    def __init__(self, *, workspace: Path | None, home: Path, bundled: Path | None = None):
         self.workspace = workspace.resolve() if workspace is not None else None
         self.roots: list[tuple[str, Path]] = []
         if workspace is not None:
@@ -228,6 +228,9 @@ class SkillLibrary:
                 ("workspace", workspace / "skills"),
             ])
         self.roots.append(("personal", home / "skills"))
+        if bundled is not None:
+            # Skill packs shipped inside the application (star/skill_packs); a user copy of the same name wins.
+            self.roots.append(("bundled", bundled))
 
     def catalog(self) -> list[Skill]:
         found: dict[str, Skill] = {}

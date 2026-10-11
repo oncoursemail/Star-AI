@@ -12,6 +12,7 @@ import re
 from jsonschema import Draft202012Validator
 
 from .agent_skills import SkillLibrary, install_starters
+from .skill_packs import PACKS_DIR
 from .brain_router import is_roblox_dev_prompt
 from .doc_knowledge import client_for
 from .graphify_bridge import GraphifyGraph
@@ -115,7 +116,7 @@ class LocalIntelligence:
         self.roblox = RobloxResearch(home=home) if roblox_research_enabled else None
         if skills_enabled:
             install_starters(home / "skills")
-            self.skills = SkillLibrary(workspace=workspace, home=home)
+            self.skills = SkillLibrary(workspace=workspace, home=home, bundled=PACKS_DIR)
         if graphify_enabled and workspace is not None:
             self.graph = GraphifyGraph(workspace)
         if obsidian_vault is not None:

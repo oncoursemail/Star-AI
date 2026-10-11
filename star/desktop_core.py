@@ -25,7 +25,7 @@ from .providers import (ALL_PROVIDERS, call_limits, connection_for, llama_reques
                         provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 from .doc_knowledge import validate_knowledge_endpoint
-from . import doc_grounding
+from . import doc_grounding, skill_packs
 
 
 def app_data() -> Path:
@@ -698,12 +698,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     # are the ones chosen for this exact question. The block carries its own markers.
                     turn_sections.insert(0, ('OFFICIAL DOCUMENTATION (untrusted reference data)', docs.block))
                 # <<< STAR Knowledge
+                # >>> Skill packs (star/skill_packs): short Roblox guidance, only for prompts that match, and
+                # never in quick chat mode. It rides in the per-turn sections, after the documentation.
+                packs = [] if quick else skill_packs.select(prompt)
+                pack_block = skill_packs.render(packs)
+                if pack_block:
+                    turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
+                    audited_event({'event': 'skill_packs', 'names': [pack.name for pack in packs], 'chars': len(pack_block)})
+                # <<< Skill packs
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history, turn_sections=turn_sections, mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block),
+                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(pack_block),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,

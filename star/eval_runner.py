@@ -411,6 +411,29 @@ def rescore(suite: Suite, result: dict, scorer, *, log=print) -> dict:
     return result
 
 
+def routing_report(suite: Suite, *, enabled=None) -> dict:
+    """Which skill packs would be added to each runnable task's prompt. No model, no server.
+
+    Per pack: the tasks it fires for, the tasks the suite says it should help (`helps`), and the
+    tasks it should help but does not fire for (a routing miss: the pack cannot help them).
+    """
+    from . import skill_packs
+    names = [p.name for p in skill_packs.available()]
+    chosen = set(names) if enabled is None else set(enabled)
+    fires = {task["id"]: skill_packs.matching_names(task["prompt"], enabled=chosen) for task in suite.runnable()}
+    report = {}
+    for name in names:
+        # "alone" is how a pack is measured (it is the only one enabled); `fires` is what happens when all compete.
+        fired = sorted(t["id"] for t in suite.runnable() if skill_packs.matching_names(t["prompt"], enabled={name}))
+        helps = sorted(t["id"] for t in suite.runnable() if name in t.get("helps", []))
+        report[name] = {"fires_for": fired, "should_help": helps,
+                        "measurable": sorted(set(fired) & set(helps)),
+                        "routing_misses": sorted(set(helps) - set(fired)),
+                        "also_fires_for": sorted(set(fired) - set(helps)),
+                        "wins_when_all_enabled": sorted(tid for tid, hit in fires.items() if name in hit)}
+    return {"per_task": fires, "per_pack": report}
+
+
 # --- self-test: reference answers must pass, bad ones must fail ------------------------------------------
 
 def selftest(suite: Suite, scorer, *, log=print) -> int:
@@ -470,6 +493,9 @@ def main(argv: list[str] | None = None) -> int:
     add_common(rs)
     rs.add_argument("--result", required=True, type=Path)
     rs.add_argument("--out", required=True, type=Path)
+    rt = sub.add_parser("routing", help="show which skill packs fire for which task (no server needed)")
+    rt.add_argument("--suite", required=True, type=Path)
+    rt.add_argument("--packs", default="all")
     ls = sub.add_parser("list", help="list the suite")
     ls.add_argument("--suite", required=True, type=Path)
     args = parser.parse_args(argv)
@@ -480,6 +506,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{len(suite.tasks)} tasks, {len(auto)} automated, {len(suite.tasks) - len(auto)} need Studio or a human")
         for t in suite.tasks:
             print(f"{t['id']:8} {t['run_mode']:9} {t['category']}")
+        return 0
+    if args.command == "routing":
+        names = None if args.packs == "all" else [x for x in args.packs.split(",") if x]
+        print(json.dumps(routing_report(suite, enabled=names), indent=1))
         return 0
     args._suite = suite
     run_info, ask, scorer, probe, secrets = build_real(args)
