@@ -87,6 +87,8 @@ def _evaluate(node, depth=0):
                 raise ValueError("Power too large")
         if isinstance(node.op, ast.Div) and isinstance(left, (Fraction, int)) and isinstance(right, (Fraction, int)):
             return _checked(Fraction(left, right))
+        if isinstance(node.op, ast.Pow) and right < 0 and isinstance(left, (Fraction, int)):
+            return _checked(Fraction(left) ** int(right))
         return _checked(_OPERATORS[type(node.op)](left, right))
     if isinstance(node, ast.Compare):
         left = _evaluate(node.left, depth + 1)
