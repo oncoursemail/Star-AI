@@ -311,11 +311,12 @@ def test_a_history_retry_opens_a_new_guarded_studio_connection_and_its_section_c
     proxy = SimpleNamespace(discovered=[{"name": "get_studio_state", "inputSchema": {"type": "object"}}],
                             verdict=SimpleNamespace(editable=False, reason=reason),
                             journal=SimpleNamespace(text=lambda: "STAR changed nothing in Studio."))
-    events, seen = [], []
+    events, seen, homes = [], [], []
 
     @asynccontextmanager
-    async def connect(settings, where):
+    async def connect(settings, where, studio_configuration_home=None):
         events.append("connect")
+        homes.append((where, studio_configuration_home))
         try:
             yield proxy
         finally:
@@ -340,12 +341,14 @@ def test_a_history_retry_opens_a_new_guarded_studio_connection_and_its_section_c
             chats.add(settings.project, "assistant", f"Earlier answer {number}.", chat_id=chat)
         prompt = "Read the open Roblox Studio place"
         chats.add(settings.project, "user", prompt, chat_id=chat)
-        answer = run_task(settings, prompt, chat_id=chat, mode="agent")
+        answer = run_task(settings, prompt, chat_id=chat, mode="agent", studio_configuration_home=tmp_path / "settings")
     finally:
         chats.close()
 
     # One guarded connection per attempt, closed before the next one; the second attempt answers.
     assert events == ["connect", "execute", "closed", "connect", "execute", "closed"]
+    # Both attempts use STAR's data folder and the folder of the settings file the owner selected (PR 50).
+    assert homes == [(home, tmp_path / "settings")] * 2
     assert all(call["studio"] is proxy and call["discovered"] == proxy.discovered for call in seen)
     assert all((call["may_edit"], call["allow_luau"], call["studio_id"]) == (False, False, "selected") for call in seen)
     # The retry carries one exchange less, recapped once; nothing else about the turn changed.

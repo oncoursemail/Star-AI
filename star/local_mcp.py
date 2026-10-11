@@ -215,10 +215,20 @@ class LocalStudioClient:
                 return await self.guarded.undo()
 
 
-async def discover(*, target="local_pc", studio_id=None):
+def _transport_options(target, home):
+    options = {"target": target}
+    if target == "host_launcher":
+        command = studio.configured_command(home)
+        if command is None:
+            raise studio.StudioTransportError("The host-defined Studio launcher is not configured; no local fallback was attempted.")
+        options["command"] = command
+    return options
+
+
+async def discover(*, target="local_pc", studio_id=None, home=None):
     """Read-only remote discovery plus an actual STAR local MCP status request."""
     label = route_label(target)
-    async with studio.connect(target=target) as remote:
+    async with studio.connect(**_transport_options(target, home)) as remote:
         try:
             checked = await studio.probe(remote, studio_id=studio_id)
         except studio.StudioNoInstancesError as error:
@@ -237,13 +247,14 @@ async def discover(*, target="local_pc", studio_id=None):
 
 
 @asynccontextmanager
-async def connect_studio(settings, home):
+async def connect_studio(settings, home, *, studio_configuration_home=None):
     """Desktop tool session: host configuration -> STAR MCP -> guarded Roblox MCP."""
     from .studio_uncertainty import StudioUncertaintyStore
     target = settings.studio_target
     label = route_label(target)
     uncertainty = StudioUncertaintyStore(Path(home) / "studio-uncertainty.sqlite3")
-    async with studio.connect(target=target) as remote:
+    configuration_home = studio_configuration_home if studio_configuration_home is not None else home
+    async with studio.connect(**_transport_options(target, configuration_home)) as remote:
         discovered = await studio.list_tools(remote)
         if "list_roblox_studios" not in {tool["name"] for tool in discovered}:
             raise studio.StudioTransportError("Studio MCP does not expose instance discovery.")

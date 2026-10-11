@@ -25,23 +25,27 @@ def validate_target(target: str) -> str:
     return target
 
 
-def connection_status(settings, cached: dict | None = None) -> dict:
+def connection_status(settings, cached: dict | None = None, *, home=None) -> dict:
     target = validate_target(settings.studio_target)
     if (cached and cached.get('target') == target
             and cached.get('selected_id', '') == settings.studio_id):
         return dict(cached)
     configured = True
+    diagnostic = None
     if target == 'host_launcher':
-        from .studio import custom_launcher
         try:
-            configured = custom_launcher() is not None
-        except Exception:
+            configured = studio.configured_command(home) is not None
+            if not configured:
+                diagnostic = {'stage': 'configuration', 'reason': 'not_configured'}
+        except Exception as exc:
             configured = False
+            diagnostic = studio.connection_diagnostic(exc)
     return {'target': target, 'label': TARGETS[target],
             'state': 'not_checked' if configured else 'unconfigured',
             'checked_at': '', 'tool_count': 0, 'instances': [],
             'selected_id': settings.studio_id, 'selected_valid': False,
             'reason_code': '' if configured else 'host_launcher_unavailable',
+            'diagnostic': diagnostic,
             'local_mcp': 'not_checked', 'server_name': 'STAR local MCP'}
 
 
@@ -50,8 +54,8 @@ def _text(value, bound=200):
             and value == value.strip() and not any(ord(c) < 32 for c in value))
 
 
-def normalize_probe(settings, value) -> dict:
-    result = connection_status(settings)
+def normalize_probe(settings, value, *, home=None) -> dict:
+    result = connection_status(settings, home=home)
     if (type(value) is not dict or value.get('status') not in {'tools_and_instances_discovered', 'tools_discovered_no_instances'}
             or value.get('target') != settings.studio_target
             or value.get('local_mcp') != 'memory' or value.get('server_name') != 'STAR local MCP'
@@ -69,31 +73,39 @@ def normalize_probe(settings, value) -> dict:
         instances.append({'id': entry['id'], 'name': entry['name']})
     result.update(state='connected' if instances else 'no_instances', instances=instances,
                   checked_at=datetime.now(timezone.utc).isoformat(), tool_count=value['tool_count'],
-                  selected_valid=settings.studio_id in seen, reason_code='', local_mcp='memory')
+                  selected_valid=settings.studio_id in seen, reason_code='', local_mcp='memory',
+                  # Connector-supplied diagnostic fields are never copied or trusted.
+                  diagnostic=None if instances else {'stage': 'instance_discovery', 'reason': 'no_instances'})
     return result
 
 
-async def discover(settings) -> dict:
-    result = connection_status(settings)
+async def discover(settings, *, home=None) -> dict:
+    result = connection_status(settings, home=home)
     if result['state'] == 'unconfigured':
         return result
     from . import local_mcp
     try:
-        value = await asyncio.wait_for(local_mcp.discover(target=settings.studio_target), PROBE_SECONDS)
-        return normalize_probe(settings, value)
+        value = await asyncio.wait_for(local_mcp.discover(target=settings.studio_target, home=home), PROBE_SECONDS)
+        try:
+            return normalize_probe(settings, value, home=home)
+        except ValueError:
+            raise studio.StudioTransportError('Invalid Studio discovery evidence',
+                                               stage='probe', reason='invalid_evidence') from None
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         result.update(state='unavailable', instances=[], selected_valid=False,
                       checked_at=datetime.now(timezone.utc).isoformat(),
-                      reason_code='timeout' if isinstance(exc, TimeoutError) else 'connection_failed')
+                      reason_code='timeout' if isinstance(exc, TimeoutError) else 'connection_failed',
+                      diagnostic={'stage': 'probe', 'reason': 'timeout'} if isinstance(exc, TimeoutError)
+                      else studio.connection_diagnostic(exc))
         return result
 
 
-async def select_instance(settings, identifier: str) -> dict:
+async def select_instance(settings, identifier: str, *, home=None) -> dict:
     if not _text(identifier):
         raise ValueError('Choose a discovered Studio instance')
-    report = await discover(settings)
+    report = await discover(settings, home=home)
     if report['state'] != 'connected' or identifier not in {item['id'] for item in report['instances']}:
         raise ValueError('The selected Studio is not available on this connection; test it again')
     settings.studio_id = identifier

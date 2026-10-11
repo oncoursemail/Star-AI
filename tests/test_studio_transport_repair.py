@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -91,6 +92,193 @@ def install_sdk(monkeypatch, tmp_path, *, custom=False, mode=None):
     return captured, parent
 
 
+def write_host_config(home, command, **extra):
+    path = home / "studio" / "remote.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"target": "server", "command": command, **extra}), encoding="utf-8")
+    return path
+
+
+def test_profile_commands_are_isolated_immutable_and_do_not_change_environment(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    first, second = tmp_path / "first", tmp_path / "second"
+    write_host_config(first, ["first-launcher", "first-argument"])
+    write_host_config(second, ["second-launcher", "second-argument"])
+    frozen = studio.configured_command(first)
+    assert frozen == ("first-launcher", "first-argument")
+    assert studio.configured_command(second) == ("second-launcher", "second-argument")
+    write_host_config(first, ["changed-launcher"])
+    assert frozen == ("first-launcher", "first-argument")
+    assert studio.COMMAND_ENV not in os.environ
+    assert studio.configured_command(tmp_path / "missing") is None
+    write_host_config(first, [])
+    assert studio.configured_command(first) is None
+
+
+def test_host_environment_precedence_and_invalid_environment_never_falls_back(monkeypatch, tmp_path):
+    path = write_host_config(tmp_path, ["file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, '["environment-launcher", "argument"]')
+    assert studio.configured_command(tmp_path) == ("environment-launcher", "argument")
+    path.write_bytes(b"invalid file that an explicit valid environment overrides")
+    assert studio.configured_command(tmp_path) == ("environment-launcher", "argument")
+    write_host_config(tmp_path, ["file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, "fixture-secret invalid environment")
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value)
+
+
+@pytest.mark.parametrize("raw", [
+    b"", b"not JSON fixture-secret", b"[]", b"{}", b'{"command":null}',
+    b'{"command":"fixture-secret"}', b'{"command":[] ,"command":["other"]}',
+    b'{"command":["program","bad\\nargument"]}', b'{"command":[" "]}',
+    b'{"command":["program",false]}', b'{"command":["program","bad\\u007fargument"]}',
+    b'\xff', b" " * (studio.MAX_COMMAND_BYTES + 1),
+])
+def test_malformed_or_oversize_host_file_fails_closed_without_private_diagnostics(monkeypatch, tmp_path, raw):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    path = write_host_config(tmp_path, [])
+    path.write_bytes(raw)
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value) and str(path) not in str(failure.value)
+
+
+@pytest.mark.parametrize("command", [["x"] * 41, ["x" * 501], ["program", "x" * 501], [""]])
+def test_host_argv_limits_apply_to_file_and_explicit_transport(monkeypatch, tmp_path, command):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    write_host_config(tmp_path, command)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    with pytest.raises(studio.StudioTransportError):
+        studio.launcher("host_launcher", command=command)
+
+
+def test_nonregular_linked_and_unreadable_config_are_refused(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    path = write_host_config(tmp_path, ["program"])
+    other = tmp_path / "hardlink.json"
+    os.link(path, other)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    other.unlink()
+    path.unlink()
+    path.mkdir()
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    path.rmdir()
+    write_host_config(tmp_path, ["program"])
+    monkeypatch.setattr(studio.os, "open", lambda *_: (_ for _ in ()).throw(PermissionError("fixture-secret")))
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value)
+
+
+@pytest.mark.parametrize("directory", [False, True])
+def test_symlink_host_file_or_folder_is_refused(monkeypatch, tmp_path, directory):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    source = write_host_config(tmp_path / "source", ["program"])
+    home = tmp_path / "linked"
+    home.mkdir()
+    if not directory:
+        (home / "studio").mkdir()
+    link = home / "studio" if directory else home / "studio" / "remote.json"
+    try:
+        link.symlink_to(source.parent if directory else source, target_is_directory=directory)
+    except OSError:
+        pytest.skip("Host cannot create a synthetic symlink")
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(home)
+
+
+@pytest.mark.parametrize('home', ['relative', '.', '..'])
+def test_relative_profile_root_is_refused_even_with_valid_environment(monkeypatch, home):
+    monkeypatch.setenv(studio.COMMAND_ENV, '["fixture-launcher"]')
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(home)
+
+
+@pytest.mark.parametrize('ancestor', [False, True])
+def test_linked_profile_root_or_ancestor_is_refused(monkeypatch, tmp_path, ancestor):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    real = tmp_path / 'real'
+    write_host_config(real / 'profile' if ancestor else real, ['fixture-launcher'])
+    link = tmp_path / 'linked'
+    if os.name == 'nt':
+        import _winapi
+        _winapi.CreateJunction(str(real), str(link))
+    else:
+        link.symlink_to(real, target_is_directory=True)
+    try:
+        with pytest.raises(studio.StudioTransportError):
+            studio.configured_command(link / 'profile' if ancestor else link)
+    finally:
+        link.rmdir() if os.name == 'nt' else link.unlink()
+
+
+def test_parent_replacement_during_read_is_refused(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    profile = tmp_path / 'profile'
+    write_host_config(profile, ['original-launcher'])
+    original_stamp = studio._directory_stamp
+    calls = 0
+    def replaced(path):
+        nonlocal calls
+        if path == profile:
+            calls += 1
+            if calls == 2:
+                profile.rename(tmp_path / 'old-profile')
+                write_host_config(profile, ['replacement-launcher'])
+        return original_stamp(path)
+    monkeypatch.setattr(studio, '_directory_stamp', replaced)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(profile)
+    assert calls == 2 and (tmp_path / 'old-profile' / 'studio' / 'remote.json').exists()
+
+
+def test_host_file_read_has_a_hard_byte_bound(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    write_host_config(tmp_path, ['fixture-launcher'])
+    original_fdopen = studio.os.fdopen
+    reads = []
+    class Reader:
+        def __init__(self, fd, mode):self.stream = original_fdopen(fd, mode)
+        def __enter__(self):self.stream.__enter__();return self
+        def __exit__(self, *args):return self.stream.__exit__(*args)
+        def fileno(self):return self.stream.fileno()
+        def read(self, size):reads.append(size);return self.stream.read(size)
+    monkeypatch.setattr(studio.os, 'fdopen', Reader)
+    assert studio.configured_command(tmp_path) == ('fixture-launcher',)
+    assert reads == [studio.MAX_COMMAND_BYTES + 1]
+
+
+def test_explicit_host_argv_is_a_connection_snapshot_without_environment_mutation(monkeypatch, tmp_path):
+    captured, _ = install_sdk(monkeypatch, tmp_path)
+    write_host_config(tmp_path, ["profile-launcher", "private-fixture-argument"])
+    command = studio.configured_command(tmp_path)
+    write_host_config(tmp_path, ["changed-file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, '["later-environment-launcher"]')
+
+    async def scenario():
+        async with studio.connect(target="host_launcher", command=command):
+            assert captured["params"].command == "profile-launcher"
+            assert captured["params"].args == ["private-fixture-argument"]
+            assert captured["params"].cwd is None
+            assert studio.COMMAND_ENV not in captured["params"].env
+    run(scenario())
+    assert captured["initialized"] == 1 and captured["closed"] == ["session", "transport"]
+
+
+def test_this_pc_ignores_host_argv_and_environment_even_when_invalid(monkeypatch, tmp_path):
+    captured, parent = install_sdk(monkeypatch, tmp_path)
+    monkeypatch.setenv(studio.COMMAND_ENV, "invalid fixture-secret")
+    async def scenario():
+        async with studio.connect(target="local_pc", command=object()):
+            assert captured["params"].command == "cmd.exe"
+            assert captured["params"].args == ["/d", "/c", str(parent / "mcp.bat")]
+    run(scenario())
+
+
 def test_local_batch_parent_cwd_and_initialize_is_not_a_health_probe(monkeypatch, tmp_path):
     captured, parent = install_sdk(monkeypatch, tmp_path)
 
@@ -169,6 +357,8 @@ def test_transport_errors_are_route_specific_and_do_not_echo_private_args(monkey
     assert "private-launcher-argument" not in message
     assert "fixture-secret" not in message
     assert error.value.__suppress_context__
+    stages = {"startup_failure": "process_startup", "initialize_failure": "initialization", "shutdown_failure": "shutdown"}
+    assert studio.connection_diagnostic(error.value) == {"stage": stages[mode], "reason": "failed"}
 
 
 def test_initialize_requires_declared_tools_capability(monkeypatch, tmp_path):
@@ -582,7 +772,9 @@ def test_probe_instance_request_timeout_is_bounded(monkeypatch):
         run(studio.probe(Waiting([([tool()], None)])))
 
 
-@pytest.mark.parametrize("mode", ["success", "silent", "caller_failure", "sdk_failure"])
+@pytest.mark.parametrize("mode", ["success", "silent", "caller_failure", "sdk_failure", "missing_tools", "null_tools",
+                                  "false_tools", "missing_capabilities", "malformed_server_info",
+                                  "list_changed_false", "unsupported_protocol", "initialize_error", "typed_caller_cleanup"])
 def test_actual_sdk_session_context_and_initialize_protocol_without_a_process(monkeypatch, tmp_path, mode):
     """Real ClientSession/AnyIO scopes, but injected in-memory transport only."""
     import anyio
@@ -614,6 +806,26 @@ def test_actual_sdk_session_context_and_initialize_protocol_without_a_process(mo
                     if request.method == "initialize":
                         result = {"protocolVersion": types.LATEST_PROTOCOL_VERSION,
                                   "capabilities": {"tools": {}}, "serverInfo": {"name": "fixture", "version": "1"}}
+                        if mode == "missing_tools":
+                            result["capabilities"] = {}
+                        elif mode == "null_tools":
+                            result["capabilities"]["tools"] = None
+                        elif mode == "false_tools":
+                            result["capabilities"]["tools"] = False
+                        elif mode == "missing_capabilities":
+                            del result["capabilities"]
+                            result["fixture"] = "fixture-secret private-launcher-argument"
+                        elif mode == "malformed_server_info":
+                            result["serverInfo"] = "fixture-secret private-launcher-argument"
+                        elif mode == "list_changed_false":
+                            result["capabilities"]["tools"] = {"listChanged": False}
+                        elif mode == "unsupported_protocol":
+                            result["protocolVersion"] = "fixture-secret private-launcher-argument"
+                        elif mode == "initialize_error":
+                            await server_send.send(SessionMessage(types.JSONRPCMessage(types.JSONRPCError(
+                                jsonrpc="2.0", id=request.id,
+                                error=types.ErrorData(code=-32000, message="fixture-secret private-launcher-argument")))))
+                            continue
                     elif request.method == "tools/list":
                         result = {"tools": [{"name": "list_roblox_studios", "inputSchema": {"type": "object"}}]}
                     else:
@@ -625,6 +837,11 @@ def test_actual_sdk_session_context_and_initialize_protocol_without_a_process(mo
             group.start_soon(server)
             try:
                 yield client_read, client_send
+            except Exception as error:
+                if mode == "typed_caller_cleanup":
+                    cleanup = studio.StudioTransportError("Host-authored cleanup failure", stage="request", reason="failed")
+                    raise ExceptionGroup("fixture-secret private-launcher-argument", [error, cleanup]) from None
+                raise
             finally:
                 group.cancel_scope.cancel()
 
@@ -639,19 +856,118 @@ def test_actual_sdk_session_context_and_initialize_protocol_without_a_process(mo
                 raise caller_failure
             if mode == "sdk_failure":
                 raise McpError(types.ErrorData(code=-32000, message="fixture-secret private-launcher-argument"))
+            if mode == "typed_caller_cleanup":
+                raise studio.StudioTransportError("Host-authored caller refusal", stage="selection", reason="required")
     if mode == "silent":
-        with pytest.raises(studio.StudioTransportError, match="initialization timed out"):
+        with pytest.raises(studio.StudioTransportError, match="initialization timed out") as error:
             run(use())
+        assert studio.connection_diagnostic(error.value) == {"stage": "initialization", "reason": "timeout"}
     elif mode == "caller_failure":
         with pytest.raises(ValueError) as error:
             run(use())
         assert error.value is caller_failure
-    elif mode == "sdk_failure":
+    elif mode in {"sdk_failure", "typed_caller_cleanup"}:
         import traceback
-        with pytest.raises(studio.StudioTransportError, match="MCP request failed") as error:
+        with pytest.raises(studio.StudioTransportError, match="MCP request failed" if mode == "sdk_failure" else "transport shutdown failed") as error:
             run(use())
         public = "".join(traceback.format_exception(error.value))
         assert "fixture-secret" not in public and "private-launcher-argument" not in public
+        assert studio.connection_diagnostic(error.value) == {"stage": "request" if mode == "sdk_failure" else "shutdown", "reason": "failed"}
+    elif mode in {"missing_tools", "null_tools", "false_tools", "missing_capabilities", "malformed_server_info",
+                  "unsupported_protocol", "initialize_error"}:
+        import traceback
+        with pytest.raises(studio.StudioTransportError) as error:
+            run(use())
+        expected = ("capability", "tools_not_declared") if mode in {"missing_tools", "null_tools"} else (
+            "initialization", "failed" if mode in {"unsupported_protocol", "initialize_error"} else "invalid_response")
+        assert studio.connection_diagnostic(error.value) == {"stage": expected[0], "reason": expected[1]}
+        public = "".join(traceback.format_exception(error.value)) + json.dumps(studio.connection_diagnostic(error.value))
+        assert "fixture-secret" not in public and "private-launcher-argument" not in public
+        assert "tools/list" not in observed
+        assert observed.count("initialize") == 1
     else:
         run(use())
         assert observed[:3] == ["initialize", "notifications/initialized", "tools/list"]
+
+
+def test_diagnostic_codes_are_validated_and_arbitrary_exception_attributes_are_not_public():
+    with pytest.raises(ValueError, match="diagnostic code"):
+        studio.StudioTransportError("Host message", stage="private-address", reason="fixture-secret")
+    with pytest.raises(ValueError, match="diagnostic code"):
+        studio.StudioTransportError("Host message", stage="selection", reason="timeout")
+    legacy = studio.StudioTransportError("Legacy host message")
+    assert studio.connection_diagnostic(legacy) == {"stage": "unknown", "reason": "connection_failed"}
+    for error in (RuntimeError("fixture-secret"), legacy):
+        error.diagnostic = {"stage": "private-address", "reason": "fixture-secret"}
+        error.stage, error.reason = "private-address", "fixture-secret"
+        error._diagnostic = ("private-address", "fixture-secret")
+        assert studio.connection_diagnostic(error) == {"stage": "unknown", "reason": "connection_failed"}
+
+
+@pytest.mark.parametrize("gate,reason", [("platform", "unsupported_platform"), ("environment", "missing_environment"),
+                                        ("launcher", "missing_launcher"), ("command", "invalid"),
+                                        ("target", "unknown_target"), ("unconfigured", "not_configured")])
+def test_configuration_gates_have_fixed_diagnostics_without_attempting_a_transport(monkeypatch, tmp_path, gate, reason):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    monkeypatch.setattr(studio.sys, "platform", "win32" if gate != "platform" else "linux")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    target = "local_pc"
+    command = None
+    if gate == "environment":
+        monkeypatch.delenv("LOCALAPPDATA")
+    elif gate == "command":
+        target, command = "host_launcher", ["fixture-program", "fixture-secret\n"]
+    elif gate == "target":
+        target = "private-address"
+    elif gate == "unconfigured":
+        target = "host_launcher"
+
+    async def use():
+        async with studio.connect(target=target, command=command):
+            pytest.fail("A refused configuration must never open a session")
+    with pytest.raises(studio.StudioTransportError) as error:
+        run(use())
+    assert studio.connection_diagnostic(error.value) == {"stage": "configuration", "reason": reason}
+    assert "fixture-secret" not in str(error.value) and "private-address" not in str(error.value)
+
+
+def test_configuration_filesystem_exception_is_sanitized_before_a_transport(monkeypatch, tmp_path):
+    import traceback
+    install_sdk(monkeypatch, tmp_path)
+    def refuse(_):
+        raise OSError("fixture-secret private-launcher-argument")
+    monkeypatch.setattr(studio.Path, "is_file", refuse)
+    async def use():
+        async with studio.connect(target="local_pc"):
+            pytest.fail("Unavailable configuration must not open a transport")
+    with pytest.raises(studio.StudioTransportError) as error:
+        run(use())
+    assert studio.connection_diagnostic(error.value) == {"stage": "configuration", "reason": "invalid"}
+    public = "".join(traceback.format_exception(error.value))
+    assert "fixture-secret" not in public and "private-launcher-argument" not in public
+
+
+@pytest.mark.parametrize("pages,reason", [([("malformed", None)], "invalid_catalog"),
+                                         ([([], None)], "empty_catalog"),
+                                         ([([tool(), tool()], None)], "duplicate_names"),
+                                         ([([tool(inputSchema={"type": "string"})], None)], "invalid_schema")])
+def test_tool_catalog_refusals_report_the_actual_fixed_gate(pages, reason):
+    with pytest.raises(studio.StudioTransportError) as error:
+        run(studio.list_tools(Pages(pages)))
+    assert studio.connection_diagnostic(error.value) == {"stage": "tool_discovery", "reason": reason}
+
+
+def test_instance_shape_bounds_disagreement_and_selection_have_distinct_codes():
+    cases = [(instances("malformed"), "invalid_response"),
+             (instances([{"id": "id", "name": "fixture"}] * 33), "limit_exceeded"),
+             (instances([], structuredContent={"studios": [{"id": "other", "name": "fixture"}]}), "representations_disagree"),
+             (instances([], content=[{"type": "text", "text": "x" * (studio.MAX_INSTANCE_BYTES + 1)}]), "limit_exceeded"),
+             (instances([]), "no_instances")]
+    for response, reason in cases:
+        with pytest.raises(studio.StudioTransportError) as error:
+            studio.parse_studios(response)
+        assert studio.connection_diagnostic(error.value) == {"stage": "instance_discovery", "reason": reason}
+    for identifier, reason in ((None, "required"), ("absent", "unavailable")):
+        with pytest.raises(studio.StudioTransportError) as error:
+            studio.select_studio([{"id": "exact", "name": "fixture"}], identifier)
+        assert studio.connection_diagnostic(error.value) == {"stage": "selection", "reason": reason}

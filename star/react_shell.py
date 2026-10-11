@@ -467,7 +467,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
-        'studio':connection_status(settings, studio_status),
+        'studio':connection_status(settings, studio_status, home=settings_file.parent),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -647,7 +647,8 @@ def launch():
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt, **({'documents': documents} if documents else {}))
+                    owner_text=prompt, studio_configuration_home=self.settings_file.parent,
+                    **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
             if provider_kind(settings)=='lan':
@@ -1066,7 +1067,7 @@ def launch():
                         current = Settings.load(self.settings_file)
                         if current.studio_target != target:
                             raise ValueError('Studio connection changed; test the selected connection again')
-                        self.studio_status = check_studio(current)
+                        self.studio_status = check_studio(current, self.settings_file.parent)
                         return self.studio_status
                     self._run(rid,action,discover_worker)
                 elif action=='selectStudio':
@@ -1078,7 +1079,7 @@ def launch():
                         current = Settings.load(self.settings_file)
                         if current.studio_target != target:
                             raise ValueError('Studio connection changed; test the selected connection again')
-                        report = asyncio.run(select_instance(current, identifier))
+                        report = asyncio.run(select_instance(current, identifier, home=self.settings_file.parent))
                         latest = Settings.load(self.settings_file)
                         if latest.studio_target != target or self.active_task:
                             raise ValueError('Studio connection changed while selecting; try again')

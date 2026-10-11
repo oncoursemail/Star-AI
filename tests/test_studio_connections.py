@@ -5,9 +5,15 @@ from dataclasses import asdict
 
 import pytest
 
+from star import desktop_core
 from star.desktop_core import Settings, check_studio
 from star.react_shell import apply_setting_changes, PERMITTED_SETTINGS
 from star import studio_connections as connections, local_mcp
+
+
+@pytest.fixture(autouse=True)
+def isolated_desktop_home(monkeypatch, tmp_path):
+    monkeypatch.setattr(desktop_core, 'app_data', lambda: tmp_path)
 
 
 def evidence(target='local_pc', studios=None, **changes):
@@ -58,6 +64,82 @@ def test_saved_configuration_is_not_reported_connected_without_a_probe(monkeypat
     assert report['state']=='unconfigured' and report['local_mcp']=='not_checked'
 
 
+def test_explicit_home_drives_app_status_discovery_and_selection_without_target_or_permission_import(monkeypatch, tmp_path):
+    from dataclasses import asdict
+    path=tmp_path/'practice'/'studio'/'remote.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'target':'pc','command':['fixture-launcher','private-argument']}))
+    home=path.parent.parent
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV,raising=False)
+    current=Settings(studio_target='host_launcher',studio_id='old',studio_edit=True,studio_luau=True)
+    before=asdict(current)
+    status=connections.connection_status(current,home=home)
+    assert status['state']=='not_checked' and status['target']=='host_launcher' and not status['selected_valid']
+    assert connections.connection_status(current,home=tmp_path/'other')['state']=='unconfigured'
+    calls=[]
+    async def discover(**kwargs):
+        calls.append(kwargs)
+        return evidence(target='host_launcher')
+    monkeypatch.setattr(local_mcp,'discover',discover)
+    report=check_studio(current,home)
+    assert calls==[{'target':'host_launcher','home':home}]
+    assert report['state']=='connected' and report['local_mcp']=='memory' and not report['selected_valid']
+    assert asdict(current)==before
+    selected=asyncio.run(connections.select_instance(current,'local-1',home=home))
+    assert calls[-1]=={'target':'host_launcher','home':home} and selected['selected_valid']
+    assert current.studio_id=='local-1' and not current.studio_edit and not current.studio_luau
+    assert 'private-argument' not in json.dumps(report)
+
+
+@pytest.mark.parametrize('raw',[None,'{}','[]','invalid fixture-secret','{"command":[]}',' '*22001])
+def test_app_bad_profile_configuration_is_unconfigured_without_connector_attempt(monkeypatch,tmp_path,raw):
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV,raising=False)
+    if raw is not None:
+        path=tmp_path/'studio'/'remote.json'
+        path.parent.mkdir()
+        path.write_text(raw)
+    async def discover(**kwargs):pytest.fail('Bad host configuration must not attempt discovery')
+    monkeypatch.setattr(local_mcp,'discover',discover)
+    current=Settings(studio_target='host_launcher',studio_id='old')
+    report=check_studio(current,tmp_path)
+    assert report['state']=='unconfigured' and not report['selected_valid']
+    assert report['local_mcp']=='not_checked' and not report['instances']
+    assert 'fixture-secret' not in json.dumps(report) and current.studio_id=='old'
+
+
+def test_app_this_pc_ignores_bad_profile_command(monkeypatch,tmp_path):
+    monkeypatch.setattr(local_mcp.studio,'configured_command',lambda *_:pytest.fail('This PC ignores operator host files'))
+    async def discover(**kwargs):return evidence()
+    monkeypatch.setattr(local_mcp,'discover',discover)
+    assert connections.connection_status(Settings(),home=tmp_path)['state']=='not_checked'
+    assert check_studio(Settings(),tmp_path)['state']=='connected'
+
+
+def test_react_snapshot_uses_settings_home_for_command_but_app_home_for_chats(monkeypatch,tmp_path):
+    from types import SimpleNamespace
+    from star import react_shell
+    persistence, configuration=tmp_path/'persistence',tmp_path/'configuration'
+    persistence.mkdir()
+    path=configuration/'studio'/'remote.json'
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({'command':['fixture-launcher']}))
+    settings_file=configuration/'settings.json'
+    Settings(studio_target='host_launcher').save(settings_file)
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV,raising=False)
+    monkeypatch.setattr(react_shell,'app_data',lambda:persistence)
+    status=SimpleNamespace(status=lambda:{},close=lambda:None)
+    monkeypatch.setattr(react_shell,'ToolWorkshop',lambda **_:status)
+    monkeypatch.setattr(react_shell,'for_settings',lambda *_:status)
+    monkeypatch.setattr(react_shell,'MCPGateway',lambda *_:status)
+    for name in ('get_dashboard','learning_status','roblox_state','credential_status','server_status','read_build_info'):
+        monkeypatch.setattr(react_shell,name,lambda *_:{})
+    runtime=SimpleNamespace(status=lambda:'stopped',router_running=lambda:False)
+    snapshot=react_shell._get_state(settings_file,runtime)
+    assert snapshot['studio']['state']=='not_checked' and snapshot['studio']['target']=='host_launcher'
+    assert (persistence/'conversations.sqlite3').is_file()
+    assert not (configuration/'conversations.sqlite3').exists()
+
+
 def test_app_discovery_uses_actual_local_mcp_contract_and_explicit_target(monkeypatch):
     calls=[]
     async def discover(**kwargs):
@@ -65,7 +147,7 @@ def test_app_discovery_uses_actual_local_mcp_contract_and_explicit_target(monkey
         return evidence(target=kwargs['target'])
     monkeypatch.setattr(local_mcp,'discover',discover)
     report=check_studio(Settings(studio_id='local-1'))
-    assert calls==[{'target':'local_pc'}]
+    assert calls==[{'target':'local_pc','home':desktop_core.app_data()}]
     assert report['state']=='connected' and report['selected_valid']
     assert report['local_mcp']=='memory' and report['tool_count']==30
     assert report['instances']==[{'id':'local-1','name':'Test Place'}]
@@ -116,7 +198,8 @@ def test_probe_deadline_cancels_and_has_no_fallback_or_replay(monkeypatch):
     monkeypatch.setattr(connections,'PROBE_SECONDS',0.01)
     report=check_studio(Settings())
     assert report['state']=='unavailable' and report['reason_code']=='timeout'
-    assert calls==[{'target':'local_pc'}]
+    assert report['diagnostic']=={'stage':'probe','reason':'timeout'}
+    assert calls==[{'target':'local_pc','home':desktop_core.app_data()}]
 
 
 def test_desktop_probe_budget_covers_each_bounded_stage_and_local_status():
@@ -171,8 +254,73 @@ def test_cancellation_remains_cancellation(monkeypatch):
     with pytest.raises(asyncio.CancelledError):check_studio(Settings())
 
 
+@pytest.mark.parametrize('stage,reason', [('process_startup','failed'), ('initialization','invalid_response'),
+                                         ('capability','tools_not_declared'), ('tool_discovery','timeout'),
+                                         ('instance_discovery','invalid_response'), ('shutdown','failed')])
+def test_fixed_transport_diagnostic_reaches_status_without_exception_text(monkeypatch,stage,reason):
+    from star import studio
+    calls=[]
+    async def refuse(**kwargs):
+        calls.append(kwargs)
+        # The public status must never serialize even a typed error's message or arbitrary attributes.
+        error=studio.StudioTransportError('fixture-secret private-address',stage=stage,reason=reason)
+        error.raw_initializer={'key':'fixture-secret'}
+        raise error
+    monkeypatch.setattr(local_mcp,'discover',refuse)
+    report=check_studio(Settings(studio_id='old'))
+    assert report['state']=='unavailable' and report['reason_code']=='connection_failed'
+    assert report['diagnostic']=={'stage':stage,'reason':reason}
+    assert not report['selected_valid'] and report['instances']==[]
+    assert len(calls)==1 and 'fixture-secret' not in json.dumps(report) and 'private-address' not in json.dumps(report)
+
+
+def test_untyped_or_tampered_failure_is_unknown_without_attribute_or_text_inference(monkeypatch):
+    from star import studio
+    failures=[RuntimeError('protocol initialization fixture-secret'),studio.StudioTransportError('fixture-secret')]
+    for failure in failures:
+        failure.diagnostic={'stage':'initialization','reason':'fixture-secret'}
+        failure._diagnostic=('initialization','fixture-secret')
+        async def refuse(**kwargs):raise failure
+        monkeypatch.setattr(local_mcp,'discover',refuse)
+        report=check_studio(Settings())
+        assert report['diagnostic']=={'stage':'unknown','reason':'connection_failed'}
+        assert report['reason_code']=='connection_failed' and 'fixture-secret' not in json.dumps(report)
+
+
+def test_incoming_mcp_diagnostic_is_discarded_on_success_empty_and_invalid_evidence(monkeypatch):
+    raw={'stage':'private-address','reason':'fixture-secret','raw':'key'}
+    for studios in (None,[]):
+        value=evidence(studios=studios,diagnostic=raw)
+        report=connections.normalize_probe(Settings(),value)
+        expected=None if studios is None else {'stage':'instance_discovery','reason':'no_instances'}
+        assert report['diagnostic']==expected
+        assert 'fixture-secret' not in json.dumps(report)
+    async def malformed(**kwargs):return evidence(tool_count=True,diagnostic=raw)
+    monkeypatch.setattr(local_mcp,'discover',malformed)
+    report=check_studio(Settings())
+    assert report['reason_code']=='connection_failed' and report['diagnostic']=={'stage':'probe','reason':'invalid_evidence'}
+    assert 'fixture-secret' not in json.dumps(report)
+
+
+def test_configuration_diagnostic_preserves_unconfigured_semantics_without_connecting(monkeypatch,tmp_path):
+    from star import studio
+    monkeypatch.delenv(studio.COMMAND_ENV,raising=False)
+    settings=Settings(studio_target='host_launcher')
+    assert connections.connection_status(settings,home=tmp_path)['diagnostic']=={'stage':'configuration','reason':'not_configured'}
+    path=tmp_path/'studio'/'remote.json'
+    path.parent.mkdir()
+    path.write_text('fixture-secret')
+    async def forbidden(**kwargs):pytest.fail('Invalid configuration must not attempt a connector')
+    monkeypatch.setattr(local_mcp,'discover',forbidden)
+    report=check_studio(settings,tmp_path)
+    assert report['state']=='unconfigured' and report['reason_code']=='host_launcher_unavailable'
+    assert report['diagnostic']=={'stage':'configuration','reason':'invalid'}
+    assert 'fixture-secret' not in json.dumps(report)
+
+
 @pytest.mark.parametrize('target', ['local_pc', 'host_launcher'])
-def test_chat_tool_turn_uses_the_host_selected_local_mcp_proxy(monkeypatch, tmp_path, target):
+@pytest.mark.parametrize('separate_configuration', [False, True])
+def test_chat_tool_turn_uses_the_host_selected_local_mcp_proxy(monkeypatch, tmp_path, target, separate_configuration):
     """Exercise the real run_task handoff; every provider and Studio endpoint is fake."""
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
@@ -184,8 +332,8 @@ def test_chat_tool_turn_uses_the_host_selected_local_mcp_proxy(monkeypatch, tmp_
         journal=SimpleNamespace(text=lambda:''))
 
     @asynccontextmanager
-    async def connect(settings,home):
-        calls.append(('connect',settings.studio_target,settings.studio_id,home))
+    async def connect(settings,home,*,studio_configuration_home=None):
+        calls.append(('connect',settings.studio_target,settings.studio_id,home,studio_configuration_home))
         yield proxy
         calls.append(('closed',))
 
@@ -207,7 +355,11 @@ def test_chat_tool_turn_uses_the_host_selected_local_mcp_proxy(monkeypatch, tmp_
     current=Settings(model='offline-test',studio_target=target,studio_id='selected',
         skills_enabled=False,graphify_enabled=False,roblox_research_enabled=False,
         tool_workshop_enabled=False,specialists_enabled=False)
-    assert desktop_core.run_task(current,'Read the open Roblox Studio place',mode='agent')=='Synthetic read-only answer'
-    assert calls==[('connect',target,'selected',tmp_path),
+    configuration=tmp_path/'operator-configuration' if separate_configuration else None
+    assert desktop_core.run_task(current,'Read the open Roblox Studio place',mode='agent',
+        studio_configuration_home=configuration)=='Synthetic read-only answer'
+    assert calls==[('connect',target,'selected',tmp_path,configuration),
         ('execute',proxy,proxy.discovered,'selected',False,False),('closed',)]
     assert len(list((tmp_path/'runs').glob('*/answer.md')))==1
+    if configuration is not None:
+        assert not configuration.exists()

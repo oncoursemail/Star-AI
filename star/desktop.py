@@ -904,7 +904,8 @@ class MainWindow(QMainWindow):
                     extra.append('Only first 4 images/frames were supplied due to context limits.')
                 text=prompt+'\n\n'+ '\n'.join(extra) if extra else prompt
                 # owner_text: only what was typed can become a lesson, never the transcript added above.
-                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev),owner_text=prompt)
+                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev),owner_text=prompt,
+                    studio_configuration_home=self.settings_file.parent)
         self._job=Job(work)
         self.jobs.add(self._job)
         self._job.event.connect(self.worker_event)
@@ -982,7 +983,7 @@ class MainWindow(QMainWindow):
     def discover_studios(self):
         if self.busy:return
         self.studio_status.setText('Connecting to Roblox Studio…')
-        self.launch_job(check_studio,self.studios_received,replace(self.cfg))
+        self.launch_job(check_studio,self.studios_received,replace(self.cfg),self.settings_file.parent)
 
     def studios_received(self, result):
         if self.busy or result.get('target')!=self.cfg.studio_target:return
@@ -1001,7 +1002,7 @@ class MainWindow(QMainWindow):
         def select():
             import asyncio
             from .studio_connections import select_instance
-            return asyncio.run(select_instance(current,identifier))
+            return asyncio.run(select_instance(current,identifier,home=self.settings_file.parent))
         self.launch_job(select,self.studio_selected)
 
     def studio_selected(self,result):
