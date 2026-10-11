@@ -85,8 +85,12 @@ def test_path_discovery_is_local_only(tmp_path, monkeypatch):
     assert discover_blender("https://evil.test/blender") is None
     assert discover_blender("//server/blender") is None
     link = tmp_path / "linked"
-    link.symlink_to(blender)
-    assert discover_blender(str(link)) is None
+    try:
+        link.symlink_to(blender)
+    except (OSError, NotImplementedError):
+        pass  # Windows runners may disallow symlinks without elevated privileges.
+    else:
+        assert discover_blender(str(link)) is None
     assert status(Settings(blender_enabled=False, blender_executable=str(blender)))["enabled"] is False
 
 
