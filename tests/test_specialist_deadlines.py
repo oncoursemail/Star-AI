@@ -42,3 +42,37 @@ def test_delegated_team_retains_partial_and_blocks_dependent_stage():
         assert output["reports"][1]["status"] == "blocked"
 
     asyncio.run(scenario())
+
+
+def test_failed_specialist_does_not_starve_independent_work():
+    class FailureThenSuccess:
+        def __init__(self):
+            self.calls = 0
+            self.chat = SimpleNamespace(completions=self)
+
+        async def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("First specialist is unavailable")
+
+            async def chunks():
+                yield SimpleNamespace(choices=[
+                    SimpleNamespace(delta=SimpleNamespace(content="Independent finding"))
+                ])
+            return chunks()
+
+    async def scenario():
+        provider = FailureThenSuccess()
+        team = ResearchTeam(client=provider, model="small-local", project="Test",
+                            parallelism=1)
+        output = await team.run([
+            {"id": "first", "role": "research", "goal": "Independent first topic"},
+            {"id": "second", "role": "review", "goal": "Independent second topic"},
+        ])
+        assert provider.calls == 2
+        assert [record["status"] for record in output["reports"]] == [
+            "failed", "completed",
+        ]
+        assert output["reports"][1]["analysis"] == "Independent finding"
+
+    asyncio.run(scenario())
