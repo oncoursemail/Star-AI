@@ -22,11 +22,17 @@ export const LINKS={
  docs:REPO_URL+'/tree/main/docs',
  start:REPO_URL+'/blob/main/START_HERE_WINDOWS11.md',
  security:REPO_URL+'/blob/main/docs/SECURITY_AND_AUTONOMY.md',
+ server:REPO_URL+'/blob/main/docs/STAR_MODEL_ROUTER_WINDOWS.md',
+ robloxAccess:REPO_URL+'/blob/main/docs/ROBLOX_ACCESS.md',
+ knowledge:REPO_URL+'/blob/main/docs/ROBLOX_KNOWLEDGE.md',
+ evals:REPO_URL+'/blob/main/docs/evals.md',
+ learning:REPO_URL+'/blob/main/docs/STAR_LEARNING.md',
+ voice:REPO_URL+'/blob/main/docs/STAR_VOICE_CALLS.md',
+ media:REPO_URL+'/blob/main/docs/STAR_MEDIA.md',
+ documents:REPO_URL+'/blob/main/star/documents.py',
  acceptance:REPO_URL+'/issues/15',
  robloxMcp:'https://create.roblox.com/docs/studio/mcp',
- // Stable file names on every release, so these always follow the newest published one.
- latestZip:REPO_URL+'/releases/latest/download/STAR-Genesis-Windows-x64.zip',
- latestSums:REPO_URL+'/releases/latest/download/SHA256SUMS.txt'
+ // When live release data is unavailable, use the official release page rather than guessing an asset URL.
 } as const
 
 export type TourId='chat'|'brain'|'tools'|'projects'|'analytics'
@@ -40,8 +46,8 @@ export const tour:TourView[]=[
   body:'STAR Brain downloads a verified engine and model, then asks it for a real reply, so you know it works before you rely on it.',
   points:['About 3.5 GB download','Every file checked by SHA-256','Runs on loopback, on your PC']},
  {id:'tools',tab:'Tools',title:'Exactly the access a task needs.',
-  body:'Connect Roblox Studio and a project folder. Everything starts read-only, and editing is a separate switch you turn on yourself.',
-  points:['Official Roblox Studio MCP','Read-only by default','Write access is opt-in']},
+  body:'Connect Roblox Studio and a project folder. Studio inspection starts read-only; editing a disposable test place requires a separate permission.',
+  points:['Official Studio MCP','Read-only Studio inspection','Scoped edits are opt-in']},
  {id:'projects',tab:'Projects',title:'Every project keeps its own context.',
   body:'Conversations and references stay with the workspace they belong to, so a Roblox obby and a research notebook do not bleed into each other.',
   points:['Separate workspaces','Saved conversations','Stored on your disk']},
@@ -63,7 +69,7 @@ export const brainRoutes:BrainRoute[]=[
 export const studioScopes=[
  {level:'Inspect',state:'On by default',body:'STAR reads the test place you point it at: instances, scripts and structure.'},
  {level:'Edit',state:'Off until you enable it',body:'Scoped changes inside that test place. You review what changed.'},
- {level:'Publish',state:'Never',body:'STAR does not publish experiences or touch live player data.'}
+ {level:'Open Cloud',state:'Separate approval',body:'Studio does not publish. Open Cloud may save a version in your approved private test experience, only after you approve that action.'}
 ] as const
 
 /** The real layout of %APPDATA%\STAR, as written by the desktop app. */
@@ -79,7 +85,9 @@ export const dataFolder=[
 
 export type Connection={name:string;what:string;since:string}
 export const connections:Connection[]=[
- {name:'Roblox Studio',what:'Inspect and edit a test place through the official MCP server',since:'0.8.0'},
+ {name:'Roblox Studio',what:'Inspect a disposable test place; scoped editing is opt-in',since:'0.8.0'},
+ {name:'Roblox Open Cloud',what:'Owner-approved saved test-place versions and Luau test runs; no live publishing',since:'0.9.0'},
+ {name:'STAR Knowledge',what:'Cited official Roblox documentation and static Luau checks on your STAR Server',since:'0.9.0'},
  {name:'Project folder',what:'Read a folder you choose; write only when you allow it',since:'0.8.0'},
  {name:'Images, video and audio',what:'Attach references to a message',since:'0.8.0'},
  {name:'Obsidian vault',what:'Read-only search across your Markdown notes',since:'0.9.0'},
@@ -89,6 +97,33 @@ export const connections:Connection[]=[
  {name:'ComfyUI',what:'Generate images in chat with your local ComfyUI',since:'0.9.0'},
  {name:'STAR Teams',what:'Bounded specialist agents on one task',since:'0.9.0'}
 ]
+
+/** Code-backed v0.9.0 features; release badges are driven only by published GitHub tags. */
+export const capabilities=[
+ {name:'STAR Server on your network',since:'0.9.0',doc:LINKS.server,
+  what:'Use a model server at a private network address. Its key stays in the OS credential store; this PC needs no local model download.'},
+ {name:'Roblox answers with sources',since:'0.9.0',doc:LINKS.knowledge,
+  what:'STAR Knowledge retrieves and cites official Roblox and Luau documentation. Static compile/type checks do not playtest code or fully validate Roblox APIs.'},
+ {name:'Studio and Open Cloud',since:'0.9.0',doc:LINKS.robloxAccess,
+  what:'Studio inspection is read-only first. Separate Open Cloud actions save versions to an owner-approved private test place or run Luau tests, each requiring approval.'},
+ {name:'Skills and the evaluation gate',since:'0.9.0',doc:LINKS.evals,
+  what:'Twelve task-specific skill packs ship, five on by default. The gate checks for regressions using fixed automated tasks; it does not judge visual quality in Studio.'},
+ {name:'Project learning',since:'0.9.0',doc:LINKS.learning,
+  what:'Source-linked local lessons are scoped to a project. Inferred lessons await review; the model is not retrained.'},
+ {name:'Voice calls',since:'0.9.0',doc:LINKS.voice,
+  what:'Optional on-PC speech recognition and Kokoro speech, with interruption controls. Extra voice packages and models are not bundled; real microphones remain untested.'},
+ {name:'Images and video',since:'0.9.0',doc:LINKS.media,
+  what:'Optional local ComfyUI creates or edits images. Video answers use up to four sampled frames and, with voice extras, a limited audio transcript; not full video playback.'},
+ {name:'Documents and tables',since:'0.9.0',doc:LINKS.documents,
+  what:'Bounded reading and source-linked search of attached PDF, DOCX, PPTX, XLSX, CSV and text files, with exact table calculations. Files and macros are not executed.'}
+] as const
+
+/** Baselines only: not a measure of Roblox Studio gameplay or a combined skill-pack run. */
+export const evalResults=[
+ {suite:'Roblox v2 (34 automated of 50)',passed:'18 / 34',rate:'52.9 %'},
+ {suite:'Creation v1 (23 automated)',passed:'11 / 23',rate:'47.8 %'},
+ {suite:'Both baselines',passed:'29 / 57',rate:'50.9 %'}
+] as const
 
 export const steps=[
  {title:'Download STAR',fact:'installer',
@@ -119,13 +154,13 @@ export const limits=[
 
 export const faqs=[
  {q:'Do I need to pay for a cloud model?',
-  a:'No. STAR runs an open model on your PC. You need the hardware for it and one model download.'},
+  a:'No. You can use an on-device model or a STAR Server on your own network. Hosted providers are optional and need their own keys.'},
  {q:'Will updating remove my chats or models?',
   a:'No. The installer replaces the app folder. Your chats, models and settings live separately in %APPDATA%\\STAR. Keep backups of work you care about anyway.'},
  {q:'Where do the numbers on this page come from?',
-  a:'From the public GitHub repository: releases, pull requests, issues and commits. There are no usage figures or benchmark scores, because none have been collected.'},
+  a:'Release and project progress come from public GitHub data. Separately, docs/evals.md reports measured automated Roblox task pass rates; those do not measure Studio game quality.'},
  {q:'Does this website track me?',
-  a:'It sets no cookies and runs no analytics. For the progress section your browser asks GitHub\'s public API directly, and the answer is kept in this browser\'s local storage for a few minutes.'}
+  a:'It sets no cookies and runs no analytics. Your browser requests public release and progress data from GitHub; progress answers are cached briefly in browser storage.'}
 ] as const
 
 /* ---------- formatting ---------- */
