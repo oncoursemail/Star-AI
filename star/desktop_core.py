@@ -964,7 +964,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # >>> Answer shape (star/answer_shape.py): a Roblox/Luau answer has a hard length limit, so
                 # the code comes first and stays whole. Full answers only; it follows the documentation
                 # and the pack in the per-turn sections.
-                shape_block = answer_shape.SHAPE_RULES if (not quick and docs.plan.check_luau) else ''
+                shape_block = (answer_shape.SHAPE_RULES
+                               if (not quick and docs.plan.check_luau and answer_shape.rule_enabled()) else '')
                 if shape_block:
                     turn_sections.insert((1 if docs.block else 0) + (1 if pack_block else 0),
                                          (answer_shape.SHAPE_HEADING, shape_block))

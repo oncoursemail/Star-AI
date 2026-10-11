@@ -334,6 +334,11 @@ def real_errors(report: dict, code: str, context: set[str]) -> list[dict]:
     return kept
 
 
+def _substance(code: str) -> int:
+    """How much code there is: characters outside comments and whitespace."""
+    return len("".join(api_check.blank(code, strings=False).split()))
+
+
 def _hard(errors: list[dict]) -> list[dict]:
     return [e for e in errors if e.get("kind") not in api_check.ADVISORY_KINDS]
 
@@ -458,9 +463,10 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
             except Exception:
                 break      # the repair attempt failed: what we have stays, with its diagnostics
             record["repair_attempted"] = True
-            # No change is no fix, and a "fix" that throws most of the code away is not one either.
+            # No change is no fix, and a "fix" that throws most of the code away is not one either
+            # (measured without comments: a repair may drop them, and that is not lost code).
             if (not fixed or fixed.strip() == current.strip()
-                    or len(fixed.strip()) < 0.6 * len(current.strip())):
+                    or _substance(fixed) < 0.6 * _substance(current)):
                 break
             codes[number - 1] = fixed
             second = await examine(fixed, number - 1)

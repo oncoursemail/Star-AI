@@ -90,6 +90,54 @@ def test_the_shape_rule_is_short_and_puts_the_code_first():
     assert "complete" in answer_shape.SHAPE_RULES and "first" in answer_shape.SHAPE_RULES
 
 
+def test_the_rule_has_an_off_switch_and_is_on_by_default():
+    assert answer_shape.rule_enabled({}) and answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": "on"})
+    assert not answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": " OFF "})
+
+
+def test_run_task_adds_the_rule_to_a_full_roblox_answer_only(monkeypatch, tmp_path):
+    """The request the model would get, captured from a fake client: no network, no model."""
+    import contextlib
+    from star import desktop_core as core
+
+    sent = []
+
+    class Captured(Exception):
+        pass
+
+    class Client:
+        def __init__(self):
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        async def create(self, **kwargs):
+            sent.append(kwargs)
+            raise Captured()
+
+    @contextlib.asynccontextmanager
+    async def fake_open(settings):
+        yield Client()
+
+    monkeypatch.setenv("STAR_SKILL_PACKS", "off")
+    monkeypatch.setattr(core, "app_data", lambda: tmp_path / "STAR")
+    monkeypatch.setattr(core, "open_client", fake_open)
+    monkeypatch.setattr(core.doc_grounding, "client_for", lambda settings: None)     # no knowledge service
+    settings = core.Settings(model="m")
+
+    def user_text(prompt, mode="auto"):
+        sent.clear()
+        with pytest.raises(Captured):
+            core.run_task(settings, prompt, mode=mode)
+        content = sent[0]["messages"][-1]["content"]
+        return content if isinstance(content, str) else content[0]["text"]
+
+    question = "Write a Luau ModuleScript that pools bullets for my shooter."
+    assert answer_shape.SHAPE_HEADING in user_text(question) and "hard length limit" in user_text(question)
+    assert answer_shape.SHAPE_HEADING not in user_text(question, mode="fast"), "a quick answer stays as it was"
+    assert answer_shape.SHAPE_HEADING not in user_text("Plan a birthday party for ten children.")
+    monkeypatch.setenv("STAR_ANSWER_SHAPE", "off")
+    assert answer_shape.SHAPE_HEADING not in user_text(question)
+
+
 # --- the agent loop -------------------------------------------------------------------------------
 
 def test_an_answer_cut_inside_its_code_is_finished_with_one_more_request():

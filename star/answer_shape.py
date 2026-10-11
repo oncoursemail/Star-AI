@@ -27,11 +27,19 @@ SHAPE_RULES = (
     "the code in prose, and add a usage example only if the request asks for one. Every block must run as "
     "shown: define what it uses before using it."
 )
+ENV_VAR = "STAR_ANSWER_SHAPE"      # "off" leaves the per-turn rule out (docs/evals.md: a prompt edit needs a switch)
 CONTINUATION_TOKENS = 900          # one extra request of at most this many tokens, twice at most
 MAX_CONTINUATIONS = 2
 LENGTH_NOTE = "\n\n*(STAR's answer reached its length limit here.)*"
 _FENCE_LINE = re.compile(r"^[ \t]*```", re.M)
 _OPENER = re.compile(r"^[ \t]*```[^\n]*\n?", re.M)
+
+
+def rule_enabled(environ=None) -> bool:
+    """The per-turn rule is on unless STAR_ANSWER_SHAPE is `off`. The continuation is not a prompt
+    edit (it only runs after an answer was cut) and has no switch."""
+    import os
+    return (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower() != "off"
 
 
 def stops_inside_code(answer: str) -> bool:

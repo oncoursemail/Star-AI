@@ -530,6 +530,21 @@ def test_a_repair_that_is_no_better_or_throws_the_code_away_is_not_used():
         assert not records[0]["repaired"] and not records[0]["ok"]
 
 
+def test_a_repair_that_drops_the_comments_has_not_thrown_the_code_away():
+    commented = ("--!strict\n" + "-- a long explanation that the repair leaves out, line after line\n" * 12
+                 + "local function pack(flags)\n\tlocal out = 0\n\tout = out | 1\n\treturn out\nend\nreturn pack\n")
+    bare = "--!strict\nlocal function pack(flags)\n\tlocal out = 0\n\tout = bit32.bor(out, 1)\n\treturn out\nend\nreturn pack\n"
+    assert len(bare) < 0.6 * len(commented), "by raw length this repair looks like most of the code is gone"
+    knowledge = FakeKnowledge(reports=[errors((15, "SyntaxError", "Expected identifier when parsing expression, got '|'")),
+                                       passed()])
+
+    async def repair(code, found):
+        return bare
+
+    answer, records = review("```luau\n" + commented + "```", knowledge, repair)
+    assert "bit32.bor(out, 1)" in answer and records[0]["repaired"] and records[0]["ok"]
+
+
 def test_the_repair_prompt_quotes_each_source_line_and_has_room_for_the_whole_block():
     from star.doc_grounding import _numbered, repair_tokens
     code = "local a = 1\nlocal b: string = a\nreturn b\n"
