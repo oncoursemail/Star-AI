@@ -50,7 +50,8 @@ MAX_INTERRUPTIONS = 12
 SERVER_TIMEOUT_SECONDS = 1800   # the largest value the app allows
 MAX_TRUNCATION_RETRIES = 2     # an answer that stops inside a code block is asked for again
 # run_task errors that are STAR's own answer to the prompt (the user would see them): a failed task, not an infrastructure error.
-PRODUCT_FAILURES = ("Model-call limit exceeded", "streamed no visible answer", "gave no text or tool calls")
+PRODUCT_FAILURES = ("Model-call limit exceeded", "streamed no visible answer", "gave no text or tool calls",
+                    "Failed to parse tool call arguments")   # the server rejects the model's own malformed tool call: the user sees this error
 LOCK_LIMIT_SECONDS = 3 * 3600
 _PRIVATE_IP = re.compile(r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b")
 _KEEP_EVENTS = {"route_selected", "knowledge_finished", "luau_check_finished", "skill_packs"}
@@ -465,6 +466,12 @@ def rescore(suite: Suite, result: dict, scorer, *, log=print) -> dict:
     changed = []
     for tid, record in result["tasks"].items():
         task = by_id.get(tid)
+        # A run made before a message was classified as STAR's own failure: it errored for a reason the user would see.
+        failure = next((text for text in PRODUCT_FAILURES if record.get("status") == "error" and text in str(record.get("error", ""))), "")
+        if task is not None and failure:
+            result["tasks"][tid] = record_for(task, None, None, product_failure=f"{failure} ({str(record['error'])[:120]})")
+            changed.append(f"{tid}: error -> fail (STAR's own failure)")
+            continue
         if task is None or "answer" not in record:
             continue
         if record.get("prompt_sha256") != hashlib.sha256(task["prompt"].encode("utf-8")).hexdigest()[:16]:

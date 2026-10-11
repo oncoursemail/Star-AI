@@ -244,6 +244,18 @@ def test_rescore_updates_scores_but_refuses_a_changed_prompt(tmp_path):
     assert result["summary"]["pass"] == 1
 
 
+def test_rescore_turns_an_old_error_that_is_stars_own_failure_into_a_fail(tmp_path):
+    suite, out = mini_suite(tmp_path), tmp_path / "r.json"
+    er.run_suite(suite, out=out, ask=asker(), scorer=scorer_for({"A-1"}), run_info=dict(RUN_INFO), log=lambda m: None)
+    data = json.loads(out.read_text(encoding="utf-8"))
+    data["tasks"]["A-2"] = {"status": "error", "passed": False, "reasons": ["x"], "checks": [], "seconds": 0.0,
+                            "error": "InternalServerError: Failed to parse tool call arguments as JSON: parse error"}
+    again = er.rescore(suite, data, scorer_for({"A-1"}), log=lambda m: None)
+    assert again["tasks"]["A-2"]["status"] == "fail" and "product_failure" in again["tasks"]["A-2"]
+    data["tasks"]["A-2"] = {"status": "error", "passed": False, "reasons": ["x"], "checks": [], "seconds": 0.0, "error": "ConnectError: server down"}
+    assert er.rescore(suite, data, scorer_for({"A-1"}), log=lambda m: None)["tasks"]["A-2"]["status"] == "error"   # infrastructure stays an error
+
+
 def test_isolated_appdata_never_touches_the_real_profile_and_restores(monkeypatch):
     monkeypatch.setenv("APPDATA", "REAL-PROFILE")
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)

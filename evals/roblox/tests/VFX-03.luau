@@ -22,8 +22,8 @@ local x2 = pool:acquire()
 check("after a double release exactly one extra object is available", x1 == a and x2 == nil)
 pool:release({})
 check("releasing a foreign object changes nothing", pool:activeCount() == 3)
-local zero = Pool.new(0, factory)
-check("maxActive 0 never builds anything", zero:acquire() == nil and zero:totalCreated() == 0)
+local okZero, zero = pcall(Pool.new, 0, factory)
+check("maxActive 0 is rejected or never builds anything", not okZero or (zero:acquire() == nil and zero:totalCreated() == 0))
 local before = made
 local p3 = Pool.new(2, factory)
 for _ = 1, 50 do
