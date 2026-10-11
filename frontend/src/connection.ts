@@ -107,7 +107,7 @@ export function describeConnection(input: {
       : {...base, tone: 'unverified', label, state: 'Not checked', note: 'Your STAR Server has not been checked in this session. Send a message or test the connection.'}
   }
   if (local) {
-    return {...base, tone: 'offline', label, state: 'Offline', note: 'The model on this PC is not running. Start it in Model & connection.'}
+    return {...base, tone: 'offline', label, state: 'Offline', note: 'The on-device brain is not running. Start it on the Model page, or switch to STAR Server in Settings.'}
   }
   return {...base, tone: 'unverified', label, state: 'Not checked', note: 'Not checked in this session. Send a message or test the connection.'}
 }
