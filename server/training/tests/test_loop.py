@@ -55,7 +55,7 @@ class ScriptedBrain:
         self.fail_after = fail_after
         self.vector = [1.0, 0.0, 0.0]
 
-    def others_active(self, own_model=None):
+    def others_active(self, own_model=None, chat_models_only=False):
         return False
 
     def seconds_since_other_activity(self):

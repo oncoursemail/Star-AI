@@ -201,7 +201,7 @@ class FakeBrain:
         self.calls = 0
         self.busy_for = busy_for
 
-    def others_active(self, own_model=None):
+    def others_active(self, own_model=None, chat_models_only=False):
         self.calls += 1
         return self.calls <= self.busy_for
 
@@ -210,7 +210,7 @@ class FakeBrain:
 
 
 def test_wait_until_clear_pauses_for_lock_pause_file_and_chats(tmp_path):
-    s = Settings(home=tmp_path, lock_dir=str(tmp_path / "lock"), poll_s=0.01, idle_s=0)
+    s = Settings(home=tmp_path, lock_dir=str(tmp_path / "lock"), poll_s=0.01, idle_poll_s=0.01, idle_s=0)
     s.ensure_dirs()
     (tmp_path / "lock").mkdir()
     sleeps = []
@@ -255,3 +255,17 @@ def test_store_roundtrip_and_rebuild(tmp_path):
     assert len(read_jsonl(tmp_path / "kept.jsonl")) == 1
     append_jsonl(tmp_path / "x.jsonl", {"a": 1})
     assert read_jsonl(tmp_path / "x.jsonl") == [{"a": 1}]
+
+
+def test_every_task_list_is_indexed_and_a_changed_suite_makes_the_index_stale(suite):
+    s = Settings()
+    (suite / "holdout-z.json").write_text(json.dumps([{"id": "H-1", "prompt": "Write a Luau function that wraps angles into the range zero to three hundred sixty degrees."}]), encoding="utf-8")
+    index = decontam.build_index(suite)
+    assert any(i["id"].startswith("holdout-z:H-1") for i in index["items"])
+    d = decontam.Decontaminator(index, s)
+    assert d.is_fresh(suite) == []
+    (suite / "holdout-new.json").write_text("[]", encoding="utf-8")                 # a new suite file appears
+    assert d.is_fresh(suite) == ["holdout-new.json"]
+    (suite / "holdout-new.json").unlink()
+    (suite / "tests" / "T-1.luau").write_text("-- edited\n", encoding="utf-8")        # a frozen file is edited
+    assert d.is_fresh(suite) == ["tests/T-1.luau"]

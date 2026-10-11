@@ -49,7 +49,7 @@ class Generator:
         reason = quiet.pause_reason(self.s, None)           # pause file, lock, window
         if reason:
             return reason
-        return "interactive" if self.brain.others_active(own_model=self._own_model) else ""
+        return "interactive" if self.brain.others_active(own_model=self._own_model, chat_models_only=True) else ""
 
     _own_model: str | None = None
 
@@ -225,7 +225,7 @@ class Generator:
                     row = self.make_candidate()
                     self.consecutive_errors = 0
                 except Yielded as y:
-                    self.log(f"yield: dropped the request in flight ({y.reason})")
+                    self.log(f"yield: dropped the request in flight ({y.reason}); timeline {getattr(self.brain, 'last_trace', {})}")
                     st["paused"]["dropped_requests_" + y.reason] = st["paused"].get("dropped_requests_" + y.reason, 0) + 1
                     self.store.save()
                     continue

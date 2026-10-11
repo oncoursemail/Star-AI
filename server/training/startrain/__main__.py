@@ -47,6 +47,12 @@ def cmd_run(args) -> int:
     stop = Stopper()
     tools = LuauTools(s)
     decontam = Decontaminator.load(s.decontam_index, s)
+    suites = s.home / "suites"
+    stale = decontam.is_fresh(suites) if suites.is_dir() else []
+    if stale:
+        log("the decontamination index is stale; these suite files are new or changed: " + ", ".join(stale[:8])
+            + ". Run build-decontam again before generating (fail closed).")
+        return 2
     store = Store(s.data)
     brain = _brain(s)
     gen = Generator(s, brain, tools, decontam, store, stop, log)

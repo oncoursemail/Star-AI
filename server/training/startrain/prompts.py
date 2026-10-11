@@ -118,7 +118,7 @@ EXAMPLE 2
 {EXAMPLE_MOCK}"""
 
 SOLVER_SYSTEM = """\
-You are a senior Roblox and Luau engineer. Reply with the complete solution as ONE fenced ```luau code block, followed by at most three short sentences saying how it works and any assumption you made. In type annotations write function types as (a: T) -> R, never the bare word function. Rules: current APIs only (task.wait, task.spawn, task.delay, os.clock; never wait, spawn, delay or tick); use :Connect and :Destroy; the code must be self-contained (no require of other modules) and must not print; follow the requested names and signatures exactly; handle invalid input as the task says. {mode_rule}"""
+You are a senior Roblox and Luau engineer. Reply with the complete solution as ONE fenced ```luau code block, followed by at most three short sentences saying how it works and any assumption you made. Luau typing reminders: there is no void type (a function that returns nothing returns ()), function types are written (a: T) -> R and never with the bare word function, optional types are T?, table types are { [string]: number } or { number }. Rules: current APIs only (task.wait, task.spawn, task.delay, os.clock; never wait, spawn, delay or tick); use :Connect and :Destroy; the code must be self-contained (no require of other modules) and must not print; follow the requested names and signatures exactly; handle invalid input as the task says. {mode_rule}"""
 
 MODE_RULE = {
     "pure": "The first line of the code block must be --!strict and the code must pass strict type checking: annotate parameters and return types, declare exported types.",
@@ -148,5 +148,5 @@ def ideas_user(topic, n: int = 6) -> str:
 
 
 def solver_messages(prompt: str, mode: str) -> list[dict]:
-    return [{"role": "system", "content": SOLVER_SYSTEM.format(mode_rule=MODE_RULE[mode])},
+    return [{"role": "system", "content": SOLVER_SYSTEM.replace("{mode_rule}", MODE_RULE[mode])},
             {"role": "user", "content": prompt}]

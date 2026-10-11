@@ -31,6 +31,7 @@ class Settings:
     window_utc: str = field(default_factory=lambda: _env("STAR_TRAIN_WINDOW_UTC", ""))
     idle_s: float = field(default_factory=lambda: float(_env("STAR_TRAIN_IDLE_S", "45")))
     poll_s: float = field(default_factory=lambda: float(_env("STAR_TRAIN_POLL_S", "3")))
+    idle_poll_s: float = field(default_factory=lambda: float(_env("STAR_TRAIN_IDLE_POLL_S", "10")))   # while waiting: fewer requests to the router
     # Sandbox for every run of model-written code.
     vm_wall_s: int = 8
     vm_cpu_s: int = 6

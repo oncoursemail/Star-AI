@@ -105,7 +105,7 @@ def wait_until_clear(settings, brain, stop, log, sleep=time.sleep) -> dict[str, 
         if reason != last_reason:
             log(f"quiet: pausing ({reason})")
             last_reason = reason
-        step = min(settings.poll_s * (4 if reason in ("window", "pause-file") else 1), 30.0)
+        step = settings.idle_poll_s if reason == "interactive" else min(settings.poll_s * (4 if reason in ("window", "pause-file") else 1), 30.0)
         sleep(step)
         waited[reason] = waited.get(reason, 0.0) + step
     return waited

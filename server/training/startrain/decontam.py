@@ -25,19 +25,36 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
 
 
+def tree_hashes(root: Path) -> dict[str, str]:
+    """SHA-256 of every file under `root` (CRLF turned into LF), by relative path."""
+    out = {}
+    for path in sorted(p for p in root.rglob("*") if p.is_file()):
+        raw = path.read_bytes().replace(b"\r\n", b"\n")
+        out[path.relative_to(root).as_posix()] = hashlib.sha256(raw).hexdigest()
+    return out
+
+
+def digest_of(hashes: dict[str, str]) -> str:
+    return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+
+
+def _task_lists(suite_root: Path):
+    """Every top-level JSON file that is a list of task objects with a prompt (golden-tasks-*, holdout-*, ...)."""
+    for path in sorted(suite_root.glob("*.json")):
+        try:
+            data = json.loads(path.read_bytes().decode("utf-8"))
+        except ValueError:
+            continue
+        if isinstance(data, list) and data and all(isinstance(t, dict) for t in data)                 and any(isinstance(t.get("prompt"), str) for t in data):
+            yield path, data
+
+
 def collect_items(suite_root: Path, extra_files: list[Path] | None = None) -> tuple[list[dict], dict]:
-    """(items, file hashes). Items: {id, kind, source, text}. kind is prompt, answer, test or other."""
+    """(items, file hashes of the whole tree). Items: {id, kind, source, text}; kind is prompt, answer or test."""
     items: list[dict] = []
-    hashes: dict[str, str] = {}
-
-    def note(path: Path, raw: bytes) -> None:
-        hashes[str(path.relative_to(suite_root)) if path.is_relative_to(suite_root) else path.name] = \
-            hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
-
-    for path in sorted(suite_root.glob("golden-tasks-*.json")):
-        raw = path.read_bytes()
-        note(path, raw)
-        for task in json.loads(raw.decode("utf-8")):
+    hashes = tree_hashes(suite_root)
+    for path, tasks in _task_lists(suite_root):
+        for task in tasks:
             for key in ("prompt", "goal"):
                 if isinstance(task.get(key), str) and task[key].strip():
                     items.append({"id": f"{path.stem}:{task.get('id')}:{key}", "kind": "prompt",
@@ -45,14 +62,11 @@ def collect_items(suite_root: Path, extra_files: list[Path] | None = None) -> tu
     for folder, kind in (("reference", "answer"), ("tests", "test")):
         for path in sorted((suite_root / folder).glob("*")) if (suite_root / folder).is_dir() else []:
             if path.is_file():
-                note(path, path.read_bytes())
                 items.append({"id": f"{folder}/{path.name}", "kind": kind, "source": folder, "text": _read(path)})
     for path in sorted(suite_root.glob("*.luau")):
-        note(path, path.read_bytes())
         items.append({"id": path.name, "kind": "test", "source": path.name, "text": _read(path)})
     for path in extra_files or []:
         raw = path.read_bytes()
-        note(path, raw)
         if path.suffix == ".jsonl":
             for n, line in enumerate(raw.decode("utf-8", "replace").splitlines()):
                 if not line.strip() or line.lstrip().startswith("//"):
@@ -96,8 +110,7 @@ def build_index(suite_root: Path, extra_files: list[Path] | None = None, embed=N
             vectors = embed([EMBED_PREFIX + it["text"][:2000] for _, it in batch])
             for (i, _), vector in zip(batch, vectors):
                 out[i]["vec"] = [round(x, 5) for x in vector]
-    digest = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
-    return {"schema": INDEX_SCHEMA, "suite_files": hashes, "suite_digest": digest, "items": out,
+    return {"schema": INDEX_SCHEMA, "suite_files": hashes, "suite_digest": digest_of(hashes), "items": out,
             "counts": {"items": len(out), "embedded": sum(1 for o in out if "vec" in o)}}
 
 
@@ -107,9 +120,16 @@ class Decontaminator:
             raise ValueError("decontamination index has an unknown schema")
         self.s = settings
         self.digest = index["suite_digest"]
+        self.suite_files = index.get("suite_files", {})
         self.items = []
         for raw in index["items"]:
             self.items.append({**raw, "sh5": set(raw["sh5"]), "sh8": set(raw["sh8"])})
+
+    def is_fresh(self, suite_root: Path) -> list[str]:
+        """Files of the suites folder that are new or changed since the index was built (empty = fresh)."""
+        now = tree_hashes(suite_root)
+        known = self.suite_files
+        return sorted([f for f, h in now.items() if known.get(f) != h] + [f for f in known if f not in now])
 
     @classmethod
     def load(cls, path: Path, settings) -> "Decontaminator":

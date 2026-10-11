@@ -50,6 +50,7 @@ class Brain:
         self._loaded_at = -1e9
         self._last_other = -1e9
         self._slot_errors: set[str] = set()
+        self.last_trace: dict[str, float] = {}
 
     # --- plumbing -----------------------------------------------------------------------------------------
     def _conn(self, timeout: float):
@@ -106,12 +107,17 @@ class Brain:
             return 0
         return sum(1 for slot in slots if isinstance(slot, dict) and slot.get("is_processing"))
 
-    def others_active(self, own_model: str | None = None) -> bool:
+    CHAT_ONLY_SKIP = ("embed", "rerank")
+
+    def others_active(self, own_model: str | None = None, *, chat_models_only: bool = False) -> bool:
         """True when somebody else is using the brain. Our own request (if any) accounts for one busy slot of
-        `own_model`. Remembers when it last saw activity."""
+        `own_model`. Remembers when it last saw activity. `chat_models_only` skips the embedding and rerank
+        models (used while our own request is in flight, to keep the check short)."""
         models = self.loaded_models()
         own_model = self._alias_of.get(own_model, own_model)
         for model in models:
+            if chat_models_only and any(word in model for word in self.CHAT_ONLY_SKIP):
+                continue
             allowed = 1 if model == own_model else 0
             if self.busy_slots(model) > allowed:
                 self._last_other = self._clock()
@@ -135,6 +141,9 @@ class Brain:
         started = self._clock()
         conn = self._conn(self._timeout)
         abort = {"reason": "", "timeout": False}
+        trace: dict[str, float] = {}
+        self.last_trace = trace
+        holder: dict = {}          # the socket, kept here because http.client drops conn.sock once a streamed reply starts
         done = threading.Event()
 
         def watch() -> None:
@@ -150,9 +159,10 @@ class Brain:
                         reason = ""
                 if reason:
                     abort["reason"] = reason
+                    trace["yield_signalled"] = round(self._clock() - started, 1)
                     try:
-                        conn.sock.shutdown(socket.SHUT_RDWR)
-                    except (OSError, AttributeError):
+                        holder["sock"].shutdown(socket.SHUT_RDWR)
+                    except (OSError, AttributeError, KeyError):
                         pass
                     return
 
@@ -162,8 +172,11 @@ class Brain:
         usage: dict = {}
         try:
             conn.request("POST", "/v1/chat/completions", body=json.dumps(payload), headers=self._headers())
+            holder["sock"] = conn.sock
+            trace["request_sent"] = round(self._clock() - started, 1)
             watcher.start()
             response = conn.getresponse()
+            trace["headers"] = round(self._clock() - started, 1)
             if response.status != 200:
                 raise BrainError(f"chat returned HTTP {response.status}")
             while True:
@@ -187,6 +200,8 @@ class Brain:
                 for choice in event.get("choices") or []:
                     delta = choice.get("delta") or {}
                     if delta.get("content"):
+                        if not text:
+                            trace["first_token"] = round(self._clock() - started, 1)
                         text.append(delta["content"])
                     if choice.get("finish_reason"):
                         finish = choice["finish_reason"]
