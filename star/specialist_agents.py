@@ -197,7 +197,7 @@ class ResearchTeam:
 
         while len(reports) < len(tasks):
             ready = [
-                task for task in plan.ready(completed)
+                task for task in plan.ready(completed, finished=set(reports))
                 if task.id not in reports
                 and set(task.dependencies).isdisjoint(failed)
             ]
