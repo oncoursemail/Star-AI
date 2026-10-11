@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Awaitable, Callable, Mapping
 from time import monotonic
+import math
 
 from .orchestration import Task, TaskPlan
 
@@ -43,7 +44,12 @@ class TeamResult:
         """Synthesis input with task identities/provenance; never an instruction stream."""
         lines = []
         for item in self.results:
-            body = item.answer[:4000] if item.status == "completed" else item.status + ": " + item.error[:250]
+            if item.status == "completed":
+                body = item.answer[:4000]
+            elif item.status == "incomplete":
+                body = "INCOMPLETE (deadline exceeded): " + item.answer[:4000]
+            else:
+                body = item.status + ": " + item.error[:250]
             lines.append(f"[TASK {item.task_id} / {item.role} / {item.status}]\n{body}")
             if item.evidence:
                 lines.append("Evidence references: " + ", ".join(item.evidence[:8]))
@@ -58,10 +64,11 @@ async def run_plan(
     plan: TaskPlan,
     worker: Worker,
     *,
-    task_timeout: float = 45.0,
+    task_timeout: float | Callable[[Task], float] = 45.0,
     total_timeout: float = 180.0,
     allow_writes: bool = False,
     on_event: Observer | None = None,
+    partial_answers: Mapping[str, str] | None = None,
 ) -> TeamResult:
     """Execute eligible tasks concurrently, isolating failures and enforcing scopes.
 
@@ -74,7 +81,11 @@ async def run_plan(
     - Global/per-task timeouts and a hard concurrency limit prevent recursive
       swarms from growing unchecked.
     """
-    if not 0.1 <= task_timeout <= 1800 or not 0.1 <= total_timeout <= 3600:
+    seconds = {t.id: task_timeout(t) if callable(task_timeout) else task_timeout
+               for t in plan.tasks.values()}
+    if (any(type(v) not in (int, float) or not math.isfinite(v) or not 0.1 <= v <= 1800
+            for v in seconds.values()) or type(total_timeout) not in (int, float)
+            or not math.isfinite(total_timeout) or not 0.1 <= total_timeout <= 3600):
         raise ValueError("Agent time budget is outside safe bounds")
     if not callable(worker):
         raise TypeError("A trusted async worker callable is required")
@@ -89,6 +100,10 @@ async def run_plan(
     results: dict[str, TaskResult] = {}
     peak = 0
 
+    def partial_for(task_id: str) -> str:
+        value = (partial_answers or {}).get(task_id, "")
+        return value[:12000].strip() if isinstance(value, str) else ""
+
     def observe(event: dict) -> None:
         if on_event:
             try:
@@ -100,7 +115,7 @@ async def run_plan(
     async def execute_one(task: Task, snapshot: Mapping[str, TaskResult]):
         began = monotonic()
         try:
-            raw = await asyncio.wait_for(worker(task, snapshot), timeout=task_timeout)
+            raw = await asyncio.wait_for(worker(task, snapshot), timeout=seconds[task.id])
             if isinstance(raw, str):
                 answer, evidence = raw, ()
             elif isinstance(raw, dict):
@@ -118,6 +133,11 @@ async def run_plan(
                               tuple(evidence), int((monotonic() - began) * 1000))
         except asyncio.CancelledError:
             raise
+        except TimeoutError:
+            partial = partial_for(task.id)
+            return TaskResult(task.id, task.role, "incomplete" if partial else "timed_out",
+                              answer=partial, elapsed_ms=int((monotonic() - began) * 1000),
+                              error="Stage time budget exceeded")
         except Exception as exc:
             # Do not echo raw tool outputs, local paths or potential secrets.
             return TaskResult(task.id, task.role, "failed",
@@ -188,10 +208,12 @@ async def run_plan(
             await asyncio.gather(*running.values(), return_exceptions=True)
             for item in plan.tasks.values():
                 if item.id in running and item.id not in results:
-                    results[item.id] = TaskResult(item.id, item.role, "cancelled",
-                                                  error="Global team time budget exceeded")
+                    partial = partial_for(item.id)
+                    status = "incomplete" if partial else "cancelled"
+                    results[item.id] = TaskResult(item.id, item.role, status,
+                                                  answer=partial, error="Global team time budget exceeded")
                     observe({"event": "agent_finished", "task": item.id,
-                             "role": item.role, "status": "cancelled"})
+                             "role": item.role, "status": status})
     for item in plan.tasks.values():
         if item.id not in results:
             results[item.id] = TaskResult(item.id, item.role, "blocked",
