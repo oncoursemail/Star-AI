@@ -1105,7 +1105,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             'route': {'profile': route.profile, 'requested_model': route.model,
                       'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(redact_text(answer), encoding='utf-8')
-        memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
+        memory.event(memory_scope, {'run_id': stamp, 'answer': redact_text(answer[:10000])})
         # Failed/cancelled answers, budget refusals and required archive/log
         # failures never advance retention. Validate source/CAS after persistence.
         conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
