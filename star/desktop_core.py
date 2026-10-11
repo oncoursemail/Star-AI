@@ -25,6 +25,7 @@ from .providers import (ALL_PROVIDERS, background_client, call_limits, connectio
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
+from .instant_route import decide_instant_route, loaded_local_model, answer_on_pc
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs
@@ -97,6 +98,7 @@ class Settings:
     server_timeout: int = 600        # seconds of silence allowed for one server request
     server_parallel: int = 1         # match the server's llama.cpp -np slot count
     server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
+    instant_route_enabled: bool | None = None   # None = on when a local model is already loaded
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
@@ -127,6 +129,8 @@ class Settings:
         if not 1 <= port <= 65535:
             raise ValueError('Invalid local inference port')
         self._validate_server()
+        if self.instant_route_enabled is not None and type(self.instant_route_enabled) is not bool:
+            raise ValueError('Instant answers setting must be true, false or automatic')
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
@@ -769,9 +773,17 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
+    token_timing = {'requested': None, 'first': None, 'last': None}
     metrics.record(settings.project, 'run_started')
     def audited_event(event):
         nonlocal first_visible_token
+        now = time.monotonic()
+        if event.get('event') == 'model_turn' and token_timing['requested'] is None:
+            token_timing['requested'] = now
+        if event.get('event') == 'assistant_delta' and str(event.get('text','')).strip():
+            if token_timing['first'] is None:
+                token_timing['first'] = now
+            token_timing['last'] = now
         if event.get('event') == 'assistant_delta' and not first_visible_token and str(event.get('text','')).strip():
             first_visible_token = True
             # Approximate first *visible* text delta from request start; no prompt
@@ -910,6 +922,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         tools_kept = (turn_memory.for_conversation(memory_scope, sticky=kind == 'lan')
                       if kind != 'cloud' else None)
         answered_by = ''
+        instant_answer = None
         tools_ran = False
         inner_event = audited_event
         def audited_event(event):
@@ -921,7 +934,37 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             inner_event(event)
         prepared_conversation = None
         async def run():
-            nonlocal prepared_conversation
+            nonlocal prepared_conversation, instant_answer, first_visible_token
+            # Do not touch the PC's model unless this standalone text turn is eligible.
+            # The loopback /models probe reads only residency; a router's unloaded model
+            # is never selected and no llama.cpp process is started or downloaded.
+            eligible = dict(prompt=prompt, mode=mode, provider=kind,
+                            enabled=settings.instant_route_enabled is not False,
+                            attachments=len(images) + len(documents or ()),
+                            tools=use_tools or document_tools is not None or bool(github_enabled),
+                            research=research, documentation=route.grounding.retrieve != 'none',
+                            deep=wants_deep, followup=referential or roblox_context
+                            or bool(owner_text is not None and owner_text != prompt))
+            if decide_instant_route(**eligible, loaded_model='resident').use_local:
+                local_model = await loaded_local_model(settings.endpoint)
+                if decide_instant_route(**eligible, loaded_model=local_model).use_local:
+                    try:
+                        instant_answer = await answer_on_pc(settings.endpoint, local_model, prompt)
+                    except Exception:
+                        # Local text was buffered, not streamed to the chat. The original
+                        # server request can now run unchanged, exactly once.
+                        audited_event({'event': 'instant_fallback', 'model': route.model})
+                    else:
+                        first_visible_token = True
+                        metrics.record(settings.project, 'first_token',
+                                       elapsed_ms=instant_answer.first_token_ms)
+                        audited_event({'event': 'instant_selected', 'model': instant_answer.model})
+                        audited_event({'event': 'model_answered', 'model': instant_answer.model})
+                        audited_event({'event': 'assistant_delta', 'text': instant_answer.text})
+                        audited_event({'event': 'finished', 'model_calls': 1, 'tool_calls': 0})
+                        return (instant_answer.text,
+                                [{'role': 'user', 'content': prompt},
+                                 {'role': 'assistant', 'content': instant_answer.text}], [])
             from .web_search import search_web, source_context
             if research:
                 audited_event({'event': 'search_started'})
@@ -1091,6 +1134,23 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       if provider_kind(settings) == 'lan' else
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
+        first = token_timing['first']
+        last = token_timing['last']
+        requested = token_timing['requested']
+        # Stream chunks do not always map 1:1 to tokens. Without usage metadata
+        # throughput is explicitly marked approximate rather than claiming exact tokens.
+        measured_first = (instant_answer.first_token_ms if instant_answer is not None else
+                          max(0, int((first - requested) * 1000)) if first is not None and requested is not None else None)
+        throughput = (instant_answer.tokens_per_second if instant_answer is not None else
+                      round(max(0, len(re.findall(r"\\w+|[^\\w\\s]", answer)) - 1)
+                            / max(0.001, last - first), 1)
+                      if first is not None and last is not None else None)
+        brain = ('pc' if instant_answer is not None or kind == 'local'
+                 else 'server' if kind == 'lan' else 'cloud')
+        stats = {'brain': brain, 'model': answered_by or route.model,
+                 'first_token_ms': measured_first, 'tokens_per_second': throughput,
+                 'estimated_tokens': instant_answer.estimated_tokens if instant_answer is not None else True}
+        audited_event({'event': 'answer_stats', **stats})
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
@@ -1098,13 +1158,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             'messages': msgs, 'archive': archive,
             # Which model was asked and which one the server said answered.
             'route': {'profile': route.profile, 'requested_model': route.model,
-                      'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
+                      'answered_model': answered_by or route.model},
+            'answer_stats': stats}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(answer, encoding='utf-8')
         memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
         # Failed/cancelled answers, budget refusals and required archive/log
         # failures never advance retention. Validate source/CAS after persistence.
-        conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
-                                   cancel_event=cancel_event)
+        if prepared_conversation is not None:
+            conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
+                                       cancel_event=cancel_event)
         audited_event({'event': 'saved', 'run_id': stamp})
         metrics.record(settings.project, 'run_succeeded',elapsed_ms=int((time.monotonic()-started)*1000))
         # The answer exists: count the lessons that were in its context, then learn from the turn.
