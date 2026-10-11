@@ -48,6 +48,8 @@ LOCK_POLL_SECONDS = 20
 LOCK_WATCH_SECONDS = 15        # how often a running request checks whether someone asked for quiet
 MAX_INTERRUPTIONS = 12
 MAX_TRUNCATION_RETRIES = 2     # an answer that stops inside a code block is asked for again
+# run_task errors that are STAR's own answer to the prompt (the user would see them): a failed task, not an infrastructure error.
+PRODUCT_FAILURES = ("Model-call limit exceeded", "streamed no visible answer", "gave no text or tool calls")
 LOCK_LIMIT_SECONDS = 3 * 3600
 _PRIVATE_IP = re.compile(r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b")
 _KEEP_EVENTS = {"route_selected", "knowledge_finished", "luau_check_finished", "skill_packs"}
@@ -248,7 +250,10 @@ def compact_events(events: list) -> list[dict]:
     return keep[:20]
 
 
-def record_for(task: dict, asked: Asked | None, score: checks.TaskScore | None, error: str = "") -> dict:
+def record_for(task: dict, asked: Asked | None, score: checks.TaskScore | None, error: str = "", product_failure: str = "") -> dict:
+    if product_failure:
+        return {"status": "fail", "passed": False, "reasons": ["STAR gave no answer: " + product_failure], "checks": [],
+                "seconds": 0.0, "product_failure": product_failure}
     if error or score is None or asked is None:
         return {"status": "error", "passed": False, "reasons": [error or "no score"], "checks": [],
                 "seconds": round(asked.seconds, 1) if asked else 0.0, "error": error}
@@ -297,7 +302,7 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
     waited = 0.0
     try:
         for number, task in enumerate(todo, 1):
-            asked, score, error = None, None, ""
+            asked, score, error, product_failure = None, None, "", ""
             truncations = 0
             for interruption in range(MAX_INTERRUPTIONS + MAX_TRUNCATION_RETRIES + 1):
                 if lock_probe is not None:
@@ -319,11 +324,14 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
                         log(f"{task['id']}: stopped because the server lock appeared; will repeat it when the lock is gone")
                         asked, score, error = None, None, ""
                         continue
-                    error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                    if any(text in str(exc) for text in PRODUCT_FAILURES):
+                        product_failure = f"{type(exc).__name__}: {str(exc)[:160]}"
+                    else:
+                        error = f"{type(exc).__name__}: {str(exc)[:200]}"
                 break
             else:
                 error = f"stopped {MAX_INTERRUPTIONS} times by the server lock"
-            result["tasks"][task["id"]] = record_for(task, asked, score, error)
+            result["tasks"][task["id"]] = record_for(task, asked, score, error, product_failure)
             record = result["tasks"][task["id"]]
             if truncations:
                 record["truncation_retries"] = truncations

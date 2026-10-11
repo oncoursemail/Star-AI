@@ -91,6 +91,17 @@ def test_infrastructure_failures_are_errors_not_failures_and_are_scrubbed(tmp_pa
     assert "10.17.0.146" not in text and "<private-address>" in text
 
 
+def test_stars_own_failure_to_answer_is_a_failed_task_not_an_infrastructure_error(tmp_path):
+    def ask(task, cancel=None):
+        raise RuntimeError("Model-call limit exceeded; results are not considered complete")
+
+    result = er.run_suite(mini_suite(tmp_path, [mini_task("A-1")]), out=tmp_path / "r.json", ask=ask,
+                          scorer=scorer_for(set()), run_info=dict(RUN_INFO), log=lambda m: None)
+    record = result["tasks"]["A-1"]
+    assert record["status"] == "fail" and "Model-call limit exceeded" in record["reasons"][0]
+    assert result["summary"]["fail"] == 1 and result["summary"]["error"] == 0
+
+
 def test_scoring_infra_error_is_an_error_record(tmp_path):
     def scorer(task, answer):
         raise ec.InfraError("sandbox: ssh to the sandbox timed out")
