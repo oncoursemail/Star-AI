@@ -1,0 +1,98 @@
+"""Keep a code answer whole inside the reply's length limit.
+
+A STAR Server turn has a fixed number of answer tokens (brain_router: 1600 for a full answer),
+and the model writes about ten of them per second. Measured on the stored evaluation answers
+(evals/results/baseline-*.json): 12 of 57 answers stopped exactly at that limit, three of them in
+the middle of the code. Two things follow from that, and both live here:
+
+  * `SHAPE_RULES`: one short per-turn instruction for code answers: the complete code first,
+    brief comments, a short explanation after it. It rides with the other per-turn sections (after
+    the user's words), so the cached start of the request is untouched.
+  * `continuation` / `splice`: when an answer still stops inside a code block, STAR asks once
+    more for the missing lines only and joins them on. No model call happens unless the answer was
+    really cut; an answer cut in its closing prose only gets an honest one-line note.
+
+Pure string functions; `star.agent.execute` makes the request.
+"""
+from __future__ import annotations
+
+import re
+
+SHAPE_HEADING = "ANSWER SHAPE (a rule from STAR)"
+SHAPE_RULES = (
+    "Your reply has a hard length limit, so spend it on the code. When the answer is code: give the complete, "
+    "working code first, one fenced luau block per script or module, with short comments only where they help "
+    "(no doc-comment header on every function, no repeated explanations inside the code). After the code add at "
+    "most five short bullet points: what it does, where it goes, and what you could not verify. Do not repeat "
+    "the code in prose, and add a usage example only if the request asks for one. Every block must run as "
+    "shown: define what it uses before using it."
+)
+CONTINUATION_TOKENS = 900          # one extra request of at most this many tokens, twice at most
+MAX_CONTINUATIONS = 2
+LENGTH_NOTE = "\n\n*(STAR's answer reached its length limit here.)*"
+_FENCE_LINE = re.compile(r"^[ \t]*```", re.M)
+_OPENER = re.compile(r"^[ \t]*```[^\n]*\n?", re.M)
+
+
+def stops_inside_code(answer: str) -> bool:
+    """True when the text ends inside a fenced block (an odd number of fence lines)."""
+    return len(_FENCE_LINE.findall(answer or "")) % 2 == 1
+
+
+def continuation(answer: str) -> tuple[str, str]:
+    """(the part of a cut answer that is kept, the instruction that asks for the rest).
+
+    The last line of an answer that ran into the limit is almost always half a line, so the kept
+    part ends with the last complete line and the model is told to write the next one in full.
+    """
+    kept = answer if answer.endswith("\n") else answer[:answer.rfind("\n") + 1]
+    lines = [line for line in kept.splitlines() if line.strip()]
+    last = lines[-1].strip() if lines else ""
+    cut = answer[len(kept):].strip()
+    instruction = (
+        "Your answer above was cut off by the length limit in the middle of a code block. Continue it: reply with "
+        "only the remaining lines of that same code block in one ```luau fence. "
+        + (f"The last complete line was:\n{last[:200]}\n" if last and not last.startswith("```") else "")
+        + (f"The next line was cut off after:\n{cut[:200]}\nWrite that line in full first. " if cut else "")
+        + "Do not repeat lines that are already written and do not start the code again. Finish the code compactly, "
+          "close the fence, then add at most two short sentences."
+    )
+    return kept, instruction
+
+
+def _strip_opener(text: str) -> str:
+    text = text.lstrip("\n")
+    first = text.split("\n", 1)[0]
+    return text[len(first) + 1:] if first.strip().startswith("```") and "\n" in text else text
+
+
+def splice(kept: str, reply: str) -> str:
+    """Join the kept part of a cut answer and the model's continuation into one answer.
+
+    Handles the three things a model does when asked to continue: it re-opens the fence, it
+    repeats the last line or two, or it starts the whole block again (then its block replaces the
+    unfinished one). A continuation that was cut off too leaves the block open: the caller asks
+    again, or closes the block and says so.
+    """
+    if not (reply or "").strip():
+        return kept
+    opener_at = [m.start() for m in _OPENER.finditer(kept)]
+    block_start = opener_at[-1] if opener_at and stops_inside_code(kept) else None
+    reply_code = _strip_opener(reply) if reply.lstrip().startswith("```") else reply
+    if block_start is not None:
+        written = kept[block_start:].split("\n", 1)[1] if "\n" in kept[block_start:] else ""
+        head = [line.strip() for line in written.splitlines() if line.strip()][:3]
+        again = [line.strip() for line in reply_code.splitlines() if line.strip()][:3]
+        if len(head) >= 2 and head[:2] == again[:2]:
+            # The model wrote the block again from its first line: keep its version.
+            opener = kept[block_start:].split("\n", 1)[0]
+            return kept[:block_start] + opener + "\n" + reply_code
+    kept_lines = kept.splitlines()
+    new_lines = reply_code.splitlines()
+    overlap = 0
+    for size in range(min(6, len(kept_lines), len(new_lines)), 0, -1):
+        if [l.strip() for l in kept_lines[-size:]] == [l.strip() for l in new_lines[:size]] and any(
+                l.strip() for l in new_lines[:size]):
+            overlap = size
+            break
+    return kept + "\n".join(new_lines[overlap:]) + ("\n" if reply_code.endswith("\n") else "")
