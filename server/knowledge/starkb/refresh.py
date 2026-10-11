@@ -19,7 +19,7 @@ from pathlib import Path
 import subprocess
 import time
 
-from .quiet import Stopper, lock_held
+from .quiet import Stopper, lock_held, wait_while_locked
 from .store import RebuildRefused, build, connect
 
 REPORT_NAME = "refresh-report.log"
@@ -32,22 +32,21 @@ def _git(repo: Path, *args: str, timeout: float = 600) -> str:
     return done.stdout.strip()
 
 
+class QuietTimeout(RuntimeError):
+    """The lock prevented a refresh stage or source fetch from starting."""
+
+
 def wait_for_quiet(max_wait: float, stop, log) -> bool:
-    waited = 0.0
-    while lock_held():
-        if stop() or waited >= max_wait:
-            return False
-        if not waited:
-            log("refresh: server lock present, waiting")
-        time.sleep(15)
-        waited += 15
-    return True
+    waited = wait_while_locked(log=log, stop=stop, poll=15, max_wait=max_wait, held=lock_held)
+    return waited is not None and not stop()
 
 
-def fetch_all(sources_dir: Path, config: dict, git=_git) -> list[dict]:
+def fetch_all(sources_dir: Path, config: dict, git=_git, *, wait=None) -> list[dict]:
     """Fetch every source without moving any checkout. Raises RuntimeError if one fetch fails."""
     found = []
     for source in config["sources"]:
+        if wait is not None and not wait():
+            raise QuietTimeout("server lock held during repository fetch")
         repo = sources_dir / source["name"]
         if not (repo / ".git").is_dir():
             raise RuntimeError(f"no checkout for {source['name']} (run fetch.sh once)")
@@ -90,7 +89,12 @@ def run(db_path: Path, home: Path, app: Path, *, max_wait: float = 3 * 3600, mod
             result["status"] = "skipped-lock"
             return result
         try:
-            result["sources"] = fetch(sources_dir, config)
+            result["sources"] = (fetch(sources_dir, config,
+                                       wait=lambda: wait_for_quiet(max_wait, stop, log))
+                                 if fetch is fetch_all else fetch(sources_dir, config))
+        except QuietTimeout:
+            result["status"] = "skipped-lock"
+            return result
         except (RuntimeError, subprocess.TimeoutExpired, OSError) as exc:
             result["status"] = "fetch-failed"       # nothing was moved, nothing was rebuilt
             result["error"] = str(exc)
@@ -102,19 +106,23 @@ def run(db_path: Path, home: Path, app: Path, *, max_wait: float = 3 * 3600, mod
                 return result
             try:
                 for source in changed:
+                    if not wait_for_quiet(max_wait, stop, log):
+                        raise QuietTimeout("server lock held during checkout update")
                     _git(source["repo"], "reset", "--quiet", "--hard", source["new"])
                     moved.append(source)
-                stats = build(db_path, sources_dir, app / "corpora.json")
+                stats = build(db_path, sources_dir, app / "corpora.json", log=log)
                 result["texts_added"] = stats["_all"]["texts_added"]
                 result["texts_removed"] = stats["_all"]["texts_removed"]
             except (RebuildRefused, RuntimeError, subprocess.SubprocessError, OSError, ValueError) as exc:
-                result["status"] = "rebuild-refused" if isinstance(exc, RebuildRefused) else "rebuild-failed"
-                result["error"] = str(exc)
+                result["status"] = ("skipped-lock" if isinstance(exc, QuietTimeout) else
+                                    "rebuild-refused" if isinstance(exc, RebuildRefused) else "rebuild-failed")
+                if not isinstance(exc, QuietTimeout):
+                    result["error"] = str(exc)
                 for source in moved:        # the working index was built from the old commits: go back to them
                     try:
                         _git(source["repo"], "reset", "--quiet", "--hard", source["old"])
                     except RuntimeError as undo:
-                        result["error"] += f"; could not restore {source['name']}: {undo}"
+                        result["error"] = result.get("error", "") + f"; could not restore {source['name']}: {undo}"
                 return result
             from .embed import run as embed_run
             embedded = embed_run(db_path, batch=8, log=log, stop=stop)
