@@ -768,15 +768,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # preferences and corrections even when the prompt shares no word with them. Ranked,
         # without repeats, and within a small budget so the first token is not delayed.
         try:
-            recalled = lesson_store.recall(settings.project, prompt, limit=4 if quick else 8,
-                                           max_chars=700 if quick else 1800)
+            limit, budget = learning.RECALL_QUICK if quick else learning.RECALL_FULL
+            recalled = lesson_store.recall(settings.project, prompt, limit=limit, max_chars=budget)
         except Exception:
             recalled = []
         shown = {lesson.id for lesson in recalled}
-        notes = '\n'.join(filter(None, [
-            learning.context_lines(recalled),
-            '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed
-                      if getattr(n, 'id', None) not in shown)]))
+        notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed
+                          if getattr(n, 'id', None) not in shown)
         for image in images:
             path = Path(image)
             media_type = 'image/jpeg' if path.suffix.lower() in ('.jpg', '.jpeg') else 'image/webp' if path.suffix.lower() == '.webp' else 'image/png'
@@ -785,7 +783,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # Per-turn reference material as (heading, text) pairs. This list is the only way
         # retrieved text reaches the model: star.agent.volatile_context appends it to the
         # final user turn, after the user's words. A new retrieval source appends one pair.
-        turn_sections = [('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
+        turn_sections = [(learning.LESSONS_HEADING, learning.context_lines(recalled)),
+                         ('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
         use_tools = route.use_tools
         allowed_context_chars = model_context_char_budget(settings)
         intelligence = for_settings(settings, home) if use_tools else None

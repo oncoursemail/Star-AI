@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 import re
 import threading
-from time import perf_counter
+from time import monotonic, perf_counter
 
 from .knowledge import now
 from .lessons import DIGESTIBLE, LESSON_KINDS, LessonRefused, LessonStore, check_lesson_text, redact
@@ -30,6 +30,7 @@ BATCH = 6                    # raw captures in one request
 AUTO_MINIMUM = 3             # an automatic run waits until this many are waiting
 MAX_OUTPUT_TOKENS = 420
 REQUEST_SECONDS = 120.0
+RETRY_AFTER_SECONDS = 900.0  # after a run that could not reach the model, automatic runs wait this long
 SERVER_FAST_MODEL = "star-quick"   # the small fast model on a STAR Server (alias of star-voice)
 
 SYSTEM = (
@@ -258,6 +259,7 @@ class Digester:
         self._run = run
         self._lock = threading.Lock()
         self._cancel = threading.Event()
+        self._not_before = 0.0
         self.thread: threading.Thread | None = None
 
     def cancel(self) -> None:
@@ -269,9 +271,12 @@ class Digester:
 
     def start(self, load, *, minimum: int = AUTO_MINIMUM, on_done=None) -> threading.Thread | None:
         """`load()` returns (settings, home, project) and runs on the new thread. A digest that is
-        still running is left alone: the new request is simply not started."""
+        still running is left alone: the new request is simply not started. After a run that
+        failed (a busy or unreachable server), automatic runs pause for a while, so a slow
+        server is not asked again after every answer; a run the owner asks for (minimum 1)
+        is always tried."""
         with self._lock:
-            if self.busy():
+            if self.busy() or (minimum > 1 and monotonic() < self._not_before):
                 return None
             cancel = self._cancel = threading.Event()
 
@@ -280,6 +285,7 @@ class Digester:
             try:
                 settings, home, project = load()
                 report = self._run(settings, home, project, cancel_event=cancel, minimum=minimum)
+                self._not_before = monotonic() + RETRY_AFTER_SECONDS if report.get("error") else 0.0
             except Exception:
                 pass
             finally:

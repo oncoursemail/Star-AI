@@ -28,6 +28,7 @@ STAR is an experimental **local-first** AI-development application. This is not 
 - `star/github_app.py`: short-lived, repository-restricted installation tokens and draft PRs only.
 - `star/selfbuild.py`: syntax-checked candidate skills, not verified or auto-executed.
 - `star/knowledge.py`: project-scoped notes and immutable local reference artifacts.
+- `star/lessons.py`, `star/lesson_digest.py`: lessons captured after a turn ([docs/STAR_LEARNING.md](docs/STAR_LEARNING.md)). Only the owner's own words are accepted automatically; anything inferred or model-written is a candidate until the owner approves it. Lessons never grant permissions or change settings.
 - `star/orchestration.py`: pure dependency/ownership planner, not a live multiagent scheduler yet.
 - `star/evals.py`, `evals/roblox_cases.json`: evaluation definitions; most cases require later live fixtures and grading.
 

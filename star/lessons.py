@@ -45,7 +45,17 @@ STANDING_KINDS = frozenset({"preference", "correction", "requirement", "decision
 MAX_TEXT = 600
 MAX_EVIDENCE = 1200
 RECALL_SCAN = 300          # newest accepted lessons considered for one turn
-RECALL_CLIP = 320          # characters of one lesson placed in a turn
+# Heading of the turn section that carries recalled lessons (star.desktop_core.run_task).
+LESSONS_HEADING = "OWNER'S LESSONS FOR THIS PROJECT (apply unless this message says otherwise)"
+RECALL_CLIP = 240          # characters of one lesson placed in a turn
+# Per-turn budget as (lessons, characters). The block is read on every turn and is never in
+# the server's prompt cache (it sits in the final user turn), so it is kept to roughly
+# 60-120 tokens for a quick answer and 300 for a full one.
+RECALL_QUICK = (3, 360)
+RECALL_FULL = (8, 1200)
+
+
+LINE_OVERHEAD = 20         # "[#123 correction] " and the line break
 
 
 class LessonRefused(ValueError):
@@ -614,7 +624,7 @@ class LessonStore:
         ranked.sort(key=lambda item: item[:3])
         chosen, size = [], 0
         for *_, row in ranked:
-            cost = min(len(row["text"]), RECALL_CLIP) + 28
+            cost = min(len(row["text"]), RECALL_CLIP) + LINE_OVERHEAD
             if size + cost > max_chars:
                 continue
             chosen.append(_lesson(row))
@@ -638,7 +648,7 @@ class LessonStore:
 
 def context_lines(lessons: list[Lesson]) -> str:
     """The lines a turn carries. The id is the provenance: the review page shows where each came from."""
-    return "\n".join(f"[lesson {lesson.kind} #{lesson.id}] {lesson.text[:RECALL_CLIP]}" for lesson in lessons)
+    return "\n".join(f"[#{lesson.id} {lesson.kind}] {lesson.text[:RECALL_CLIP]}" for lesson in lessons)
 
 
 # --- capture after a turn --------------------------------------------------------------------
@@ -806,6 +816,18 @@ def learning_status(home: Path, project: str) -> dict:
         return {name: 0 for name in (*STATUSES, "pending", "uses")}
     finally:
         store.close()
+
+
+def write_export(destination: Path, data: dict) -> dict:
+    """Save an export where the owner chose. Returns a nonsecret receipt for the interface."""
+    destination = Path(destination).expanduser()
+    if not destination.suffix:
+        destination = destination.with_suffix(".json")
+    temporary = destination.with_name(destination.name + ".part")
+    temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(destination)
+    return {"filename": destination.name, "count": len(data.get("lessons") or []),
+            "saved_to_user_selected_location": True}
 
 
 def handle_action(home: Path, project: str, action: str, body: dict) -> dict:

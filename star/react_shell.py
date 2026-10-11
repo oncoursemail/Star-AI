@@ -35,7 +35,7 @@ from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
-from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status
+from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester
 
 ALLOWED_ACTIONS = frozenset({
@@ -711,7 +711,16 @@ def launch():
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)
-                    return json.dumps({'ok':True,'data':handle_lesson_action(app_data(),settings.project,action,body)},default=str)
+                    data=handle_lesson_action(app_data(),settings.project,action,body)
+                    if action=='exportLessons':
+                        # The file goes where the owner chooses, like the review bundle.
+                        name=re.sub(r'[^A-Za-z0-9._-]+','-',settings.project).strip('-') or 'project'
+                        suggested=str(Path.home()/f"STAR-lessons-{name}-{time.strftime('%Y%m%d',time.gmtime())}.json")
+                        filename,_=QFileDialog.getSaveFileName(self.host,'Export lessons',suggested,'JSON (*.json)')
+                        if not filename:
+                            return json.dumps({'ok':True,'data':{'cancelled':True}})
+                        data=write_export(Path(filename),data)
+                    return json.dumps({'ok':True,'data':data},default=str)
                 if action=='digestLessons':
                     # "Summarise now": the same background step, started by the owner for even one capture.
                     if self.active_task:raise RuntimeError('Wait for the current answer before summarising captures')

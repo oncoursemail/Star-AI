@@ -5,11 +5,13 @@ import {AnalyticsView} from './Charts'
 import {Message,Panel,StarMark,Tag} from './components'
 import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts} from './types'
 import './tokens.css'
 import './stellar-ui.css'
 import './chat.css'
-import {ProviderPanel,McpPanel,LearningPanel} from './IntegrationPanels'
+import './learning.css'
+import {ProviderPanel,McpPanel} from './IntegrationPanels'
+import {LearningPanel} from './LearningPanel'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
@@ -246,6 +248,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      endRun('done')
      streamRef.current='';sending.current=false
      setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
+     // What the turn taught is said once, plainly; the lesson itself is on the Projects page.
+     const learned=result?.learned as {accepted?:number;candidates?:number}|undefined
+     if(learned?.accepted)setNotice(`Noted for this project: ${learned.accepted===1?'1 lesson':learned.accepted+' lessons'} from what you said. Review it under Projects.`)
+     else if(learned?.candidates)setNotice(`${learned.candidates===1?'1 note is':learned.candidates+' notes are'} waiting for your review under Projects.`)
      if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current})
      setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
@@ -467,6 +473,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setDraft(d=>({...d,router_models_dir:result.path as string}))
    }
  }
+ /** A thumb on a saved answer. The host stores it and keeps a note for review; nothing is trusted from it. */
+ const rate=async(mid:number,value:'up'|'down'|'')=>{
+   const done=await act('messageFeedback',{messageId:mid,value}) as {counts?:LessonCounts}|null
+   if(!done)return
+   setMessages(list=>list.map(m=>m.mid===mid?{...m,feedback:value||undefined}:m))
+   if(done.counts)setData(d=>({...d,learning:done.counts}))
+ }
  const copyConversation=async()=>{
    if(!messages.length){setNotice('Nothing to copy yet.');return}
    const transcript=messages.map(m=>(m.role==='assistant'?'STAR':m.role==='user'?'You':'System')+':\n'+m.text).join('\n\n---\n\n')
@@ -587,6 +600,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                        onEdit={m.role==='user'&&!busy?()=>fillComposer(m.text):recover?()=>fillComposer(retryPrompt):undefined}
                        onRetry={recover?retryNow:undefined}
                        onAskAgain={m.role==='assistant'&&at===lastStar&&at>lastUser&&!busy&&lastUser>=0?()=>void send(messages[lastUser].text,[]):undefined}
+                       onFeedback={m.role==='assistant'&&typeof m.mid==='number'&&!live?value=>void rate(m.mid as number,value):undefined}
                        onConnection={recover?()=>nav('brain'):undefined}/>
                      {at===lastUser&&timelineNode}
                    </Fragment>
@@ -614,7 +628,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <div className="sr-only" role="status" aria-live="polite">{announce}</div>
          </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
-         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
+         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
             {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}

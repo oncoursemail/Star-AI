@@ -302,7 +302,7 @@ def test_recall_ranks_matching_lessons_first_and_respects_the_budget(store):
     store.approve("P", pitfall.lesson_id, human_approved=True)
     about = store.recall("P", "why does my Raycast code error on nil?", limit=4, max_chars=700)
     assert about[0].id == pitfall.lesson_id and len(about) <= 4
-    assert sum(min(len(x.text), L.RECALL_CLIP) + 28 for x in about) <= 700
+    assert sum(min(len(x.text), L.RECALL_CLIP) + L.LINE_OVERHEAD for x in about) <= 700
     # A pitfall is topical: it is not carried into turns about something else. Preferences are.
     unrelated = store.recall("P", "hello there", limit=8, max_chars=1800)
     assert pitfall.lesson_id not in [x.id for x in unrelated] and unrelated
@@ -427,7 +427,9 @@ def test_a_correction_in_one_chat_changes_a_later_chat_of_the_same_project_only(
     third = desk.turn("Write a loop that spawns a part every second.", "while true do task.wait(1) end")
     final = text_of(third.request["messages"][-1])
     assert final.startswith("Write a loop that spawns a part every second.")
-    assert f"[lesson correction #{lesson.id}] {LESSON}" in final and "REVIEWED KNOWLEDGE" in final
+    assert f"{L.LESSONS_HEADING}:\n[#{lesson.id} correction] {LESSON}" in final
+    # The whole addition (wrapper, heading, lesson) stays small: it is read again on every turn.
+    assert len(final) - len("Write a loop that spawns a part every second.") < 330
     # Only the final user turn changed: the system message is the same bytes as before the lesson existed.
     assert third.request["messages"][0] == first.request["messages"][0]
     assert LESSON not in third.request["messages"][0]["content"]
@@ -605,6 +607,32 @@ def test_bridge_exposes_the_lesson_actions_and_settings_and_nothing_wider(tmp_pa
     assert state["learning"]["pending"] == 1 and state["analytics"]["learning"]["pending"] == 1
     assert [(m["role"], m.get("mid"), m.get("feedback")) for m in state["messages"]] == [
         ("user", None, None), ("assistant", answer, "up")]
+
+
+def test_an_export_is_written_where_the_owner_chose(tmp_path):
+    store = LessonStore(tmp_path)
+    try:
+        stated(store, "Always use task.wait instead of wait.")
+        data = store.export("P")
+    finally:
+        store.close()
+    receipt = L.write_export(tmp_path / "out" / ".." / "lessons", data)
+    assert receipt == {"filename": "lessons.json", "count": 1, "saved_to_user_selected_location": True}
+    saved = json.loads((tmp_path / "lessons.json").read_text(encoding="utf-8"))
+    assert saved["format"] == "star-lessons-v1" and saved["lessons"][0]["text"].startswith("Always use task.wait")
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_bridge_wires_learning_through_the_tested_helpers():
+    """The Qt Bridge cannot be built without PySide6, so its wiring is pinned structurally."""
+    import inspect
+    from star import react_shell
+    source = inspect.getsource(react_shell.launch)
+    assert "handle_lesson_action(app_data(),settings.project,action,body)" in source
+    assert "owner_text=prompt" in source                                    # never the transcript STAR appended
+    assert "self._warm(check=False,then=self._digest_when_idle)" in source  # only once the turn is over
+    assert "if action in WARM_UP_STOPPERS or action in VOICE_ACTIONS:self.digester.cancel()" in source
+    assert "write_export(Path(filename),data)" in source
 
 
 # --- 7. additive migration --------------------------------------------------------------------
@@ -869,3 +897,16 @@ def test_the_background_runner_runs_one_digest_at_a_time_and_stops_on_request(tm
     runner.cancel()                                                    # what any real request does
     first.join(2)
     assert seen == [True] and done == [{"created": 0, "cancelled": True}] and not runner.busy()
+
+    # A run that could not reach the model pauses the automatic runs; the owner's own request still goes.
+    calls = []
+
+    def unreachable(settings, home, project, *, cancel_event=None, minimum=3):
+        calls.append(minimum)
+        return {"created": 0, "error": "APITimeoutError"}
+
+    runner = digest.Digester(run=unreachable)
+    runner.start(lambda: (lan(), tmp_path, "P")).join(2)
+    assert runner.start(lambda: (lan(), tmp_path, "P")) is None and calls == [3]
+    runner.start(lambda: (lan(), tmp_path, "P"), minimum=1).join(2)
+    assert calls == [3, 1]

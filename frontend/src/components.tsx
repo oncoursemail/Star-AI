@@ -1,7 +1,7 @@
 import {splitSources, type AnswerSource} from './sources'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
-import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, X} from 'lucide-react'
+import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, ThumbsDown, ThumbsUp, X} from 'lucide-react'
 import * as Dialog from '@radix-ui/react-dialog'
 import {motion} from 'motion/react'
 import ReactMarkdown from 'react-markdown'
@@ -167,6 +167,8 @@ export type MessageProps = {
   /** Ask the last question again after a finished answer. */
   onAskAgain?: () => void
   onConnection?: () => void
+  /** Rate a saved answer: 'up', 'down', or '' to take the rating back. STAR keeps it as a note to review. */
+  onFeedback?: (value: 'up' | 'down' | '') => void
 }
 
 /** A turn that ended without an answer. The backend stores this row, so it reads the same after a restart. */
@@ -212,7 +214,7 @@ function TurnNotice({entry, animated, onRetry, onEdit, onConnection}: MessagePro
 }
 
 export function Message(props: MessageProps) {
-  const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain} = props
+  const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain, onFeedback} = props
   if (entry.role === 'event') return <TurnNotice {...props} animated={animated} />
   const isUser = entry.role === 'user'
   const hasImage = Boolean(entry.image?.startsWith('data:image/webp;base64,'))
@@ -282,6 +284,18 @@ export function Message(props: MessageProps) {
               <RotateCcw size={14} aria-hidden="true" />
               <span>Ask again</span>
             </button>
+          )}
+          {onFeedback && !isUser && (
+            <>
+              <button type="button" className="msg-action msg-rate" aria-label="Helpful" title="Helpful" aria-pressed={entry.feedback === 'up'}
+                onClick={() => onFeedback(entry.feedback === 'up' ? '' : 'up')}>
+                <ThumbsUp size={14} aria-hidden="true" />
+              </button>
+              <button type="button" className="msg-action msg-rate" aria-label="Not helpful" title="Not helpful" aria-pressed={entry.feedback === 'down'}
+                onClick={() => onFeedback(entry.feedback === 'down' ? '' : 'down')}>
+                <ThumbsDown size={14} aria-hidden="true" />
+              </button>
+            </>
           )}
           {hasImage && (
             <span className="msg-meta">

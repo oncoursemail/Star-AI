@@ -14,7 +14,7 @@ import {act} from '@testing-library/react'
 
 export type Call = {action: string; payload: Record<string, unknown>; requestId: string}
 export type Reply = {ok: boolean; data?: unknown; pending?: boolean; error?: string}
-type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string}
+type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string}
 
 /** Mirrors `asdict(Settings())` in star/desktop_core.py; loosely typed on purpose. */
 export const backendSettings = {
@@ -44,7 +44,8 @@ export function installFakeDesktop() {
   const boot = () => ({
     version: '0.9.0', project: 'STAR', projects: ['STAR'], active_chat: 'chat-1',
     chats: [{id: 'chat-1', title: 'Test chat', created: stamp(), updated: stamp()}],
-    messages: db.map((m, i) => ({...m, id: `saved-${i}`})), retry,
+    // Like the real host: every stored answer carries its row id, so it can be rated.
+    messages: db.map((m, i) => ({...m, id: `saved-${i}`, ...(m.role === 'assistant' ? {mid: m.mid ?? i + 1} : {})})), retry,
     settings: backendSettings, brain_installed: true, brain_running: true, analytics,
     release_url: 'https://github.com/oncoursemail/Star-AI/releases/latest', credentials: {},
     ...reported,
