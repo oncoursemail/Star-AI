@@ -37,6 +37,8 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester, may_start_automatic
+from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
+                           handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -52,6 +54,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
+# Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
+# the model asked for (star/roblox_cloud.py, docs/ROBLOX_ACCESS.md). Never a publish action itself.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -67,7 +72,7 @@ PERMITTED_SETTINGS = frozenset({
     'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model',
     'router_models_dir','router_context','gpu_layers','roblox_research_enabled',
     'tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider',
-    'project','workspace','studio_id','studio_edit','workspace_edit','max_calls',
+    'project','workspace','studio_id','studio_edit','studio_own_places','studio_luau','workspace_edit','max_calls',
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
@@ -364,6 +369,15 @@ def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
         emit(request_id, 'error', f'{type(exc).__name__}: {str(exc)[:350]}')
 
 
+def roblox_state(home: Path) -> dict:
+    """Roblox connection summary for the interface: no network call and never the key."""
+    try:
+        return RobloxCloud(home=home).status()
+    except Exception:
+        return {'key_present': False, 'source': '', 'state': 'no_key', 'message': '', 'last_check': None,
+                'test_experience': None, 'pending_actions': 0, 'denied_place_ids': []}
+
+
 def file_allowed(path: Path, approved: set[Path]) -> Path:
     resolved = path.expanduser().resolve(strict=True)
     if resolved not in approved:
@@ -418,6 +432,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dic
         'learning':learning_status(home,settings.project),
         'credentials':credential_status(),
         'server':server_status(settings),
+        'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
@@ -747,6 +762,12 @@ def launch():
                             return json.dumps({'ok':True,'data':{'cancelled':True}})
                         data=write_export(Path(filename),data)
                     return json.dumps({'ok':True,'data':data},default=str)
+                if action in ROBLOX_ACTIONS:
+                    # Explicit owner clicks in Settings. The ones that talk to Roblox run off the UI thread.
+                    if action in ROBLOX_NETWORK_ACTIONS:
+                        self._run(rid,action,lambda:handle_roblox_action(app_data(),action,body))
+                        return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                    return json.dumps({'ok':True,'data':handle_roblox_action(app_data(),action,body)})
                 if action=='digestLessons':
                     # "Summarise now": the same background step, started by the owner for even one capture.
                     if self.active_task:raise RuntimeError('Wait for the current answer before summarising captures')

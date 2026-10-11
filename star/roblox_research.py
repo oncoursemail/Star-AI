@@ -21,6 +21,8 @@ import time
 import uuid
 
 import httpx
+
+from . import roblox_cloud
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 _MAX_BYTES = 240_000
@@ -173,7 +175,7 @@ class RobloxResearch:
             "enabled": True, "read_only": True, "public_game_data": True,
             "forum": "best effort; rate limits / challenge pages possible",
             "youtube_data_api_configured": bool(os.environ.get("STAR_YOUTUBE_API_KEY")),
-            "open_cloud_read_configured": bool(os.environ.get("STAR_ROBLOX_READ_API_KEY")),
+            "open_cloud_read_configured": bool(os.environ.get("STAR_ROBLOX_READ_API_KEY")) or roblox_cloud.key_present(),
             "note": "No API keys, cookies, uploads or game publishing exposed to the model.",
         }
 
@@ -663,10 +665,11 @@ class RobloxResearch:
 
     def open_cloud_universe(self, universe_id) -> dict:
         universe_id = _positive_id(universe_id)
-        key = os.environ.get("STAR_ROBLOX_READ_API_KEY", "").strip()
+        # The owner's key: Settings (OS keyring), the key file, or the environment (star/roblox_cloud.py).
+        key = os.environ.get("STAR_ROBLOX_READ_API_KEY", "").strip() or roblox_cloud.load_key()[0]
         if not key:
             return {"configured": False, "universe_id": universe_id,
-                    "note": "Configure a least-privilege Roblox Open Cloud universe:read key in the local process environment."}
+                    "note": "No Roblox API key is connected. The owner adds one in Settings, Roblox."}
         payload = self._get("apis", f"/cloud/v2/universes/{universe_id}",
                             api_key=key, ttl=180)
         return {"configured": True, "universe_id": universe_id,

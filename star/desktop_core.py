@@ -28,6 +28,7 @@ from .brain_router import select_route, validate_alias, is_roblox_task, deep_req
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding
+from . import studio_loop
 
 
 def app_data() -> Path:
@@ -51,6 +52,9 @@ class Settings:
     workspace: str = ''
     studio_id: str = ''
     studio_edit: bool = False
+    # The sandbox rule itself is code (star/studio_loop.py): edits only in a blank unsaved place.
+    studio_own_places: bool = False       # ...and, when on, in places owned by STAR's own Roblox account
+    studio_luau: bool = False             # let STAR run Luau in that sandbox (needed to create instances)
     workspace_edit: bool = False
     max_calls: int = 12
     context_chars: int = 26000
@@ -114,7 +118,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud')):
+                            'learning_digest_cloud', 'studio_own_places', 'studio_luau')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -909,9 +913,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     kwargs.update(model=model, request_extras=slot_fields(model))
                     if allow_studio:
                         async with connect() as session:
-                            return await execute(**kwargs, studio=session,
-                                discovered=await list_tools(session), studio_id=settings.studio_id,
-                                may_edit=settings.studio_edit)
+                            # The tool list is the connector's own, read now. What STAR may do in
+                            # the open place is decided in code from what that place is.
+                            discovered = await list_tools(session)
+                            guarded = await studio_loop.open_guarded(
+                                session, discovered, studio_id=settings.studio_id,
+                                opted_in=settings.studio_edit, own_places=settings.studio_own_places,
+                                own_account_id=studio_loop.own_account_id(home))
+                            sections = list(kwargs.get('turn_sections') or ())
+                            sections.append(('ROBLOX STUDIO PLACE', guarded.verdict.reason))
+                            outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,
+                                discovered=discovered, studio_id=settings.studio_id,
+                                may_edit=guarded.verdict.editable,
+                                allow_luau=guarded.verdict.editable and settings.studio_luau)
+                            return studio_loop.with_report(outcome, guarded)
                     return await execute(**kwargs)
                 used = route
                 try:
