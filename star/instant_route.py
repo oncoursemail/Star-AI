@@ -46,14 +46,14 @@ class InstantAnswer:
 
 def decide_instant_route(
     prompt: str, *, mode: str, provider: str, enabled: bool,
-    loaded_model: str, attachments: int = 0, tools: bool = False,
+    installed: bool, loaded_model: str, attachments: int = 0, tools: bool = False,
     research: bool = False, documentation: bool = False, deep: bool = False,
     followup: bool = False,
 ) -> InstantDecision:
     """A zero-I/O, fail-closed route table. Model readiness is supplied by the caller."""
     if provider != "lan":
         return InstantDecision(False, "provider")
-    if not enabled or not loaded_model:
+    if not enabled or not installed or not loaded_model:
         return InstantDecision(False, "not-ready")
     if mode not in ("fast", "auto"):
         return InstantDecision(False, "mode")
@@ -184,7 +184,7 @@ async def answer_on_pc(endpoint: str, model: str, prompt: str):
         raise ValueError("Instant model must use the on-device loopback endpoint")
     from openai import AsyncOpenAI
     async with httpx.AsyncClient(timeout=12, trust_env=False, follow_redirects=False) as transport:
-        client = AsyncOpenAI(base_url=endpoint, api_key="local-only", http_client=transport)
+        client = AsyncOpenAI(base_url=endpoint, api_key="local-only", http_client=transport, max_retries=0)
         try:
             return await complete_instant(client, model, prompt)
         finally:
