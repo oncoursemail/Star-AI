@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
-from typing import Callable, Iterable
 
 from jsonschema import Draft202012Validator
 
@@ -19,9 +18,6 @@ from .doc_knowledge import client_for
 from .graphify_bridge import GraphifyGraph
 from .obsidian_bridge import ObsidianVault
 from .roblox_cloud import RobloxCloud
-from .shared_brain_runtime import (RUNTIME_TOOLS, SharedBrainUnavailable,
-                                   make_shared_brain_runtime, registered_workspace,
-                                   shared_store_present)
 from .roblox_research import RobloxResearch
 
 
@@ -105,10 +101,8 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS, *RUNTIME_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
-_SHARED_TOOL_NAMES = frozenset(tool["name"] for tool in RUNTIME_TOOLS)
-_LEGACY_GRAPH_READ_NAMES = frozenset({"star_graphify_query", "star_graphify_stats"})
 
 _SKILL_TRIGGER = re.compile(r"\b(skill|expert|workflow|tool|roblox|luau|ui|design|debug|build|fix|test|code|studio|script)\b", re.I)
 _VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan)\b", re.I)
@@ -126,8 +120,7 @@ class LocalIntelligence:
     def __init__(self, *, home: Path, workspace: Path | None = None,
                  obsidian_vault: Path | None = None, skills_enabled: bool = True,
                  graphify_enabled: bool = True, roblox_research_enabled: bool = True,
-                 docs=None, cloud=None, registered_workspaces: Iterable[Path | str] = (),
-                 graph_boundary_check: Callable[[], bool] | None = None):
+                 docs=None, cloud=None):
         self.home = home
         self.workspace = workspace
         self.docs = docs   # star.doc_knowledge.KnowledgeClient, or None when not configured
@@ -136,12 +129,6 @@ class LocalIntelligence:
         self.skills = None
         self.graph = None
         self.vault = None
-        self.shared_brain = None
-        self._closed = False
-        self._shared_prepared = False
-        self._graph_boundary_check = graph_boundary_check
-        self._shared_root = (registered_workspace(workspace, registered_workspaces)
-                             if graphify_enabled is True else None)
         self.roblox = RobloxResearch(home=home) if roblox_research_enabled else None
         if skills_enabled:
             install_starters(home / "skills")
@@ -151,48 +138,16 @@ class LocalIntelligence:
         if obsidian_vault is not None:
             self.vault = ObsidianVault(obsidian_vault)
 
-    def _graph_allowed(self) -> bool:
-        if self._closed or self.graph is None:
-            return False
-        if self._graph_boundary_check is not None and not self._graph_boundary_check():
-            # A host snapshot change revokes this hub; a new turn creates a new one.
-            self.close()
-            return False
-        return True
-
-    def _shared_status(self) -> dict:
-        if not self._graph_allowed():
-            return {"enabled": False, "ready": False, "reference_data_only": True}
-        self._shared_prepared |= shared_store_present(self.graph.workspace)
-        if not self._shared_prepared:
-            return {"enabled": False, "ready": False, "reference_data_only": True}
-        if self._shared_root is None:
-            return {"enabled": False, "ready": False, "reason": "workspace is not registered"}
-        if self.shared_brain is None:
-            self.shared_brain = make_shared_brain_runtime(
-                self._shared_root, (self._shared_root,), enabled=True)
-        if self.shared_brain is not None:
-            return self.shared_brain.status()
-        return {"enabled": True, "ready": False, "reason": "operator-prepared store unavailable"}
-
-    def close(self) -> None:
-        """Revoke this hub. Dispatch holds no SQLite handle between calls."""
-        self._closed = True
-        if self.shared_brain is not None:
-            self.shared_brain.close()
-
     def status(self) -> dict:
         catalog = self.skills.catalog() if self.skills else []
-        shared = self._shared_status()
         graph_detected = bool(self.graph and self.graph.path.is_file() and not self.graph.path.is_symlink())
         return {
             "skills": {"enabled": self.skills is not None, "count": len(catalog),
                        "names": [s.name for s in catalog[:12]]},
-            "graphify": {"enabled": self._graph_allowed(),
+            "graphify": {"enabled": self.graph is not None,
                          "export_detected": graph_detected,
                          "path": "graphify-out/graph.json" if self.graph else "",
                          "note": "Graph export is validated only when queried."},
-            "shared_brain": shared,
             "obsidian": {"enabled": self.vault is not None,
                          "read_only": True,
                          "note": "Select an Obsidian vault folder and explicitly enable access."},
@@ -202,20 +157,13 @@ class LocalIntelligence:
 
     def definitions(self, prompt: str) -> list[dict]:
         """Conserve small-model context and plain-chat streaming where possible."""
-        shared = self._shared_status() if _GRAPH_TRIGGER.search(prompt) else None
-        if self._closed:
-            return []
         result = []
         if self.skills and _SKILL_TRIGGER.search(prompt):
             result.extend(SKILL_TOOLS)
         if self.vault and _VAULT_TRIGGER.search(prompt):
             result.extend(OBSIDIAN_TOOLS)
-        if self._graph_allowed() and _GRAPH_TRIGGER.search(prompt):
-            if self.graph.path.is_file():
-                result.extend(tool for tool in GRAPHIFY_TOOLS
-                              if not self._shared_prepared or tool["name"] not in _LEGACY_GRAPH_READ_NAMES)
-            if shared and shared["ready"]:
-                result.extend(self.shared_brain.definitions())
+        if self.graph and self.graph.path.is_file() and _GRAPH_TRIGGER.search(prompt):
+            result.extend(GRAPHIFY_TOOLS)
         if self.docs and (_ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)):
             result.extend(DOC_KNOWLEDGE_TOOLS)
         if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I)):
@@ -240,25 +188,9 @@ class LocalIntelligence:
         return name in ALL_TOOLS
 
     def call(self, name: str, args: dict, *, enabled: set[str]) -> dict:
-        if self._closed or name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
+        if name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
             raise PermissionError("Intelligence tool is not enabled for this task")
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
-        if name in _SHARED_TOOL_NAMES or name.startswith("star_graphify_"):
-            shared = self._shared_status()
-            if not self._graph_allowed():
-                raise PermissionError("Graph access is disabled for this task")
-            if name in _SHARED_TOOL_NAMES:
-                if self._shared_root is None:
-                    raise PermissionError("Shared-brain workspace is not registered")
-                if shared["ready"]:
-                    try:
-                        return self.shared_brain.call(name, args, enabled=enabled)
-                    except SharedBrainUnavailable:
-                        pass
-                return {"available": False, "reference_data_only": True,
-                        "reason": "operator-prepared shared store unavailable"}
-            if self._shared_prepared and name in _LEGACY_GRAPH_READ_NAMES:
-                raise PermissionError("Legacy graph query/stats are superseded by the shared store")
         if name in _DOC_TOOL_NAMES:
             if self.docs is None:
                 raise PermissionError("STAR Knowledge is not configured")
@@ -362,17 +294,8 @@ class LocalIntelligence:
 
 
 def for_settings(settings, home: Path) -> LocalIntelligence:
-    """Register the exact owner-selected workspace, never a model-supplied path.
-
-    Settings are trusted host input from the owner interface. Each turn gets a
-    new hub; this closure also observes changes to this in-memory snapshot. It
-    does not watch a separately saved settings file during an in-flight turn.
-    """
+    """Construct a scoped hub without importing the desktop UI or its Qt stack."""
     workspace = Path(settings.workspace).expanduser() if settings.workspace else None
-    selected = registered_workspace(workspace, (workspace,) if workspace is not None else ())
-    def graph_boundary_check():
-        return (settings.graphify_enabled is True and selected is not None
-                and registered_workspace(settings.workspace, (selected,)) == selected)
     obsidian = (Path(settings.obsidian_vault).expanduser()
                 if settings.obsidian_enabled else None)
     return LocalIntelligence(
@@ -381,8 +304,6 @@ def for_settings(settings, home: Path) -> LocalIntelligence:
         obsidian_vault=obsidian,
         skills_enabled=settings.skills_enabled,
         graphify_enabled=settings.graphify_enabled,
-        registered_workspaces=(selected,) if selected is not None and settings.graphify_enabled is True else (),
-        graph_boundary_check=graph_boundary_check,
         roblox_research_enabled=getattr(settings, "roblox_research_enabled", True),
         docs=client_for(settings),
         cloud=RobloxCloud(home=home),
