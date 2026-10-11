@@ -34,6 +34,7 @@ from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
+from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -44,6 +45,8 @@ ALLOWED_ACTIONS = frozenset({
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
 })
+# Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -437,6 +440,8 @@ def launch():
             self.turn: TurnRef | None = None
             self.active_update = False
             self.warmer = Warmer()
+            self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
+                                     settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
 
         def _warm_target(self):
             """What a message sent now would talk to. Runs on the warm-up thread."""
@@ -459,6 +464,18 @@ def launch():
                 self._warm_target, check=check,
                 on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
                 on_done=(lambda report:self._emit(request_id,'result',report)) if request_id else None)
+
+        def _save_voice_turn(self, user_text: str, reply_text: str):
+            # A call shows up in the active chat like typed messages do.
+            settings = Settings.load(self.settings_file)
+            chats = Conversations(app_data() / 'conversations.sqlite3')
+            try:
+                active_chat = chats.active_chat(settings.project)
+                chats.add(settings.project, 'user', user_text, chat_id=active_chat)
+                if reply_text:
+                    chats.add(settings.project, 'assistant', reply_text, chat_id=active_chat)
+            finally:
+                chats.close()
 
         def _emit(self, request_id: str, kind: str, data):
             payload={'requestId':request_id,'kind':kind,'data':data}
@@ -613,6 +630,8 @@ def launch():
                         return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
                     self._warm(rid)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                if action in VOICE_ACTIONS:
+                    return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
@@ -910,6 +929,7 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            self.voice.close()
             self.cancel_chat.set()
             self.warmer.cancel()
             self.runtime.stop()
