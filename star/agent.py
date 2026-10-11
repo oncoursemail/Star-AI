@@ -11,6 +11,15 @@ from .policy import allowed_registry, enforce
 from .memory import compact
 from .workspace import TOOLS, TOOL_NAMES
 
+
+class HistoryWindowPressure(RuntimeError):
+    """Complete replay turns need retention before they can leave the request."""
+    def __init__(self, dropped: list[dict], *, dispatched: bool, tool_actions_started: bool):
+        super().__init__('Complete conversation turns exceed the request budget')
+        self.dropped = dropped
+        self.dispatched = dispatched
+        self.tool_actions_started = tool_actions_started
+
 RULES = """You are STAR Genesis, an early-stage Roblox development AI.
 Truthfully report uncertainty and failed operations. Never claim a game was edited without a successful tool result.
 For images, identify what is actually visible before inferring interactions.
@@ -223,7 +232,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   subagent_model=None, tool_workshop=None, specialists=None,
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
-                  tool_memory=None, helper_client=None, document_tools=None, image_max_side=None):
+                  tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
+                  preserve_history=False):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -382,6 +392,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     require_fit([messages[0], {"role": "user", "content": [
         {"type": "text", "text": prompt}, *content[1:]]}], "The original request alone is too large. ")
     calls_count = 0
+    tool_actions_started = False
     delegations = 0
     if callable(request_extras):   # the slot depends on whether tools are attached
         request_extras = request_extras(tools_attached)
@@ -397,6 +408,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             before, previous_anchor = messages, anchor
             messages, anchor = drop_oldest_turns(messages, anchor, max(0, context_chars - schema_chars), text_size)
             if anchor != previous_anchor:
+                if preserve_history:
+                    raise HistoryWindowPressure(before[1:previous_anchor - anchor + 1],
+                                                dispatched=step > 0, tool_actions_started=tool_actions_started)
                 archive.append({"step": step, "history_bounded": True,
                                 "messages": before[1:previous_anchor - anchor + 1]})
                 event({"event": "context_bounded", "reason": "earlier_turns_archived",
@@ -554,6 +568,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     event({"event": "tool_rejected", "tool": name})
                 else:
                     # Authorized: announce before running so progress is not retroactive.
+                    tool_actions_started = True
                     event({"event": "tool_started", "tool": name})
                     if name == 'star_github_tree' or name == 'star_github_read':
                         try:
