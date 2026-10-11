@@ -286,3 +286,28 @@ def test_agent_typed_pressure_contains_whole_turns_before_dispatch():
     assert failure.value.dropped == history
     assert failure.value.dispatched is failure.value.tool_actions_started is False
     assert not models.requests and gateway.calls == 0
+
+
+def test_real_desktop_request_omits_stopped_and_failed_image_rows(desk):
+    desk.chats.add(desk.settings.project, 'user', 'Good earlier question',
+                   chat_id=desk.chat)
+    desk.chats.add(desk.settings.project, 'assistant', 'Good earlier answer',
+                   chat_id=desk.chat)
+    stopped = desk.chats.add(desk.settings.project, 'user', 'stop this request',
+                             chat_id=desk.chat)
+    desk.chats.add_terminal(desk.settings.project, desk.chat, stopped, 'cancelled',
+                            'Interrupted reply')
+    image = desk.chats.add(desk.settings.project, 'user', 'generate an image',
+                           chat_id=desk.chat)
+    desk.chats.add_terminal(desk.settings.project, desk.chat, image, 'failed',
+                            'Image generation failed')
+    assert turn(desk, 'what is 2+2?') == 'Fixture answer.'
+    messages = desk.models.requests[-1]['messages']
+    assert [item['role'] for item in messages] == [
+        'system', 'user', 'assistant', 'user']
+    assert messages[1:3] == [
+        {'role': 'user', 'content': 'Good earlier question'},
+        {'role': 'assistant', 'content': 'Good earlier answer'}]
+    assert messages[-1]['content'][0]['text'].startswith('what is 2+2?')
+    assert 'stop this request' not in json.dumps(messages)
+    assert 'generate an image' not in json.dumps(messages)
