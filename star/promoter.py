@@ -6,6 +6,7 @@ Lessons and the audit live in the same SQLite database so both commit together.
 """
 from __future__ import annotations
 
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -55,7 +56,7 @@ def _readonly_setting(home, key: str):
     if not db_file.is_file():
         return None
     try:
-        with sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True, timeout=1) as db:
+        with closing(sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True, timeout=1)) as db:
             row = db.execute("SELECT value_json FROM promoter_settings WHERE key=?", (key,)).fetchone()
             return json.loads(row[0]) if row is not None else None
     except (sqlite3.Error, OSError, ValueError):
@@ -71,7 +72,7 @@ def enabled_skill_packs(home, defaults) -> frozenset[str]:
     if not db_file.is_file():
         return frozenset(names & known)
     try:
-        with sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True, timeout=1) as db:
+        with closing(sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True, timeout=1)) as db:
             for key, value in db.execute(
                     "SELECT key,value_json FROM promoter_settings WHERE key LIKE 'skill_pack:%'"):
                 name = key.removeprefix("skill_pack:")
@@ -91,6 +92,31 @@ def routing_role(home, profile: str) -> str | None:
         return None
     role = _readonly_setting(home, f"routing_rule:{profile}")
     return role if role in _ROLES else None
+
+
+def expire_due(home, now=None) -> list[int]:
+    """Retire due self-derived lessons before a turn recalls trusted notes.
+
+    No new SQLite file, migration, or write transaction is opened on the usual
+    (no promotion / nothing due) path.
+    """
+    stamp = _stamp(now)
+    db_file = _home(home) / "knowledge" / "knowledge.sqlite3"
+    if not db_file.is_file():
+        return []
+    try:
+        with closing(sqlite3.connect(f"file:{db_file.as_posix()}?mode=ro", uri=True, timeout=1)) as db:
+            due = db.execute(
+                """SELECT 1 FROM promoter_audit a
+                   JOIN promoter_changes c ON c.id=a.promotion_id
+                   WHERE c.state='applied' AND a.kept_at IS NULL
+                   AND a.expires_at IS NOT NULL AND a.expires_at<=? LIMIT 1""", (stamp,)).fetchone()
+    except (sqlite3.Error, OSError):
+        return []  # pre-promotion installations have no tables yet
+    if due is None:
+        return []
+    with Promoter(home) as store:
+        return store.expire(stamp)
 
 
 class Promoter:
@@ -160,7 +186,7 @@ class Promoter:
                 and isinstance(candidate.get("run"), dict)
                 and candidate["run"].get("change_sha256") == digest):
             verdict = eval_gate.evaluate_change(baseline, candidate)
-            gate_data = verdict.to_dict()
+            gate_data = {**verdict.to_dict(), "change_sha256": digest}
             gate_verdict = {eval_gate.ALLOWED: "allowed", eval_gate.BLOCKED: "blocked",
                             eval_gate.UNUSABLE: "unusable", eval_gate.INCOMPLETE: "incomplete"}[verdict.code]
         row = self.db.execute(
@@ -265,7 +291,8 @@ class Promoter:
             change = json.loads(row["change_json"])
             if (row["gate_verdict"] != "allowed" or row["change_sha256"] != change_digest(change)
                     or not json.loads(row["gate_json"]).get("allowed")
-                    or json.loads(row["gate_json"]).get("exit_code") != eval_gate.ALLOWED):
+                    or json.loads(row["gate_json"]).get("exit_code") != eval_gate.ALLOWED
+                    or json.loads(row["gate_json"]).get("change_sha256") != change_digest(change)):
                 raise PermissionError("The exact change needs an allowed star.eval_gate verdict")
             target = self._target(change)
             stamp = _stamp()
@@ -318,7 +345,10 @@ class Promoter:
     def _restore(self, target: str, before: dict) -> None:
         if not target.startswith("lesson:"):
             if before["present"]:
-                self._write_setting(target, before["value"])
+                self.db.execute(
+                    "INSERT INTO promoter_settings(key,value_json) VALUES(?,?) "
+                    "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json",
+                    (target, _json(before["value"])))
             else:
                 self.db.execute("DELETE FROM promoter_settings WHERE key=?", (target,))
             return
