@@ -79,7 +79,7 @@ def mapped_require(expression: str, source: pathlib.Path, template: pathlib.Path
         return None
     candidate = template.joinpath(*components).with_suffix(".luau")
     if not candidate.is_file():
-        raise ValueError(f"{source}: cannot resolve {expr} to {candidate}")
+        return None  # Non-spec engine script; an executed unresolved require still fails.
     relative = pathlib.Path(__import__("os").path.relpath(candidate.with_suffix(""), source.parent))
     path = relative.as_posix()
     if not path.startswith("."):
