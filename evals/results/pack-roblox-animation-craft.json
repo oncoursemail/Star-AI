@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-creation-v1.json",
-  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
   "tasks_total": 23,
   "automated": 23,
   "selected": [
@@ -40,7 +40,7 @@
   "started_at": "2026-10-11T08:04:20+00:00",
   "waited_for_lock_s": 5.4,
   "finished_at": "2026-10-11T08:47:07+00:00",
-  "rescored_at": "2026-10-11T10:37:53+00:00"
+  "rescored_at": "2026-10-11T11:07:38+00:00"
  },
  "complete": true,
  "tasks": {
@@ -49,8 +49,7 @@
    "passed": false,
    "prompt_sha256": "9d8693803da23ad8",
    "reasons": [
-    "luau_check[1]: line 8: Table type '{ [string]: (number) -> number }' not compatible with type '{ [string]: (numbe; line 81: Value of type '(((number) -> number) | ((number) -> number))?' could be nil",
-    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first"
+    "luau_check[1]: line 8: Table type '{ [string]: (number) -> number }' not compatible with type '{ [string]: (numbe; line 81: Value of type '(((number) -> number) | ((number) -> number))?' could be nil"
    ],
    "checks": [
     {
@@ -64,8 +63,7 @@
     },
     {
      "id": "luau_check[2]",
-     "ok": false,
-     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+     "ok": true
     },
     {
      "id": "unit_tests",
@@ -156,7 +154,7 @@
    "seconds": 291.5,
    "timings": {
     "luau_check_s": 0.09,
-    "unit_s": 0.49
+    "unit_s": 0.48
    },
    "blocks": 1,
    "answer_chars": 7104,
@@ -564,7 +562,7 @@
    "seconds": 197.2,
    "timings": {
     "luau_check_s": 0.17,
-    "unit_s": 0.48
+    "unit_s": 0.47
    },
    "blocks": 2,
    "answer_chars": 6195,

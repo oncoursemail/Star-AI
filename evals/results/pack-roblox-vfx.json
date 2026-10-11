@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-creation-v1.json",
-  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
   "tasks_total": 23,
   "automated": 23,
   "selected": [
@@ -38,21 +38,15 @@
   "started_at": "2026-10-11T08:47:07+00:00",
   "waited_for_lock_s": 2.4,
   "finished_at": "2026-10-11T09:03:04+00:00",
-  "rescored_at": "2026-10-11T10:37:56+00:00"
+  "rescored_at": "2026-10-11T11:07:40+00:00"
  },
  "complete": true,
  "tasks": {
   "VFX-01": {
-   "status": "fail",
-   "passed": false,
+   "status": "pass",
+   "passed": true,
    "prompt_sha256": "3a66ac0dafce73fb",
-   "reasons": [
-    "require:lifetime: Lifetime is a NumberRange",
-    "require:speed: Speed is a NumberRange",
-    "require:size_seq: Size is a NumberSequence",
-    "require:transp_seq: Transparency is a NumberSequence",
-    "require:color_seq: Color is a ColorSequence"
-   ],
+   "reasons": [],
    "checks": [
     {
      "id": "luau_block",
@@ -88,13 +82,15 @@
     },
     {
      "id": "require:lifetime",
-     "ok": false,
-     "detail": "Lifetime is a NumberRange"
+     "ok": true
     },
     {
      "id": "require:speed",
-     "ok": false,
-     "detail": "Speed is a NumberRange"
+     "ok": true
+    },
+    {
+     "id": "require:number_range",
+     "ok": true
     },
     {
      "id": "require:spread",
@@ -106,18 +102,15 @@
     },
     {
      "id": "require:size_seq",
-     "ok": false,
-     "detail": "Size is a NumberSequence"
+     "ok": true
     },
     {
      "id": "require:transp_seq",
-     "ok": false,
-     "detail": "Transparency is a NumberSequence"
+     "ok": true
     },
     {
      "id": "require:color_seq",
-     "ok": false,
-     "detail": "Color is a ColorSequence"
+     "ok": true
     },
     {
      "id": "require:cleanup",
@@ -134,7 +127,7 @@
    ],
    "seconds": 307.2,
    "timings": {
-    "luau_check_s": 0.19
+    "luau_check_s": 0.14
    },
    "blocks": 2,
    "answer_chars": 6561,
@@ -171,12 +164,10 @@
    "answer": "Here is the `HitEffect` ModuleScript. It creates a reusable, self-cleaning impact spark burst using a single invisible Part, an Attachment, and a `ParticleEmitter` configured for a one-shot burst.\n\n### `HitEffect` ModuleScript\n\n```lua\n--!strict\n\nlocal HitEffect = {}\n\n-- Configuration for the spark effect\nlocal SPARK_CONFIG = {\n\tEmitCount = 20,\n\tLifetime = NumberRange.new(0.2, 0.5), -- Sparks live under half a second\n\tSpeed = NumberRange.new(20, 40),      -- 20 to 40 studs/s\n\tSpreadAngle = Vector2.new(180, 180),  -- All directions (spherical burst)\n\tDrag = 10,                            -- High drag to stop sparks quickly\n\tLightEmission = 1,                    -- Full glow for sparks\n}\n\n-- ColorSequence: White/Yellow -> Orange\n-- Starts bright (1, 1, 1) and (1, 0.8, 0), ends deep orange (1, 0.4, 0)\nlocal COLOR_SEQUENCE = ColorSequence.new({\n\tColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 240)), -- White-ish\n\tColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 220, 50)),  -- Yellow\n\tColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 120, 0)),   -- Orange\n})\n\n-- NumberSequence: Shrink over time (Size)\n-- Starts at 0.4 studs, shrinks to 0.05 studs\nlocal SIZE_SEQUENCE = NumberSequence.new({\n\tNumberSequenceKeypoint.new(0.0, 0.4),\n\tNumberSequenceKeypoint.new(1.0, 0.05),\n})\n\n-- NumberSequence: Fade out over time (Transparency)\n-- Starts opaque (0), ends invisible (1)\nlocal TRANSPARENCY_SEQUENCE = NumberSequence.new({\n\tNumberSequenceKeypoint.new(0.0, 0),\n\tNumberSequenceKeypoint.new(1.0, 1),\n})\n\n--- Spawns a one-shot impact spark burst at the given position.\n-- @param position Vector3: The world position to spawn the sparks.\nfunction HitEffect.play(position: Vector3)\n\t-- 1. Create the container Part (invisible and anchored)\n\tlocal sparkPart = Instance.new(\"Part\")\n\tsparkPart.Name = \"HitSparkEffect\"\n\tsparkPart.Anchored = true\n\tsparkPart.CanCollide = false\n\tsparkPart.Transparency = 1 -- Invisible\n\tsparkPart.Size = Vector3.new(0.5, 0.5, 0.5) -- Small hitbox\n\tsparkPart.Position = position\n\n\t-- 2. Create an Attachment for the ParticleEmitter to emit from\n\tlocal attachment = Instance.new(\"Attachment\")\n\tattachment.Name = \"SparkAttachment\"\n\tattachment.Parent = sparkPart\n\n\t-- 3. Create the ParticleEmitter\n\tlocal emitter = Instance.new(\"ParticleEmitter\")\n\temitter.Name = \"SparkEmitter\"\n\temitter.Parent = attachment\n\n\t-- 4. Configure Emitter for One-Shot Burst\n\temitter.Rate = 0 -- Do not emit continuously; we use :Emit() manually\n\temitter.Lifetime = SPARK_CONFIG.Lifetime\n\temitter.Speed = SPARK_CONFIG.Speed\n\temitter.SpreadAngle = SPARK_CONFIG.SpreadAngle\n\temitter.Drag = SPARK_CONFIG.Drag\n\temitter.LightEmission = SPARK_CONFIG.LightEmission\n\temitter.Texture = \"rbxassetid://6101261905\" -- Electric spark texture\n\n\t-- 5. Shape the particle's life with Sequences\n\temitter.Color = COLOR_SEQUENCE -- White/Yellow to Orange\n\temitter.Size = SIZE_SEQUENCE   -- Shrink over life\n\temitter.Transparency = TRANSPARENCY_SEQUENCE -- Fade out over life\n\n\t-- 6. Emit the particles\n\temitter:Emit(SPARK_CONFIG.EmitCount)\n\n\t-- 7. Clean up the Part after the longest particle has died\n\t-- Max lifetime is 0.5s, plus a small buffer for safety\n\tlocal cleanupTime = SPARK_CONFIG.Lifetime.Max + 0.2\n\ttask.delay(cleanupTime, function()\n\t\tif sparkPart and sparkPart.Parent then\n\t\t\tsparkPart:Destroy()\n\t\tend\n\tend)\nend\n\nreturn HitEffect\n```\n\n### How to Use\n\n1.  Save this script as a **ModuleScript** named `HitEffect` in `ServerScriptService` (or `ReplicatedStorage` if you prefer).\n2.  Call it from your server-side hit detection logic:\n\n```lua\nlocal HitEffect = require(game.ServerScriptService.HitEffect)\n\n-- Example: When a bullet hits a part\nlocal function onHit(hitPart, position)\n\t-- Spawn the spark effect\n\tHitEffect.play(position)\n\t\n\t-- ... handle damage ...\nend\n```\n\n### Key Properties Explained\n\n| Property | Value | Purpose |\n| :--- | :--- | :--- |\n| `Rate` | `0` | Disables continuous emission. We manually trigger the burst with `:Emit()`. |\n| `Emit(count)` | `20` | Releases 20 particles instantly in a single burst. |\n| `Lifetime` | `0.2, 0.5` | Particles exist for 0.2 to 0.5 seconds, ensuring they disappear quickly. |\n| `Speed` | `20, 40` | Particles fly out at 20–40 studs per second, creating a fast impact feel. |\n| `SpreadAngle` | `180, 180` | Fires particles in a full spherical pattern (all directions). |\n| `Drag` | `10` | High drag slows particles down rapidly, making the burst feel \"heavy\" and impactful. |\n| `LightEmission` | `1` | Makes the sparks glow brightly against the environment. |\n| `Color` | `ColorSequence` | Transitions from bright white/yellow (impact flash) to orange (ember fade). |\n| `Size` | `NumberSequence` | Shrinks particles from 0.4 to 0.05 studs over their lifetime. |\n| `Transparency` | `NumberSequence` | Fades particles from opaque to invisible over their lifetime. |\n| `task.delay` | `0.7s` | Cleans up the invisible Part after the longest possible particle lifetime (0.5s + 0.2s buffer). |\n\n### Notes\n\n-   **Performance:** The effect is self-cleaning. The Part is destroyed after 0.7 seconds, preventing memory leaks from repeated hits.\n-   **Texture:** The spark texture (`rbxassetid://6101261905`) is a standard Roblox electric spark. If you want a different look, you can change the `Texture` property to a custom asset ID.\n-   **Server-Side:** This script is\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Key 'ColorSequence' not found in table 'SPARK_CONFIG', line 70). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create explosions with VFX > Emitter setup](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#emitter-setup) · retrieved, not cited\n2. [Create explosions with VFX > Test particle bursts](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#test-particle-bursts) · retrieved, not cited\n3. [Use particles for actions > Make particles spread](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/using-particles-for-actions#make-particles-spread) · retrieved, not cited\n4. [Basic particle effects > Particle properties > Color](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/basic-particle-effects#color) · retrieved, not cited\n"
   },
   "VFX-02": {
-   "status": "fail",
-   "passed": false,
+   "status": "pass",
+   "passed": true,
    "prompt_sha256": "0f4572906d24856a",
-   "reasons": [
-    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first"
-   ],
+   "reasons": [],
    "checks": [
     {
      "id": "luau_block",
@@ -188,8 +179,7 @@
     },
     {
      "id": "luau_check[2]",
-     "ok": false,
-     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+     "ok": true
     },
     {
      "id": "require:beam",
@@ -250,7 +240,7 @@
    ],
    "seconds": 198.2,
    "timings": {
-    "luau_check_s": 0.17
+    "luau_check_s": 0.16
    },
    "blocks": 2,
    "answer_chars": 5617,
@@ -314,8 +304,8 @@
    ],
    "seconds": 197.8,
    "timings": {
-    "luau_check_s": 0.16,
-    "unit_s": 0.5
+    "luau_check_s": 0.17,
+    "unit_s": 0.47
    },
    "blocks": 2,
    "answer_chars": 6239,
@@ -384,7 +374,7 @@
    ],
    "seconds": 186.6,
    "timings": {
-    "luau_check_s": 0.17,
+    "luau_check_s": 0.16,
     "unit_s": 0.48
    },
    "blocks": 2,
@@ -482,11 +472,11 @@
   }
  },
  "summary": {
-  "pass": 2,
-  "fail": 3,
+  "pass": 4,
+  "fail": 1,
   "error": 0,
   "scored": 5,
-  "pass_rate": 0.4,
+  "pass_rate": 0.8,
   "median_seconds": 197.8
  }
 }

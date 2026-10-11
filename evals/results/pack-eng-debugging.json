@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-creation-v1.json",
-  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
   "tasks_total": 23,
   "automated": 23,
   "selected": [
@@ -36,7 +36,7 @@
   "started_at": "2026-10-11T09:20:38+00:00",
   "waited_for_lock_s": 2.3,
   "finished_at": "2026-10-11T09:33:36+00:00",
-  "rescored_at": "2026-10-11T10:38:01+00:00"
+  "rescored_at": "2026-10-11T11:07:45+00:00"
  },
  "complete": true,
  "tasks": {
@@ -74,7 +74,7 @@
    "seconds": 113.8,
    "timings": {
     "luau_check_s": 0.17,
-    "unit_s": 0.5
+    "unit_s": 0.48
    },
    "blocks": 2,
    "answer_chars": 3693,
@@ -111,12 +111,10 @@
    "answer": "Let me analyze the `addItem` function to find the root cause of the bug.\n\n## Code Analysis\n\nThe function has two main phases:\n1. **First `for` loop**: Tries to fill existing stacks that match the item name and have room.\n2. **`while` loop**: Creates new stacks for any remaining amount.\n\n### The Bug\n\nIn the `while` loop, the code calculates `put` correctly but then inserts a stack with `count = amount` instead of `count = put`:\n\n```lua\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = put })\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n```\n\n### What happens with 70 potions, maxStack 20:\n\n1. **First loop**: No existing stacks, so nothing happens. `amount` is still 70.\n2. **While loop iteration 1**:\n   - `put = math.min(20, 70) = 20`\n   - Inserts `{ name = name, count = 70 }` ← **Wrong!** Should be 20\n   - `amount = 70 - 20 = 50`\n3. **While loop iteration 2**:\n   - `put = math.min(20, 50) = 20`\n   - Inserts `{ name = name, count = 50 }` ← **Wrong!** Should be 20\n   - `amount = 50 - 20 = 30`\n4. **While loop iteration 3**:\n   - `put = math.min(20, 30) = 20`\n   - Inserts `{ name = name, count = 30 }` ← **Wrong!** Should be 20\n   - `amount = 30 - 20 = 10`\n5. **While loop iteration 4**:\n   - `put = math.min(20, 10) = 10`\n   - Inserts `{ name = name, count = 10 }` ← Correct by coincidence\n   - `amount = 10 - 10 = 0`\n\nResult: `[70, 50, 30, 10]` instead of `[20, 20, 20, 10]`.\n\n## The Fix\n\nChange `count = amount` to `count = put` in the `table.insert` call.\n\n```lua\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = put })  -- Fixed: was `amount`\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n```\n\n## Root Cause\n\n**The `while` loop inserted new stacks with `count = amount` (the remaining total) instead of `count = put` (the calculated portion for that stack), causing each new stack to contain the wrong quantity.**\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Unknown global 'amount'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Roblox developer 101 > 4 - Adventure game part 2 > Appendix > Troubleshooting and classroom tips](https://create.roblox.com/docs/education/lesson-plans/roblox-developer-lesson#troubleshooting-and-classroom-tips) · retrieved, not cited\n2. [Recap: July 2021 > Editor features](https://luau.org/news/2021-07-30-luau-recap-july-2021#editor-features) · retrieved, not cited\n3. [Stacks > Implement stacks](https://create.roblox.com/docs/luau/stacks#implement-stacks) · retrieved, not cited\n4. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n"
   },
   "ENG-04": {
-   "status": "fail",
-   "passed": false,
+   "status": "pass",
+   "passed": true,
    "prompt_sha256": "83b854c2b109fd06",
-   "reasons": [
-    "require:signature: the signature is unchanged"
-   ],
+   "reasons": [],
    "checks": [
     {
      "id": "luau_block",
@@ -132,8 +130,7 @@
     },
     {
      "id": "require:signature",
-     "ok": false,
-     "detail": "the signature is unchanged"
+     "ok": true
     },
     {
      "id": "require:cause",
@@ -143,7 +140,7 @@
    "seconds": 137.3,
    "timings": {
     "luau_check_s": 0.08,
-    "unit_s": 0.48
+    "unit_s": 0.47
    },
    "blocks": 1,
    "answer_chars": 2567,
@@ -215,8 +212,8 @@
    ],
    "seconds": 166.5,
    "timings": {
-    "luau_check_s": 0.22,
-    "unit_s": 0.48
+    "luau_check_s": 0.23,
+    "unit_s": 0.47
    },
    "blocks": 3,
    "answer_chars": 7870,
@@ -256,11 +253,11 @@
   }
  },
  "summary": {
-  "pass": 1,
-  "fail": 2,
+  "pass": 2,
+  "fail": 1,
   "error": 0,
   "scored": 3,
-  "pass_rate": 0.3333,
+  "pass_rate": 0.6667,
   "median_seconds": 137.3
  }
 }

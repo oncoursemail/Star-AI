@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-creation-v1.json",
-  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
   "tasks_total": 23,
   "automated": 23,
   "selected": [
@@ -36,7 +36,7 @@
   "started_at": "2026-10-11T09:11:57+00:00",
   "waited_for_lock_s": 1.4,
   "finished_at": "2026-10-11T09:20:37+00:00",
-  "rescored_at": "2026-10-11T10:37:59+00:00"
+  "rescored_at": "2026-10-11T11:07:43+00:00"
  },
  "complete": true,
  "tasks": {
@@ -113,7 +113,7 @@
    ],
    "seconds": 93.0,
    "timings": {
-    "luau_check_s": 0.09
+    "luau_check_s": 0.08
    },
    "blocks": 1,
    "answer_chars": 4150,
@@ -271,12 +271,10 @@
    "answer": "Here is a complete, production-ready ModuleScript that implements your theming system.\n\n### 1. The ModuleScript (`ThemeButtonStyle`)\n\nPlace this in `ReplicatedStorage`. It handles the configuration and the application of styles.\n\n```lua\n-- // ReplicatedStorage.ThemeButtonStyle\n-- // A centralized theme manager for consistent button styling.\n\nlocal ThemeButtonStyle = {}\n\n-- // 1. The Theme Configuration\n-- // Change these values in one place to restyle all buttons.\nThemeButtonStyle.Theme = {\n\tPrimary = {\n\t\tBackgroundColor3 = Color3.fromRGB(0, 120, 255), -- Bright Blue\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\tDanger = {\n\t\tBackgroundColor3 = Color3.fromRGB(230, 40, 40), -- Red\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\tGhost = {\n\t\tBackgroundColor3 = Color3.fromRGB(255, 255, 255), -- White\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\t\n\tText = Color3.fromRGB(255, 255, 255), -- White text for all variants\n\tFont = Enum.Font.GothamBold,\n\tCornerRadius = UDim.new(0, 8), -- 8px rounded corners\n\tStrokeThickness = 2,\n}\n\n-- // 2. The Helper Function\nfunction ThemeButtonStyle.styleButton(button: TextButton, variant: string)\n\tlocal theme = ThemeButtonStyle.Theme\n\t\n\t-- Validate variant\n\tif not theme[variant] then\n\t\twarn(string.format(\"ThemeButtonStyle: Unknown variant '%s'. Expected 'Primary', 'Danger', or 'Ghost'.\", variant))\n\t\treturn\n\tend\n\t\n\tlocal colors = theme[variant]\n\t\n\t-- // Disable AutoButtonColor so our tweens control the color completely\n\tbutton.AutoButtonColor = false\n\t\n\t-- // Base Properties\n\tbutton.BackgroundColor3 = colors.BackgroundColor3\n\tbutton.TextColor3 = theme.Text\n\tbutton.Font = theme.Font\n\tbutton.BorderSizePixel = 0 -- We use UIStroke instead\n\t\n\t-- // UICorner\n\tlocal corner = button:FindFirstChildOfClass(\"UICorner\")\n\tif not corner then\n\t\tcorner = Instance.new(\"UICorner\")\n\t\tcorner.Name = \"UICorner\"\n\t\tcorner.Parent = button\n\tend\n\tcorner.CornerRadius = theme.CornerRadius\n\t\n\t-- // UIStroke (ApplyStrokeMode = Border)\n\tlocal stroke = button:FindFirstChildOfClass(\"UIStroke\")\n\tif not stroke then\n\t\tstroke = Instance.new(\"UIStroke\")\n\t\tstroke.Name = \"UIStroke\"\n\t\tstroke.Parent = button\n\tend\n\tstroke.Thickness = theme.StrokeThickness\n\tstroke.Color = colors.TextStrokeColor3\n\tstroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border\n\t\n\t-- // UIGradient (Primary Variant Only)\n\t-- // Adds a subtle top-to-bottom lightness shift for depth\n\tif variant == \"Primary\" then\n\t\tlocal gradient = button:FindFirstChildOfClass(\"UIGradient\")\n\t\tif not gradient then\n\t\t\tgradient = Instance.new(\"UIGradient\")\n\t\t\tgradient.Name = \"UIGradient\"\n\t\t\tgradient.Rotation = 90\n\t\t\tgradient.Parent = button\n\t\tend\n\t\tgradient.Enabled = true\n\t\tgradient.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255) -- Handled below\n\t\tgradient.Transparency = NumberSequence.new({\n\t\t\tNumberSequenceKeypoint.new(0, 0),\n\t\t\tNumberSequenceKeypoint.new(1, 0.15) -- 15% white overlay at the bottom\n\t\t})\n\telse\n\t\t-- Disable gradient for Danger and Ghost\n\t\tlocal gradient = button:FindFirstChildOfClass(\"UIGradient\")\n\t\tif gradient then\n\t\t\tgradient.Enabled = false\n\t\tend\n\tend\n\t\n\t-- // UIScale (Press Feedback)\n\tlocal scale = button:FindFirstChildOfClass(\"UIScale\")\n\tif not scale then\n\t\tscale = Instance.new(\"UIScale\")\n\t\tscale.Name = \"UIScale\"\n\t\tscale.Parent = button\n\tend\n\tscale.Scale = 1 -- Reset to default\n\t\n\t-- // TweenService Feedback\n\tlocal TweenService = game:GetService(\"TweenService\")\n\tlocal tweenInfo = TweenInfo.new(\n\t\t0.12, \n\t\tEnum.EasingStyle.Quad, \n\t\tEnum.EasingDirection.Out\n\t)\n\t\n\t-- Hover: Brighten Background\n\tbutton.MouseEnter:Connect(function()\n\t\tif variant == \"Primary\" then\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(255, 255, 255), 0.15)}):Play()\n\t\telseif variant == \"Danger\" then\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(255, 255, 255), 0.15)}):Play()\n\t\telse\n\t\t\t-- Ghost: Darken slightly on hover for contrast\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(0, 0, 0), 0.05)}):Play()\n\t\tend\n\tend)\n\t\n\tbutton.MouseLeave:Connect(function()\n\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3}):Play()\n\tend)\n\t\n\t-- Press: Shrink UIScale\n\tbutton.MouseButton1Down:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 0.96}):Play()\n\tend)\n\t\n\tbutton.MouseButton1Up:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 1}):Play()\n\tend)\n\t\n\t-- Ensure text stroke is applied for readability\n\tbutton.TextStrokeTransparency = 0.5\n\tbutton.TextStrokeColor3 = colors.TextStrokeColor3\nend\n\nreturn ThemeButtonStyle\n```\n\n### 2. How to use it in your game\n\nIn a **LocalScript** inside your ScreenGui (or wherever your buttons are):\n\n```lua\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal ThemeButtonStyle = require(ReplicatedStorage.ThemeButtonStyle)\n\n-- Apply styles to existing buttons\nThemeButtonStyle.styleButton(script.Parent.PrimaryButton, \"Primary\")\nThemeButtonStyle.styleButton(script.Parent.DangerButton, \"Danger\")\nThemeButtonStyle.styleButton(script.Parent.GhostButton, \"Ghost\")\n```\n\n### Key Implementation Details\n\n1.  **Centralized Theme:** The `Theme` table holds all colors, fonts, and dimensions. Changing `Theme.CornerRadius` or `Theme.Primary.BackgroundColor3` instantly updates the logic for any new buttons you style.\n2.  **UIStroke & ApplyStrokeMode:** We explicitly set `ApplyStrokeMode = Enum.ApplyStrokeMode.Border` as requested. This ensures the stroke draws *\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n2. [Enum.ButtonStyle](https://create.roblox.com/docs/reference/engine/enums/ButtonStyle) · retrieved, not cited\n3. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n"
   },
   "UIS-02": {
-   "status": "fail",
-   "passed": false,
+   "status": "pass",
+   "passed": true,
    "prompt_sha256": "cea35387904c35b8",
-   "reasons": [
-    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first"
-   ],
+   "reasons": [],
    "checks": [
     {
      "id": "luau_block",
@@ -288,8 +286,7 @@
     },
     {
      "id": "luau_check[2]",
-     "ok": false,
-     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+     "ok": true
     },
     {
      "id": "unit_tests",
@@ -341,11 +338,11 @@
   }
  },
  "summary": {
-  "pass": 2,
-  "fail": 1,
+  "pass": 3,
+  "fail": 0,
   "error": 0,
   "scored": 3,
-  "pass_rate": 0.6667,
+  "pass_rate": 1.0,
   "median_seconds": 195.3
  }
 }

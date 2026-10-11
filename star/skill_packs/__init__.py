@@ -35,13 +35,15 @@ MAX_PACKS_PER_TURN = 1
 MAX_BLOCK_CHARS = 1200
 BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
-# Enabled by default. Filled in from the measured results in docs/evals.md.
+# Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
+# "Measured results"). The others stay shipped and can be switched on with STAR_SKILL_PACKS, but were either
+# blocked (a confirmed regression), inconclusive (the no-pack arm flips on the same task) or showed no gain.
 DEFAULT_ENABLED: tuple[str, ...] = (
-    "roblox-ui-layout",
     "roblox-secure-remotes",
-    "roblox-datastore-safety",
-    "roblox-animation-tools",
-    "roblox-performance-streaming",
+    "roblox-animation-craft",
+    "roblox-vfx",
+    "roblox-building-layout",
+    "eng-verify-before-done",
 )
 
 # The prompt must read as a Roblox question at all ...

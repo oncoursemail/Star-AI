@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-creation-v1.json",
-  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
   "tasks_total": 23,
   "automated": 23,
   "selected": [
@@ -35,7 +35,7 @@
   "started_at": "2026-10-11T09:35:24+00:00",
   "waited_for_lock_s": 0.9,
   "finished_at": "2026-10-11T09:45:31+00:00",
-  "rescored_at": "2026-10-11T10:38:03+00:00"
+  "rescored_at": "2026-10-11T11:07:47+00:00"
  },
  "complete": true,
  "tasks": {
@@ -81,8 +81,8 @@
    ],
    "seconds": 291.8,
    "timings": {
-    "luau_check_s": 0.19,
-    "unit_s": 0.47
+    "luau_check_s": 0.16,
+    "unit_s": 0.48
    },
    "blocks": 2,
    "answer_chars": 6536,
@@ -158,8 +158,8 @@
    ],
    "seconds": 313.4,
    "timings": {
-    "luau_check_s": 0.19,
-    "unit_s": 0.49
+    "luau_check_s": 0.17,
+    "unit_s": 0.48
    },
    "blocks": 2,
    "answer_chars": 6600,
