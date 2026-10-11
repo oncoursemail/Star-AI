@@ -191,6 +191,14 @@ call the real schemas would reject. With Studio open on a new Baseplate:
 Expected with `--edit`: every step ok, the first playtest shows the planted error, the second is clean, three
 edits are reported, and after the undo the script and the two parts are gone.
 
+**A Studio on another machine.** By default STAR starts the connector of the Studio on this PC. For a Studio that
+runs elsewhere (for example on a second machine reached over SSH), set the environment variable
+`STAR_STUDIO_MCP_COMMAND` to a JSON list: the program, then its arguments, for a command that speaks the
+connector's MCP over standard input and output, for example
+`["ssh", "-o", "BatchMode=yes", "<host>", "<launcher script on that machine>"]`. The sandbox rule is the same: the
+place open there is asked what it is before anything is edited. The variable is read from the process environment
+only, so a model cannot set it.
+
 ## 7. What is not here
 
 - Nothing is ever made public, bought or spent; there is no code path for it.

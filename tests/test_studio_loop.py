@@ -375,3 +375,28 @@ def test_without_the_luau_switch_a_model_edits_scripts_but_cannot_run_code():
     assert "execute_luau" in [event["tool"] for event in events if event["event"] == "tool_rejected"]
     assert "ServerScriptService.Door" in fake.scripts and "Workspace.Door" not in fake.instances
     assert "Studio changes in this turn (1):" in answer
+
+
+# ------------------------------------------------------------------ a Studio on another machine
+
+def test_the_owner_can_name_a_launcher_for_a_studio_elsewhere(monkeypatch):
+    from star import studio
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    assert studio.custom_launcher() is None
+    monkeypatch.setenv(studio.COMMAND_ENV, json.dumps(["ssh", "-o", "BatchMode=yes", "studio-host", "studio-mcp.sh"]))
+    assert studio.launcher() == ("ssh", ["-o", "BatchMode=yes", "studio-host", "studio-mcp.sh"], None)
+    for bad in ("ssh studio-host", "[]", '["ssh", 7]', '{"program": "ssh"}', '[""]', json.dumps(["x"] * 41)):
+        monkeypatch.setenv(studio.COMMAND_ENV, bad)
+        with pytest.raises(RuntimeError, match="JSON list"):
+            studio.launcher()
+
+
+def test_without_it_only_the_local_windows_launcher_is_used(monkeypatch, tmp_path):
+    from star import studio
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setattr(studio.sys, "platform", "win32")
+    assert studio.launcher() == ("cmd.exe", ["/d", "/c", str(tmp_path / "Roblox" / "mcp.bat")], tmp_path / "Roblox" / "mcp.bat")
+    monkeypatch.setattr(studio.sys, "platform", "linux")
+    with pytest.raises(RuntimeError, match=studio.COMMAND_ENV):
+        studio.launcher()
