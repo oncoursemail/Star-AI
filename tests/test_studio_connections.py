@@ -198,6 +198,7 @@ def test_probe_deadline_cancels_and_has_no_fallback_or_replay(monkeypatch):
     monkeypatch.setattr(connections,'PROBE_SECONDS',0.01)
     report=check_studio(Settings())
     assert report['state']=='unavailable' and report['reason_code']=='timeout'
+    assert report['diagnostic']=={'stage':'probe','reason':'timeout'}
     assert calls==[{'target':'local_pc','home':desktop_core.app_data()}]
 
 
@@ -251,6 +252,70 @@ def test_cancellation_remains_cancellation(monkeypatch):
     async def cancel(**kwargs):raise asyncio.CancelledError
     monkeypatch.setattr(local_mcp,'discover',cancel)
     with pytest.raises(asyncio.CancelledError):check_studio(Settings())
+
+
+@pytest.mark.parametrize('stage,reason', [('process_startup','failed'), ('initialization','invalid_response'),
+                                         ('capability','tools_not_declared'), ('tool_discovery','timeout'),
+                                         ('instance_discovery','invalid_response'), ('shutdown','failed')])
+def test_fixed_transport_diagnostic_reaches_status_without_exception_text(monkeypatch,stage,reason):
+    from star import studio
+    calls=[]
+    async def refuse(**kwargs):
+        calls.append(kwargs)
+        # The public status must never serialize even a typed error's message or arbitrary attributes.
+        error=studio.StudioTransportError('fixture-secret private-address',stage=stage,reason=reason)
+        error.raw_initializer={'key':'fixture-secret'}
+        raise error
+    monkeypatch.setattr(local_mcp,'discover',refuse)
+    report=check_studio(Settings(studio_id='old'))
+    assert report['state']=='unavailable' and report['reason_code']=='connection_failed'
+    assert report['diagnostic']=={'stage':stage,'reason':reason}
+    assert not report['selected_valid'] and report['instances']==[]
+    assert len(calls)==1 and 'fixture-secret' not in json.dumps(report) and 'private-address' not in json.dumps(report)
+
+
+def test_untyped_or_tampered_failure_is_unknown_without_attribute_or_text_inference(monkeypatch):
+    from star import studio
+    failures=[RuntimeError('protocol initialization fixture-secret'),studio.StudioTransportError('fixture-secret')]
+    for failure in failures:
+        failure.diagnostic={'stage':'initialization','reason':'fixture-secret'}
+        failure._diagnostic=('initialization','fixture-secret')
+        async def refuse(**kwargs):raise failure
+        monkeypatch.setattr(local_mcp,'discover',refuse)
+        report=check_studio(Settings())
+        assert report['diagnostic']=={'stage':'unknown','reason':'connection_failed'}
+        assert report['reason_code']=='connection_failed' and 'fixture-secret' not in json.dumps(report)
+
+
+def test_incoming_mcp_diagnostic_is_discarded_on_success_empty_and_invalid_evidence(monkeypatch):
+    raw={'stage':'private-address','reason':'fixture-secret','raw':'key'}
+    for studios in (None,[]):
+        value=evidence(studios=studios,diagnostic=raw)
+        report=connections.normalize_probe(Settings(),value)
+        expected=None if studios is None else {'stage':'instance_discovery','reason':'no_instances'}
+        assert report['diagnostic']==expected
+        assert 'fixture-secret' not in json.dumps(report)
+    async def malformed(**kwargs):return evidence(tool_count=True,diagnostic=raw)
+    monkeypatch.setattr(local_mcp,'discover',malformed)
+    report=check_studio(Settings())
+    assert report['reason_code']=='connection_failed' and report['diagnostic']=={'stage':'probe','reason':'invalid_evidence'}
+    assert 'fixture-secret' not in json.dumps(report)
+
+
+def test_configuration_diagnostic_preserves_unconfigured_semantics_without_connecting(monkeypatch,tmp_path):
+    from star import studio
+    monkeypatch.delenv(studio.COMMAND_ENV,raising=False)
+    settings=Settings(studio_target='host_launcher')
+    assert connections.connection_status(settings,home=tmp_path)['diagnostic']=={'stage':'configuration','reason':'not_configured'}
+    path=tmp_path/'studio'/'remote.json'
+    path.parent.mkdir()
+    path.write_text('fixture-secret')
+    async def forbidden(**kwargs):pytest.fail('Invalid configuration must not attempt a connector')
+    monkeypatch.setattr(local_mcp,'discover',forbidden)
+    report=check_studio(settings,tmp_path)
+    assert report['state']=='unconfigured' and report['reason_code']=='host_launcher_unavailable'
+    assert report['diagnostic']=={'stage':'configuration','reason':'invalid'}
+    assert 'fixture-secret' not in json.dumps(report)
 
 
 @pytest.mark.parametrize('target', ['local_pc', 'host_launcher'])
