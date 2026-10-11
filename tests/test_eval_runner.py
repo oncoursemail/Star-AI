@@ -41,7 +41,7 @@ def scorer_for(passing):
 def asker(answers=None, seconds=1.5, fail_on=()):
     log = []
 
-    def ask(task):
+    def ask(task, cancel=None):
         log.append(task["id"])
         if task["id"] in fail_on:
             raise TimeoutError("server timed out at 10.17.0.146:8080")
@@ -150,6 +150,46 @@ def test_a_lock_that_never_clears_stops_the_run_with_progress_saved(tmp_path):
     result = er.run_suite(mini_suite(tmp_path), out=tmp_path / "r.json", ask=ask, scorer=scorer_for(set()),
                           lock_probe=lambda: True, run_info=dict(RUN_INFO), sleep=sleep, now=lambda: clock["t"], log=lambda m: None)
     assert not result["complete"] and "lock" in result["run"]["stopped"] and ask.log == []
+
+
+def test_a_request_is_stopped_and_repeated_when_the_lock_appears_during_it(tmp_path):
+    import threading
+    import time as _time
+    locked = {"now": False}
+    attempts = []
+
+    def probe():
+        return locked["now"]
+
+    def ask(task, cancel):
+        attempts.append(task["id"])
+        if len(attempts) == 1:
+            locked["now"] = True                       # someone takes the lock while this request runs
+            assert cancel.wait(2), "the watcher should have cancelled the request"
+            locked["now"] = False                      # ... and releases it again
+            raise RuntimeError("STAR task cancelled by user")
+        return er.Asked("fine", [], 1.0)
+
+    result = er.run_suite(mini_suite(tmp_path, [mini_task("A-1")]), out=tmp_path / "r.json", ask=ask,
+                          scorer=scorer_for({"A-1"}), lock_probe=probe, run_info=dict(RUN_INFO), sleep=lambda s: None,
+                          log=lambda m: None, watch_interval=0.01)
+    assert attempts == ["A-1", "A-1"] and result["tasks"]["A-1"]["status"] == "pass"
+
+
+def test_lock_watcher_only_cancels_when_the_lock_exists():
+    import threading
+    cancel = threading.Event()
+    with er.LockWatcher(lambda: False, cancel, interval=0.01) as quiet:
+        cancel.wait(0.1)
+    assert not cancel.is_set() and not quiet.fired
+    with er.LockWatcher(lambda: None, cancel, interval=0.01):
+        cancel.wait(0.1)
+    assert not cancel.is_set()                         # an unreachable probe never cancels work
+    with er.LockWatcher(lambda: True, cancel, interval=0.01) as loud:
+        assert cancel.wait(1)
+    assert loud.fired
+    with er.LockWatcher(None, threading.Event()):       # no probe: nothing runs
+        pass
 
 
 def test_an_unreachable_lock_probe_does_not_block_the_run():

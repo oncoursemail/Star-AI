@@ -36,6 +36,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 from . import eval_checks as checks
@@ -44,6 +45,8 @@ SCHEMA = 1
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_KEY_FILE = Path.home() / ".star" / "server_api_key"
 LOCK_POLL_SECONDS = 20
+LOCK_WATCH_SECONDS = 15        # how often a running request checks whether someone asked for quiet
+MAX_INTERRUPTIONS = 12
 LOCK_LIMIT_SECONDS = 3 * 3600
 _PRIVATE_IP = re.compile(r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b")
 _KEEP_EVENTS = {"route_selected", "knowledge_finished", "luau_check_finished", "skill_packs"}
@@ -192,6 +195,41 @@ def wait_for_lock(probe, *, sleep=time.sleep, now=time.monotonic, log=print,
     return now() - started
 
 
+class LockWatcher:
+    """While a request runs, ask every few seconds whether the server lock appeared; if it did, set `cancel`.
+
+    The lock means "quiet please: a timing measurement is running". Waiting before each request is not
+    enough when one request lasts minutes, so the request itself is stopped and repeated afterwards.
+    """
+
+    def __init__(self, probe, cancel: threading.Event, *, interval: float = LOCK_WATCH_SECONDS):
+        self._probe, self._cancel, self._interval = probe, cancel, interval
+        self._stop = threading.Event()
+        self.fired = False
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            try:
+                locked = self._probe()
+            except Exception:
+                locked = None
+            if locked is True:
+                self.fired = True
+                self._cancel.set()
+                return
+
+    def __enter__(self):
+        if self._probe is not None:
+            self._thread.start()
+        return self
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        if self._thread.is_alive():
+            self._thread.join(timeout=5)
+
+
 # --- one run ---------------------------------------------------------------------------------------
 
 @dataclass
@@ -227,7 +265,7 @@ def record_for(task: dict, asked: Asked | None, score: checks.TaskScore | None, 
 
 def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info: dict, task_ids=None,
               resume: bool = True, retry_errors: bool = False, sleep=time.sleep, now=time.monotonic,
-              log=print, secrets=()) -> dict:
+              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS) -> dict:
     """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict."""
     selected = [t for t in suite.runnable() if not task_ids or t["id"] in set(task_ids)]
     unknown = set(task_ids or []) - {t["id"] for t in suite.tasks}
@@ -258,16 +296,27 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
     waited = 0.0
     try:
         for number, task in enumerate(todo, 1):
-            if lock_probe is not None:
-                waited += wait_for_lock(lock_probe, sleep=sleep, now=now, log=log)
             asked, score, error = None, None, ""
-            try:
-                asked = ask(task)
-                score = scorer(task, asked.answer)
-            except checks.InfraError as exc:
-                error = str(exc)
-            except Exception as exc:                       # the task path failed: infrastructure, not a wrong answer
-                error = f"{type(exc).__name__}: {str(exc)[:200]}"
+            for interruption in range(MAX_INTERRUPTIONS + 1):
+                if lock_probe is not None:
+                    waited += wait_for_lock(lock_probe, sleep=sleep, now=now, log=log)
+                cancel = threading.Event()
+                watcher = LockWatcher(lock_probe, cancel, interval=watch_interval)
+                try:
+                    with watcher:
+                        asked = ask(task, cancel)
+                    score = scorer(task, asked.answer)
+                except checks.InfraError as exc:
+                    error = str(exc)
+                except Exception as exc:                   # the task path failed: infrastructure, not a wrong answer
+                    if watcher.fired:
+                        log(f"{task['id']}: stopped because the server lock appeared; will repeat it when the lock is gone")
+                        asked, score, error = None, None, ""
+                        continue
+                    error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                break
+            else:
+                error = f"stopped {MAX_INTERRUPTIONS} times by the server lock"
             result["tasks"][task["id"]] = record_for(task, asked, score, error)
             record = result["tasks"][task["id"]]
             result["summary"] = summarize(result["tasks"])
@@ -355,12 +404,12 @@ def build_real(args, log=print):
                 time.sleep(3 * (attempt + 1))
         raise last
 
-    def ask(task: dict) -> Asked:
+    def ask(task: dict, cancel=None) -> Asked:
         events: list = []
         started = time.monotonic()
         with isolated_appdata():
             answer = run_task(Settings(**{**settings.__dict__, "project": "eval-" + task["id"].lower()}),
-                              task["prompt"], mode=args.mode, on_event=events.append)
+                              task["prompt"], mode=args.mode, on_event=events.append, cancel_event=cancel)
         return Asked(answer, events, time.monotonic() - started)
 
     suite = args._suite
