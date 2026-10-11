@@ -48,14 +48,12 @@ RECALL_SCAN = 300          # newest accepted lessons considered for one turn
 # Heading of the turn section that carries recalled lessons (star.desktop_core.run_task).
 LESSONS_HEADING = "OWNER'S LESSONS FOR THIS PROJECT (apply unless this message says otherwise)"
 RECALL_CLIP = 240          # characters of one lesson placed in a turn
+LINE_OVERHEAD = 20         # "[#123 correction] " and the line break
 # Per-turn budget as (lessons, characters). The block is read on every turn and is never in
-# the server's prompt cache (it sits in the final user turn), so it is kept to roughly
-# 60-120 tokens for a quick answer and 300 for a full one.
+# the server's prompt cache (it sits in the final user turn), so it is kept small: at most
+# about 90 tokens of lessons for a quick answer and 300 for a full one.
 RECALL_QUICK = (3, 360)
 RECALL_FULL = (8, 1200)
-
-
-LINE_OVERHEAD = 20         # "[#123 correction] " and the line break
 
 
 class LessonRefused(ValueError):
