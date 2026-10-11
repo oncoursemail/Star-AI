@@ -30,9 +30,9 @@ from ..agent_skills import _frontmatter
 
 PACKS_DIR = Path(__file__).resolve().parent
 ENV_VAR = "STAR_SKILL_PACKS"
-MAX_BODY_CHARS = 1100
+MAX_BODY_CHARS = 6400
 MAX_PACKS_PER_TURN = 1
-MAX_BLOCK_CHARS = 1200
+MAX_BLOCK_CHARS = 6500
 BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
 # Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
@@ -90,6 +90,12 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
         r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
     # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
+    "game-obby": re.compile(r"\b(?:obby|checkpoint|checkpoints|kill brick|stage progression|obstacle course)\b", re.IGNORECASE),
+    "game-tycoon": re.compile(r"\b(?:tycoon|dropper|droppers|collector|collectors|purchase button|factory plot)\b", re.IGNORECASE),
+    "game-simulator": re.compile(r"\b(?:simulator|clicker|rebirth|rebirths|leaderstats|upgrade loop)\b", re.IGNORECASE),
+    "game-rounds": re.compile(r"\b(?:rounds|round-based|intermission|round state|round timer|round winner|minigame)\b", re.IGNORECASE),
+    "game-inventory": re.compile(r"\b(?:inventory|equip|unequip|item pickup|item ownership|backpack)\b", re.IGNORECASE),
+    "game-npc-quests": re.compile(r"\b(?:NPC quest|NPC quests|quest|quests|quest reward|quest dialogue|dialogue)\b", re.IGNORECASE),
     "eng-debugging": re.compile(
         r"\b(?:debug\w*|bugs?|root cause|fix(?:es)?|stack trace|errors?|crash\w*|broken|fails|failing|attempt to \w+|regression)\b",
         re.IGNORECASE),
