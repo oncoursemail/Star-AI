@@ -207,6 +207,8 @@ class BlenderController:
                 "executable": str(executable), "tested": True}
 
     def inspect(self, job_id: str) -> dict:
+        if getattr(self.settings, "blender_enabled", False) is not True:
+            raise PermissionError("Enable Blender in STAR settings before inspecting its jobs")
         if not isinstance(job_id, str) or not JOB_ID.fullmatch(job_id):
             raise ValueError("Unknown Blender job identifier")
         root = _job_root(self.home, self.settings.project)
@@ -227,7 +229,8 @@ class BlenderController:
         return {"job_id": job_id, "scene": report.get("scene"), "objects": report.get("objects"),
                 "mesh_count": report.get("mesh_count"), "triangle_count": report.get("triangle_count"),
                 "blend_file": str(directory / "scene.blend"), "glb_file": str(directory / "scene.glb"),
-                "preview_file": str(directory / "preview.png") if (directory / "preview.png").is_file() else None,
+                "preview_file": str(directory / "preview.png") if (
+                    (directory / "preview.png").is_file() and not (directory / "preview.png").is_symlink()) else None,
                 "notice": "Export files exist; Studio import, visual similarity and rig behavior are not verified."}
 
     async def build(self, spec: dict) -> dict:
