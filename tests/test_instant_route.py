@@ -38,3 +38,20 @@ def test_instant_decision_table(changes, expected):
 def test_instant_decision_pure_and_stable():
     inputs = BASE | {"prompt": "Hi!"}
     assert decide_instant_route(**inputs) == decide_instant_route(**inputs)
+
+
+@pytest.mark.parametrize(("field", "value"), [
+    ("enabled", "true"),
+    ("installed", 1),
+    ("loaded", "yes"),
+    ("tools", "false"),
+    ("research", None),
+    ("documentation", 0),
+    ("deep", []),
+    ("attachments", -1),
+    ("attachments", "0"),
+    ("model", "   "),
+    ("model", 42),
+])
+def test_malformed_readiness_cannot_opt_into_instant(field, value):
+    assert not decide_instant_route(**(BASE | {field: value})).use_local
