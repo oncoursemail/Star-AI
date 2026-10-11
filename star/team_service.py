@@ -118,7 +118,18 @@ async def run_research_team(
             receipt = begin_research(home, project, prompt)
         except (OSError, sqlite3.Error):
             pass  # Research audit is best-effort, never access authorization.
-        batch = await research_web(prompt, provider=web_provider)
+        try:
+            batch = await research_web(prompt, provider=web_provider)
+        except BaseException as exc:
+            if receipt is not None:
+                try:
+                    finish_research(home, receipt,
+                                    status="cancelled" if isinstance(exc, asyncio.CancelledError) else "failed",
+                                    book=book, elapsed_ms=int((monotonic() - started) * 1000),
+                                    peak_concurrency=0)
+                except (OSError, sqlite3.Error):
+                    pass
+            raise
         book.searches = batch.planned_queries
         book.failed_searches = batch.failed_queries
         book.add(list(batch.sources), count_search=False)
@@ -201,6 +212,8 @@ async def run_research_team(
             ("local:reviewed-knowledge",) if context else ()
         )}
 
+    status = "failed"
+    result = None
     try:
         if on_event:
             # The trusted, app-defined plan: lets the UI show queued stages truthfully.
@@ -220,12 +233,25 @@ async def run_research_team(
                                if r.status != "completed")
             raise RuntimeError("STAR Teams could not finish: " + issues[:250])
         answer = result.for_id("synthesis").answer
+        status = "completed"
         if research:
             answer += "\n\n" + book.citations()
             if book.failed_searches:
                 answer += (f"\n{book.failed_searches} of {book.searches} "
                            "search attempts returned no usable evidence.")
         return answer, result
+    except asyncio.CancelledError:
+        status = "cancelled"
+        raise
     finally:
+        if receipt is not None:
+            try:
+                finish_research(
+                    home, receipt, status=status, book=book,
+                    elapsed_ms=int((monotonic() - started) * 1000),
+                    peak_concurrency=result.peak_concurrency if result else 0,
+                )
+            except (OSError, sqlite3.Error):
+                pass
         if created_client:
             await client.close()
