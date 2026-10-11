@@ -22,6 +22,15 @@ TOOLS = [
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
+    {"name": "workspace_game_discover", "description": "Discover Godot, Unity, and Unreal game projects in this selected workspace; read-only, bounded scan.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
+    {"name": "workspace_game_inspect", "description": "Inspect one Godot, Unity, or Unreal project: engine metadata, languages, sample scenes and export presets. Read-only.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}},
+    {"name": "workspace_game_plan", "description": "Preview an engine-specific validation, import, test or export command. Never executes code or launches an editor.",
+     "inputSchema": {"type": "object", "properties": {
+         "path": {"type": "string"}, "action": {"type": "string", "enum": ["validate", "import", "test", "export"]},
+         "preset": {"type": "string"}, "output": {"type": "string"}},
+         "required": ["path", "action"], "additionalProperties": False}},
 ]
 TOOL_NAMES = {t['name'] for t in TOOLS}
 
@@ -53,9 +62,20 @@ class Workspace:
             raise ValueError('Unknown workspace tool')
         if not isinstance(args, dict):
             raise ValueError('Arguments must be an object')
-        from jsonschema import validate
+        from jsonschema import validate, ValidationError
         schema = next(t['inputSchema'] for t in TOOLS if t['name'] == name)
-        validate(args, schema)
+        try:
+            validate(args, schema)
+        except ValidationError:
+            raise ValueError('Invalid workspace tool arguments') from None
+        if name in {'workspace_game_discover', 'workspace_game_inspect', 'workspace_game_plan'}:
+            from . import game_projects
+            if name == 'workspace_game_discover':
+                return game_projects.discover(self, args.get('path', '.'))
+            if name == 'workspace_game_inspect':
+                return game_projects.inspect(self, args['path'])
+            return game_projects.plan(self, args['path'], args['action'],
+                                      preset=args.get('preset', ''), output=args.get('output', ''))
         if name == 'workspace_list':
             path = self.resolve(args.get('path', '.'))
             if not path.is_dir():
