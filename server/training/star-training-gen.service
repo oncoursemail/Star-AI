@@ -43,3 +43,6 @@ ProtectHome=yes
 ReadWritePaths=/opt/star/training
 RestrictSUIDSGID=yes
 LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
