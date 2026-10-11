@@ -52,3 +52,18 @@ def summarize_verdicts(cases: list[Case], verdicts: dict[str, str]) -> dict:
         "pass_rate_executed": round(totals["passed"] / executed, 4) if executed else None,
         "note": "Catalog verdicts are externally supplied; this module does NOT run Roblox tests or validate proof."
     }
+
+
+def main(argv=None) -> int:
+    """`python -m star.evals run|selftest|list|gate ...` (see star/eval_runner.py and star/eval_gate.py)."""
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "gate":
+        from .eval_gate import main as gate_main
+        return gate_main(args[1:])
+    from .eval_runner import main as run_main
+    return run_main(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

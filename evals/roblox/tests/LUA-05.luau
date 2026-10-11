@@ -1,0 +1,7 @@
+local ret, env = load_answer()
+local parseKV = resolve(ret, env, "parseKV")
+check("hp/name/empty example", deepEqual(parseKV("hp=100; name = Bob ;empty="), { hp = "100", name = "Bob", empty = "" }))
+check("the last duplicate wins", deepEqual(parseKV("a=1;a=2"), { a = "2" }))
+check("segments without = or with an empty key are ignored", deepEqual(parseKV("novalue; =x; b = c=d"), { b = "c=d" }))
+local ok, res = pcall(parseKV, "")
+check("empty string gives an empty table without error", ok and type(res) == "table" and countKeys(res) == 0)

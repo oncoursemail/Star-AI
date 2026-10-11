@@ -1,0 +1,3546 @@
+[
+ {
+  "id": "LUA-01",
+  "category": "luau-typing",
+  "difficulty": 1,
+  "goal": "Write a strict-mode typed inventory module that passes static analysis and unit tests",
+  "prompt": "Write a Luau ModuleScript named Inventory in --!strict mode. Export a type `Inventory = { [string]: number }`. Provide `Inventory.new(): Inventory`, `Inventory.add(inv: Inventory, itemId: string, count: number): ()` which raises an error if count is not a positive integer, `Inventory.remove(inv: Inventory, itemId: string, count: number): boolean` which returns false and changes nothing when the inventory holds fewer than count (and removes the key when the count reaches 0), and `Inventory.count(inv: Inventory, itemId: string): number`.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/LUA-01.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune",
+   "checks": [
+    "First line of the answer file is --!strict; the file contains no `:: any`, `--!nocheck` or `--!nonstrict`",
+    "`luau-lsp analyze` (or `luau-analyze`) exits 0 with zero errors on the file",
+    "spec: add 3 then add 2 of 'wood' gives count 5",
+    "spec: remove 6 returns false and count stays 5",
+    "spec: remove 5 returns true and inv['wood'] == nil",
+    "spec: add with count 0, -1 and 1.5 each fail under pcall",
+    "spec: count of an unknown item is 0"
+   ]
+  },
+  "pass_conditions": [
+   "Static analysis clean in strict mode",
+   "All 7 spec assertions pass under Lune"
+  ],
+  "required_evidence": [
+   "answer/Inventory.luau",
+   "analyze.log",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Uses `any` casts or disables type checking to silence errors"
+  ],
+  "expected_sources": [
+   "content/en-us/luau/type-checking.md",
+   "src/content/docs/types/tables.md",
+   "content/en-us/scripting/module.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "auto": {
+   "strict": true,
+   "unit_test": {
+    "file": "tests/LUA-01.luau",
+    "checks": 7
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    },
+    {
+     "id": "no_cast_any",
+     "re": "::\\s*any\\b",
+     "why": "no `:: any` casts",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "development"
+ },
+ {
+  "id": "LUA-02",
+  "category": "luau-typing",
+  "difficulty": 1,
+  "goal": "Fix strict-mode nil errors with type refinement instead of casts",
+  "prompt": "This module fails strict type checking and crashes at runtime when p or p.level is nil. Fix it. A nil profile must return \"unknown\"; a nil level counts as 0. Do not use `any` and do not relax the checking mode.\n\n--!strict\ntype Profile = { name: string, level: number? }\nlocal function describe(p: Profile?): string\n\treturn p.name .. \" (level \" .. p.level + 1 .. \")\"\nend\nreturn describe",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/LUA-02.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune",
+   "checks": [
+    "`luau-lsp analyze` exits 0 on the answer; file still starts with --!strict and has no `:: any`",
+    "spec: describe(nil) == \"unknown\"",
+    "spec: describe({name = \"A\"}) == \"A (level 1)\"",
+    "spec: describe({name = \"A\", level = 4}) == \"A (level 5)\"",
+    "The type alias Profile and the function signature are unchanged"
+   ]
+  },
+  "pass_conditions": [
+   "Strict analysis clean",
+   "3 spec assertions pass",
+   "Signature preserved"
+  ],
+  "required_evidence": [
+   "answer/describe.luau",
+   "analyze.log",
+   "lune-test.log",
+   "diff.patch"
+  ],
+  "hard_fail": [
+   "Changes the mode comment or adds `any`"
+  ],
+  "expected_sources": [
+   "src/content/docs/types/refinements.md",
+   "content/en-us/luau/type-checking.md",
+   "src/content/docs/types/basic-types.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 400,
+   "wall_seconds": 420
+  },
+  "auto": {
+   "strict": true,
+   "unit_test": {
+    "file": "tests/LUA-02.luau",
+    "checks": 3
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "alias_kept",
+     "re": "type\\s+Profile\\s*=\\s*\\{\\s*name\\s*:\\s*string\\s*,\\s*level\\s*:\\s*number\\?\\s*\\}",
+     "why": "the Profile type alias must be unchanged"
+    },
+    {
+     "id": "signature_kept",
+     "re": "function\\s+describe\\s*\\(\\s*p\\s*:\\s*Profile\\?\\s*\\)\\s*:\\s*string",
+     "why": "the function signature must be unchanged"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    },
+    {
+     "id": "no_any",
+     "re": "\\bany\\b",
+     "why": "`any` hides type errors",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "holdout"
+ },
+ {
+  "id": "LUA-03",
+  "category": "luau-typing",
+  "difficulty": 2,
+  "goal": "Implement generic list utilities whose generics are really checked",
+  "prompt": "Write a --!strict ModuleScript ListUtil with `map<T, U>(list: {T}, fn: (T) -> U): {U}`, `filter<T>(list: {T}, pred: (T) -> boolean): {T}` and `find<T>(list: {T}, pred: (T) -> boolean): T?`. None of them may modify the input list.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/LUA-03.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune",
+   "checks": [
+    "`luau-lsp analyze` exits 0 on ListUtil.luau",
+    "Analyzing fixtures/LUA-03/misuse.luau (calls map({1, 2}, function(s: string) return s end)) reports at least one type error, which proves the parameters are generic and not `any`",
+    "spec: map({1,2,3}, x*2) == {2,4,6}; filter({1,2,3,4}, even) == {2,4}; find({'a','b'}, == 'b') == 'b'; find on no match == nil",
+    "spec: the input tables are element-wise unchanged after each call"
+   ]
+  },
+  "pass_conditions": [
+   "Module is clean",
+   "Misuse file is rejected by the type checker",
+   "Spec passes"
+  ],
+  "required_evidence": [
+   "answer/ListUtil.luau",
+   "analyze.log",
+   "misuse-analyze.log",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Function parameters typed as `any` or `{any}`"
+  ],
+  "expected_sources": [
+   "src/content/docs/types/generics.md",
+   "content/en-us/luau/type-checking.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 540
+  },
+  "auto": {
+   "strict": true,
+   "unit_test": {
+    "file": "tests/LUA-03.luau",
+    "checks": 5
+   },
+   "typecheck_probe": {
+    "suffix": "__M.map({1, 2}, function(s: string) return s end)",
+    "block": "longest"
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    },
+    {
+     "id": "no_any",
+     "re": "\\bany\\b",
+     "why": "`any` hides type errors",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "development"
+ },
+ {
+  "id": "LUA-04",
+  "category": "luau-syntax",
+  "difficulty": 2,
+  "goal": "Port a Lua 5.4 snippet (goto, bitwise operators) to valid Luau with identical results",
+  "prompt": "Port this Lua 5.4 function to Luau so it runs in Roblox and returns the same three values.\n\nlocal function pack(flags)\n  local out = 0\n  for i = 1, #flags do\n    if not flags[i] then goto continue end\n    out = out | (1 << (i - 1))\n    ::continue::\n  end\n  return out, out // 4, out >> 1\nend\nreturn pack",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/LUA-04.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune",
+   "checks": [
+    "The answer parses with the Luau compiler (luau-compile or luau-lsp analyze reports no syntax error)",
+    "The answer contains no `goto`, no `::label::`, and no `|`, `<<`, `>>` operators outside comments and strings",
+    "spec: pack({true,false,true,true}) returns 13, 3, 6",
+    "spec: pack({}) returns 0, 0, 0; pack of 16 true flags returns 65535, 16383, 32767"
+   ]
+  },
+  "pass_conditions": [
+   "Compiles as Luau",
+   "No Lua 5.3/5.4-only syntax left",
+   "Spec passes"
+  ],
+  "required_evidence": [
+   "answer/pack.luau",
+   "compile.log",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Claims Luau supports goto or integer bitwise operators"
+  ],
+  "expected_sources": [
+   "src/content/docs/getting-started/compatibility.md",
+   "src/content/docs/getting-started/syntax.md",
+   "content/en-us/reference/engine/libraries/bit32.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 400,
+   "wall_seconds": 420
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/LUA-04.luau",
+    "checks": 3
+   },
+   "forbid": [
+    {
+     "id": "no_goto",
+     "re": "\\bgoto\\b",
+     "why": "Luau has no goto",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "no_label",
+     "re": "::\\s*\\w+\\s*::",
+     "why": "Luau has no ::labels::",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "no_shift",
+     "re": "<<|>>",
+     "why": "Luau has no << or >> operators",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "no_bitor",
+     "re": "^(?!.*(?::\\s|\\btype\\b|->)).*[\\w)\\]]\\s*\\|\\s*[(\\w]",
+     "why": "Luau has no | operator (use bit32.bor)",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "holdout"
+ },
+ {
+  "id": "LUA-05",
+  "category": "luau-syntax",
+  "difficulty": 2,
+  "goal": "Parse a key=value string with Luau string patterns",
+  "prompt": "Write `parseKV(s: string): { [string]: string }` in --!strict Luau. Input looks like \"hp=100; name = Bob ;empty=\". Segments are separated by `;`. Trim spaces around keys and values. Ignore segments that have no `=` or an empty key. If a key repeats, the last value wins. Use only the built-in string library.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/LUA-05.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune",
+   "checks": [
+    "`luau-lsp analyze` exits 0",
+    "spec: \"hp=100; name = Bob ;empty=\" gives {hp='100', name='Bob', empty=''} and nothing else",
+    "spec: \"a=1;a=2\" gives {a='2'}; \"novalue; =x; b = c=d\" gives {b='c=d'}",
+    "spec: \"\" gives an empty table and does not error"
+   ]
+  },
+  "pass_conditions": [
+   "Strict analysis clean",
+   "All spec cases pass"
+  ],
+  "required_evidence": [
+   "answer/parseKV.luau",
+   "analyze.log",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Uses a regex syntax that Luau patterns do not support (for example `\\d`, `|` alternation, `{n}` counts)"
+  ],
+  "expected_sources": [
+   "content/en-us/luau/strings.md",
+   "content/en-us/reference/engine/libraries/string.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 500,
+   "wall_seconds": 480
+  },
+  "auto": {
+   "strict": true,
+   "unit_test": {
+    "file": "tests/LUA-05.luau",
+    "checks": 4
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "development"
+ },
+ {
+  "id": "NET-01",
+  "category": "remote-security",
+  "difficulty": 2,
+  "goal": "Make a purchase RemoteEvent handler server-authoritative",
+  "prompt": "This server script lets exploiters buy anything for free. Rewrite the handler so the server decides the price and validates everything the client sends. Prices live in the server table `Catalog = { sword = 100, shield = 250 }`. Each player may own each item once.\n\nBuyItem.OnServerEvent:Connect(function(player, itemId, price)\n\tlocal coins = player.leaderstats.Coins\n\tcoins.Value -= price\n\tgiveItem(player, itemId)\nend)",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/NET-01.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune-mock",
+   "checks": [
+    "Fuzz (seed 1234, 500 calls): with client price values -1e9, 0, NaN, \"free\", nil the balance change is either 0 or exactly the Catalog price",
+    "itemId that is a number, a table, nil, an unknown string or a 10,000-character string causes no balance change, no grant and no thrown error",
+    "A player with 99 coins cannot buy sword; with 100 coins the balance becomes 0 and sword is granted once",
+    "50 rapid valid calls for the same item grant it once and charge once",
+    "The balance never increases and never goes below 0 at any point of the fuzz run"
+   ]
+  },
+  "pass_conditions": [
+   "All five checks hold",
+   "Explanation states the server ignores the client-supplied price"
+  ],
+  "required_evidence": [
+   "answer/Shop.server.luau",
+   "fuzz.log",
+   "diff.patch"
+  ],
+  "hard_fail": [
+   "Balance increases or goes negative",
+   "Handler still reads the client price"
+  ],
+  "expected_sources": [
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/scripting/security/security-tactics.md",
+   "content/en-us/scripting/security/client-server-boundary.md"
+  ],
+  "budget": {
+   "model_calls": 4,
+   "tool_calls": 8,
+   "output_tokens": 800,
+   "wall_seconds": 720
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-01.luau",
+    "checks": 7
+   },
+   "require": [
+    {
+     "id": "catalog_lookup",
+     "re": "Catalog\\s*\\[",
+     "why": "the price must come from the server's Catalog table"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "client_price",
+     "re": "\\.Value\\s*-=\\s*price\\b",
+     "why": "the balance must not be reduced by the client's price"
+    }
+   ]
+  },
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "NET-03",
+  "category": "remote-security",
+  "difficulty": 2,
+  "goal": "Add a server-side per-player cooldown to an ability remote without leaking memory",
+  "prompt": "Players fire the RemoteEvent UseAbility. Write a server ModuleScript AbilityGate with `tryUse(player: Player): boolean` that allows one use every 2 seconds per player measured with the server clock, a `forget(player: Player)` that is connected to Players.PlayerRemoving, and `trackedCount(): number` for tests. Client arguments must not influence the timing.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/NET-03.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune-mock",
+   "checks": [
+    "With the mock clock: 100 calls inside 1 simulated second return true exactly once",
+    "A call at t = 2.1 s after the accepted call returns true",
+    "Two different players are gated independently",
+    "After the mock fires PlayerRemoving for a player, trackedCount() drops by one",
+    "Static: timing uses os.clock(), time() or Workspace:GetServerTimeNow(); no timestamp is read from remote arguments"
+   ]
+  },
+  "pass_conditions": [
+   "All gate checks pass",
+   "No per-player state survives PlayerRemoving"
+  ],
+  "required_evidence": [
+   "answer/AbilityGate.luau",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Cooldown is enforced only in a LocalScript"
+  ],
+  "expected_sources": [
+   "content/en-us/scripting/debounce.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/reference/engine/classes/Players.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 540
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-03.luau",
+    "checks": 4
+   },
+   "require": [
+    {
+     "id": "server_clock",
+     "any": [
+      "os\\.clock\\s*\\(",
+      "(?<![.\\w])time\\s*\\(\\s*\\)",
+      "GetServerTimeNow",
+      "tick\\s*\\(\\s*\\)",
+      "os\\.time\\s*\\("
+     ],
+     "why": "timing must use the server clock"
+    },
+    {
+     "id": "player_removing",
+     "re": "PlayerRemoving",
+     "why": "forget() must be connected to Players.PlayerRemoving"
+    }
+   ]
+  },
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "NET-04",
+  "category": "remote-security",
+  "difficulty": 2,
+  "goal": "Choose the right remote type for continuous versus critical messages",
+  "prompt": "I need two messages. (1) Each client sends its aim direction to the server about 20 times per second; losing some updates is fine. (2) The server tells every client once that the round ended; this must arrive. Create the remotes in ReplicatedStorage and write the client and server code for both. Validate what the client sends.",
+  "run_mode": "automated",
+  "fixtures": [],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune-mock",
+   "checks": [
+    "The aim remote is created with Instance.new(\"UnreliableRemoteEvent\"); the round-end remote with Instance.new(\"RemoteEvent\")",
+    "The aim payload is a single Vector3 (or two numbers); nothing else is sent, so it is far below the 1000-byte UnreliableRemoteEvent payload limit",
+    "Client sending is rate limited to at most 20 sends per simulated second in the mock (accumulated delta time, not every frame)",
+    "Server handler rejects non-Vector3 values and vectors with NaN or infinite components without erroring",
+    "Round end uses FireAllClients on the RemoteEvent"
+   ]
+  },
+  "pass_conditions": [
+   "Correct remote classes",
+   "Rate limit and validation present and effective in the mock"
+  ],
+  "required_evidence": [
+   "answer/client.luau",
+   "answer/server.luau",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Round-end message sent through an UnreliableRemoteEvent"
+  ],
+  "expected_sources": [
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/reference/engine/classes/UnreliableRemoteEvent.yaml",
+   "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+  ],
+  "budget": {
+   "model_calls": 4,
+   "tool_calls": 8,
+   "output_tokens": 900,
+   "wall_seconds": 780
+  },
+  "auto": {
+   "require": [
+    {
+     "id": "unreliable_aim",
+     "re": "Instance\\.new\\(\\s*\"UnreliableRemoteEvent\"\\s*\\)",
+     "why": "the 20 Hz aim stream must use an UnreliableRemoteEvent"
+    },
+    {
+     "id": "reliable_round",
+     "re": "Instance\\.new\\(\\s*\"RemoteEvent\"\\s*\\)",
+     "why": "the round-end message must use a reliable RemoteEvent"
+    },
+    {
+     "id": "fire_all",
+     "re": "FireAllClients",
+     "why": "the round end goes to every client with FireAllClients"
+    },
+    {
+     "id": "fire_server",
+     "re": "FireServer",
+     "why": "the client sends the aim with FireServer"
+    },
+    {
+     "id": "typeof_check",
+     "re": "typeof\\s*\\(",
+     "why": "the server must check the argument's type (Vector3)"
+    },
+    {
+     "id": "nan_check",
+     "any": [
+      "(\\b[\\w.]+)\\s*~=\\s*\\1",
+      "math\\.huge",
+      "\\bnan\\b",
+      "isfinite",
+      "Magnitude"
+     ],
+     "why": "NaN or infinite vectors must be rejected"
+    },
+    {
+     "id": "rate_limit",
+     "any": [
+      "1\\s*/\\s*20",
+      "0\\.05\\b",
+      "(?i)interval",
+      "(?i)rate"
+     ],
+     "why": "the client must limit its send rate to 20 per second"
+    }
+   ]
+  },
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "NET-05",
+  "category": "datastore-safety",
+  "difficulty": 3,
+  "goal": "Save player data safely with UpdateAsync, retries and a shutdown flush",
+  "prompt": "Write a server ModuleScript PlayerData that keeps each player's data table in memory, saves it with DataStoreService under the key \"Player_\" .. UserId, retries failed writes up to 3 times with growing delays, saves on PlayerRemoving and flushes every loaded player in game:BindToClose. Several servers may write the same key, so do not overwrite blindly. Never yield inside the update callback. The module connects Players.PlayerAdded and Players.PlayerRemoving itself when it is required, and exposes `PlayerData.get(player: Player): { [string]: any }?` for the in-memory table.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/NET-05.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "static+lune-mock",
+   "checks": [
+    "Static: writes use GlobalDataStore:UpdateAsync inside pcall; SetAsync is not used for existing player data",
+    "Static: no task.wait, wait or other yielding call inside the UpdateAsync callback body",
+    "Mock data store that throws on the first 2 calls: the value is stored after the 3rd attempt and at most 3 attempts are made",
+    "Mock that always throws: save returns false (or reports failure) and does not loop forever; the in-memory copy is kept",
+    "PlayerRemoving triggers exactly one successful save; BindToClose callback saves all 3 mock players before returning",
+    "Stored value survives a JSON round trip and is smaller than the 4,194,304-character per-key limit"
+   ]
+  },
+  "pass_conditions": [
+   "All mock scenarios pass",
+   "No yielding in the update callback"
+  ],
+  "required_evidence": [
+   "answer/PlayerData.luau",
+   "lune-test.log"
+  ],
+  "hard_fail": [
+   "Unbounded retry loop",
+   "Data written from a LocalScript"
+  ],
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/best-practices.md",
+   "content/en-us/cloud-services/data-stores/index.md",
+   "content/en-us/reference/engine/classes/GlobalDataStore.yaml",
+   "content/en-us/cloud-services/data-stores/error-codes-and-limits.md",
+   "content/en-us/reference/engine/classes/DataModel.yaml"
+  ],
+  "budget": {
+   "model_calls": 5,
+   "tool_calls": 10,
+   "output_tokens": 1100,
+   "wall_seconds": 960
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-05.luau",
+    "checks": 5
+   },
+   "require": [
+    {
+     "id": "update_async",
+     "re": "UpdateAsync",
+     "why": "writes must use UpdateAsync"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\s*\\(",
+     "why": "DataStore calls must be wrapped in pcall"
+    },
+    {
+     "id": "bind_to_close",
+     "re": "BindToClose",
+     "why": "all loaded players must be saved in BindToClose"
+    },
+    {
+     "id": "player_removing",
+     "re": "PlayerRemoving",
+     "why": "save on PlayerRemoving"
+    },
+    {
+     "id": "key",
+     "re": "\"Player_\"",
+     "why": "the key must be \"Player_\" .. UserId",
+     "scope": "code"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_setasync",
+     "re": "[:.]SetAsync\\s*\\(",
+     "why": "SetAsync overwrites blindly; use UpdateAsync for existing data"
+    }
+   ]
+  },
+  "helps": [
+   "roblox-datastore-safety"
+  ],
+  "v2_amendment": "Prompt extended so the unit tests can drive the module through Players events without guessing its API.",
+  "split": "development"
+ },
+ {
+  "id": "UI-01",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Build a centered, responsive confirmation dialog from native UI objects",
+  "prompt": "In StarterGui create a ScreenGui named ConfirmDialog with a Frame named Panel centered on the screen. Panel is 40% of the screen width but never wider than 520 px or narrower than 280 px, with a 16:10 aspect ratio and 16 px inner padding. Inside: TextLabel Title, TextLabel Body, and TextButtons Confirm and Cancel side by side along the bottom with a 12 px gap. It must look right on 1920x1080, 1280x720 and a 390x844 phone.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/_harness/ui_probe.luau",
+   "fixtures/_harness/blank-test-place.rbxl"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe",
+   "probe": "Harness-owned ui_probe.luau, run through the Studio MCP in the disposable test place. It clones Panel into three plain Frames sized 1920x1080, 1280x720 and 390x844 and reads AbsolutePosition/AbsoluteSize.",
+   "checks": [
+    "Panel.AnchorPoint == Vector2.new(0.5, 0.5) and Panel.Position == UDim2.fromScale(0.5, 0.5)",
+    "Panel has a UISizeConstraint with MaxSize.X == 520 and MinSize.X == 280, a UIAspectRatioConstraint with AspectRatio between 1.59 and 1.61, and a UIPadding of 16 px on all four sides",
+    "In each simulated viewport the panel center is within 1 px of the container center and the panel lies fully inside the container",
+    "Confirm and Cancel do not intersect, are inside Panel, and the horizontal gap between them is 12 px (+-1)",
+    "Title.TextFits and Body.TextFits are true in the 390x844 container",
+    "Every object is a native GuiObject; there is no ImageLabel containing a picture of the dialog"
+   ]
+  },
+  "pass_conditions": [
+   "All probe checks pass at the three sizes",
+   "Screenshot at each size attached"
+  ],
+  "required_evidence": [
+   "gui-hierarchy.json",
+   "probe-result.json",
+   "viewport-1920.png",
+   "viewport-1280.png",
+   "viewport-390.png"
+  ],
+  "hard_fail": [
+   "Fixed pixel Position that is only centered at one resolution",
+   "Claims a Studio test happened without a tool result"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/position-and-size.md",
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/UISizeConstraint.yaml",
+   "content/en-us/reference/engine/classes/UIAspectRatioConstraint.yaml",
+   "content/en-us/reference/engine/classes/UIPadding.yaml"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 20,
+   "output_tokens": 1400,
+   "wall_seconds": 1500
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "UI-02",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Build a scrolling 5-column inventory grid that keeps square slots at any size",
+  "prompt": "Create a ScreenGui named Inventory with a centered Frame Window (60% x 70% of the screen). Inside it put a ScrollingFrame named Grid that fills the window and holds 30 square slot Frames named Slot01 to Slot30, always 5 per row with 8 px gaps. It scrolls vertically only and the canvas must grow with the content automatically.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/_harness/ui_probe.luau",
+   "fixtures/_harness/blank-test-place.rbxl"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe",
+   "checks": [
+    "Grid contains exactly 30 Frames named Slot01..Slot30 and one UIGridLayout",
+    "Grid.ScrollingDirection == Enum.ScrollingDirection.Y and Grid.AutomaticCanvasSize == Enum.AutomaticSize.Y",
+    "In the 1920x1080, 1280x720 and 390x844 containers: the slots occupy exactly 5 distinct X positions and 6 distinct Y positions",
+    "Each slot is square: abs(AbsoluteSize.X - AbsoluteSize.Y) <= 1",
+    "Grid.AbsoluteCanvasSize.X <= Grid.AbsoluteWindowSize.X + 1 (no horizontal scrolling) and AbsoluteCanvasSize.Y covers the bottom edge of Slot30",
+    "Horizontal distance between neighbouring slots is 8 px (+-1)"
+   ]
+  },
+  "pass_conditions": [
+   "All probe checks pass at the three sizes"
+  ],
+  "required_evidence": [
+   "gui-hierarchy.json",
+   "probe-result.json",
+   "viewport-1280.png",
+   "viewport-390.png"
+  ],
+  "hard_fail": [
+   "Slots positioned by hand without a layout object",
+   "CanvasSize hard-coded so that content is cut off"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/grid-table-layouts.md",
+   "content/en-us/ui/scrolling-frames.md",
+   "content/en-us/reference/engine/classes/UIGridLayout.yaml",
+   "content/en-us/reference/engine/classes/ScrollingFrame.yaml"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 20,
+   "output_tokens": 1200,
+   "wall_seconds": 1500
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "UI-03",
+  "category": "ui-overflow",
+  "difficulty": 3,
+  "goal": "Make a button label survive long localized text without overlapping its icon",
+  "prompt": "The TextButton BuyButton has a 24x24 ImageLabel named Icon on the left and a TextLabel named Label. \"Buy\" fits, but the German text \"Jetzt für 1.250 Münzen kaufen\" overlaps the icon. Fix the layout: the button may grow horizontally up to 320 px, after that the text may shrink down to size 12, and if it still does not fit it must end with an ellipsis. Text must never overlap the icon or leave the button.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/UI-03/buy-button.rbxm",
+   "fixtures/UI-03/strings.json",
+   "fixtures/_harness/ui_probe.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe",
+   "checks": [
+    "For each of the 3 fixture strings (\"Buy\", the German string, a 60-character string) the probe sets Label.Text and waits one frame",
+    "Label.AbsolutePosition.X >= Icon.AbsolutePosition.X + Icon.AbsoluteSize.X + 4",
+    "Label right edge <= BuyButton right edge, and BuyButton.AbsoluteSize.X <= 320",
+    "Either Label.TextFits is true, or Label.TextTruncate == Enum.TextTruncate.AtEnd and the rendered text size is 12",
+    "With \"Buy\" the button is narrower than with the German string (it really resizes)"
+   ]
+  },
+  "pass_conditions": [
+   "All probe checks pass for the three strings",
+   "Screenshots for the three strings attached"
+  ],
+  "required_evidence": [
+   "probe-result.json",
+   "buy-short.png",
+   "buy-german.png",
+   "buy-60.png",
+   "changed-objects.json"
+  ],
+  "hard_fail": [
+   "Text overlaps the icon in any fixture string",
+   "Solution replaces the text with an image"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/UITextSizeConstraint.yaml",
+   "content/en-us/reference/engine/classes/TextLabel.yaml",
+   "content/en-us/ui/labels.md"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 20,
+   "output_tokens": 1200,
+   "wall_seconds": 1500
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "UI-04",
+  "category": "ui-interaction",
+  "difficulty": 2,
+  "goal": "Script hover, press and gamepad-selection states for a button with interruptible tweens",
+  "prompt": "Write a LocalScript named ButtonStates for the TextButton PlayButton. On hover or gamepad selection it scales to 1.05 over 0.12 s and returns to 1 when the pointer or selection leaves. While pressed the background is darker. It must work with mouse, touch and gamepad, cancel a running tween when a new state begins, and disconnect everything when the button is destroyed. Turn off the automatic button colour.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/UI-04/play-button.rbxm",
+   "fixtures/_harness/ui_probe.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "static+studio-probe",
+   "checks": [
+    "Static: connects MouseEnter and MouseLeave, SelectionGained and SelectionLost, and uses Activated for the click (not only MouseButton1Click)",
+    "Static: PlayButton.AutoButtonColor is set to false; every TweenInfo duration is <= 0.2 s; a previous Tween is cancelled or reused before a new one plays",
+    "Static: connections are disconnected on Destroying or when the button leaves the DataModel",
+    "Probe in play mode (only if the connected Studio MCP exposes user_mouse_input): after hovering, the UIScale.Scale (or equivalent size) reaches 1.05 (+-0.01) within 0.3 s and returns to 1.0 within 0.3 s after leaving",
+    "Console output has no errors during the probe"
+   ]
+  },
+  "pass_conditions": [
+   "Static checks pass",
+   "Probe passes or is recorded as blocked when input simulation is unavailable"
+  ],
+  "required_evidence": [
+   "answer/ButtonStates.client.luau",
+   "static-check.json",
+   "probe-result.json",
+   "console.log"
+  ],
+  "hard_fail": [
+   "Only MouseButton1Click is handled, so touch or gamepad cannot activate the button"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/buttons.md",
+   "content/en-us/ui/animation.md",
+   "content/en-us/reference/engine/classes/GuiButton.yaml",
+   "content/en-us/reference/engine/classes/GuiObject.yaml",
+   "content/en-us/reference/engine/classes/TweenService.yaml"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 16,
+   "output_tokens": 1000,
+   "wall_seconds": 1200
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "UI-05",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Place a HUD badge inside the safe area, clear of the Roblox top bar and device cut-outs",
+  "prompt": "Add a currency badge named CoinBadge (an ImageLabel icon plus a TextLabel amount) to the ScreenGui HUD. It sits in the top-right corner, 12 px from the top and right edges of the safe area, and must never be hidden by the Roblox top bar buttons or a phone notch.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/UI-05/hud.rbxm"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe+human",
+   "checks": [
+    "HUD.ScreenInsets == Enum.ScreenInsets.CoreUISafeInsets and HUD.IgnoreGuiInset == false",
+    "CoinBadge.AnchorPoint == Vector2.new(1, 0) and CoinBadge.Position == UDim2.new(1, -12, 0, 12)",
+    "CoinBadge contains one ImageLabel and one TextLabel that do not intersect",
+    "Human check on two Studio device-emulator screenshots (a phone in landscape and desktop): the badge is fully visible and does not overlap the top bar controls"
+   ]
+  },
+  "pass_conditions": [
+   "Property checks pass",
+   "Reviewer confirms both screenshots"
+  ],
+  "required_evidence": [
+   "probe-result.json",
+   "emulator-phone-landscape.png",
+   "emulator-desktop.png"
+  ],
+  "hard_fail": [
+   "Sets ScreenInsets to None or IgnoreGuiInset to true and compensates with magic offsets"
+  ],
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/ScreenGui.yaml",
+   "content/en-us/reference/engine/enums/ScreenInsets.yaml",
+   "content/en-us/ui/on-screen-containers.md",
+   "content/en-us/ui/position-and-size.md"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 14,
+   "output_tokens": 800,
+   "wall_seconds": 1200
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "UI-06",
+  "category": "ui-assets",
+  "difficulty": 1,
+  "goal": "Configure 9-slice scaling so a bordered panel resizes without distorted corners",
+  "prompt": "The ImageLabel PanelBg uses a 96x96 px panel texture whose rounded corners are 24 px. When I resize it the corners stretch. Configure it so it can be any size with crisp corners.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/UI-06/panel.rbxm",
+   "fixtures/UI-06/panel-96.png"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe+human",
+   "checks": [
+    "PanelBg.ScaleType == Enum.ScaleType.Slice",
+    "PanelBg.SliceCenter == Rect.new(24, 24, 72, 72)",
+    "PanelBg.SliceScale == 1",
+    "The Image property is unchanged (same asset)",
+    "Human check on screenshots at 200x100 and 600x400: corners have the same radius in both"
+   ]
+  },
+  "pass_conditions": [
+   "Property checks pass",
+   "Reviewer confirms corners"
+  ],
+  "required_evidence": [
+   "probe-result.json",
+   "panel-200x100.png",
+   "panel-600x400.png"
+  ],
+  "hard_fail": [
+   "Replaces the image with UICorner on a plain Frame instead of using the supplied art"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/9-slice.md",
+   "content/en-us/reference/engine/classes/ImageLabel.yaml"
+  ],
+  "budget": {
+   "model_calls": 4,
+   "tool_calls": 10,
+   "output_tokens": 500,
+   "wall_seconds": 780
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "UI-07",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Build an evenly spaced settings list with labels left and toggles right",
+  "prompt": "Create a Frame named SettingsList with five rows named Row1 to Row5. Each row is 48 px tall with a TextLabel on the left and a 64x32 TextButton toggle on the right. Rows are 8 px apart, the list has 16 px padding on the left and right, the order comes from LayoutOrder, and the label uses whatever width is left. It must work in a container that is only 390 px wide.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/_harness/ui_probe.luau",
+   "fixtures/_harness/blank-test-place.rbxl"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe",
+   "checks": [
+    "SettingsList has a UIListLayout with SortOrder == Enum.SortOrder.LayoutOrder and Padding == UDim.new(0, 8)",
+    "Rows have LayoutOrder 1..5 in name order and AbsoluteSize.Y == 48",
+    "AbsolutePosition.Y of consecutive rows differs by 56 px (+-1)",
+    "All five toggles have the same right edge (+-1) and it equals the list's right edge minus 16",
+    "In the 390 px wide container each label's right edge is <= its toggle's left edge",
+    "Toggle AbsoluteSize is 64x32 in every container"
+   ]
+  },
+  "pass_conditions": [
+   "All probe checks pass at 1280 px and 390 px container widths"
+  ],
+  "required_evidence": [
+   "gui-hierarchy.json",
+   "probe-result.json",
+   "list-1280.png",
+   "list-390.png"
+  ],
+  "hard_fail": [
+   "Rows positioned with manual Y offsets instead of a layout"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/list-flex-layouts.md",
+   "content/en-us/reference/engine/classes/UIListLayout.yaml",
+   "content/en-us/reference/engine/classes/UIFlexItem.yaml",
+   "content/en-us/reference/engine/classes/UIPadding.yaml"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 20,
+   "output_tokens": 1200,
+   "wall_seconds": 1500
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "UI-08",
+  "category": "ui-text",
+  "difficulty": 2,
+  "goal": "Typewriter effect on rich text that never shows raw markup",
+  "prompt": "Write a ModuleScript DialogText with `play(label: TextLabel, text: string, charsPerSecond: number): () -> ()`. It reveals the text one character at a time. The text contains rich text tags such as <b> and <font color=\"#FFD166\">, and the raw tags must never be visible while typing. The function returns a `skip` function that shows the full text immediately.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/UI-08/dialog.rbxm",
+   "fixtures/_harness/ui_probe.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "static+studio-probe",
+   "checks": [
+    "Static: sets label.RichText = true and label.Text to the full string once, then animates label.MaxVisibleGraphemes",
+    "Static: does not assign substrings of the text to label.Text inside the loop",
+    "Probe: 0.5 s after play() with 20 chars per second, MaxVisibleGraphemes is between 8 and 12",
+    "Probe: after calling skip(), MaxVisibleGraphemes == -1 and label.Text equals the full source string",
+    "Probe: calling play() twice on the same label does not leave two loops running (final state is the second text, fully visible)"
+   ]
+  },
+  "pass_conditions": [
+   "Static and probe checks pass"
+  ],
+  "required_evidence": [
+   "answer/DialogText.luau",
+   "probe-result.json",
+   "console.log"
+  ],
+  "hard_fail": [
+   "Raw tag characters such as \"<fo\" are visible in any sampled frame"
+  ],
+  "expected_sources": [
+   "content/en-us/ui/animation.md",
+   "content/en-us/ui/rich-text.md",
+   "content/en-us/reference/engine/classes/TextLabel.yaml"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 14,
+   "output_tokens": 900,
+   "wall_seconds": 1200
+  },
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "SYS-01",
+  "category": "server-authoritative-inventory",
+  "difficulty": 3,
+  "goal": "Server-side inventory move/stack/swap that cannot duplicate or lose items",
+  "prompt": "Write a server ModuleScript InventoryService for 20-slot inventories kept on the server. Each slot is nil or { itemId: string, count: number } with a maximum stack of 99. Implement `MoveItem(player: Player, fromSlot: any, toSlot: any): (boolean, string?)`: validate that both are integers from 1 to 20 and different, and that the source slot is not empty; if the target holds the same itemId, stack up to 99 and leave the remainder in the source; if it holds a different item, swap; if empty, move. Invalid requests return false and a reason and change nothing. Also implement `GetSnapshot(player): { [number]: { itemId: string, count: number } }`. Also implement `Give(player: Player, itemId: string, count: number): boolean`, which the server uses to put items into the inventory (it fills existing stacks of the same item first, then empty slots, and returns false if everything did not fit).",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/SYS-01.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "lune-property",
+   "checks": [
+    "Property test, seed 1234, 2,000 random operations including invalid arguments (strings, NaN, 0, 21, 1.5, tables, nil)",
+    "After every operation the total count per itemId equals the initial total (no duplication, no loss)",
+    "No slot ever has count > 99 or count <= 0",
+    "Every invalid request returns false with a non-empty reason and leaves a deep copy of the state identical",
+    "No call throws",
+    "GetSnapshot returns a copy: mutating it does not change the server state"
+   ]
+  },
+  "pass_conditions": [
+   "All property checks hold for the full run"
+  ],
+  "required_evidence": [
+   "answer/InventoryService.luau",
+   "property-test.log"
+  ],
+  "hard_fail": [
+   "Any item duplication"
+  ],
+  "expected_sources": [
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/scripting/security/security-tactics.md",
+   "content/en-us/scripting/module.md"
+  ],
+  "budget": {
+   "model_calls": 5,
+   "tool_calls": 10,
+   "output_tokens": 1200,
+   "wall_seconds": 1080
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/SYS-01.luau",
+    "checks": 6
+   },
+   "require": [
+    {
+     "id": "move_item",
+     "re": "MoveItem",
+     "why": "MoveItem is required"
+    },
+    {
+     "id": "snapshot",
+     "re": "GetSnapshot",
+     "why": "GetSnapshot is required"
+    }
+   ]
+  },
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "v2_amendment": "Prompt extended with Give(...) so the unit tests can seed an inventory through a specified API.",
+  "split": "holdout"
+ },
+ {
+  "id": "SYS-02",
+  "category": "npc-pathing",
+  "difficulty": 3,
+  "goal": "Walk an NPC to a goal with PathfindingService and recover when the path is blocked",
+  "prompt": "In the test place, write a server Script that walks the NPC Workspace.Guard to Workspace.Goal with PathfindingService (AgentRadius 2, AgentHeight 5, AgentCanJump true). Follow the waypoints, jump when a waypoint asks for it, compute a new path when the current one becomes blocked ahead of the NPC, and after 3 failed computations stop and print PATH_FAILED.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/SYS-02/npc-maze.rbxl",
+   "fixtures/SYS-02/harness.server.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "static+studio-playtest",
+   "checks": [
+    "Static: PathfindingService:CreatePath with the three agent parameters; ComputeAsync wrapped in pcall; path.Status compared with Enum.PathStatus.Success",
+    "Static: connects path.Blocked and compares the blocked waypoint index with the current one; handles Enum.PathWaypointAction.Jump; waits on Humanoid.MoveToFinished",
+    "Playtest A: Guard's HumanoidRootPart is within 6 studs of Goal within 30 s",
+    "Playtest B: the harness closes Workspace.Door at t = 3 s; Guard still arrives within 45 s",
+    "Playtest C (Goal sealed off): PATH_FAILED is printed exactly once and the script stops retrying",
+    "get_console_output shows no errors in A, B or C"
+   ]
+  },
+  "pass_conditions": [
+   "Static checks pass",
+   "Playtests A, B and C pass"
+  ],
+  "required_evidence": [
+   "answer/GuardPath.server.luau",
+   "playtest-A.json",
+   "playtest-B.json",
+   "playtest-C.json",
+   "console.log",
+   "arrival.png"
+  ],
+  "hard_fail": [
+   "Teleports the NPC (sets CFrame or Position) instead of walking",
+   "Reports arrival without a playtest result"
+  ],
+  "expected_sources": [
+   "content/en-us/characters/pathfinding.md",
+   "content/en-us/reference/engine/classes/PathfindingService.yaml",
+   "content/en-us/reference/engine/classes/Path.yaml",
+   "content/en-us/reference/engine/classes/Humanoid.yaml"
+  ],
+  "budget": {
+   "model_calls": 10,
+   "tool_calls": 24,
+   "output_tokens": 1500,
+   "wall_seconds": 1800
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "SYS-03",
+  "category": "economy-simulation",
+  "difficulty": 2,
+  "goal": "Deterministic idle-economy simulation with exact expected purchase times",
+  "prompt": "Write a pure Luau function `simulate(config): { number }`. config = { baseIncome: number, incomePerLevel: number, baseCost: number, growth: number, upgrades: number }. Time advances in whole seconds. Each second the player first earns the current income; then, while the player can afford the next upgrade, they buy it: coins decrease by the cost, income increases by incomePerLevel, and the next cost is math.ceil(baseCost * growth ^ level) where level is the number of upgrades owned. Return the second at which each of the first `upgrades` upgrades was bought. Run it for { baseIncome = 1, incomePerLevel = 1, baseCost = 10, growth = 1.5, upgrades = 10 } and tell me whether the pacing has a problem.",
+  "run_mode": "automated",
+  "fixtures": [
+   "tests/SYS-03.luau"
+  ],
+  "fixture_status": "implemented",
+  "grader": {
+   "type": "lune",
+   "checks": [
+    "simulate with the given config returns exactly {10, 18, 26, 34, 45, 57, 74, 95, 124, 162} (reference values computed independently on 2026-10-10)",
+    "Costs used are 10, 15, 23, 34, 51, 76, 114, 171, 257, 385",
+    "Calling simulate twice returns equal tables; the function reads and writes no globals",
+    "With upgrades = 200 and growth = 1.05 it finishes in under 1 s under Lune",
+    "The written answer quotes the returned numbers (not invented ones) and notes that the gap between purchases grows from 8 s to 38 s"
+   ]
+  },
+  "pass_conditions": [
+   "Exact numeric match",
+   "Answer text is consistent with the tool output"
+  ],
+  "required_evidence": [
+   "answer/simulate.luau",
+   "lune-test.log",
+   "answer.md"
+  ],
+  "hard_fail": [
+   "Answer states purchase times that differ from the executed output"
+  ],
+  "expected_sources": [
+   "content/en-us/production/game-design/balance-virtual-economies.md"
+  ],
+  "budget": {
+   "model_calls": 4,
+   "tool_calls": 8,
+   "output_tokens": 900,
+   "wall_seconds": 780
+  },
+  "auto": {
+   "unit_test": {
+    "file": "tests/SYS-03.luau",
+    "checks": 4
+   },
+   "require": [
+    {
+     "id": "quotes_numbers",
+     "re": "\\b162\\b",
+     "why": "the answer must quote the executed purchase times (last one 162)",
+     "scope": "prose"
+    },
+    {
+     "id": "quotes_gap",
+     "re": "\\b124\\b",
+     "why": "the answer must quote the executed purchase times (124)",
+     "scope": "prose"
+    }
+   ]
+  },
+  "helps": [],
+  "split": "development"
+ },
+ {
+  "id": "SYS-04",
+  "category": "gameplay-systems",
+  "difficulty": 2,
+  "goal": "Tag-driven hazard system that handles parts tagged and untagged at runtime",
+  "prompt": "Write a server Script: every BasePart tagged \"Lava\" kills a character that touches it. Parts can receive or lose the tag while the game runs, and the script must react to both without leaking connections.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/SYS-04/lava-place.rbxl",
+   "fixtures/SYS-04/harness.server.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "static+studio-playtest",
+   "checks": [
+    "Static: iterates CollectionService:GetTagged(\"Lava\") and connects GetInstanceAddedSignal(\"Lava\") and GetInstanceRemovedSignal(\"Lava\")",
+    "Static: keeps the Touched connection per part and disconnects it when the tag is removed",
+    "Playtest: the harness dummy dies when moved onto Lava1 (tagged at start)",
+    "Playtest: after the harness adds the tag to Rock4 at t = 2 s, a new dummy dies on Rock4",
+    "Playtest: after the harness removes the tag from Lava1, a new dummy survives 3 s on Lava1",
+    "Console output has no errors"
+   ]
+  },
+  "pass_conditions": [
+   "Static checks pass",
+   "Three playtest scenarios pass"
+  ],
+  "required_evidence": [
+   "answer/Lava.server.luau",
+   "playtest.json",
+   "console.log"
+  ],
+  "hard_fail": [
+   "Kill logic placed in a LocalScript",
+   "Polling every part in Workspace each frame"
+  ],
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/CollectionService.yaml",
+   "content/en-us/reference/engine/classes/BasePart.yaml"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 16,
+   "output_tokens": 800,
+   "wall_seconds": 1200
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "STU-01",
+  "category": "studio-navigation",
+  "difficulty": 1,
+  "goal": "Read-only search of a Studio place for every use of a named RemoteEvent",
+  "prompt": "In the connected Studio place, find every script that fires or listens to the RemoteEvent named BuyItem. Give me the full instance path and line number of each use. Do not change anything.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/STU-01/shop-place.rbxl",
+   "fixtures/STU-01/expected.json"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "tool-log+exact-match",
+   "checks": [
+    "The set of (instance path, line) pairs in the answer equals fixtures/STU-01/expected.json exactly (precision 1.0, recall 1.0)",
+    "tool-log.jsonl contains only read tools (list_roblox_studios, get_studio_state, search_game_tree, inspect_instance, script_search, script_grep, script_read)",
+    "No multi_edit, execute_luau, insert_asset or start_stop_play call appears in the log",
+    "Every tool call carries the pinned studio_id"
+   ]
+  },
+  "pass_conditions": [
+   "Exact match with ground truth",
+   "Zero mutating tool calls"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "tool-log.jsonl"
+  ],
+  "hard_fail": [
+   "Any mutating tool call",
+   "A listed line that the tool results do not contain"
+  ],
+  "expected_sources": [
+   "content/en-us/studio/mcp.md"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 12,
+   "output_tokens": 500,
+   "wall_seconds": 900
+  },
+  "split": "development"
+ },
+ {
+  "id": "STU-02",
+  "category": "studio-debugging",
+  "difficulty": 2,
+  "goal": "Find and fix a character-not-loaded error from real console output with a minimal edit",
+  "prompt": "When I press Play the output shows an error from one of my scripts. Find the cause and fix it with the smallest possible change. It must also keep working after the character respawns.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/STU-02/respawn-place.rbxl",
+   "fixtures/STU-02/harness.server.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-playtest+diff",
+   "fixture_note": "StarterPlayerScripts.DeathLogger is a LocalScript: `local player = game.Players.LocalPlayer; local humanoid = player.Character.Humanoid; humanoid.Died:Connect(function() print(\"died\") end)`. It fails with `attempt to index nil with 'Humanoid'`.",
+   "checks": [
+    "Before the edit, the model's tool log shows get_console_output returning the error and script_read of DeathLogger (the diagnosis is based on evidence)",
+    "After the edit, a 10 s playtest shows no error lines in get_console_output",
+    "The harness kills the character twice with a respawn in between; \"died\" is printed twice",
+    "The diff touches only StarterPlayerScripts.DeathLogger and changes at most 15 lines",
+    "The answer names the cause: the script ran before the character existed"
+   ]
+  },
+  "pass_conditions": [
+   "Error gone",
+   "Works after respawn",
+   "Minimal diff"
+  ],
+  "required_evidence": [
+   "tool-log.jsonl",
+   "console-before.log",
+   "console-after.log",
+   "diff.patch"
+  ],
+  "hard_fail": [
+   "Wraps the code in pcall to hide the error",
+   "Edits scripts other than DeathLogger"
+  ],
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/Player.yaml",
+   "content/en-us/studio/mcp.md"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 18,
+   "output_tokens": 700,
+   "wall_seconds": 1500
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "ANI-01",
+  "category": "animation",
+  "difficulty": 2,
+  "goal": "Play and stop a tool animation through the Animator without deprecated calls",
+  "prompt": "The Tool Sword has an Animation named Swing and a LocalScript. When the tool is activated, play Swing on my character. Stop it when the tool is unequipped. Do not use deprecated APIs and do not load the animation again on every swing.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/ANI-01/sword-place.rbxl",
+   "fixtures/ANI-01/harness.client.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "static+studio-playtest",
+   "checks": [
+    "Static: calls Animator:LoadAnimation; the text `Humanoid:LoadAnimation` / `humanoid:LoadAnimation` does not appear",
+    "Static: LoadAnimation is outside the Activated handler, or its result is cached per equip",
+    "Static: connects Tool.Activated and Tool.Unequipped and calls track:Stop() on unequip",
+    "Playtest (R15 dummy): after the harness activates the tool, Animator:GetPlayingAnimationTracks() contains a track whose Animation is Swing",
+    "Playtest: after the harness unequips the tool, no Swing track is playing",
+    "Console output has no warnings or errors"
+   ]
+  },
+  "pass_conditions": [
+   "Static checks pass",
+   "Both playtest states observed"
+  ],
+  "required_evidence": [
+   "answer/Sword.client.luau",
+   "playtest.json",
+   "console.log"
+  ],
+  "hard_fail": [
+   "Uses the deprecated Humanoid:LoadAnimation",
+   "Claims the animation was previewed without a playtest result"
+  ],
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/Animator.yaml",
+   "content/en-us/reference/engine/classes/Humanoid.yaml",
+   "content/en-us/animation/using.md",
+   "content/en-us/reference/engine/classes/Tool.yaml"
+  ],
+  "budget": {
+   "model_calls": 6,
+   "tool_calls": 16,
+   "output_tokens": 800,
+   "wall_seconds": 1200
+  },
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "split": "development"
+ },
+ {
+  "id": "ANI-02",
+  "category": "rig-prop-alignment",
+  "difficulty": 3,
+  "goal": "Attach a prop to the right hand correctly on both R6 and R15 rigs",
+  "prompt": "Write `attachProp(character: Model, prop: Model): JointInstance | WeldConstraint`. The prop's PrimaryPart is called Handle. Attach it to the character's right hand so the Handle sits at the hand's grip attachment, for both R6 and R15 characters. The prop must not change how the character moves. Raise a clear error if the rig is missing the part you need.",
+  "run_mode": "studio",
+  "fixtures": [
+   "fixtures/ANI-02/rigs-place.rbxl",
+   "fixtures/ANI-02/probe.luau"
+  ],
+  "fixture_status": "to_implement",
+  "grader": {
+   "type": "studio-probe",
+   "fixture_note": "The place contains Workspace.RigR6, Workspace.RigR15 and Workspace.Lantern. Fixture precondition, to be confirmed with inspect_instance when the fixture is built: both hand parts contain an Attachment named RightGripAttachment.",
+   "checks": [
+    "R15: the returned joint connects RigR15.RightHand and Lantern.Handle",
+    "R6: the returned joint connects RigR6[\"Right Arm\"] and a clone of Lantern.Handle",
+    "The function distinguishes the rigs with Humanoid.RigType or by looking the parts up with a fallback, not by hard-coding one rig",
+    "After attaching, the distance between Handle.Position and RightGripAttachment.WorldPosition is < 0.05 studs on both rigs",
+    "Handle.Anchored == false, Handle.CanCollide == false and Handle.Massless == true",
+    "Calling it with a model that has no right hand part fails under pcall with a message that names the missing part"
+   ]
+  },
+  "pass_conditions": [
+   "All probe checks pass on both rigs",
+   "Screenshot of each rig attached"
+  ],
+  "required_evidence": [
+   "answer/attachProp.luau",
+   "probe-result.json",
+   "rig-r6.png",
+   "rig-r15.png"
+  ],
+  "hard_fail": [
+   "Builds a fake arm or character out of Parts",
+   "Works on only one rig type"
+  ],
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/Humanoid.yaml",
+   "content/en-us/reference/engine/enums/HumanoidRigType.yaml",
+   "content/en-us/players/tools.md",
+   "content/en-us/reference/engine/classes/Motor6D.yaml"
+  ],
+  "budget": {
+   "model_calls": 8,
+   "tool_calls": 18,
+   "output_tokens": 1000,
+   "wall_seconds": 1500
+  },
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "split": "holdout"
+ },
+ {
+  "id": "UI-09",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Native responsive inventory HUD built in code (ScreenGui, grid layout, constraints)",
+  "prompt": "Write a LocalScript (for StarterPlayerScripts) that builds a native inventory HUD in code: a ScreenGui named InventoryHud in the player's PlayerGui containing a centered Frame (about 60% of the screen width) with a title label, a close button and a 4-column grid of 12 square item slots. It must work on a 1920x1080 PC window and on a 390x844 phone: use Scale-based sizes, a layout object to arrange the slots (do not position them by hand) and a constraint that keeps the slots square. Do not use pictures of UI.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In a Studio test place with the device emulator, screenshot at 1920x1080 and 390x844: slots stay square and aligned, nothing overlaps or leaves the screen, the title and close button are readable and at least 44 px high on the phone.",
+  "expected_sources": [
+   "content/en-us/ui/position-and-size.md",
+   "content/en-us/ui/grid-table-layouts.md",
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/UIGridLayout.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Slots positioned by hand with pixel offsets",
+   "A flattened image used as the HUD"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "screengui",
+     "re": "Instance\\.new\\(\\s*\"ScreenGui\"\\s*\\)",
+     "why": "a ScreenGui is created in code"
+    },
+    {
+     "id": "playergui",
+     "re": "PlayerGui",
+     "why": "the ScreenGui is parented to the player's PlayerGui"
+    },
+    {
+     "id": "layout_object",
+     "any": [
+      "\"UIGridLayout\"",
+      "\"UIListLayout\"",
+      "\"UITableLayout\""
+     ],
+     "why": "slots are arranged by a layout object"
+    },
+    {
+     "id": "square",
+     "any": [
+      "\"UIAspectRatioConstraint\"",
+      "AspectRatio"
+     ],
+     "why": "slots are kept square with an aspect-ratio constraint"
+    },
+    {
+     "id": "scale_sizes",
+     "any": [
+      "UDim2\\.fromScale",
+      "UDim2\\.new\\(\\s*0?\\.\\d+\\s*,\\s*0\\s*,"
+     ],
+     "why": "sizes use Scale, not fixed pixels"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "images_of_ui",
+     "re": "\"ImageLabel\"[^\\n]*\\n?[^\\n]*rbxassetid",
+     "why": "UI must be real objects, not pictures"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: a ScreenGui is created in code",
+    "Present: the ScreenGui is parented to the player's PlayerGui",
+    "Present: slots are arranged by a layout object",
+    "Present: slots are kept square with an aspect-ratio constraint",
+    "Present: sizes use Scale, not fixed pixels",
+    "Absent: UI must be real objects, not pictures"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UI-10",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Scrolling shop list that grows without manual canvas maths",
+  "prompt": "Write a LocalScript that builds a scrolling shop list inside the existing ScreenGui named ShopGui (find it in the player's PlayerGui): 30 rows, each a Frame with an item-name label on the left and a price label on the right. A layout object must arrange the rows, the list must scroll vertically, and the scrollable area must grow with the number of rows without you computing the canvas height. Add padding so text does not touch the edges.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In Studio, play with 30 and then 3 rows: the full list scrolls to the last row, there is no empty canvas below the last row, and text keeps its padding on a phone-sized viewport.",
+  "expected_sources": [
+   "content/en-us/ui/scrolling-frames.md",
+   "content/en-us/ui/list-flex-layouts.md",
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/ScrollingFrame.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Canvas height computed manually from the row count"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "scrolling",
+     "re": "\"ScrollingFrame\"",
+     "why": "a ScrollingFrame provides the scrolling"
+    },
+    {
+     "id": "list_layout",
+     "re": "\"UIListLayout\"",
+     "why": "a UIListLayout arranges the rows"
+    },
+    {
+     "id": "auto_canvas",
+     "re": "AutomaticCanvasSize",
+     "why": "AutomaticCanvasSize grows the canvas by itself"
+    },
+    {
+     "id": "padding",
+     "re": "\"UIPadding\"",
+     "why": "UIPadding keeps text off the edges"
+    },
+    {
+     "id": "shop_gui",
+     "re": "ShopGui",
+     "why": "the existing ShopGui is used"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "manual_canvas",
+     "re": "CanvasSize\\s*=\\s*UDim2\\.\\w+\\([^)]*(#|\\*)",
+     "why": "the canvas height must not be computed by hand"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: a ScrollingFrame provides the scrolling",
+    "Present: a UIListLayout arranges the rows",
+    "Present: AutomaticCanvasSize grows the canvas by itself",
+    "Present: UIPadding keeps text off the edges",
+    "Present: the existing ShopGui is used",
+    "Absent: the canvas height must not be computed by hand"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "UI-11",
+  "category": "ui-layout",
+  "difficulty": 2,
+  "goal": "Keep a HUD label out of the phone notch without device-specific offsets",
+  "prompt": "On phones with a camera cut-out the score label of this HUD is hidden in the top-right corner. Fix the script without hard-coding device-specific pixel offsets, and keep it correct on PC.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In the Studio device emulator choose a phone with a notch: the label is fully visible and not under the notch or the Roblox top bar; on a 16:9 desktop viewport it sits where designed.",
+  "expected_sources": [
+   "content/en-us/ui/on-screen-containers.md",
+   "content/en-us/reference/engine/classes/ScreenGui.yaml",
+   "content/en-us/reference/engine/enums/ScreenInsets.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 480
+  },
+  "hard_fail": [
+   "Moves the label with another fixed pixel offset"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "safe_area",
+     "any": [
+      "ScreenInsets",
+      "SafeAreaCompatibility",
+      "ClipToDeviceSafeArea",
+      "GetGuiInset"
+     ],
+     "why": "the safe area must be handled by the engine's screen-inset setting"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "hack_offset",
+     "re": "-\\s*150\\b",
+     "why": "the hard-coded -150 pixel offset must go"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: the safe area must be handled by the engine's screen-inset setting",
+    "Absent: the hard-coded -150 pixel offset must go"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UI-12",
+  "category": "ui-layout",
+  "difficulty": 3,
+  "goal": "Scale a fixed-pixel panel for phone and 4K with UIScale from the viewport",
+  "prompt": "This LocalScript builds a 500x300 pixel settings panel that is too big on phones and tiny on a 4K monitor. Rewrite it so the panel keeps its proportions and scales with the screen: use a UIScale driven by the camera's ViewportSize (reference design 1280x720, scale clamped between 0.6 and 2), update it whenever the viewport changes, and make the buttons at least 44 pixels tall on touch devices.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal panel = Instance.new(\"Frame\")\npanel.Size = UDim2.fromOffset(500, 300)\npanel.AnchorPoint = Vector2.new(0.5, 0.5)\npanel.Position = UDim2.fromScale(0.5, 0.5)\npanel.Parent = gui\nlocal button = Instance.new(\"TextButton\")\nbutton.Size = UDim2.fromOffset(120, 28)\nbutton.Text = \"Close\"\nbutton.Parent = panel",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In Studio check the panel at 1280x720, 390x844 and 3840x2160: the same share of the screen at each, never clipped, and the Close button at least 44 px high when TouchEnabled.",
+  "expected_sources": [
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/ui/position-and-size.md",
+   "content/en-us/reference/engine/classes/UIScale.yaml",
+   "content/en-us/reference/engine/classes/Camera.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Polls the viewport size in a loop"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "uiscale",
+     "re": "\"UIScale\"",
+     "why": "a UIScale scales the panel"
+    },
+    {
+     "id": "viewport",
+     "re": "ViewportSize",
+     "why": "the scale comes from the camera's ViewportSize"
+    },
+    {
+     "id": "changed",
+     "re": "GetPropertyChangedSignal\\(\\s*\"ViewportSize\"\\s*\\)",
+     "why": "the scale updates when the viewport changes"
+    },
+    {
+     "id": "clamp",
+     "any": [
+      "math\\.clamp",
+      "math\\.min\\s*\\(.*math\\.max",
+      "math\\.max\\s*\\(.*math\\.min"
+     ],
+     "why": "the scale is clamped between 0.6 and 2"
+    },
+    {
+     "id": "touch_target",
+     "re": "\\b44\\b",
+     "why": "touch buttons are at least 44 pixels tall"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_global_wait",
+     "re": "(?<![.\\w:])wait\\s*\\(",
+     "why": "the global wait() is deprecated; use task.wait",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "polling",
+     "re": "while\\s+true\\s+do",
+     "why": "no polling loop: react to the viewport signal"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: a UIScale scales the panel",
+    "Present: the scale comes from the camera's ViewportSize",
+    "Present: the scale updates when the viewport changes",
+    "Present: the scale is clamped between 0.6 and 2",
+    "Present: touch buttons are at least 44 pixels tall",
+    "Absent: the global wait() is deprecated; use task.wait",
+    "Absent: no polling loop: react to the viewport signal"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "UI-13",
+  "category": "ui-interaction",
+  "difficulty": 3,
+  "goal": "Hover and press feedback that works with mouse, touch and gamepad and cleans up",
+  "prompt": "Write a LocalScript that gives the existing TextButton PlayButton (PlayerGui.MainMenu.PlayButton) hover and press feedback: on hover it grows to 1.05x with a 0.15 second Quad tween and returns when the pointer leaves; on press it dips to 0.95x. It must also react when a gamepad selects the button, cancel a running tween before starting the next, and disconnect its connections when the button is destroyed.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In Studio play with mouse, touch emulation and a gamepad emulator: the button grows and shrinks smoothly, quick hover on/off never leaves it at the wrong size, destroying the menu leaves no errors or leaked connections.",
+  "expected_sources": [
+   "content/en-us/ui/animation.md",
+   "content/en-us/reference/engine/classes/TweenService.yaml",
+   "content/en-us/reference/engine/datatypes/TweenInfo.yaml",
+   "content/en-us/reference/engine/classes/GuiButton.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Overlapping tweens fight each other"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "tweenservice",
+     "re": "GetService\\(\\s*\"TweenService\"\\s*\\)",
+     "why": "TweenService animates the button"
+    },
+    {
+     "id": "tweeninfo",
+     "re": "TweenInfo\\.new",
+     "why": "TweenInfo configures the 0.15 s Quad tween"
+    },
+    {
+     "id": "cancel",
+     "re": ":Cancel\\s*\\(",
+     "why": "a running tween is cancelled before the next starts"
+    },
+    {
+     "id": "hover",
+     "any": [
+      "MouseEnter",
+      "InputBegan"
+     ],
+     "why": "hover is handled"
+    },
+    {
+     "id": "gamepad",
+     "any": [
+      "SelectionGained",
+      "SelectionLost"
+     ],
+     "why": "gamepad selection is handled"
+    },
+    {
+     "id": "cleanup",
+     "any": [
+      "Destroying",
+      "AncestryChanged",
+      ":Disconnect\\s*\\("
+     ],
+     "why": "connections are cleaned up"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_global_wait",
+     "re": "(?<![.\\w:])wait\\s*\\(",
+     "why": "the global wait() is deprecated; use task.wait",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: TweenService animates the button",
+    "Present: TweenInfo configures the 0.15 s Quad tween",
+    "Present: a running tween is cancelled before the next starts",
+    "Present: hover is handled",
+    "Present: gamepad selection is handled",
+    "Present: connections are cleaned up",
+    "Absent: the global wait() is deprecated; use task.wait"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UI-14",
+  "category": "ui-text",
+  "difficulty": 2,
+  "goal": "Nameplate text that always fits on one line",
+  "prompt": "Players with very long display names overflow our 200x40 nameplate. Write `createNameplate(parent: Instance, displayName: string): TextLabel` that creates the label and keeps the whole name visible on one line at any length: the text must shrink to fit but never go below size 10 or above size 24, and must not spill outside the label.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "In Studio create nameplates with 3, 20 and 60 character names (and a name in a wide-glyph script): every one stays inside the 200x40 label, is never smaller than 10 and never larger than 24.",
+  "expected_sources": [
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/UITextSizeConstraint.yaml",
+   "content/en-us/reference/engine/classes/TextLabel.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 480
+  },
+  "hard_fail": [
+   "Text can exceed the label"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "fn",
+     "re": "function\\s+createNameplate\\b|createNameplate\\s*=\\s*function",
+     "why": "createNameplate is defined"
+    },
+    {
+     "id": "scaled",
+     "re": "TextScaled\\s*=\\s*true",
+     "why": "TextScaled shrinks the text to fit"
+    },
+    {
+     "id": "constraint",
+     "re": "\"UITextSizeConstraint\"",
+     "why": "a UITextSizeConstraint bounds the size"
+    },
+    {
+     "id": "min",
+     "re": "MinTextSize\\s*=\\s*10\\b",
+     "why": "the minimum size is 10"
+    },
+    {
+     "id": "max",
+     "re": "MaxTextSize\\s*=\\s*24\\b",
+     "why": "the maximum size is 24"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: createNameplate is defined",
+    "Present: TextScaled shrinks the text to fit",
+    "Present: a UITextSizeConstraint bounds the size",
+    "Present: the minimum size is 10",
+    "Present: the maximum size is 24"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "UI-15",
+  "category": "ui-interaction",
+  "difficulty": 3,
+  "goal": "Settings menu navigable with a gamepad and with touch",
+  "prompt": "Build, in code, a settings menu (ScreenGui) with a volume slider, a music toggle and a Close button that can be used with a gamepad (the D-pad moves focus, A presses, B closes) as well as touch and mouse. Make the first control selected when the menu opens and give back control of the selection when it closes.",
+  "run_mode": "studio",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "Needs Studio's gamepad emulator: open the menu, move focus across all three controls with the D-pad, press A on each, press B to close; verify focus never escapes to other GUIs and is restored on close; repeat with touch emulation.",
+  "expected_sources": [
+   "content/en-us/ui/gamepad.md",
+   "content/en-us/reference/engine/classes/GuiService.yaml",
+   "content/en-us/reference/engine/classes/GuiObject.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 1500
+  },
+  "hard_fail": [
+   "Menu cannot be operated without a mouse"
+  ],
+  "fixture_status": "to_implement",
+  "fixtures": [],
+  "pass_conditions": [
+   "See studio_check"
+  ],
+  "required_evidence": [
+   "screenshots",
+   "console.log"
+  ],
+  "grader": {
+   "type": "studio-probe",
+   "checks": [
+    "Needs Studio's gamepad emulator: open the menu, move focus across all three controls with the D-pad, press A on each, press B to close; verify focus never escapes to other GUIs and is restored on close; repeat with touch emulation."
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UI-16",
+  "category": "ui-docs-question",
+  "difficulty": 1,
+  "goal": "Documentation question: Scale versus Offset and keeping icons square (citation required)",
+  "prompt": "In Roblox UI, when should I use Scale and when Offset in a UDim2 for size and position, and how do I keep a square icon square on any screen shape? Answer from the documentation and cite the pages you use.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-ui-layout"
+  ],
+  "studio_check": "A human checks that every claim in the answer is supported by the cited page and that no property name is invented.",
+  "expected_sources": [
+   "content/en-us/ui/position-and-size.md",
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/reference/engine/classes/UIAspectRatioConstraint.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 450,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents a property or class name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "scale",
+     "re": "\\bScale\\b",
+     "why": "mentions Scale",
+     "scope": "prose"
+    },
+    {
+     "id": "offset",
+     "re": "\\bOffset\\b",
+     "why": "mentions Offset",
+     "scope": "prose"
+    },
+    {
+     "id": "aspect",
+     "re": "UIAspectRatioConstraint",
+     "why": "names UIAspectRatioConstraint for keeping icons square",
+     "scope": "prose"
+    }
+   ],
+   "citation": {
+    "required": true,
+    "url_contains_any": [
+     "position-and-size",
+     "size-modifiers",
+     "UIAspectRatioConstraint",
+     "UDim2"
+    ]
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: mentions Scale",
+    "Present: mentions Offset",
+    "Present: names UIAspectRatioConstraint for keeping icons square",
+    "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-06",
+  "category": "remote-security",
+  "difficulty": 3,
+  "goal": "Server-authoritative melee hit handler",
+  "prompt": "Players swing a sword and fire the RemoteEvent `Hit` with the target the client thinks it hit: Hit:FireServer(targetModel). Write the complete server-side handler (a Script in ServerScriptService). The server alone decides the damage (10). It must verify everything the client claims: the argument is a Model containing a living Humanoid, it is not the attacker's own character, the target's root part is within 12 studs of the attacker's root part, and the attacker may swing at most once every 0.6 seconds measured with the server clock. Never accept damage, distance, position or time from the client.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "studio_check": "With two Studio test clients: a normal hit lands once; firing Hit repeatedly, from 100 studs away, at yourself, at a part, at a dead humanoid and with extra arguments does nothing and logs no errors.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/scripting/security/security-tactics.md",
+   "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 720
+  },
+  "hard_fail": [
+   "Damage amount comes from the client",
+   "Cooldown only on the client"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "on_server_event",
+     "re": "OnServerEvent",
+     "why": "the Hit remote is handled on the server"
+    },
+    {
+     "id": "type_check",
+     "any": [
+      "typeof\\s*\\(",
+      ":IsA\\(\\s*\"Model\"\\s*\\)"
+     ],
+     "why": "the argument's type is checked"
+    },
+    {
+     "id": "humanoid",
+     "any": [
+      "FindFirstChildOfClass\\(\\s*\"Humanoid\"\\s*\\)",
+      "FindFirstChild\\(\\s*\"Humanoid\"\\s*\\)"
+     ],
+     "why": "the target must have a Humanoid"
+    },
+    {
+     "id": "distance",
+     "re": "Magnitude|:Distance\\(",
+     "why": "the distance is measured on the server"
+    },
+    {
+     "id": "alive",
+     "any": [
+      "\\.Health\\s*(>|~=)",
+      "TakeDamage"
+     ],
+     "why": "the target must be alive / damage is applied by the server"
+    },
+    {
+     "id": "server_clock",
+     "any": [
+      "os\\.clock\\s*\\(",
+      "(?<![.\\w])time\\s*\\(\\s*\\)",
+      "GetServerTimeNow",
+      "tick\\s*\\(\\s*\\)",
+      "os\\.time\\s*\\("
+     ],
+     "why": "the cooldown uses the server clock"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "extra_args",
+     "re": "OnServerEvent\\s*:\\s*Connect\\(\\s*function\\s*\\(\\s*\\w+\\s*,\\s*\\w+\\s*,\\s*\\w+",
+     "why": "the handler must take only (player, target): no client-supplied damage, time or position"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: the Hit remote is handled on the server",
+    "Present: the argument's type is checked",
+    "Present: the target must have a Humanoid",
+    "Present: the distance is measured on the server",
+    "Present: the target must be alive / damage is applied by the server",
+    "Present: the cooldown uses the server clock",
+    "Absent: the handler must take only (player, target): no client-supplied damage, time or position"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "NET-07",
+  "category": "remote-security",
+  "difficulty": 2,
+  "goal": "A reusable argument validator that never throws",
+  "prompt": "Write a server ModuleScript `Validate` for checking RemoteEvent arguments. `Validate.integer(x: any, min: number, max: number): number?` returns x if it is a number with no fractional part (not NaN, not infinite) inside [min, max], else nil. `Validate.number(x: any, min: number, max: number): number?` is the same for any finite number. `Validate.string(x: any, maxLength: number): string?` returns x if it is a string of 1 to maxLength bytes containing no control characters (bytes below 32 or 127), else nil. `Validate.oneOf(x: any, allowed: { [string]: boolean }): string?` returns x only if it is a string and allowed[x] is true. None of them may ever throw, whatever x is.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "studio_check": "Review that the module is used at the top of every real handler and that the Studio output stays clean while a client fires malformed arguments.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/luau/type-checking.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 480
+  },
+  "hard_fail": [
+   "A validator that errors on unexpected input"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/NET-07.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-07.luau",
+    "checks": 7
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-08",
+  "category": "remote-security",
+  "difficulty": 3,
+  "goal": "Remove a server InvokeClient call that trusts and can hang on the client",
+  "prompt": "This server code asks each client how much ammo it has and trusts the answer, and a client that never replies can hang the server thread. Rewrite the design so the server owns the ammo count and never waits for or trusts a client reply. The client may only ask the server to reload through a RemoteEvent called Reload.\n\nlocal GetAmmo = ReplicatedStorage.GetAmmo -- RemoteFunction\nPlayers.PlayerAdded:Connect(function(player)\n\tlocal ammo = GetAmmo:InvokeClient(player)\n\tgiveAmmoBonus(player, ammo)\nend)",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "studio_check": "In a two-client Studio test, make one client never respond or answer with a huge number: the server keeps running and the ammo shown is the server's own value.",
+  "expected_sources": [
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/reference/engine/classes/RemoteFunction.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Server still calls InvokeClient"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "remote_event",
+     "re": "RemoteEvent|Reload",
+     "why": "the client asks through the Reload RemoteEvent"
+    },
+    {
+     "id": "on_server_event",
+     "re": "OnServerEvent",
+     "why": "the server handles the request"
+    },
+    {
+     "id": "server_state",
+     "re": "\\[\\s*player\\s*\\]|\\.UserId",
+     "why": "the server keeps the ammo count itself"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "invoke_client",
+     "re": "InvokeClient",
+     "why": "the server must never call InvokeClient"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: the client asks through the Reload RemoteEvent",
+    "Present: the server handles the request",
+    "Present: the server keeps the ammo count itself",
+    "Absent: the server must never call InvokeClient"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "NET-09",
+  "category": "remote-security",
+  "difficulty": 3,
+  "goal": "Developer product purchases that are granted exactly once",
+  "prompt": "Write the server Script that processes Developer Product purchases: product 1111 gives 100 coins, product 2222 gives 500 coins. Handle MarketplaceService.ProcessReceipt correctly: a purchase must be granted exactly once even if the callback runs twice or the server shuts down in the middle, record the PurchaseId in a DataStore, return the right Enum.ProductPurchaseDecision value in every case, and never take the product or amount from a client message.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes",
+   "roblox-datastore-safety"
+  ],
+  "studio_check": "In Studio with test purchases: buy once and see coins granted once; force a DataStore error and confirm the receipt is retried and not lost; call the callback twice with the same receipt and confirm one grant.",
+  "expected_sources": [
+   "content/en-us/production/monetization/developer-products.md",
+   "content/en-us/reference/engine/classes/MarketplaceService.yaml",
+   "content/en-us/reference/engine/enums/ProductPurchaseDecision.yaml",
+   "content/en-us/cloud-services/data-stores/player-data-purchasing.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 840
+  },
+  "hard_fail": [
+   "Grants before the receipt is recorded",
+   "Product or amount from a client message"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "process_receipt",
+     "re": "ProcessReceipt",
+     "why": "ProcessReceipt is used"
+    },
+    {
+     "id": "granted",
+     "re": "PurchaseGranted",
+     "why": "returns PurchaseGranted after a successful grant"
+    },
+    {
+     "id": "not_processed",
+     "re": "NotProcessedYet",
+     "why": "returns NotProcessedYet when it cannot finish"
+    },
+    {
+     "id": "purchase_id",
+     "re": "PurchaseId",
+     "why": "the PurchaseId is recorded"
+    },
+    {
+     "id": "datastore",
+     "any": [
+      "UpdateAsync",
+      "GetAsync"
+     ],
+     "why": "the receipt record is stored in a DataStore"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\s*\\(",
+     "why": "DataStore calls are protected with pcall"
+    },
+    {
+     "id": "product_id",
+     "re": "ProductId",
+     "why": "the product comes from the receipt"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "client_message",
+     "re": "OnServerEvent",
+     "why": "no client message decides the grant"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: ProcessReceipt is used",
+    "Present: returns PurchaseGranted after a successful grant",
+    "Present: returns NotProcessedYet when it cannot finish",
+    "Present: the PurchaseId is recorded",
+    "Present: the receipt record is stored in a DataStore",
+    "Present: DataStore calls are protected with pcall",
+    "Present: the product comes from the receipt",
+    "Absent: no client message decides the grant"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-10",
+  "category": "remote-security",
+  "difficulty": 3,
+  "goal": "Fix an exploitable walk-speed remote",
+  "prompt": "Fix this exploitable server handler.\n\nSpeedMode.OnServerEvent:Connect(function(player, speed)\n\tplayer.Character.Humanoid.WalkSpeed = speed\nend)\n\nThe client now sends only a mode string that must be exactly \"walk\" or \"sprint\". The server alone decides the speed: walk sets WalkSpeed to 16; sprint sets 24 but only while the player's attribute `Stamina` is greater than 0 (otherwise the speed is 16). Any other value, a missing character or Humanoid, or a dead Humanoid changes nothing and must not throw. Allow at most 5 requests per second per player, measured with the server clock.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "studio_check": "In a Studio test with an exploit-style client firing SpeedMode with numbers, tables and a flood of requests: WalkSpeed only ever becomes 16 or 24, and the output has no errors.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/reference/engine/classes/Humanoid.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Speed value comes from the client"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/NET-10.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-10.luau",
+    "checks": 7
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "NET-11",
+  "category": "remote-docs-question",
+  "difficulty": 1,
+  "goal": "Documentation question: what a server must assume about RemoteEvent arguments (citation required)",
+  "prompt": "Is it safe for a server script to trust the arguments a client sends through a RemoteEvent, and what exactly should the server check? Answer from the documentation and cite the pages you use.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-secure-remotes"
+  ],
+  "studio_check": "A human checks that each recommendation in the answer is supported by the cited page.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/scripting/security/security-tactics.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 450,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says client arguments can be trusted"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "untrusted",
+     "re": "(?i)\\b(never|not|don'?t|cannot)\\b[^.\\n]{0,40}\\btrust|untrusted|exploit",
+     "why": "states that client arguments cannot be trusted",
+     "scope": "prose"
+    },
+    {
+     "id": "validate",
+     "re": "(?i)validat|verif|check|sanit",
+     "why": "says what to check",
+     "scope": "prose"
+    }
+   ],
+   "citation": {
+    "required": true,
+    "url_contains_any": [
+     "remote",
+     "client-server-boundary",
+     "security"
+    ]
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: states that client arguments cannot be trusted",
+    "Present: says what to check",
+    "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-12",
+  "category": "datastore-safety",
+  "difficulty": 2,
+  "goal": "A retry helper with exponential backoff and an injectable wait",
+  "prompt": "Write a ModuleScript `Retry` with `Retry.run(fn: () -> any, attempts: number, baseDelay: number, wait: (number) -> ()): (boolean, any)`. It calls fn inside pcall. On success it returns true and fn's first return value. On an error it calls the injected `wait` with baseDelay * 2^(k-1) seconds after the k-th failure and tries again; after `attempts` failed calls it returns false and the last error message, with no wait after the final failure. attempts must be a positive integer, otherwise it throws. fn is never called more than `attempts` times.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-datastore-safety"
+  ],
+  "studio_check": "Review that real save code passes task.wait as the wait argument and that the helper is not used inside an UpdateAsync callback.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/best-practices.md",
+   "content/en-us/cloud-services/data-stores/error-codes-and-limits.md",
+   "content/en-us/reference/engine/libraries/task.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 480
+  },
+  "hard_fail": [
+   "Unbounded retry loop"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/NET-12.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-12.luau",
+    "checks": 7
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-13",
+  "category": "datastore-safety",
+  "difficulty": 3,
+  "goal": "Atomic currency update with UpdateAsync that cancels invalid changes",
+  "prompt": "Write a ModuleScript `Wallet` with `Wallet.add(store: DataStore, key: string, delta: number): (boolean, number?)`. It must call store:UpdateAsync exactly once per call, inside pcall. The update callback receives the old value (nil for a new key; treat it as 0) and must return old + delta, or return nil to cancel when the result would be negative or when delta is not a finite integer. The callback must not yield. Return true and the new balance on success; return false and nil when the update was cancelled or UpdateAsync threw.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-datastore-safety"
+  ],
+  "studio_check": "In Studio with two test servers writing the same key: concurrent adds are never lost, a debit past zero is refused, and the output stays clean when the DataStore is throttled.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/index.md",
+   "content/en-us/cloud-services/data-stores/best-practices.md",
+   "content/en-us/reference/engine/classes/GlobalDataStore.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Read-modify-write with GetAsync then SetAsync"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/NET-13.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/NET-13.luau",
+    "checks": 7
+   },
+   "require": [
+    {
+     "id": "update_async",
+     "re": "UpdateAsync",
+     "why": "UpdateAsync is used"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\s*\\(",
+     "why": "wrapped in pcall"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "set_async",
+     "re": "[:.]SetAsync\\s*\\(",
+     "why": "no blind SetAsync"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)",
+    "Present: UpdateAsync is used",
+    "Present: wrapped in pcall",
+    "Absent: no blind SetAsync"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "NET-14",
+  "category": "datastore-safety",
+  "difficulty": 3,
+  "goal": "Autosave and shutdown flush that respects DataStore limits",
+  "prompt": "Write the server Script part that persists player data safely. Every 60 seconds each player's cached data table is saved with UpdateAsync, spread out so all players are not written in the same instant; there is no save on every stat change; there is a final save on PlayerRemoving; and in game:BindToClose all remaining players are saved in parallel (task.spawn) while the handler waits until they finish or 25 seconds have passed. Wrap every DataStore call in pcall.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-datastore-safety"
+  ],
+  "studio_check": "In Studio, shut the test server down with 10 simulated players: all 10 saves complete before the 30 second shutdown window; the request budget is not exhausted during normal play.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/player-data-purchasing.md",
+   "content/en-us/cloud-services/data-stores/best-practices.md",
+   "content/en-us/reference/engine/classes/DataModel.yaml",
+   "content/en-us/cloud-services/data-stores/error-codes-and-limits.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 840
+  },
+  "hard_fail": [
+   "Saves on every stat change",
+   "BindToClose saves players one after another with no deadline"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "update_async",
+     "re": "UpdateAsync",
+     "why": "UpdateAsync is used for saving"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\s*\\(",
+     "why": "DataStore calls are wrapped in pcall"
+    },
+    {
+     "id": "player_removing",
+     "re": "PlayerRemoving",
+     "why": "final save on PlayerRemoving"
+    },
+    {
+     "id": "bind_to_close",
+     "re": "BindToClose",
+     "why": "a BindToClose flush exists"
+    },
+    {
+     "id": "parallel",
+     "any": [
+      "task\\.spawn",
+      "task\\.defer",
+      "coroutine\\.(wrap|create)"
+     ],
+     "why": "BindToClose saves players in parallel"
+    },
+    {
+     "id": "deadline",
+     "any": [
+      "os\\.clock\\s*\\(",
+      "(?<![.\\w])time\\s*\\(\\s*\\)",
+      "tick\\s*\\(\\s*\\)",
+      "os\\.time\\s*\\("
+     ],
+     "why": "the shutdown wait has a time limit"
+    },
+    {
+     "id": "interval",
+     "re": "\\b60\\b",
+     "why": "autosave interval of 60 seconds"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "set_async",
+     "re": "[:.]SetAsync\\s*\\(",
+     "why": "no blind SetAsync"
+    },
+    {
+     "id": "no_global_wait",
+     "re": "(?<![.\\w:])wait\\s*\\(",
+     "why": "the global wait() is deprecated; use task.wait",
+     "scope": "code_nostr"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: UpdateAsync is used for saving",
+    "Present: DataStore calls are wrapped in pcall",
+    "Present: final save on PlayerRemoving",
+    "Present: a BindToClose flush exists",
+    "Present: BindToClose saves players in parallel",
+    "Present: the shutdown wait has a time limit",
+    "Present: autosave interval of 60 seconds",
+    "Absent: no blind SetAsync",
+    "Absent: the global wait() is deprecated; use task.wait"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "NET-15",
+  "category": "datastore-docs-question",
+  "difficulty": 1,
+  "goal": "Documentation question: data store limits and throttling (citation required)",
+  "prompt": "What are the request limits and the common error codes for Roblox data stores, and how should a script cope with throttling? Answer from the documentation and cite the pages you use.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-datastore-safety"
+  ],
+  "studio_check": "A human checks the numbers quoted against the cited page.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/error-codes-and-limits.md",
+   "content/en-us/cloud-services/data-stores/best-practices.md",
+   "content/en-us/reference/engine/classes/DataStoreService.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 500,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents limits not on the cited page"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "mentions_limit",
+     "re": "(?i)limit|budget|throttl",
+     "why": "talks about limits or throttling",
+     "scope": "prose"
+    },
+    {
+     "id": "mentions_retry",
+     "re": "(?i)retry|retries|wait|back.?off|pcall",
+     "why": "says how to cope",
+     "scope": "prose"
+    }
+   ],
+   "citation": {
+    "required": true,
+    "url_contains_any": [
+     "error-codes-and-limits",
+     "best-practices",
+     "DataStoreService",
+     "data-stores"
+    ]
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: talks about limits or throttling",
+    "Present: says how to cope",
+    "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "ANI-03",
+  "category": "animation",
+  "difficulty": 2,
+  "goal": "Play idle and attack animations with the modern Animator API",
+  "prompt": "Write a LocalScript (for StarterCharacterScripts) that loads and plays a looping idle animation (rbxassetid://180435571) and a one-shot attack animation (rbxassetid://180435792) on the character's Animator when the player presses the F key. Use the modern API (not the deprecated Humanoid:LoadAnimation), give the attack the Action priority, stop the idle track while the attack plays and resume it afterwards, and clean up when the character is removed.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "studio_check": "In Studio on an R15 and an R6 character: idle loops, F plays the attack over the idle with no sliding or T-pose frame, idle resumes after, and respawning leaves no errors.",
+  "expected_sources": [
+   "content/en-us/animation/using.md",
+   "content/en-us/reference/engine/classes/Animator.yaml",
+   "content/en-us/reference/engine/classes/AnimationTrack.yaml",
+   "content/en-us/tutorials/use-case-tutorials/animation/play-character-animations.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Uses Humanoid:LoadAnimation"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "animator",
+     "re": "Animator",
+     "why": "the character's Animator is used"
+    },
+    {
+     "id": "load",
+     "re": ":LoadAnimation\\s*\\(",
+     "why": "animations are loaded on the Animator"
+    },
+    {
+     "id": "priority",
+     "re": "Enum\\.AnimationPriority\\.Action",
+     "why": "the attack has Action priority"
+    },
+    {
+     "id": "looped",
+     "re": "\\.Looped\\s*=\\s*true",
+     "why": "the idle track loops"
+    },
+    {
+     "id": "input",
+     "any": [
+      "UserInputService",
+      "ContextActionService"
+     ],
+     "why": "input is read through an input service"
+    },
+    {
+     "id": "key",
+     "re": "KeyCode\\.F\\b",
+     "why": "the F key"
+    },
+    {
+     "id": "resume",
+     "any": [
+      "\\.Stopped",
+      "\\.Ended",
+      "AnimationTrack\\.Stopped"
+     ],
+     "why": "idle resumes when the attack ends"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "deprecated",
+     "re": "(?i)humanoid\\s*:\\s*LoadAnimation",
+     "why": "Humanoid:LoadAnimation is deprecated; use the Animator"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: the character's Animator is used",
+    "Present: animations are loaded on the Animator",
+    "Present: the attack has Action priority",
+    "Present: the idle track loops",
+    "Present: input is read through an input service",
+    "Present: the F key",
+    "Present: idle resumes when the attack ends",
+    "Absent: Humanoid:LoadAnimation is deprecated; use the Animator"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "ANI-04",
+  "category": "tool-attachment",
+  "difficulty": 3,
+  "goal": "A sword that sits correctly in the right hand on R6 and R15",
+  "prompt": "A Tool named Sword has a Handle part and a Blade part. Write a Script inside the Tool so that the sword sits in the character's right hand with the blade pointing forward on both R6 and R15 characters. Check which rig the player has, adjust the tool's grip accordingly, play a stab animation (rbxassetid://180435792) through the Animator when the tool is activated, and stop it when the tool is unequipped.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "studio_check": "In Studio equip the Sword on an R6 and an R15 avatar: the handle sits in the right hand/arm on both, the blade points forward, the stab animation does not detach it, unequipping removes it from the hand.",
+  "expected_sources": [
+   "content/en-us/players/tools.md",
+   "content/en-us/reference/engine/classes/Tool.yaml",
+   "content/en-us/reference/engine/enums/HumanoidRigType.yaml",
+   "content/en-us/reference/engine/classes/Humanoid.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 720
+  },
+  "hard_fail": [
+   "Welds the handle by hand on top of the engine's RightGrip"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "rig_type",
+     "re": "RigType",
+     "why": "the rig type is checked"
+    },
+    {
+     "id": "rig_enum",
+     "any": [
+      "HumanoidRigType\\.R6",
+      "HumanoidRigType\\.R15"
+     ],
+     "why": "R6 and R15 are told apart with Enum.HumanoidRigType"
+    },
+    {
+     "id": "grip",
+     "any": [
+      "\\.Grip\\s*=",
+      "GripPos",
+      "GripForward",
+      "GripRight",
+      "GripUp"
+     ],
+     "why": "the tool's grip properties align the sword"
+    },
+    {
+     "id": "equipped",
+     "re": "\\.Equipped\\b",
+     "why": "reacts to Equipped"
+    },
+    {
+     "id": "unequipped",
+     "re": "\\.Unequipped\\b",
+     "why": "reacts to Unequipped"
+    },
+    {
+     "id": "activated",
+     "re": "\\.Activated\\b",
+     "why": "reacts to Activated"
+    },
+    {
+     "id": "animator",
+     "re": "Animator",
+     "why": "plays the animation through the Animator"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "deprecated",
+     "re": "(?i)humanoid\\s*:\\s*LoadAnimation",
+     "why": "Humanoid:LoadAnimation is deprecated"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: the rig type is checked",
+    "Present: R6 and R15 are told apart with Enum.HumanoidRigType",
+    "Present: the tool's grip properties align the sword",
+    "Present: reacts to Equipped",
+    "Present: reacts to Unequipped",
+    "Present: reacts to Activated",
+    "Present: plays the animation through the Animator",
+    "Absent: Humanoid:LoadAnimation is deprecated"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "ANI-05",
+  "category": "animation",
+  "difficulty": 3,
+  "goal": "Fire the hit on an animation marker, not on a guessed delay",
+  "prompt": "An attack animation has a marker named Hit. Write the LocalScript that loads the animation rbxassetid://180435792 on the character's Animator, plays it when the equipped tool is activated, and sends exactly one FireServer() on the remote `AttackHit` when the marker Hit is reached. Disconnect the connection when the track stops, never fire if the track was stopped early, and do not use wait or task.wait to guess the timing.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "studio_check": "In Studio with a real animation that has a Hit marker: one FireServer per swing, none when the swing is interrupted, nothing fires after the track ended.",
+  "expected_sources": [
+   "content/en-us/animation/events.md",
+   "content/en-us/reference/engine/classes/AnimationTrack.yaml",
+   "content/en-us/reference/engine/classes/Animator.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Fires the hit after a fixed delay"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "marker",
+     "re": "GetMarkerReachedSignal\\(\\s*\"Hit\"\\s*\\)",
+     "why": "listens to the Hit marker"
+    },
+    {
+     "id": "fire",
+     "re": "FireServer",
+     "why": "tells the server when the marker is reached"
+    },
+    {
+     "id": "disconnect",
+     "re": ":Disconnect\\s*\\(",
+     "why": "the marker connection is disconnected"
+    },
+    {
+     "id": "stopped",
+     "any": [
+      "\\.Stopped",
+      "\\.Ended"
+     ],
+     "why": "reacts when the track stops"
+    },
+    {
+     "id": "activated",
+     "re": "Activated",
+     "why": "plays the animation when the tool is activated"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_global_wait",
+     "re": "(?<![.\\w:])wait\\s*\\(",
+     "why": "the global wait() is deprecated; use task.wait",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "task_wait",
+     "re": "task\\.wait\\s*\\(",
+     "why": "no timing by waiting"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: listens to the Hit marker",
+    "Present: tells the server when the marker is reached",
+    "Present: the marker connection is disconnected",
+    "Present: reacts when the track stops",
+    "Present: plays the animation when the tool is activated",
+    "Absent: the global wait() is deprecated; use task.wait",
+    "Absent: no timing by waiting"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "ANI-06",
+  "category": "rig-prop-alignment",
+  "difficulty": 4,
+  "goal": "A lantern held in the left hand on R6 and R15 with an attachment",
+  "prompt": "Make a Lantern model hold in the character's left hand on both R6 and R15 rigs, using an Attachment on the lantern and one on the hand so the alignment is data, not guesswork. Show how the grip is positioned and how it is removed.",
+  "run_mode": "studio",
+  "helps": [
+   "roblox-animation-tools"
+  ],
+  "studio_check": "Needs Studio: spawn an R6 and an R15 avatar, attach the lantern, play walk and idle animations, and check by screenshot that the lantern stays in the hand without clipping or drifting; confirm removal leaves nothing behind.",
+  "expected_sources": [
+   "content/en-us/players/tools.md",
+   "content/en-us/reference/engine/classes/Attachment.yaml",
+   "content/en-us/reference/engine/classes/Humanoid.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 1500
+  },
+  "hard_fail": [
+   "Lantern floats or clips through the hand"
+  ],
+  "fixture_status": "to_implement",
+  "fixtures": [],
+  "pass_conditions": [
+   "See studio_check"
+  ],
+  "required_evidence": [
+   "screenshots",
+   "console.log"
+  ],
+  "grader": {
+   "type": "studio-probe",
+   "checks": [
+    "Needs Studio: spawn an R6 and an R15 avatar, attach the lantern, play walk and idle animations, and check by screenshot that the lantern stays in the hand without clipping or drifting; confirm removal leaves nothing behind."
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "PERF-01",
+  "category": "performance",
+  "difficulty": 2,
+  "goal": "Replace a per-frame polling loop with an event or a throttled query",
+  "prompt": "This server script wastes time polling every frame. Rewrite it for performance without changing the behaviour (the door turns half transparent while a player is within 10 studs, and opaque otherwise). Prefer an event-driven or throttled approach and explain the choice in one sentence.\n\nwhile true do\n\twait()\n\tfor _, plr in game.Players:GetPlayers() do\n\t\tlocal c = plr.Character\n\t\tif c and (c.PrimaryPart.Position - door.Position).Magnitude < 10 then\n\t\t\tdoor.Transparency = 0.5\n\t\telse\n\t\t\tdoor.Transparency = 0\n\t\tend\n\tend\nend",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-performance-streaming"
+  ],
+  "studio_check": "In Studio profile with the MicroProfiler before and after with 20 simulated players: script time per frame drops and the door behaviour is unchanged.",
+  "expected_sources": [
+   "content/en-us/performance-optimization/improve.md",
+   "content/en-us/reference/engine/classes/ProximityPrompt.yaml",
+   "content/en-us/reference/engine/classes/RunService.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 480
+  },
+  "hard_fail": [
+   "Still polls every frame"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "event_or_throttle",
+     "any": [
+      "ProximityPrompt",
+      "GetPartBoundsInRadius",
+      "GetPartBoundsInBox",
+      "GetPartsInPart",
+      "\\.Touched",
+      "task\\.wait\\(\\s*0?\\.\\d+\\s*\\)",
+      "task\\.wait\\(\\s*[1-9]\\d*(\\.\\d+)?\\s*\\)"
+     ],
+     "why": "event-driven, or a throttled query"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "frame_poll_wait",
+     "re": "(?<![.\\w:])wait\\s*\\(\\s*\\)",
+     "why": "wait() with no argument polls every frame (and is deprecated)",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "frame_poll_task",
+     "re": "task\\.wait\\s*\\(\\s*\\)",
+     "why": "task.wait() with no argument polls every frame",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "render_stepped",
+     "re": "RenderStepped",
+     "why": "RenderStepped is for the client's camera work"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: event-driven, or a throttled query",
+    "Absent: wait() with no argument polls every frame (and is deprecated)",
+    "Absent: task.wait() with no argument polls every frame",
+    "Absent: RenderStepped is for the client's camera work"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PERF-02",
+  "category": "performance-streaming",
+  "difficulty": 3,
+  "goal": "Make client code safe for StreamingEnabled",
+  "prompt": "StreamingEnabled is on in our place. This LocalScript errors because parts are not streamed in yet. Rewrite it so it is safe with instance streaming: wait for objects with a timeout, react when they stream in or out, and mark what the boss model needs as always present.\n\nlocal door = workspace.Map.Building.Door\ndoor.Touched:Connect(function() print(\"touched\") end)\nlocal boss = workspace.Map.Boss\nprint(boss.Humanoid.Health)",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-performance-streaming"
+  ],
+  "studio_check": "In Studio with StreamingEnabled and a distant spawn: no errors in the output at join, the door logic works once the area streams in, the boss is available wherever the player is.",
+  "expected_sources": [
+   "content/en-us/workspace/streaming/index.md",
+   "content/en-us/reference/engine/classes/Model.yaml",
+   "content/en-us/reference/engine/enums/ModelStreamingMode.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Indexes streamed instances directly"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "wait_for_child",
+     "re": "WaitForChild\\s*\\(",
+     "why": "WaitForChild is used for streamed objects"
+    },
+    {
+     "id": "timeout",
+     "re": "WaitForChild\\s*\\([^)]*,\\s*\\d+(\\.\\d+)?\\s*\\)",
+     "why": "WaitForChild has a timeout argument"
+    },
+    {
+     "id": "streaming_mode",
+     "re": "ModelStreamingMode|StreamingMode|Persistent|PersistentPerPlayer|Atomic",
+     "why": "the boss model's streaming mode is set"
+    },
+    {
+     "id": "react",
+     "any": [
+      "ChildAdded",
+      "DescendantAdded",
+      "GetInstanceAddedSignal",
+      "ChildRemoved",
+      "DescendantRemoving",
+      "GetInstanceRemovedSignal"
+     ],
+     "why": "reacts to instances streaming in or out"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "long_path",
+     "re": "\\bworkspace\\.\\w+\\.\\w+\\.\\w+",
+     "why": "long direct paths break when parts are not streamed in"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Present: WaitForChild is used for streamed objects",
+    "Present: WaitForChild has a timeout argument",
+    "Present: the boss model's streaming mode is set",
+    "Present: reacts to instances streaming in or out",
+    "Absent: long direct paths break when parts are not streamed in"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "PERF-03",
+  "category": "performance",
+  "difficulty": 3,
+  "goal": "A fixed-size bullet pool instead of creating and destroying parts",
+  "prompt": "A gun fires 20 bullets per second and creates a new Part for each one, which causes garbage-collection spikes. Write a server ModuleScript `BulletPool` with `BulletPool.new(size: number, template: BasePart)` that clones the template exactly `size` times up front, and the methods `pool:get(): BasePart?` (returns an idle part parented to workspace, or nil when none is idle), `pool:release(part: BasePart)` (parks the part, with Parent set to nil, and ignores a part that is already idle) and `pool:idleCount(): number`. It must never create more than `size` parts.",
+  "run_mode": "automated",
+  "helps": [
+   "roblox-performance-streaming"
+  ],
+  "studio_check": "In Studio fire 20 bullets per second for a minute: the part count stays constant and the MicroProfiler shows no allocation spikes; released parts reset their velocity.",
+  "expected_sources": [
+   "content/en-us/performance-optimization/improve.md",
+   "content/en-us/reference/engine/classes/Debris.yaml",
+   "content/en-us/reference/engine/classes/Instance.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Creates new instances after construction"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/PERF-03.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/PERF-03.luau",
+    "checks": 6
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "6 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
+   ]
+  },
+  "split": "development"
+ }
+]
