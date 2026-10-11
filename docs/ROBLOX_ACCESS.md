@@ -177,6 +177,11 @@ only when **Studio edits** is on and the place is
 - a place owned by STAR's own Roblox account (the account of the connected API key), with
   **Also places of STAR's own account** switched on.
 
+The question is asked again, and the rule applied again, before every script edit, every Luau edit, every
+playtest start and before an undo: a turn can last minutes, and if another place has been opened in that Studio
+window meanwhile, the change is refused and the rest of the turn only reads. (Stopping a playtest is never
+refused.) That costs two extra read calls per change.
+
 Everything else is read-only whatever the settings say: any other published place, an unsaved place that already
 has scripts STAR did not make, a place STAR could not identify, and always the deny-list (by place id and by
 the id of its experience, `game.GameId`). A place whose Studio title carries a deny-listed id is not even asked

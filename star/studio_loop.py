@@ -157,7 +157,7 @@ class PlaceIdentity:
 @dataclass(frozen=True)
 class Verdict:
     editable: bool
-    kind: str          # blank | own | denied | published | not_blank | unknown
+    kind: str          # blank | own | denied | published | not_blank | unknown | changed
     reason: str
     identity: PlaceIdentity | None = None
 
@@ -323,10 +323,38 @@ class GuardedStudio:
     """
 
     def __init__(self, session, *, studio_id: str, verdict: Verdict, tools: set[str],
-                 journal: ChangeJournal | None = None):
+                 journal: ChangeJournal | None = None, rule: dict | None = None):
         self.session, self.studio_id, self.verdict, self.tools = session, studio_id, verdict, set(tools)
         self.journal = journal if journal is not None else ChangeJournal()
         self._marked = bool(verdict.identity and verdict.identity.marker)
+        # The owner's switches the verdict was made with (judge's keyword arguments), kept so the
+        # same rule can be applied again before each change.
+        self.rule = dict(rule) if rule is not None else None
+
+    async def _confirm(self) -> str | None:
+        """Just before a change: is the place that was judged still the one that is open?
+
+        A turn can last minutes, and another place can be opened in the same Studio window while
+        it runs. So the place is asked again and the sandbox rule applied again. None means go
+        ahead. Otherwise nothing is changed: another place than the one judged, or one the rule no
+        longer allows, makes the rest of the session read-only; a place that could not be asked
+        at this moment refuses only this one change.
+        """
+        if self.rule is None:
+            return "the sandbox rule of this session is not known"
+        now = await _look(self.session, self.tools, self.studio_id, self.rule)
+        if now.identity is None and now.kind == "unknown":
+            return "STAR could not confirm which place is open right now, so nothing was changed"
+        judged = self.verdict.identity
+        same = judged is not None and now.identity is not None and (
+            (judged.place_id, judged.game_id, judged.creator_id, judged.creator_type)
+            == (now.identity.place_id, now.identity.game_id, now.identity.creator_id, now.identity.creator_type))
+        if now.editable and same:
+            return None
+        self.verdict = now if not now.editable else Verdict(
+            False, "changed", "Another place is open in this Studio window than the one STAR checked when "
+            "the turn began. STAR only reads it now; ask again to continue there.", now.identity)
+        return self.verdict.reason
 
     async def call_tool(self, name: str, arguments: dict | None = None):
         arguments = dict(arguments or {})
@@ -340,11 +368,18 @@ class GuardedStudio:
             return _Refused("Edit refused: " + self.verdict.reason)
         if arguments.get("studio_id") != self.studio_id:
             return _Refused("Edit refused: that is not the Studio instance STAR checked")
+        if name == "execute_luau" and arguments.get("datamodel_type") != "Edit":
+            return _Refused("Edit refused: Luau runs in the Edit DataModel only")
+        # What changes the place, or starts its scripts, is confirmed against the place that is open
+        # now. Stopping a playtest and input into a running one are not: they change nothing that
+        # stays, and a playtest must always be stoppable.
+        if name in ("multi_edit", "execute_luau") or (name == "start_stop_play" and arguments.get("is_start") is not False):
+            problem = await self._confirm()
+            if problem:
+                return _Refused("Edit refused: " + problem)
         if name == "multi_edit":
             return await self._edit_script(arguments)
         if name == "execute_luau":
-            if arguments.get("datamodel_type") != "Edit":
-                return _Refused("Edit refused: Luau runs in the Edit DataModel only")
             wrapped, tag = wrap_edit(str(arguments.get("code", "")))
             result = await self.session.call_tool(name, arguments={**arguments, "code": wrapped})
             seen = _marked_json(result_text(result), EDIT_MARK)
@@ -388,6 +423,9 @@ class GuardedStudio:
         done, left = [], []
         if not self.verdict.editable:
             return {"undone": done, "left": ["Undo refused: " + self.verdict.reason]}
+        problem = await self._confirm()        # the undo removes and rewrites things: same check
+        if problem:
+            return {"undone": done, "left": ["Undo refused: " + problem]}
         for entry in reversed(self.journal.entries):
             if entry["kind"] == "luau" and entry.get("known") and "execute_luau" in self.tools:
                 result = await self.session.call_tool("execute_luau", arguments={
@@ -416,21 +454,27 @@ class GuardedStudio:
         return {"undone": done, "left": left}
 
 
-async def open_guarded(session, discovered: list[dict], *, studio_id: str, opted_in: bool,
-                       own_places: bool = False, own_account_id: int | None = None) -> GuardedStudio:
-    """Connect step of the loop: find the instance, ask what it is, apply the sandbox rule."""
-    tools = {tool.get("name", "") for tool in discovered}
+async def _look(session, tools: set[str], studio_id: str, rule: dict) -> Verdict:
+    """Find the instance, ask the open place what it is, apply the sandbox rule. Reads only."""
     name = ""
     if "list_roblox_studios" in tools:
         listed = studios(await session.call_tool("list_roblox_studios", arguments={}))
         name = next((item["name"] for item in listed if item["id"] == studio_id), "")
         if listed and not any(item["id"] == studio_id for item in listed):
-            return GuardedStudio(session, studio_id=studio_id, tools=tools, verdict=Verdict(
-                False, "unknown", "The chosen Studio instance is not open any more."))
+            return Verdict(False, "unknown", "The chosen Studio instance is not open any more.")
     identity = await identify(session, studio_id, tools=tools, studio_name=name)
-    verdict = judge(identity, opted_in=opted_in, own_places=own_places, own_account_id=own_account_id,
-                    studio_name=name)
-    return GuardedStudio(session, studio_id=studio_id, verdict=verdict, tools=tools)
+    return judge(identity, studio_name=name, **rule)
+
+
+async def open_guarded(session, discovered: list[dict], *, studio_id: str, opted_in: bool,
+                       own_places: bool = False, own_account_id: int | None = None) -> GuardedStudio:
+    """Connect step of the loop: find the instance, ask what it is, apply the sandbox rule.
+
+    The same look is repeated before every change (GuardedStudio._confirm)."""
+    tools = {tool.get("name", "") for tool in discovered}
+    rule = {"opted_in": opted_in, "own_places": own_places, "own_account_id": own_account_id}
+    verdict = await _look(session, tools, studio_id, rule)
+    return GuardedStudio(session, studio_id=studio_id, verdict=verdict, tools=tools, rule=rule)
 
 
 def own_account_id(home) -> int | None:

@@ -252,3 +252,56 @@ def test_the_studio_guard_refuses_a_tool_star_has_never_seen():
     assert not run(studio.call_tool("get_studio_state", {"studio_id": SID})).model_dump()["isError"]
 
 
+# ------------------------------------------------------------------ 7. the place is checked again before each edit
+
+EDIT = {"studio_id": SID, "datamodel_type": "Edit", "file_path": "ServerScriptService.X", "className": "Script",
+        "edits": [{"old_string": "", "new_string": "print('x')"}]}
+LUAU = {"studio_id": SID, "datamodel_type": "Edit", "code": "Instance.new('Part').Parent = workspace"}
+PLAY = {"studio_id": SID, "is_start": True}
+
+
+@pytest.mark.parametrize("now_open", [
+    dict(placeId=DENIED_PLACE, gameId=DENIED_UNIVERSE, creatorId=1),      # the owner's real game
+    dict(placeId=777, gameId=77, creatorId=5),                            # any published place
+    dict(placeId=0, gameId=0, creatorId=0, scripts=3),                    # someone's unsaved work
+])
+def test_a_place_opened_later_under_the_same_instance_is_not_edited(now_open):
+    fake_studio = FakeStudio()
+    fake_studio.luau_effects = lambda code: [("Part", "Workspace.Part")]
+    studio = run(opened(fake_studio))
+    assert studio.verdict.editable                             # a blank Baseplate was open when the turn began
+    scripts = now_open.pop("scripts", 0)
+    fake_studio.identity.update(now_open)                      # ...then another place was opened in that window
+    fake_studio.scripts = {f"ServerScriptService.Old{n}": {"class": "Script", "source": "print('theirs')"}
+                           for n in range(scripts)}
+    theirs = dict(fake_studio.scripts)
+    for name, arguments in (("multi_edit", EDIT), ("execute_luau", LUAU), ("start_stop_play", PLAY)):
+        refused = run(studio.call_tool(name, dict(arguments)))
+        assert refused.model_dump()["isError"] and "Edit refused" in sl.result_text(refused)
+    assert fake_studio.scripts == theirs and "Workspace.Part" not in fake_studio.instances
+    assert not fake_studio.playing and not fake_studio.marker
+    assert not [name for name in fake_studio.names() if name in ("multi_edit", "start_stop_play")]
+    assert all(arguments["code"] == sl.IDENTITY_PROBE for name, arguments in fake_studio.calls if name == "execute_luau")
+    assert not studio.verdict.editable and studio.journal.entries == []
+    assert run(studio.undo())["undone"] == []
+
+
+def test_the_same_blank_place_stays_editable_through_a_whole_turn():
+    fake_studio = FakeStudio()
+    fake_studio.luau_effects = lambda code: [("Part", "Workspace.Part")]
+    studio = run(opened(fake_studio))
+    for name, arguments in (("multi_edit", EDIT), ("execute_luau", LUAU), ("start_stop_play", PLAY),
+                            ("start_stop_play", {**PLAY, "is_start": False}),
+                            ("multi_edit", {**EDIT, "file_path": "ServerScriptService.Y"})):
+        assert not run(studio.call_tool(name, dict(arguments))).model_dump()["isError"], name
+    assert set(fake_studio.scripts) == {"ServerScriptService.X", "ServerScriptService.Y"} and fake_studio.marker
+    assert studio.verdict.editable and len(studio.journal.entries) == 5
+
+
+def test_a_playtest_can_always_be_stopped():
+    fake_studio = FakeStudio()
+    studio = run(opened(fake_studio))
+    assert not run(studio.call_tool("start_stop_play", dict(PLAY))).model_dump()["isError"]
+    fake_studio.identity.update(placeId=777, gameId=77)        # whatever is open now, stopping is never refused
+    assert not run(studio.call_tool("start_stop_play", {**PLAY, "is_start": False})).model_dump()["isError"]
+    assert not fake_studio.playing
