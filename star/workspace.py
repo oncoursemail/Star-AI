@@ -17,8 +17,10 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
     {"name": "workspace_read", "description": "Read a UTF-8 text file in the selected workspace (not secrets or binary files).",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}},
-    {"name": "workspace_search", "description": "Search UTF-8 text files by substring inside the selected workspace.",
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"], "additionalProperties": False}},
+    {"name": "workspace_search", "description": "Search local source/text files by substring, or find code declarations with mode=symbols (read-only, bounded).",
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"},
+                                                "mode": {"type": "string", "enum": ["text", "symbols"], "default": "text"}},
+                     "required": ["query"], "additionalProperties": False}},
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
@@ -96,26 +98,8 @@ class Workspace:
                 raise ValueError('Not a small text file')
             return {'path': args['path'], 'content': path.read_text(encoding='utf-8')}
         if name == 'workspace_search':
-            query = args['query']
-            if not query or len(query) > 300:
-                raise ValueError('Query must be between 1 and 300 characters')
-            hits = []
-            for path in self.root.rglob('*'):
-                if len(hits) >= 80:
-                    break
-                if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_READ_BYTES:
-                    continue
-                try:
-                    self.resolve(path.relative_to(self.root).as_posix())
-                    text = path.read_text(encoding='utf-8')
-                except (OSError, UnicodeError, PermissionError, ValueError):
-                    continue
-                for idx, line in enumerate(text.splitlines(), 1):
-                    if query.lower() in line.lower():
-                        hits.append({'file': path.relative_to(self.root).as_posix(), 'line': idx, 'text': line[:200]})
-                        if len(hits) >= 80:
-                            break
-            return {'query': query, 'matches': hits}
+            from .code_navigation import search_workspace
+            return search_workspace(self, args['query'], mode=args.get('mode', 'text'))
         if not allow_write:
             raise PermissionError('Workspace editing is switched off')
         path = self.resolve(args['path'], allow_missing=True)
