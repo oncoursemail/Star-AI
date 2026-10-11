@@ -1153,6 +1153,26 @@ def launch():
     app=QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName('STAR Intelligence')
     app.setStyle('Fusion')
-    shell=Shell()
-    shell.show()
-    return app.exec()
+    from .single_instance import DesktopInstance, bypass_single_instance
+    shell = None
+
+    def activate():
+        if shell is not None:
+            if shell.isMinimized():
+                shell.showNormal()
+            shell.show()
+            shell.raise_()
+            shell.activateWindow()
+
+    instance = None
+    if not bypass_single_instance():
+        instance = DesktopInstance(app_data(), activate)
+        if not instance.primary:
+            return 0
+    try:
+        shell=Shell()
+        shell.show()
+        return app.exec()
+    finally:
+        if instance is not None:
+            instance.close()
