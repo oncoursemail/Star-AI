@@ -65,7 +65,7 @@ The bot is **not** a general voice listener, image generator, multimodal app, ch
 ## Owner installation (Windows development)
 
 1. Create an app under https://discord.com/developers/applications and add a Bot; **never** use a user token, self-bot or shared server admin token.
-2. Configure guild installation with `bot` and `applications.commands` OAuth scopes. Least-privilege permissions: View Channels, Send Messages, Embed Links, Attach Files; Read Message History for message-context actions; Connect and Speak for optional voice-channel output. Do **not** give Administrator, Manage Guild or Manage Roles.
+2. Configure guild installation with `bot` and `applications.commands` OAuth scopes. Least-privilege permissions: View Channels, Send Messages, Embed Links, Attach Files, **Send Voice Messages** (distinct Discord permission); Read Message History for message-context actions; Connect and Speak for optional voice-channel output. Do **not** give Administrator, Manage Guild or Manage Roles.
 3. Install required dependencies (`Python 3.11+` in source builds), use the already configured STAR model, and follow `docs/STAR_VOICE_CALLS.md` for Kokoro and faster-whisper models. Install FFmpeg on `PATH`.
 4. Supply an environment-scoped bot token, Discord user ID, test guild ID and optionally allowed text channels. These are example **placeholders**, not real credentials:
 
