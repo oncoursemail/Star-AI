@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "name": "microsoft-dotnet",
+  "title": "Microsoft C# and .NET documentation",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/dotnet/docs.git",
+    "revision": "main",
+    "content_root": "docs/",
+    "public_base": "https://learn.microsoft.com/en-us/dotnet/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-4.0",
+      "url": "https://github.com/dotnet/docs/blob/main/LICENSE",
+      "redistribution_allowed": true,
+      "attribution": "Credit Microsoft and contributors; link the page and CC BY 4.0, and indicate changes if any.",
+      "conditions": "Applies to original conceptual documentation in dotnet/docs; exclude separately licensed imported/third-party materials.",
+      "evidence_url": "https://github.com/dotnet/docs/blob/main/LICENSE",
+      "evidence_quote": "Creative Commons Attribution 4.0 International Public License"
+    },
+    "code_samples": {
+      "id": "MIT",
+      "url": "https://github.com/dotnet/docs/blob/main/LICENSE-CODE",
+      "redistribution_allowed": true,
+      "attribution": "Retain MIT copyright and permission notices in all substantial code copies.",
+      "conditions": "Only code within this repository; sample projects elsewhere need their own licence review.",
+      "evidence_url": "https://github.com/dotnet/docs/blob/main/LICENSE-CODE",
+      "evidence_quote": "MIT License"
+    }
+  },
+  "include": [
+    "docs/csharp/",
+    "docs/core/",
+    "docs/standard/",
+    "docs/fundamentals/",
+    "docs/desktop/"
+  ],
+  "exclude": [
+    "samples/ and external sample repositories",
+    "ThirdPartyNotices.md and third-party assets",
+    "Non-English translations",
+    "Generated .NET API XML in other repositories",
+    "Build tooling and repository metadata"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 1000,
+    "max": 50000,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "weekly",
+    "note": "Review upstream commits weekly and license notices on update; no pull job is configured."
+  },
+  "citation": {
+    "format": "Microsoft Learn: {title} — {url} (Microsoft and contributors, CC BY 4.0)",
+    "example": "Microsoft Learn: C# language reference — https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/ (CC BY 4.0)"
+  }
+}
