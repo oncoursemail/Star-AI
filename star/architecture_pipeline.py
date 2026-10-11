@@ -153,7 +153,7 @@ def make_plan(brief: BuildingBrief) -> dict:
 
 
 def create_package(raw: object, output_dir: Path, *, blender: Path | None = None,
-                   run=subprocess.run) -> Path:
+                   preview: bool = False, run=subprocess.run) -> Path:
     """Write plan; optionally run *bundled* Blender script after explicit invocation.
 
     Never overwrites existing output. Blender is never called for a plan-only request.
@@ -162,6 +162,8 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
     output_dir = Path(output_dir).expanduser().resolve()
     if output_dir.exists():
         raise FileExistsError(f"Output path already exists: {output_dir}")
+    if preview and blender is None:
+        raise ValueError("A real Blender executable is required for a render preview")
     if blender is not None:
         blender = Path(blender).expanduser().resolve()
         if not blender.is_file() or blender.name.lower() not in {"blender", "blender.exe"}:
@@ -183,6 +185,8 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         glb = output_dir / "building.glb"
         cmd = [str(blender), "--background", "--factory-startup", "--disable-autoexec", "--threads", "2",
                "--python", str(script), "--", str(plan), str(glb)]
+        if preview:
+            cmd.append("--preview")
         try:
             result = run(cmd, capture_output=True, text=True, timeout=180, check=True)
         except subprocess.TimeoutExpired as exc:
@@ -195,6 +199,13 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
             export = inspect_glb(glb, expected_material_roles=tuple(plan_data["palette"]))
         except ValueError as exc:
             raise RuntimeError(f"Blender GLB export was not validated: {exc}") from exc
+        if preview:
+            image = output_dir / "building-preview.png"
+            if not image.is_file() or image.is_symlink() or image.stat().st_size < 128:
+                raise RuntimeError("Blender did not create a usable preview PNG")
+            with image.open("rb") as stream:
+                if stream.read(8) != b"\x89PNG\r\n\x1a\n":
+                    raise RuntimeError("Blender preview is not a PNG image")
 
     manifest = {
         "schema_version": 1,
@@ -203,8 +214,10 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         "brief_sha256": hashlib.sha256(json.dumps(asdict(brief), sort_keys=True).encode("utf-8")).hexdigest(),
         "plan_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "files": ["building-plan.json", "architecture-audit.json", "studio-import-guide.md",
-                  "asset-manifest.json"] + (["building.blend", "building.glb"] if export else []),
+                  "asset-manifest.json"] + (["building.blend", "building.glb"] if export else []) + (
+                      ["building-preview.png"] if preview else []),
         "blender_export": export,
+        "preview_rendered": bool(preview),
         "studio_imported": False, "visual_quality_verified": False,
         "review_required": plan_data["review_required"],
     }
@@ -230,12 +243,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("brief", type=Path, help="A JSON brief with documented fields")
     parser.add_argument("--out", required=True, type=Path, help="New, empty output path (never overwritten)")
     parser.add_argument("--blender", type=Path, help="Explicit Blender executable; omit for plan-only")
+    parser.add_argument("--preview", action="store_true",
+                        help="Produce a simple Blender Workbench PNG preview; requires --blender")
     args = parser.parse_args(argv)
     if args.brief.stat().st_size > 16_384:
         parser.error("Brief exceeds 16 KB")
     try:
         plan = create_package(json.loads(args.brief.read_text(encoding="utf-8")),
-                              args.out, blender=args.blender)
+                              args.out, blender=args.blender, preview=args.preview)
     except (ValueError, OSError, RuntimeError) as exc:
         parser.error(str(exc))
     print(plan)
