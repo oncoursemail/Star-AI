@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "_comment": "Offline source catalogue only. All revisions and reviewed licence hashes are unresolved. Paths are proposed selections, not claims that source text was fetched or ingested. Resolve exact version/path/licence evidence locally before reviewed-copy. No live corpus changes.",
+  "sources": [
+    {
+      "name": "creator-docs", "repo": "https://github.com/Roblox/creator-docs.git", "checkout": "creator-docs", "branch": "main", "revision": null,
+      "permission": "candidate", "compatibility": "Record STUDIO_VERSION from the exact selected revision; existing full Roblox index remains active.",
+      "prose_licence": "CC-BY-4.0", "code_licence": "MIT", "attribution": "Roblox Creator Documentation; Roblox Corporation; retain supplied notices and indicate excerpt changes.",
+      "licence_files": [{"path": "LICENSE", "id": "CC-BY-4.0", "sha256": null}, {"path": "LICENSE-CODE", "id": "MIT", "sha256": null}],
+      "paths": ["content/en-us/reference/engine/classes/TweenService.yaml", "content/en-us/reference/engine/classes/Animator.yaml"],
+      "public_base": "https://create.roblox.com/docs", "limits": {"files": 2000, "file_bytes": 2097152, "total_bytes": 33554432, "chunks": 30000}
+    },
+    {
+      "name": "luau-site", "repo": "https://github.com/luau-lang/site.git", "checkout": "luau-site", "branch": "master", "revision": null,
+      "permission": "candidate", "compatibility": "Luau docs snapshot; language/runtime version must be recorded separately.",
+      "prose_licence": "MIT", "code_licence": "MIT", "attribution": "Roblox Corporation 2019-2026 and Lua.org, PUC-Rio 1994-2019; retain MIT copyright and permission notice.",
+      "licence_files": [{"path": "LICENSE.md", "id": "MIT", "sha256": null}],
+      "paths": ["src/content/docs/syntax.md", "src/content/docs/typecheck.md"],
+      "public_base": "https://luau.org", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "godot-guides", "repo": "https://github.com/godotengine/godot-docs.git", "checkout": "godot-docs", "branch": "4.7", "revision": null,
+      "permission": "candidate", "compatibility": "Godot 4.7 guide candidate; confirm exact project version. Never use latest for a different engine version.",
+      "prose_licence": "CC-BY-3.0", "code_licence": "CC-BY-3.0", "attribution": "Juan Linietsky, Ariel Manzur and the Godot community; retain licence and source links and indicate excerpt changes.",
+      "licence_files": [{"path": "LICENSE.txt", "id": "CC-BY-3.0", "sha256": null}],
+      "paths": ["tutorials/scripting/gdscript/gdscript_basics.rst", "tutorials/ui/gui_containers.rst", "tutorials/animation/animation_tree.rst"],
+      "public_base": "https://docs.godotengine.org/en/4.7", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "godot-xml", "repo": "https://github.com/godotengine/godot.git", "checkout": "godot-engine-docs", "branch": "4.7.2-stable", "revision": null,
+      "permission": "candidate", "compatibility": "Godot 4.7.2 selected API source XML; raw excerpts only, not a normalized symbol table.",
+      "prose_licence": "MIT", "code_licence": "MIT", "attribution": "Godot Engine contributors; preserve exact copyright and MIT permission notices from the pinned source.",
+      "licence_files": [{"path": "LICENSE.txt", "id": "MIT", "sha256": null}],
+      "paths": ["doc/classes/Control.xml", "doc/classes/Tween.xml", "doc/classes/AnimationTree.xml"],
+      "public_base": "https://docs.godotengine.org/en/4.7", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "dotnet-docs", "repo": "https://github.com/dotnet/docs.git", "checkout": "dotnet-docs", "branch": "main", "revision": null,
+      "permission": "candidate", "compatibility": "Record each selected article's runtime/language applicability; main is a documentation ref, not a .NET SDK version.",
+      "prose_licence": "CC-BY-4.0", "code_licence": "MIT", "attribution": "Microsoft .NET documentation; Microsoft Corporation and contributors; preserve copyright/licence notices.",
+      "licence_files": [{"path": "LICENSE", "id": "CC-BY-4.0", "sha256": null}, {"path": "LICENSE-CODE", "id": "MIT", "sha256": null}],
+      "paths": ["docs/csharp/asynchronous-programming/async-scenarios.md", "docs/core/testing/index.md"],
+      "public_base": "https://learn.microsoft.com/en-us/dotnet", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "mdn-content", "repo": "https://github.com/mdn/content.git", "checkout": "mdn-content", "branch": "main", "revision": null,
+      "permission": "candidate", "compatibility": "Selected web APIs; browser compatibility data is a separate source and is not ingested by this slice.",
+      "prose_licence": "CC-BY-SA-2.5", "code_licence": "CC0-1.0-or-MIT-by-history", "attribution": "MDN Web Docs contributors; retain title/source/licence notices. Shared adaptations of prose retain ShareAlike; sample age must be verified before choosing CC0 or MIT.",
+      "licence_files": [{"path": "LICENSE.md", "id": "CC-BY-SA-2.5", "sha256": null}, {"path": "LICENSE.md", "id": "CC0-1.0", "sha256": null}, {"path": "LICENSE.md", "id": "MIT", "sha256": null}],
+      "paths": ["files/en-us/web/css/animation/index.md", "files/en-us/web/api/element/animate/index.md"],
+      "public_base": "https://developer.mozilla.org/en-US/docs", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "typescript-handbook", "repo": "https://github.com/microsoft/TypeScript-Website.git", "checkout": "typescript-website", "branch": "v2", "revision": null,
+      "permission": "candidate", "compatibility": "Record TypeScript applicability per article; v2 is the website branch, not TypeScript 2.",
+      "prose_licence": "CC-BY-4.0", "code_licence": "MIT", "attribution": "TypeScript documentation; Microsoft Corporation and contributors; retain source and licence notices.",
+      "licence_files": [{"path": "LICENSE", "id": "CC-BY-4.0", "sha256": null}, {"path": "LICENSE-CODE", "id": "MIT", "sha256": null}],
+      "paths": ["packages/documentation/copy/en/handbook-v2/Basics.md", "packages/documentation/copy/en/handbook-v2/Everyday Types.md"],
+      "public_base": "https://www.typescriptlang.org/docs", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "python-docs", "repo": "https://github.com/python/cpython.git", "checkout": "cpython-docs", "branch": "3.14", "revision": null,
+      "permission": "candidate", "compatibility": "Python 3.14 proposed selection; choose the project's actual release and retain incorporated third-party notices.",
+      "prose_licence": "PSF-2.0", "code_licence": "PSF-2.0-or-0BSD", "attribution": "Python Software Foundation and contributors; retain PSF licence/copyright and a summary of changes when sharing derivatives.",
+      "licence_files": [{"path": "Doc/license.rst", "id": "PSF-2.0", "sha256": null}, {"path": "Doc/license.rst", "id": "0BSD", "sha256": null}],
+      "paths": ["Doc/tutorial/classes.rst", "Doc/library/asyncio-task.rst", "Doc/library/pathlib.rst", "Doc/library/unittest.rst"],
+      "public_base": "https://docs.python.org/3.14", "limits": {"files": 100, "file_bytes": 2097152, "total_bytes": 10485760, "chunks": 5000}
+    },
+    {
+      "name": "unity-links", "permission": "link-only", "revision": null,
+      "links": ["https://unity.com/legal/docs-terms", "https://unity.com/legal/terms-of-service", "https://docs.unity.com/en-us/unity-cli"],
+      "reason": "Applicable documentation use and current STAR client/model/agent authorization remain unresolved. No local build, retrieval ingestion or engine invocation."
+    }
+  ]
+}
