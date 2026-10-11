@@ -253,9 +253,11 @@ async def complete_cut_answer(answer: str, messages: list[dict], kwargs: dict, r
             if getattr(choice.message, 'tool_calls', None) or not (choice.message.content or '').strip():
                 break
             answer = answer_shape.splice(kept, choice.message.content)
+            cut_again = getattr(choice, 'finish_reason', None) == 'length'
             if not answer_shape.stops_inside_code(answer):
-                return answer
-            if getattr(choice, 'finish_reason', None) != 'length':
+                # The code is whole. If the limit was reached again, it was in the closing prose.
+                return answer.rstrip() + answer_shape.LENGTH_NOTE if cut_again else answer
+            if not cut_again:
                 # The model wrote the remaining lines and stopped without closing the fence.
                 return answer.rstrip('\n') + '\n```\n'
     except asyncio.CancelledError:

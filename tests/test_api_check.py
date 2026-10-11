@@ -140,10 +140,12 @@ def test_an_invented_member_is_reported_with_the_real_members_as_a_hint():
     assert kinds(findings) == [(UNKNOWN, 3), (UNKNOWN, 4)]
     assert "`GuiService.ViewportSize` is not in the official Roblox API reference" in findings[0]["message"]
     assert "class GuiService has no member `ViewportSize`" in findings[0]["message"]
-    assert "GetGuiInset" in findings[0]["hint"] and "TopbarInset" in findings[0]["hint"]
-    # the name exists, on another class: the hint says where, so the fix is not "the nearest spelling"
-    assert findings[0]["hint"].startswith("`ViewportSize` is a member of Camera")
-    assert "is a member of" not in findings[1]["hint"], "GetScreenResolution exists nowhere"
+    # the name exists, on another class: the hint says where and offers no list to pick a near spelling from
+    assert findings[0]["hint"].startswith("`ViewportSize` is a member of Camera, not of GuiService")
+    assert "TopbarInset" not in findings[0]["hint"]
+    # a name that exists nowhere: the class's real members are the hint
+    assert "is a member of" not in findings[1]["hint"]
+    assert "GetGuiInset" in findings[1]["hint"] and "TopbarInset" in findings[1]["hint"]
     assert checked == 6, "GetService, the class, two real methods and the two invented members"
 
 

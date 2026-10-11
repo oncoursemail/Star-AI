@@ -424,8 +424,28 @@ def test_engine_code_is_analysed_non_strict_and_pure_luau_exactly_as_written():
     # a Roblox word in a comment or a string does not make pure Luau "engine code"
     assert not touches_engine('--!strict\n-- uses game:GetService elsewhere\nlocal s = "workspace.Part"\nreturn s\n')
     knowledge = FakeKnowledge(reports=[passed()])
-    answer, _ = review("```luau\n" + engine + "```", knowledge)
+    answer, records = review("```luau\n" + engine + "```", knowledge)
     assert knowledge.checked == [check_source(engine)] and "--!strict\nlocal Players" in answer, "only the check sees the change"
+    assert records[0]["non_strict"] and "analysed in non-strict mode, because the checker has no Roblox type" in answer
+    answer, records = review("```luau\n" + pure + "```", FakeKnowledge(reports=[passed()]))
+    assert "non_strict" not in records[0] and "non-strict" not in answer
+
+
+def test_lint_findings_that_are_bugs_count_and_style_warnings_do_not():
+    report = {**passed(), "warnings": [
+        {"line": 3, "column": 5, "kind": "LocalUnused", "message": "Variable 'x' is never used"},
+        {"line": 8, "column": 7, "kind": "ComparisonPrecedence", "message": "not X == Y is equivalent to (not X) == Y"}]}
+    seen = []
+
+    async def repair(code, found):
+        seen.append([e["kind"] for e in found])
+        return "local fixed = true\n"
+
+    answer, records = review(ANSWER, FakeKnowledge(reports=[report, passed()]), repair)
+    assert seen == [["ComparisonPrecedence"]] and "local fixed = true" in answer
+    assert "first failed the static Luau check (not X == Y is equivalent to (not X) == Y, line 8)" in answer
+    quiet, records = review(ANSWER, FakeKnowledge(reports=[{**passed(), "warnings": report["warnings"][:1]}]), repair)
+    assert records[0]["ok"] and not records[0]["repaired"] and len(seen) == 1, "an unused local is not worth a model call"
 
 
 def test_names_from_the_request_and_from_other_blocks_are_context_not_defects():
@@ -479,6 +499,20 @@ def test_a_partly_successful_repair_is_shown_and_said_to_be_unverified():
     assert "STAR corrected part of it" in answer and "treat it as unverified" in answer
     assert "- line 9: Unknown type 'void' (TypeError)" in answer and "Expected ')'" in answer.split("still has")[0]
     assert records[0]["repaired"] and not records[0]["ok"] and len(records[0]["remaining"]) == 1
+
+
+def test_no_second_round_for_a_block_that_is_still_full_of_type_errors():
+    many = [(n, "TypeError", f"type problem {n}") for n in range(1, 9)]
+    knowledge = FakeKnowledge(reports=[errors(*many), errors(*many[:4])])
+    calls = []
+
+    async def repair(code, found):
+        calls.append(len(found))
+        return "local attempt = %d\n" % len(calls)
+
+    answer, records = review(ANSWER, knowledge, repair)
+    assert calls == [8], "the first round helped (8 -> 4) but four type errors are not 'a little left'"
+    assert "local attempt = 1" in answer and "STAR corrected part of it" in answer and len(records[0]["remaining"]) == 4
 
 
 def test_a_repair_that_is_no_better_or_throws_the_code_away_is_not_used():

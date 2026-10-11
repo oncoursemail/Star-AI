@@ -107,6 +107,13 @@ def test_an_answer_cut_inside_its_code_is_finished_with_one_more_request():
     assert follow_up["messages"][:-2] == model.requests[0]["messages"]
 
 
+def test_a_continuation_that_finishes_the_code_but_is_cut_in_its_prose_says_so():
+    model = FakeClient([reply(CUT, finish="length"),
+                        reply("```luau\n\tfor i = 1, size do\n\tend\n\treturn self\nend\nreturn Pool\n```\nStore it a", finish="length")])
+    answer, _, _ = run(model, continuation_tokens=900)
+    assert "return Pool\n```" in answer and answer.endswith("Store it a" + LENGTH_NOTE) and len(model.requests) == 2
+
+
 def test_at_most_two_continuations_and_an_unfinished_block_is_closed_and_labelled():
     model = FakeClient([reply(CUT, finish="length"), reply("```luau\n\tfor i = 1, size do\n", finish="length"),
                         reply("```luau\n\t\tself[i] = i\n", finish="length")])

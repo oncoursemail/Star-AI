@@ -33,6 +33,7 @@ SOURCES_MARKER = "**Sources retrieved by STAR**"
 CHECK_MARKER = "**Luau check by STAR:**"
 MAX_CHECKED_BLOCKS = 3
 MAX_REPAIR_ROUNDS = 2       # per block; the second only after the first made the block better
+SECOND_ROUND_MAX_ERRORS = 2
 # The whole task has one deadline (route.task_timeout) and an answer that is already written must
 # never be lost to it. The self-check gets what is left of the turn minus REVIEW_RESERVE, and a
 # repair call is stopped REPAIR_RESERVE before the deadline (time for the re-check and the save).
@@ -278,6 +279,10 @@ _ENGINE_CODE = re.compile(
     r"|:\s*(?:Player|Instance|BasePart|Part|Model|Humanoid|Tool|Animator|AnimationTrack|GuiObject|Frame|TextLabel|"
     r"TextButton|RBXScriptConnection|RBXScriptSignal|RemoteEvent|DataStore|Vector3|CFrame|Color3|UDim2)\b")
 _STRICT_DIRECTIVE = re.compile(r"^([ \t]*)--!strict\b", re.M)
+# The checker's lint warnings are mostly style (an unused local). These few are bugs whatever the
+# type-checking mode is, and they are what non-strict analysis of engine code would otherwise miss.
+BUG_LINTS = frozenset({"ComparisonPrecedence", "MisleadingAndOr", "DuplicateCondition", "DuplicateFunction",
+                       "TableOperations", "ForRange", "UninitializedLocal", "FormatString"})
 _UNKNOWN_GLOBAL = re.compile(r"Unknown global '([A-Za-z_]\w*)'")
 _IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 SYNTAX = "SyntaxError"
@@ -412,6 +417,9 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
         errors = real_errors(report, code, context_names(prompt, others))
         dropped = len(report.get("errors") or []) - len(errors)
         count = max(len(errors), (report.get("error_count") or 0) - dropped)
+        # Lint findings that are bugs in any type-checking mode (`not x == y`, a for loop that never runs).
+        lints = [w for w in report.get("warnings") or [] if w.get("kind") in BUG_LINTS]
+        errors, count = errors + lints, count + len(lints)
         checked = None
         if api_lookup is not None and not any(e.get("kind") == SYNTAX for e in errors):
             try:
@@ -436,6 +444,8 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
                       error_count=state["count"])
         if state["api"] is not None:
             record["api_checked"] = state["api"]
+        if check_source(code) != code:
+            record["non_strict"] = True      # its `--!strict` was read as non-strict for the check
         if not state["errors"] or repair is None:
             continue
         current, current_state = code, state
@@ -460,6 +470,12 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
             current, current_state = fixed, second
             if not current_state["errors"]:
                 break
+            # A second round costs as much as the first (the whole block is written again). It is
+            # worth that when the first one uncovered what a syntax error had hidden, or when only
+            # a little is left; a block that is still full of type errors stays as it is now.
+            if not (any(e.get("kind") == SYNTAX for e in state["errors"])
+                    or len(_hard(current_state["errors"])) <= SECOND_ROUND_MAX_ERRORS):
+                break
         if current is not code:
             record.update(repaired=True, ok=not _hard(current_state["errors"]), fix=_changed_lines(code, current),
                           remaining=list(current_state["errors"]))
@@ -482,6 +498,9 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
     scope = (f"{api_names} API name(s) the code uses were checked against the official API reference; other "
              "names and types were not verified, and the code was not run." if api_names
              else "Roblox API names and types were not verified, and the code was not run.")
+    if any(r.get("non_strict") for r in ran):
+        scope = ("Code that uses the engine was analysed in non-strict mode, because the checker has no Roblox type "
+                 "definitions. " + scope)
     notes = []
     listed = False
     for r in ran:

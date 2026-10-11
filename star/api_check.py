@@ -263,8 +263,11 @@ def diagnose(code: str, lookup) -> tuple[list[dict], int]:
                 member = ref["symbols"][0].replace(":", ".").split(".", 1)[1]
                 homes = [cls for cls in nearby if (elsewhere.get(f"{cls}.{member}") or {}).get("found")
                          and not elsewhere[f"{cls}.{member}"].get("deprecated")][:3]
-                hint = (f"`{member}` is a member of {', '.join(homes)}: use it on an object of that class. " if homes
-                        else "") + (f"Members of {ref['owner']}: {listed}" if listed else "")
+                # With a real home for the name, the member list is left out: offered both, the
+                # model picks the nearest spelling on the wrong class (`GuiService.ViewportDisplaySize`).
+                hint = (f"`{member}` is a member of {', '.join(homes)}, not of {ref['owner']}: get an object of that "
+                        "class and use it there." if homes
+                        else f"Members of {ref['owner']}: {listed}" if listed else "")
             findings.append({"line": ref["line"], "column": 0, "kind": UNKNOWN, "message": message,
                              **({"hint": hint} if hint else {})})
         elif all(e.get("deprecated") for e in hits):
