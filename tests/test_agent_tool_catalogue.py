@@ -60,6 +60,7 @@ MCP = ["star_mcp_search", "star_mcp_call"]
 WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_test", "star_toolforge_run"]
 # The research team (star/specialist_agents.py DELEGATE_TOOL).
 SPECIALISTS = ["star_delegate_research"]
+CALCULATOR = ["star_calculate"]
 # Composer switches: research (web search) and the STAR source reader.
 WEB = ["star_web_search"]
 GITHUB = ["star_github_tree", "star_github_read"]
@@ -207,7 +208,7 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
     names = everything_on(desk, monkeypatch, knowledge=False)
-    expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
                 + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + WORKSHOP
                 + SPECIALISTS)
     assert names == expected          # the order is part of the request the server caches
@@ -218,7 +219,7 @@ def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch
     names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True)
     expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
                 + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
-                + WORKSHOP + SPECIALISTS)
+                + WORKSHOP + SPECIALISTS + CALCULATOR)
     assert names == expected
     assert not set(ROBLOX_LINKS) & set(names)
 
@@ -240,3 +241,5 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     assert [tool["name"] for tool in mcp_connections.TOOLS] == MCP
     assert [tool["name"] for tool in tool_workshop.TOOL_SCHEMAS] == WORKSHOP
     assert specialist_agents.DELEGATE_TOOL["name"] == SPECIALISTS[0]
+    from star.calc import TOOL
+    assert TOOL["name"] == CALCULATOR[0]
