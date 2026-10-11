@@ -57,7 +57,21 @@ while true do
         if alive <= 1 then break end
     end
     phase = "Results"
-    -- Remaining active userId is the winner; award on server only once.
+    local winnerId: number? = nil
+    local survivors = 0
+    for userId in active do
+        survivors += 1
+        winnerId = userId
+    end
+    if survivors == 1 and winnerId then
+        local winner = Players:GetPlayerByUserId(winnerId)
+        if winner then
+            local wins = winner:FindFirstChild("leaderstats")
+            local value = wins and wins:FindFirstChild("Wins")
+            if value and value:IsA("IntValue") then value.Value += 1 end
+        end
+    end
+    -- Create leaderstats/Wins on PlayerAdded; broadcast phase with RemoteEvent.
     task.wait(5)
     for _, player in Players:GetPlayers() do teleport(player, lobby) end
 end
