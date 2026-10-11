@@ -200,17 +200,5 @@ class GraphifyGraph:
             current = prev[current]
         route.append({"node": nodes[origin]})
         route.reverse()
-        returned = route[:30]
-        truncated = len(returned) < len(route)
-        return {
-            "found": True,
-            "hops": len(route) - 1,
-            "returned_hops": len(returned) - 1,
-            "truncated": truncated,
-            "path": returned,
-            "notice": (
-                "Only the first 30 route nodes are shown; the destination and remaining "
-                "relationships are omitted. Do not cite this as a complete dependency path. "
-                if truncated else ""
-            ) + "Traversal can cross edges backwards; relation arrows retain their original direction.",
-        }
+        return {"found": True, "hops": len(route) - 1, "path": route[:30],
+                "notice": "Traversal can cross edges backwards; relation arrows retain their original direction."}
