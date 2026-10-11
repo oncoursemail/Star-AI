@@ -65,16 +65,20 @@ class TaskPlan:
                 raise ValueError("Cyclic dependency graph")
             done.update(t.id for t in ready)
 
-    def ready(self, completed: set[str], running: set[str] | None = None) -> list[Task]:
+    def ready(self, completed: set[str], running: set[str] | None = None,
+              *, finished: set[str] | None = None) -> list[Task]:
         running = running or set()
-        if not completed <= self.tasks.keys() or not running <= self.tasks.keys():
+        finished = finished or set()
+        if (not completed <= self.tasks.keys() or not running <= self.tasks.keys()
+                or not finished <= self.tasks.keys()):
             raise ValueError("Unknown task status")
         slots = max(0, self.max_parallel - len(running))
         locked_writes = [res for id in running for res in self.tasks[id].writes]
         locked_reads = [res for id in running for res in self.tasks[id].reads]
         output = []
         for t in self.tasks.values():
-            if t.id in completed or t.id in running or not set(t.dependencies) <= completed:
+            if (t.id in completed or t.id in running or t.id in finished
+                    or not set(t.dependencies) <= completed):
                 continue
             if any(overlaps(p, held) for p in t.writes for held in locked_writes + locked_reads):
                 continue
