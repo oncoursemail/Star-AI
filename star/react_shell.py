@@ -52,6 +52,7 @@ ALLOWED_ACTIONS = frozenset({
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
+    'researchStatus','researchCheck','researchEvidence',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
     'serverKeyFileStatus','importServerKeyFile',
@@ -766,6 +767,23 @@ def launch():
                         self._run(rid,action,media_worker)
                         return json.dumps({'ok':True,'pending':True,'requestId':rid})
                     return json.dumps({'ok':True,'data':media_worker()},default=str)
+                if action in {'researchStatus', 'researchCheck', 'researchEvidence'}:
+                    # Read-only public documentation, observed into a local candidate-only ledger.
+                    # No model-selected host, reviewed-memory promotion or GitHub publish permission.
+                    def research_task():
+                        from .evolution_research import ResearchWatcher
+                        with ResearchWatcher(app_data() / 'research-watch.sqlite3') as watcher:
+                            if action == 'researchStatus':
+                                return watcher.status()
+                            if action == 'researchEvidence':
+                                return watcher.evidence(body.get('observation'))
+                            return watcher.check_many()
+                    if action == 'researchCheck':
+                        if self.active_task:
+                            raise RuntimeError('Finish the active task before checking research sources')
+                        self._run(rid, action, research_task)
+                        return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                    return json.dumps({'ok':True,'data':research_task()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
