@@ -5,12 +5,13 @@ and the model writes about ten of them per second. Measured on the stored evalua
 (evals/results/baseline-*.json): 12 of 57 answers stopped exactly at that limit, three of them in
 the middle of the code. Two things follow from that, and both live here:
 
-  * `SHAPE_RULES`: one short per-turn instruction for code answers: the complete code first,
-    brief comments, a short explanation after it. It rides with the other per-turn sections (after
-    the user's words), so the cached start of the request is untouched.
-  * `continuation` / `splice`: when an answer still stops inside a code block, STAR asks once
+  * `continuation` / `splice` (always on): when an answer stops inside a code block, STAR asks once
     more for the missing lines only and joins them on. No model call happens unless the answer was
     really cut; an answer cut in its closing prose only gets an honest one-line note.
+  * `SHAPE_RULES` (OFF by default, `STAR_ANSWER_SHAPE=on`): one short per-turn instruction for
+    requests that ask for code: the complete code first, brief comments, a short explanation after
+    it. It made answers shorter and faster but reproduced two regressions on the evaluation suite
+    (see `rule_enabled`), so it ships switched off until a wording passes the gate.
 
 Pure string functions; `star.agent.execute` makes the request.
 """
@@ -32,7 +33,7 @@ SHAPE_RULES = (
 _ASKS_FOR_CODE = re.compile(
     r"\b(?:write|make|create|build|fix|refactor|convert|implement|script|code|add|generate|rewrite|debug)\b|```",
     re.IGNORECASE)
-ENV_VAR = "STAR_ANSWER_SHAPE"      # "off" leaves the per-turn rule out (docs/evals.md: a prompt edit needs a switch)
+ENV_VAR = "STAR_ANSWER_SHAPE"      # "on" adds the per-turn rule (docs/evals.md: a prompt edit needs a switch)
 CONTINUATION_TOKENS = 900          # one extra request of at most this many tokens, twice at most
 MAX_CONTINUATIONS = 2
 LENGTH_NOTE = "\n\n*(STAR's answer reached its length limit here.)*"
@@ -41,10 +42,16 @@ _OPENER = re.compile(r"^[ \t]*```[^\n]*\n?", re.M)
 
 
 def rule_enabled(environ=None) -> bool:
-    """The per-turn rule is on unless STAR_ANSWER_SHAPE is `off`. The continuation is not a prompt
-    edit (it only runs after an answer was cut) and has no switch."""
+    """The per-turn rule is OFF unless STAR_ANSWER_SHAPE is `on`.
+
+    It was measured on suite v2 (docs/agents/eval-gains.md): answers got about a quarter shorter and
+    the median turn went from 149 s to 109 s, but two tasks that pass without it failed with it in
+    every run (a terser draft that lost a check; a path comment put above `--!strict`). A change
+    that reproduces a regression stays off by default, like a skill pack that did (docs/evals.md).
+    The continuation is not a prompt edit (it only runs after an answer was cut) and has no switch.
+    """
     import os
-    return (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower() != "off"
+    return (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower() == "on"
 
 
 def asks_for_code(prompt: str) -> bool:

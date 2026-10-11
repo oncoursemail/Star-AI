@@ -961,9 +961,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
                     audited_event({'event': 'skill_packs', 'names': [pack.name for pack in packs], 'chars': len(pack_block)})
                 # <<< Skill packs
-                # >>> Answer shape (star/answer_shape.py): a Roblox/Luau answer has a hard length limit, so
-                # the code comes first and stays whole. Full answers only; it follows the documentation
-                # and the pack in the per-turn sections.
+                # >>> Answer shape (star/answer_shape.py): "the complete code first, then a short explanation".
+                # OFF unless STAR_ANSWER_SHAPE=on (it reproduced two regressions on the evaluation suite).
+                # Full answers to requests for Roblox/Luau code only; it follows the documentation and the pack.
                 shape_block = (answer_shape.SHAPE_RULES
                                if (not quick and docs.plan.check_luau and answer_shape.rule_enabled()
                                    and answer_shape.asks_for_code(prompt)) else '')

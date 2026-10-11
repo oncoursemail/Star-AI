@@ -102,12 +102,12 @@ def test_the_rule_is_for_requests_that_ask_for_code(prompt, expected):
     assert answer_shape.asks_for_code(prompt) is expected
 
 
-def test_the_rule_has_an_off_switch_and_is_on_by_default():
-    assert answer_shape.rule_enabled({}) and answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": "on"})
-    assert not answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": " OFF "})
+def test_the_rule_is_off_unless_switched_on():
+    assert not answer_shape.rule_enabled({}) and not answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": "off"})
+    assert answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": " ON "})
 
 
-def test_run_task_adds_the_rule_to_a_full_roblox_answer_only(monkeypatch, tmp_path):
+def test_run_task_adds_the_rule_only_when_switched_on_and_only_to_a_full_code_request(monkeypatch, tmp_path):
     """The request the model would get, captured from a fake client: no network, no model."""
     import contextlib
     from star import desktop_core as core
@@ -143,6 +143,9 @@ def test_run_task_adds_the_rule_to_a_full_roblox_answer_only(monkeypatch, tmp_pa
         return content if isinstance(content, str) else content[0]["text"]
 
     question = "Write a Luau ModuleScript that pools bullets for my shooter."
+    monkeypatch.delenv("STAR_ANSWER_SHAPE", raising=False)
+    assert answer_shape.SHAPE_HEADING not in user_text(question), "off by default: the request is as it was before"
+    monkeypatch.setenv("STAR_ANSWER_SHAPE", "on")
     assert answer_shape.SHAPE_HEADING in user_text(question) and "hard length limit" in user_text(question)
     assert answer_shape.SHAPE_HEADING not in user_text(question, mode="fast"), "a quick answer stays as it was"
     assert answer_shape.SHAPE_HEADING not in user_text("Plan a birthday party for ten children.")
