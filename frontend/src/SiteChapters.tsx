@@ -169,7 +169,7 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
        <i className="sw-crop sw-crop-bl" aria-hidden="true"/><i className="sw-crop sw-crop-br" aria-hidden="true"/>
        <div className="sw-plate-frame">
         <Crop id="setup" sizes="(max-width: 960px) calc(100vw - 64px), 560px"
-         alt='The STAR Brain setup card: "Set up your local AI. Download a verified local model to get started. A few gigabytes of disk space are required." with a "Download and start" button and an Offline status.'/>
+          alt='The Model on this PC card. No local model is installed. Installing downloads a verified model of a few gigabytes. A Download and start button begins setup.'/>
        </div>
       </div>
       <figcaption className="sw-note">Step two as it looks in the app before the model is installed.</figcaption>

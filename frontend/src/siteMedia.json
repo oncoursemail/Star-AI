@@ -1,5 +1,5 @@
 {
- "capturedAt": "2026-10-10T15:18:24.294Z",
+ "capturedAt": "2026-10-11T05:41:27.099Z",
  "sourceVersion": "0.9.0",
  "images": {
   "chat": [
@@ -7,13 +7,13 @@
     "file": "chat-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 23468
+    "bytes": 23944
    },
    {
     "file": "chat-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 54894
+    "bytes": 60606
    }
   ],
   "chat-narrow": [
@@ -21,7 +21,7 @@
     "file": "chat-narrow-860.webp",
     "width": 860,
     "height": 1240,
-    "bytes": 34800
+    "bytes": 37540
    }
   ],
   "brain": [
@@ -29,13 +29,13 @@
     "file": "brain-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 21082
+    "bytes": 27004
    },
    {
     "file": "brain-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 53274
+    "bytes": 73214
    }
   ],
   "brain-narrow": [
@@ -43,7 +43,7 @@
     "file": "brain-narrow-860.webp",
     "width": 860,
     "height": 1240,
-    "bytes": 36106
+    "bytes": 43900
    }
   ],
   "tools": [
@@ -51,13 +51,13 @@
     "file": "tools-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 34614
+    "bytes": 40296
    },
    {
     "file": "tools-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 80084
+    "bytes": 97244
    }
   ],
   "tools-narrow": [
@@ -65,7 +65,7 @@
     "file": "tools-narrow-860.webp",
     "width": 860,
     "height": 1240,
-    "bytes": 30910
+    "bytes": 35108
    }
   ],
   "projects": [
@@ -73,13 +73,13 @@
     "file": "projects-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 27850
+    "bytes": 30020
    },
    {
     "file": "projects-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 66252
+    "bytes": 72616
    }
   ],
   "projects-narrow": [
@@ -87,7 +87,7 @@
     "file": "projects-narrow-860.webp",
     "width": 860,
     "height": 1240,
-    "bytes": 37744
+    "bytes": 36760
    }
   ],
   "analytics": [
@@ -95,13 +95,13 @@
     "file": "analytics-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 22846
+    "bytes": 24598
    },
    {
     "file": "analytics-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 55068
+    "bytes": 60566
    }
   ],
   "analytics-narrow": [
@@ -109,37 +109,37 @@
     "file": "analytics-narrow-860.webp",
     "width": 860,
     "height": 1240,
-    "bytes": 22612
+    "bytes": 23188
    }
   ],
   "studio-narrow": [
    {
-    "file": "studio-narrow-800.webp",
-    "width": 800,
-    "height": 1020,
-    "bytes": 21398
+    "file": "studio-narrow-796.webp",
+    "width": 796,
+    "height": 998,
+    "bytes": 21998
    }
   ],
   "setup": [
    {
-    "file": "setup-688.webp",
-    "width": 688,
-    "height": 172,
-    "bytes": 6536
+    "file": "setup-700.webp",
+    "width": 700,
+    "height": 151,
+    "bytes": 4856
    },
    {
-    "file": "setup-1376.webp",
-    "width": 1376,
-    "height": 344,
-    "bytes": 16394
+    "file": "setup-1400.webp",
+    "width": 1400,
+    "height": 302,
+    "bytes": 12536
    }
   ],
   "setup-narrow": [
    {
-    "file": "setup-narrow-800.webp",
-    "width": 800,
-    "height": 396,
-    "bytes": 15186
+    "file": "setup-narrow-796.webp",
+    "width": 796,
+    "height": 310,
+    "bytes": 12122
    }
   ]
  }

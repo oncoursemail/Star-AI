@@ -53,13 +53,18 @@ def test_persistent_image_message_preview():
 
 def test_reduced_motion_and_ui_research():
     ui = read("frontend/src/Desktop.tsx")
+    policy = read("frontend/src/MotionPolicy.tsx")
     css = desktop_css()
-    assert "MotionConfig reducedMotion" in ui
+    assert "MotionPolicy reduced={reducedMotion}" in ui
+    assert "MotionConfig reducedMotion" in policy
     assert "prefers-reduced-motion" in css
     assert "flex-direction:row" in css
-    assert "window.matchMedia" in ui
+    assert "window.matchMedia" in policy
+    assert "useSyncExternalStore" in policy
+    assert "|| saved" in policy
+    assert "useEffectiveReducedMotion(!themeMotion)" in ui
     # STAR's own Reduced motion setting reaches CSS transitions too, and is stored at once.
-    assert "data-reduced-motion={!themeMotion}" in ui
+    assert "data-reduced-motion={reducedMotion}" in ui
     assert ".shell[data-reduced-motion='true']" in read("frontend/src/tokens.css")
     assert "act('saveSettings',{settings:{reduced_motion:reduced}})" in ui
 
