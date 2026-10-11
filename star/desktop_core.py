@@ -922,6 +922,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         tools_kept = (turn_memory.for_conversation(memory_scope, sticky=kind == 'lan')
                       if kind != 'cloud' else None)
         answered_by = ''
+        model_stats = {}
         instant_answer = None
         tools_ran = False
         inner_event = audited_event
@@ -929,6 +930,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             nonlocal answered_by, tools_ran
             if event.get('event') == 'model_answered':
                 answered_by = str(event.get('model') or '')
+                model_stats.update(first_token_ms=event.get('first_token_ms'),
+                                   tokens_per_second=event.get('tokens_per_second'),
+                                   estimated_tokens=event.get('estimated_tokens') is True)
             elif event.get('event') == 'tool_started':
                 tools_ran = True
             inner_event(event)
@@ -1138,19 +1142,18 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         first = token_timing['first']
         last = token_timing['last']
         requested = token_timing['requested']
-        # Stream chunks do not always map 1:1 to tokens. Without usage metadata
-        # throughput is explicitly marked approximate rather than claiming exact tokens.
+        # Backend stream chunks carry the real first-token and completion measurements.
         measured_first = (instant_answer.first_token_ms if instant_answer is not None else
+                          model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else
                           max(0, int((first - requested) * 1000)) if first is not None and requested is not None else None)
         throughput = (instant_answer.tokens_per_second if instant_answer is not None else
-                      round(max(0, len(re.findall(r"\w+|[^\w\s]", answer)) - 1)
-                            / max(0.001, last - first), 1)
-                      if first is not None and last is not None else None)
+                      model_stats.get('tokens_per_second'))
         brain = ('pc' if instant_answer is not None or kind == 'local'
                  else 'server' if kind == 'lan' else 'cloud')
         stats = {'brain': brain, 'model': answered_by or route.model,
                  'first_token_ms': measured_first, 'tokens_per_second': throughput,
-                 'estimated_tokens': instant_answer.estimated_tokens if instant_answer is not None else True}
+                 'estimated_tokens': (instant_answer.estimated_tokens if instant_answer is not None
+                                      else model_stats.get('estimated_tokens', True))}
         audited_event({'event': 'answer_stats', **stats})
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
