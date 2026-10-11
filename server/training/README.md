@@ -51,6 +51,15 @@ signals, Players, RunService, CollectionService, TweenService, Vector3, UDim2, .
 * Checkpoint after every candidate (JSONL appended and fsynced, `state.json` replaced atomically; the files are
   authoritative if they disagree). SIGTERM stops cleanly; `Restart=on-failure` after 5 minutes.
 
+## Safety of the code it runs
+
+Everything a teacher writes is executed only inside the container, as the unprivileged user `star`, in the standalone
+Luau VM (no `io`, no `os.execute`, no network library; the solution is loaded with `loadstring` into a whitelisted
+environment), in a fresh private directory, with an empty environment, its own session (killed as a group on timeout),
+address space 256 MB, CPU 6 s, wall 8 s, 1 MB files, 32 open files, and a 64 KB output cap. The unit adds `ProtectSystem=strict`,
+`PrivateTmp`, `NoNewPrivileges`, a 2 GB memory cap and write access to `/opt/star/training` only. No network namespace is
+available to user `star` here, but the VM has no way to open a socket.
+
 ## Files on the server (`/opt/star/training`)
 
 | Path | What |
