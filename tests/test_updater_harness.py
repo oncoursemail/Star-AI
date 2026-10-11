@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from star import updates
-from star.react_shell import finish_desktop_update
+from star.react_shell import finish_desktop_update, prepare_desktop_update
 
 
 def _payload() -> bytes:
@@ -127,3 +127,47 @@ def test_close_failure_does_not_launch_installer(monkeypatch):
     with pytest.raises(RuntimeError, match="close failed"):
         finish_desktop_update(shell, SimpleNamespace(close=lambda: events.append("released")))
     assert events == ["released"]
+
+
+def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path, monkeypatch):
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    payload = _payload()
+    requests = []
+    events = []
+    with _feed(_release("0.9.1", payload), payload, requests) as client:
+        monkeypatch.setattr(updates, "get_latest", lambda: updates.get_latest(client))
+        monkeypatch.setattr(
+            updates, "stage_installer",
+            lambda result, home, progress: original_stage(result, home, client, progress),
+        )
+        class Bridge:
+            pending_update = None
+            def __init__(self):
+                self.shutdownRequested = SimpleNamespace(emit=self.request_shutdown)
+            def _emit(self, _rid, kind, data):
+                events.append((kind, data))
+            def request_shutdown(self):
+                assert self.pending_update is not None
+                assert self.pending_update.checksum_verified
+                events.append(("shutdown",))
+        original_stage = updates.stage_installer
+        bridge = Bridge()
+        outcome = prepare_desktop_update(bridge, "test-request", tmp_path)
+    assert outcome == {"status": "pending_restart", "version": "0.9.1"}
+    assert events[-1] == ("shutdown",)
+    assert bridge.pending_update.path.is_file()
+
+
+def test_real_bridge_worker_does_not_quit_for_current_release(tmp_path, monkeypatch):
+    requests = []
+    with _feed(_release("0.9.0", _payload()), _payload(), requests) as client:
+        monkeypatch.setattr(updates, "get_latest", lambda: updates.get_latest(client))
+        bridge = SimpleNamespace(
+            pending_update=None,
+            shutdownRequested=SimpleNamespace(
+                emit=lambda: pytest.fail("No upgrade must not request shutdown"),
+            ),
+        )
+        with pytest.raises(RuntimeError, match="No newer"):
+            prepare_desktop_update(bridge, "request", tmp_path)
+        assert bridge.pending_update is None
