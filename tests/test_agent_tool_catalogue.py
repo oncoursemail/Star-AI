@@ -243,3 +243,20 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     assert specialist_agents.DELEGATE_TOOL["name"] == SPECIALISTS[0]
     from star.calc import TOOL
     assert TOOL["name"] == CALCULATOR[0]
+
+
+
+def test_calculator_runs_through_real_agent_loop(desk):
+    result = desk.turn("Calculate 1/3 + 1/6", answers=[
+        reply(None, [tool_call("star_calculate", '{"expression":"1/3+1/6"}')]),
+        reply("The result is 1/2."),
+    ])
+    assert result.answer == "The result is 1/2."
+    assert offered(result.requests[0]) == ALWAYS + CALCULATOR + SKILLS
+    assert {"event": "tool_started", "tool": "star_calculate"} in desk.events
+    assert {"event": "tool_finished", "tool": "star_calculate", "is_error": False} in desk.events
+    sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    assert json.loads(payload["output"]) == {"result": "1/2"}
