@@ -256,6 +256,17 @@ class Reply:
     data: Any = None      # parsed JSON, or None when the body was not JSON
 
 
+def _without(value, secret: str):
+    """The same JSON value with `secret` cut out of every string in it, keys included."""
+    if isinstance(value, str):
+        return value.replace(secret, "[key removed]") if secret in value else value
+    if isinstance(value, list):
+        return [_without(item, secret) for item in value]
+    if isinstance(value, dict):
+        return {_without(name, secret): _without(item, secret) for name, item in value.items()}
+    return value
+
+
 class OpenCloud:
     """The one place a request to Roblox is built. Fixed host; paths only from ENDPOINTS."""
 
@@ -316,11 +327,13 @@ class OpenCloud:
             data = json.loads(b"".join(chunks)) if chunks else None
         except (ValueError, UnicodeError):
             data = None
-        return Reply(status, data)
+        # Roblox is not known to repeat the key in an answer. Should one ever do so (an error text,
+        # a log line, a returned value), it ends here, before anything is built from the reply.
+        return Reply(status, _without(data, self._key))
 
 
 def _error_text(reply: Reply) -> str:
-    """Roblox's own short reason, for the owner. Bounded; an answer never echoes the key."""
+    """Roblox's own short reason, for the owner. Bounded; OpenCloud.call already cut the key out."""
     data = reply.data
     text = ""
     if isinstance(data, dict):

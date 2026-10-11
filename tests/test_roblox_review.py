@@ -214,3 +214,25 @@ def test_a_task_that_stays_unreachable_is_reported_with_its_path(fake, tmp_path)
     assert record["state"] == "TIMED_OUT" and record["task"] and "did not finish" in record["error"]
 
 
+# ------------------------------------------------------------------ 6. the key never rides on Roblox's own text
+
+def test_an_answer_that_echoes_the_key_is_cleaned_before_anyone_sees_it(fake, tmp_path):
+    fake.logs = [f"debug: header x-api-key={KEY}", "ok"]
+    fake.task_result = {"state": "COMPLETE", "output": {"results": [{"echo": KEY}]}}
+
+    def echo(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/versions"):
+            return httpx.Response(400, json={"message": "Bad header x-api-key: " + KEY})
+        return fake.handle(request)
+
+    cloud = ready(fake, tmp_path, echo)
+    with pytest.raises(CloudError) as caught:
+        cloud.publish_place(build_place(EXAMPLE).data)
+    assert KEY not in str(caught.value) and "Bad header" in str(caught.value)
+    record = cloud.run_luau("return 1")
+    assert record["state"] == "COMPLETE" and KEY not in repr(record)
+    action = cloud.request_action("run_test", "Run", {"script": "return 1"})
+    cloud.decide(action["id"], approved=True, human_approved=True)
+    assert KEY not in (tmp_path / "roblox" / "actions.json").read_text(encoding="utf-8")
+
+
