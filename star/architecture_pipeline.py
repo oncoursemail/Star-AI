@@ -261,7 +261,7 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         script = Path(__file__).resolve().parents[1] / "scripts" / "blender_building.py"
         glb = output_dir / "building.glb"
         cmd = [str(blender), "--background", "--factory-startup", "--disable-autoexec", "--threads", "2",
-               "--python", str(script), "--", str(plan), str(glb)]
+               "--python-exit-code", "7", "--python", str(script), "--", str(plan), str(glb)]
         if preview:
             cmd.append("--preview")
         try:
@@ -271,7 +271,9 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         except subprocess.CalledProcessError as exc:
             raise RuntimeError(f"Blender export failed: {str(exc.stderr or '')[-1500:]}") from exc
         if not glb.is_file() or not (output_dir / "building.blend").is_file():
-            raise RuntimeError("Blender did not write the expected .glb and .blend files")
+            diagnostics = (str(getattr(result, "stderr", "") or "") + "\n"
+                           + str(getattr(result, "stdout", "") or ""))[-1800:]
+            raise RuntimeError("Blender did not write the expected .glb and .blend files: " + diagnostics)
         try:
             export = inspect_glb(glb, expected_material_roles=tuple(plan_data["palette"]))
         except ValueError as exc:
