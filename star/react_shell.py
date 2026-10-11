@@ -526,6 +526,7 @@ def launch():
             self.cancel_chat = threading.Event()
             self.turn: TurnRef | None = None
             self.active_update = False
+            self._closing = False
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
@@ -659,6 +660,8 @@ def launch():
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
+            if self.cancel_chat.is_set():
+                raise RuntimeError('cancelled by user')
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -1148,8 +1151,17 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
-            self.voice.close()
+            # Restart Manager, session end and ordinary window close share this path.
+            # Record the cancellation before stopping services: Qt may exit while a
+            # background worker is still waiting on its provider.
+            if self._closing:
+                return
+            self._closing = True
             self.cancel_chat.set()
+            if self.turn is not None:
+                _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
+                record_turn_failure(app_data(), self.turn, 'cancelled', detail)
+            self.voice.close()
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
             self.warmer.cancel()
             self.runtime.stop()
@@ -1197,6 +1209,10 @@ def launch():
             return 0
     try:
         shell=Shell()
+        # Windows Restart Manager asks Qt to end the session via commitDataRequest.
+        # aboutToQuit also covers app.quit() without a close event.
+        app.commitDataRequest.connect(lambda manager: shell.close())
+        app.aboutToQuit.connect(shell.bridge.close)
         shell.show()
         return app.exec()
     finally:
