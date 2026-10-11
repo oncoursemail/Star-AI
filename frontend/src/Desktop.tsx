@@ -21,6 +21,7 @@ import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesSt
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
+import {StarPet,type PetState} from './StarPet'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -78,6 +79,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [data,setData]=useState<BootData>(initial??{version:'0.9.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
+ const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')!=='off')
+ const [petIdleMs,setPetIdleMs]=useState(0)
+ const [petTerminal,setPetTerminal]=useState<{kind:PetState;at:number}|null>(null)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
  const [stopping,setStopping]=useState(false)
@@ -137,6 +141,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const targetRef=useRef('')
  const askedTarget=useRef('')
  const inactive=preview||!initial
+ useEffect(()=>{writePreference('star.pet.visible',showStar?'on':'off')},[showStar])
+ useEffect(()=>{
+  const activity=()=>setPetIdleMs(0)
+  window.addEventListener('pointerdown',activity);window.addEventListener('keydown',activity)
+  const timer=setInterval(()=>setPetIdleMs(ms=>ms+30000),30000)
+  return ()=>{window.removeEventListener('pointerdown',activity);window.removeEventListener('keydown',activity);clearInterval(timer)}
+ },[])
+ useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
  chatRef.current=data.active_chat
@@ -238,6 +250,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        fresh.current.add(row.id)
        setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
+       setPetTerminal({kind:cancelled?'cancelled':'error',at:Date.now()})
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
        // The host has just recorded this failure; without this the Model page would still say "not checked yet".
        if(!cancelled)void refreshConnection()
@@ -257,6 +270,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      endRun('done')
      streamRef.current='';sending.current=false
      setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
+     setPetTerminal({kind:'finished',at:Date.now()})
      // What the turn taught is said once, plainly; the lesson itself is on the Projects page.
      const learned=result?.learned as {accepted?:number;candidates?:number;replaced?:number;not_kept?:number}|undefined
      if(learned?.accepted)setNotice(`Noted for this project: ${learned.accepted===1?'1 lesson':learned.accepted+' lessons'} from what you said.${learned.replaced?' It replaced an older lesson on the same subject.':''} Review it under Projects.`)
@@ -547,6 +561,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
  const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
  const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[],!retryText&&pending?pending.message_id:undefined)
+ const petState:PetState=update?.available?'update':busy?(streamingText?'streaming':'thinking'):petTerminal?.kind??(prompt.trim()?'typing':petIdleMs>=660000?'asleep':petIdleMs>=600000?'sleepy':'idle')
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
@@ -718,7 +733,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <div className="intelligence-folder-row"><label>Obsidian vault folder<input aria-label="Obsidian vault folder" value={draft.obsidian_vault??''} onChange={e=>setDraft(d=>({...d,obsidian_vault:e.target.value}))} placeholder="Choose an Obsidian Markdown vault"/></label><button type="button" className="secondary-button" onClick={async()=>{const result=await act('selectFolder');if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){setDraft(d=>({...d,obsidian_vault:result.path as string}))}}}><FolderOpen size={15}/> Browse folder</button></div>
              <small>Note contents stay local, are not promoted into trusted memory without review, and cannot override tool permissions.</small>
            </Panel>
-           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Reduced motion</strong><small>Turns off animation everywhere in STAR. Applied and saved immediately.</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>setReducedMotion(e.target.checked)}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
+           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Show Star</strong><small>Display the mascot over the chat. Saved on this device.</small></span><input aria-label="Show Star" type="checkbox" checked={showStar} onChange={e=>setShowStar(e.target.checked)}/></label><label className="setting-switch"><span><strong>Reduced motion</strong><small>Turns off animation everywhere in STAR. Applied and saved immediately.</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>setReducedMotion(e.target.checked)}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
             <div className="section-heading"><div><span className="eyebrow">VERSION & UPDATES</span><h2>Stay up to date</h2></div><Tag kind={update?.available?'gold':'neutral'}>{update?.available?'Update ready':`v${data.version}`}</Tag></div>
             <p>STAR downloads official Windows releases, checks the exact file size and SHA-256 checksum, and replaces application files. Your chats, projects, memories, settings, and downloaded models remain in your local profile.</p>
             <div className="update-version-line"><span><strong>Installed</strong> v{data.version}</span><span><strong>Latest checked</strong> {update? `v${update.version}` : 'Not checked yet'}</span></div>
@@ -736,6 +751,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      </AnimatePresence>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
+   {tab==='chat'&&<StarPet state={petState} visible={showStar} reducedMotion={reducedMotion}/>}
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
  </div></MotionPolicy>
 }
