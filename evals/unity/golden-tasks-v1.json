@@ -1,0 +1,1302 @@
+[
+  {
+    "id": "UNI-01",
+    "category": "unity-monobehaviour-lifecycle",
+    "difficulty": 1,
+    "goal": "Demonstrate Awake and OnDisable (scenario 1)",
+    "prompt": "For Unity C#, implement Awake and OnDisable; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bAwake\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bOnDisable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+MonoBehaviour\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-monobehaviour-lifecycle"
+    ],
+    "split": "development",
+    "reference_answer": "void Awake() {} void OnDisable() {}",
+    "bad_answer": "new MonoBehaviour();"
+  },
+  {
+    "id": "UNI-02",
+    "category": "unity-input-system",
+    "difficulty": 2,
+    "goal": "Demonstrate enable and disable actions (scenario 1)",
+    "prompt": "For Unity C#, implement enable and disable actions; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\.Enable\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Disable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bInput\\.GetAxis\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-input-system"
+    ],
+    "split": "development",
+    "reference_answer": "action.Enable(); action.Disable();",
+    "bad_answer": "Input.GetAxis(\"Horizontal\");"
+  },
+  {
+    "id": "UNI-03",
+    "category": "unity-physics-and-collisions",
+    "difficulty": 3,
+    "goal": "Demonstrate fixed timestep forces (scenario 1)",
+    "prompt": "For Unity C#, implement fixed timestep forces; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bFixedUpdate\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.AddForce\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\btransform\\.position\\s*=",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-physics-and-collisions"
+    ],
+    "split": "development",
+    "reference_answer": "void FixedUpdate() { body.AddForce(Vector3.up); }",
+    "bad_answer": "transform.position = Vector3.up;"
+  },
+  {
+    "id": "UNI-04",
+    "category": "unity-ui-toolkit-and-ugui",
+    "difficulty": 1,
+    "goal": "Demonstrate UI Toolkit click binding (scenario 1)",
+    "prompt": "For Unity C#, implement UI Toolkit click binding; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "rootVisualElement",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.clicked\\s*\\+=",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bGameObject\\.Find\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-ui-toolkit-and-ugui"
+    ],
+    "split": "development",
+    "reference_answer": "var root = doc.rootVisualElement; button.clicked += OnClick;",
+    "bad_answer": "GameObject.Find(\"play\");"
+  },
+  {
+    "id": "UNI-05",
+    "category": "unity-scriptableobjects-and-data",
+    "difficulty": 2,
+    "goal": "Demonstrate ScriptableObject asset (scenario 1)",
+    "prompt": "For Unity C#, implement ScriptableObject asset; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bScriptableObject\\b",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bCreateAssetMenu\\b",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+ScriptableObject\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-scriptableobjects-and-data"
+    ],
+    "split": "development",
+    "reference_answer": "[CreateAssetMenu] class Item : ScriptableObject {}",
+    "bad_answer": "new ScriptableObject();"
+  },
+  {
+    "id": "UNI-06",
+    "category": "unity-performance-and-pooling",
+    "difficulty": 3,
+    "goal": "Demonstrate pooling reuse (scenario 1)",
+    "prompt": "For Unity C#, implement pooling reuse; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bObjectPool\\s*<",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Release\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bDestroy\\s*\\(\\s*pooled",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-performance-and-pooling"
+    ],
+    "split": "development",
+    "reference_answer": "ObjectPool<GameObject> pool; void Return(GameObject x) { pool.Release(x); }",
+    "bad_answer": "Destroy(pooled);"
+  },
+  {
+    "id": "UNI-07",
+    "category": "unity-monobehaviour-lifecycle",
+    "difficulty": 1,
+    "goal": "Demonstrate Awake and OnDisable (scenario 2)",
+    "prompt": "For Unity C#, implement Awake and OnDisable; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bAwake\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bOnDisable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+MonoBehaviour\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-monobehaviour-lifecycle"
+    ],
+    "split": "development",
+    "reference_answer": "void Awake() {} void OnDisable() {}",
+    "bad_answer": "new MonoBehaviour();"
+  },
+  {
+    "id": "UNI-08",
+    "category": "unity-input-system",
+    "difficulty": 2,
+    "goal": "Demonstrate enable and disable actions (scenario 2)",
+    "prompt": "For Unity C#, implement enable and disable actions; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\.Enable\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Disable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bInput\\.GetAxis\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-input-system"
+    ],
+    "split": "development",
+    "reference_answer": "action.Enable(); action.Disable();",
+    "bad_answer": "Input.GetAxis(\"Horizontal\");"
+  },
+  {
+    "id": "UNI-09",
+    "category": "unity-physics-and-collisions",
+    "difficulty": 3,
+    "goal": "Demonstrate fixed timestep forces (scenario 2)",
+    "prompt": "For Unity C#, implement fixed timestep forces; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bFixedUpdate\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.AddForce\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\btransform\\.position\\s*=",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-physics-and-collisions"
+    ],
+    "split": "development",
+    "reference_answer": "void FixedUpdate() { body.AddForce(Vector3.up); }",
+    "bad_answer": "transform.position = Vector3.up;"
+  },
+  {
+    "id": "UNI-10",
+    "category": "unity-ui-toolkit-and-ugui",
+    "difficulty": 1,
+    "goal": "Demonstrate UI Toolkit click binding (scenario 2)",
+    "prompt": "For Unity C#, implement UI Toolkit click binding; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "rootVisualElement",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.clicked\\s*\\+=",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bGameObject\\.Find\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-ui-toolkit-and-ugui"
+    ],
+    "split": "development",
+    "reference_answer": "var root = doc.rootVisualElement; button.clicked += OnClick;",
+    "bad_answer": "GameObject.Find(\"play\");"
+  },
+  {
+    "id": "UNI-11",
+    "category": "unity-scriptableobjects-and-data",
+    "difficulty": 2,
+    "goal": "Demonstrate ScriptableObject asset (scenario 2)",
+    "prompt": "For Unity C#, implement ScriptableObject asset; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bScriptableObject\\b",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bCreateAssetMenu\\b",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+ScriptableObject\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-scriptableobjects-and-data"
+    ],
+    "split": "development",
+    "reference_answer": "[CreateAssetMenu] class Item : ScriptableObject {}",
+    "bad_answer": "new ScriptableObject();"
+  },
+  {
+    "id": "UNI-12",
+    "category": "unity-performance-and-pooling",
+    "difficulty": 3,
+    "goal": "Demonstrate pooling reuse (scenario 2)",
+    "prompt": "For Unity C#, implement pooling reuse; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bObjectPool\\s*<",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Release\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bDestroy\\s*\\(\\s*pooled",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-performance-and-pooling"
+    ],
+    "split": "development",
+    "reference_answer": "ObjectPool<GameObject> pool; void Return(GameObject x) { pool.Release(x); }",
+    "bad_answer": "Destroy(pooled);"
+  },
+  {
+    "id": "UNI-13",
+    "category": "unity-monobehaviour-lifecycle",
+    "difficulty": 1,
+    "goal": "Demonstrate Awake and OnDisable (scenario 3)",
+    "prompt": "For Unity C#, implement Awake and OnDisable; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bAwake\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bOnDisable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+MonoBehaviour\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-monobehaviour-lifecycle"
+    ],
+    "split": "development",
+    "reference_answer": "void Awake() {} void OnDisable() {}",
+    "bad_answer": "new MonoBehaviour();"
+  },
+  {
+    "id": "UNI-14",
+    "category": "unity-input-system",
+    "difficulty": 2,
+    "goal": "Demonstrate enable and disable actions (scenario 3)",
+    "prompt": "For Unity C#, implement enable and disable actions; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\.Enable\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Disable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bInput\\.GetAxis\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-input-system"
+    ],
+    "split": "development",
+    "reference_answer": "action.Enable(); action.Disable();",
+    "bad_answer": "Input.GetAxis(\"Horizontal\");"
+  },
+  {
+    "id": "UNI-15",
+    "category": "unity-physics-and-collisions",
+    "difficulty": 3,
+    "goal": "Demonstrate fixed timestep forces (scenario 3)",
+    "prompt": "For Unity C#, implement fixed timestep forces; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bFixedUpdate\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.AddForce\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\btransform\\.position\\s*=",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-physics-and-collisions"
+    ],
+    "split": "development",
+    "reference_answer": "void FixedUpdate() { body.AddForce(Vector3.up); }",
+    "bad_answer": "transform.position = Vector3.up;"
+  },
+  {
+    "id": "UNI-16",
+    "category": "unity-ui-toolkit-and-ugui",
+    "difficulty": 1,
+    "goal": "Demonstrate UI Toolkit click binding (scenario 3)",
+    "prompt": "For Unity C#, implement UI Toolkit click binding; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "rootVisualElement",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.clicked\\s*\\+=",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bGameObject\\.Find\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-ui-toolkit-and-ugui"
+    ],
+    "split": "development",
+    "reference_answer": "var root = doc.rootVisualElement; button.clicked += OnClick;",
+    "bad_answer": "GameObject.Find(\"play\");"
+  },
+  {
+    "id": "UNI-17",
+    "category": "unity-scriptableobjects-and-data",
+    "difficulty": 2,
+    "goal": "Demonstrate ScriptableObject asset (scenario 3)",
+    "prompt": "For Unity C#, implement ScriptableObject asset; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bScriptableObject\\b",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bCreateAssetMenu\\b",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+ScriptableObject\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-scriptableobjects-and-data"
+    ],
+    "split": "development",
+    "reference_answer": "[CreateAssetMenu] class Item : ScriptableObject {}",
+    "bad_answer": "new ScriptableObject();"
+  },
+  {
+    "id": "UNI-18",
+    "category": "unity-performance-and-pooling",
+    "difficulty": 3,
+    "goal": "Demonstrate pooling reuse (scenario 3)",
+    "prompt": "For Unity C#, implement pooling reuse; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bObjectPool\\s*<",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Release\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bDestroy\\s*\\(\\s*pooled",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-performance-and-pooling"
+    ],
+    "split": "development",
+    "reference_answer": "ObjectPool<GameObject> pool; void Return(GameObject x) { pool.Release(x); }",
+    "bad_answer": "Destroy(pooled);"
+  },
+  {
+    "id": "UNI-19",
+    "category": "unity-monobehaviour-lifecycle",
+    "difficulty": 1,
+    "goal": "Demonstrate Awake and OnDisable (scenario 4)",
+    "prompt": "For Unity C#, implement Awake and OnDisable; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\bAwake\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\bOnDisable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bnew\\s+MonoBehaviour\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-monobehaviour-lifecycle"
+    ],
+    "split": "development",
+    "reference_answer": "void Awake() {} void OnDisable() {}",
+    "bad_answer": "new MonoBehaviour();"
+  },
+  {
+    "id": "UNI-20",
+    "category": "unity-input-system",
+    "difficulty": 2,
+    "goal": "Demonstrate enable and disable actions (scenario 4)",
+    "prompt": "For Unity C#, implement enable and disable actions; include lifecycle safety and explain the decisions.",
+    "run_mode": "automated",
+    "fixtures": [],
+    "fixture_status": "implemented",
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Required API patterns after stripping C# comments and strings",
+        "Forbidden APIs absent",
+        "C# structure includes the expected calls"
+      ]
+    },
+    "pass_conditions": [
+      "Both required patterns match",
+      "Forbidden pattern does not match"
+    ],
+    "required_evidence": [
+      "answer/Example.cs"
+    ],
+    "hard_fail": [
+      "Unsafe API appears in code"
+    ],
+    "expected_sources": [
+      "https://docs.unity3d.com/ScriptReference/MonoBehaviour.html"
+    ],
+    "budget": {
+      "model_calls": 1,
+      "tool_calls": 0,
+      "output_tokens": 400,
+      "wall_seconds": 60
+    },
+    "auto": {
+      "code": false,
+      "require": [
+        {
+          "id": "one",
+          "re": "\\.Enable\\s*\\(",
+          "scope": "raw"
+        },
+        {
+          "id": "two",
+          "re": "\\.Disable\\s*\\(",
+          "scope": "raw"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "unsafe",
+          "re": "\\bInput\\.GetAxis\\s*\\(",
+          "scope": "raw"
+        }
+      ]
+    },
+    "helps": [
+      "unity-input-system"
+    ],
+    "split": "development",
+    "reference_answer": "action.Enable(); action.Disable();",
+    "bad_answer": "Input.GetAxis(\"Horizontal\");"
+  }
+]
