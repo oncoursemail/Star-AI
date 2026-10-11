@@ -15,6 +15,7 @@ import {RobloxPanel} from './RobloxPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
+import {imageIntent} from './imageIntent'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
@@ -341,10 +342,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
    if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
    sending.current=true
-   const mine=beginRun(value,selected,imageMode?'image':teamMode?'team':'chat')
+   const intent=!teamMode&&!imageMode&&chatMode!=='agent'&&data.settings.media_chat_auto!==false?imageIntent(value,{hasImage:selected.some(p=>/\.(png|jpe?g|webp)$/i.test(p)),hasPreviousImage:messages.some(m=>!!m.image)}):null
+   const makeImage=imageMode||!!intent
+   const mine=beginRun(value,selected,makeImage?'image':teamMode?'team':'chat')
    setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
-   const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
+   const action=makeImage?'generateImage':teamMode?'runTeam':'sendMessage'
+   const res=await act(action,makeImage?{prompt:intent?.prompt||value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
@@ -353,7 +356,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      fresh.current.add(row.id)
      setMessages(m=>[...m,row])
    }
- },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,imageSize,data.settings,chatMode,teamMode,research,githubSource])
+ },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,imageSize,data.settings,chatMode,teamMode,research,githubSource,messages])
 
  const stop=useCallback(()=>{
    if(!busy||stopping)return
@@ -692,6 +695,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><PageTitle eyebrow="PREFERENCES" title="Settings" description="Personalize STAR and connect the tools you need."/><Panel className="settings-section"><div className="section-heading"><div><h2>{serverDraft?'STAR Server model':'Local model'}</h2><p>{serverDraft?'The model your STAR Server runs. Its address, key and limits are under Model & provider below.':'STAR Brain configures these automatically after installation.'}</p></div><BrainCircuit size={20}/></div><div className="field-grid"><label>{serverDraft?'Server model ID':'Model ID'}<input list="star-model-ids" value={draft.model} onChange={e=>setDraft(d=>({...d,model:e.target.value}))} placeholder={serverDraft?'Model on your STAR Server':'Installed model'}/></label>{!serverDraft&&<label>Local endpoint<input value={draft.endpoint} onChange={e=>setDraft(d=>({...d,endpoint:e.target.value}))}/></label>}</div><button className="secondary-button" onClick={()=>void act('listModels')}>List available models <RefreshCcw size={14}/></button><button className="secondary-button" type="button" disabled={modelChecking||!draft.model} onClick={()=>void testActualModel()}>{modelChecking?<LoaderCircle className="spin" size={14}/>:<Zap size={14}/>} Test actual response</button>{modelCheck&&<div className="health-result"><Check size={16}/> <span>Live response: {modelCheck.sample}</span></div>}{modelList.length>0&&<small>Available: {modelList.join(', ')}</small>}</Panel><ProviderPanel draft={draft} onChange={setDraft} credentials={data.credentials||{}} invoke={act} refresh={()=>void sync()} disabled={inactive}/>
          <RobloxPanel status={data.roblox} draft={draft} onChange={setDraft} invoke={act} disabled={inactive}/>
          <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
+           <label className="setting-switch"><span><strong>Create images straight from chat</strong><small>Automatically create pictures when you ask in normal chat.</small></span><input type="checkbox" checked={draft.media_chat_auto!==false} onChange={e=>setDraft(d=>({...d,media_chat_auto:e.target.checked}))}/></label>
            <MediaPlaces settings={data.settings} invoke={act} disabled={inactive} refresh={()=>void sync()}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Advanced: use your own ComfyUI workflow</small></span><ChevronDown size={18}/></summary>
