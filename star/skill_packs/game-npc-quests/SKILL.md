@@ -26,6 +26,7 @@ quests[UserId]={status: new|active|ready|claimed,progress:number}; objective eve
 --!strict
 -- ServerScriptService/Quests.server.luau; workspace.QuestNPC.Prompt is ProximityPrompt
 local Players = game:GetService("Players")
+local dialogue = game:GetService("ReplicatedStorage"):WaitForChild("QuestDialogue") :: RemoteEvent
 local npc = workspace:WaitForChild("QuestNPC")
 local prompt = npc:WaitForChild("Prompt") :: ProximityPrompt
 type Quest = {status: string, progress: number, coins: number}
@@ -46,6 +47,7 @@ prompt.Triggered:Connect(function(player)
     elseif s.status == "ready" then
         s.status = "claimed"; s.coins += 100
     end
+    dialogue:FireClient(player, s.status, s.progress) -- Client displays text only.
 end)
 -- Call only from a server-authenticated objective completion handler:
 local function progressQuest(player: Player)
