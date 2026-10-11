@@ -11,7 +11,7 @@ def test_positive_and_negative(rule, bad, good):
 
 
 @pytest.mark.parametrize("source", [
-    "-- wait(1)\\n",
+    "-- wait(1)\n",
     "--[[ game.Players wait(1) ]]",
     "--[==[ Instance.new('Part', workspace) ]==]",
     "local x = 'game.Players wait(1)'",
@@ -25,7 +25,7 @@ def test_comment_and_string_contents_are_ignored(source):
 
 
 def test_line_numbers_and_deterministic_order():
-    source = "-- comment\\nlocal x = [[wait(3)]]\\nwait(1)\\n"
+    source = "-- comment\nlocal x = [[wait(3)]]\nwait(1)\n"
     assert lint(source) == [Finding(
         "deprecated-task-global", 3, "Deprecated global wait().",
         "Use task.wait().", "warning")]
@@ -33,7 +33,7 @@ def test_line_numbers_and_deterministic_order():
 
 
 def test_code_is_never_executed():
-    assert lint('require(12345)\\nloadstring("error()")') == []
+    assert lint('require(12345)\nloadstring("error()")') == []
     with pytest.raises(TypeError):
         lint(None)
 
