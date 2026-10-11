@@ -1,4 +1,5 @@
 """Offline tests drive real generation, filesystem writes, repair and CLI paths."""
+from contextvars import ContextVar
 import hashlib
 import json
 import os
@@ -45,10 +46,31 @@ class ScriptedModel:
 
 @pytest.fixture(autouse=True)
 def no_network(monkeypatch):
+    # Some Python/Windows builds emulate socketpair with an internal TCP pair.
+    # Permit only that synchronous stdlib operation, not model/provider traffic.
+    internal_pair = ContextVar("builder_internal_socketpair", default=False)
+    original_connect = socket.socket.connect
+    pair = {"factory": socket.socketpair}
+
     def blocked(*args, **kwargs):
         raise AssertionError("Network access is not allowed in builder tests")
+
+    def connect(sock, *args, **kwargs):
+        if not internal_pair.get():
+            return blocked()
+        return original_connect(sock, *args, **kwargs)
+
+    def socketpair(*args, **kwargs):
+        token = internal_pair.set(True)
+        try:
+            return pair["factory"](*args, **kwargs)
+        finally:
+            internal_pair.reset(token)
+
     monkeypatch.setattr(socket, "create_connection", blocked)
-    monkeypatch.setattr(socket.socket, "connect", blocked)
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket, "socketpair", socketpair)
+    return pair
 
 
 def assert_project(root, manifest):
@@ -506,3 +528,19 @@ def test_missing_second_public_function_is_not_a_pass(tmp_path):
     result = builder.build_project([module(interface=["run", "elapsed"])], tmp_path, fake)
     assert result["failed"][0]["error"] == "Missing public interface: elapsed"
     assert not result["generated"]
+
+
+def test_cli_internal_socketpair_does_not_enable_model_network_calls(tmp_path, monkeypatch, capsys, no_network):
+    # Force the emulation when available, even on a host with native socketpair.
+    no_network["factory"] = getattr(socket, "_fallback_socketpair", no_network["factory"])
+    calls = install_fake_provider(monkeypatch, tmp_path, [good()])
+    plan = write_plan(tmp_path)
+    assert builder.main(["--plan", str(plan), "--out", str(tmp_path / "out")]) == 0
+    assert calls["closed"] == 1
+    assert not json.loads(capsys.readouterr().out)["failed"]
+    with socket.socket() as probe:
+        # The guard must reject before inspecting an address or attempting I/O.
+        with pytest.raises(AssertionError, match="Network access"):
+            probe.connect(())
+    with pytest.raises(AssertionError, match="Network access"):
+        socket.create_connection(())
