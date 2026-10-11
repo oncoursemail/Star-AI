@@ -25,10 +25,10 @@ async function start(){
 for(const page of ['Analytics','Settings','Model']){
  it('keeps streaming when visiting '+page+' and returning',async()=>{
   const {user,id}=await start()
-  await user.click(screen.getByRole('button',{name:page,exact:true}))
+  await user.click(screen.getByRole('button',{name:page}))
   bridge.delta(id,'mountains')
   expect(bridge.sent('cancelMessage')).toHaveLength(0)
-  await user.click(screen.getByRole('button',{name:'Chat',exact:true}))
+  await user.click(screen.getByRole('button',{name:'Chat'}))
   expect(await screen.findByText('Building the mountains')).toBeTruthy()
   bridge.complete(id,'Building the mountains')
   expect(await screen.findByText('Building the mountains')).toBeTruthy()
