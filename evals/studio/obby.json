@@ -1,0 +1,20 @@
+{
+  "game": "obby",
+  "milestones": [
+    {
+      "id": "obby.checkpoints",
+      "description": "Workspace.Checkpoints contains five or more SpawnLocations named Checkpoint1 through CheckpointN with no missing stage numbers.",
+      "check": "local folder = workspace:FindFirstChild(\"Checkpoints\")\nif not folder or not folder:IsA(\"Folder\") then\n    return false, \"Workspace.Checkpoints folder is missing\"\nend\nlocal count = 0\nfor _, child in ipairs(folder:GetChildren()) do\n    if child:IsA(\"SpawnLocation\") then\n        count = count + 1\n    end\nend\nif count < 5 then\n    return false, \"Need at least five SpawnLocation checkpoints\"\nend\nfor stage = 1, count do\n    local checkpoint = folder:FindFirstChild(\"Checkpoint\" .. tostring(stage))\n    if not checkpoint or not checkpoint:IsA(\"SpawnLocation\") then\n        return false, \"Checkpoint numbering has a gap at \" .. tostring(stage)\n    end\nend\nreturn true, \"Found \" .. tostring(count) .. \" consecutively numbered checkpoints\""
+    },
+    {
+      "id": "obby.kill_handlers",
+      "description": "Each BasePart in Workspace.KillParts has an enabled server Script named KillHandler whose source references a Touched connection and Humanoid. Source signatures are not runtime proof.",
+      "check": "local folder = workspace:FindFirstChild(\"KillParts\")\nif not folder or not folder:IsA(\"Folder\") then\n    return false, \"Workspace.KillParts folder is missing\"\nend\nlocal count = 0\nfor _, part in ipairs(folder:GetChildren()) do\n    if not part:IsA(\"BasePart\") then\n        return false, \"KillParts contains a non-part child\"\n    end\n    local handler = part:FindFirstChild(\"KillHandler\")\n    if not handler or not handler:IsA(\"Script\") then\n        return false, \"Kill part lacks server KillHandler: \" .. part.Name\n    end\n    if not handler.Enabled or handler.RunContext == Enum.RunContext.Client then\n        return false, \"KillHandler is disabled or client-run: \" .. part.Name\n    end\n    local source = handler.Source\n    if not source:find(\"Touched:Connect\", 1, true) or not source:find(\"Humanoid\", 1, true) then\n        return false, \"KillHandler lacks Touched/Humanoid source signature: \" .. part.Name\n    end\n    count = count + 1\nend\nif count == 0 then\n    return false, \"Need at least one kill part\"\nend\nreturn true, \"Found server KillHandler source signatures for \" .. tostring(count) .. \" kill parts\""
+    },
+    {
+      "id": "obby.finish",
+      "description": "Workspace.Finish is a BasePart with an enabled server FinishHandler Script containing a Touched connection in source.",
+      "check": "local finish = workspace:FindFirstChild(\"Finish\")\nif not finish or not finish:IsA(\"BasePart\") then\n    return false, \"Workspace.Finish part is missing\"\nend\nlocal handler = finish:FindFirstChild(\"FinishHandler\")\nif not handler or not handler:IsA(\"Script\") then\n    return false, \"Finish needs a server FinishHandler Script\"\nend\nif not handler.Enabled or handler.RunContext == Enum.RunContext.Client then\n    return false, \"FinishHandler must run on the server\"\nend\nif not handler.Source:find(\"Touched:Connect\", 1, true) then\n    return false, \"FinishHandler source lacks a Touched connection\"\nend\nreturn true, \"Finish part and server-side touch handler source are present\""
+    }
+  ]
+}
