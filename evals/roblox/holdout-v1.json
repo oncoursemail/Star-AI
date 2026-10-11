@@ -1,0 +1,1356 @@
+[
+ {
+  "id": "HO-NET-01",
+  "category": "remote-security-anticheat",
+  "difficulty": 3,
+  "goal": "Server-side teleport and speed check on position samples that cannot be laundered",
+  "prompt": "In my Roblox game: I want to catch teleport and speed exploits on the server. Write a ModuleScript `SpeedGuard` for position samples that my server loop takes about every 0.5 seconds. `SpeedGuard.new(maxSpeed: number, tolerance: number)` returns a guard with these colon methods. `guard:sample(userId: number, position: Vector3, now: number): boolean` returns true when the movement since that player's baseline is allowed and false when it is not. A player's first sample is always allowed and simply becomes the baseline (position and time). For later samples dt = now - baseline time: if dt <= 0 the sample is rejected; otherwise it is allowed when the horizontal distance (X and Z only, because falling and jumping are normal) to the baseline position is at most maxSpeed * dt * tolerance. Only an allowed sample moves the baseline (both position and time), so a flagged player cannot launder a teleport by being sampled again at the new place. `guard:forget(userId: number)` drops that player's state (I call it from PlayerRemoving).",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Walk, sprint and fall in a test server: no false flags. Set WalkSpeed to 200 from a client exploit tool or teleport with CFrame: the sample is rejected and the player is set back.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/security/security-tactics.md",
+   "content/en-us/reference/engine/classes/Players.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Measures vertical movement so that falling players are flagged",
+   "Moves the baseline on a rejected sample"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-NET-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-NET-01.luau",
+    "checks": 18
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "18 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-NET-02",
+  "category": "remote-rate-limit",
+  "difficulty": 3,
+  "goal": "Token-bucket rate limiter per player with an abuse callback that fires once per streak",
+  "prompt": "In my Roblox game: players spam my chat-command RemoteEvent. Write a server ModuleScript `Limiter` that gives each player a token bucket. `Limiter.new(capacity: number, refillPerSecond: number, maxStrikes: number, now: () -> number, onAbuse: (userId: number) -> ())` (`now` returns the current time in seconds, so the limiter can be tested without waiting). `limiter:allow(userId: number): boolean`: a player's bucket starts full; tokens refill continuously at refillPerSecond, measured from `now()` at each call, and never go above capacity; a call with at least one whole token spends one and returns true; otherwise it returns false and counts one strike for that player. An allowed call resets that player's strikes to 0. When a player's consecutive strikes reach maxStrikes, call `onAbuse(userId)` exactly once for that streak (not again for every further denied call; a new streak after an allowed call can trigger it again). `limiter:forget(userId: number)` removes that player's data.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Hook it to a RemoteEvent and fire it 50 times in a loop from a test client: the first calls pass, the rest are dropped, and onAbuse runs once.",
+  "expected_sources": [
+   "content/en-us/scripting/security/security-tactics.md",
+   "content/en-us/scripting/events/remote.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Calls onAbuse on every denied call",
+   "Reads the clock itself instead of using now()"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-NET-02.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-NET-02.luau",
+    "checks": 19
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "19 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-NET-03",
+  "category": "remote-validation-replay",
+  "difficulty": 3,
+  "goal": "Untrusted batches of input commands: sequence numbers, allowed actions, batch cap, never throws",
+  "prompt": "In my Roblox game: the client sends batches of input commands to the server through one RemoteEvent. Each command is a table `{ seq = <integer>, action = <string> }` and a batch is an array of commands. Write a server ModuleScript `InputQueue` with `InputQueue.new(allowedActions: { [string]: boolean }, maxBatch: number)`. `queue:push(userId: number, batch: any): number` validates the untrusted batch and returns how many commands were accepted. Rules: a batch that is not a table accepts 0 and nothing ever throws; only the first maxBatch entries are looked at; an entry is accepted only if it is a table whose seq is a finite whole number strictly greater than the highest seq already accepted for that player (it starts at 0) and whose action is a string that is true in allowedActions. Accepted actions are appended to that player's queue in order, and an accepted seq raises the player's highest seq immediately, so a replayed or duplicate seq is dropped, also inside one batch. `queue:drain(userId: number): { string }` returns the accepted actions in order and empties that player's queue (the highest seq is kept). `queue:forget(userId: number)` removes the player's state.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Fire the remote from a test client with replayed, reordered, oversized and malformed batches; the server output stays clean and only fresh commands run.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Trusts seq values without comparing with the last accepted one",
+   "Throws on a malformed entry"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-NET-03.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-NET-03.luau",
+    "checks": 18
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "18 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-NET-04",
+  "category": "remote-server-authority",
+  "difficulty": 2,
+  "goal": "Crafting request from the client: the server owns recipes, validates inputs and never half-pays",
+  "prompt": "In my Roblox game: a crafting RemoteEvent lets the client say which recipe it wants and how many times. The server owns the recipes: plank costs 2 wood and gives 4 planks; torch costs 1 plank and 1 coal and gives 2 torches; bridge costs 6 plank and 2 rope and gives 1 bridge. Write a server ModuleScript `Crafting` with `Crafting.craft(inventory: { [string]: number }, recipeId: any, times: any): (boolean, string?)`, which the RemoteEvent handler calls with the player's server-side inventory table (item name to count). The recipes live inside your module. A craft needs recipeId to be the name of a recipe, `times` to be a whole number from 1 to 20, and the inventory to hold enough of every ingredient for all the crafts. On success it removes the ingredients (delete a key whose count reaches 0), adds the produced items under the recipe's name and returns true. On failure it returns false and a short reason and leaves the inventory exactly as it was (no partial payment). It must never throw, whatever the client sent (NaN, huge numbers, tables, negative values, unknown names).",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Fire the remote with unknown recipes, 0, -5, 1e9 and NaN as the count: the inventory never changes and nothing errors.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Takes ingredients before checking all of them",
+   "Accepts a negative or fractional count"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-NET-04.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-NET-04.luau",
+    "checks": 14
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "14 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-NET-05",
+  "category": "remote-instance-arguments",
+  "difficulty": 2,
+  "goal": "A RemoteEvent that receives an Instance: prove type, class, ownership and that the player is alive",
+  "prompt": "In my Roblox game: a `DropTool` RemoteEvent lets players drop a Tool from their inventory; the client fires `DropTool:FireServer(tool)`. Write the server ModuleScript `Dropper` with `Dropper.handle(player: Player, tool: any): boolean`, which my OnServerEvent handler calls. It must return true and set `tool.Parent = workspace` only when: `typeof(tool) == \"Instance\"`, the instance is a Tool, it is a descendant of that player's own Backpack or of that player's own Character, and that character has a Humanoid with Health above 0. In every other case it returns false and changes nothing. It must never throw, whatever the client sent (nil, numbers, strings, tables, other kinds of Instances, another player's tools).",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "From an exploit client fire DropTool with another player's tool, a baseplate Part, a number and nil: nothing happens and the server output stays clean.",
+  "expected_sources": [
+   "content/en-us/scripting/security/client-server-boundary.md",
+   "content/en-us/scripting/events/remote.md",
+   "content/en-us/reference/engine/classes/Instance.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Indexes the argument before checking typeof",
+   "Moves a tool that does not belong to the player"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-NET-05.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-NET-05.luau",
+    "checks": 13
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "13 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DAT-01",
+  "category": "datastore-session-lock",
+  "difficulty": 3,
+  "goal": "Session lock inside the saved record, claimed and released with one UpdateAsync each",
+  "prompt": "In my Roblox game: two servers sometimes load the same player's data at once (teleports, quick rejoins) and overwrite each other. Write a ModuleScript `SessionLock` that keeps a session lock inside the saved record, using `store:UpdateAsync` on a DataStore that is passed in, with the key `tostring(userId)`. The record is nil for a new player or a table `{ lock = { jobId = string, at = number }?, data = any }`. `SessionLock.acquire(store, userId: number, jobId: string, now: number, staleAfter: number): (boolean, any)` makes exactly one UpdateAsync call inside pcall. In its callback: if the record has no lock, or the lock belongs to the same jobId, or the lock is stale (now - lock.at >= staleAfter), write the record back with `lock = { jobId = jobId, at = now }` and the same data (a new player gets `data = {}`); acquire then returns true and the data. If another job holds a fresh lock, the callback returns nil so nothing is written, and acquire returns false and the string \"locked\". If the UpdateAsync call errors, acquire returns false and the error text. `SessionLock.release(store, userId: number, jobId: string): boolean` makes exactly one UpdateAsync call inside pcall that removes the lock only if it belongs to jobId (leaving the data alone) and returns true if it removed one, otherwise false; it must never create a record or touch a lock that belongs to another job.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Teleport between two private servers with a test place and watch the lock move; the second server never loads data while the first holds a fresh lock.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/GlobalDataStore.yaml",
+   "content/en-us/cloud-services/data-stores/index.md",
+   "content/en-us/cloud-services/data-stores/error-codes-and-limits.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Reads with GetAsync and writes with SetAsync (race between servers)",
+   "Yields inside the UpdateAsync callback"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-DAT-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-DAT-01.luau",
+    "checks": 22
+   },
+   "require": [
+    {
+     "id": "update_async",
+     "re": "UpdateAsync",
+     "why": "the lock must be claimed with UpdateAsync, not read and written separately"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\b",
+     "why": "DataStore calls must be wrapped in pcall"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "22 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins",
+    "Present: the lock must be claimed with UpdateAsync, not read and written separately",
+    "Present: DataStore calls must be wrapped in pcall"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DAT-02",
+  "category": "datastore-schema-migration",
+  "difficulty": 2,
+  "goal": "Upgrade old save formats step by step without touching the input",
+  "prompt": "In my Roblox game: my saved player data has changed shape twice and old saves are still out there. Write a pure Luau ModuleScript `Migrate` with `Migrate.upgrade(data: any): ({ [string]: any }, number)` that returns the data in the current format (version 3) and the number of upgrade steps it applied. Version 1 has no `version` field (an explicit version = 1 is the same layout) and looks like `{ gold = number, items = { string } }`. Version 2 is `{ version = 2, coins = number, items = { [string]: number } }`: gold is renamed to coins, and the item list becomes counts per name (duplicates add up). Version 3 adds `settings = { music = boolean, sfx = boolean }`. Missing gold becomes 0 coins and a missing item list becomes an empty table. Whatever the version, the result's settings has both keys: a missing key gets true, but an existing value (even false) is kept. Other fields are kept as they are. The input table and its nested tables must never be modified or shared with the result. A version greater than 3, or one that is not a whole number from 1 to 3, and data that is not a table raise an error (for a newer version the message names it).",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Load a v1 save from an old test place and check the player's coins and items after the upgrade.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/index.md",
+   "content/en-us/cloud-services/data-stores/versioning-listing-and-caching.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Modifies the saved table that was passed in",
+   "Replaces a stored false setting with the default true"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-DAT-02.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-DAT-02.luau",
+    "checks": 15
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "15 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DAT-03",
+  "category": "datastore-ordered-leaderboard",
+  "difficulty": 3,
+  "goal": "Global leaderboard on an OrderedDataStore: integers only, paging, clamping, failures",
+  "prompt": "In my Roblox game: write a server ModuleScript `Board` for a global kills leaderboard on an OrderedDataStore that is passed in as `store`. `Board.submit(store, userId: number, kills: number): boolean` saves with `store:SetAsync(tostring(userId), math.floor(kills))` inside pcall (ordered data stores only hold integers); negative, NaN or infinite kills return false without calling the store; it returns true when the save worked and false when it threw. `Board.top(store, count: number): { { rank: number, userId: number, kills: number } }` returns the best players, highest first: clamp count to 1..100 (round a fraction down), call `store:GetSortedAsync(false, 25)` once inside pcall (pages of 25), read each page with `pages:GetCurrentPage()` (an array of `{ key = string, value = number }`) and keep going with `pages:AdvanceToNextPageAsync()` (inside pcall) only while you still need more entries and `pages.IsFinished` is false. Convert each key back with tonumber and skip keys that are not numbers without leaving a gap in the ranks; ranks are 1, 2, 3... If GetSortedAsync fails return an empty table, and if advancing a page fails return the entries gathered so far.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Run it against a real OrderedDataStore in a test place with more than 50 saved scores and compare the output with the data store viewer.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/OrderedDataStore.yaml",
+   "content/en-us/reference/engine/classes/Pages.yaml",
+   "content/en-us/cloud-services/data-stores/index.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Stops after the first page",
+   "Advances a page after IsFinished is true"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-DAT-03.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-DAT-03.luau",
+    "checks": 17
+   },
+   "require": [
+    {
+     "id": "sorted",
+     "re": "GetSortedAsync",
+     "why": "the ranking comes from OrderedDataStore:GetSortedAsync"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "17 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins",
+    "Present: the ranking comes from OrderedDataStore:GetSortedAsync"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DAT-04",
+  "category": "datastore-serialisation",
+  "difficulty": 3,
+  "goal": "Make a Luau structure storable and bring it back unchanged (sparse keys, mixed tables, NaN, cycles)",
+  "prompt": "In my Roblox game: my save table has sparse numeric keys (for example `unlocked = { [101] = true, [205] = true }`), tables that mix an array and named fields, and sometimes a NaN from a bad division, and saving it to a DataStore fails or comes back changed. Write a pure Luau ModuleScript `Codec` with `Codec.encode(value: any): any` and `Codec.decode(value: any): any`. The encoded result must be safe for a DataStore the way JSON is: it contains only booleans, strings, finite numbers and tables, where every table is either a continuous array (keys exactly 1..n) or a dictionary whose keys are all strings. `decode(encode(x))` must deep-equal x for any x built from booleans, strings, finite numbers and tables, including tables with sparse or non-continuous numeric keys, negative or fractional keys, a string key \"1\" next to the number key 1, mixed array-and-string keys, and empty tables. encode must raise an error (error()) for NaN, infinity, functions, threads and for a table that contains itself, directly or through other tables; a table that is only shared in two places is not a cycle. encode must not modify its input. How the encoded layout looks is up to you.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Save and reload a table with sparse and mixed keys through a real DataStore in a test place and compare it with the original.",
+  "expected_sources": [
+   "content/en-us/cloud-services/data-stores/versioning-listing-and-caching.md",
+   "content/en-us/cloud-services/data-stores/index.md",
+   "content/en-us/luau/tables.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Turns numeric keys into strings so that key 1 and key \"1\" collide",
+   "Accepts NaN or infinity"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-DAT-04.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-DAT-04.luau",
+    "checks": 36
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "36 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-UI-01",
+  "category": "ui-layout-scaling",
+  "difficulty": 3,
+  "goal": "Hotbar built in code with a layout object, scale-only sizes and a validated slot count",
+  "prompt": "In my Roblox game: I need the hotbar built in code instead of by hand in Studio. Write a ModuleScript `Hotbar` with `Hotbar.build(playerGui: Instance, slotCount: number): Frame` that creates the bar and returns it. Requirements: (1) a ScreenGui named `Hotbar` with ResetOnSpawn = false, parented to playerGui; (2) inside it a Frame named `Bar` (the one you return), anchored bottom-center (AnchorPoint (0.5, 1), Position X scale 0.5 and Y scale 0.98), 60% of the screen width (Size X scale 0.6), with BackgroundTransparency 1 and a UIAspectRatioConstraint whose AspectRatio equals slotCount so its height follows its width; (3) inside Bar exactly one UIListLayout (horizontal, SortOrder LayoutOrder, items centered, Padding of 0.01 in scale) that arranges the slots, and `slotCount` TextButtons named `Slot1`, `Slot2`, ... with LayoutOrder equal to their number and Text equal to their number as a string; every slot has full height (Size Y scale 1) and all slots have the same width in scale, chosen so that the slots plus the gaps between them fill the bar without overflowing; (4) no Size or Position anywhere may use a pixel Offset, so it fits every screen; (5) slotCount must be a whole number from 1 to 10, anything else raises an error before anything is created.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "In Studio use the device emulator (phone, tablet, 4K): the bar stays at the bottom center, the slots stay square and nothing overflows.",
+  "expected_sources": [
+   "content/en-us/ui/list-flex-layouts.md",
+   "content/en-us/ui/size-modifiers.md",
+   "content/en-us/ui/position-and-size.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Slots placed with pixel positions instead of a layout object",
+   "Pixel sizes that break on small screens"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-UI-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-UI-01.luau",
+    "checks": 19
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "19 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-UI-02",
+  "category": "ui-tween-state",
+  "difficulty": 3,
+  "goal": "Toast notifications that queue, slide in and out with TweenService and never overlap",
+  "prompt": "In my Roblox game: write a ModuleScript `Toast` that shows notification messages one at a time on a TextLabel I already have. `Toast.new(label: TextLabel)` (use that label, do not create another one) and `toast:show(text: string)`. A message appears at once if nothing is showing: set label.Text, slide the label in by tweening its Position to `UDim2.fromScale(0.5, 0.1)` with TweenService in 0.25 seconds, keep it there for 2 seconds after the slide-in has finished, slide it out by tweening Position to `UDim2.fromScale(0.5, -0.1)` in 0.25 seconds, and then show the next waiting message. Messages that arrive while one is showing wait in a first-in-first-out queue that holds at most 5; further messages are dropped. After the queue ran dry the next message shows immediately again. `show` may be called from any script thread.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Call show ten times in a row from a test script: the first six messages appear one after another, never overlapping, and the rest are dropped.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/TweenService.yaml",
+   "content/en-us/reference/engine/classes/TweenBase.yaml",
+   "content/en-us/ui/animation.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "New messages overwrite the one on screen",
+   "Unbounded queue"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-UI-02.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-UI-02.luau",
+    "checks": 13
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "13 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-UI-03",
+  "category": "ui-tween-state",
+  "difficulty": 3,
+  "goal": "Health bar whose fill tweens size and color together, cancelling the previous tween and clamping input",
+  "prompt": "In my Roblox game: write a ModuleScript `HealthBar` with `HealthBar.new(fill: Frame)` and a method `bar:set(current: number, max: number)`. The fill Frame sits inside a track Frame and shows the fraction = current / max clamped to [0, 1]: each update tweens, with ONE `TweenService:Create` call, `fill.Size` to `UDim2.fromScale(fraction, 1)` and `fill.BackgroundColor3` to green `Color3.fromRGB(80, 200, 120)` when fraction > 0.5, amber `Color3.fromRGB(240, 180, 40)` when fraction > 0.25, otherwise red `Color3.fromRGB(220, 60, 60)`, over 0.2 seconds with Quad easing, Out direction. If a previous tween is still playing it must be cancelled first so tweens never fight. Calling set again with a result that has the same fraction as the last applied one creates no new tween. A max that is zero or negative, NaN, or arguments that are not numbers count as fraction 0 (never divide by zero, never throw).",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Drag the player's health in Studio from 100 to 0 quickly: the bar follows smoothly without flicker and turns amber then red.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/TweenService.yaml",
+   "content/en-us/reference/engine/classes/TweenBase.yaml",
+   "content/en-us/ui/animation.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Several tweens fight over the same properties",
+   "Division by zero when max is 0"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-UI-03.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-UI-03.luau",
+    "checks": 19
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "19 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-UI-04",
+  "category": "ui-state-layout",
+  "difficulty": 2,
+  "goal": "Tab bar with a layout object, exclusive page visibility, click handling and clean-up",
+  "prompt": "In my Roblox game: write a ModuleScript `Tabs` with `Tabs.new(tabBar: Frame, pages: { [string]: GuiObject }, order: { string })`. For every name in `order` create a TextButton named `Tab_<name>` with Text = the name and LayoutOrder = its position in `order` inside tabBar, and add one UIListLayout to tabBar (horizontal, SortOrder LayoutOrder) so the buttons line up without manual positions. `tabs:select(name: string): boolean` makes the page of that name Visible and every other page not Visible, sets the selected button's BackgroundColor3 to `Color3.fromRGB(70, 130, 255)` and every other button's to `Color3.fromRGB(45, 45, 55)`, and returns true; an unknown name changes nothing and returns false. A click on a button (its `Activated` event) selects its tab, with exactly one connection per button no matter how often select is called. The first name in order is selected right after creation. `tabs:selected(): string?` returns the current name. `tabs:destroy()` disconnects the click connections and destroys the buttons.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Click through the tabs with the mouse and on a phone in the device emulator; the right page shows and the highlight follows.",
+  "expected_sources": [
+   "content/en-us/ui/list-flex-layouts.md",
+   "content/en-us/reference/engine/classes/GuiButton.yaml",
+   "content/en-us/reference/engine/classes/UIListLayout.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Only the clicked page is shown and the others stay visible",
+   "New connections on every select"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-UI-04.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-UI-04.luau",
+    "checks": 18
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "18 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-ANI-01",
+  "category": "animation-controller",
+  "difficulty": 3,
+  "goal": "Animation controller on an Animator: load once, one animation at a time, fade times, remembered speed",
+  "prompt": "In my Roblox game: write a ModuleScript `AnimController` that wraps a character's Animator. `AnimController.new(animator: Animator, ids: { [string]: string })` maps names such as \"Idle\" and \"Slash\" to animation asset ids. Load lazily: the first time a name is played, create one `Animation` instance with that AnimationId and load it once with `animator:LoadAnimation`; later plays of the same name reuse the loaded AnimationTrack (loading again leaks tracks). `controller:play(name: string, fadeTime: number?): AnimationTrack?` plays the track with fadeTime (default 0.1) and returns it, returns nil for an unknown name (and then touches nothing), does nothing and returns the same track if that track is already playing, and otherwise first stops the controller's track that is currently playing with the same fadeTime. `controller:stop(fadeTime: number?)` stops the current track (default fade 0.1) and is harmless when nothing is playing. `controller:setSpeed(multiplier: number)` applies AdjustSpeed to the track that is playing and is remembered, so every track started afterwards also runs at that speed.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Play Idle, Slash and Roll in a test place and watch that animations cross-fade, the track list in the Animator does not grow and speed changes apply.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/Animator.yaml",
+   "content/en-us/reference/engine/classes/AnimationTrack.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Loads the animation again on every play",
+   "Uses the deprecated Humanoid:LoadAnimation"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-ANI-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-ANI-01.luau",
+    "checks": 17
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "17 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-VFX-01",
+  "category": "vfx-beam-chain",
+  "difficulty": 3,
+  "goal": "Lightning chain of Beams between attachments with exact beam settings and Debris clean-up",
+  "prompt": "In my Roblox game: write a ModuleScript `Chain` with `Chain.zap(parent: Instance, points: { Vector3 }): { Beam }` that draws a lightning chain through the points. First check that every point is a Vector3 (otherwise raise an error before creating anything); with fewer than two points return an empty table and create nothing. For each point create an invisible, anchored, non-colliding Part (Transparency 1) positioned at the point and parented to `parent`, with one Attachment inside it. For each pair of neighbouring points create one Beam with Attachment0 on the first point's part and Attachment1 on the second's, Color = ColorSequence.new(Color3.fromRGB(120, 200, 255)), Width0 0.6, Width1 0.2, Segments 12, FaceCamera true, LightEmission 1, Transparency = NumberSequence.new(0.1), and parent each beam to the part it starts at. Hand every part to `Debris:AddItem(part, 0.4)` so the whole effect cleans itself up. Return the beams in order.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Call zap with 5 points from a test script and watch the bolt appear and vanish after about 0.4 s with no leftover parts or beams in Workspace.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/Beam.yaml",
+   "content/en-us/reference/engine/classes/Attachment.yaml",
+   "content/en-us/reference/engine/classes/Debris.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Beams parented outside the cleaned-up parts (they leak)",
+   "Parts or beams left behind"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-VFX-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-VFX-01.luau",
+    "checks": 13
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "13 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-VFX-02",
+  "category": "vfx-particle-throttle",
+  "difficulty": 2,
+  "goal": "Footstep dust bursts from a ParticleEmitter driven by Humanoid.Running with a throttle",
+  "prompt": "In my Roblox game: add footstep dust. Write a ModuleScript `Dust` with `Dust.attach(humanoid: Humanoid, emitter: ParticleEmitter, now: () -> number): () -> ()`. It sets `emitter.Enabled = false` (the dust is emitted in bursts only) and connects to `humanoid.Running`, whose argument is the speed in studs per second. A burst `emitter:Emit(count)` happens when the speed is above 8 and at least 0.25 seconds (by `now()`) have passed since the previous burst (the first burst is allowed at once), with count = math.clamp(math.floor(speed / 4), 1, 6). Events that are ignored (slow, or too soon) emit nothing and do not delay the next burst. Each attach keeps its own timer. It returns a function that disconnects the connection; after calling it nothing is emitted, and calling it twice is harmless.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Run around in a test place: dust puffs at your feet while sprinting, none while walking or standing, and no continuous cloud.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/ParticleEmitter.yaml",
+   "content/en-us/reference/engine/classes/Humanoid.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Leaves Enabled = true so the emitter streams continuously",
+   "An ignored event restarts the throttle timer"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-VFX-02.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-VFX-02.luau",
+    "checks": 17
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "17 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-BLD-01",
+  "category": "building-cframe-ring",
+  "difficulty": 3,
+  "goal": "Evenly spaced CFrames on a horizontal ring in the center's own space, facing inward",
+  "prompt": "In my Roblox game: I place a boss arena's pillars on a ring, and the arena can be rotated and moved anywhere. Write a ModuleScript `Ring` with `Ring.cframes(center: CFrame, radius: number, count: number): { CFrame }` that returns `count` CFrames evenly spaced on a horizontal circle of `radius` studs around `center`, in the center's own space (rotating the center rotates the ring). Element i (1-based) uses theta = 2 * math.pi * (i - 1) / count and sits at the world position of `center` offset in its local space by `Vector3.new(radius * math.sin(theta), 0, -radius * math.cos(theta))`, so element 1 is straight ahead of the center. Every CFrame must face the center (its LookVector points from the pillar to the center's position). count must be a positive whole number and radius a positive finite number, otherwise raise an error.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Place six pillars with it around a rotated arena model and check that they all face the middle.",
+  "expected_sources": [
+   "content/en-us/reference/engine/datatypes/CFrame.yaml",
+   "content/en-us/workspace/cframes.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Uses world axes and ignores the center's rotation",
+   "Pillars face outward"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-BLD-01.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-BLD-01.luau",
+    "checks": 10
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "10 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-BLD-02",
+  "category": "world-raycast",
+  "difficulty": 2,
+  "goal": "Line of sight with a raycast: full-length direction, Exclude filter, caller's list untouched",
+  "prompt": "In my Roblox game: write a ModuleScript `Sight` with `Sight.canSee(eye: Vector3, target: BasePart, ignore: { Instance }?): boolean` for my enemy AI. It casts one ray with `workspace:Raycast` from `eye` to `target.Position`, never hitting anything in the `ignore` list (the enemy's own model, for example): use a RaycastParams with FilterType Exclude and FilterDescendantsInstances set to a copy of the list, so the caller's table is not modified. It returns true when the ray hits nothing or when the first thing it hits is `target` itself, and false when something else is hit first. Targets can be hundreds of studs away.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Put a wall between an NPC and a part in a test place and watch canSee flip when the wall is removed.",
+  "expected_sources": [
+   "content/en-us/workspace/raycasting.md",
+   "content/en-us/reference/engine/classes/WorldRoot.yaml",
+   "content/en-us/reference/engine/datatypes/RaycastParams.yaml"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Passes a unit-length direction so the ray only reaches 1 stud",
+   "Modifies the caller's ignore list"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-BLD-02.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-BLD-02.luau",
+    "checks": 12
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "12 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-BLD-03",
+  "category": "world-collectionservice",
+  "difficulty": 3,
+  "goal": "Tag binder: existing and future instances, per-instance clean-up, errors contained, unbind",
+  "prompt": "In my Roblox game: I run behaviour on everything that carries a CollectionService tag (doors, pickups, turrets). Write a ModuleScript `Tagged` with `Tagged.bind(tag: string, handler: (Instance) -> (() -> ())?): () -> ()`. The handler runs once for every instance that already has the tag and for every instance that gets the tag later (`GetInstanceAddedSignal`). An instance is never handled twice at the same time. The handler may return a cleanup function, which runs when the instance loses the tag (`GetInstanceRemovedSignal`); if the instance gets the tag again the handler runs again. An error in the handler for one instance must not stop bind, the other instances or later additions. `bind` returns an unbind function that disconnects both signals and runs the cleanup of every instance that is still bound, once; calling it twice is harmless. Two bindings on the same tag work independently.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Tag ten parts with a script while the game runs and remove tags again; behaviours start and stop with the tag and nothing leaks after unbinding.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/CollectionService.yaml",
+   "content/en-us/studio/properties.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Misses instances that were tagged before bind",
+   "Leaves signal connections after unbinding"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-BLD-03.luau"
+  ],
+  "auto": {
+   "unit_test": {
+    "file": "tests/HO-BLD-03.luau",
+    "checks": 19
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "19 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-ENG-01",
+  "category": "engineering-typed-generics",
+  "difficulty": 3,
+  "goal": "Generic binary min-heap with stable ties, fully typed so a Heap<number> rejects a string",
+  "prompt": "In my Roblox game: my AI scheduler needs a priority queue. Write a --!strict pure Luau ModuleScript `Heap` (no Roblox classes) that exports `type Heap<T>` and `Heap.new<T>(less: (T, T) -> boolean): Heap<T>`: a binary min-heap ordered by `less` (an item that is less than another comes out first). Methods, called with a colon: `push(item: T)`, `pop(): T?` (removes and returns the smallest item, nil when empty), `peek(): T?` (the smallest item without removing it) and `size(): number`. Items that compare equal (neither is less than the other) must come out in the order they were pushed. It must be fully typed so that a `Heap<number>` rejects a string at type-check time.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Use it for a timed event queue in a test place and check that events with the same time keep their order.",
+  "expected_sources": [
+   "src/content/docs/types/generics.md",
+   "content/en-us/luau/type-checking.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Items typed as any",
+   "Equal items come out in an unstable order"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-ENG-01.luau"
+  ],
+  "auto": {
+   "compile_mode": "exact",
+   "strict": true,
+   "unit_test": {
+    "file": "tests/HO-ENG-01.luau",
+    "checks": 12
+   },
+   "typecheck_probe": {
+    "suffix": "local __h = __M.new(function(a: number, b: number) return a < b end)\n__h:push(\"not a number\")",
+    "block": "longest"
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "12 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins",
+    "A deliberate misuse (a string pushed on a Heap<number>) must be rejected by the type checker",
+    "Present: the answer's first line must be --!strict",
+    "Absent: the checking mode must not be relaxed"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-ENG-02",
+  "category": "engineering-algorithm",
+  "difficulty": 3,
+  "goal": "Fewest-hop route through a teleporter network with defined tie-breaking and edge cases",
+  "prompt": "In my Roblox game: players travel through a network of teleporters. Write a --!strict pure Luau function `findRoute(links: { [string]: { string } }, from: string, to: string): { string }?` that returns the route with the fewest hops as the list of stops from `from` to `to` inclusive, or nil when there is none. `links[stop]` lists the stops that can be reached directly from `stop`, in order of preference; among equally short routes return the one that is first when you compare hop by hop, taking at each hop the link that is listed earlier (a standard breadth-first search that visits links in the listed order finds exactly that route). If from == to the route is `{ from }`, even if that stop has no entry. An unknown start (different from the goal) gives nil. Links may point to stops that have no entry of their own, lists may repeat a stop or contain the stop itself, and there can be cycles. Do not modify `links`. It must work for chains of thousands of stops.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Use it to choose a path through a graph of teleporters in a test place and compare with a manual count.",
+  "expected_sources": [
+   "content/en-us/luau/type-checking.md",
+   "content/en-us/luau/tables.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Depth-first search returns a longer route",
+   "Recursion that overflows on long chains"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-ENG-02.luau"
+  ],
+  "auto": {
+   "compile_mode": "exact",
+   "strict": true,
+   "unit_test": {
+    "file": "tests/HO-ENG-02.luau",
+    "checks": 16
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "16 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins",
+    "Present: the answer's first line must be --!strict",
+    "Absent: the checking mode must not be relaxed"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-ENG-03",
+  "category": "engineering-number-format",
+  "difficulty": 2,
+  "goal": "Number abbreviation for leaderboards with rounding carry across suffixes and no negative zero",
+  "prompt": "In my Roblox game: my leaderboard shows huge numbers. Write a --!strict pure Luau function `abbreviate(n: number): string`. Suffixes: K (thousand), M (million), B (billion), T (trillion). Values below 1000 print as a whole number rounded to the nearest integer (half up). Larger values are divided by the unit and rounded to at most one decimal (half up) and the \".0\" is dropped, so 1000 is \"1K\", 1500 is \"1.5K\", 12345 is \"12.3K\". If the rounding reaches 1000 in the current unit the next suffix is used instead: 999999 is \"1M\" (not \"1000K\") and 999.5 is \"1K\". T is the largest suffix, so 1500000000000000 is \"1500T\". Negative numbers get a leading \"-\" and use the same rules, but a number that rounds to zero prints \"0\" (never \"-0\"). NaN, infinity and non-numbers raise an error.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "Show scores from 0 to 10^15 in a leaderstats label and check the boundaries visually.",
+  "expected_sources": [
+   "content/en-us/luau/index.md",
+   "content/en-us/luau/type-checking.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 800,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Prints 1000K instead of 1M",
+   "Prints 1.0K or -0"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/HO-ENG-03.luau"
+  ],
+  "auto": {
+   "compile_mode": "exact",
+   "strict": true,
+   "unit_test": {
+    "file": "tests/HO-ENG-03.luau",
+    "checks": 31
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the answer's first line must be --!strict",
+     "scope": "first_raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_nocheck",
+     "re": "--!(nocheck|nonstrict)",
+     "why": "the checking mode must not be relaxed",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+luau-vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "31 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits) against harness-owned stand-ins",
+    "Present: the answer's first line must be --!strict",
+    "Absent: the checking mode must not be relaxed"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DOC-01",
+  "category": "docs-question-attributes",
+  "difficulty": 1,
+  "goal": "Documentation question: attribute value types, change events and replication (citation required)",
+  "prompt": "In Roblox, which kinds of values can I store in an Instance attribute, how do I run code when one attribute changes, and can clients see the attributes that the server sets? Answer from the documentation and cite the pages you use.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "A human checks each statement of the answer against the cited page.",
+  "expected_sources": [
+   "content/en-us/studio/properties.md",
+   "content/en-us/scripting/attributes.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 450,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says tables or Instances can be stored in attributes"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "basic_types",
+     "re": "(?is)(?=.*\\bstring\\b)(?=.*\\bboolean\\b)(?=.*\\bnumber\\b)",
+     "why": "names the basic attribute types string, boolean and number",
+     "scope": "prose"
+    },
+    {
+     "id": "roblox_types",
+     "re": "(?i)\\b(Vector3|Color3|UDim2|CFrame|BrickColor|Vector2)\\b",
+     "why": "names at least one Roblox datatype that attributes can hold",
+     "scope": "prose"
+    },
+    {
+     "id": "change_signal",
+     "re": "GetAttributeChangedSignal|AttributeChanged",
+     "why": "names the signal for attribute changes",
+     "scope": "prose"
+    },
+    {
+     "id": "replication",
+     "re": "(?i)replicat",
+     "why": "says that attribute values replicate",
+     "scope": "prose"
+    }
+   ],
+   "citation": {
+    "required": true,
+    "url_contains_any": [
+     "attributes",
+     "properties"
+    ]
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the basic attribute types string, boolean and number",
+    "Present: names at least one Roblox datatype that attributes can hold",
+    "Present: names the signal for attribute changes",
+    "Present: says that attribute values replicate",
+    "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ },
+ {
+  "id": "HO-DOC-02",
+  "category": "docs-question-messaging",
+  "difficulty": 1,
+  "goal": "Documentation question: MessagingService message and topic size and the send rate limit (citation required)",
+  "prompt": "In Roblox, how large can a MessagingService message and a topic name be, and how many messages can one game server send per minute before it is throttled? Answer from the documentation and cite the pages you use.",
+  "run_mode": "automated",
+  "helps": [],
+  "studio_check": "A human checks the numbers against the cited page.",
+  "expected_sources": [
+   "content/en-us/reference/engine/classes/MessagingService.yaml",
+   "content/en-us/cloud-services/cross-server-messaging.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 450,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents limits that the documentation does not state"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "message_size",
+     "re": "(?i)1[, ]?024|\\b1\\s?(?:ki?b|kib)\\b",
+     "why": "states the message size limit of 1,024 characters (1 KiB)",
+     "scope": "prose"
+    },
+    {
+     "id": "topic_size",
+     "re": "\\b80\\b",
+     "why": "states the topic name limit of 80 characters",
+     "scope": "prose"
+    },
+    {
+     "id": "send_rate",
+     "re": "(?s)(?=.*\\b600\\b)(?=.*\\b240\\b)",
+     "why": "states the per-server send limit 600 + 240 per player per minute",
+     "scope": "prose"
+    }
+   ],
+   "citation": {
+    "required": true,
+    "url_contains_any": [
+     "MessagingService",
+     "messaging",
+     "cross-server"
+    ]
+   }
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: states the message size limit of 1,024 characters (1 KiB)",
+    "Present: states the topic name limit of 80 characters",
+    "Present: states the per-server send limit 600 + 240 per player per minute",
+    "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
+   ]
+  },
+  "split": "holdout",
+  "suite": "holdout-v1"
+ }
+]
