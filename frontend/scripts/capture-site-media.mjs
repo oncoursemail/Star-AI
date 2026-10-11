@@ -53,8 +53,8 @@ const NARROW={width:430,height:620}
 const VIEWS=[
  {id:'chat',prepare:async page=>{
    // Typed into the real composer. The preview never sends it anywhere.
-   await page.locator('.composer textarea').first().fill('Inspect my Roblox Studio test place, then plan a responsive inventory UI. Do not edit anything yet.')
-   await page.locator('.composer textarea').first().blur()
+   await page.getByRole('textbox',{name:'Message STAR'}).fill('Inspect my Roblox Studio test place, then plan a responsive inventory UI. Do not edit anything yet.')
+   await page.getByRole('textbox',{name:'Message STAR'}).blur()
  }},
  {id:'brain'},
  {id:'tools'},
@@ -64,8 +64,8 @@ const VIEWS=[
 /** Element-level crops used inside the feature chapters. The Studio cards are only captured stacked. */
 const CROPS=[
  {id:'studio-narrow',tab:'tools',selector:'.two-up',viewport:{width:430,height:900}},
- {id:'setup',tab:'brain',selector:'.brain-simple',viewport:{width:980,height:800}},
- {id:'setup-narrow',tab:'brain',selector:'.brain-simple',viewport:{width:430,height:800}}
+ {id:'setup',tab:'brain',selector:'.conn-local',viewport:{width:980,height:800}},
+ {id:'setup-narrow',tab:'brain',selector:'.conn-local',viewport:{width:430,height:800}}
 ]
 
 async function settle(page){

@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import type {ChatMessage} from './types'
 import {request} from './bridge'
 import {messageIn} from './motion'
+import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
 import {classifyFailure} from './connection'
 
 /** The STAR glyph: a drawn four-point star, used wherever the brand appears on the desktop. */
@@ -173,14 +174,16 @@ export type MessageProps = {
 
 /** A turn that ended without an answer. The backend stores this row, so it reads the same after a restart. */
 function TurnNotice({entry, animated, onRetry, onEdit, onConnection}: MessageProps) {
+  const reduced = useStarReducedMotion()
+  const variants = useMotionVariants(messageIn)
   const failure = classifyFailure(entry.text)
   const failed = entry.status === 'failed'
   const actionable = Boolean(onRetry || onEdit)
   const connectionFirst = failed && (failure.kind === 'unreachable' || failure.kind === 'access' || failure.kind === 'setup')
   return (
     <motion.article
-      variants={messageIn}
-      initial={animated ? 'hidden' : false}
+      variants={variants}
+      initial={animated && !reduced ? 'hidden' : false}
       animate="shown"
       className={'msg msg-note is-' + (entry.status || 'plain') + (actionable ? ' is-actionable' : '')}
       aria-label={failed ? 'STAR could not answer' : entry.status === 'cancelled' ? 'Stopped' : 'STAR notice'}
@@ -214,6 +217,8 @@ function TurnNotice({entry, animated, onRetry, onEdit, onConnection}: MessagePro
 }
 
 export function Message(props: MessageProps) {
+  const reduced = useStarReducedMotion()
+  const variants = useMotionVariants(messageIn)
   const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain, onFeedback} = props
   if (entry.role === 'event') return <TurnNotice {...props} animated={animated} />
   const isUser = entry.role === 'user'
@@ -222,8 +227,8 @@ export function Message(props: MessageProps) {
   const {body, sources} = isUser || partial ? {body: entry.text, sources: []} : splitSources(entry.text)
   return (
     <motion.article
-      variants={messageIn}
-      initial={animated ? 'hidden' : false}
+      variants={variants}
+      initial={animated && !reduced ? 'hidden' : false}
       animate="shown"
       className={'msg ' + (isUser ? 'msg-user' : 'msg-star') + (pinned ? ' is-pinned' : '')}
       aria-label={isUser ? 'You said' : 'STAR said'}

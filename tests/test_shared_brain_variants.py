@@ -27,7 +27,7 @@ from star.shared_brain.store import SharedBrain, serialize
 SUITE_SHA256 = "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696"
 SUITE_PATH = Path(__file__).parent / "fixtures" / "shared_brain_retrieval.json"
 SOURCE_VALIDATION_PATH = Path(__file__).parent / "fixtures" / "shared_brain_runtime_source_validation.json"
-SOURCE_VALIDATION_SHA256 = "0ce9202b56faa8b3a18c5404d3c263bdc11b627c4bff5eee81af13a1b236b5fb"
+SOURCE_VALIDATION_SHA256 = "0cc405336f98827426a326084ceb80e687b93c0da2b74bb24797aa1c15fe0296"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -114,9 +114,11 @@ def current_validation_sources(frozen_suite):
     assert hashlib.sha256(canonical).hexdigest() == SOURCE_VALIDATION_SHA256
     assert validation["kind"] == "development_source_validation"
     assert validation["historical_fixture_sha256"] == SUITE_SHA256
-    assert set(validation["changed_sources"]) == {"star/lessons.py"}
+    assert set(validation["changed_sources"]) == {"star/agent.py", "star/lessons.py", "star/memory.py"}
     for relative, current in validation["changed_sources"].items():
         assert current["historical_crlf_sha256"] == pins[relative]
+        assert current["source_revision_commit"] == validation["observed_integration_merge_head"]
+        assert current["source_change_commit"] in validation["reviewed_dependency_commits"]
         pins[relative] = current["current_crlf_sha256"]
     return pins, validation
 
@@ -152,6 +154,7 @@ def test_current_overlay_preserves_development_symbol_grounding(frozen_suite, cu
         for record in current["development_grounding"]:
             case = cases[record["case_id"]]
             assert record["qualified_symbol"] == case["expected_qualified_symbol"]
+            assert record["historical_source_location"] == case["expected_source_location"]
             assert record["unchanged_grounding_excerpt"] == case["grounding_excerpt"]
             declaration = declarations[record["qualified_symbol"]]
             assert declaration.lineno == record["current_declaration_line"]
@@ -159,6 +162,8 @@ def test_current_overlay_preserves_development_symbol_grounding(frozen_suite, cu
         normalized = (PROJECT_ROOT / relative).read_bytes().replace(b"\r\n", b"\n")
         assert b"\r" not in normalized
         assert hashlib.sha256(normalized).hexdigest() == current["current_lf_sha256"]
+        git_blob = b"blob " + str(len(normalized)).encode() + b"\x00" + normalized
+        assert hashlib.sha1(git_blob).hexdigest() == current["git_blob_sha1"]
 
 
 def test_historical_pin_still_rejects_current_dependency_bytes(current_validation_sources):
@@ -171,12 +176,13 @@ def test_historical_pin_still_rejects_current_dependency_bytes(current_validatio
             frozen_source_bytes(raw + b"\n# unreviewed source drift\n", current["current_crlf_sha256"])
 
 
-def test_benchmark_refuses_historical_lessons_before_query_or_store(frozen_suite, tmp_path, monkeypatch):
+@pytest.mark.parametrize("case_id", ["retrieval-05", "retrieval-08", "retrieval-15"])
+def test_benchmark_refuses_historical_sources_before_query_or_store(frozen_suite, tmp_path, monkeypatch, case_id):
     cases, _ = frozen_suite
     # A development-only one-case guard probe must abort before any retrieval,
     # store construction or timing; it is not another comparison measurement.
     probe = tmp_path / "historical-development-guard.json"
-    probe.write_text(json.dumps({"cases": [cases["retrieval-08"]]}), encoding="utf-8")
+    probe.write_text(json.dumps({"cases": [cases[case_id]]}), encoding="utf-8")
     spec = importlib.util.spec_from_file_location(
         "shared_brain_benchmark_guard", PROJECT_ROOT / "scripts/shared_brain_benchmark.py")
     benchmark = importlib.util.module_from_spec(spec)

@@ -1,17 +1,42 @@
 {
   "schema_version": 1,
   "kind": "development_source_validation",
-  "validation_id": "shared-brain-runtime-development-source-maintenance-v1",
+  "validation_id": "shared-brain-runtime-development-source-maintenance-v2",
+  "supersedes_validation_semantic_sha256": "0ce9202b56faa8b3a18c5404d3c263bdc11b627c4bff5eee81af13a1b236b5fb",
   "purpose": "Current development-only variant controls, separate from the original frozen retrieval comparison.",
   "historical_fixture": "tests/fixtures/shared_brain_retrieval.json",
   "historical_fixture_sha256": "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696",
-  "observed_parent_commit": "4b7058a5526d8e88b43d6a6d0f66e0782fe9516e",
-  "reviewed_dependency_commit": "52a7b5147297230c265a8c5b65f5221c1395bdd4",
-  "provenance": "Independent audit of all 12 development expected-source files found only lessons.py changed by the reviewed PR41 export path normalization. Its two development declarations and grounding excerpts are unchanged. Runtime intelligence.py is not an expected-source pin in this suite.",
+  "observed_parent_commit": "f73217cc682a1423034e4cbcb1d716d1d723506d",
+  "observed_integration_merge_head": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+  "reviewed_dependency_commits": [
+    "52a7b5147297230c265a8c5b65f5221c1395bdd4",
+    "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2"
+  ],
+  "provenance": "Independent audit of all 12 development expected-source files found agent.py and memory.py changed by reviewed PR42, plus lessons.py by PR41. Canonical LF bytes equal the staged integration revision blobs. Development symbol identities and grounding excerpts remain unchanged; Memory.put moved from L24 to L25. Runtime intelligence.py is not an expected-source pin in this suite.",
   "transport_rule": "Restore exact canonical CRLF bytes in disposable test copies only; pure LF is accepted only if reconstruction matches the explicit SHA256. Other content drift remains an error.",
   "measurement_limits": "No holdout cases, queries, grading expectations, original source pins, archive or measurements changed. This overlay is not accepted by the benchmark and creates no new unseen-performance claim.",
   "changed_sources": {
+    "star/agent.py": {
+      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+      "source_change_commit": "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2",
+      "git_blob_sha1": "8a65528c0b97ce6c1e3443e078563a4e8a4b141a",
+      "historical_crlf_sha256": "18f4c3cd2f93df2167525332a3ebdcaa26ab27a4540a6fc8384da2fe94068d9b",
+      "current_crlf_sha256": "2f67e397052018e5c56b3f6bebf301ea4254f27be3fa8e190f1e961e296058a7",
+      "current_lf_sha256": "79ea235c17a047a66046ea539c962b0d21f5454e4bcc27bc47e16b94f560ef7b",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-15",
+          "qualified_symbol": "validate_model_roles",
+          "historical_source_location": "L112",
+          "current_declaration_line": 112,
+          "unchanged_grounding_excerpt": "STAR requires exactly one system message, at the start of each model request"
+        }
+      ]
+    },
     "star/lessons.py": {
+      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+      "source_change_commit": "52a7b5147297230c265a8c5b65f5221c1395bdd4",
+      "git_blob_sha1": "013ac8fc20e86ec4f30126fdcc7f8e5f52b2a061",
       "historical_crlf_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
       "current_crlf_sha256": "8960237feeea5daef4b56067601b63f00337d1aa7050920e04d5c0e9707740e6",
       "current_lf_sha256": "4c9ffc8a9a1f0188cbe8a096c6fb08b80ba5e63fd888350b25b1602e42d32c4e",
@@ -19,14 +44,33 @@
         {
           "case_id": "retrieval-08",
           "qualified_symbol": "LessonStore.capture_inferred",
+          "historical_source_location": "L527",
           "current_declaration_line": 527,
           "unchanged_grounding_excerpt": "Always a candidate: there is no argument that makes this path trusted."
         },
         {
           "case_id": "retrieval-09",
           "qualified_symbol": "LessonStore.recall",
+          "historical_source_location": "L657",
           "current_declaration_line": 657,
           "unchanged_grounding_excerpt": "standing preferences and corrections, newest first, without repeats, within a budget."
+        }
+      ]
+    },
+    "star/memory.py": {
+      "source_revision_commit": "ceb5a6a610dd7be8341d79fe40576e97d2c9d4bc",
+      "source_change_commit": "22144eacafec8eaf7f1d4f3291c8e4d8a87bc9c2",
+      "git_blob_sha1": "9ddcf7bcf163fed1032fd1d945086f2503443020",
+      "historical_crlf_sha256": "5efce497d5b03029972cefc1c4d7c82ebdb75f47e6af0516d8f135b3eb9e2a73",
+      "current_crlf_sha256": "c7cd59870e966b457e4d4397efb8de938d66b2b14f51b8464e70d1dc6bdd1444",
+      "current_lf_sha256": "8c9b257f949f04d3a0282af3322076f0f21d34a1d4bebff0e9e74b2e6019c808",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-05",
+          "qualified_symbol": "Memory.put",
+          "historical_source_location": "L24",
+          "current_declaration_line": 25,
+          "unchanged_grounding_excerpt": "raise ValueError(\"Refusing empty checkpoint\")"
         }
       ]
     }

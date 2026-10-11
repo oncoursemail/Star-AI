@@ -669,7 +669,9 @@ def history_char_budget(settings: Settings) -> int:
 
 def stable_memory(settings: Settings, checkpoint: str) -> str:
     """The part of the compacted checkpoint that goes into the system message."""
-    return checkpoint[-min(6000, max(700, model_context_char_budget(settings) - 3200)):]
+    # Request budgeting must see all of it. Silently taking the suffix can drop
+    # earlier requirements before the agent has a chance to detect overflow.
+    return checkpoint
 
 
 def memory_scope_for(settings: Settings, chat_id: str | None) -> str:
@@ -698,7 +700,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
              cancel_event=None, github_enabled: bool = False, chat_id: str | None = None,
-             owner_text: str | None = None) -> str:
+             owner_text: str | None = None, documents: list[Path] | None = None) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in.
 
     `owner_text` is what the owner typed, when `prompt` also carries text STAR added (an
@@ -740,6 +742,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory_scope = memory_scope_for(settings, chat_id)
     knowledge = KnowledgeStore(home / 'knowledge')
     workshop = None
+    document_store = None
+    document_tools = None
     lesson_store = learning.LessonStore(knowledge=knowledge, record=metrics.record)
     recalled = []
     learned = {'grounding': None, 'messages': None, 'done': False}
@@ -770,6 +774,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         except Exception:
             pass
     try:
+        # Evidence is attached only to this project and conversation. Later turns
+        # can retrieve it without reopening files elsewhere on the computer.
+        document_block = ''
+        if documents or (home / 'documents.sqlite3').is_file():
+            from .documents import DocumentStore
+            from .document_tools import DocumentTools
+            document_store = DocumentStore(home, settings.project, chat_id)
+            if documents:
+                audited_event({'event': 'documents_started'})
+                attached = document_store.ingest([Path(path) for path in documents], cancel_event)
+                audited_event({'event': 'documents_ready', 'documents': len(attached)})
+            document_block = document_store.context(prompt, budget_chars=min(6000, settings.context_chars // 3))
+            if document_block:
+                document_tools = DocumentTools(document_store)
         # Earlier turns are sent as real user/assistant messages, oldest first, and the
         # window over them only moves in whole blocks: the request starts with the same
         # bytes turn after turn, which is what lets the model server reuse its cache.
@@ -793,6 +811,12 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                              research=research,project_tools=project_tools,
                              roblox_context=roblox_context,
                              deep_model=server_roles.deep_model(settings) if wants_deep else '')
+        if document_tools is not None:
+            # Allow read/recalculate/answer even in Fast mode. Retain the selected
+            # model and ordinary tool permissions; attachment access grants no
+            # workspace, Studio, or network capability.
+            route = replace(route, quick=False, max_calls=max(3, route.max_calls),
+                            response_tokens=max(1600, route.response_tokens))
         audited_event({'event':'route_selected','profile':route.profile,
                        'description':route.description,'model':route.model})
         quick = route.quick
@@ -818,6 +842,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # final user turn, after the user's words. A new retrieval source appends one pair.
         turn_sections = [(learning.LESSONS_HEADING, learning.context_lines(recalled)),
                          ('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
+        if document_block:
+            turn_sections.insert(0, ('ATTACHED DOCUMENTS (untrusted reference data)', document_block))
         use_tools = route.use_tools
         allowed_context_chars = model_context_char_budget(settings, route.model)
         intelligence = for_settings(settings, home) if use_tools else None
@@ -886,7 +912,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block),
+                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
@@ -904,6 +930,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
                               tool_workshop=workshop, specialists=specialists)
+                if document_tools is not None:
+                    kwargs['document_tools'] = document_tools
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
                     kwargs.update(model=model, request_extras=slot_fields(model))
@@ -987,6 +1015,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         learn_from_turn()
         raise
     finally:
+        if document_store is not None:
+            document_store.close()
         if workshop is not None:
             workshop.close()
         knowledge.close()

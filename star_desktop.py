@@ -33,6 +33,12 @@ def main():
             from keyring.backends.Windows import WinVaultKeyring
             if WinVaultKeyring is None:
                 raise RuntimeError('Windows credential vault backend missing')
+        from star.document_doctor import check_document_bundle
+        print('Packaged document readers OK:', ', '.join(check_document_bundle()))
+        return 0
+    if '--document-doctor' in sys.argv:
+        from star.document_doctor import check_document_bundle
+        print('Packaged document readers OK:', ', '.join(check_document_bundle()))
         return 0
     if '--ui-doctor' in sys.argv:
         from star.react_shell import react_index
