@@ -211,11 +211,28 @@ def _server(messages: list[dict[str, Any]]) -> str:
             '    if not handler then return nil end',
         ])
         if msg["reply"]:
-            # Synchronous handlers only: Luau cannot preempt a yielding InvokeServer callback.
+            # A detached task and timer bound the invocation even if a handler yields.
             lines.extend([
-                '    -- Reply handlers must be synchronous: no yielding functions are called here.',
-                '    -- A handler that yields violates this contract; use an event protocol for async work.',
-                f'    return handler(player{", " if args else ""}{args})',
+                '    local finished = Instance.new("BindableEvent")',
+                '    local settled = false',
+                '    local result = nil',
+                '    task.spawn(function()',
+                f'        local ok, value = pcall(handler, player{", " if args else ""}{args})',
+                '        if not settled then',
+                '            settled = true',
+                '            if ok then result = value end',
+                '            finished:Fire()',
+                '        end',
+                '    end)',
+                '    task.delay(5, function()',
+                '        if not settled then',
+                '            settled = true',
+                '            finished:Fire()',
+                '        end',
+                '    end)',
+                '    if not settled then finished.Event:Wait() end',
+                '    finished:Destroy()',
+                '    return result',
             ])
         else:
             lines.append(f'    handler(player{", " if args else ""}{args})')
