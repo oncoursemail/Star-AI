@@ -131,3 +131,59 @@ def test_worker_output_and_configuration_are_bounded():
     assert result.for_id("task").error == "ValueError"
     with pytest.raises(ValueError):
         asyncio.run(run_plan(p, bad_return, total_timeout=0))
+
+
+
+def test_expired_stage_keeps_visible_partial_but_blocks_synthesis():
+    async def scenario():
+        partial = {}
+
+        async def slow(task, previous):
+            partial[task.id] = "Promising analysis, interrupted halfway"
+            await asyncio.Event().wait()
+
+        plan = TaskPlan([
+            Task("research", "research", "Analyze an issue"),
+            Task("synthesis", "integration", "Summarize", dependencies=("research",)),
+        ])
+        events = []
+        result = await run_plan(plan, slow, task_timeout=lambda task: .11,
+                                total_timeout=1, on_event=events.append,
+                                partial_answers=partial)
+        assert not result.completed
+        assert result.for_id("research").status == "incomplete"
+        assert result.for_id("research").answer == partial["research"]
+        assert result.for_id("synthesis").status == "blocked"
+        assert "INCOMPLETE" in result.summary()
+        assert any(e.get("status") == "incomplete" for e in events)
+
+    asyncio.run(scenario())
+
+
+def test_global_deadline_preserves_partial_without_lying_about_completion():
+    async def scenario():
+        partial = {}
+
+        async def slow(task, previous):
+            partial[task.id] = "Some unfinished output"
+            await asyncio.Event().wait()
+
+        plan = TaskPlan([Task("slow", "research", "Analyze")])
+        result = await run_plan(plan, slow, task_timeout=1, total_timeout=.12,
+                                partial_answers=partial)
+        assert result.for_id("slow").status == "incomplete"
+        assert result.for_id("slow").answer == "Some unfinished output"
+        assert not result.completed
+
+    asyncio.run(scenario())
+
+
+def test_expired_stage_with_no_text_is_timed_out_not_success():
+    async def scenario():
+        async def slow(task, previous):
+            await asyncio.Event().wait()
+        plan = TaskPlan([Task("slow", "research", "Analyze")])
+        return await run_plan(plan, slow, task_timeout=.11, total_timeout=1)
+    result = asyncio.run(scenario())
+    assert result.for_id("slow").status == "timed_out"
+    assert not result.completed
