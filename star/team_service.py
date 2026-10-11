@@ -16,6 +16,7 @@ from collections.abc import Callable
 from .agent_runtime import TeamResult, run_plan
 from .orchestration import Task, TaskPlan
 from .learning import learned_context
+from .team_deadlines import DeadlinePolicy, ProviderSpeeds, SPEEDS, collect_text
 
 
 SPECIALISTS = (
@@ -65,6 +66,7 @@ async def run_research_team(
     on_event: Callable[[dict], None] | None = None,
     client=None,
     settings=None,
+    speeds: ProviderSpeeds | None = None,
 ) -> tuple[str, TeamResult]:
     """Run 3 parallel-able specialist roles + 1 dependency-aware synthesis.
 
@@ -88,19 +90,26 @@ async def run_research_team(
         raise ValueError("Start and select STAR Brain before running Agents")
     limits = call_limits(settings)
     if kind == "lan":
-        # A CPU server needs minutes per specialist; one call per llama.cpp slot.
-        request_seconds = limits.request_timeout
-        total_seconds = min(3600.0, request_seconds * 4)
         parallel = limits.parallel if parallel is None else min(parallel, limits.parallel)
     else:
-        request_seconds, total_seconds = 110.0, 300.0
         parallel = 2 if parallel is None else parallel
     plan = specialist_plan(prompt, parallel=parallel)
+    policy = DeadlinePolicy(min_seconds=settings.team_timeout_min,
+                            max_seconds=settings.team_timeout_max)
+    speeds = speeds if speeds is not None else SPEEDS
+    address = settings.server_endpoint if kind == "lan" else settings.endpoint
+    speed_key = (kind, address, model)
+    total_seconds = policy.overall_seconds(850, 1400, parallel, speeds.get(speed_key))
+    partial_answers: dict[str, str] = {}
+
+    def stage_seconds(task: Task) -> float:
+        tokens = 1400 if task.id == "synthesis" else 850
+        return policy.stage_seconds(tokens, speeds.get(speed_key))
     context = learned_context(home, project, prompt, max_chars=4200, limit=8)
     created_client = client is None
 
     if created_client:
-        client = open_client(settings, request_timeout=request_seconds)
+        client = open_client(settings, request_timeout=limits.request_timeout)
 
     async def model_worker(task: Task, previous):
         system = TEAM_RULES
@@ -129,20 +138,17 @@ async def run_research_team(
                 context +
                 "\n\nProvide a concise specialist analysis; do not claim any unperformed actions."
             )
-        # Exactly one first system turn, compatible with strict Qwen Jinja templates.
-        completion = await client.chat.completions.create(
-            model=model,
+        # One system turn for strict Qwen templates; streamed deltas survive a deadline.
+        answer = await collect_text(
+            client, model=model,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user", "content": task_input},
-            ],
-            temperature=0,
-            max_tokens=1400 if task.id == "synthesis" else 850,
+            ], max_tokens=1400 if task.id == "synthesis" else 850,
+            speeds=speeds, speed_key=speed_key,
+            on_partial=lambda text: partial_answers.__setitem__(task.id, text),
         )
-        if not completion.choices:
-            raise RuntimeError("The model returned no completion choices")
-        answer = str(completion.choices[0].message.content or "").strip()
-        if not answer:
+        if not answer.strip():
             raise RuntimeError("The agent returned no visible text")
         return {"answer": answer[:12000], "evidence": (
             ("local:reviewed-knowledge",) if context else ()
@@ -159,12 +165,17 @@ async def run_research_team(
                 pass  # Progress display is best effort; it never blocks the run.
         result = await run_plan(
             plan, model_worker,
-            task_timeout=request_seconds, total_timeout=total_seconds,
-            allow_writes=False, on_event=on_event,
+            task_timeout=stage_seconds, total_timeout=total_seconds,
+            allow_writes=False, on_event=on_event, partial_answers=partial_answers,
         )
         if not result.completed:
             issues = ", ".join(f"{r.task_id}:{r.status}" for r in result.results
                                if r.status != "completed")
+            if any(r.status in ("incomplete", "timed_out", "cancelled") for r in result.results):
+                # Never present a partial run as a successful synthesis.
+                return ("STAR Teams INCOMPLETE (a deadline expired). "
+                        "These are partial or independent findings, not a final answer.\n\n"
+                        + result.summary(), result)
             raise RuntimeError("STAR Teams could not finish: " + issues[:250])
         answer = result.for_id("synthesis").answer
         return answer, result
