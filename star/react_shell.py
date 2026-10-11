@@ -52,7 +52,7 @@ ALLOWED_ACTIONS = frozenset({
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
-    'researchStatus','researchCheck','researchEvidence',
+    'researchStatus','researchCheck','researchEvidence','researchNominate',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
     'serverKeyFileStatus','importServerKeyFile',
@@ -767,7 +767,7 @@ def launch():
                         self._run(rid,action,media_worker)
                         return json.dumps({'ok':True,'pending':True,'requestId':rid})
                     return json.dumps({'ok':True,'data':media_worker()},default=str)
-                if action in {'researchStatus', 'researchCheck', 'researchEvidence'}:
+                if action in {'researchStatus', 'researchCheck', 'researchEvidence', 'researchNominate'}:
                     # Read-only public documentation, observed into a local candidate-only ledger.
                     # No model-selected host, reviewed-memory promotion or GitHub publish permission.
                     def research_task():
@@ -777,6 +777,9 @@ def launch():
                                 return watcher.status()
                             if action == 'researchEvidence':
                                 return watcher.evidence(body.get('observation'))
+                            if action == 'researchNominate':
+                                project = Settings.load(self.settings_file).project
+                                return watcher.nominate(body.get('observation'), home=app_data(), project=project)
                             return watcher.check_many()
                     if action == 'researchCheck':
                         if self.active_task:
