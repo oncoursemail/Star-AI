@@ -1007,9 +1007,18 @@ def step_restart_retry(d: Driver) -> None:
         d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
         d.wait_idle(d.options.turn_timeout)
         s.facts.update(d.stream_metrics(turn))
-        new = read_messages(d.profile)[len(before):]
-        s.check([r['role'] for r in new] == ['user', 'assistant'] and new[0]['body'] == PROMPT_FAIL,
-                'Retry after a restart re-sent the stored prompt and the answer was saved', [r['role'] for r in new])
+        # Retry answers the question that is already stored (in-place Retry): it is not stored a second time.
+        after = read_messages(d.profile)
+        new = after[len(before):]
+        question = next((r for r in reversed(before) if r['role'] == 'user'), None) or {}
+        s.check([r['role'] for r in new] == ['assistant'] and bool(new[0]['body']),
+                'Retry after a restart saved one answer row and did not store the question again', [r['role'] for r in new])
+        copies = [r['id'] for r in after if r['role'] == 'user' and r['body'] == PROMPT_FAIL
+                  and r['chat_id'] == question.get('chat_id') and r['id'] >= question.get('id', 0)]
+        s.check(question.get('body') == PROMPT_FAIL and copies == [question.get('id')]
+                and bool(new) and new[0]['chat_id'] == question.get('chat_id'),
+                'the stored question that was retried still exists exactly once, and the answer is in its chat',
+                {'question': question.get('id'), 'copies': copies})
         shown = d.transcript()
         s.check(bool(shown) and shown[-1]['role'] == 'assistant' and bool(shown[-1]['text']), 'the answer is rendered')
         s.check(all(t['buttons'] == [] for t in shown if t['role'] == 'event'), 'no stale Retry buttons remain')
@@ -1263,7 +1272,15 @@ def step_upgrade(d: Driver) -> None:
         text = d.js("__acc.text('.page-stage')") or ''
         s.fact('text', text)
         s.check('This PC' in text and 'released-local-model' in text, 'the Model page shows the on-device provider and the saved model')
-        s.check('STAR Server' not in text.replace('Connection settings', ''), 'nothing on the page claims a STAR Server is in use', text[:300])
+        # The page may offer STAR Server ("... or switch to STAR Server in Settings"). What it must not do is
+        # claim one is connected or in use: the status label, the Provider value, or a sentence saying so.
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        provider = lines[lines.index('Provider') + 1] if 'Provider' in lines[:-1] else ''
+        label = (d.status().get('label') or '')
+        claims = [line for line in lines if line.startswith('STAR Server')
+                  or re.search(r'\b(?:connected to|using|running on|answered by)\s+(?:the\s+|a\s+|your\s+)?STAR Server\b', line, re.I)]
+        s.check(provider == 'This PC' and 'STAR Server' not in label and not claims,
+                'nothing on the page claims a STAR Server is in use', {'provider': provider, 'status': label, 'claims': claims})
         s.check('Model on this PC' in text, 'the on-device model card is shown, not folded away')
         s.shots.append(d.shot('upgrade-model'))
         d.open_page('Settings', 'Settings')
