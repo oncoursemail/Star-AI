@@ -725,8 +725,11 @@ def launch():
                 if action=='digestLessons':
                     # "Summarise now": the same background step, started by the owner for even one capture.
                     if self.active_task:raise RuntimeError('Wait for the current answer before summarising captures')
-                    started=self.digester.start(self._digest_target,minimum=1,
-                                                on_done=lambda report:self._emit(rid,'result',report))
+                    def digested(report):
+                        self._emit(rid,'result',report)
+                        # The chat's own model answered: prime its conversation cache again.
+                        if report.get('shared_model') and not self.active_task:self._warm(check=False)
+                    started=self.digester.start(self._digest_target,minimum=1,on_done=digested)
                     if started is None:raise RuntimeError('STAR is already summarising captures')
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='rememberDecision':

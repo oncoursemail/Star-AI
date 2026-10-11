@@ -84,8 +84,14 @@ sets it for a lesson.
 ## Optional background summary
 
 Some captures are rough ("An answer was marked not helpful"). When at least three are waiting, and
-after a turn and its cache warm-up have finished, STAR may send one small request to the fast model
-(`star-quick` on a STAR Server, otherwise the configured fast or main model) asking it to reword them.
+after a turn and its cache warm-up have finished, STAR may send one small request to a spare fast model
+(`star-quick` on a STAR Server) asking it to reword them.
+
+- The automatic run never asks a model the chat itself uses (`model`, `fast_model`, `reasoning_model`,
+  `roblox_model`, `vision_model`): that request would replace the conversation the warm-up has just
+  cached (STAR's local router runs one slot), and the next message would be read from the start. With
+  the local provider, or a server without `star-quick`, nothing runs automatically. "Summarise raw
+  notes" on the review page may use the fast or main model; the chat's cache is then primed again.
 
 - Its output is always a candidate (`source_type = summary`) and passes the same content rules.
 - Raw captures it used become `merged`; one you already reviewed is left alone.

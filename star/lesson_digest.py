@@ -67,9 +67,23 @@ def digest_allowed(settings) -> tuple[bool, str]:
     return True, ""
 
 
-def candidates_for(settings) -> list[str]:
+CHAT_MODEL_FIELDS = ("model", "fast_model", "reasoning_model", "roblox_model", "vision_model")
+
+
+def chat_models(settings) -> set[str]:
+    """The model ids the chat itself may route a turn to."""
+    return {name for name in (str(getattr(settings, field, "") or "").strip() for field in CHAT_MODEL_FIELDS) if name}
+
+
+def candidates_for(settings, *, spare_only: bool = False) -> list[str]:
     """Model ids to try, cheapest first. A STAR Server has a small fast model under a fixed alias;
-    a server that does not know it answers 'no such model' and the next id is tried."""
+    a server that does not know it answers 'no such model' and the next id is tried.
+
+    `spare_only` is for the automatic run. It follows the warm-up that has just primed the chat
+    model's prompt cache, and a request to that same model replaces the cached conversation
+    (STAR's local router runs a single slot), so the owner's next message would be read from
+    the start again. With `spare_only` the chat's own models are left out; the list may be empty.
+    """
     names = []
     try:
         if provider_kind(settings) == "lan":
@@ -82,6 +96,9 @@ def candidates_for(settings) -> list[str]:
         if name and name not in seen:
             seen.add(name)
             ordered.append(name)
+    if spare_only:
+        used = chat_models(settings)
+        ordered = [name for name in ordered if name not in used]
     return ordered
 
 
@@ -220,6 +237,10 @@ def digest_once(settings, home: Path, project: str, *, cancel_event=None, minimu
     allowed, reason = digest_allowed(settings)
     if not allowed:
         return done(skipped=reason)
+    # An automatic run (it waits for a batch) may only use a model the chat does not use.
+    models = candidates_for(settings, spare_only=minimum > 1)
+    if not models:
+        return done(skipped="no_spare_model")
     metrics = None
     try:
         if record is None:
@@ -237,13 +258,15 @@ def digest_once(settings, home: Path, project: str, *, cancel_event=None, minimu
             return done(skipped="nothing_waiting", waiting=len(captures))
         if cancel_event is not None and cancel_event.is_set():
             return done(cancelled=True)
-        reply, model = asyncio.run(_ask(settings, candidates_for(settings), build_request(captures),
-                                        cancel_event, open_model))
+        reply, model = asyncio.run(_ask(settings, models, build_request(captures), cancel_event, open_model))
         if not model:
             return done(cancelled=True)
         lessons = parse_reply(reply, len(captures))
         created = apply_digest(store, project, captures, lessons, model)
-        return done(created=len(created), ids=created, raw=len(captures), model=model, proposed=len(lessons))
+        # shared_model: the chat's own model answered, so its cached conversation is gone.
+        shared = {"shared_model": True} if model in chat_models(settings) else {}
+        return done(created=len(created), ids=created, raw=len(captures), model=model, proposed=len(lessons),
+                    **shared)
     except Exception as exc:
         return done(error=type(exc).__name__)
     finally:

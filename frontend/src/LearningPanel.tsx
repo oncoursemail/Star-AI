@@ -33,7 +33,7 @@ const emptyText:Record<View,string>={
 const day=(stamp:string)=>{const time=Date.parse(stamp);return Number.isNaN(time)?'':new Date(time).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
 /** Why the background step did nothing, in the owner's terms. */
 const skipReasons:Record<string,string>={
- nothing_waiting:'There are no raw notes to summarise.',off:'Background summaries are turned off.',
+ nothing_waiting:'There are no raw notes to summarise.',no_spare_model:'No spare model is available for a background summary.',off:'Background summaries are turned off.',
  cloud:'Background summaries are off while a hosted provider is selected.',no_model:'Select a model first.',settings:'Check your model settings first.',
 }
 export function describeDigest(report:DigestReport):string{
@@ -164,7 +164,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    <div className="learn-tools"><button type="button" className="learn-button is-primary" disabled={disabled||!!pending||teach.trim().length<3} onClick={()=>void remember()}><Check size={14} aria-hidden="true"/> Save as accepted</button><span className="learn-count">{teach.length}/1200</span></div>
    <div className="learn-settings">
      <label className="learn-switch"><span><strong>Accept my own corrections automatically</strong><small>{autoAccept?'What you state in your own words is kept at once. Everything STAR infers still waits for review.':'Review everything: even your own statements wait here until you approve them.'}</small></span><input type="checkbox" disabled={disabled} checked={autoAccept} onChange={e=>void change('learning_auto_accept',e.target.checked)}/></label>
-     <label className="learn-switch"><span><strong>Summarise raw notes in the background</strong><small>After an answer, the fast model on your own hardware may reword raw notes. Its suggestions always wait for review.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest??true} onChange={e=>void change('learning_digest',e.target.checked)}/></label>
+     <label className="learn-switch"><span><strong>Summarise raw notes in the background</strong><small>After an answer, the spare fast model of a STAR Server may reword raw notes. It never runs on the model you chat with; use “Summarise raw notes” for that. Its suggestions always wait for review.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest??true} onChange={e=>void change('learning_digest',e.target.checked)}/></label>
      {cloud&&<label className="learn-switch"><span><strong>Also summarise with a hosted provider</strong><small>Off by default: the notes quote your chats and would be sent to the selected provider.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest_cloud??false} onChange={e=>void change('learning_digest_cloud',e.target.checked)}/></label>}
    </div>
    <p className="learn-help">Lessons are plain notes. They cannot grant permissions or change settings, and anything that looks like a key or password is refused.</p>

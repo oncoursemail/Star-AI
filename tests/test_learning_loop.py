@@ -1107,3 +1107,47 @@ def test_notes_star_makes_by_itself_stop_piling_up_when_nobody_reviews_them(stor
     store.reject("P", results[0].lesson_id, human_approved=True)
     assert store.capture_inferred(project="P", kind="fact", source_type="doc", source="docs-search:c#999",
                                   text="The indexed Roblox and Luau documentation had no passage for: \"new\"").status == "candidate"
+
+
+def test_the_automatic_summary_never_asks_a_model_the_chat_itself_uses(tmp_path):
+    """The automatic step runs right after the warm-up that primed the chat model's prompt cache.
+    A request to that same model replaces the cached conversation (STAR's local router runs one
+    slot), so the next message would be read from the start again. Only a spare model is asked;
+    the owner's own "Summarise raw notes" may still use the chat model."""
+    raw_captures(tmp_path)
+    good = json.dumps({"lessons": [{"from": [1], "kind": "preference", "text": "The owner wants the Buy button blue."}]})
+
+    local = Settings(model="chat-model", fast_model="small-chat-model")
+    report, models = digest_with(tmp_path, good, settings=local, minimum=3)
+    assert report["skipped"] == "no_spare_model" and report["created"] == 0 and models.requests == []
+
+    class NoSuchModel(Exception):
+        status_code = 404
+
+    # A LAN server without the spare model: the automatic run gives up instead of using star-fast.
+    report, models = digest_with(tmp_path, good, minimum=3, failures=(NoSuchModel(), NoSuchModel()))
+    assert report["error"] == "NoSuchModel" and {r["model"] for r in models.requests} == {"star-quick"}
+    # The spare model is itself one of the chat's models: not spare.
+    report, models = digest_with(tmp_path, good, settings=lan(fast_model="star-quick"), minimum=3)
+    assert report["skipped"] == "no_spare_model" and models.requests == []
+
+    store = LessonStore(tmp_path)
+    try:
+        assert {x.status for x in store.list("P")} == {"candidate"} and len(digest.waiting(store, "P")) == 3
+    finally:
+        store.close()
+
+    # With the spare model present the automatic run works and says the chat model was not touched.
+    report, models = digest_with(tmp_path, good, minimum=3)
+    assert report["created"] == 1 and report["model"] == "star-quick" and "shared_model" not in report
+    # Asked for by the owner, without a spare model: the chat model answers, and the report says so
+    # (the bridge then primes the chat's cache again).
+    raw_captures(tmp_path, project="Q")
+    models = Models()
+    models.responses = [reply(good)]
+    report = digest.digest_once(local, tmp_path, "Q", minimum=1, open_model=lambda settings, **_: Client(models))
+    assert report["created"] == 1 and report["model"] == "small-chat-model" and report["shared_model"] is True
+    import inspect
+    from star import react_shell
+    source = inspect.getsource(react_shell.launch)
+    assert "if report.get('shared_model') and not self.active_task:self._warm(check=False)" in source
