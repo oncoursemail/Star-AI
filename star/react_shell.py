@@ -799,7 +799,7 @@ def launch():
                     self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='switchChat':
-                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
                     conversations=Conversations(app_data()/'conversations.sqlite3')
