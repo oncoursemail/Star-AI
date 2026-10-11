@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 
 from star.environment_craft import (PRESETS, compare_render, foliage_script,
-                                    inspect_reference, lighting_recipe, main)
+                                    inspect_reference, lighting_recipe, main, vfx_recipe)
 
 
 def _picture(path: Path, color, *, size=(160, 90), split=None):
@@ -105,3 +105,17 @@ def test_cli_does_not_overwrite_and_produces_real_reports(tmp_path, capsys):
     with pytest.raises(SystemExit) as exc:
         main(["lighting", "winter-shrine", "--out", str(target)])
     assert exc.value.code == 2
+
+
+def test_vfx_recipes_are_bounded_and_never_download_unreviewed_textures():
+    from star.environment_craft import VFX_PRESETS
+    assert set(VFX_PRESETS) == {"falling-snow", "floating-embers", "dust-motes"}
+    for name in VFX_PRESETS:
+        script = vfx_recipe(name)
+        assert 'Instance.new("ParticleEmitter")' in script
+        assert 'ParticleEmitter' in script and 'WindAffectsDrag = true' in script
+        assert 'STAR_FX_Anchor' in script and 'NumberSequenceKeypoint.new' in script
+        assert 'rbxassetid://' not in script
+        assert 'HttpService' not in script and 'require(' not in script
+    with pytest.raises(ValueError, match="Unknown"):
+        vfx_recipe('invented')
