@@ -9,12 +9,13 @@ from star import desktop_core, doc_grounding, skill_packs
 from star.agent_skills import SkillLibrary
 from star.desktop_core import Settings, run_task
 
+UNITY_NAMES = ["unity-monobehaviour-lifecycle","unity-input-system","unity-physics-and-collisions","unity-ui-toolkit-and-ugui","unity-scriptableobjects-and-data","unity-performance-and-pooling"]
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
          "game-obby", "game-tycoon", "game-simulator", "game-rounds",
          "game-inventory", "game-npc-quests",
-         "eng-debugging", "eng-test-first", "eng-verify-before-done"]
+         "eng-debugging", "eng-test-first", "eng-verify-before-done"] + UNITY_NAMES
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
@@ -42,6 +43,9 @@ def test_every_pack_cites_official_documentation_and_lists_the_api_names_it_chec
         if pack.name in ENGINEERING:
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
+        if pack.name.startswith("unity-"):
+            assert sources.count("https://docs.unity3d.com/") >= 3, pack.name
+            continue
         assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
         assert "verified with the knowledge service /api-lookup" in sources, pack.name
         assert "http://" not in sources and "10.17" not in sources
@@ -219,3 +223,14 @@ def test_new_game_packs_are_registered_but_switched_off_pending_evaluation():
 def test_new_game_pack_routing_requires_explicit_opt_in(name, prompt):
     assert skill_packs.matching_names(prompt) == [] or name not in skill_packs.matching_names(prompt)
     assert skill_packs.matching_names(prompt, enabled={name}) == [name]
+
+
+def test_unity_packs_require_opt_in_and_do_not_match_roblox():
+    assert set(UNITY_NAMES).isdisjoint(skill_packs.DEFAULT_ENABLED)
+    assert set(UNITY_NAMES).isdisjoint(skill_packs.enabled_names({}))
+    assert set(UNITY_NAMES) <= skill_packs.enabled_names({skill_packs.ENV_VAR: "all"})
+    for name in UNITY_NAMES:
+        assert skill_packs.enabled_names({skill_packs.ENV_VAR: name}) == {name}
+    assert skill_packs.matching_names("In Unity, implement MonoBehaviour Awake and OnDisable.", enabled={"unity-monobehaviour-lifecycle"}) == ["unity-monobehaviour-lifecycle"]
+    assert skill_packs.matching_names("In Unity, implement Rigidbody FixedUpdate AddForce.", enabled={"unity-physics-and-collisions"}) == ["unity-physics-and-collisions"]
+    assert skill_packs.matching_names(UI_PROMPT, enabled=UNITY_NAMES) == []
