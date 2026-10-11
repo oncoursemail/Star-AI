@@ -607,6 +607,11 @@ class LessonStore:
         try:
             self._begin()
             self.db.execute("DELETE FROM lesson_use WHERE note_id=?", (lesson_id,))
+            # Raw notes folded into a deleted summary have nothing left to be reviewed through:
+            # they wait again, marked as already seen so the summary step does not remake it.
+            self.db.execute(
+                "UPDATE notes SET status='candidate',revision='candidate-digested',merged_into=NULL,updated=? "
+                "WHERE merged_into=? AND project=? AND status='merged'", (now(), lesson_id, lesson.project))
             self.db.execute("UPDATE notes SET merged_into=NULL WHERE merged_into=? AND project=?",
                             (lesson_id, lesson.project))
             self.db.execute("DELETE FROM notes WHERE id=? AND project=? AND status IS NOT NULL",

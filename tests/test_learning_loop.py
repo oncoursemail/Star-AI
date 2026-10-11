@@ -1151,3 +1151,29 @@ def test_the_automatic_summary_never_asks_a_model_the_chat_itself_uses(tmp_path)
     from star import react_shell
     source = inspect.getsource(react_shell.launch)
     assert "if report.get('shared_model') and not self.active_task:self._warm(check=False)" in source
+
+
+def test_deleting_a_summary_gives_its_raw_notes_back_for_review(tmp_path):
+    """A raw note folded into a summary says "review the summary instead". Once the summary is
+    deleted there is nothing to review, so the notes wait again (and are not sent to the model twice)."""
+    ids = raw_captures(tmp_path)
+    store = LessonStore(tmp_path)
+    try:
+        made = digest.apply_digest(store, "P", digest.waiting(store, "P"),
+                                   [{"from": [1, 2], "kind": "preference", "text": "The owner wants the Buy button blue."}], "m")
+        assert [store.get("P", i).status for i in ids] == ["merged", "merged", "candidate"]
+        store.delete("P", made[0], human_approved=True)
+        assert [(store.get("P", i).status, store.get("P", i).merged_into) for i in ids[:2]] == [("candidate", None)] * 2
+        assert digest.waiting(store, "P") == []                                   # already seen by the summary step
+        assert store.approve("P", ids[0], human_approved=True, text="Make the Buy button blue.").status == "accepted"
+        assert not [n for n in store.knowledge.find("P", "owner wants Buy button", reviewed_only=False)
+                    if "owner wants" in n.text]                                    # the summary left the search index too
+        # A capture the owner had already rejected stays rejected when its summary goes.
+        again = raw_captures(tmp_path, project="Q")
+        made = digest.apply_digest(store, "Q", digest.waiting(store, "Q"),
+                                   [{"from": [1], "kind": "preference", "text": "The owner wants the Buy button blue."}], "m")
+        store.reject("Q", again[0], human_approved=True)
+        store.delete("Q", made[0], human_approved=True)
+        assert store.get("Q", again[0]).status == "rejected"
+    finally:
+        store.close()

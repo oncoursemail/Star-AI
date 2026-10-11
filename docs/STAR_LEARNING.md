@@ -94,7 +94,8 @@ after a turn and its cache warm-up have finished, STAR may send one small reques
   notes" on the review page may use the fast or main model; the chat's cache is then primed again.
 
 - Its output is always a candidate (`source_type = summary`) and passes the same content rules.
-- Raw captures it used become `merged`; one you already reviewed is left alone.
+- Raw captures it used become `merged`; one you already reviewed is left alone. Deleting a summary
+  puts its raw captures back under Waiting (they are not sent to the model a second time).
 - One request per run, 6 captures, 420 output tokens, 120 seconds; cancelled by any real request;
   after a failed run automatic runs pause for 15 minutes.
 - Off for hosted providers unless `learning_digest_cloud` is turned on, because the captures quote your
