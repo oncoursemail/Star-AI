@@ -100,6 +100,11 @@ class ObsidianVault:
                        for part in path.parts)):
             raise PermissionError("Hidden, non-Markdown or escaping paths are blocked")
         file = self.root / path
+        current = self.root
+        for part in path.parts:
+            current = current / part
+            if current.is_symlink():
+                raise PermissionError("Symlink paths within the vault are blocked")
         if (file.is_symlink() or not file.is_file()
                 or not file.resolve(strict=True).is_relative_to(self.root)
                 or file.stat().st_size > MAX_NOTE_BYTES):
