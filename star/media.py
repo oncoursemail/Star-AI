@@ -5,11 +5,19 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 MAX_FILE = 8 * 1024 * 1024
+OWN_HARDWARE_MAX_SIDE = 1280        # default cap for pictures read by the STAR Server or the on-device brain
 MAX_PIXELS = 20_000_000
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
 
-def image_part(filename: Path) -> dict:
+def image_part(filename: Path, max_side: int | None = None) -> dict:
+    """The picture as a data URL for the model: re-encoded PNG, no metadata.
+
+    `max_side` scales a larger picture down so its longer side is at most that many pixels.
+    The file on disk is never changed; only the copy the model reads is smaller. A model on a
+    processor reads a picture at roughly its pixel count (measured on the STAR Server: about
+    1,000 tokens and 30 s for one megapixel), so an uncapped 2560 x 1600 screenshot took minutes.
+    """
     if not filename.is_file() or filename.stat().st_size > MAX_FILE:
         raise ValueError("Image missing or larger than 8 MiB")
     with Image.open(filename) as source:
@@ -18,6 +26,8 @@ def image_part(filename: Path) -> dict:
         if getattr(source, "n_frames", 1) != 1 or source.width * source.height > MAX_PIXELS:
             raise ValueError("Animated images or images over 20 MP aren't supported")
         sanitized = ImageOps.exif_transpose(source).convert("RGB")
+        if max_side and max(sanitized.size) > max_side:
+            sanitized.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
         buffer = io.BytesIO()
         sanitized.save(buffer, "PNG")
     raw = buffer.getvalue()

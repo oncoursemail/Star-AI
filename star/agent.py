@@ -223,7 +223,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   subagent_model=None, tool_workshop=None, specialists=None,
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
-                  tool_memory=None, helper_client=None):
+                  tool_memory=None, helper_client=None, image_max_side=None):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -324,7 +324,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
 
     context = turn_context(turn_sections or ())
     content = [{"type": "text", "text": final_user_text(prompt, context)}]
-    content.extend(image_part(path) for path in image_paths)
+    content.extend(image_part(path, image_max_side) for path in image_paths)
     # messages[anchor] is the request being answered; messages[1:anchor] are earlier turns.
     messages, anchor = assemble(make_system_message(project_memory, tools_attached=tools_attached, guidance=guidance),
                                 clean_history(history), {"role": "user", "content": content})
