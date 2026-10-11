@@ -125,6 +125,14 @@ def evaluate(expression: str):
     """Evaluate an expression without eval, Python object access or imports."""
     if not isinstance(expression, str) or not expression.strip() or len(expression) > MAX_LENGTH:
         raise ValueError("Invalid expression length")
+    depth = 0
+    for char in expression:
+        if char in "([{":
+            depth += 1
+            if depth > MAX_DEPTH:
+                raise ValueError("Expression nesting too deep")
+        elif char in ")]}":
+            depth -= 1
     try:
         root = ast.parse(expression, mode="eval")
         if sum(1 for _ in ast.walk(root)) > MAX_NODES:
