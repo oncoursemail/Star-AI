@@ -27,7 +27,7 @@
       "attribution": "Keep the MIT copyright and permission notice with substantial copies of repository code samples.",
       "conditions": "Do not assume separate playground examples or external packages share the licence.",
       "evidence_url": "https://github.com/microsoft/TypeScript-Website/blob/v2/LICENSE-CODE",
-      "evidence_quote": "The MIT License (MIT)"
+      "evidence_quote": "MIT License"
     }
   },
   "include": [
