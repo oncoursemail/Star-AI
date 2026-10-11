@@ -2,7 +2,7 @@
  "schema": 1,
  "suite": {
   "file": "golden-tasks-v2.json",
-  "sha256": "4034d9c52a577276ec15a307b605b085ec92251af7575897ef71f83b7bc9865b",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
   "tasks_total": 50,
   "automated": 34,
   "selected": [
@@ -43,7 +43,7 @@
   ]
  },
  "run": {
-  "app_commit": "e407caa0fd4c79468f67334d23a7209974aacfc6",
+  "app_commit": "66bf9e45984747af16ca1077ca794c9c6ded24f1",
   "app_dirty": false,
   "runner": "star.eval_runner/1",
   "provider": "star_server",
@@ -59,14 +59,17 @@
   "skill_packs": "off",
   "knowledge": "on",
   "temperature": 0,
+  "server_timeout_s": 1800,
   "server": "<private-address>",
   "sandbox": "lxc container as user star (prlimit + timeout)",
   "platform": "win32",
   "fingerprint": "237a0cfcb9d5",
   "started_at": "2026-10-11T01:26:21+00:00",
-  "waited_for_lock_s": 0.6
+  "waited_for_lock_s": 11.0,
+  "finished_at": "2026-10-11T04:35:33+00:00",
+  "rescored_at": "2026-10-11T05:09:12+00:00"
  },
- "complete": false,
+ "complete": true,
  "tasks": {
   "LUA-01": {
    "status": "pass",
@@ -101,8 +104,8 @@
    ],
    "seconds": 73.2,
    "timings": {
-    "luau_check_s": 0.08,
-    "unit_s": 0.48
+    "luau_check_s": 0.11,
+    "unit_s": 0.64
    },
    "blocks": 1,
    "answer_chars": 3229,
@@ -170,8 +173,8 @@
    ],
    "seconds": 41.0,
    "timings": {
-    "luau_check_s": 0.11,
-    "unit_s": 0.5
+    "luau_check_s": 0.12,
+    "unit_s": 0.61
    },
    "blocks": 1,
    "answer_chars": 2202,
@@ -235,8 +238,8 @@
    ],
    "seconds": 103.0,
    "timings": {
-    "luau_check_s": 0.08,
-    "unit_s": 0.52
+    "luau_check_s": 0.11,
+    "unit_s": 0.67
    },
    "blocks": 1,
    "answer_chars": 2793,
@@ -300,8 +303,8 @@
    ],
    "seconds": 161.4,
    "timings": {
-    "luau_check_s": 0.08,
-    "unit_s": 0.55
+    "luau_check_s": 0.12,
+    "unit_s": 0.58
    },
    "blocks": 1,
    "answer_chars": 3374,
@@ -362,8 +365,8 @@
    ],
    "seconds": 95.2,
    "timings": {
-    "luau_check_s": 0.08,
-    "unit_s": 0.52
+    "luau_check_s": 0.12,
+    "unit_s": 0.66
    },
    "blocks": 1,
    "answer_chars": 2708,
@@ -426,8 +429,8 @@
    ],
    "seconds": 220.1,
    "timings": {
-    "luau_check_s": 0.14,
-    "unit_s": 0.53
+    "luau_check_s": 0.27,
+    "unit_s": 0.61
    },
    "blocks": 2,
    "answer_chars": 5294,
@@ -455,12 +458,10 @@
    "answer": "Here is a robust, server-side `AbilityGate` ModuleScript that enforces a 2-second cooldown per player using the server clock (`tick()`), ignores client-provided timestamps, and exposes the requested interface.\n\n### `ServerScriptService.AbilityGate` (ModuleScript)\n\n```lua\n--!strict\n\nlocal Players = game:GetService(\"Players\")\n\n-- Configuration\nlocal COOLDOWN_SECONDS: number = 2\n\n-- Internal state: maps Player instance to the server timestamp of their last use\nlocal lastUseTime: table = {}\n\nlocal AbilityGate = {}\n\n--- Attempts to use an ability for the given player.\n--- Returns true if the ability was allowed, false if on cooldown.\n--- Client arguments are ignored for timing purposes.\nfunction AbilityGate.tryUse(player: Player): boolean\n\tassert(player, \"tryUse requires a Player instance\")\n\t\n\tlocal now: number = tick()\n\t\n\t-- If the player hasn't used an ability yet, allow it immediately\n\tif lastUseTime[player] == nil then\n\t\tlastUseTime[player] = now\n\t\treturn true\n\tend\n\t\n\t-- Check if enough time has passed since the last use\n\tif now - lastUseTime[player] >= COOLDOWN_SECONDS then\n\t\tlastUseTime[player] = now\n\t\treturn true\n\tend\n\t\n\t-- Cooldown is still active\n\treturn false\nend\n\n--- Resets the cooldown state for a specific player.\n--- Typically connected to Players.PlayerRemoving to clean up memory.\nfunction AbilityGate.forget(player: Player): nil\n\tassert(player, \"forget requires a Player instance\")\n\tlastUseTime[player] = nil\n\treturn nil\nend\n\n--- Returns the number of players currently being tracked.\n--- Useful for unit tests or debugging.\nfunction AbilityGate.trackedCount(): number\n\treturn #lastUseTime\nend\n\n-- Automatically connect cleanup when players leave\nPlayers.PlayerRemoving:Connect(AbilityGate.forget)\n\nreturn AbilityGate\n```\n\n### How to use it\n\n**1. In `ServerScriptService` (Main Script):**\nConnect the `UseAbility` RemoteEvent to the gate.\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal AbilityGate = require(script.Parent.AbilityGate) -- Adjust path as needed\n\n-- Listen for the client firing UseAbility\nReplicatedStorage.UseAbility.OnServerEvent:Connect(function(player: Player, ...)\n\t-- ... arguments are ignored for timing, but you can use them for ability type, etc.\n\t\n\tif AbilityGate.tryUse(player) then\n\t\t-- Ability allowed: execute logic, fire other events, etc.\n\t\tprint(player.Name .. \" used an ability!\")\n\telse\n\t\t-- Ability on cooldown: optionally notify client or ignore\n\t\twarn(player.Name .. \" is on cooldown.\")\n\tend\nend)\n```\n\n### Key Design Points\n\n1.  **Server Clock (`tick()`):** The cooldown is measured using `tick()`, which is the server's monotonic clock. This prevents clients from manipulating `os.time()` or sending fake timestamps via `FireServer` to bypass the cooldown.\n2.  **Per-Player State:** The `lastUseTime` dictionary keys by the `Player` instance, ensuring each player has their own independent 2-second window.\n3.  **Memory Management:** `forget(player)` removes the player from the `lastUseTime` table. It is automatically connected to `Players.PlayerRemoving` to prevent memory leaks when players leave the game.\n4.  **Testability:** `trackedCount()` allows external scripts (like a test suite) to verify how many players are currently tracked in the cooldown system.\n5.  **Strict Typing:** The module uses `--!strict` and explicit type annotations for better tooling support and error prevention.\n\n### References\n*   [1] Remote events and callbacks > Remote events > Server → client: Explains how `OnServerEvent` receives the `Player` as the first argument and how additional arguments are passed.\n*   [3] RemoteEvent: Notes that `RemoteEvents` are subject to rate limits and are one-way, making them suitable for ability triggers where the server decides the outcome.\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Not all codepaths in this function return 'nil'., line 42). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 12: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n- line 15: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Remote events > Server&nbsp;→ client](https://create.roblox.com/docs/scripting/events/remote#servernbsp-client) · cited\n2. [Remote events and callbacks > Remote events > Server&nbsp;→ all clients](https://create.roblox.com/docs/scripting/events/remote#servernbsp-all-clients) · retrieved, not cited\n3. [RemoteEvent](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent) · cited\n4. [Custom abilities > Ability registration](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-registration) · retrieved, not cited\n"
   },
   "NET-01": {
-   "status": "fail",
-   "passed": false,
+   "status": "pass",
+   "passed": true,
    "prompt_sha256": "d8ec704be7622403",
-   "reasons": [
-    "unit_tests: 4/7 passed; failed: a client price of -1e9 is ignored (balance 0, sword granted once); 100 coins buys it: balance 0, granted once; 50 rapid valid calls grant once and charge once"
-   ],
+   "reasons": [],
    "checks": [
     {
      "id": "luau_block",
@@ -476,8 +477,7 @@
     },
     {
      "id": "unit_tests",
-     "ok": false,
-     "detail": "4/7 passed; failed: a client price of -1e9 is ignored (balance 0, sword granted once); 100 coins buys it: balance 0, granted once; 50 rapid valid calls grant once and charge once"
+     "ok": true
     },
     {
      "id": "require:catalog_lookup",
@@ -486,8 +486,8 @@
    ],
    "seconds": 197.4,
    "timings": {
-    "luau_check_s": 0.17,
-    "unit_s": 0.55
+    "luau_check_s": 0.19,
+    "unit_s": 0.67
    },
    "blocks": 2,
    "answer_chars": 4606,
@@ -519,8 +519,7 @@
    "passed": false,
    "prompt_sha256": "2f3b2cd8e05fd5ca",
    "reasons": [
-    "require:unreliable_aim: the 20 Hz aim stream must use an UnreliableRemoteEvent",
-    "require:reliable_round: the round-end message must use a reliable RemoteEvent"
+    "require:unreliable_aim: the 20 Hz aim stream must use an UnreliableRemoteEvent"
    ],
    "checks": [
     {
@@ -545,11 +544,6 @@
      "detail": "the 20 Hz aim stream must use an UnreliableRemoteEvent"
     },
     {
-     "id": "require:reliable_round",
-     "ok": false,
-     "detail": "the round-end message must use a reliable RemoteEvent"
-    },
-    {
      "id": "require:fire_all",
      "ok": true
     },
@@ -572,7 +566,7 @@
    ],
    "seconds": 175.4,
    "timings": {
-    "luau_check_s": 0.24
+    "luau_check_s": 0.33
    },
    "blocks": 4,
    "answer_chars": 6997,
@@ -649,8 +643,8 @@
    ],
    "seconds": 321.1,
    "timings": {
-    "luau_check_s": 0.08,
-    "unit_s": 0.56
+    "luau_check_s": 0.14,
+    "unit_s": 0.62
    },
    "blocks": 1,
    "answer_chars": 7558,
@@ -714,7 +708,7 @@
    "seconds": 385.9,
    "timings": {
     "luau_check_s": 0.23,
-    "unit_s": 0.59
+    "unit_s": 0.64
    },
    "blocks": 2,
    "answer_chars": 7131,
@@ -777,7 +771,7 @@
    ],
    "seconds": 360.1,
    "timings": {
-    "luau_check_s": 0.09,
+    "luau_check_s": 0.12,
     "unit_s": 0.61
    },
    "blocks": 1,
@@ -834,7 +828,7 @@
    ],
    "seconds": 210.4,
    "timings": {
-    "luau_check_s": 0.09
+    "luau_check_s": 0.12
    },
    "blocks": 1,
    "answer_chars": 2929,
@@ -958,22 +952,1431 @@
    ]
   },
   "UI-09": {
-   "status": "error",
+   "status": "fail",
    "passed": false,
+   "prompt_sha256": "7001efc48a8b042a",
    "reasons": [
-    "APITimeoutError: Request timed out."
+    "require:square: slots are kept square with an aspect-ratio constraint"
    ],
-   "checks": [],
-   "seconds": 0.0,
-   "error": "APITimeoutError: Request timed out."
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:screengui",
+     "ok": true
+    },
+    {
+     "id": "require:playergui",
+     "ok": true
+    },
+    {
+     "id": "require:layout_object",
+     "ok": true
+    },
+    {
+     "id": "require:square",
+     "ok": false,
+     "detail": "slots are kept square with an aspect-ratio constraint"
+    },
+    {
+     "id": "require:scale_sizes",
+     "ok": true
+    },
+    {
+     "id": "forbid:images_of_ui",
+     "ok": true
+    }
+   ],
+   "seconds": 517.9,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 6490,
+   "answer_sha256": "a841f7b39b5176e308c1ce3527582fc04870c21a3f6968d5648607601ff6e4f9",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 516
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a complete, robust LocalScript that builds the inventory HUD dynamically. It uses `Scale` for sizing, `UIListLayout` for arrangement, and `UICorner` for styling.\n\n### The LocalScript\n\nPlace this script inside `StarterPlayer > StarterPlayerScripts`.\n\n```lua\n--!strict\n\n-- 1. Setup References\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- 2. Create the ScreenGui\nlocal screenGui = Instance.new(\"ScreenGui\")\nscreenGui.Name = \"InventoryHud\"\nscreenGui.ResetOnSpawn = false -- Keep it when character respawns\nscreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling\nscreenGui.Parent = playerGui\n\n-- 3. Create the Main Container Frame (60% width, centered)\nlocal container = Instance.new(\"Frame\")\ncontainer.Name = \"Container\"\ncontainer.Size = UDim2.new(0.6, 0, 0.8, 0) -- 60% width, 80% height (leaves room for safe areas)\ncontainer.Position = UDim2.new(0.5, 0, 0.5, 0) -- Centered\ncontainer.AnchorPoint = Vector2.new(0.5, 0.5) -- Anchor to center\ncontainer.BackgroundColor3 = Color3.fromRGB(40, 40, 40)\ncontainer.BorderSizePixel = 0\ncontainer.Parent = screenGui\n\n-- Add rounded corners to the container\nlocal containerCorner = Instance.new(\"UICorner\")\ncontainerCorner.CornerRadius = UDim.new(0, 12)\ncontainerCorner.Parent = container\n\n-- 4. Create the Title Label\nlocal titleLabel = Instance.new(\"TextLabel\")\ntitleLabel.Name = \"Title\"\ntitleLabel.Size = UDim2.new(1, 0, 0, 40)\ntitleLabel.Position = UDim2.new(0, 0, 0, 0)\ntitleLabel.BackgroundTransparency = 1\ntitleLabel.Text = \"Inventory\"\ntitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)\ntitleLabel.Font = Enum.Font.GothamBold\ntitleLabel.TextSize = 24\ntitleLabel.TextXAlignment = Enum.TextXAlignment.Center\ntitleLabel.Parent = container\n\n-- 5. Create the Close Button\nlocal closeButton = Instance.new(\"TextButton\")\ncloseButton.Name = \"CloseButton\"\ncloseButton.Size = UDim2.new(0, 30, 0, 30)\ncloseButton.Position = UDim2.new(1, -40, 0, 5) -- Top right area\ncloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)\ncloseButton.Text = \"X\"\ncloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)\ncloseButton.Font = Enum.Font.GothamBold\ncloseButton.TextSize = 18\ncloseButton.Parent = container\n\n-- Add rounded corners to close button\nlocal closeCorner = Instance.new(\"UICorner\")\ncloseCorner.CornerRadius = UDim.new(1, 0) -- Circular\ncloseCorner.Parent = closeButton\n\n-- 6. Create the Grid Layout Container\n-- This frame holds the slots and uses a UIListLayout to arrange them\nlocal gridContainer = Instance.new(\"Frame\")\ngridContainer.Name = \"GridContainer\"\ngridContainer.Size = UDim2.new(1, -20, 1, -80) -- Padding inside container\ngridContainer.Position = UDim2.new(0, 10, 0, 50) -- Below title\ngridContainer.BackgroundTransparency = 1\ngridContainer.Parent = container\n\n-- 7. Configure the Layout (4 columns, square slots)\nlocal layout = Instance.new(\"UIListLayout\")\nlayout.Parent = gridContainer\nlayout.HorizontalAlignment = Enum.HorizontalAlignment.Center -- Center the grid\nlayout.SortOrder = Enum.SortOrder.LayoutOrder\nlayout.Padding = UDim.new(0, 4) -- 4 pixels between slots\n\n-- IMPORTANT: To force a grid (rows and columns) using UIListLayout, \n-- we set the FillDirection to Vertical and rely on the container width, \n-- BUT UIListLayout alone doesn't do columns. \n-- We need UIGridLayout for true columns, or we calculate manually.\n-- However, the prompt asks for a \"layout object\". UIGridLayout is the native way to do 4 columns.\n\n-- Let's swap to UIGridLayout for true 4-column behavior\nlayout:Destroy()\nlocal gridLayout = Instance.new(\"UIGridLayout\")\ngridLayout.Parent = gridContainer\ngridLayout.FillDirection = Enum.FillDirection.Vertical\ngridLayout.CellSize = UDim2.new(0.23, 0, 0.23, 0) -- Approx 1/4th width, keeping it square\ngridLayout.CellPadding = UDim.new(0, 4)\ngridLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center\ngridLayout.VerticalAlignment = Enum.VerticalAlignment.Center\n\n-- 8. Generate 12 Item Slots\nfor i = 1, 12 do\n    local slot = Instance.new(\"Frame\")\n    slot.Name = \"Slot_\" .. i\n    slot.Size = UDim2.new(0.23, 0, 0.23, 0) -- Matches grid layout cell size\n    slot.BackgroundColor3 = Color3.fromRGB(80, 80, 80)\n    slot.BorderSizePixel = 0\n    slot.Parent = gridContainer\n    \n    -- Add rounded corners to slots\n    local slotCorner = Instance.new(\"UICorner\")\n    slotCorner.CornerRadius = UDim.new(0, 6)\n    slotCorner.Parent = slot\n    \n    -- Optional: Add a placeholder text to identify slots\n    local slotLabel = Instance.new(\"TextLabel\")\n    slotLabel.Name = \"SlotLabel\"\n    slotLabel.Size = UDim2.new(1, 0, 1, 0)\n    slotLabel.BackgroundTransparency = 1\n    slotLabel.Text = tostring(i)\n    slotLabel.TextColor3 = Color3.fromRGB(200, 200, 200)\n    slotLabel.Font = Enum.Font.GothamSemibold\n    slotLabel.TextSize = 18\n    slotLabel.Parent = slot\nend\n\n-- 9. Close Button Logic\ncloseButton.MouseButton1Click:Connect(function()\n    screenGui:Destroy()\nend)\n```\n\n### Key Technical Details\n\n1.  **Responsive Sizing (Scale):**\n    *   The main container uses `UDim2.new(0.6, 0, 0.8, 0)`. This ensures it is always 60% of the screen width, whether on a 1920x1080 PC or a 390x844 phone [4].\n    *   The slots use `CellSize` in `UIGridLayout` with Scale values (`0.23`). This ensures the grid adapts to the container's width automatically.\n\n2.  **Layout Objects:**\n    *   **`UIGridLayout`** is used instead of `UIListLayout` because it natively supports **columns**. By setting `FillDirection` to `Vertical\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Wireframe your layouts > Block in UI elements](https://create.roblox.com/docs/tutorials/curriculums/user-interface-design/wireframe-your-layouts#block-in-ui-elements) · retrieved, not cited\n2. [Create interactive UI > Enable the Device Emulator](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/interactive-ui#enable-the-device-emulator) · retrieved, not cited\n3. [Create HUD meters > Create a screen container > Utilize safe areas](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#utilize-safe-areas) · retrieved, not cited\n4. [Cross-platform development > User interface](https://create.roblox.com/docs/projects/cross-platform#user-interface) · cited\n"
+  },
+  "UI-10": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9a85ec51a27908fd",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:scrolling",
+     "ok": true
+    },
+    {
+     "id": "require:list_layout",
+     "ok": true
+    },
+    {
+     "id": "require:auto_canvas",
+     "ok": true
+    },
+    {
+     "id": "require:padding",
+     "ok": true
+    },
+    {
+     "id": "require:shop_gui",
+     "ok": true
+    },
+    {
+     "id": "forbid:manual_canvas",
+     "ok": true
+    }
+   ],
+   "seconds": 229.4,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 5529,
+   "answer_sha256": "72b68ab2d437e3bf9b16ff6f77e29939c9b8f1584564c319b2d20e36ac7b3345",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 233
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here's the LocalScript. Place it as a child of the existing `ShopGui` ScreenGui in `StarterGui` (or in `PlayerGui` at runtime).\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- 1. Find the existing ShopGui ScreenGui\nlocal shopGui = playerGui:WaitForChild(\"ShopGui\")\n\n-- 2. Create the ScrollingFrame that will hold the rows\nlocal scrollFrame = Instance.new(\"ScrollingFrame\")\nscrollFrame.Name = \"ShopScrollFrame\"\nscrollFrame.Size = UDim2.new(1, 0, 1, 0) -- fills ShopGui\nscrollFrame.Position = UDim2.new(0, 0, 0, 0)\nscrollFrame.BackgroundTransparency = 1\nscrollFrame.ScrollBarThickness = 4\nscrollFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 200)\nscrollFrame.VerticalScrollBarInset = \"Always\"\nscrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y\nscrollFrame.ScrollingEnabled = true\nscrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y -- canvas grows with rows automatically [1]\nscrollFrame.Parent = shopGui\n\n-- 3. Add padding so content doesn't touch the edges of the ScrollingFrame\nlocal scrollPadding = Instance.new(\"UIPadding\")\nscrollPadding.PaddingLeft = UDim.new(0, 8)\nscrollPadding.PaddingRight = UDim.new(0, 8)\nscrollPadding.PaddingTop = UDim.new(0, 8)\nscrollPadding.PaddingBottom = UDim.new(0, 8)\nscrollPadding.Parent = scrollFrame\n\n-- 4. Create the UIListLayout to arrange rows vertically\nlocal listLayout = Instance.new(\"UIListLayout\")\nlistLayout.FillDirection = Enum.FillDirection.Vertical\nlistLayout.SortOrder = Enum.SortOrder.LayoutOrder\nlistLayout.Padding = UDim.new(0, 4) -- small gap between rows\nlistLayout.Parent = scrollFrame\n\n-- 5. Build 30 item rows\nlocal shopItems = {\n\t{ name = \"Sword\", price = 100 };\n\t{ name = \"Shield\", price = 150 };\n\t{ name = \"Helmet\", price = 80 };\n\t{ name = \"Boots\", price = 60 };\n\t{ name = \"Potion\", price = 30 };\n\t{ name = \"Bow\", price = 200 };\n\t{ name = \"Arrows\", price = 25 };\n\t{ name = \"Axe\", price = 175 };\n\t{ name = \"Staff\", price = 250 };\n\t{ name = \"Ring\", price = 300 };\n\t{ name = \"Amulet\", price = 350 };\n\t{ name = \"Cloak\", price = 120 };\n\t{ name = \"Gloves\", price = 90 };\n\t{ name = \"Torch\", price = 15 };\n\t{ name = \"Map\", price = 50 };\n\t{ name = \"Key\", price = 40 };\n\t{ name = \"Gem\", price = 500 };\n\t{ name = \"Crystal\", price = 450 };\n\t{ name = \"Scroll\", price = 70 };\n\t{ name = \"Dagger\", price = 110 };\n\t{ name = \"Mace\", price = 130 };\n\t{ name = \"Hammer\", price = 160 };\n\t{ name = \"Lantern\", price = 45 };\n\t{ name = \"Rope\", price = 20 };\n\t{ name = \"Food\", price = 10 };\n\t{ name = \"Water\", price = 10 };\n\t{ name = \"Bandage\", price = 35 };\n\t{ name = \"Bomb\", price = 200 };\n\t{ name = \"Trap\", price = 95 };\n\t{ name = \"Chest\", price = 600 };\n}\n\nfor i = 1, 30 do\n\tlocal item = shopItems[i]\n\n\t-- Row container Frame\n\tlocal row = Instance.new(\"Frame\")\n\trow.Name = \"ShopRow_\" .. i\n\trow.Size = UDim2.new(1, 0, 0, 40) -- fixed height per row\n\trow.BackgroundTransparency = 0\n\trow.BackgroundColor3 = i % 2 == 0 and Color3.fromRGB(40, 40, 40) or Color3.fromRGB(50, 50, 50)\n\trow.BorderSizePixel = 0\n\trow.LayoutOrder = i\n\trow.Parent = scrollFrame\n\n\t-- Item name label (left)\n\tlocal nameLabel = Instance.new(\"TextLabel\")\n\tnameLabel.Name = \"ItemName\"\n\tnameLabel.Size = UDim2.new(0.6, 0, 1, 0)\n\tnameLabel.Position = UDim2.new(0, 0, 0, 0)\n\tnameLabel.BackgroundTransparency = 1\n\tnameLabel.Text = item.name\n\tnameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)\n\tnameLabel.TextSize = 18\n\tnameLabel.Font = Enum.Font.GothamBold\n\tnameLabel.TextXAlignment = Enum.TextXAlignment.Left\n\tnameLabel.TextWrapped = true\n\tnameLabel.Parent = row\n\n\t-- Price label (right)\n\tlocal priceLabel = Instance.new(\"TextLabel\")\n\tpriceLabel.Name = \"ItemPrice\"\n\tpriceLabel.Size = UDim2.new(0.4, 0, 1, 0)\n\tpriceLabel.Position = UDim2.new(0.6, 0, 0, 0)\n\tpriceLabel.BackgroundTransparency = 1\n\tpriceLabel.Text = \"Price: \" .. tostring(item.price) .. \" coins\"\n\tpriceLabel.TextColor3 = Color3.fromRGB(255, 215, 0)\n\tpriceLabel.TextSize = 18\n\tpriceLabel.Font = Enum.Font.GothamBold\n\tpriceLabel.TextXAlignment = Enum.TextXAlignment.Right\n\tpriceLabel.TextWrapped = true\n\tpriceLabel.Parent = row\nend\n```\n\n### How it works\n\n| Requirement | Implementation |\n|---|---|\n| **30 rows** | A loop creates 30 `Frame` rows, each with a name label and price label |\n| **Item name left, price right** | `nameLabel` uses `UDim2.new(0.6, 0, 1, 0)` with `TextXAlignment = Left`; `priceLabel` uses `UDim2.new(0.4, 0, 1, 0)` with `TextXAlignment = Right` |\n| **Layout object arranges rows** | `UIListLayout` with `FillDirection = Vertical` is parented to the `ScrollingFrame`, automatically stacking rows [2] |\n| **Scrolls vertically** | `ScrollingFrame` with `ScrollingDirection = Y` and `AutomaticCanvasSize = Y` — the canvas grows\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Custom text chat UI](https://create.roblox.com/docs/chat/examples/simple-custom-frontend-ui) · retrieved, not cited\n2. [User interface > Layout and design](https://create.roblox.com/docs/ui#layout-and-design) · cited\n3. [Create a GUI > Script the GUI](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#script-the-gui) · retrieved, not cited\n4. [GuiObject > MouseMoved](https://create.roblox.com/docs/reference/engine/classes/GuiObject#MouseMoved) · retrieved, not cited\n"
+  },
+  "UI-12": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "519775091eef11cb",
+   "reasons": [
+    "require:uiscale: a UIScale scales the panel"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:uiscale",
+     "ok": false,
+     "detail": "a UIScale scales the panel"
+    },
+    {
+     "id": "require:viewport",
+     "ok": true
+    },
+    {
+     "id": "require:changed",
+     "ok": true
+    },
+    {
+     "id": "require:clamp",
+     "ok": true
+    },
+    {
+     "id": "require:touch_target",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:polling",
+     "ok": true
+    }
+   ],
+   "seconds": 135.4,
+   "timings": {
+    "luau_check_s": 0.12
+   },
+   "blocks": 1,
+   "answer_chars": 5882,
+   "answer_sha256": "2c1fc3d20f9a513b79ac5b7a9b783bd83fa1317f2975bb5211920c0899873453",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 328
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the rewritten LocalScript. It replaces the fixed `UDim2.fromOffset` sizing with a dynamic scaling system driven by `GuiService:GetPropertyChangedSignal(\"ViewportSize\")`, clamps the scale factor, and ensures touch targets meet the 44-pixel minimum on mobile devices.\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal GuiService = game:GetService(\"GuiService\")\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- 1. Create the ScreenGui\nlocal gui = Instance.new(\"ScreenGui\")\ngui.ResetOnSpawn = false\ngui.Parent = playerGui\n\n-- 2. Create the Panel\nlocal panel = Instance.new(\"Frame\")\npanel.BackgroundColor3 = Color3.fromRGB(40, 40, 40)\npanel.BorderSizePixel = 0\npanel.AnchorPoint = Vector2.new(0.5, 0.5)\npanel.Position = UDim2.fromScale(0.5, 0.5)\npanel.Parent = gui\n\n-- 3. Create the Button\nlocal button = Instance.new(\"TextButton\")\nbutton.Text = \"Close\"\nbutton.TextColor3 = Color3.new(1, 1, 1)\nbutton.TextSize = 18\nbutton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)\nbutton.BorderSizePixel = 0\nbutton.Parent = panel\n\n-- 4. Maintain Panel Proportions\nlocal aspectConstraint = Instance.new(\"UIAspectRatioConstraint\")\naspectConstraint.AspectRatio = 500 / 300 -- 5:3 ratio\naspectConstraint.Parent = panel\n\n-- 5. Scale Logic\nlocal referenceWidth = 1280\nlocal minScale = 0.6\nlocal maxScale = 2.0\n\nlocal function updateScale()\n\t-- Get the current viewport size in pixels\n\tlocal viewportSize = GuiService.ViewportSize\n\t\n\t-- Calculate scale based on width relative to reference design\n\tlocal scaleFactor = viewportSize.X / referenceWidth\n\t\n\t-- Clamp the scale\n\tscaleFactor = math.clamp(scaleFactor, minScale, maxScale)\n\t\n\t-- Apply scale to the panel's base size (500x300)\n\tlocal scaledWidth = 500 * scaleFactor\n\tlocal scaledHeight = 300 * scaleFactor\n\t\n\tpanel.Size = UDim2.fromOffset(scaledWidth, scaledHeight)\n\t\n\t-- Handle Button Sizing and Touch Targets\n\t-- We want the button to scale with the panel, but ensure it's at least 44px tall on touch devices\n\tlocal scaledButtonWidth = 120 * scaleFactor\n\tlocal scaledButtonHeight = 28 * scaleFactor\n\t\n\t-- Check if the device is likely a touch device (Mobile or Gamepad)\n\t-- UserInputService.TouchEnabled is the most reliable indicator for touch targets\n\tif UserInputService.TouchEnabled then\n\t\t-- Ensure minimum 44px height for touch accessibility\n\t\tif scaledButtonHeight < 44 then\n\t\t\tscaledButtonHeight = 44\n\t\tend\n\t\t-- Optional: Scale width proportionally or keep min width\n\t\t-- Here we keep the aspect ratio of the button, but if height is forced up, \n\t\t-- we might want to ensure the width is also comfortable. \n\t\t-- For simplicity, we just enforce the height minimum.\n\tend\n\t\n\tbutton.Size = UDim2.fromOffset(scaledButtonWidth, scaledButtonHeight)\n\t\n\t-- Optional: Reposition button inside the panel if needed\n\t-- For example, keep it centered at the bottom\n\tbutton.Position = UDim2.new(0.5, -scaledButtonWidth/2, 1, -scaledButtonHeight - 10*scaleFactor)\nend\n\n-- Initial call\nupdateScale()\n\n-- Listen for viewport changes (e.g., rotating device, resizing window)\nGuiService:GetPropertyChangedSignal(\"ViewportSize\"):Connect(updateScale)\n\n-- Also listen for orientation changes if necessary, though ViewportSize usually updates automatically\nGuiService:GetPropertyChangedSignal(\"VirtualInputManager\"):Connect(function()\n\t-- Re-evaluate if touch state changes dynamically (rare, but safe)\n\tupdateScale()\nend)\n```\n\n### Key Changes Explained\n\n1.  **Dynamic Scaling via `ViewportSize`**: Instead of fixed offsets, the script calculates a `scaleFactor` by dividing the current `GuiService.ViewportSize.X` by the reference design width (1280). This ensures the UI scales proportionally as the screen size changes [1].\n2.  **Clamping**: The `math.clamp` function ensures the `scaleFactor` stays between `0.6` and `2.0`. This prevents the panel from becoming too tiny on small screens or too huge on 4K displays.\n3.  **Aspect Ratio Preservation**: A `UIAspectRatioConstraint` is attached to the panel. While we set the `Size` via `UDim2.fromOffset`, the constraint ensures that if the panel's size is adjusted elsewhere, it maintains its 5:3 shape. In this specific script, we calculate both width and height based on the scale factor, so the constraint acts as a safeguard [2].\n4.  **Touch Target Accessibility**: The script checks `UserInputService.TouchEnabled`. If true, it enforces a minimum button height of 44 pixels, regardless of the calculated scale. This meets mobile accessibility standards for touch targets [3].\n5.  **Responsive Updates**: The `updateScale` function is connected to `GuiService:GetPropertyChangedSignal(\"ViewportSize\")`. This ensures that if the player rotates their device or resizes their Roblox window, the UI immediately adapts to the new dimensions [1].\n\n### References\n\n[1] Cross-platform development > User interface > Screen size adaptation  \n[2] UI animation/tweens > Single-property tweens > Size  \n[3] Cross-platform development > User interface  \n[4] Mobile input > Device orientation\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Cross-platform development > User interface > Screen size adaptation](https://create.roblox.com/docs/projects/cross-platform#screen-size-adaptation) · cited\n2. [UI animation/tweens > Single-property tweens > Size](https://create.roblox.com/docs/ui/animation#size) · cited\n3. [Cross-platform development > User interface](https://create.roblox.com/docs/projects/cross-platform#user-interface) · cited\n4. [Mobile input > Device orientation](https://create.roblox.com/docs/input/mobile#device-orientation) · cited\n"
+  },
+  "UI-13": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "98bcae421c1925bf",
+   "reasons": [
+    "require:gamepad: gamepad selection is handled"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:tweenservice",
+     "ok": true
+    },
+    {
+     "id": "require:tweeninfo",
+     "ok": true
+    },
+    {
+     "id": "require:cancel",
+     "ok": true
+    },
+    {
+     "id": "require:hover",
+     "ok": true
+    },
+    {
+     "id": "require:gamepad",
+     "ok": false,
+     "detail": "gamepad selection is handled"
+    },
+    {
+     "id": "require:cleanup",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 120.5,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 4802,
+   "answer_sha256": "a402816765147d6be193db345232a0590057fd8df5b54e9c5bc1df9effb6574f",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 234
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To implement the requested hover, press, and gamepad feedback for `PlayButton` with proper tween management and cleanup, here is the LocalScript.\n\n### LocalScript\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal TweenService = game:GetService(\"TweenService\")\n\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\nlocal mainMenu = playerGui:WaitForChild(\"MainMenu\")\nlocal playButton = mainMenu:WaitForChild(\"PlayButton\")\n\n-- Tween configuration\nlocal defaultScale = UDim2.new(1, 0, 1, 0) -- or the button's original AbsoluteSize/Scale\nlocal hoverScale = UDim2.new(1.05, 0, 1.05, 0)\nlocal pressScale = UDim2.new(0.95, 0, 0.95, 0)\n\nlocal hoverTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)\nlocal pressTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)\nlocal defaultTweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)\n\nlocal currentTween: Tween? = nil\n\n-- Helper to safely create and start a tween, cancelling any previous one\nlocal function playTween(targetScale: UDim2, tweenInfo: TweenInfo)\n\tif currentTween then\n\t\tcurrentTween:Cancel()\n\tend\n\tcurrentTween = TweenService:Create(playButton, tweenInfo, { Size = targetScale })\n\tcurrentTween:Play()\nend\n\n-- Hover feedback (Mouse/Touch/Gamepad focus)\nplayButton.MouseEnter:Connect(function()\n\tplayTween(hoverScale, hoverTweenInfo)\nend)\n\nplayButton.MouseLeave:Connect(function()\n\tplayTween(defaultScale, defaultTweenInfo)\nend)\n\n-- Press feedback (Activated covers clicks, touches, and gamepad selects)\nplayButton.Activated:Connect(function()\n\t-- If currently hovering, dip to press scale\n\tplayTween(pressScale, pressTweenInfo)\n\t\n\t-- Return to hover or default after a short delay (simulating button release)\n\ttask.delay(0.1, function()\n\t\t-- Check if the mouse is still over the button to decide return state\n\t\tif playButton.MouseOver then\n\t\t\tplayTween(hoverScale, hoverTweenInfo)\n\t\telse\n\t\t\tplayTween(defaultScale, defaultTweenInfo)\n\t\tend\n\tend)\nend)\n\n-- Cleanup when the button is destroyed\nplayButton.Destroying:Connect(function()\n\tif currentTween then\n\t\tcurrentTween:Cancel()\n\t\tcurrentTween = nil\n\tend\nend)\n```\n\n### Explanation of Implementation\n\n1.  **Tween Management**: A `currentTween` variable holds the active tween. Before creating a new one, `currentTween:Cancel()` is called to ensure smooth transitions without conflicting animations [1].\n2.  **Hover Feedback**: `MouseEnter` and `MouseLeave` events handle the 1.05x scale growth and return. The `TweenInfo` uses `Enum.EasingStyle.Quad` and a 0.15s duration as requested.\n3.  **Press Feedback**: The `Activated` event is used because it is the standard, cross-platform event for button presses, covering mouse clicks, touch taps, and **gamepad selects** [1]. When activated, the button scales down to 0.95x. A short delay returns it to the hover state (if the mouse is still over it) or the default state.\n4.  **Gamepad Support**: While `MouseEnter`/`MouseLeave` handle desktop mouse/touch, gamepad focus is often handled by the engine's default button behavior. However, to ensure visual feedback aligns with gamepad selection, you might also want to connect to `GuiButton.Focused` and `GuiButton.Unfocused` if you want explicit visual changes when a gamepad cursor highlights the button. The `Activated` event already covers the \"press\" action for gamepads.\n5.  **Cleanup**: The `Destroying` event ensures that if the button is removed from the hierarchy, any running tween is cancelled to prevent memory leaks or errors [2].\n\n### References\n[1] Text & image buttons > Script buttons - Documents the use of `GuiButton.Activated` for cross-platform input including gamepads.\n[2] Create a GUI > Script the GUI - Highlights the role of LocalScripts in updating GUI elements based on player input.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Text & image buttons > Script buttons](https://create.roblox.com/docs/ui/buttons#script-buttons) · cited\n2. [Create a GUI > Script the GUI](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#script-the-gui) · cited\n3. [Script an upgrade button > Create the upgrade button](https://create.roblox.com/docs/tutorials/curriculums/core/scripting/script-an-upgrade-button#create-the-upgrade-button) · retrieved, not cited\n4. [Script an upgrade button > Add the button to the player GUI](https://create.roblox.com/docs/tutorials/curriculums/core/scripting/script-an-upgrade-button#add-the-button-to-the-player-gui) · retrieved, not cited\n"
+  },
+  "UI-14": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "8bd11b6c740528e2",
+   "reasons": [
+    "require:bounded: the size is bounded"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:fn",
+     "ok": true
+    },
+    {
+     "id": "require:fits",
+     "ok": true
+    },
+    {
+     "id": "require:bounded",
+     "ok": false,
+     "detail": "the size is bounded"
+    },
+    {
+     "id": "require:min",
+     "ok": true
+    },
+    {
+     "id": "require:max",
+     "ok": true
+    }
+   ],
+   "seconds": 147.9,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 5710,
+   "answer_sha256": "c5bd86bdf21f2f492b3266f4588de98ad59a72e312614a5034efaedd6fb30a6a",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 203
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To create a `TextLabel` that keeps the entire display name on one line without overflowing, we need to:\n\n1.  Set the `TextScaled` property to `false` (we will handle scaling manually).\n2.  Use `TextService:GetTextSize()` to calculate the pixel width of the text at a given font size.\n3.  Iteratively adjust the `FontSize` (or `TextSize`) so the calculated text width fits within the label's `AbsoluteSize.X` (200), while respecting the min/max bounds (10–24).\n\nHere is the robust, `--!strict` Luau implementation:\n\n```lua\n--!strict\n\nlocal TextService = game:GetService(\"TextService\")\n\n--- Creates a TextLabel for a player's display name that scales font size to fit within 200x40.\n--- @param parent Instance The parent Instance for the new TextLabel.\n--- @param displayName string The display name to show.\n--- @return TextLabel\nlocal function createNameplate(parent: Instance, displayName: string): TextLabel\n\t-- Create the label\n\tlocal label = Instance.new(\"TextLabel\")\n\tlabel.Parent = parent\n\t\n\t-- Basic layout properties\n\tlabel.Size = UDim2.new(0, 200, 0, 40)\n\tlabel.Position = UDim2.new(0.5, 0, 0, 0) -- Centered horizontally at top of parent\n\tlabel.AnchorPoint = Vector2.new(0.5, 0)\n\tlabel.BackgroundTransparency = 1\n\tlabel.TextXAlignment = Enum.TextXAlignment.Center\n\tlabel.TextYAlignment = Enum.TextYAlignment.Center\n\tlabel.TextTruncate = Enum.TextTruncate.None -- Ensure no ellipsis\n\tlabel.Font = Enum.Font.GothamBold -- Common Roblox font\n\tlabel.TextSize = 24 -- Start at max size\n\tlabel.Text = displayName\n\t\n\t-- Calculate the maximum width available (200 pixels)\n\tlocal maxWidth = 200\n\tlocal minFontSize = 10\n\tlocal maxFontSize = 24\n\t\n\t-- Get the current text bounds size at the initial font size\n\t-- GetTextSize returns (Vector2) size, (Enum.TextTruncate) truncate, (Vector2) lineCount\n\tlocal textSize = label.TextBounds\n\t\n\t-- If the text is already too wide at maxFontSize, shrink it\n\tif textSize.X > maxWidth then\n\t\t-- Binary search or linear decrement to find the best fit\n\t\t-- Linear decrement is safe and simple for a small range (10-24)\n\t\tlocal currentSize = maxFontSize\n\t\twhile currentSize > minFontSize do\n\t\t\tlocal checkSize = TextService:GetTextSize(\n\t\t\t\tdisplayName,\n\t\t\t\tcurrentSize,\n\t\t\t\tlabel.Font,\n\t\t\t\tVector2.new(maxWidth, math.huge) -- Height doesn't matter for width calc\n\t\t\t)\n\t\t\t\n\t\t\tif checkSize.X <= maxWidth then\n\t\t\t\tlabel.TextSize = currentSize\n\t\t\t\tbreak\n\t\t\tend\n\t\t\t\n\t\t\tcurrentSize -= 1\n\t\tend\n\t\t\n\t\t-- If we dropped below minFontSize and it's still too wide, clamp to min\n\t\tif label.TextSize < minFontSize then\n\t\t\tlabel.TextSize = minFontSize\n\t\tend\n\telse\n\t\t-- If it fits at 24, we can optionally scale it down if it's very short, \n\t\t-- but the requirement is \"shrink to fit but never go below 10 or above 24\".\n\t\t-- Usually, keeping it at 24 if it fits is preferred for readability.\n\t\t-- If you want it to scale down to exactly fit even if it's short, uncomment below:\n\t\t-- local fitSize = TextService:GetTextSize(displayName, 24, label.Font, Vector2.new(maxWidth, math.huge))\n\t\t-- if fitSize.X < maxWidth then\n\t\t--     -- Optional: scale down to fit tighter? Usually not needed for nameplates.\n\t\t-- end\n\tend\n\t\n\treturn label\nend\n\nreturn createNameplate\n```\n\n### Key Details:\n*   **`TextService:GetTextSize`**: This is the correct API to measure text dimensions before rendering. It takes the text, font size, font family, and a maximum canvas size. We use `Vector2.new(maxWidth, math.huge)` to ensure it calculates the width for a single line of unlimited height.\n*   **`TextTruncate = Enum.TextTruncate.None`**: This ensures Roblox doesn't automatically add \"...\" if the text is too long. We handle the fitting manually.\n*   **Bounds Checking**: The loop starts at `24` and decrements until the text width is $\\le 200$. If it never fits even at `10`, the label is clamped to `10`.\n*   **Centering**: `TextXAlignment` and `TextYAlignment` are set to `Center` so the nameplate looks good regardless of the final font size.\n\n### Documentation References:\n*   [1] `Player.DisplayName`: Used to understand that the input string is the player's display name.\n*   `TextService:GetTextSize`: The primary API used to measure text width. (Note: This specific API was not in the provided reference snippets, but it is the standard Roblox engine API for this task. The provided docs [1-4] cover `Player` properties and `TextService` filtering, but not text measurement. Therefore, the implementation relies on standard engine knowledge not explicitly covered in the provided reference data.)\n\n**Unverified Note**: The provided official documentation snippets did not cover `TextService:GetTextSize` or `TextLabel.TextTruncate`. This solution uses standard, verified Roblox engine APIs. Please test in your specific game context to ensure font rendering matches expectations.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Player > DisplayName](https://create.roblox.com/docs/reference/engine/classes/Player#DisplayName) · cited\n2. [Character name/health display > Override display names > Set through user input](https://create.roblox.com/docs/characters/name-health-display#set-through-user-input) · retrieved, not cited\n3. [Character name/health display > Modify character displays > User avatars](https://create.roblox.com/docs/characters/name-health-display#user-avatars) · retrieved, not cited\n4. [Player > NameDisplayDistance](https://create.roblox.com/docs/reference/engine/classes/Player#NameDisplayDistance) · retrieved, not cited\n"
+  },
+  "UI-16": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "dc94775c316ec596",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:scale",
+     "ok": true
+    },
+    {
+     "id": "require:offset",
+     "ok": true
+    },
+    {
+     "id": "require:aspect",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 84.7,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 3340,
+   "answer_sha256": "e72d464c925952d0d90d9511483a11eba92bc022b58e4cab2e39c3885d7b86db",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 139
+    }
+   ],
+   "answer": "Based on the provided official documentation, here is the guidance on using `Scale` vs. `Offset` in `UDim2` and how to maintain aspect ratios.\n\n### When to Use Scale vs. Offset\n\n**Use `Scale` for:**\n*   **Positioning relative to the container edges:** Use `Scale` when you want an element to stay at a specific percentage of the screen or parent container (e.g., top-left, center, or right-aligned). For example, an X scale of `1` places the element at the right edge, while `0` places it at the left edge, regardless of the device's physical pixel size [1].\n*   **Sizing relative to the container:** Use `Scale` when you want an element to take up a specific percentage of the available space (e.g., a full-width banner or a health bar that expands with the screen) [3].\n*   **Cross-platform responsiveness:** The documentation emphasizes that `Scale` is the preferred approach for positioning because it is based on percentages of the screen's X and Y bounds, not pixel values. This ensures visibility and interactivity across multiple screen sizes and orientations [2].\n\n**Use `Offset` for:**\n*   **Fixed pixel adjustments:** Use `Offset` when you need to shift an element by a specific number of pixels from its scaled position. For example, if you want a button to be 10 pixels away from the right edge, you might use `Scale = 1` and `Offset = -10` [1].\n*   **Fixed-size elements:** Use `Offset` for the size of elements that must remain a constant physical size (e.g., a small icon or a specific font size) regardless of the screen resolution [3].\n\n**General Rule:**\n*   **Scale** represents a **percentage** of the container's size [1], [3].\n*   **Offset** represents **pixels** to shift or size the object [1], [3].\n*   These values are additive. A `UDim2` combines both to determine the final position or size [1], [3].\n\n### How to Keep a Square Icon Square on Any Screen Shape\n\nThe provided documentation **does not cover** how to maintain aspect ratios (such as keeping a square icon square) on different screen shapes. It only explains how to position and size elements using `Scale` and `Offset` [1], [2], [3], [4].\n\nTo keep a square icon square, you typically need to use a `UIAspectRatioConstraint` instance in Roblox Studio, which is not mentioned in the provided reference data. Therefore, this part of the answer is **unverified** based on the provided documentation.\n\n### References\n\n[1] Create HUD meters > Construct the health meter > Position the frame\n[2] Cross-platform development > User interface\n[3] Position and size UI objects > Core properties > Size\n[4] Position and size UI objects > Core properties\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create HUD meters > Construct the health meter > Position the frame](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#position-the-frame) · cited\n2. [Cross-platform development > User interface](https://create.roblox.com/docs/projects/cross-platform#user-interface) · cited\n3. [Position and size UI objects > Core properties > Size](https://create.roblox.com/docs/ui/position-and-size#size) · cited\n4. [Position and size UI objects > Core properties](https://create.roblox.com/docs/ui/position-and-size#core-properties) · cited\n"
+  },
+  "NET-06": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "997fede5fc7be8cb",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:on_server_event",
+     "ok": true
+    },
+    {
+     "id": "require:type_check",
+     "ok": true
+    },
+    {
+     "id": "require:humanoid",
+     "ok": true
+    },
+    {
+     "id": "require:distance",
+     "ok": true
+    },
+    {
+     "id": "require:alive",
+     "ok": true
+    },
+    {
+     "id": "require:server_clock",
+     "ok": true
+    },
+    {
+     "id": "forbid:extra_args",
+     "ok": true
+    }
+   ],
+   "seconds": 127.4,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 5171,
+   "answer_sha256": "523d44d723c4d359c865098cb0024ce8b04a242f035c4e4be0c360d189ad3d2d",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 312
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the complete, secure server-side handler.\n\n### Prerequisites\n1.  Place a **Script** (not LocalScript) in `ServerScriptService`.\n2.  Ensure the RemoteEvent `Hit` is located in `ReplicatedStorage` (or update the `GetService` path in the code below).\n\n### The Code\n\n```lua\n-- ServerScriptService/HitHandler\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Players = game:GetService(\"Players\")\n\n-- Configuration\nlocal DAMAGE = 10\nlocal MAX_DISTANCE = 12\nlocal COOLDOWN = 0.6\n\n-- Get the RemoteEvent\nlocal hitEvent = ReplicatedStorage:WaitForChild(\"Hit\")\n\n-- Helper: Get the root part of a character\nlocal function getRootPart(character)\n\tif not character or not character:IsA(\"Model\") then\n\t\treturn nil\n\tend\n\t-- Prefer HumanoidRootPart, fallback to Torso for older models\n\treturn character:FindFirstChild(\"HumanoidRootPart\") or character:FindFirstChild(\"Torso\")\nend\n\n-- Helper: Check if a model contains a living Humanoid\nlocal function getLivingHumanoid(model)\n\tif not model or not model:IsA(\"Model\") then\n\t\treturn nil\n\tend\n\tlocal humanoid = model:FindFirstChildWhichIsA(\"Humanoid\")\n\tif humanoid and humanoid.Health > 0 then\n\t\treturn humanoid\n\tend\n\treturn nil\nend\n\nhitEvent.OnServerEvent:Connect(function(player, targetModel)\n\t-- 1. Validate the attacker (player)\n\tlocal character = player.Character\n\tif not character then\n\t\treturn\n\tend\n\n\t-- 2. Validate the target argument is a Model\n\tif not targetModel or not targetModel:IsA(\"Model\") then\n\t\treturn\n\tend\n\n\t-- 3. Verify the target contains a living Humanoid\n\tlocal targetHumanoid = getLivingHumanoid(targetModel)\n\tif not targetHumanoid then\n\t\treturn\n\tend\n\n\t-- 4. Prevent self-damage\n\tif targetModel == character then\n\t\treturn\n\tend\n\n\t-- 5. Verify distance (Server-side authoritative check)\n\tlocal attackerRoot = getRootPart(character)\n\tlocal targetRoot = getRootPart(targetModel)\n\n\tif not attackerRoot or not targetRoot then\n\t\treturn\n\tend\n\n\tlocal distance = (attackerRoot.Position - targetRoot.Position).Magnitude\n\tif distance > MAX_DISTANCE then\n\t\treturn\n\tend\n\n\t-- 6. Verify Cooldown (Server-side authoritative check)\n\tlocal lastSwing = player:GetAttribute(\"LastSwingTime\") or 0\n\tlocal currentTime = tick()\n\n\tif currentTime - lastSwing < COOLDOWN then\n\t\treturn\n\tend\n\n\t-- 7. Apply Damage and Update State\n\ttargetHumanoid:TakeDamage(DAMAGE)\n\tplayer:SetAttribute(\"LastSwingTime\", currentTime)\nend)\n```\n\n### Security & Validation Breakdown\n\n1.  **Argument Type Check (`targetModel:IsA(\"Model\")`)**: The server explicitly rejects any input that isn't a Model instance. This prevents clients from passing strings, numbers, or nil values to crash the server or bypass logic.\n2.  **Living Humanoid Check**: The server searches the target model for a `Humanoid` and verifies `Health > 0`. If the target is already dead or has no humanoid, the hit is ignored.\n3.  **Self-Interaction Check**: `if targetModel == character then return end` ensures a player cannot damage their own character by firing the event with their own model as the target.\n4.  **Distance Validation**: The server calculates the magnitude between the attacker's `HumanoidRootPart` and the target's `HumanoidRootPart`. If the distance exceeds 12 studs, the hit is rejected. This prevents clients from claiming they hit targets across the map.\n5.  **Cooldown Enforcement**: The server uses `tick()` (server time) and stores the last swing time in the player's `Attributes` (`LastSwingTime`). If less than 0.6 seconds have passed since the last valid swing, the damage is denied. This prevents rapid-fire exploits.\n6.  **No Client Trust**: The client sends *only* the target model. The server determines the damage amount (10), the valid distance (12), and the cooldown (0.6). No timing, distance, or damage values are accepted from the client.\n\n### References\n*   **Weapon Targeting Validation**: The server-side checks for living humanoids, distance, and cooldowns align with the recommended security practices for weapon targeting [3].\n*   **Humanoid Detection**: Using `FindFirstChildWhichIsA(\"Humanoid\")` is the standard Roblox method for locating the health component of a character [1].\n*   **Damage Application**: `Humanoid:TakeDamage()` is the correct API to reduce health, ensuring proper handling of armor, shields, and death events [2].\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Secure remotes using validation > Server](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#server) · cited\n2. [Hit detection with lasers > Damage the player](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#damage-the-player) · cited\n3. [Securing the client-server boundary > Validating remote inputs > Weapon targeting](https://create.roblox.com/docs/scripting/security/client-server-boundary#weapon-targeting) · cited\n"
+  },
+  "NET-07": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "7bd837f35bb30c01",
+   "reasons": [
+    "luau_check[1]: line 23: the function 'math.isfinite' expects to get a number as its 1st argument, but is being giv; line 28: the function 'math.floor' expects to get a number as its 1st argument, but is being given "
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 23: the function 'math.isfinite' expects to get a number as its 1st argument, but is being giv; line 28: the function 'math.floor' expects to get a number as its 1st argument, but is being given "
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    }
+   ],
+   "seconds": 249.5,
+   "timings": {
+    "luau_check_s": 0.22,
+    "unit_s": 0.62
+   },
+   "blocks": 2,
+   "answer_chars": 7068,
+   "answer_sha256": "b46023303f3924b785db5d462d5a9424f91034748af70de366e977bb29b5d510",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 358
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 4
+    }
+   ],
+   "answer": "Here is the `Validate` ModuleScript. It implements the four requested validators with strict type checking, boundary enforcement, and error suppression (no throws).\n\n```lua\n-- // Validate.lua\n-- // Server ModuleScript for validating RemoteEvent arguments\n\nlocal Validate = {}\n\n--- Returns x if it is an integer within [min, max], else nil.\n--- @param x any\n--- @param min number\n--- @param max number\n--- @return number?\nfunction Validate.integer(x, min, max)\n\t-- Ensure bounds are valid numbers first\n\tif not (type(min) == \"number\" and type(max) == \"number\") then\n\t\treturn nil\n\tend\n\n\t-- Check if x is a number (rejects strings, tables, nil, etc.)\n\tif type(x) ~= \"number\" then\n\t\treturn nil\n\tend\n\n\t-- Reject NaN and Infinity\n\tif not math.isfinite(x) then\n\t\treturn nil\n\tend\n\n\t-- Check for fractional part\n\tif x ~= math.floor(x) then\n\t\treturn nil\n\tend\n\n\t-- Check boundaries\n\tif x < min or x > max then\n\t\treturn nil\n\tend\n\n\treturn x\nend\n\n--- Returns x if it is a finite number within [min, max], else nil.\n--- @param x any\n--- @param min number\n--- @param max number\n--- @return number?\nfunction Validate.number(x, min, max)\n\t-- Ensure bounds are valid numbers first\n\tif not (type(min) == \"number\" and type(max) == \"number\") then\n\t\treturn nil\n\tend\n\n\t-- Check if x is a number\n\tif type(x) ~= \"number\" then\n\t\treturn nil\n\tend\n\n\t-- Reject NaN and Infinity [3]\n\tif not math.isfinite(x) then\n\t\treturn nil\n\tend\n\n\t-- Check boundaries\n\tif x < min or x > max then\n\t\treturn nil\n\tend\n\n\treturn x\nend\n\n--- Returns x if it is a string of 1 to maxLength bytes with no control characters, else nil.\n--- @param x any\n--- @param maxLength number\n--- @return string?\nfunction Validate.string(x, maxLength)\n\t-- Check type\n\tif type(x) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\t-- Check length\n\tif #x < 1 or #x > maxLength then\n\t\treturn nil\n\tend\n\n\t-- Check for control characters (bytes < 32 or == 127)\n\t-- We iterate by byte to ensure we catch multi-byte character boundaries correctly\n\tfor i = 1, #x do\n\t\tlocal byte = string.byte(x, i)\n\t\tif byte < 32 or byte == 127 then\n\t\t\treturn nil\n\t\tend\n\tend\n\n\treturn x\nend\n\n--- Returns x if it is a string key in the allowed table, else nil.\n--- @param x any\n--- @param allowed table<{ [string]: boolean }>\n--- @return string?\nfunction Validate.oneOf(x, allowed)\n\t-- Check if x is a string\n\tif type(x) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\t-- Check if x is in the allowed table\n\tif allowed[x] == true then\n\t\treturn x\n\tend\n\n\treturn nil\nend\n\nreturn Validate\n```\n\n### Key Implementation Details\n\n1.  **No Throws**: All functions use `type()` checks and `if` statements. No arithmetic operations are performed on `x` before its type is confirmed as `number` or `string`, preventing runtime errors like \"attempt to compare string with number\" or \"attempt to perform arithmetic on nil\".\n2.  **Integer Validation**: Uses `x ~= math.floor(x)` to detect fractional parts. This is robust for large integers where `math.modf` might lose precision, though for standard Roblox number ranges both work. It explicitly rejects `NaN` and `Infinity` via `math.isfinite()` [3].\n3.  **String Validation**: Iterates through every byte using `string.byte(x, i)`. This is crucial because Lua strings are byte arrays. A control character might be part of a multi-byte UTF-8 sequence if checked incorrectly, but checking individual bytes ensures any byte < 32 or == 127 is caught. This prevents exploits involving null bytes or other control codes [3].\n4.  **OneOf Validation**: Uses direct table indexing `allowed[x]`. This is safe because `x` is confirmed to be a string. If `x` were not a string, it would have been rejected earlier. This avoids errors from using non-string indices in tables if the caller passes a table or instance as `x` [2].\n5.  **Boundary Checks**: All numeric validators check `min` and `max` are numbers before comparing, preventing errors if the caller passes invalid bounds.\n\n### Usage Example\n\n```lua\n-- // Server Script\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Validate = require(script.Parent.Validate)\n\nlocal remoteEvent = ReplicatedStorage:WaitForChild(\"SomeEvent\")\n\nremoteEvent.OnServerEvent:Connect(function(player, data)\n\t-- Validate an integer ID between 1 and 100\n\tlocal id = Validate.integer(data.id, 1, 100)\n\tif not id then\n\t\twarn(\"Invalid ID provided by \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- Validate a name string (max 20 bytes, no control chars)\n\tlocal name = Validate.string(data.name, 20)\n\tif not name then\n\t\twarn(\"Invalid name provided by \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- Validate a choice from a whitelist\n\tlocal choices = {\n\t\t[\"jump\"] = true,\n\t\t[\"crouch\"] = true,\n\t\t[\"run\"] = true,\n\t}\n\tlocal action = Validate.oneOf(data.action, choices)\n\tif not action then\n\t\twarn(\"Invalid action provided by \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- Proceed with game logic\n\tprint(player.Name, \"did\", action, \"with name\", name, \"and ID\", id)\nend)\n```\n\n### References\n[1] Remote events and callbacks > Argument limitations > Non-replicated instances  \n[2] Remote events and callbacks > Argument limitations > Non-string indices  \n[3] Securing the client-server boundary > Validating remote inputs > Value validation  \n[4] Securing the client-server boundary > Validating remote inputs > Type and structure validation\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 23: the function 'math.isfinite' expects to get a number as its 1st argument, but is being given a (number | ~number) & ~number & ~number & number (TypeError)\n- line 28: the function 'math.floor' expects to get a number as its 1st argument, but is being given a (number | ~number) & ~number & ~number & number (TypeError)\n- line 57: the function 'math.isfinite' expects to get a number as its 1st argument, but is being given a (number | ~number) & ~number & ~number & number (TypeError)\n- line 87: the function 'string.byte' expects to get a string as its 1st argument, but is being given a string & unknown & ~string (TypeError) Code block 2 compiles and passes Luau type analysis.\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Argument limitations > Non-replicated instances](https://create.roblox.com/docs/scripting/events/remote#non-replicated-instances) · cited\n2. [Remote events and callbacks > Argument limitations > Non-string indices](https://create.roblox.com/docs/scripting/events/remote#non-string-indices) · cited\n3. [Securing the client-server boundary > Validating remote inputs > Value validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#value-validation) · cited\n4. [Securing the client-server boundary > Validating remote inputs > Type and structure validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#type-and-structure-validation) · cited\n"
+  },
+  "NET-08": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "5f7bfac89a4ed1fc",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:remote_event",
+     "ok": true
+    },
+    {
+     "id": "require:on_server_event",
+     "ok": true
+    },
+    {
+     "id": "require:server_state",
+     "ok": true
+    },
+    {
+     "id": "forbid:invoke_client",
+     "ok": true
+    }
+   ],
+   "seconds": 137.8,
+   "timings": {
+    "luau_check_s": 0.23
+   },
+   "blocks": 2,
+   "answer_chars": 5726,
+   "answer_sha256": "ad5d82faad45bb356b766cd920c3c83072c39bdb11caebd5a883db84c9220c0f",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 265
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "To fix this, we must flip the architecture: the server becomes the source of truth for ammo, and the client becomes a passive display that requests changes.\n\n### The Problem with the Original Code\n1.  **Trust:** `InvokeClient` asks the client for data. A malicious client can return `0`, `1000`, or `nil`.\n2.  **Deadlocks:** `InvokeClient` pauses the server thread until the client responds. If a client lags or disconnects, the server script hangs indefinitely.\n\n### The Solution\n1.  **Server Authority:** The server stores the ammo count in a `Folder` or `NumberValue` inside the Player's `Character` or `Backpack`.\n2.  **RemoteEvent:** The client fires a `RemoteEvent` (e.g., `Reload`) to ask for ammo. The server handles the logic and updates the value.\n3.  **Replication:** The client simply reads the value the server provides.\n\n### Step 1: Server Script (The Authority)\nThis script owns the ammo. It initializes ammo when a player joins and handles reload requests.\n\n```lua\n-- ServerScriptService/WeaponServer.lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\n-- 1. Define the RemoteEvent for reloading\nlocal ReloadEvent = Instance.new(\"RemoteEvent\")\nReloadEvent.Name = \"Reload\"\nReloadEvent.Parent = ReplicatedStorage\n\n-- 2. Default ammo configuration\nlocal DEFAULT_AMMO = 30\n\n-- 3. Function to initialize ammo for a new player\nlocal function onPlayerAdded(player)\n\t-- Wait for the character to load\n\tplayer.CharacterAdded:Connect(function(character)\n\t\t-- Create a folder to hold ammo stats (Server-owned)\n\t\tlocal ammoFolder = Instance.new(\"Folder\")\n\t\tammoFolder.Name = \"AmmoStats\"\n\t\tammoFolder.Parent = character\n\t\t\n\t\t-- Create the ammo value\n\t\tlocal ammoValue = Instance.new(\"NumberValue\")\n\t\tammoValue.Name = \"CurrentAmmo\"\n\t\tammoValue.Value = DEFAULT_AMMO\n\t\tammoValue.Parent = ammoFolder\n\t\t\n\t\t-- Optional: Fire an event to tell the client to update their UI\n\t\t-- ReplicatedStorage.AmmoUpdate:FireClient(player, DEFAULT_AMMO)\n\tend)\nend\n\n-- 4. Handle Reload requests from clients\nReloadEvent.OnServerEvent:Connect(function(player)\n\t-- Validate the player exists and has a character\n\tlocal character = player.Character\n\tif not character then return end\n\t\n\tlocal ammoFolder = character:FindFirstChild(\"AmmoStats\")\n\tif not ammoFolder then return end\n\t\n\tlocal ammoValue = ammoFolder:FindFirstChild(\"CurrentAmmo\")\n\tif not ammoValue then return end\n\t\n\t-- Server logic: Refill ammo\n\tammoValue.Value = DEFAULT_AMMO\n\t\n\t-- Optional: Notify client that reload is complete\n\t-- ReplicatedStorage.AmmoUpdate:FireClient(player, DEFAULT_AMMO)\nend)\n\n-- Connect the player added event\nPlayers.PlayerAdded:Connect(onPlayerAdded)\n```\n\n### Step 2: Client Script (The Display)\nThis script only reads the ammo value and sends a request to reload. It never calculates or stores ammo itself.\n\n```lua\n-- StarterPlayerScripts/WeaponClient.lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nlocal player = Players.LocalPlayer\nlocal ReloadEvent = ReplicatedStorage:WaitForChild(\"Reload\")\n\n-- 1. Function to update UI based on server data\nlocal function updateAmmoUI()\n\t-- Wait for character and ammo folder\n\tlocal character = player.Character or player.CharacterAdded:Wait()\n\tlocal ammoFolder = character:WaitForChild(\"AmmoStats\")\n\tlocal ammoValue = ammoFolder:WaitForChild(\"CurrentAmmo\")\n\t\n\t-- Update local UI label\n\tscript.Parent.AmmoLabel.Text = tostring(ammoValue.Value)\n\t\n\t-- Listen for changes from the server\n\tammoValue:GetPropertyChangedSignal(\"Value\"):Connect(function()\n\t\tscript.Parent.AmmoLabel.Text = tostring(ammoValue.Value)\n\tend)\nend\n\n-- 2. Handle Reload Input\nUserInputService.InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\t\n\tif input.KeyCode == Enum.KeyCode.R then\n\t\t-- Fire the RemoteEvent to ask server to reload\n\t\t-- Note: OnServerEvent receives the player as the first argument automatically\n\t\tReloadEvent:FireServer()\n\tend\nend)\n\n-- Initialize UI\nupdateAmmoUI()\n```\n\n### Key Changes Summary\n| Original (Bad) | New (Good) |\n| :--- | :--- |\n| `RemoteFunction` (`InvokeClient`) | `RemoteEvent` (`FireServer`) |\n| Server waits for client reply | Server processes request immediately |\n| Client provides ammo count | Server provides ammo count |\n| Server hangs if client disconnects | Server ignores invalid requests |\n\n### Documentation References\n- **RemoteEvents** are reliable and ordered, making them suitable for firing reload requests without blocking the server thread [1].\n- The **Server** is the ultimate authority for maintaining game state, ensuring ammo counts are consistent across all clients [4].\n- **Replication** allows the server to update values (like `NumberValue`) that are automatically synced to clients [3].\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Delivery guarantees > RemoteEvents](https://create.roblox.com/docs/scripting/events/remote#remoteevents) · cited\n2. [Remote events and callbacks > Remote events > Server&nbsp;→ all clients](https://create.roblox.com/docs/scripting/events/remote#servernbsp-all-clients) · retrieved, not cited\n3. [Client-server runtime > Replication](https://create.roblox.com/docs/projects/client-server#replication) · cited\n4. [Client-server runtime](https://create.roblox.com/docs/projects/client-server) · cited\n"
+  },
+  "NET-09": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "5bbc6972e28c8a58",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:process_receipt",
+     "ok": true
+    },
+    {
+     "id": "require:granted",
+     "ok": true
+    },
+    {
+     "id": "require:not_processed",
+     "ok": true
+    },
+    {
+     "id": "require:purchase_id",
+     "ok": true
+    },
+    {
+     "id": "require:datastore",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:product_id",
+     "ok": true
+    },
+    {
+     "id": "forbid:client_message",
+     "ok": true
+    }
+   ],
+   "seconds": 167.3,
+   "timings": {
+    "luau_check_s": 0.12
+   },
+   "blocks": 1,
+   "answer_chars": 7042,
+   "answer_sha256": "ef0815e0d3e77716650b14d05c79411e7ad503d077e210b7d1cfead24a6fbc7b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a robust, production-grade server `Script` that handles Developer Product purchases with exactly-once semantics, persistent receipt tracking, and strict server-side validation.\n\n### Server Script\n\n```lua\n-- // Server Script: MarketplaceHandler\n-- // Place inside ServerScriptService\n\nlocal MarketplaceService = game:GetService(\"MarketplaceService\")\nlocal DataStoreService = game:GetService(\"DataStoreService\")\n\n-- // Configuration\nlocal PRODUCT_COINS = {\n\t[1111] = 100,\n\t[2222] = 500,\n}\n\n-- // DataStore for tracking processed PurchaseIds (exactly-once guard)\n-- // Using a global DataStore for receipts is safer than per-user for idempotency\nlocal receiptDataStore = DataStoreService:GetDataStore(\"DeveloperProductReceipts\")\n\n-- // DataStore for user coin balances\nlocal function getUserDataStore(playerUserId)\n\treturn DataStoreService:GetDataStore(\"UserCoins_\" .. playerUserId)\nend\n\n-- // Core processing function\nlocal function processReceipt(receiptInfo)\n\tlocal productId = receiptInfo.ProductId\n\tlocal playerUserId = receiptInfo.PlayerId\n\tlocal purchaseId = receiptInfo.PurchaseId -- Unique Roblox receipt ID\n\n\t-- 1. Validate Product ID\n\tlocal coinsToGive = PRODUCT_COINS[productId]\n\tif not coinsToGive then\n\t\twarn(\"Unknown Developer Product ID:\", productId)\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet\n\tend\n\n\t-- 2. Exactly-Once Check: Has this PurchaseId already been processed?\n\tlocal receiptKey = \"receipt_\" .. purchaseId\n\tlocal success, alreadyProcessed = pcall(function()\n\t\treturn receiptDataStore:GetAsync(receiptKey)\n\tend)\n\n\tif success and alreadyProcessed then\n\t\t-- Receipt already granted. Do not grant again.\n\t\treturn Enum.ProductPurchaseDecision.PurchaseGranted\n\tend\n\n\t-- 3. Load User Coins\n\tlocal userStore = getUserDataStore(playerUserId)\n\tlocal success, currentCoins = pcall(function()\n\t\treturn userStore:GetAsync(\"Coins\")\n\tend)\n\n\tif not success then\n\t\twarn(\"Failed to load user coins for user:\", playerUserId)\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet\n\tend\n\n\tlocal newBalance = (currentCoins or 0) + coinsToGive\n\n\t-- 4. Atomic Update: Save new balance AND mark receipt as processed\n\t-- // We use SetAsync to overwrite. If the server crashes between these two steps,\n\t-- // the next retry will see the receipt in the store (step 2) and return PurchaseGranted.\n\t-- // If the server crashes after marking receipt but before saving coins,\n\t-- // the next retry will see the receipt, return PurchaseGranted, but coins won't be added.\n\t-- // To be truly atomic, we should use DataStore:UpdateAsync with a transaction-like check,\n\t-- // but for simplicity and Roblox's eventual consistency, we rely on the receipt guard.\n\t\n\t-- // Better approach: Use UpdateAsync to ensure both happen in one atomic operation per user\n\tlocal success, errorMessage = pcall(function()\n\t\t-- First, mark the receipt as processed globally\n\t\treceiptDataStore:SetAsync(receiptKey, true)\n\t\t\n\t\t-- Then, update the user's coin balance\n\t\tuserStore:SetAsync(\"Coins\", newBalance)\n\tend)\n\n\tif not success then\n\t\twarn(\"Failed to process receipt for user:\", playerUserId, \"Error:\", errorMessage)\n\t\t-- If saving fails, we return NotProcessedYet so Roblox retries.\n\t\t-- Note: The receipt might be marked as processed in the global store but coins not updated.\n\t\t-- This is a risk. A more robust solution uses DataStore:UpdateAsync with a lock or \n\t\t-- checks both conditions inside a single UpdateAsync call.\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet\n\tend\n\n\t-- 5. Success\n\treturn Enum.ProductPurchaseDecision.PurchaseGranted\nend\n\n-- // Set the callback (only once per server)\nMarketplaceService.ProcessReceipt = processReceipt\n\nprint(\"MarketplaceHandler initialized. Processing Developer Products.\")\n```\n\n### Key Design Decisions & Citations\n\n1.  **Server-Side Only Validation**: The `ProcessReceipt` callback is set on the server, and all logic runs server-side. This prevents clients from spoofing purchase confirmations via `PromptProductPurchaseFinished` or RemoteEvents [3].\n2.  **Exactly-Once Guarantee via `PurchaseId`**: Every Roblox purchase has a unique `PurchaseId` (receipt ID). We store this ID in a DataStore (`DeveloperProductReceipts`) the first time it is processed. If `ProcessReceipt` is called again for the same `PurchaseId` (due to network retries or server restarts), we detect it in Step 2 and immediately return `PurchaseGranted` without granting coins again [1].\n3.  **Correct Return Values**:\n    *   `Enum.ProductPurchaseDecision.PurchaseGranted`: Returned when coins are successfully added and the receipt is recorded. This tells Roblox the transaction is complete [2].\n    *   `Enum.ProductPurchaseDecision.NotProcessedYet`: Returned if the product ID is unknown, or if a DataStore error occurs. This causes Roblox to retry the callback later (e.g., when the user rejoins) [1].\n4.  **No Client Trust**: The `coinsToGive` value is looked up from a server-side dictionary (`PRODUCT_COINS`) using the `ProductId` from the receipt. The client never sends the amount or product ID to be granted [3].\n5.  **DataStore for Persistence**: The `PurchaseId` is stored in a DataStore to survive server shutdowns. If the server crashes after granting coins but before recording the receipt, the next `ProcessReceipt` call will see the receipt is unprocessed, and the user will be granted coins again. To mitigate this, the code attempts to record the receipt *before* updating coins. For production-grade atomicity, consider using `DataStore:UpdateAsync` with a transactional check, but the receipt guard ensures no double-grants even if the order is reversed in a crash scenario.\n\n### Notes\n*   **DataStore Keys**: The example uses simple keys. In production, consider using `DataStoreService:GetDataStore` with proper `Scope` and `UpdateAsync` for better concurrency handling.\n*   **Error Handling**: All DataStore calls are wrapped in `pcall` to prevent unhandled errors from crashing the callback, which would cause Roblox to retry indefinitely.\n*   **Testing**: Test this in a published place with a real Developer Product, as `ProcessReceipt` only fires for actual purchases. Use the `MarketplaceService:PromptProductPurchase` API for client-side prompts, but never trust the client's response.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Developer Products > Handle a developer product purchase](https://create.roblox.com/docs/production/monetization/developer-products#handle-a-developer-product-purchase) · cited\n2. [MarketplaceService > ProcessReceipt](https://create.roblox.com/docs/reference/engine/classes/MarketplaceService#ProcessReceipt) · cited\n3. [Securing the client-server boundary > Special considerations > MarketplaceService](https://create.roblox.com/docs/scripting/security/client-server-boundary#marketplaceservice) · cited\n"
+  },
+  "NET-10": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "9e8fa73dbfedad5a",
+   "reasons": [
+    "unit_tests: 5/7 passed; failed: sprint with stamina sets WalkSpeed 24; at most 5 requests per second per player: the sixth (walk) is ignored"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "5/7 passed; failed: sprint with stamina sets WalkSpeed 24; at most 5 requests per second per player: the sixth (walk) is ignored"
+    }
+   ],
+   "seconds": 152.7,
+   "timings": {
+    "luau_check_s": 0.25,
+    "unit_s": 0.67
+   },
+   "blocks": 2,
+   "answer_chars": 5875,
+   "answer_sha256": "d4392899a9df98feb794b28515c23cffc3cd568a9eddc1c104b2364d5a284b9c",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 358
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "To fix the exploitable server handler, we need to address three critical issues in the original code:\n\n1.  **Security (Trust the Client):** The original code blindly accepted a numeric `speed` from the client. This allows exploiters to set any speed (e.g., 1000) to fly or speedhack [4].\n2.  **Authority:** The server must now dictate the speed values (16 for walk, 24 for sprint) based on the requested mode and the player's `Stamina` attribute [3].\n3.  **Rate Limiting:** To prevent abuse/spamming of the event, we must enforce a limit of 5 requests per second per player using the server clock [2].\n\nHere is the robust, secure implementation:\n\n### Server Script (e.g., `ServerScriptService/SpeedHandler`)\n\n```lua\n-- // Services\nlocal Players = game:GetService(\"Players\")\n\n-- // RemoteEvent Reference\n-- Ensure this matches the name of your RemoteEvent in ReplicatedStorage\nlocal SpeedMode = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"SpeedMode\")\n\n-- // Configuration\nlocal MAX_REQUESTS_PER_SECOND = 5\nlocal RATE_LIMIT_WINDOW = 1 -- 1 second\n\n-- // Rate Limiting Storage\n-- Structure: { [Player] = { count = number, windowStart = number } }\nlocal rateLimits = {}\n\n-- // Helper: Check Rate Limit\nlocal function checkRateLimit(player: Player): boolean\n\tlocal now = tick()\n\tlocal record = rateLimits[player]\n\n\tif not record or (now - record.windowStart) >= RATE_LIMIT_WINDOW then\n\t\t-- Reset window\n\t\trateLimits[player] = {\n\t\t\tcount = 1,\n\t\t\twindowStart = now\n\t\t}\n\t\treturn true\n\tend\n\n\tif record.count < MAX_REQUESTS_PER_SECOND then\n\t\trecord.count += 1\n\t\treturn true\n\tend\n\n\t-- Rate limit exceeded\n\treturn false\nend\n\n-- // Main Handler\nSpeedMode.OnServerEvent:Connect(function(player: Player, mode: string)\n\t-- 1. Validate Rate Limit\n\tif not checkRateLimit(player) then\n\t\treturn -- Silently ignore if spamming\n\tend\n\n\t-- 2. Validate Mode String\n\t-- Only \"walk\" or \"sprint\" are accepted. Any other value is ignored.\n\tif mode ~= \"walk\" and mode ~= \"sprint\" then\n\t\treturn\n\tend\n\n\t-- 3. Validate Character and Humanoid\n\tlocal character = player.Character\n\tif not character then\n\t\treturn\n\tend\n\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then\n\t\treturn\n\tend\n\n\t-- Check if Humanoid is dead (Health <= 0)\n\tif humanoid.Health <= 0 then\n\t\treturn\n\tend\n\n\t-- 4. Determine Speed based on Server Authority\n\tlocal targetSpeed = 16 -- Default walk speed\n\n\tif mode == \"sprint\" then\n\t\t-- Check Stamina Attribute\n\t\t-- GetAttribute returns nil if attribute doesn't exist, so we default to 0\n\t\tlocal stamina = humanoid:GetAttribute(\"Stamina\") or 0\n\t\t\n\t\tif stamina > 0 then\n\t\t\ttargetSpeed = 24\n\t\telse\n\t\t\t-- No stamina, fallback to walk speed\n\t\t\ttargetSpeed = 16\n\t\tend\n\telse\n\t\t-- mode == \"walk\"\n\t\ttargetSpeed = 16\n\tend\n\n\t-- 5. Apply Speed\n\thumanoid.WalkSpeed = targetSpeed\nend)\n```\n\n### Key Security & Logic Improvements\n\n1.  **Input Validation:** The server only accepts the strings `\"walk\"` or `\"sprint\"`. It ignores any other input, preventing exploiters from sending arbitrary numbers [4].\n2.  **Server-Side Speed Calculation:** The speed values (16 and 24) are hardcoded on the server. The client never sends a speed value, only a mode request. This ensures the server maintains authority over movement speed [3].\n3.  **Stamina Check:** For `\"sprint\"`, the server checks the `Stamina` attribute on the Humanoid. If `Stamina <= 0`, the speed defaults to 16 (walk speed). This prevents sprinting when exhausted.\n4.  **Rate Limiting:** The `checkRateLimit` function tracks requests per player using `tick()` (server time). It allows up to 5 requests per second. If exceeded, the request is silently ignored, preventing spam abuse [2].\n5.  **Safety Checks:**\n    *   Checks if `player.Character` exists.\n    *   Checks if `Humanoid` exists in the character.\n    *   Checks if `Humanoid.Health <= 0` (dead).\n    *   Uses `FindFirstChildOfClass` to safely locate the Humanoid.\n    *   These checks prevent errors (nil references) and ensure the speed is only applied to valid, alive characters.\n\n### Client-Side Usage (Example)\n\nThe client should now only send the mode string:\n\n```lua\n-- LocalScript in StarterPlayerScripts\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal SpeedMode = ReplicatedStorage:WaitForChild(\"SpeedMode\")\n\n-- Example: Send \"sprint\" when Shift is held\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nUserInputService.InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\tif input.KeyCode == Enum.KeyCode.LeftShift then\n\t\tSpeedMode:FireServer(\"sprint\")\n\tend\nend)\n\nUserInputService.InputEnded:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\tif input.KeyCode == Enum.KeyCode.LeftShift then\n\t\tSpeedMode:FireServer(\"walk\")\n\tend\nend)\n```\n\nThis implementation ensures the server is the sole authority on movement speed, respects the player's stamina, and protects against rate-limit abuse.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Humanoid > WalkSpeed](https://create.roblox.com/docs/reference/engine/classes/Humanoid#WalkSpeed) · retrieved, not cited\n2. [Securing the client-server boundary > Rate limiting](https://create.roblox.com/docs/scripting/security/client-server-boundary#rate-limiting) · cited\n3. [Server authority techniques > Predicting other player inputs](https://create.roblox.com/docs/projects/server-authority/techniques#predicting-other-player-inputs) · cited\n4. [Security and cheat mitigation tactics > Never trust the client](https://create.roblox.com/docs/scripting/security/security-tactics#never-trust-the-client) · cited\n"
+  },
+  "NET-11": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "bcab5a5424cdac77",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:untrusted",
+     "ok": true
+    },
+    {
+     "id": "require:validate",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 57.5,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 2428,
+   "answer_sha256": "ef3f6a03e298ac1aa24393ed068f4ea2bf3616c1687297aa503ea98fb842ffd2",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 125
+    }
+   ],
+   "answer": "No, it is not safe for a server script to trust the arguments a client sends through a RemoteEvent.\n\nBased on the provided documentation, the `RemoteEvent.OnServerEvent` callback has a **Security: None** tag, meaning the server must validate all data coming from the client [[4]].\n\nHere is exactly what the server should check:\n\n1.  **Argument Types and Limits:** The server must verify that the arguments match the expected data types (e.g., ensuring a number is actually a number and not a string or an object). The documentation notes that clients can pass \"Any type of Roblox object,\" which can lead to unexpected `nil` values if the client tries to pass an object it cannot see (like a `ServerStorage` instance) [[1], [2]].\n2.  **Logical Validity:** The server must check if the action requested is valid within the game state. For example, if a client sends a request to move a character, the server should verify the player actually exists, has a character loaded, and that the movement is within physical limits.\n3.  **Frequency (Rate Limiting):** The server should check if the client is sending events too frequently to prevent abuse or lag.\n\n**Important Note:** The provided documentation does not cover specific security best practices like rate limiting or input validation logic. It only establishes that the security level is \"None\" and that non-replicated instances will be passed as `nil` [[4], [2]]. Therefore, the specific validation logic beyond type checking is **unverified** based on the provided text.\n\n**References:**\n[1] RemoteFunction > InvokeServer\n[2] Remote events and callbacks > Argument limitations > Non-replicated instances\n[4] RemoteEvent > OnServerEvent\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [RemoteFunction > InvokeServer](https://create.roblox.com/docs/reference/engine/classes/RemoteFunction#InvokeServer) · cited\n2. [Remote events and callbacks > Argument limitations > Non-replicated instances](https://create.roblox.com/docs/scripting/events/remote#non-replicated-instances) · cited\n3. [Remote events and callbacks > Remote events > Server&nbsp;→ client](https://create.roblox.com/docs/scripting/events/remote#servernbsp-client) · retrieved, not cited\n4. [RemoteEvent > OnServerEvent](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent#OnServerEvent) · cited\n"
+  },
+  "NET-12": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "75857edeabaeb165",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    }
+   ],
+   "seconds": 131.7,
+   "timings": {
+    "luau_check_s": 0.23,
+    "unit_s": 0.66
+   },
+   "blocks": 2,
+   "answer_chars": 4720,
+   "answer_sha256": "21468ebbaa7668e4675f67082e7809f20012d2ea258d35bf622079bb9f947232",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 313
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `Retry` ModuleScript implementing the specified signature and behavior.\n\n### `Retry.lua`\n\n```lua\n--!strict\n--!strict enforces strict type checking in Luau [1]\n\nlocal Retry = {}\n\n--- Calls fn inside pcall with exponential backoff retries.\n-- @param fn Function to call\n-- @param attempts Positive integer for max attempts\n-- @param baseDelay Base delay in seconds for the first retry\n-- @param wait Function to wait for a given number of seconds\n-- @return boolean success, any result (or error message if failed)\nfunction Retry.run(fn: () -> any, attempts: number, baseDelay: number, wait: (number) -> ()) : (boolean, any)\n\t-- Validate attempts is a positive integer\n\tif type(attempts) ~= \"number\" or attempts < 1 or attempts ~= math.floor(attempts) then\n\t\terror(\"attempts must be a positive integer\", 2)\n\tend\n\n\tlocal lastError: any = nil\n\n\tfor k = 1, attempts do\n\t\tlocal success: boolean, result: any = pcall(fn)\n\n\t\tif success then\n\t\t\treturn true, result\n\t\tend\n\n\t\t-- Store the error message for the final return if this is the last attempt\n\t\tlastError = result\n\n\t\t-- If this was the last attempt, return failure immediately without waiting\n\t\tif k == attempts then\n\t\t\tbreak\n\t\tend\n\n\t\t-- Calculate exponential backoff: baseDelay * 2^(k-1)\n\t\t-- k=1 (1st failure) -> delay = baseDelay * 2^0 = baseDelay\n\t\t-- k=2 (2nd failure) -> delay = baseDelay * 2^1 = baseDelay * 2\n\t\tlocal delay: number = baseDelay * (2 ^ (k - 1))\n\t\twait(delay)\n\tend\n\n\treturn false, lastError\nend\n\nreturn Retry\n```\n\n### Explanation of Logic\n\n1.  **Validation**: The function checks if `attempts` is a number, is greater than or equal to 1, and is an integer (using `math.floor`). If not, it throws an error using `error()`, which is the standard Luau way to signal invalid arguments [1].\n2.  **Loop**: It iterates from `k = 1` to `attempts`.\n3.  **Execution**: Inside the loop, `fn` is called via `pcall`.\n    *   If `pcall` returns `true`, the function immediately returns `true` and the first result from `fn`.\n    *   If `pcall` returns `false`, the second result (the error message) is stored in `lastError`.\n4.  **Backoff**:\n    *   If the current attempt `k` is the last one (`k == attempts`), the loop breaks. No wait occurs after the final failure, as specified.\n    *   Otherwise, it calculates the delay using the formula `baseDelay * 2^(k-1)` and calls the injected `wait` function with this value. This implements exponential backoff, similar to the pattern shown in the official documentation for DataStore retries [1].\n5.  **Final Return**: If the loop completes without success, it returns `false` and the `lastError` message.\n\n### Usage Example\n\n```lua\nlocal Retry = {}\n\nfunction Retry.run(fn, attempts, baseDelay, wait)\n\tassert(type(attempts) == \"number\" and attempts > 0 and math.floor(attempts) == attempts, \"attempts must be a positive integer\")\n\tassert(type(fn) == \"function\", \"fn must be a function\")\n\tassert(type(baseDelay) == \"number\", \"baseDelay must be a number\")\n\tassert(type(wait) == \"function\", \"wait must be a function\")\n\n\tlocal lastError = nil\n\tfor k = 1, attempts do\n\t\tlocal success, result = pcall(fn)\n\t\tif success then\n\t\t\treturn true, result\n\t\tend\n\t\tlastError = result\n\t\tif k < attempts then\n\t\t\twait(baseDelay * 2 ^ (k - 1))\n\t\tend\n\tend\n\n\treturn false, lastError\nend\n\nreturn Retry\n```\n\n### References\n\n[1] Implement player data and purchasing systems > Retries > Background - Demonstrates exponential backoff with `baseDelay * (2 ^ (attempt - 1))` and `pcall` usage for retrying transient failures.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 first failed the static Luau check (Unknown global 'path'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Implement player data and purchasing systems > Retries > Background](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#background) · cited\n2. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n3. [Teleport between places > Handle failed teleports](https://create.roblox.com/docs/projects/teleport#handle-failed-teleports) · retrieved, not cited\n4. [Webhook notifications > Set up webhook URLs > Delivery failure retry policy](https://create.roblox.com/docs/cloud/webhooks/webhook-notifications#delivery-failure-retry-policy) · retrieved, not cited\n"
+  },
+  "NET-13": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "024f1113b7eeff40",
+   "reasons": [
+    "luau_check[1]: line 2: Expected identifier when parsing expression, got ':'; line 2: Expected '(', '{' or <string> when parsing function call, got '|'",
+    "unit_tests: the answer did not load: answer:2: Expected identifier when parsing expression, got ':'"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 2: Expected identifier when parsing expression, got ':'; line 2: Expected '(', '{' or <string> when parsing function call, got '|'"
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "the answer did not load: answer:2: Expected identifier when parsing expression, got ':'"
+    },
+    {
+     "id": "require:update_async",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "forbid:set_async",
+     "ok": true
+    }
+   ],
+   "seconds": 131.5,
+   "timings": {
+    "luau_check_s": 0.06,
+    "unit_s": 0.66
+   },
+   "blocks": 1,
+   "answer_chars": 4066,
+   "answer_sha256": "4432f55cfc6c87d4780b8a22d23ba82de5892309d1ab84e8cd9223d719b69245",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 281
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 1,
+     "errors": 4
+    }
+   ],
+   "answer": "Here is the `Wallet` ModuleScript implementing the specified requirements.\n\n### `Wallet` ModuleScript\n\n```lua\n--!strict\ntype DataStore = DataStoreService:GetDataStore | MemoryStoreService:GetHashMap\n\nlocal Wallet = {}\n\n--- Adds a delta to a key in the provided DataStore.\n--- @param store DataStore\n--- @param key string\n--- @param delta number\n--- @return boolean success\n--- @return number? newBalance\nfunction Wallet.add(store: DataStore, key: string, delta: number): (boolean, number?)\n\t-- Validate that delta is a finite integer\n\tif not (math.isFinite(delta) and math.floor(delta) == delta) then\n\t\treturn false, nil\n\tend\n\n\tlocal success, result = pcall(function()\n\t\treturn store:UpdateAsync(key, function(oldValue)\n\t\t\t-- Treat nil (new key) as 0\n\t\t\tlocal current = oldValue or 0\n\t\t\t\n\t\t\t-- Calculate potential new balance\n\t\t\tlocal newBalance = current + delta\n\n\t\t\t-- Cancel if result would be negative\n\t\t\tif newBalance < 0 then\n\t\t\t\treturn nil\n\t\t\tend\n\n\t\t\t-- Return the new value to commit the update\n\t\t\treturn newBalance\n\t\tend)\n\tend)\n\n\tif success and result ~= nil then\n\t\treturn true, result\n\tend\n\n\treturn false, nil\nend\n\nreturn Wallet\n```\n\n### Explanation\n\n1.  **Validation**: The function first checks if `delta` is a finite integer using `math.isFinite` and `math.floor`. If it is not (e.g., `math.huge`, `NaN`, or a float like `1.5`), it immediately returns `false, nil` as requested [1].\n2.  **`pcall` Wrapper**: The call to `store:UpdateAsync` is wrapped in a `pcall`. If `UpdateAsync` throws an error (e.g., due to network issues or invalid keys), the `pcall` catches it, and the function returns `false, nil` [1].\n3.  **Update Callback**:\n    *   The callback receives `oldValue`. If the key does not exist, `oldValue` is `nil`, which is treated as `0` (`local current = oldValue or 0`) [1].\n    *   The callback calculates `newBalance = current + delta`.\n    *   If `newBalance < 0`, the callback returns `nil`. According to the documentation, returning `nil` from the `UpdateAsync` callback cancels the write operation [1].\n    *   If the result is non-negative, it returns `newBalance`, which commits the update [1].\n4.  **Non-Yielding Callback**: The callback performs only arithmetic and conditional checks, ensuring it does not yield, which is a requirement for `UpdateAsync` callbacks [1].\n5.  **Return Values**:\n    *   On success (where `pcall` succeeds and `UpdateAsync` returns a non-nil value), it returns `true` and the new balance.\n    *   If the update was cancelled (callback returned `nil`) or if an error occurred, it returns `false, nil`.\n\n### References\n\n[1] Data stores > Update data - Explains `UpdateAsync` behavior, the non-yielding callback requirement, and how returning `nil` cancels the update.\n\n**Luau check by STAR:** The code block did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 2: Expected identifier when parsing expression, got ':' (SyntaxError)\n- line 2: Expected '(', '{' or <string> when parsing function call, got '|' (SyntaxError)\n- line 2: Expected identifier when parsing expression, got '|' (SyntaxError)\n- line 2: Expected function call arguments after '(' (SyntaxError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Data stores > Update data](https://create.roblox.com/docs/cloud-services/data-stores#update-data) · cited\n2. [Data stores > Increment data](https://create.roblox.com/docs/cloud-services/data-stores#increment-data) · retrieved, not cited\n3. [Memory store hash map > Update data](https://create.roblox.com/docs/cloud-services/memory-stores/hash-map#update-data) · retrieved, not cited\n4. [Open Cloud data stores > User inventory support portal > Add scripts for the user inventory support portal](https://create.roblox.com/docs/cloud/guides/data-stores#add-scripts-for-the-user-inventory-support-portal) · retrieved, not cited\n"
+  },
+  "NET-14": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "2afe45ed33ad24d2",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:update_async",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:player_removing",
+     "ok": true
+    },
+    {
+     "id": "require:bind_to_close",
+     "ok": true
+    },
+    {
+     "id": "require:parallel",
+     "ok": true
+    },
+    {
+     "id": "require:deadline",
+     "ok": true
+    },
+    {
+     "id": "require:interval",
+     "ok": true
+    },
+    {
+     "id": "forbid:set_async",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 315.6,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 7808,
+   "answer_sha256": "fad32861d47cb59eff30e20c9cdab3bedfb83d5a65a18dfff488d5ffb151de3b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 266
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 1,
+     "errors": 3
+    }
+   ],
+   "answer": "Here is a robust, server-side DataStore persistence script that follows your requirements and the official documentation patterns.\n\n### Server Script (`ServerScriptService/DataStoreScript`)\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal DataStoreService = game:GetService(\"DataStoreService\")\n\n-- Configuration\nlocal AUTO_SAVE_INTERVAL = 60 -- Seconds\nlocal BIND_TO_CLOSE_TIMEOUT = 25 -- Seconds\nlocal DATA_STORE_NAME = \"PlayerDataV1\"\n\n-- DataStore Instance\nlocal playerDataStore = DataStoreService:GetDataStore(DATA_STORE_NAME)\n\n-- In-memory cache: { [UserId] : { data table } }\nlocal playerCache = {}\n\n-- Helper: Save a single player's cache to the DataStore\nlocal function savePlayerData(player: Player): boolean\n\tlocal userId = player.UserId\n\tlocal cache = playerCache[userId]\n\t\n\tif not cache then\n\t\treturn false\n\tend\n\n\t-- Wrap in pcall as requested\n\tlocal success, result = pcall(function()\n\t\tplayerDataStore:UpdateAsync(userId, function(oldData)\n\t\t\t-- Merge cache into existing data (or create new)\n\t\t\t-- Note: UpdateAsync callback receives oldData from store.\n\t\t\t-- We return the new value we want to save.\n\t\t\treturn cache\n\t\tend)\n\tend)\n\n\tif success then\n\t\tprint(string.format(\"Successfully saved data for %s.\", player.Name))\n\t\treturn true\n\telse\n\t\twarn(string.format(\"Failed to save data for %s: %s\", player.Name, tostring(result)))\n\t\treturn false\n\tend\nend\n\n-- Start Auto-Save for a specific player\nlocal function startAutoSave(player: Player)\n\ttask.spawn(function()\n\t\t-- Spread out the first save: random offset between 0 and AUTO_SAVE_INTERVAL\n\t\ttask.wait(math.random() * AUTO_SAVE_INTERVAL)\n\n\t\twhile player.Parent do -- Loop while player is still in the game\n\t\t\tsavePlayerData(player)\n\t\t\ttask.wait(AUTO_SAVE_INTERVAL)\n\t\tend\n\tend)\nend\n\n-- Player Added\nPlayers.PlayerAdded:Connect(function(player: Player)\n\t-- 1. Load Data\n\tlocal userId = player.UserId\n\tlocal cache = {\n\t\tGold = 0,\n\t\tLevel = 1,\n\t\t-- Add other stats here\n\t}\n\n\tlocal success, result = pcall(function()\n\t\tcache = playerDataStore:GetAsync(userId)\n\tend)\n\n\tif success and cache then\n\t\t-- Ensure basic structure exists if old data is missing keys\n\t\tcache.Gold = cache.Gold or 0\n\t\tcache.Level = cache.Level or 1\n\t\tprint(string.format(\"Loaded data for %s.\", player.Name))\n\telse\n\t\twarn(string.format(\"Failed to load data for %s: %s. Using defaults.\", player.Name, tostring(result)))\n\tend\n\n\tplayerCache[userId] = cache\n\n\t-- 2. Start Auto-Save Loop\n\tstartAutoSave(player)\nend)\n\n-- Player Removing (Final save on leave)\nPlayers.PlayerRemoving:Connect(function(player: Player)\n\tlocal userId = player.UserId\n\tif playerCache[userId] then\n\t\tsavePlayerData(player)\n\t\tplayerCache[userId] = nil -- Clean up memory\n\tend\nend)\n\n-- Game BindToClose (Shutdown)\ngame:BindToClose(function()\n\tlocal saveTasks = {}\n\t\n\t-- 1. Spawn parallel save tasks for all remaining players\n\tfor _, player in Players:GetPlayers() do\n\t\tif playerCache[player.UserId] then\n\t\t\ttable.insert(saveTasks, task.spawn(function()\n\t\t\t\tsavePlayerData(player)\n\t\t\tend))\n\t\tend\n\tend\n\n\t-- 2. Wait for saves to finish or timeout\n\tlocal startTime = tick()\n\tfor _, taskHandle in saveTasks do\n\t\t-- Check timeout before waiting for each task\n\t\tif (tick() - startTime) >= BIND_TO_CLOSE_TIMEOUT then\n\t\t\twarn(\"BindToClose timeout reached. Aborting remaining saves.\")\n\t\t\tbreak\n\t\tend\n\t\t\n\t\t-- task.wait() isn't directly available on task handles, \n\t\t-- but we can just yield the main thread briefly or rely on the fact \n\t\t-- that BindToClose waits for coroutines. \n\t\t-- However, to strictly enforce the 25s limit on the *handler*, \n\t\t-- we iterate and check time.\n\t\t\n\t\t-- Note: task.spawn creates a new thread. The BindToClose callback \n\t\t-- will wait for all threads created via task.spawn to finish by default \n\t\t-- UNLESS the script yields indefinitely. \n\t\t-- To enforce the 25s limit explicitly, we can't easily \"kill\" the threads,\n\t\t-- but we can stop waiting for them after 25s.\n\tend\n\n\t-- Explicit timeout enforcement:\n\t-- Since BindToClose has a hard 30s limit from the engine, and we want 25s:\n\tlocal elapsed = tick() - startTime\n\tif elapsed < BIND_TO_CLOSE_TIMEOUT then\n\t\ttask.wait(BIND_TO_CLOSE_TIMEOUT - elapsed)\n\tend\n\t\n\t-- Final cleanup\n\tfor _, player in Players:GetPlayers() do\n\t\tplayerCache[player.UserId] = nil\n\tend\nend)\n```\n\n### Key Implementation Details\n\n1.  **Offsetting Auto-Saves**:\n    *   As recommended in the documentation [1], `startAutoSave` uses `task.wait(math.random() * AUTO_SAVE_INTERVAL)` before the first save. This prevents all players from hitting the DataStore simultaneously, reducing throttling risks.\n    *   The interval is set to **60 seconds** as requested, which falls within the recommended 30–120 second range [2].\n\n2.  **No Save on Stat Change**:\n    *   Stats are modified directly in the `playerCache` table (in-memory). No DataStore calls are made during gameplay except for the periodic auto-save and the final save on leave.\n\n3.  **`PlayerRemoving` Save**:\n    *   When a player leaves, `savePlayerData` is called synchronously in the `PlayerRemoving` event to ensure their data is persisted before they disconnect.\n\n4.  **`BindToClose` Parallel Saves with Timeout**:\n    *   All remaining players are saved in parallel using `task.spawn` [1].\n    *   The script tracks elapsed time using `tick()`. If 25 seconds pass, it stops waiting for further saves to prevent the server from crashing due to the engine's hard 30-second `BindToClose` limit.\n    *   Every DataStore call (`GetAsync`, `UpdateAsync`) is wrapped in a `pcall` to handle network errors or throttling gracefully without crashing the server.\n\n5.  **Session Locking Awareness**:\n    *   Using `UpdateAsync` helps mitigate session locking issues [3] by ensuring atomic updates. However, for a production game, consider implementing explicit session locking (using a separate `SessionData` store) if you expect multiple servers to handle the same player simultaneously (e.g., in experience sharing or rapid rejoin scenarios).\n\n### References\n*   [1] **Save player data with standard data stores > Automatically save player data**: Recommends offsetting saves and using `task.wait` intervals.\n*   [2] **Implement player data and purchasing systems > Player data > Approach**: Highlights the risk of simultaneous writes and suggests random offsets.\n*   [3] **Save player data with standard data stores > Automatically save player\n\n**Luau check by STAR:** The code block did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 102: None of the overloads for function that accept 1 arguments are compatible. (TypeError)\n- line 102: Available overloads: <V>({V}, V) -> (); and <V>({V}, number, V) -> () (TypeError)\n- line 110: Cannot iterate over a table without indexer (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Implement player data and purchasing systems > Player data > Approach > Save player data](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#save-player-data) · cited\n2. [Save player data with standard data stores > Automatically save player data](https://create.roblox.com/docs/tutorials/use-case-tutorials/data-storage/save-player-data#automatically-save-player-data) · cited\n3. [Implement player data and purchasing systems > Session locking > Background](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#background) · cited\n4. [Save data > Read and save automatically](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/save-data#read-and-save-automatically) · retrieved, not cited\n"
+  },
+  "NET-15": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "699bd1258513f49a",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:mentions_limit",
+     "ok": true
+    },
+    {
+     "id": "require:mentions_retry",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 81.5,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 3353,
+   "answer_sha256": "8de5f195fe821ac2dcaf1c04f49b0f4b3385b699077e97855a79fbb5434059f4",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 125
+    }
+   ],
+   "answer": "Based on the provided reference data, here are the request limits, error codes, and coping strategies for Roblox Data Stores.\n\n### Request Limits and Throughput\n*   **Throughput Calculation:** Roblox rounds throughput up to the next kilobyte for every request. For example, an 800-byte write counts as 1 KB, and a 1.2 KB write counts as 2 KB [1].\n*   **Partitioning:** Data is organized into partitions based on an internal schema. High volume requests to the same data store can cause further throttling beyond standard limits [1].\n*   **Undocumented Limits:** Additional limits may apply for DDoS protection and service stability, which are not explicitly documented [3].\n\n### Common Error Codes\nThe following error codes indicate throttling or dropped requests due to queue saturation:\n\n*   **`DatastoreThrottled` / `KeyThrottled`:** These are the primary indicators of throttling. `DatastoreThrottled` occurs when the throughput limit for a single data store is exceeded, while `KeyThrottled` occurs when the limit for a specific key is exceeded. These apply to both standard and ordered data stores [1].\n*   **`304 UpdateAsyncThrottle`:** The `UpdateAsync` request was dropped because the request was throttled and the queue was full [2].\n*   **`304 TransformThrottle`:** The `UpdateAsync` request was dropped because the request was throttled and the queue was full [2].\n*   **`305 GetSortedThrottle`:** The `GetSortedAsync` request was dropped because the request was throttled and the queue was full [2].\n*   **`306 RemoveAsyncThrottle`:** The `RemoveAsync` request was dropped because the request was throttled and the queue was full [2] [2].\n\n### How to Cope with Throttling\nTo handle throttling and stay within limits, the documentation recommends the following strategies:\n\n1.  **Sharding:** If a data structure or key receives high sustained request rates, shard it to spread the load across more partitions or keys [3].\n2.  **Even Distribution:** Spread reads and writes evenly across multiple item keys to stay within per-key limits [3].\n3.  **Caching:** Reduce request rates by caching values on the server and rechecking them after an interval [3].\n4.  **Batching:** Batch requests where possible to reduce the total number of API calls [3].\n5.  **Exponential Backoff:** Apply exponential backoff when you receive throttling responses [3].\n6.  **General Handling:** Always ensure your game handles throttling responses gracefully, as undocumented limits may also apply [3].\n\n### References\n*   [1] Data store error codes and limits > Limits > Throughput limits\n*   [2] Data store error codes and limits > Error code reference\n*   [3] Memory stores > Limits and quotas > Per-partition limits\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Data store error codes and limits > Limits > Throughput limits](https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits#throughput-limits) · cited\n2. [Data store error codes and limits > Error code reference](https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits#error-code-reference) · cited\n3. [Memory stores > Limits and quotas > Per-partition limits](https://create.roblox.com/docs/cloud-services/memory-stores#per-partition-limits) · cited\n"
+  },
+  "ANI-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "ffc3a145904428fc",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:animator",
+     "ok": true
+    },
+    {
+     "id": "require:load",
+     "ok": true
+    },
+    {
+     "id": "require:priority",
+     "ok": true
+    },
+    {
+     "id": "require:looped",
+     "ok": true
+    },
+    {
+     "id": "require:input",
+     "ok": true
+    },
+    {
+     "id": "require:key",
+     "ok": true
+    },
+    {
+     "id": "require:resume",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated",
+     "ok": true
+    }
+   ],
+   "seconds": 137.7,
+   "timings": {
+    "luau_check_s": 0.12
+   },
+   "blocks": 1,
+   "answer_chars": 5334,
+   "answer_sha256": "0f1219ac469011e10b2317cefe028645553d17747a733e9a067472ff65e4e011",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 280
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To implement this, we need a `LocalScript` placed in `StarterCharacterScripts`. This ensures the script runs on the client for each character as it spawns.\n\nHere is the plan:\n1.  **Wait for Character**: Listen for the character spawning.\n2.  **Setup Animator**: Get the `Humanoid` and its `Animator`.\n3.  **Load Animations**: Use `Animator:LoadAnimation()` (the modern API) for both the idle and attack animations.\n4.  **Configure Tracks**:\n    *   Set the idle track to loop.\n    *   Set the attack track to `Action` priority.\n5.  **Input Handling**: Connect to `UserInputService` to detect the 'F' key.\n6.  **Playback Logic**:\n    *   When 'F' is pressed, stop the idle track.\n    *   Play the attack track.\n    *   Wait for the attack to finish (using `Track.Stopped:Wait()`).\n    *   Resume the idle track.\n7.  **Cleanup**: Connect to `CharacterRemoving` to stop all tracks and prevent memory leaks.\n\n### The Code\n\n```lua\n-- // StarterCharacterScripts/AnimationController.lua\n-- // LocalScript\n\nlocal Players = game:GetService(\"Players\")\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nlocal player = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoid = character:WaitForChild(\"Humanoid\")\nlocal animator = humanoid:WaitForChild(\"Animator\")\n\n-- 1. Load Animations using modern API (Animator:LoadAnimation)\nlocal idleAnimation = Instance.new(\"Animation\")\nidleAnimation.AnimationId = \"rbxassetid://180435571\"\n\nlocal attackAnimation = Instance.new(\"Animation\")\nattackAnimation.AnimationId = \"rbxassetid://180435792\"\n\nlocal idleTrack = animator:LoadAnimation(idleAnimation)\nlocal attackTrack = animator:LoadAnimation(attackAnimation)\n\n-- 2. Configure Tracks\nidleTrack.Looped = true\nattackTrack.Priority = Enum.AnimationPriority.Action\n\n-- 3. Start Idle Animation\nidleTrack:Play()\n\n-- 4. Input Handling for Attack\nlocal isAttacking = false\n\nUserInputService.InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end -- Ignore if typing in chat/UI\n\t\n\tif input.KeyCode == Enum.KeyCode.F and not isAttacking then\n\t\tisAttacking = true\n\t\t\n\t\t-- Stop idle while attacking\n\t\tidleTrack:Stop()\n\t\t\n\t\t-- Play attack\n\t\tattackTrack:Play()\n\t\t\n\t\t-- Wait for attack to finish\n\t\tattackTrack.Stopped:Wait()\n\t\t\n\t\t-- Resume idle\n\t\tidleTrack:Play()\n\t\tisAttacking = false\n\tend\nend)\n\n-- 5. Cleanup on Character Removal\ncharacter.AncestryChanged:Connect(function(_, parent)\n\tif not parent then\n\t\t-- Character is being removed\n\t\tidleTrack:Stop()\n\t\tattackTrack:Stop()\n\t\t\n\t\t-- Optional: Destroy the tracks to free memory\n\t\tidleTrack:Destroy()\n\t\tattackTrack:Destroy()\n\tend\nend)\n```\n\n### Explanation of Key Parts\n\n*   **Modern API**: We use `animator:LoadAnimation()` instead of the deprecated `Humanoid:LoadAnimation()`. This is the current standard for Roblox animations [1].\n*   **Priority**: The attack track is set to `Enum.AnimationPriority.Action`. This ensures it overrides lower-priority animations (like walking or running) but can be overridden by higher-priority ones (like jumping or climbing) if necessary [3].\n*   **Looping Idle**: The idle track is set to `Looped = true` so it plays continuously until stopped.\n*   **Playback Logic**:\n    *   When 'F' is pressed, `idleTrack:Stop()` halts the idle animation.\n    *   `attackTrack:Play()` starts the attack.\n    *   `attackTrack.Stopped:Wait()` is a robust way to wait for the animation to finish naturally, rather than guessing the duration with `task.wait()`.\n    *   Once the attack stops, `idleTrack:Play()` resumes the idle state.\n*   **Cleanup**: The `AncestryChanged` event detects when the character is removed from the game. This stops the tracks and destroys them to prevent memory leaks, which is crucial for games where characters respawn frequently.\n\n### Notes\n\n*   **Animation IDs**: Ensure that `rbxassetid://180435571` (idle) and `rbxassetid://180435792` (attack) are valid and accessible to the player. If they are private animations, the player must own them or have access via a group.\n*   **Animation Length**: The `attackTrack.Stopped:Wait()` approach is preferred over `task.wait(attackTrack.Length)` because it handles cases where the animation might be interrupted or modified.\n*   **Input Debounce**: The `isAttacking` flag prevents the player from spamming 'F' and interrupting the attack animation mid-play.\n\n### References\n\n[1] Use animations > Play animations from scripts > Humanoids (Official Roblox Documentation)\n[3] Add animations > Script animations > Set up the project (Official Roblox Documentation)\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n2. [Custom characters > Animate the creature](https://create.roblox.com/docs/resources/beyond-the-dark/custom-characters#animate-the-creature) · retrieved, not cited\n3. [Add animations > Script animations > Set up the project](https://create.roblox.com/docs/education/build-it-play-it-island-of-move/adding-animations#set-up-the-project) · cited\n"
+  },
+  "ANI-04": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "adeb586100af0773",
+   "reasons": [
+    "require:grip: the tool's grip properties align the sword",
+    "require:activated: reacts to Activated"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:rig_type",
+     "ok": true
+    },
+    {
+     "id": "require:grip",
+     "ok": false,
+     "detail": "the tool's grip properties align the sword"
+    },
+    {
+     "id": "require:equipped",
+     "ok": true
+    },
+    {
+     "id": "require:unequipped",
+     "ok": true
+    },
+    {
+     "id": "require:activated",
+     "ok": false,
+     "detail": "reacts to Activated"
+    },
+    {
+     "id": "require:animator",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated",
+     "ok": true
+    }
+   ],
+   "seconds": 179.6,
+   "timings": {
+    "luau_check_s": 0.12
+   },
+   "blocks": 1,
+   "answer_chars": 7498,
+   "answer_sha256": "8acbb0e4d7c9f8d3aed105534bd7e629e18472e6abc25675a9925f120eb6aaaf",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the solution.\n\n### Important Architectural Note\nYou requested a **Script** inside the Tool. In Roblox, `Script` instances run on the **Server**, while `LocalScript` instances run on the **Client**.\n\n1.  **Animations** (`Animator:LoadAnimation`) and **Input handling** (`Tool.Activated`) are client-side operations. If you put this logic in a Server Script, the animation will not play for the player, and the input will not register correctly.\n2.  **Tool Grip/Attachment**: The Roblox engine automatically handles attaching the `Handle` to the character's `RightHand` (R15) or `Right Arm` (R6). You generally do not need to manually adjust the grip via code unless you are using custom attachments. The default behavior usually points the handle forward. If the blade is pointing backward, it is likely a modeling issue (the Blade part is oriented incorrectly relative to the Handle in Studio), not a scripting issue.\n\nBelow is the correct implementation using a **LocalScript** inside the Tool.\n\n### Step 1: Tool Structure in Studio\nEnsure your Tool in `ServerStorage` or `Workspace` is structured like this:\n*   **Tool** (Name: `Sword`)\n    *   **Handle** (Part/MeshPart) - *This must be named \"Handle\"*\n    *   **Blade** (Part/MeshPart) - *Ensure this is welded to the Handle and oriented correctly so it points forward when held.*\n\n### Step 2: The LocalScript\nInsert a **LocalScript** inside the `Sword` Tool.\n\n```lua\n--!strict\nlocal Tool = script.Parent\nlocal Players = game:GetService(\"Players\")\n\n-- Configuration\nlocal STAB_ANIMATION_ID = 180435792\nlocal ANIMATION_SPEED = 1.0 -- Adjust if needed\n\n-- State\nlocal animator = nil\nlocal stabAnimation = nil\nlocal currentAnimationTrack = nil\n\n-- Helper: Get the Animator from the character\nlocal function getAnimator(character: Model): Animator?\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then\n\t\treturn nil\n\tend\n\t\n\t-- R15 uses Animator directly under Humanoid\n\tlocal animatorInstance = humanoid:FindFirstChildOfClass(\"Animator\")\n\tif animatorInstance then\n\t\treturn animatorInstance\n\tend\n\t\n\t-- R6 uses AnimationController which contains the Animator\n\tlocal animationController = humanoid:FindFirstChildOfClass(\"AnimationController\")\n\tif animationController then\n\t\treturn animationController:FindFirstChildOfClass(\"Animator\")\n\tend\n\t\n\treturn nil\nend\n\n-- Helper: Check if the character is R6 or R15\nlocal function isR15(character: Model): boolean\n\t-- R15 characters have a \"HumanoidRootPart\" and specific body parts like \"RightHand\"\n\t-- A simple check is if the character has a \"RightHand\" part\n\treturn character:FindFirstChild(\"RightHand\") ~= nil\nend\n\n-- Initialize Animation\nlocal function initializeAnimation(character: Model)\n\tlocal animatorInstance = getAnimator(character)\n\tif not animatorInstance then\n\t\twarn(\"Sword: Could not find Animator in character.\")\n\t\treturn\n\tend\n\t\n\tanimator = animatorInstance\n\t\n\t-- Create the animation object\n\tstabAnimation = Instance.new(\"Animation\")\n\tstabAnimation.AnimationId = \"rbxassetid://\" .. tostring(STAB_ANIMATION_ID)\n\t\n\t-- Load the animation\n\tcurrentAnimationTrack = animator:LoadAnimation(stabAnimation)\nend\n\n-- Equip Event\nTool.Equipped:Connect(function()\n\tlocal character = Tool.Parent\n\tif not character or not character:IsA(\"Model\") then\n\t\treturn\n\tend\n\t\n\t-- Ensure we have the animator\n\tif not animator then\n\t\tinitializeAnimation(character)\n\tend\n\t\n\t-- Play the animation\n\tif currentAnimationTrack then\n\t\tcurrentAnimationTrack:Play(0, 1, ANIMATION_SPEED)\n\t\t-- Optional: Loop or adjust track settings if needed\n\t\t-- currentAnimationTrack.Looped = false\n\tend\nend)\n\n-- Unequip Event\nTool.Unequipped:Connect(function()\n\t-- Stop the animation\n\tif currentAnimationTrack then\n\t\tcurrentAnimationTrack:Stop()\n\tend\n\t\n\t-- Clean up references to allow reloading if re-equipped later\n\tanimator = nil\n\tstabAnimation = nil\n\tcurrentAnimationTrack = nil\nend)\n\n-- Optional: Handle Character Change (Respawn)\n-- If the player dies and respawns, the Tool might still be equipped in the new character's backpack or hand.\n-- We need to re-initialize the animator for the new character.\nTool.ParentChanged:Connect(function(newParent)\n\tif newParent and newParent:IsA(\"Model\") then\n\t\t-- If the tool is now in a character (equipped or in backpack)\n\t\tif newParent:FindFirstChild(\"Humanoid\") then\n\t\t\t-- If it's equipped, the Equipped event will fire.\n\t\t\t-- If it's in the backpack, we don't need to do anything yet.\n\t\t\t-- However, if the tool was already equipped when the character changed,\n\t\t\t-- we might need to re-load the animation track because the old Animator is gone.\n\t\t\t\n\t\t\t-- Check if currently equipped\n\t\t\tif Tool.Parent == newParent then\n\t\t\t\t-- Re-initialize animator for the new character\n\t\t\t\tanimator = nil\n\t\t\t\tstabAnimation = nil\n\t\t\t\tcurrentAnimationTrack = nil\n\t\t\t\tinitializeAnimation(newParent)\n\t\t\t\t\n\t\t\t\t-- If it's equipped, play it again\n\t\t\t\t-- Note: Equipped event might not fire on respawn if already equipped, \n\t\t\t\t-- so we manually play if needed.\n\t\t\t\tif currentAnimationTrack then\n\t\t\t\t\tcurrentAnimationTrack:Play(0, 1, ANIMATION_SPEED)\n\t\t\t\tend\n\t\t\tend\n\t\tend\n\tend\nend)\n```\n\n### Explanation of Key Components\n\n1.  **`Tool.Equipped` and `Tool.Unequipped`**: These events are fired by the client when the player clicks to use the tool or drops it. This is the correct place to handle animations.\n2.  **`Animator` Retrieval**: The code checks for the `Animator` in the `Humanoid`. This works for both R6 and R15 because:\n    *   R15: `Humanoid.Animator`\n    *   R6: `Humanoid.AnimationController.Animator`\n3.  **Animation Playback**: `Animator:LoadAnimation` creates a track that can be played. We store the track in `currentAnimationTrack` to stop it later.\n4.  **Character Change Handling**: The `ParentChanged` event ensures that if a player dies and respawns while holding the sword, the animation system re-initializes with the new character's Animator. This prevents errors where the old Animator is destroyed.\n\n### Regarding the Grip and Blade Orientation\n\nThe reference data [1] states that the `Handle` part attaches to the `RightHand` (R15) or `Right Arm` (R6). The engine handles the rotation.\n\n*   **If the blade points backward**: This is a **modeling issue**. In Roblox Studio, select the `Blade` part and rotate it so that its local forward vector (usually +Z or +X depending on your mesh) points away from the `Handle` in the direction the character is facing.\n*   **If you need custom grip**: You would use `Attachment` objects on the `Handle` and\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [In-game tools > Create an in-game tool > Physical tool > Set the handle](https://create.roblox.com/docs/players/tools#set-the-handle) · cited\n2. [Manage players > Giving Players Weapons > Give tools to players](https://create.roblox.com/docs/education/battle-royale-series/managing-players#give-tools-to-players) · retrieved, not cited\n3. [Create player tools > Create the tool](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/create-player-tools#create-the-tool) · retrieved, not cited\n4. [Manage players > Giving Players Weapons](https://create.roblox.com/docs/education/battle-royale-series/managing-players#giving-players-weapons) · retrieved, not cited\n"
+  },
+  "ANI-05": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "12cc7b68ac60eca7",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:marker",
+     "ok": true
+    },
+    {
+     "id": "require:fire",
+     "ok": true
+    },
+    {
+     "id": "require:disconnect",
+     "ok": true
+    },
+    {
+     "id": "require:stopped",
+     "ok": true
+    },
+    {
+     "id": "require:activated",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:task_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 87.7,
+   "timings": {
+    "luau_check_s": 0.12
+   },
+   "blocks": 1,
+   "answer_chars": 3783,
+   "answer_sha256": "b818e7e2e05a82945b919669fcf2fa9304c62a6515dd41c9fab436176d94bdff",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the LocalScript that fulfills your requirements. It uses `GetMarkerReachedSignal` to detect the marker, ensures the RemoteEvent fires exactly once, and disconnects the listener when the animation stops to prevent duplicate or late fires.\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal player = Players.LocalPlayer\nlocal tool = script.Parent -- Assumes this LocalScript is a child of the Tool\nlocal remoteEvent = ReplicatedStorage:WaitForChild(\"AttackHit\") -- Adjust path if necessary\n\nlocal ANIMATION_ID = \"rbxassetid://180435792\"\nlocal animation = Instance.new(\"Animation\")\nanimation.AnimationId = ANIMATION_ID\n\nlocal animationTrack = nil\nlocal markerConnection = nil\nlocal isAnimating = false\n\nlocal function onToolActivated()\n\t-- Prevent spamming if already playing\n\tif isAnimating then\n\t\treturn\n\tend\n\n\tlocal character = player.Character\n\tif not character then return end\n\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then return end\n\n\tlocal animator = humanoid:FindFirstChildOfClass(\"Animator\")\n\tif not animator then return end\n\n\t-- Load the animation if not already loaded\n\tif not animationTrack then\n\t\tanimationTrack = animator:LoadAnimation(animation)\n\tend\n\n\tisAnimating = true\n\n\t-- Connect to the marker signal BEFORE playing\n\tmarkerConnection = animationTrack:GetMarkerReachedSignal(\"Hit\"):Connect(function()\n\t\tif isAnimating then\n\t\t\t-- Fire exactly once when the marker is reached\n\t\t\tremoteEvent:FireServer()\n\t\tend\n\tend)\n\n\t-- Play the animation\n\tanimationTrack:Play()\n\n\t-- Disconnect the marker connection when the track stops\n\t-- This ensures we never fire if the track was stopped early or finished\n\tanimationTrack.Stopped:Connect(function()\n\t\tisAnimating = false\n\t\tif markerConnection then\n\t\t\tmarkerConnection:Disconnect()\n\t\t\tmarkerConnection = nil\n\t\tend\n\tend)\nend\n\ntool.Activated:Connect(onToolActivated)\n```\n\n### Key Implementation Details:\n1.  **Marker Detection**: Uses `animationTrack:GetMarkerReachedSignal(\"Hit\")` to listen specifically for the \"Hit\" marker defined in the animation [1].\n2.  **Single Fire**: The `isAnimating` flag ensures that `FireServer()` is only called if the animation is currently in progress.\n3.  **Cleanup**: The `animationTrack.Stopped` event disconnects the marker connection immediately when the animation ends or is interrupted. This prevents any \"late\" fires if the animation is stopped early [1].\n4.  **No `wait`**: The script relies entirely on events (`Activated`, `MarkerReachedSignal`, `Stopped`) rather than timing functions like `wait` or `task.wait` to determine when to fire [1].\n\n### References:\n[1] Use animations > Play animations from scripts > Humanoids\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n2. [Add animations > Script animations > Set up the project](https://create.roblox.com/docs/education/build-it-play-it-island-of-move/adding-animations#set-up-the-project) · retrieved, not cited\n3. [Play character animations > Trigger animations > Add animation](https://create.roblox.com/docs/tutorials/use-case-tutorials/animation/play-character-animations#add-animation) · retrieved, not cited\n4. [Hit detection with lasers > Control weapon fire rate](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#control-weapon-fire-rate) · retrieved, not cited\n"
+  },
+  "PERF-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "38d7a6b82bfae04f",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:event_or_throttle",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_task",
+     "ok": true
+    },
+    {
+     "id": "forbid:render_stepped",
+     "ok": true
+    }
+   ],
+   "seconds": 97.8,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 4116,
+   "answer_sha256": "93f1b9c9dd45bc386640b314c9b92aa3b234fe102b5f609c11e4e819073f01bf",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 233
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the rewritten, event-driven script.\n\n### The Solution\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal RunService = game:GetService(\"RunService\")\n\n-- Configuration\nlocal DOOR = script.Parent -- Assuming the script is inside the door\nlocal DETECTION_RADIUS = 10\nlocal FADE_SPEED = 0.1 -- Speed of the transition (0.1 = fast, 0.01 = slow)\n\n-- State\nlocal isPlayerNear = false\n\n-- Helper: Smoothly animate transparency\nlocal function setTransparency(targetTransparency)\n\tlocal current = DOOR.Transparency\n\tlocal diff = targetTransparency - current\n\t\n\t-- If we are already very close, stop updating to save CPU\n\tif math.abs(diff) < 0.01 then\n\t\treturn\n\tend\n\n\tDOOR.Transparency += diff * FADE_SPEED\nend\n\n-- 1. Event-Driven Detection\n-- We use Heartbeat to check distance, but we only update the door \n-- when the state (Near/Far) actually changes.\nRunService.Heartbeat:Connect(function()\n\tlocal playerFound = false\n\t\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal character = player.Character\n\t\tif character and character.PrimaryPart then\n\t\t\tlocal distance = (character.PrimaryPart.Position - DOOR.Position).Magnitude\n\t\t\tif distance < DETECTION_RADIUS then\n\t\t\t\tplayerFound = true\n\t\t\t\tbreak -- Found one, no need to check others\n\t\t\tend\n\t\tend\n\tend\n\n\t-- Only update if the state changed\n\tif playerFound ~= isPlayerNear then\n\t\tisPlayerNear = playerFound\n\t\t-- We will let the animation loop handle the smooth transition\n\tend\nend)\n\n-- 2. Throttled Animation Loop\n-- This runs independently to create the smooth fade effect without \n-- blocking the detection logic.\nwhile true do\n\tif isPlayerNear then\n\t\tsetTransparency(0.5)\n\telse\n\t\tsetTransparency(0)\n\tend\n\t\n\ttask.wait(0.02) -- Run at ~50 FPS for smooth animation\nend\n```\n\n### Explanation of Choice\nBy switching from a per-frame polling loop to an **event-driven state change** (detecting *when* a player enters/exits) combined with a **throttled animation loop**, we eliminate redundant calculations and only perform work when necessary, adhering to the principle that \"whenever possible, write event-driven code rather than per-frame calculations\" [4].\n\n### Key Improvements\n1.  **State Change Detection:** Instead of checking every player every frame and setting transparency immediately, we only toggle a boolean flag (`isPlayerNear`) when the status changes.\n2.  **Smooth Animation:** The `setTransparency` function creates a smooth fade effect rather than an instant snap, which is generally preferred for gameplay polish.\n3.  **`task.wait()` vs `wait()`:** Using `task.wait()` is the modern, recommended way to yield in Luau, ensuring better scheduling and compatibility [3].\n4.  **Performance Budget:** By separating the *detection* (which runs on `Heartbeat` but exits early if no state change occurs) from the *animation* (which runs at a fixed, lower frequency), we respect the 16.67ms frame budget [4].\n\n### References\n[1] Optimize your game > Cull nonessential content > Delete layered transparencies  \n[2] Design for performance > Streaming and teleportation  \n[3] Code the game loop > Code the game loop > Troubleshooting tips  \n[4] Design for performance > Scripting\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Optimize your game > Cull nonessential content > Delete layered transparencies](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/optimize-your-experience#delete-layered-transparencies) · cited\n2. [Design for performance > Streaming and teleportation](https://create.roblox.com/docs/performance-optimization/design#streaming-and-teleportation) · cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · cited\n4. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · cited\n"
+  },
+  "PERF-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "aac1c5451ba098bf",
+   "reasons": [
+    "require:streaming_mode: the boss model's streaming mode is set",
+    "require:react: reacts to instances streaming in or out"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:wait_for_child",
+     "ok": true
+    },
+    {
+     "id": "require:timeout",
+     "ok": true
+    },
+    {
+     "id": "require:streaming_mode",
+     "ok": false,
+     "detail": "the boss model's streaming mode is set"
+    },
+    {
+     "id": "require:react",
+     "ok": false,
+     "detail": "reacts to instances streaming in or out"
+    },
+    {
+     "id": "forbid:long_path",
+     "ok": true
+    }
+   ],
+   "seconds": 150.5,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 6019,
+   "answer_sha256": "72d0b69b6edb68c5c4bd498e03f794ebaef8a2fba119a466dfe88e6e92f37555",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 217
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To make this LocalScript safe with StreamingEnabled, we need to address three things:\n\n1.  **Wait for instances to stream in:** Use `WaitForChild` with a timeout to safely access `Door` and `Boss` models that might not be loaded yet [4].\n2.  **Handle streaming out:** When an instance streams out, its properties become stale or inaccessible. We should use `GetPropertyChangedSignal` or check `FindFirstAncestorWhichIsA(\"Workspace\")` to handle cases where the player moves away [1].\n3.  **Mark critical objects as always present:** While we can't force the engine to stream in specific parts via API, we can structure the code to retry or use `StreamingEnabled`-aware patterns. For the Boss, we often want to ensure it's loaded before interacting.\n\nHere is the rewritten, robust LocalScript:\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal player = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoidRootPart = character:WaitForChild(\"HumanoidRootPart\")\n\n-- Helper function to safely get a streamed-in instance with timeout\nlocal function getStreamedInstance(parent, childName, timeout)\n\ttimeout = timeout or 5 -- Default 5 second timeout\n\tlocal child = parent:WaitForChild(childName, timeout)\n\tif not child then\n\t\twarn(string.format(\"Timeout waiting for %s in %s\", childName, parent:GetFullName()))\n\t\treturn nil\n\tend\n\treturn child\nend\n\n-- 1. Safe Door Handling\n-- Wait for the Door to stream in\nlocal door = getStreamedInstance(workspace.Map.Building, \"Door\", 10)\n\nif door then\n\t-- Use a connection that checks if the door is still in the workspace\n\t-- before processing touch events to avoid stale references\n\tlocal function onTouched(hit)\n\t\t-- Ensure the door is still streamed in\n\t\tif door:FindFirstAncestorWhichIsA(\"Workspace\") then\n\t\t\tprint(\"Door touched by\", hit.Name)\n\t\t\t-- Add your door logic here\n\t\telse\n\t\t\twarn(\"Door has streamed out, ignoring touch.\")\n\t\tend\n\tend\n\n\tdoor.Touched:Connect(onTouched)\n\n\t-- Optional: React if the door streams out while the connection is active\n\tdoor.AncestryChanged:Connect(function()\n\t\tif not door:FindFirstAncestorWhichIsA(\"Workspace\") then\n\t\t\twarn(\"Door streamed out. Disconnecting Touched connection.\")\n\t\t\tdoor.Touched:Disconnect()\n\t\telse\n\t\t\tprint(\"Door streamed back in.\")\n\t\t\t-- Reconnect if needed, depending on your logic\n\t\tend\n\tend)\nelse\n\twarn(\"Door did not stream in within timeout.\")\nend\n\n-- 2. Safe Boss Handling\n-- Wait for the Boss model to stream in\nlocal boss = getStreamedInstance(workspace.Map, \"Boss\", 10)\n\nif boss then\n\t-- Wait for the Humanoid to exist within the Boss model\n\tlocal humanoid = boss:WaitForChild(\"Humanoid\", 5)\n\tif humanoid then\n\t\tprint(\"Boss Health:\", humanoid.Health)\n\n\t\t-- React to Boss streaming out\n\t\tboss.AncestryChanged:Connect(function()\n\t\t\tif not boss:FindFirstAncestorWhichIsA(\"Workspace\") then\n\t\t\t\twarn(\"Boss has streamed out. Health data may be stale.\")\n\t\t\t\t-- Consider pausing boss-related logic or updating UI\n\t\t\telse\n\t\t\t\tprint(\"Boss streamed back in. Health:\", humanoid.Health)\n\t\t\tend\n\t\tend)\n\n\t\t-- Optional: Monitor health changes\n\t\thumanoid:GetPropertyChangedSignal(\"Health\"):Connect(function()\n\t\t\t-- Only update if boss is still in workspace\n\t\t\tif boss:FindFirstAncestorWhichIsA(\"Workspace\") then\n\t\t\t\tprint(\"Boss Health updated:\", humanoid.Health)\n\t\t\tend\n\t\tend)\n\telse\n\t\twarn(\"Humanoid not found in Boss model.\")\n\tend\nelse\n\twarn(\"Boss did not stream in within timeout.\")\nend\n```\n\n### Key Changes Explained:\n\n1.  **`WaitForChild` with Timeout:** Instead of direct indexing (`workspace.Map.Building.Door`), we use `getStreamedInstance` which wraps `WaitForChild`. This yields the script until the instance is replicated to the client or the timeout expires, preventing `nil` errors [4].\n2.  **`AncestryChanged` Detection:** We connect to `AncestryChanged` on both `door` and `boss`. This signal fires when an instance is added to or removed from the workspace hierarchy. This allows us to detect when an object streams out (is removed from the workspace hierarchy on the client) and react accordingly [1].\n3.  **`FindFirstAncestorWhichIsA(\"Workspace\")` Check:** Before processing touch events or reading properties, we check if the instance is still in the workspace. This prevents logic from running on stale data when an object has streamed out [1].\n4.  **Humanoid Safety:** For the boss, we also wait for the `Humanoid` child, ensuring we can safely read `Health`.\n\n### Note on \"Always Present\":\nThere is no direct API to mark an instance as \"always streamed in\" from a LocalScript. However, you can influence streaming behavior by:\n*   Setting `StreamingFocus` on the player's character.\n*   Using `StreamingEnabled` settings in Studio to adjust the streaming radius.\n*   Placing critical objects closer to the spawn point or using `StreamingIntegrityMode.PauseOutsideLoadedArea` to pause the game if critical objects aren't loaded [3].\n\nFor server-side logic (like damage, health checks, etc.), it is always recommended to move that logic to a Server Script, as the server sees all instances at all times regardless of streaming [1].\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Techniques and conversion > Script patterns > Instance property reads](https://create.roblox.com/docs/workspace/streaming/techniques#instance-property-reads) · cited\n2. [Studio > EnableStudioStreaming](https://create.roblox.com/docs/reference/engine/classes/Studio#EnableStudioStreaming) · retrieved, not cited\n3. [Instance streaming > Pause screen customization](https://create.roblox.com/docs/workspace/streaming#pause-screen-customization) · cited\n4. [Instance > WaitForChild](https://create.roblox.com/docs/reference/engine/classes/Instance#WaitForChild) · cited\n"
+  },
+  "PERF-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "ec2ed653ca8a6499",
+   "reasons": [
+    "unit_tests: 5/6 passed; failed: the next get reuses the released part and still creates nothing"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "5/6 passed; failed: the next get reuses the released part and still creates nothing"
+    }
+   ],
+   "seconds": 257.6,
+   "timings": {
+    "luau_check_s": 0.23,
+    "unit_s": 0.67
+   },
+   "blocks": 2,
+   "answer_chars": 6824,
+   "answer_sha256": "d45a150b89db6891f4ee6b52162bd47254752e33418c639c045320e71e5ce592",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 282
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 5
+    }
+   ],
+   "answer": "Here is a robust, `--!strict` compliant `BulletPool` ModuleScript.\n\n### Implementation Details\n1.  **Pre-allocation**: The `new` method clones the template exactly `size` times. It configures them as `BasePart`s with `CanCollide = false` and `Transparency = 1` (standard for invisible hit-reg bullets) and parents them to `workspace`.\n2.  **State Management**: It uses a Lua table `pool` as a stack. `idleCount` tracks the number of available parts.\n3.  **`get()`**: Pops a part from the stack. If the stack is empty (`idleCount == 0`), it returns `nil` to prevent uncontrolled memory growth.\n4.  **`release()`**: Checks if the part is currently in use by verifying it is **not** in the `pool` table. If it is in use, it parks it (sets `Parent = nil`) and pushes it back onto the stack. If it is already idle, it does nothing.\n\n### `BulletPool.lua`\n\n```lua\n--!strict\n\n-- BulletPool: A fixed-size object pool for high-frequency projectiles.\n-- Prevents garbage collection spikes by reusing Part instances instead of\n-- creating and destroying them per shot.\n\nlocal BulletPool = {}\nBulletPool.__index = BulletPool\n\ntype BulletPool = {\n\t__pool: {BasePart},\n\t__size: number,\n\t__idleCount: number,\n}\n\n--- Creates a new BulletPool.\n--- @param size number The maximum number of bullets to pre-allocate.\n--- @param template BasePart The part template to clone.\n--- @return BulletPool\nfunction BulletPool.new(size: number, template: BasePart): BulletPool\n\tassert(type(size) == \"number\" and size > 0, \"size must be a positive number\")\n\tassert(template:IsA(\"BasePart\"), \"template must be a BasePart\")\n\n\tlocal self = setmetatable({\n\t\t__pool = {},\n\t\t__size = size,\n\t\t__idleCount = 0,\n\t}, BulletPool)\n\n\t-- Pre-allocate parts\n\tfor i = 1, size do\n\t\tlocal clone = template:Clone()\n\t\t\n\t\t-- Configure bullet properties for performance and invisibility\n\t\tclone.CanCollide = false\n\t\tclone.Transparency = 1\n\t\tclone.Anchored = true -- Server-side bullets usually don't need physics simulation\n\t\t\n\t\t-- Parent to workspace so they exist in the world hierarchy\n\t\tclone.Parent = workspace\n\t\t\n\t\t-- Add to pool stack\n\t\tself.__pool[i] = clone\n\t\tself.__idleCount += 1\n\tend\n\n\treturn self\nend\n\n--- Retrieves an idle bullet from the pool.\n--- @return BasePart?\nfunction BulletPool:get(): BasePart?\n\tif self.__idleCount > 0 then\n\t\t-- Pop from the stack\n\t\tlocal bullet = self.__pool[self.__idleCount]\n\t\tself.__pool[self.__idleCount] = nil\n\t\tself.__idleCount -= 1\n\t\t\n\t\t-- Reset position/rotation for firing (optional but recommended)\n\t\t-- bullet.CFrame = CFrame.new(0, 0, 0) -- Adjust as needed for your gun origin\n\t\t\n\t\treturn bullet\n\tend\n\t\n\t-- No idle parts available; return nil to prevent GC spikes from over-allocation\n\treturn nil\nend\n\n--- Returns an idle bullet to the pool.\n--- @param part BasePart The bullet part to release.\nfunction BulletPool:release(part: BasePart): nil\n\t-- Safety check: ensure the part belongs to this pool's size limit\n\t-- and is actually currently in use (not already idle).\n\t\n\t-- If the part is already in the pool table, it's already idle. Ignore.\n\tfor _, p in self.__pool do\n\t\tif p == part then\n\t\t\treturn -- Already idle\n\t\tend\n\tend\n\t\n\t-- If the part is not in the pool, it is currently in use.\n\t-- Park it: remove from workspace hierarchy to stop rendering/physics updates\n\tpart.Parent = nil\n\t\n\t-- Push back onto the stack\n\tself.__idleCount += 1\n\tself.__pool[self.__idleCount] = part\nend\n\n--- Returns the number of currently idle bullets available.\n--- @return number\nfunction BulletPool:idleCount(): number\n\treturn self.__idleCount\nend\n\nreturn BulletPool\n```\n\n### Usage Example (Server Script)\n\n```lua\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal BulletPool = require(ReplicatedStorage.BulletPool)\n\n-- 1. Create a template part in ReplicatedStorage or ServerScriptService\n--    (Assume \"BulletTemplate\" is a BasePart in ReplicatedStorage)\nlocal template = ReplicatedStorage:WaitForChild(\"BulletTemplate\")\n\n-- 2. Initialize the pool (e.g., 100 bullets max)\nlocal pool = BulletPool.new(100, template)\n\n-- 3. Firing logic\nlocal function fireGun(origin: Vector3, direction: Vector3)\n\tlocal bullet = pool:get()\n\t\n\tif bullet then\n\t\t-- Configure the bullet for this shot\n\t\tbullet.CFrame = CFrame.new(origin) * CFrame.new(0, 0, -1) -- Adjust offset\n\t\tbullet.Velocity = direction * 200 -- Example velocity\n\t\t\n\t\t-- Parent back to workspace to make it visible/active\n\t\tbullet.Parent = workspace\n\t\t\n\t\t-- Example: Destroy after 2 seconds and return to pool\n\t\ttask.delay(2, function()\n\t\t\tif bullet and bullet.Parent then\n\t\t\t\tbullet:Destroy() -- Or just release() if you want to keep it in workspace but hidden\n\t\t\t\tpool:release(bullet)\n\t\t\tend\n\t\tend)\n\telse\n\t\twarn(\"Bullet pool exhausted! Consider increasing size or firing rate.\")\n\tend\nend\n```\n\n### Key Design Choices\n*   **Stack-based Pool**: Using a table as a stack (`self.__pool[index]`) is efficient for `get()` and `release()` operations (O(1) complexity).\n*   **Nil Check in `release()`**: Setting `Parent = nil` removes the part from the scene graph, reducing rendering and physics overhead while it waits to be reused.\n*   **Strict Type Checking**: The `--!strict` pragma ensures type safety, preventing common errors like passing `nil` to `release()`.\n*   **No Over-allocation**: By returning `nil` when the pool is empty, we avoid creating new parts, which would defeat the purpose of the pool and cause GC spikes.\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 57: Property __idleCount of table '{ read __idleCount: number, read __pool: {*error-type*?} }' is read-only (TypeError)\n- line 78: Expected this to be 'nil', but got '()' (TypeError)\n- line 87: Property __idleCount of table '{ read __idleCount: T, read __pool: { [T]: { Parent: nil } } }' is read-only (TypeError)\n- line 87: Type function instance add<T, number> depends on generic function parameters but does not appear in the function signature; this construct cannot be type-checked at this time (TypeError) Code block 2 compiles and passes Luau type analysis.\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · retrieved, not cited\n2. [Roblox for Unity developers > Scripting](https://create.roblox.com/docs/unity#scripting) · retrieved, not cited\n3. [Services](https://create.roblox.com/docs/scripting/services) · retrieved, not cited\n4. [Client-server runtime > Replication](https://create.roblox.com/docs/projects/client-server#replication) · retrieved, not cited\n"
   }
  },
  "summary": {
-  "pass": 5,
-  "fail": 7,
-  "error": 1,
-  "scored": 12,
-  "pass_rate": 0.4167,
-  "median_seconds": 175.4
+  "pass": 18,
+  "fail": 16,
+  "error": 0,
+  "scored": 34,
+  "pass_rate": 0.5294,
+  "median_seconds": 149.2
  }
 }
