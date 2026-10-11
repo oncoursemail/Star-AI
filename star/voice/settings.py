@@ -11,9 +11,11 @@ import re
 from dataclasses import asdict, dataclass
 
 from .call import CallConfig
+from .catalog import STYLE_IDS
 from .turn import TurnConfig
 
 TTS_ENGINES = ("kokoro",)
+TTS_LANGS = ("en-us", "en-gb")
 ASR_ENGINES = ("faster-whisper",)
 ASR_MODELS = ("auto", "tiny.en", "base.en", "small.en", "medium.en", "distil-large-v3", "large-v3-turbo",
               "tiny", "base", "small", "medium", "large-v3")
@@ -28,6 +30,11 @@ class VoiceSettings:
     tts_engine: str = "kokoro"
     voice: str = "heart"                 # id from the audition page, or an engine-specific recipe
     speed: float = 0.92                  # a little slower than neutral: calmer
+    voice_style: str = "warm-caring"     # speaking manner: warm-caring | confident-commanding | anime-bright
+    voice_id: str = ""                   # catalog id of the chosen voice (star/voice/voices.json); "" = custom `voice`
+    tts_lang: str = "en-us"              # phonemiser language for the voice (en-gb for the British stock voices)
+    sentence_gap_ms: int = 0             # extra silence after each sentence (the commanding voices use 400 to 450)
+    pitch_semitones: float = 0.0         # whole-voice pitch change in semitones (anime voices up, commanding down)
     asr_engine: str = "faster-whisper"
     asr_model: str = "auto"              # auto = small.en on an NVIDIA GPU, base.en on the CPU
     asr_prompt: str = "Star, Roblox, Luau, RemoteEvent."     # spellings the transcript should prefer
@@ -49,6 +56,11 @@ class VoiceSettings:
         checks = [(self.tts_engine in TTS_ENGINES, "Unknown text-to-speech engine"),
                   (bool(_VOICE_ID.match(self.voice)), "Invalid voice id"),
                   (0.6 <= float(self.speed) <= 1.4, "Speed must be between 0.6 and 1.4"),
+                  (self.voice_style in STYLE_IDS, "Unknown voice style"),
+                  (self.voice_id == "" or bool(_VOICE_ID.match(self.voice_id)), "Invalid voice catalog id"),
+                  (self.tts_lang in TTS_LANGS, "Unknown voice language"),
+                  (0 <= int(self.sentence_gap_ms) <= 1500, "sentence_gap_ms must be 0-1500"),
+                  (-6.0 <= float(self.pitch_semitones) <= 6.0, "pitch_semitones must be between -6 and 6"),
                   (self.asr_engine in ASR_ENGINES, "Unknown speech-to-text engine"),
                   (self.asr_model in ASR_MODELS, "Unknown speech-to-text model"),
                   (len(self.asr_prompt) <= 300, "Speech-to-text hint is too long"),
@@ -97,4 +109,4 @@ class VoiceSettings:
                           min_end_silence_ms=min(int(self.min_end_silence_ms), int(self.max_silence_ms)),
                           barge_in_ms=int(self.barge_in_ms))
         return CallConfig(turn=turn, system_extra=self.system_extra, partial_transcripts=self.partial_transcripts,
-                          use_echo_gate=self.output == "speakers")
+                          use_echo_gate=self.output == "speakers", style=self.voice_style)

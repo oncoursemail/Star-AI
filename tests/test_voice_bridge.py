@@ -120,7 +120,7 @@ def test_start_failures_are_reported_as_events_and_leave_no_call_behind(tmp_path
 
 def test_actions_are_validated_and_settings_round_trip(tmp_path):
     bridge, _events, _saved, _built = make_bridge(tmp_path)
-    assert "voiceStartCall" in VOICE_ACTIONS and len(VOICE_ACTIONS) == 10
+    assert "voiceStartCall" in VOICE_ACTIONS and len(VOICE_ACTIONS) == 11
     with pytest.raises(PermissionError):
         bridge.handle("deleteEverything", {})
     for action in ("voiceInterrupt", "voiceSetMuted"):
@@ -142,7 +142,8 @@ def test_actions_are_validated_and_settings_round_trip(tmp_path):
     assert bridge.handle("voiceGetSettings", {})["settings"]["voice"] == "heart"     # damaged file -> defaults
 
     voices = bridge.handle("voiceListVoices", {})["voices"]
-    assert {"engine": "kokoro", "id": "heart", "label": "Heart", "recipe": [["af_heart", 1.0]]} in voices
+    heart = next(v for v in voices if v["id"] == "heart")                # the catalog keeps the audition ids
+    assert heart["engine"] == "kokoro" and heart["recipe"] == [["af_heart", 1.0]] and heart["callable"] is True
     assert bridge.handle("voiceListDevices", {})["devices"][0]["name"] == "Fake mic"
 
 

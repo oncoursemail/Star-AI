@@ -60,6 +60,7 @@ class CallConfig:
     turn: TurnConfig = field(default_factory=TurnConfig)
     history_messages: int = 40            # most user+assistant messages sent as context (see _context)
     system_extra: str = ""                # optional extra context appended to the voice prompt
+    style: str = "warm-caring"            # speaking manner (persona.STYLE_PROMPTS): warm-caring, confident-commanding, anime-bright
     speculative_asr: bool = True          # start transcribing at the first pause
     partial_transcripts: bool = True      # live transcript while the user is talking
     partial_interval: float = 0.9         # seconds between live transcripts
@@ -322,7 +323,7 @@ class CallSession:
             if len(self.history) > limit:
                 keep = (limit // 2) // 2 * 2
                 del self.history[: len(self.history) - keep]
-            return [system_message(self.config.system_extra)] + list(self.history)
+            return [system_message(self.config.system_extra, self.config.style)] + list(self.history)
 
     def _generate_and_speak(self, reply: _Reply, messages: list[dict]) -> None:
         metrics = reply.metrics

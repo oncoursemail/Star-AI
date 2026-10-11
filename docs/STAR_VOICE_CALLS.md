@@ -55,7 +55,8 @@ optional packages.
 | `turn.py` | `TurnDetector` (start, pause, resume, end of turn, barge-in rules) and `EchoGate` |
 | `call.py` | `CallSession`: wires the stages, runs replies on worker threads, handles interruption and history |
 | `brain.py` | `ServerBrain`: cancellable streaming client; `ScriptedBrain` for offline tests |
-| `persona.py` | The voice system prompt (warm, caring, short spoken sentences) |
+| `persona.py` | The voice system prompts: warm and caring (default), confident and commanding, anime-bright; one fixed prompt per style |
+| `catalog.py`, `voices.json` | The voice catalog: every selectable voice, its style group, engine settings, licence and measured latency (section 9) |
 | `metrics.py` | `TurnMetrics` and the latency table |
 | `settings.py` | `VoiceSettings`: validated settings (voice id, engines, timings) |
 | `filecall.py` | Scripted calls from WAV files with a real-time virtual microphone and speaker |
@@ -143,13 +144,14 @@ request.
 | `voiceStatus` | none | `{available, missingPackages[], missingModels[], serverConfigured, inCall, callId, state, muted}` |
 | `voiceGetSettings` | none | `{settings: VoiceSettings, choices: {asr_model[], endpointer[], output[]}}` |
 | `voiceSaveSettings` | `{settings: {...partial}}` | `{settings}` after validation; stored in `voice.json` in the app data folder |
-| `voiceListVoices` | none | `{voices: [{engine, id, label, recipe}]}` (ids match the audition page) |
+| `voiceListVoices` | `{style?}` | `{styles[], voices[], selected}`: the voice catalog, optionally one style (section 9) |
+| `voiceSelectVoice` | `{voiceId}` | `{settings, voice, appliesToNextCall}`; saves the voice, speed, language, pauses, pitch and speaking style |
 | `voiceListDevices` | none | `{devices: [{index, kind: "input"|"output", name, default}]}` |
 | `voiceStartCall` | `{settings?: {...partial}}` | `{callId, settings}`; loading and the call run in the background |
 | `voiceStopCall` | none | `{stopped: true|false}`; an `ended` event follows |
 | `voiceInterrupt` | none | `{interrupted: true}` (a "stop talking" button) |
 | `voiceSetMuted` | `{muted: true|false}` | `{muted}`; while muted the microphone is ignored |
-| `voicePreviewVoice` | `{voice?, speed?, text?}` | `{previewing}`; speaks one sample line when no call is active |
+| `voicePreviewVoice` | `{voiceId?, voice?, speed?, text?}` | `{previewing, voiceId}`; speaks one sample line (the style's own line for a catalog voice) when no call is active; a `preview_done` event follows |
 
 Only one call can exist. `voiceStartCall` during a call returns an error. Invalid settings are rejected before
 anything starts.
@@ -183,6 +185,11 @@ the words Star actually spoke), so a call appears in the conversation history li
 | `tts_engine` | `kokoro` | Only Kokoro is wired in today |
 | `voice` | `heart` | Audition-page id (`heart`, `blend-heart-nicole`, ...) or a custom blend `af_heart:0.7+af_nicole:0.3` |
 | `speed` | `0.92` | 0.6 to 1.4; slightly under 1 reads calmer |
+| `voice_style` | `warm-caring` | Speaking manner: `warm-caring`, `confident-commanding`, `anime-bright` (changes the system prompt) |
+| `voice_id` | empty | Catalog id of the chosen voice; empty when `voice` is a custom recipe |
+| `tts_lang` | `en-us` | `en-us` or `en-gb` (the British stock voices) |
+| `sentence_gap_ms` | 0 | Silence after each spoken sentence (the commanding voices use 300 to 450) |
+| `pitch_semitones` | 0 | Whole-voice pitch change, -6 to 6 (anime voices up, commanding down) |
 | `asr_engine`, `asr_model` | `faster-whisper`, `auto` | `auto` = `small.en` on an NVIDIA GPU, `base.en` on the CPU (section 6) |
 | `asr_prompt` | names such as Star, Roblox, RemoteEvent | Spellings the transcript should prefer |
 | `device` | `auto` | `auto`, `cuda` or `cpu` |
@@ -202,7 +209,7 @@ the words Star actually spoke), so a call appears in the conversation history li
 - Show the live `partial_transcript`, replace it with `final_transcript`, then show Star's `assistant_sentence`
   captions. On `interrupted`, trim the caption to `heard_text`.
 - A mute toggle (`voiceSetMuted`), a "stop talking" button (`voiceInterrupt`) and a hang-up button (`voiceStopCall`).
-- Voice picker: `voiceListVoices` + `voicePreviewVoice`, saved through `voiceSaveSettings`.
+- Voice picker: `voiceListVoices`, `voicePreviewVoice`, `voiceSelectVoice` (section 9).
 
 ## 6. Speech recognition choice
 
@@ -345,9 +352,65 @@ What the four runs show:
 - **Packaging.** The optional packages and models are not part of the Windows installer. `voiceStatus` reports them
   as missing rather than failing.
 - **Other voices.** Only Kokoro is wired into calls. The audition page also has Chatterbox, Qwen3-TTS, Pocket TTS and
-  Supertonic samples; adding one is an `engines.py` class (section 2). See `docs/research/voice.md` in the project
-  folder for the measurements behind the recommendations.
+  Supertonic samples; adding one is an `engines.py` class (section 2). The catalog already lists the Qwen3-TTS and
+  Chatterbox voices (with `callable: false`) so the picker can show them greyed out. See `docs/research/voice.md` and
+  `docs/research/voice-styles.md` in the project folder for the measurements behind the recommendations.
+- **Voice styles and young callers.** Callers can be children and teenagers. The commanding style is a firm-mentor
+  tone and its prompt forbids romantic, sexual or role-play content; the picker should present it as an opt-in
+  choice (not the default), and nothing in the prompts asks the brain to be flirtatious. Not tested with a live brain
+  here: only the prompts' text and the settings flow are tested.
 - **False end of turn between sentences.** Smart Turn sometimes ends the turn after the first of two sentences; the
   session cancels and merges, at the cost of one abandoned request to the server.
 - **Server speed dominates.** Every other stage adds well under a second in total; the brain's first token and its
   tokens per second decide how the call feels.
+
+## 9. Voice picker contract (Settings > Voice)
+
+Three speaking styles, each a group of voices; the style also changes how Star words her replies (one fixed system
+prompt per style in `persona.py`). The catalog is `star/voice/voices.json` (loaded by `catalog.py`, generated from the
+audition measurements by `voice-lab/make_catalog.py`). All voices are original synthetic voices: Kokoro stock voices and
+blends, voices designed from a written description (Qwen3-TTS), or Qwen / Chatterbox locked on a synthetic clip.
+
+| Style id (`voice_style`) | Name | What it is | Voices | Live-call pick (`recommended_for: live`) | Quality pick (`quality`) |
+|---|---|---|---|---|---|
+| `warm-caring` | Warm and caring | The default. Includes the soft and whispery sub-style (archetype `whisper`) | 7 | none flagged (the default voice is `heart`) | none flagged |
+| `confident-commanding` | Confident and commanding | Mature, calm, in control; a tone only, never explicit | 12 | `cmd-nicole-aoede` | `cmd-nicole-kore-firm-locked` |
+| `anime-bright` | Anime-style | Bright adult English-dub style; includes soft East-Asian-accented voices | 10 | `ani-bella-heart-up` | `ani-genki-wide-locked` |
+
+### What the screen calls, in order
+
+1. **Open the picker:** `voiceListVoices {}` returns `{styles[], voices[], selected}`. `styles[]` is
+   `{id, name, summary, preview_line}`. Each voice is `{id, name, label, style, archetype, engine, engine_settings,
+   reference_clip, audition, licence, latency{first_audio_seconds, first_audio_kind, realtime_factor, device}, measured{pitch_hz,
+   words_per_minute, pitch_range_st, ...}, recommended_for[], notes, callable, reason}`. `selected` is
+   `{voiceId, voice, style, speed}` (voice id empty = a custom `voice` recipe). `voiceListVoices {"style": "anime-bright"}`
+   lists one group.
+2. **Show a voice:** group rows by `style`; label `recommended_for` as "Best for live calls" / "Best quality";
+   show `latency.first_audio_seconds` ("0.27 s to first sound") and `licence` in a details row. A voice with
+   `callable: false` (its engine is not built into calls yet: Qwen3-TTS and Chatterbox voices today) is shown disabled
+   with `reason`; the same voice can be heard on the audition page (`audition` is `engine-folder/voice` there).
+3. **Preview:** `voicePreviewVoice {"voiceId": "<id>"}` answers `{previewing, voiceId}` at once and speaks the style's
+   own sample line (for example "Sit down. Breathe. Now show me what you built."); a `preview_done` event
+   (`{type: "preview_done", voice}`, keyed by the request id) follows. It refuses while a call is running and refuses an
+   uncallable voice (`ValueError`, shown as the error text). `text` may override the sample line.
+4. **Choose:** `voiceSelectVoice {"voiceId": "<id>"}` stores the voice recipe, speed, language, sentence pause, pitch
+   change and the speaking style in `voice.json` and answers `{settings, voice, appliesToNextCall}` (true when a call is
+   running; the change takes effect on the next call, because the call already has its engine and prompt).
+   Unknown ids and uncallable voices raise `ValueError` with a plain message.
+5. **Call:** `voiceStartCall {}` uses the saved selection. To try a voice for one call only, pass
+   `settings: {voice, speed, tts_lang, sentence_gap_ms, pitch_semitones, voice_style}` (the same fields the selection
+   writes).
+
+Settings the selection writes (all validated, see section 5): `tts_engine`, `voice` (a Kokoro recipe such as
+`af_nicole:0.6+af_aoede:0.4`), `speed`, `tts_lang`, `sentence_gap_ms`, `pitch_semitones`, `voice_style`, `voice_id`.
+
+Notes for the screen designer:
+
+- Present the commanding style as an opt-in choice and never as the default. Its prompt forbids romantic or sexual
+  content and role-play, but callers can be children and teenagers (section 8).
+- "Soft and whispery" and "soft East-Asian-accented" voices were made from the owner's listening feedback on Kokoro
+  Nicole; the page marks them. Their accents come from stock voices or description-designed voices only.
+- Pitch shifts are resampling (the voice gets a little smaller or larger as well): kept to plus or minus 3.5 semitones,
+  and only upwards for anime and downwards for commanding voices (a unit test enforces this).
+- Adding an engine: write the class (section 2), add its name to `TTS_ENGINES`, and the catalog entries for that engine
+  become `callable: true` with no other change.

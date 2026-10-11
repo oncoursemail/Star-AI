@@ -3,7 +3,7 @@
 The React call screen is not built yet (another branch owns the chat UI). This module is the whole backend
 contract it needs, documented in docs/STAR_VOICE_CALLS.md:
 
-  actions  voiceStatus, voiceGetSettings, voiceSaveSettings, voiceListVoices, voiceListDevices,
+  actions  voiceStatus, voiceGetSettings, voiceSaveSettings, voiceListVoices, voiceSelectVoice, voiceListDevices,
            voiceStartCall, voiceStopCall, voiceInterrupt, voiceSetMuted, voicePreviewVoice
   events   kind "voice", data {type: state | level | speech_started | partial_transcript | final_transcript
            | assistant_delta | assistant_sentence | interrupted | turn_metrics | error | progress | ended}
@@ -21,11 +21,12 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Callable
 
-from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, VoiceSettings
+from .catalog import STYLES, VoiceEntry, find_voice, kokoro_recipe, load_catalog
+from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, TTS_ENGINES, VoiceSettings
 
 VOICE_ACTIONS = frozenset({
-    "voiceStatus", "voiceGetSettings", "voiceSaveSettings", "voiceListVoices", "voiceListDevices",
-    "voiceStartCall", "voiceStopCall", "voiceInterrupt", "voiceSetMuted", "voicePreviewVoice",
+    "voiceStatus", "voiceGetSettings", "voiceSaveSettings", "voiceListVoices", "voiceSelectVoice",
+    "voiceListDevices", "voiceStartCall", "voiceStopCall", "voiceInterrupt", "voiceSetMuted", "voicePreviewVoice",
 })
 REQUIRED_PACKAGES = {"numpy": "numpy", "onnxruntime": "onnxruntime", "sounddevice": "sounddevice",
                      "faster_whisper": "faster-whisper", "kokoro_onnx": "kokoro-onnx", "httpx": "httpx"}
@@ -141,10 +142,9 @@ class VoiceBridge:
             self._settings_path.write_text(json.dumps(asdict(settings), indent=1), encoding="utf-8")
             return {"settings": asdict(settings)}
         if action == "voiceListVoices":
-            from .engines import KOKORO_VOICES
-            return {"voices": [{"engine": "kokoro", "id": vid, "label": vid.replace("-", " ").title(),
-                                "recipe": [[name, weight] for name, weight in recipe]}
-                               for vid, recipe in KOKORO_VOICES.items()]}
+            return self._list_voices(body)
+        if action == "voiceSelectVoice":
+            return self._select_voice(body)
         if action == "voiceListDevices":
             return {"devices": self._factories.devices()}
         if action == "voiceStartCall":
@@ -190,6 +190,48 @@ class VoiceBridge:
     def close(self) -> None:
         self.stop_call(wait=2.0)
 
+    # -- voice catalog ------------------------------------------------------------------------
+    @staticmethod
+    def _voice_view(entry: VoiceEntry) -> dict:
+        data = entry.to_dict()
+        usable = entry.engine in TTS_ENGINES
+        data["label"] = entry.name                       # older name for the display text
+        data["callable"] = usable
+        data["reason"] = "" if usable else (f"The {entry.engine} engine is not built into calls yet. "
+                                            "You can hear this voice on the audition page.")
+        if usable and entry.engine == "kokoro":
+            data["recipe"] = [list(part) for part in entry.engine_settings["recipe"]]
+        return data
+
+    def _list_voices(self, body: dict) -> dict:
+        """The picker's data: styles, voices (optionally one style), and what is selected now."""
+        style = str(body.get("style") or "")
+        if style and style not in STYLES:
+            raise ValueError("Unknown voice style")
+        current = self._load_settings()
+        voices = [self._voice_view(v) for v in load_catalog() if not style or v.style == style]
+        return {"styles": [{"id": sid, **info} for sid, info in STYLES.items()],
+                "voices": voices,
+                "selected": {"voiceId": current.voice_id, "voice": current.voice, "style": current.voice_style,
+                             "speed": current.speed}}
+
+    def _select_voice(self, body: dict) -> dict:
+        """Choose a catalog voice: stores its engine settings and its speaking style in the voice settings."""
+        voice_id = str(body.get("voiceId") or body.get("id") or "").strip()
+        entry = find_voice(voice_id)
+        if entry is None:
+            raise ValueError("Unknown voice")
+        if entry.engine not in TTS_ENGINES:
+            raise ValueError(f"The {entry.engine} engine is not built into calls yet; this voice can only be heard "
+                             "on the audition page")
+        if self._settings_path is None:
+            raise RuntimeError("Voice settings cannot be saved here")
+        settings = VoiceSettings.from_mapping(_settings_for(entry), self._load_settings())
+        self._settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self._settings_path.write_text(json.dumps(asdict(settings), indent=1), encoding="utf-8")
+        return {"settings": asdict(settings), "voice": self._voice_view(entry),
+                "appliesToNextCall": self._call is not None}
+
     # -- workers ------------------------------------------------------------------------------
     def _get_engines(self, settings: VoiceSettings, progress):
         key = (settings.tts_engine, settings.asr_engine, settings.asr_model, settings.asr_prompt, settings.device,
@@ -197,11 +239,7 @@ class VoiceBridge:
         if self._engines is None or self._engines_key != key:
             self._engines = self._factories.engines(settings, progress)
             self._engines_key = key
-        tts = self._engines.tts
-        if hasattr(tts, "set_voice") and getattr(tts, "voice", None) != settings.voice:
-            tts.set_voice(settings.voice)
-        if hasattr(tts, "speed"):
-            tts.speed = float(settings.speed)
+        _apply_voice(self._engines.tts, settings)
         return self._engines
 
     def _run_call(self, call: _Call) -> None:
@@ -252,17 +290,26 @@ class VoiceBridge:
         """Speak one sample line in a voice, outside a call, so the owner can compare voices in the app."""
         if self._call is not None:
             raise RuntimeError("Stop the call before previewing a voice")
-        settings = VoiceSettings.from_mapping({k: body[k] for k in ("voice", "speed", "output_device") if k in body},
-                                              self._load_settings())
-        text = str(body.get("text") or PREVIEW_LINE)[:400]
+        wanted = {k: body[k] for k in ("voice", "speed", "output_device") if k in body}
+        line = PREVIEW_LINE
+        if body.get("voiceId"):                       # a catalog voice: its own engine settings and sample line
+            entry = find_voice(str(body["voiceId"]))
+            if entry is None:
+                raise ValueError("Unknown voice")
+            if entry.engine not in TTS_ENGINES:
+                raise ValueError(f"The {entry.engine} engine is not built into calls yet; listen on the audition page")
+            wanted.update(_settings_for(entry))
+            line = STYLES[entry.style]["preview_line"]
+        settings = VoiceSettings.from_mapping(wanted, self._load_settings())
+        text = str(body.get("text") or line)[:400]
 
         def work() -> None:
             try:
                 from .engines import make_tts
                 tts = self._engines.tts if self._engines is not None else make_tts(
-                    settings.tts_engine, settings.voice, settings.speed, settings.device)
-                if hasattr(tts, "set_voice"):
-                    tts.set_voice(settings.voice)
+                    settings.tts_engine, settings.voice, settings.speed, settings.device, settings.tts_lang,
+                    settings.sentence_gap_ms, settings.pitch_semitones)
+                _apply_voice(tts, settings)
                 speaker = self._factories.speaker(int(getattr(tts, "sample_rate", 24000)), settings.output_device)
                 with speaker:
                     for pcm, rate in tts.synthesize(text):
@@ -274,4 +321,27 @@ class VoiceBridge:
                 self._emit(request_id, {"type": "error", "message": str(exc)[:300] or type(exc).__name__})
 
         threading.Thread(target=work, name="star-voice-preview", daemon=True).start()
-        return {"previewing": settings.voice}
+        return {"previewing": settings.voice, "voiceId": settings.voice_id}
+
+
+def _settings_for(entry: VoiceEntry) -> dict:
+    """The VoiceSettings keys a catalog voice sets (Kokoro: recipe string, speed, language, sentence gap)."""
+    es = entry.engine_settings
+    return {"tts_engine": entry.engine, "voice": kokoro_recipe(entry), "speed": es.get("speed", 0.92),
+            "tts_lang": es.get("lang", "en-us"), "sentence_gap_ms": es.get("sentence_gap_ms", 0),
+            "pitch_semitones": es.get("pitch_semitones", 0.0),
+            "voice_style": entry.style, "voice_id": entry.id}
+
+
+def _apply_voice(tts, settings: VoiceSettings) -> None:
+    """Point a loaded TTS engine at the chosen voice; engines without a setting ignore it."""
+    if hasattr(tts, "set_voice") and getattr(tts, "voice", None) != settings.voice:
+        tts.set_voice(settings.voice)
+    if hasattr(tts, "speed"):
+        tts.speed = float(settings.speed)
+    if hasattr(tts, "lang"):
+        tts.lang = settings.tts_lang
+    if hasattr(tts, "gap_ms"):
+        tts.gap_ms = int(settings.sentence_gap_ms)
+    if hasattr(tts, "pitch_semitones"):
+        tts.pitch_semitones = float(settings.pitch_semitones)

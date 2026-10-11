@@ -270,6 +270,11 @@ KOKORO_VOICES = {
 }
 
 
+def pitch_ratio(semitones: float) -> float:
+    """Frequency ratio of a pitch change in semitones: +12 doubles the pitch, -12 halves it."""
+    return 2.0 ** (float(semitones) / 12.0)
+
+
 def parse_kokoro_voice(voice: str) -> list[tuple[str, float]]:
     """'heart', 'af_heart', or a custom blend such as 'af_heart:0.7+af_nicole:0.3'."""
     voice = voice.strip()
@@ -291,7 +296,8 @@ class KokoroTTS:
     sample_rate = 24000
 
     def __init__(self, voice: str = "heart", speed: float = 0.92, device: str = "auto", lang: str = "en-us",
-                 model: str | os.PathLike | None = None, voices: str | os.PathLike | None = None) -> None:
+                 model: str | os.PathLike | None = None, voices: str | os.PathLike | None = None,
+                 gap_ms: int = 0, pitch_semitones: float = 0.0) -> None:
         add_nvidia_dll_dirs()
         import onnxruntime as ort
         from kokoro_onnx import Kokoro
@@ -311,6 +317,8 @@ class KokoroTTS:
         self._kokoro = Kokoro.from_session(session, str(voices or model_file("voices-v1.0.bin")))
         self._lock = threading.Lock()
         self.speed, self.lang = speed, lang
+        self.gap_ms = gap_ms                  # silence after each sentence (commanding voices: a deliberate pace)
+        self.pitch_semitones = pitch_semitones   # whole-voice pitch change; see pitch_ratio
         self.set_voice(voice)
 
     def set_voice(self, voice: str) -> None:
@@ -324,9 +332,16 @@ class KokoroTTS:
                 pass
 
     def synthesize(self, text: str) -> Iterable[tuple[bytes, int]]:
+        ratio = pitch_ratio(self.pitch_semitones)
         with self._lock:
-            samples, rate = self._kokoro.create(text, voice=self._style, speed=self.speed, lang=self.lang)
+            # A pitch change is a resample (playing the clip back faster or slower), which also changes its length;
+            # asking Kokoro for a speed divided by the same ratio makes the final pace the speed that was asked for.
+            samples, rate = self._kokoro.create(text, voice=self._style, speed=self.speed / ratio, lang=self.lang)
+        if ratio != 1.0:
+            samples = resample(samples, int(rate), int(round(rate / ratio)))
         yield float_to_pcm16(samples), int(rate)
+        if self.gap_ms > 0:
+            yield b"\x00\x00" * int(int(rate) * self.gap_ms / 1000), int(rate)
 
 
 # -- registries -------------------------------------------------------------------------------
@@ -352,7 +367,9 @@ def make_asr(name: str = "faster-whisper", model: str = "", device: str = "auto"
     raise ValueError(f"Unknown speech-to-text engine: {name}")
 
 
-def make_tts(name: str = "kokoro", voice: str = "", speed: float = 0.92, device: str = "auto"):
+def make_tts(name: str = "kokoro", voice: str = "", speed: float = 0.92, device: str = "auto", lang: str = "en-us",
+             gap_ms: int = 0, pitch_semitones: float = 0.0):
     if name == "kokoro":
-        return KokoroTTS(voice or "heart", speed=speed, device=device)
+        return KokoroTTS(voice or "heart", speed=speed, device=device, lang=lang, gap_ms=gap_ms,
+                         pitch_semitones=pitch_semitones)
     raise ValueError(f"Unknown text-to-speech engine: {name}")
