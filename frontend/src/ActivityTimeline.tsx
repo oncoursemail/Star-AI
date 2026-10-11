@@ -85,7 +85,7 @@ export function ActivityTimeline({run, onStop, stopping = false}: {run: Activity
   const listId = useId()
   const done = countDone(run)
   const total = run.steps.length
-  const meta = [run.label, total ? (running ? `${done} of ${total} steps done` : `${total} ${total === 1 ? 'step' : 'steps'}`) : ''].filter(Boolean).join(' · ')
+  const meta = [run.label, total ? (running ? `${done} of ${total} steps done` : `${total} ${total === 1 ? 'step' : 'steps'}`) : '', run.model ? (running ? run.model : `answered by ${run.model}`) : ''].filter(Boolean).join(' · ')
   return (
     <section className={'act act-' + run.outcome + (open ? ' is-open' : '')} aria-label="What STAR did">
       <div className="act-head">

@@ -18,7 +18,7 @@ if not exist "%STAR_VOICE_PYTHON%" (
 
 rem --- Server address and key (the key is read into a variable and never shown) ---
 if not defined STAR_SERVER_URL if exist "%USERPROFILE%\.star\server_url" set /p STAR_SERVER_URL=<"%USERPROFILE%\.star\server_url"
-if not defined STAR_SERVER_URL set /p STAR_SERVER_URL=STAR Server address (for example http://10.17.0.146:8080/v1):
+if not defined STAR_SERVER_URL set /p STAR_SERVER_URL=STAR Server address (for example http://192.168.1.20:8080/v1):
 if not defined STAR_SERVER_API_KEY if exist "%USERPROFILE%\.star\server_api_key" set /p STAR_SERVER_API_KEY=<"%USERPROFILE%\.star\server_api_key"
 if not defined STAR_SERVER_API_KEY (
   echo No server key found. Put it in %USERPROFILE%\.star\server_api_key or set STAR_SERVER_API_KEY.

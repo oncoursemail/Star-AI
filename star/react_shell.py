@@ -125,6 +125,13 @@ _ROUTE_PROFILES = frozenset({'fast','reasoning','roblox','vision','research','ag
 _STEP_STATES = {'completed':'done','done':'done','failed':'failed','blocked':'blocked',
                 'cancelled':'cancelled'}
 _TOOL_NAME = re.compile(r'[A-Za-z][A-Za-z0-9_.-]{0,47}')
+# A model id as a server or provider names it ("star-voice", "openai/gpt-oss-20b"). Shown as
+# plain text in the status popover and the activity record; anything else is not forwarded.
+_MODEL_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9._:/+-]{0,79}')
+
+
+def _model_name(value):
+    return value if isinstance(value, str) and _MODEL_NAME.fullmatch(value) else None
 
 
 def _opaque_id(value) -> str:
@@ -194,8 +201,22 @@ def sanitize_event(event: dict) -> dict:
         activity={'type':'route'}
         if event.get('profile') in _ROUTE_PROFILES:
             activity['profile']=event['profile']
+        if _model_name(event.get('model')):
+            activity['model']=event['model']       # the model this message is sent to
         return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90],
                 'activity':activity}
+    if kind == 'route_fallback':
+        # The model chosen for this job is missing or did not load; the configured one answers.
+        activity={'type':'route','fallback':True}
+        if _model_name(event.get('model')):
+            activity['model']=event['model']
+        return {'phase':'That model is not available. Using your main model','activity':activity}
+    if kind == 'model_answered':
+        # The model name the server itself reported on the answer.
+        activity={'type':'model'}
+        if _model_name(event.get('model')):
+            activity['model']=event['model']
+        return {'phase':'Finishing the answer','activity':activity}
     if kind in {'search_started','search_finished'}:
         started = kind == 'search_started'
         return {'phase':'Searching the web' if started else 'Web search finished',

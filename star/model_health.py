@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from time import perf_counter
 
+from . import server_roles
 from .desktop_core import Settings
 from .providers import (STAR_SERVER, call_limits, get_api_key, open_client, provider_kind,
                         remember_server_limits, uses_star_server, validate_lan_endpoint)
@@ -201,6 +202,8 @@ def server_status(settings) -> dict:
         'ok': last.get('ok') if current else None,   # None = not checked yet
         'code': last.get('code', '') if current else '',
         'checked_at': last.get('checked_at', '') if current else '',
+        # Which model does which job on this server; [] for other providers.
+        'roles': server_roles.role_report(settings) if uses_star_server(settings) else [],
     }
 
 
@@ -222,7 +225,7 @@ def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
     steps: list[dict] = []
     model = str(getattr(settings, 'model', '') or '')
     report = {'ok': False, 'code': '', 'message': '', 'steps': steps, 'models': [], 'model': model,
-              'context_tokens': None, 'slots': None, 'first_token_ms': None, 'sample': ''}
+              'context_tokens': None, 'slots': None, 'first_token_ms': None, 'sample': '', 'roles': []}
     key = ''
 
     def step(name: str, status: str, began: float, detail: str) -> None:
@@ -299,6 +302,10 @@ def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
         for item in listed:
             known.update(str(alias) for alias in item.get('aliases') or [] if isinstance(alias, str))
         report['models'] = offered
+        # Which of the offered models does which job (star/server_roles.py). Read from the
+        # list that was just fetched: no further request, and nothing is written to Settings.
+        server_roles.remember_models(endpoint, listed)
+        report['roles'] = server_roles.role_report(settings)
         step('models', 'ok', began, f'Key accepted, {len(offered)} model(s) offered')
         if not model:
             return finish('no_model')
@@ -321,6 +328,9 @@ def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
             step('limits', 'ok', began, f'{context} context tokens per request, {slots} parallel slot(s)')
         else:
             step('limits', 'skipped', began, 'Server did not report its limits')
+        # Slots and context of the other role models, loaded ones only: on a llama.cpp
+        # router, asking about a model that is not loaded would load it.
+        server_roles.read_limits(client, root, endpoint, auth, skip=model)
 
         if not chat:
             return finish('ok', f'STAR Server is reachable, the key works and it offers {model}.')

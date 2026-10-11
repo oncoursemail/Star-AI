@@ -79,13 +79,17 @@ pip install -r requirements.txt -r requirements-voice.txt
 python -m star.voice setup          # Kokoro, Silero VAD, Smart Turn: about 365 MB, verified by SHA-256
 ```
 
+In the app a call uses the STAR Server you set up in Settings: its address, the key in the Windows credential
+store, and the quick model (the quick model you chose, else the server's `star-voice`, else your one configured
+model). The first three variables below are optional overrides, mainly for the command-line tools.
+
 Environment variables:
 
 | Variable | Meaning |
 |---|---|
-| `STAR_SERVER_URL` | Brain address, for example `http://10.17.0.146:8080/v1`. Must be an IP on your own network ending in `/v1` |
-| `STAR_SERVER_API_KEY` | Brain key. Only ever sent in the Authorization header; never logged or printed |
-| `STAR_VOICE_MODEL` | Model name on the server (default `star-fast`) |
+| `STAR_SERVER_URL` | Overrides the address from Settings, for example `http://192.168.1.20:8080/v1`. Must be an IP on your own network ending in `/v1` |
+| `STAR_SERVER_API_KEY` | Overrides the saved key. Only ever sent in the Authorization header; never logged or printed |
+| `STAR_VOICE_MODEL` | Overrides the model (with `STAR_SERVER_URL` set and no model given: `star-fast`) |
 | `STAR_VOICE_MODELS` | Folder with the voice model files (default `%LOCALAPPDATA%\STAR\voice-models`) |
 | `STAR_VOICE_<SETTING>` | Any field of `VoiceSettings`, for example `STAR_VOICE_VOICE=blend-heart-nicole` |
 
@@ -338,11 +342,12 @@ What the four runs show:
 
 ## 8. Hand-off notes and open problems
 
-- **Server provider.** `star/providers.py` and `Settings` are being changed on another branch (`star_server`
-  provider). Until that lands, `ServerBrain.from_env()` reads `STAR_SERVER_URL` and `STAR_SERVER_API_KEY`. After it
-  lands, build the brain from `connection_for(settings)` in `runtime.make_brain` (one function); `validate_server_url`
-  in `brain.py` can then be replaced by the provider's own LAN check. In the packaged app nothing sets those two
-  variables yet, so `voiceStatus` reports `serverConfigured: false` there.
+- **Server provider (done).** `runtime.make_brain` builds the brain with `ServerBrain.from_settings()`:
+  address from the app's Settings (`providers.validate_lan_endpoint`), key from the keyring
+  (`providers.get_api_key`), model from `server_roles.quick_model`. The environment variables above still override
+  them, and `voiceStatus` reports `serverConfigured` from the same lookup without any network call. On a server
+  that reported two or more slots the call is pinned to the slot next to the open chat's, so a call and a typed
+  chat on the same model do not replace each other's cached prompt.
 - **Real microphone untested.** Device opening, sample-rate negotiation on unusual audio hardware, and how the
   thresholds feel with a human voice all still need a person. `Microphone` asks PortAudio for 16 kHz mono directly.
 - **Echo.** With loudspeakers the microphone hears Star. The energy echo gate (`output: speakers`) stops her

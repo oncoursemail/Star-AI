@@ -22,6 +22,21 @@ _DEEP = re.compile(
     re.IGNORECASE,
 )
 _MODEL_ID = re.compile(r"^[^\s\x00-\x1f\x7f]{1,180}$")
+# STAR Server only: a Fast-mode message that is about writing or reading code goes to the main
+# model, not to the small quick-chat one (docs/research/server-inference.md 4.3).
+_CODING = re.compile(
+    r"```|\b(?:code|coding|script(?:s|ing)?|function|program(?:ming)?|bug|debug(?:ging)?|refactor|"
+    r"compile|regex|stack\s?trace|traceback|exception|unit\s+tests?|algorithm|"
+    r"python|javascript|typescript|lua|java|rust|golang|sql|html|css|json|bash|powershell|"
+    r"c\+\+|c#)(?![\w+#])",
+    re.IGNORECASE,
+)
+# The owner asks for the slow best-quality model in so many words. Nothing else selects it.
+_DEEP_COMMAND = re.compile(r"^\s*/deep\b[ \t]*", re.IGNORECASE)
+_DEEP_REQUEST = re.compile(
+    r"^\s*/deep\b|\b(?:use|with|ask)\s+(?:the\s+)?(?:star-deep|deep\s+model|best[- ]quality\s+model)\b",
+    re.IGNORECASE,
+)
 
 ROBLOX_QUALITY_NOTES = (
     "\n\nROBLOX QUALITY CHECKLIST (requirements, not evidence of completion): "
@@ -216,6 +231,18 @@ def is_roblox_task(prompt: str) -> bool:
     return isinstance(prompt, str) and bool(_ROBLOX.search(prompt))
 
 
+def deep_request(prompt: str) -> tuple[bool, str]:
+    """(did the owner ask for the slow best-quality model, the prompt without a leading `/deep`).
+
+    `/deep <question>` or the words "use the deep model" / "use star-deep" /
+    "use the best-quality model". Deterministic; the rest of the prompt is unchanged.
+    """
+    if not isinstance(prompt, str) or not _DEEP_REQUEST.search(prompt):
+        return False, prompt
+    stripped = _DEEP_COMMAND.sub("", prompt, count=1)
+    return True, stripped if stripped.strip() else prompt
+
+
 def validate_alias(value: str, *, field: str = "model") -> None:
     """Only ID strings, never arbitrary provider URLs, controls or shell fragments."""
     if not isinstance(value, str):
@@ -241,11 +268,21 @@ class BrainRoute:
 
 def select_route(settings, prompt: str, *, mode: str = "auto",
                  image_count: int = 0, research: bool = False,
-                 project_tools: bool = False, roblox_context: bool = False) -> BrainRoute:
+                 project_tools: bool = False, roblox_context: bool = False,
+                 deep_model: str = "") -> BrainRoute:
     """Select a capability profile, not a different privacy or permission policy.
 
     Auto complexity detection is deliberately cheap and deterministic. It is not
     a benchmark nor a guarantee that a selected model supports vision/tools.
+
+    STAR Server (kind `lan`) has one extra rule, because its quick model is a
+    small text-only one: the `fast_model` answers only plain chat. A Fast-mode
+    message that is about Roblox or Luau, will be grounded in the documentation,
+    or is about code goes to the Roblox/reasoning model instead. Cloud providers
+    and the on-PC brain keep the table below exactly as it was.
+
+    `deep_model` is the slow best-quality model and is passed only when the owner
+    asked for it in this message (see `deep_request`). It never answers images.
     """
     if mode not in {"fast", "auto", "agent"}:
         raise ValueError("Unknown chat mode")
@@ -261,10 +298,14 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         value = getattr(settings, name, "")
         validate_alias(value, field=name)
         configured[name] = value
+    validate_alias(deep_model, field="deep_model")
     roblox_topic = is_roblox_task(prompt) or roblox_context
     primary = configured["model"]
     if not primary:
         raise ValueError("Select a primary model first")
+    kind = provider_kind(settings)
+    grounding = grounding_plan(prompt, mode=mode, image_count=image_count, research=research,
+                               roblox_context=roblox_context)
 
     if mode == "fast":
         profile = "vision" if image_count else "fast"
@@ -288,6 +329,12 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
     # that the owner chose for image-capable work.
     if image_count:
         chosen = configured["vision_model"] or primary
+    elif deep_model:
+        chosen = deep_model
+    elif profile == "fast" and kind == "lan" and (roblox_topic or grounding.retrieve != "none"):
+        chosen = configured["roblox_model"] or configured["reasoning_model"] or primary
+    elif profile == "fast" and kind == "lan" and _CODING.search(prompt):
+        chosen = configured["reasoning_model"] or primary
     elif profile == "fast":
         chosen = configured["fast_model"] or primary
     elif profile == "roblox":
@@ -302,7 +349,6 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
     # A configured smaller model can draft subagent analyses while the main
     # reasoning model synthesizes; this never starts several models by itself.
     subagent = (configured["fast_model"] or chosen) if mode == "agent" else chosen
-    kind = provider_kind(settings)
     # (agent, tools, quick answer, deep answer) whole-task budgets in seconds.
     if kind == "lan":
         # A CPU server streams a few tokens per second, so scale every budget
@@ -322,7 +368,7 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         timeout = budgets[1]
     else:
         max_calls = 1
-        timeout = budgets[2] if quick else budgets[3]
+        timeout = budgets[2] if quick and not (deep_model and not image_count) else budgets[3]
 
     return BrainRoute(
         profile=profile, model=chosen, subagent_model=subagent,
@@ -334,6 +380,5 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
             "roblox": "Roblox engineering", "vision": "Visual analysis",
             "research": "Source-grounded research", "agent": "Agent workflow",
         }[profile],
-        grounding=grounding_plan(prompt, mode=mode, image_count=image_count, research=research,
-                                 roblox_context=roblox_context),
+        grounding=grounding,
     )

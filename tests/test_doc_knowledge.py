@@ -36,9 +36,9 @@ def test_default_address_is_the_server_host_on_the_knowledge_port():
 
 
 def test_explicit_address_wins_and_off_disables():
-    settings = Settings(server_endpoint="http://192.168.1.20:8080/v1", knowledge_endpoint="http://10.17.0.146:8091")
+    settings = Settings(server_endpoint="http://192.168.1.20:8080/v1", knowledge_endpoint="http://192.168.1.21:8091")
     settings.validate()
-    assert knowledge_endpoint_for(settings) == "http://10.17.0.146:8091"
+    assert knowledge_endpoint_for(settings) == "http://192.168.1.21:8091"
     settings.knowledge_endpoint = "off"
     settings.validate()
     assert knowledge_endpoint_for(settings) == ""

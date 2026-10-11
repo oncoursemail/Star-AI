@@ -30,10 +30,14 @@ from .context_layout import assemble
 from .desktop_core import (Settings, app_data, chat_history, memory_scope_for, stable_memory)
 from .model_health import note_server_result, probe_server
 from .providers import llama_request_fields, open_client, provider_kind
+from . import server_roles, turn_memory
 
 # The priming turn. It is the last message of the request, so nothing after the
 # cached start depends on it; the single generated token is thrown away.
 PRIME_TEXT = "."
+# A Fast-mode message that goes to the main model on a server with a fleet (and to
+# the one configured model everywhere else). Only used to ask the router which model.
+MAIN_MODEL_PROBE = "How do I write a Luau script in Roblox?"
 
 
 def _checkpoint(home: Path, scope: str) -> str:
@@ -52,27 +56,74 @@ def _checkpoint(home: Path, scope: str) -> str:
     return row[0] if row and isinstance(row[0], str) else ''
 
 
-def prefix_request(settings: Settings, home: Path, chat_id: str | None) -> dict:
-    """The request whose start equals the start of the next plain-chat message.
+def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list[dict]:
+    """The requests whose start equals the start of the next message, most likely first.
 
     Built with the same functions a real turn uses (`make_system_message`,
     `chat_history`, `llama_request_fields`), so the bytes match by construction.
+
+    1. The shape of this chat's last request in this process (its model and, after
+       a tool-using turn, the very tool list it sent): the next message most
+       likely has the same shape. After an Agent turn this is the tool prompt, so
+       the warm-up extends that cached prompt instead of replacing it. Before the
+       first turn (app start) this is plain chat on the quick model.
+    2. Each other chat model of the server (the quick model, and the main model
+       that answers Roblox and coding questions), when the chat has earlier turns
+       to read: with the shape this chat last sent to that model (so a tool
+       prompt it holds is extended, not replaced), else plain chat. Each model
+       keeps its own copy of the conversation, so without this the first
+       question that goes to the other model reads the whole window (measured:
+       37 s on the main model for a full window).
+
+    Never two requests for the same model: its slot holds one prompt, and a
+    second request would replace the first. So on a single-model server there is
+    one request, and after a tool turn it is the tool prompt, not plain chat.
     """
     history = chat_history(settings, home, chat_id)[0] if (home / 'conversations.sqlite3').is_file() else []
     scope = memory_scope_for(settings, chat_id)
-    system = make_system_message(stable_memory(settings, _checkpoint(home, scope)), tools_attached=False)
-    messages, _ = assemble(system, history, {'role': 'user', 'content': [{'type': 'text', 'text': PRIME_TEXT}]})
-    return {'model': select_route(settings, 'hello', mode='fast').model, 'messages': messages,
-            'extras': llama_request_fields(settings, conversation=scope, tools=False)}
+    memory = stable_memory(settings, _checkpoint(home, scope))
+
+    def build(model: str, tools, guidance: str) -> dict:
+        system = make_system_message(memory, tools_attached=bool(tools), guidance=guidance if tools else '')
+        messages, _ = assemble(system, history, {'role': 'user', 'content': [{'type': 'text', 'text': PRIME_TEXT}]})
+        return {'model': model, 'messages': messages, 'tools': list(tools) if tools else None,
+                'extras': llama_request_fields(settings, conversation=scope, tools=bool(tools), model=model,
+                                               prime=True)}
+
+    routed = server_roles.effective(settings)
+    quick = select_route(routed, 'hello', mode='fast').model
+    main = select_route(routed, MAIN_MODEL_PROBE, mode='fast').model
+    shape = turn_memory.last_shape(scope)
+    if shape and shape.get('model'):
+        targets = [build(shape['model'], shape.get('tools'), str(shape.get('guidance') or ''))]
+    else:
+        targets = [build(quick, None, '')]
+    endpoint = str(getattr(settings, 'server_endpoint', ''))
+    sent = turn_memory.model_shapes(scope)
+    for model in (quick, main):
+        if not history or any(server_roles.same_model(endpoint, model, target['model']) for target in targets):
+            continue
+        last = next((known for known in sent if server_roles.same_model(endpoint, model, known['model'])), None)
+        targets.append(build(last['model'], last.get('tools'), str(last.get('guidance') or '')) if last
+                       else build(model, None, ''))
+    return targets
+
+
+def prefix_request(settings: Settings, home: Path, chat_id: str | None) -> dict:
+    """The first (most likely) of `prefix_requests`."""
+    return prefix_requests(settings, home, chat_id)[0]
 
 
 async def _prime(settings: Settings, request: dict, cancel_event, timeout: float | None) -> dict:
     """Send the one-token request; stop the moment `cancel_event` is set."""
     async with open_client(settings, request_timeout=timeout) as client:
+        # After a tool-using turn the request starts with the same tool list that turn sent.
+        tools = {'tools': request['tools'], 'tool_choice': 'auto'} if request.get('tools') else {}
+
         async def send(extras):
             stream = await client.chat.completions.create(
                 model=request['model'], messages=request['messages'], max_tokens=1, temperature=0,
-                stream=True, **({'extra_body': extras} if extras else {}))
+                stream=True, **tools, **({'extra_body': extras} if extras else {}))
             timings = None
             if hasattr(stream, '__aiter__'):
                 async for chunk in stream:
@@ -148,7 +199,8 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
         return done(cancelled=True, **({'ok': True, 'code': 'ok'} if report else {}))
     checked = {'ok': True, 'code': 'ok'} if report else {}
     try:
-        request = prefix_request(settings, home or app_data(), chat_id)
+        requests = prefix_requests(settings, home or app_data(), chat_id)
+        request = requests[0]
     except Exception as exc:
         # Nothing was sent: a chat database or setting that cannot be read is a
         # local problem and says nothing about the server.
@@ -164,6 +216,20 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
     if report:
         result.update(ok=True, code='ok')
     result['history_messages'] = len(request['messages']) - 2
+    result['model'] = str(request['model'])[:180]
+    result['with_tools'] = bool(request.get('tools'))
+    # The quick model too, when the first request was for another model. Best effort:
+    # a failure here says nothing about the server the owner is using.
+    also = 0
+    for extra in requests[1:]:
+        if cancelled() or not result.get('primed'):
+            break
+        try:
+            also += bool(asyncio.run(_prime(settings, extra, cancel_event, None)).get('primed'))
+        except Exception:
+            break
+    if also:
+        result['also_primed'] = also
     return done(**result)
 
 

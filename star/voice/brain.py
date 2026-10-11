@@ -1,9 +1,13 @@
 """Streaming chat client for voice calls (OpenAI-compatible server, e.g. the STAR Server llama.cpp router).
 
-Hand-off note: this module reads STAR_SERVER_URL and STAR_SERVER_API_KEY from the environment because the
-`star_server` provider is being added to star/providers.py on another branch. Once that lands, replace
-`ServerBrain.from_env()` with the (base_url, api_key) pair from `connection_for(settings)`; nothing else here
-depends on where the address and key come from.
+Where the address, key and model come from (`server_connection`):
+
+  address  STAR_SERVER_URL, else the STAR Server address saved in the app's Settings
+  key      STAR_SERVER_API_KEY, else the key in the OS keyring (star.providers.get_api_key)
+  model    STAR_VOICE_MODEL, else the owner's quick model, else the server's quick model
+           (`star-voice`), else the one configured model (star.server_roles.quick_model)
+
+The environment variables stay as an override, so the command-line tools keep working without the app.
 
 The key is only ever placed in the Authorization header. It is never logged, printed or put in an exception.
 """
@@ -17,6 +21,8 @@ from typing import Iterator
 from urllib.parse import urlsplit
 
 DEFAULT_MODEL = "star-fast"
+_SETUP_HINT = ("Enter your STAR Server address and key in Settings \u2192 STAR Server (or set STAR_SERVER_URL and "
+               "STAR_SERVER_API_KEY) before starting a voice call.")
 
 
 class BrainError(RuntimeError):
@@ -41,6 +47,60 @@ def validate_server_url(url: str) -> str:
         if not (address.is_private or address.is_loopback or address.is_link_local):
             raise ValueError("STAR_SERVER_URL must point to your own network (private or loopback address)")
     return url.strip().rstrip("/")
+
+
+def _app_settings():
+    """The app's saved Settings, or None when they cannot be read. Never raises."""
+    try:
+        from ..desktop_core import Settings, app_data
+        return Settings.load(app_data() / "settings.json")
+    except Exception:
+        return None
+
+
+def server_connection(settings=None, *, discover: bool = True) -> tuple[str, str, str, int | None]:
+    """(address, key, model, slot) for a voice call; address or key is "" when not set up.
+
+    `settings` is the app's Settings object (loaded from disk when omitted). With `discover`
+    the server is asked once which models it offers, if STAR has not asked it yet in this
+    process, so the quick model is known; a server that does not answer just leaves the
+    configured model. `slot` pins the call to the slot next to the open chat's on a server
+    that has reported two or more (None otherwise), so a call and a typed chat on the same
+    model do not replace each other's cached prompt.
+    """
+    from ..providers import STAR_SERVER, get_api_key, llama_request_fields, validate_lan_endpoint
+    from .. import server_roles
+    settings = _app_settings() if settings is None else settings
+    url = os.environ.get("STAR_SERVER_URL", "").strip()
+    overridden = bool(url)
+    if not url and settings is not None:
+        try:
+            url = validate_lan_endpoint(getattr(settings, "server_endpoint", ""))
+        except ValueError:
+            url = ""
+    try:
+        key = get_api_key(STAR_SERVER) or ""     # STAR_SERVER_API_KEY first, then the keyring
+    except Exception:
+        key = ""
+    model = os.environ.get("STAR_VOICE_MODEL", "").strip()
+    slot = None
+    if url and key and settings is not None and not overridden:
+        if not model and discover and not server_roles.known(url):
+            server_roles.discover(url, key)
+        if not model:
+            model = server_roles.quick_model(settings, DEFAULT_MODEL)
+        try:
+            slot = llama_request_fields(settings, conversation="voice-call", model=model,
+                                        background=True).get("id_slot")
+        except ValueError:
+            slot = None
+    return url, key, model or DEFAULT_MODEL, slot
+
+
+def server_configured() -> bool:
+    """Is there an address and a key for a call? No network."""
+    url, key, _model, _slot = server_connection(discover=False)
+    return bool(url and key)
 
 
 class ChatStream:
@@ -133,12 +193,14 @@ class ServerBrain:
     """Talks to one OpenAI-compatible endpoint. Thread-safe: each stream() call is its own request."""
 
     def __init__(self, base_url: str, api_key: str, model: str = DEFAULT_MODEL, *, max_tokens: int = 220,
-                 temperature: float = 0.7, connect_timeout: float = 5.0, read_timeout: float = 60.0) -> None:
+                 temperature: float = 0.7, connect_timeout: float = 5.0, read_timeout: float = 60.0,
+                 id_slot: int | None = None) -> None:
         import httpx
         self.base_url = validate_server_url(base_url)
         if not api_key:
             raise ValueError("The STAR Server key is empty")
         self.model = model
+        self.id_slot = id_slot if type(id_slot) is int and id_slot >= 0 else None
         self.max_tokens = max_tokens
         self.temperature = temperature
         self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -150,9 +212,20 @@ class ServerBrain:
         url = os.environ.get("STAR_SERVER_URL", "").strip()
         key = os.environ.get("STAR_SERVER_API_KEY", "").strip()
         if not url or not key:
-            raise BrainError("Set STAR_SERVER_URL (for example http://10.17.0.146:8080/v1) and STAR_SERVER_API_KEY "
+            raise BrainError("Set STAR_SERVER_URL (for example http://192.168.1.20:8080/v1) and STAR_SERVER_API_KEY "
                              "before starting a voice call.")
         return cls(url, key, os.environ.get("STAR_VOICE_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL, **kwargs)
+
+    @classmethod
+    def from_settings(cls, settings=None, **kwargs) -> "ServerBrain":
+        """The app's own STAR Server: address from Settings, key from the keyring, the quick model.
+
+        The three environment variables still win when they are set (see `server_connection`).
+        """
+        url, key, model, slot = server_connection(settings)
+        if not url or not key:
+            raise BrainError(_SETUP_HINT)
+        return cls(url, key, model, id_slot=slot, **kwargs)
 
     def stream(self, messages: list[dict], *, max_tokens: int | None = None) -> ChatStream:
         payload = {
@@ -165,6 +238,8 @@ class ServerBrain:
             "cache_prompt": True,
             "chat_template_kwargs": {"enable_thinking": False},   # a voice reply must not spend seconds thinking
         }
+        if self.id_slot is not None:
+            payload["id_slot"] = self.id_slot                      # the call's own slot (see server_connection)
         return ChatStream(lambda: self._client.stream("POST", f"{self.base_url}/chat/completions",
                                                       headers=self._headers, json=payload))
 

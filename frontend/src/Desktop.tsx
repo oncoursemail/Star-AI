@@ -243,10 +243,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const result=event.data as Record<string,unknown>
    if(CHAT_ACTIONS.includes(action)){
      cancelRequested.current=false
+     const answeredBy=runRef.current?.model
      endRun('done')
      streamRef.current='';sending.current=false
      setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
-     if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current})
+     if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current,...(answeredBy?{model:answeredBy}:{})})
      setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('The local model is running.');void sync()

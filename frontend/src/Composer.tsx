@@ -290,6 +290,12 @@ export function Composer(props: ComposerProps) {
                     <dd>{connection.provider}</dd>
                     <dt>Model</dt>
                     <dd>{connection.model || 'None selected'}</dd>
+                    {connection.answeredBy && (
+                      <>
+                        <dt>Answered by</dt>
+                        <dd>{connection.answeredBy}</dd>
+                      </>
+                    )}
                     {connection.endpoint && (
                       <>
                         <dt>Address</dt>

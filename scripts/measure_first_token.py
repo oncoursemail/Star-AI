@@ -27,7 +27,7 @@ is what a first message costs. Turns of one conversation share their marker.
 The server key is read from STAR_SERVER_API_KEY or --key-file and never printed.
 Only run this while you hold the server lock: timings are ruined by overlap.
 
-  python scripts/measure_first_token.py --endpoint http://10.17.0.146:8080/v1 \
+  python scripts/measure_first_token.py --endpoint http://192.168.1.20:8080/v1 \
       --model star-fast --key-file ~/.star/server_api_key --out ttft.json
 """
 from __future__ import annotations
@@ -293,7 +293,7 @@ def run_app(settings: Settings, turns: list[tuple[str, str]]) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--endpoint", required=True, help="for example http://10.17.0.146:8080/v1")
+    parser.add_argument("--endpoint", required=True, help="for example http://192.168.1.20:8080/v1")
     parser.add_argument("--model", required=True)
     parser.add_argument("--key-file", default="")
     parser.add_argument("--phases", default="chat,resume,agent,app")

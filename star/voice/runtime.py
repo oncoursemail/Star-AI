@@ -55,7 +55,9 @@ class Engines:
 
 
 def make_brain(settings: VoiceSettings):
-    return ServerBrain.from_env(max_tokens=int(settings.max_reply_tokens))
+    # Address and key from the app's Settings and keyring, the quick model by default;
+    # STAR_SERVER_URL / STAR_SERVER_API_KEY / STAR_VOICE_MODEL override them.
+    return ServerBrain.from_settings(max_tokens=int(settings.max_reply_tokens))
 
 
 def build_session(settings: VoiceSettings, engines: Engines, speaker: Speaker, brain=None,
