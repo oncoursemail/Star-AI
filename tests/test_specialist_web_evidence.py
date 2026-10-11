@@ -85,6 +85,8 @@ def test_research_mode_parallel_specialists_receive_cited_snippets_not_tools():
         output = await team.run(WEB_TASKS)
         assert calls == 2 and peak == 2
         assert all(row["status"] == "completed" for row in output["reports"])
+        assert all(row["web_urls"] == ["https://docs.example/guide"]
+                   for row in output["reports"])
         assert len(model.requests) == 2
         for request in model.requests:
             assert "tools" not in request
