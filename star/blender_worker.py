@@ -197,9 +197,14 @@ def _environment(spec):
     scene.render.resolution_x = 640
     scene.render.resolution_y = 360
     scene.render.resolution_percentage = 100
+    if hasattr(scene.render.image_settings, "media_type"):
+        scene.render.image_settings.media_type = "IMAGE"
     scene.render.image_settings.file_format = "PNG"
     scene.render.film_transparent = False
-    scene.render.engine = "BLENDER_EEVEE_NEXT" if bpy.app.version >= (4, 2, 0) else "BLENDER_EEVEE"
+    # Blender 5.0 renamed EEVEE_NEXT back to EEVEE.
+    scene.render.engine = ("BLENDER_EEVEE" if bpy.app.version >= (5, 0, 0)
+                           else "BLENDER_EEVEE_NEXT" if bpy.app.version >= (4, 2, 0)
+                           else "BLENDER_EEVEE")
     scene.render.filepath = str(Path(bpy.data.filepath).parent / "preview.png")
 
 
