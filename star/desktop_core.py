@@ -940,6 +940,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             # is never selected and no llama.cpp process is started or downloaded.
             eligible = dict(prompt=prompt, mode=mode, provider=kind,
                             enabled=settings.instant_route_enabled is not False,
+                            installed=bool(settings.gguf_model or settings.router_models_dir),
                             attachments=len(images) + len(documents or ()),
                             tools=use_tools or document_tools is not None or bool(github_enabled),
                             research=research, documentation=route.grounding.retrieve != 'none',
