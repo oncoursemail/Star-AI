@@ -41,16 +41,39 @@ def chat_image(home: Path, body: str) -> dict | None:
     if not path.is_relative_to(directory) or not path.is_file():
         return {"text": "Generated image unavailable (file missing)."}
     try:
-        return {"text": "Image generated locally · original saved in STAR/generated-images", "image": preview_image(path)}
+        return {"text": _saved_answer(path), "image": preview_image(path)}
     except (OSError, ValueError):
         return {"text": "Generated image saved; preview unavailable. Open STAR data folder to view."}
 
-def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None) -> dict:
-    """Local, explicit ComfyUI opt-in; never downloads unreviewed custom nodes."""
-    if not settings.comfy_workflow.strip():
-        raise ValueError("Configure a ComfyUI API-format workflow in Settings → Image generation first.")
+def _saved_answer(path: Path) -> str:
+    """The line written when the picture was made (time, model, size, seed), kept beside it."""
+    import json
+    try:
+        note = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        answer = note.get("answer")
+        if isinstance(answer, str) and 0 < len(answer) <= 600:
+            return answer
+    except (OSError, ValueError, AttributeError):
+        pass
+    return "Image generated locally · original saved in STAR/generated-images"
+
+def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None, *, size: str = "square",
+                        source: Path | None = None, mask: Path | None = None) -> dict:
+    """Make or edit a picture for the chat, on the place chosen in Settings.
+
+    The built-in path is ComfyUI on this PC with FLUX.2 klein 4B (star/image_gen.py): text to
+    image, edit an attached picture, or change only a masked area. An owner who configured
+    their own API-format workflow keeps it for text to image; it never downloads custom nodes.
+    """
     if not 1 <= len(prompt.strip()) <= 1500:
         raise ValueError("Image prompt must be 1–1500 characters")
+    if source is not None or not settings.comfy_workflow.strip():
+        from .image_gen import generate as generate_built_in
+        made = generate_built_in(settings, prompt, home, size=size, source=source, mask=mask,
+                                 cancel_event=cancel_event)
+        return {"answer": made["answer"], "image": made["image"], "message": made["message"]}
+    from . import media_places
+    media_places.require(settings, "images", home)
     from .comfy import generate
     output = home / "generated-images"
     images = generate(Path(settings.comfy_workflow), prompt=prompt,
