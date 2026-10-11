@@ -47,7 +47,8 @@ def _images(settings, home: Path | None) -> dict:
     if sizes:
         timing = ', '.join(f'{size} in {_seconds(seconds)} s' for size, seconds in sizes.items())
         note = (f"Measured on this PC ({pc.get('gpu', 'graphics card')}, {pc.get('date', '')}): {timing}. "
-                f"The first image after ComfyUI starts took {_seconds(pc.get('first_image_seconds', 0))} s. "
+                f"Starting ComfyUI takes about {_seconds(pc.get('start_seconds', 0))} s and the first image after "
+                f"that took {_seconds(pc.get('first_image_seconds', 0))} s. "
                 f"Changing an attached picture takes about {_seconds(pc.get('edit_seconds_1024', 0))} s. "
                 f"The card's memory peaked at {pc.get('vram_peak_mb', 0)} MB of {pc.get('vram_total_mb', 0)} MB "
                 f"(the desktop itself was using {pc.get('vram_idle_mb', 0)} MB); a voice call needs about "

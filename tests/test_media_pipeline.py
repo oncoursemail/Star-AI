@@ -670,6 +670,48 @@ def test_launcher_only_ever_binds_this_computer(tmp_path):
     assert already == {'started': False, 'running': True, 'message': 'ComfyUI is already running.'}
 
 
+def test_a_start_that_never_answers_is_stopped_again(tmp_path, monkeypatch):
+    (tmp_path / 'main.py').write_text('')
+    scripts = tmp_path / '.venv' / 'Scripts'
+    scripts.mkdir(parents=True)
+    (scripts / 'python.exe').write_text('')
+    started, ended = [], []
+
+    class Hung:
+        pid = 4242
+
+        def __init__(self, command, **kwargs):
+            started.append((command, kwargs['cwd']))
+            self.alive = True
+
+        def poll(self):
+            return None if self.alive else 1
+
+        def terminate(self):
+            self.alive = False
+
+        def kill(self):
+            self.alive = False
+
+        def wait(self, timeout=None):
+            self.alive = False
+            return 1
+
+    def run(command, **_):
+        ended.append(command)
+        return SimpleNamespace(returncode=0)
+    monkeypatch.setattr(media_actions.subprocess, 'Popen', Hung)
+    monkeypatch.setattr(media_actions.subprocess, 'run', run)
+    launcher = media_actions.ComfyLauncher()
+    with pytest.raises(TimeoutError, match='STAR stopped it again'):
+        launcher.start(Settings(comfy_home=str(tmp_path)), tmp_path / 'home', wait_seconds=0.05, is_up=lambda: False)
+    assert len(started) == 1 and '--listen' in started[0][0] and started[0][1] == str(tmp_path)
+    assert not launcher.running()                         # nothing is left holding the graphics card
+    if os.name == 'nt':
+        assert ended and ended[0][:3] == ['taskkill', '/PID', '4242'] and '/T' in ended[0]
+    assert (tmp_path / 'home' / 'logs' / 'comfyui.log').is_file()
+
+
 def test_bridge_allows_the_media_actions_and_words_failures_for_the_owner():
     from star.react_shell import ALLOWED_ACTIONS, PERMITTED_SETTINGS, failure_outcome
     assert media_actions.MEDIA_ACTIONS <= ALLOWED_ACTIONS

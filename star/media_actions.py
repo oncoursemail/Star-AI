@@ -53,8 +53,13 @@ class ComfyLauncher:
     def running(self) -> bool:
         return self._process is not None and self._process.poll() is None
 
-    def start(self, settings, home: Path, *, wait_seconds: float = 90.0,
+    def start(self, settings, home: Path, *, wait_seconds: float = 120.0,
               is_up: Callable[[], bool] | None = None) -> dict:
+        """Start ComfyUI and wait until it answers (measured: 25 to 28 s on the owner's PC).
+
+        A start that never answers is stopped again, so a hung process is not left holding the
+        graphics card (seen once, right after another ComfyUI had been killed by force).
+        """
         check = is_up or (lambda: image_gen.status(settings)['running'])
         if check():
             return {'started': False, 'running': True, 'message': 'ComfyUI is already running.'}
@@ -76,17 +81,27 @@ class ComfyLauncher:
                 raise RuntimeError('ComfyUI stopped right after starting. Its messages are in the STAR data '
                                    'folder under logs/comfyui.log.')
             time.sleep(1.0)
-        raise TimeoutError(f'ComfyUI did not answer within {int(wait_seconds)} seconds. It may still be '
-                           'starting; check again in a moment (logs/comfyui.log in the STAR data folder).')
+        self.stop()
+        raise TimeoutError(f'ComfyUI did not answer within {int(wait_seconds)} seconds, so STAR stopped it again. '
+                           'Try Start ComfyUI once more; if it repeats, its messages are in the STAR data folder '
+                           'under logs/comfyui.log.')
 
     def stop(self) -> None:
+        """Stop the ComfyUI this launcher started (never one the owner started themselves)."""
         process, self._process = self._process, None
-        if process is not None and process.poll() is None:
+        if process is None or process.poll() is not None:
+            return
+        if os.name == 'nt':
+            # The environment's python.exe is a small launcher with the real interpreter as its child:
+            # end the whole tree, or the child would keep the port and the graphics memory.
+            subprocess.run(['taskkill', '/PID', str(process.pid), '/T', '/F'], capture_output=True,
+                           creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0), check=False)
+        else:
             process.terminate()
-            try:
-                process.wait(timeout=8)
-            except subprocess.TimeoutExpired:
-                process.kill()
+        try:
+            process.wait(timeout=8)
+        except subprocess.TimeoutExpired:
+            process.kill()
 
 
 def _data_url(path: Path, side: int = 1600) -> str:

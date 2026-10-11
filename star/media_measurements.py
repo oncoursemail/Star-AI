@@ -15,6 +15,7 @@ MEASUREMENTS = {'images': {'pc': {'date': '2026-10-11',
                    'inpaint_seconds_1024': 13.3,
                    'with_one_reference_seconds_1024': 10.2,
                    'first_image_seconds': 13.1,
+                   'start_seconds': 30,
                    'first_image_note': 'First image after ComfyUI started, model files already in the disk cache. '
                                        'After a restart of the PC it will be longer (8.26 GB read from disk).',
                    'vram_peak_mb': 7730,
@@ -58,6 +59,11 @@ MEASUREMENTS = {'images': {'pc': {'date': '2026-10-11',
                                                                          'pictures are now scaled to 1280 on the '
                                                                          'longer side before our own hardware reads '
                                                                          'them'},
+                               'screenshot_2560x1600_scaled_to_1280': {'first_word_seconds': 41.1,
+                                                                       'total_seconds': 57.5,
+                                                                       'tokens_read': 1186},
+                               'load_note': 'The server was shared with other work during every run (load average '
+                                            '19 to 30 with the measuring lock held); an idle server will be faster.',
                                'compare_two_pictures': {'seconds': 51.9, 'tokens_read': 1419, 'tokens_written': 133},
                                'read_tokens_per_second': 37.5,
                                'write_tokens_per_second': 10.2,
