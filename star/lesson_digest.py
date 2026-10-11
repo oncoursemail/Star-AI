@@ -24,7 +24,8 @@ from time import monotonic, perf_counter
 
 from .knowledge import now
 from .lessons import DIGESTIBLE, LESSON_KINDS, LessonRefused, LessonStore, check_lesson_text, redact
-from .providers import open_client, provider_kind
+from . import server_roles
+from .providers import background_client, open_client, provider_kind, server_slots
 
 BATCH = 6                    # raw captures in one request
 AUTO_MINIMUM = 3             # an automatic run waits until this many are waiting
@@ -71,8 +72,36 @@ CHAT_MODEL_FIELDS = ("model", "fast_model", "reasoning_model", "roblox_model", "
 
 
 def chat_models(settings) -> set[str]:
-    """The model ids the chat itself may route a turn to."""
-    return {name for name in (str(getattr(settings, field, "") or "").strip() for field in CHAT_MODEL_FIELDS) if name}
+    """The model ids the chat itself may route a turn to.
+
+    On a STAR Server that includes the models the server offered for the role fields the owner
+    left blank (star/server_roles.py): plain chat then goes to the server's quick model.
+    """
+    routed = server_roles.effective(settings)
+    return {name for name in (str(getattr(routed, field, "") or "").strip() for field in CHAT_MODEL_FIELDS) if name}
+
+
+def _on_server(settings) -> bool:
+    try:
+        return provider_kind(settings) == "lan"
+    except ValueError:
+        return False
+
+
+def keeps_chat_cache(settings, model: str) -> bool:
+    """Can `model` be asked without replacing the chat's cached conversation?
+
+    Yes when the chat never uses that model (under any of its names: `star-quick` is another
+    name of `star-voice`). Yes also on a STAR Server when that model has reported two or more
+    slots: the request is then pinned to the slot next to the open chat's
+    (providers.background_client), like every other background call. Otherwise no: one slot,
+    an unknown slot count, or the on-PC router (a single slot).
+    """
+    server = _on_server(settings)
+    endpoint = str(getattr(settings, "server_endpoint", "") or "")
+    used = any(name == model or (server and server_roles.same_model(endpoint, name, model))
+               for name in chat_models(settings))
+    return not used or (server and server_slots(settings, model) >= 2)
 
 
 def candidates_for(settings, *, spare_only: bool = False) -> list[str]:
@@ -82,7 +111,8 @@ def candidates_for(settings, *, spare_only: bool = False) -> list[str]:
     `spare_only` is for the automatic run. It follows the warm-up that has just primed the chat
     model's prompt cache, and a request to that same model replaces the cached conversation
     (STAR's local router runs a single slot), so the owner's next message would be read from
-    the start again. With `spare_only` the chat's own models are left out; the list may be empty.
+    the start again. With `spare_only` only models that leave that cache alone are kept
+    (keeps_chat_cache); the list may be empty.
     """
     names = []
     try:
@@ -97,9 +127,24 @@ def candidates_for(settings, *, spare_only: bool = False) -> list[str]:
             seen.add(name)
             ordered.append(name)
     if spare_only:
-        used = chat_models(settings)
-        ordered = [name for name in ordered if name not in used]
+        ordered = [name for name in ordered if keeps_chat_cache(settings, name)]
     return ordered
+
+
+def open_conversation(settings, home) -> str:
+    """The slot key of the chat the owner has open: the one desktop_core.run_task uses for it."""
+    try:
+        from .desktop_core import Conversations, memory_scope_for
+        path = Path(home) / "conversations.sqlite3"
+        if not path.is_file():
+            return ""
+        chats = Conversations(path)
+        try:
+            return memory_scope_for(settings, chats.active_chat(settings.project))
+        finally:
+            chats.close()
+    except Exception:
+        return ""
 
 
 def build_request(captures: list) -> list[dict]:
@@ -189,10 +234,16 @@ def apply_digest(store: LessonStore, project: str, captures: list, lessons: list
     return created
 
 
-async def _ask(settings, models: list[str], messages: list[dict], cancel_event, open_model) -> tuple[str, str]:
-    """One completion, stopped the moment `cancel_event` is set. Returns (reply text, model used)."""
+async def _ask(settings, models: list[str], messages: list[dict], cancel_event, open_model,
+               conversation: str = "") -> tuple[str, str]:
+    """One completion, stopped the moment `cancel_event` is set. Returns (reply text, model used).
+
+    Not the conversation itself: on a STAR Server it is sent to the slot next to the open
+    chat's (`conversation` is that chat's slot key), never into it.
+    """
     own_hardware = provider_kind(settings) != "cloud"
-    async with open_model(settings, request_timeout=REQUEST_SECONDS) as client:
+    async with open_model(settings, request_timeout=REQUEST_SECONDS) as plain:
+        client = background_client(plain, settings, conversation=conversation)
         async def send(model: str, strict: bool):
             extra = {"response_format": {"type": "json_object"}} if strict else {}
             response = await client.chat.completions.create(
@@ -258,13 +309,14 @@ def digest_once(settings, home: Path, project: str, *, cancel_event=None, minimu
             return done(skipped="nothing_waiting", waiting=len(captures))
         if cancel_event is not None and cancel_event.is_set():
             return done(cancelled=True)
-        reply, model = asyncio.run(_ask(settings, models, build_request(captures), cancel_event, open_model))
+        reply, model = asyncio.run(_ask(settings, models, build_request(captures), cancel_event, open_model,
+                                        conversation=open_conversation(settings, home)))
         if not model:
             return done(cancelled=True)
         lessons = parse_reply(reply, len(captures))
         created = apply_digest(store, project, captures, lessons, model)
-        # shared_model: the chat's own model answered, so its cached conversation is gone.
-        shared = {"shared_model": True} if model in chat_models(settings) else {}
+        # shared_model: the chat's own model answered in the chat's slot, so its cached conversation is gone.
+        shared = {} if keeps_chat_cache(settings, model) else {"shared_model": True}
         return done(created=len(created), ids=created, raw=len(captures), model=model, proposed=len(lessons),
                     **shared)
     except Exception as exc:
