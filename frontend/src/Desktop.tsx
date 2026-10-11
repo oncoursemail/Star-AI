@@ -1,5 +1,5 @@
 import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
-import {AnimatePresence,MotionConfig,motion} from 'motion/react'
+import {AnimatePresence,motion} from 'motion/react'
 import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,ExternalLink,Folder,FolderOpen,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
 import {Message,Panel,StarMark,Tag} from './components'
@@ -19,7 +19,9 @@ import {Composer,type Availability,type ChatMode} from './Composer'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
-import {pageFade} from './motion'
+import {instant,pageFade} from './motion'
+import {MotionPolicy,useEffectiveReducedMotion} from './MotionPolicy'
+import {MotionSurface} from './MotionSurface'
 import type {Fixture,FixtureScript} from './previewFixtures'
 
 type Tab='chat'|'projects'|'brain'|'analytics'|'tools'|'library'|'settings'
@@ -110,6 +112,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [historyQuery,setHistoryQuery]=useState('')
  const [modelList,setModelList]=useState<string[]>([])
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
+ const reducedMotion=useEffectiveReducedMotion(!themeMotion)
  const [fixture]=useState(()=>requestedFixture(preview))
  const running=useRef<Map<string,string>>(new Map())
  const chatScroll=useRef<HTMLDivElement>(null)
@@ -160,7 +163,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  const jumpToLatest=()=>{
    followBottom.current=true
-   if(chatScroll.current)chatScroll.current.scrollTo({top:chatScroll.current.scrollHeight,behavior:themeMotion?'smooth':'auto'})
+   if(chatScroll.current)chatScroll.current.scrollTo({top:chatScroll.current.scrollHeight,behavior:reducedMotion?'auto':'smooth'})
    setShowJump(false)
  }
  const act=useCallback(async(action:string,params:Record<string,unknown>={})=>{
@@ -541,7 +544,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[])
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
- return <MotionConfig reducedMotion={themeMotion?'user':'always'}><div className={wrapper} data-preview={preview} data-reduced-motion={!themeMotion}>
+ return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
    <aside className="rail" aria-label="STAR navigation">
      <div className="rail-head">
        <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span>STAR</span></button>
@@ -586,7 +589,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      </header>
      {preview&&<div className="preview-ribbon" role="note"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
-       <motion.main key={tab} className="page-stage" variants={pageFade} initial="hidden" animate="shown" exit="exit">
+       <MotionSurface as="main" key={tab} className="page-stage" variants={pageFade}>
          {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
@@ -657,7 +660,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               <h2>Model on this PC</h2>
               <p>{data.brain_running?'The local engine is running on this PC.':data.brain_installed?'A local model is installed but not started.':'No local model is installed. Installing downloads a verified model of a few gigabytes.'}</p>
               {!data.brain_running&&<button type="button" className="secondary-button" disabled={brainProgress!==null||inactive} onClick={()=>void act(data.brain_installed?'startBrain':'installBrain')}>{brainProgress?<LoaderCircle className="spin" size={16}/>:<Download size={16}/>} {brainProgress?'Preparing the local model…':data.brain_installed?'Start local model':'Download and start'}</button>}
-              {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={{duration:.2}}/></div></div>}
+              {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={reducedMotion?instant:{duration:.2}}/></div></div>}
             </Panel>
             </LocalBrainFallback>
           </div></div>}
@@ -719,11 +722,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             {updateProgress&&<div className="update-download" role="status" aria-live="polite"><div className="update-download-label"><span>{updateProgress.phase}</span><strong>{updateProgress.total?Math.round(updateProgress.downloaded/updateProgress.total*100)+'%':'Preparing…'}</strong></div><div className="progress-track"><div className={updateProgress.total?'':'progress-indeterminate'} style={updateProgress.total?{width:`${Math.min(100,Math.round(updateProgress.downloaded/updateProgress.total*100))}%`}:undefined}/></div></div>}
             <small>Upgrades start only after you choose Install & restart. Installing does not erase your local data.</small>
            </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
-       </motion.main>
+       </MotionSurface>
      </AnimatePresence>
      {notice&&<div role="status" className="toast"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
- </div></MotionConfig>
+ </div></MotionPolicy>
 }
 function PageTitle({eyebrow,title,description}:{eyebrow:string;title:string;description:string}) {return <div className="page-intro"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>}

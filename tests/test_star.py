@@ -158,15 +158,19 @@ def test_qwen_compaction_never_adds_second_system(monkeypatch):
         return "Verified task checkpoint after inspecting a Studio script"
     monkeypatch.setattr(agent,"compact",pretend_compact)
     async def run():
+        class LongScriptStudio(FakeStudio):
+            async def call_tool(self, name, arguments):
+                return SimpleNamespace(model_dump=lambda **kwargs: {
+                    "content": [{"type": "text", "text": "observed script\n" * 800}], "isError": False})
         model=FakeModels([
             reply(calls=[call("script_read",{"studio_id":"sandbox"})]),
             reply("Finished inspection"),
         ])
         client=SimpleNamespace(chat=SimpleNamespace(completions=model))
         answer,messages,archive=await execute(client=client,model="qwen-local",
-            prompt="inspect script",image_paths=[],studio=FakeStudio(),
+            prompt="inspect script",image_paths=[],studio=LongScriptStudio(),
             studio_id="sandbox",discovered=[schema_tool("script_read")],
-            context_chars=100,checkpoint=lambda summary:updates.append(summary))
+            context_chars=6000,checkpoint=lambda summary:updates.append(summary))
         assert answer=="Finished inspection"
         assert updates and archive
         for request in model.requests:

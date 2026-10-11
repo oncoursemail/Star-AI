@@ -288,6 +288,10 @@ def sanitize_event(event: dict) -> dict:
     if kind == 'model_started':
         # Routing and context are ready; the request goes out next (after Studio connects, if it is used).
         return {'phase':'Contacting the model'}
+    if kind == 'documents_started':
+        return {'phase': 'Reading attached documents'}
+    if kind == 'documents_ready':
+        return {'phase': 'Attached documents ready'}
     # An event without wording of its own still reads as a sentence, never as an internal name.
     return {'phase':'STAR is working'}
 
@@ -577,7 +581,8 @@ def launch():
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
             from .media_features import VIDEO_EXTENSIONS,AUDIO_EXTENSIONS,video_frames,transcribe_audio
-            pics=[];extras=[]
+            from .documents import DOCUMENT_EXTENSIONS
+            pics=[];extras=[];documents=[]
             with tempfile.TemporaryDirectory(prefix='star-media-') as directory:
                 for path in selected:
                     if path.suffix.lower() in VIDEO_EXTENSIONS:
@@ -586,6 +591,8 @@ def launch():
                         extras.append(f'Video source: {path.name}; {len(frames)} sampled frames (not full continuous understanding).')
                     elif path.suffix.lower() in AUDIO_EXTENSIONS:
                         extras.append(f'Audio transcript from {path.name}: {transcribe_audio(path)}')
+                    elif path.suffix.lower() in DOCUMENT_EXTENSIONS:
+                        documents.append(path)
                     else:
                         pics.append(path)
                 if len(pics)>4:
@@ -602,7 +609,7 @@ def launch():
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt)
+                    owner_text=prompt, **({'documents': documents} if documents else {}))
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -702,7 +709,7 @@ def launch():
                     if kind=='audio':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Select audio references','','Audio files (*.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
                     else:
-                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','Media (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
                     picked=[]
                     for name in names[:8]:
                         path=Path(name).resolve(strict=True)

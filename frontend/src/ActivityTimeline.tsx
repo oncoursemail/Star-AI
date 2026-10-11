@@ -4,6 +4,8 @@ import {Ban, Check, ChevronDown, Circle, CircleSlash, LoaderCircle, ShieldQuesti
 import {countDone, formatElapsed, headline, runElapsed, stateWord, stepElapsed} from './activity'
 import type {ActivityRun, ActivityStep, StepState} from './activity'
 import {collapse, rowIn} from './motion'
+import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
+import {MotionSurface} from './MotionSurface'
 
 /** Re-render once a second while something is running, so elapsed times are live. */
 export function useNow(active: boolean): number {
@@ -41,6 +43,8 @@ function Glyph({state}: {state: StepState | 'run-done' | 'run-failed' | 'run-can
 }
 
 function Step({step, now}: {step: ActivityStep; now: number}) {
+  const reduced = useStarReducedMotion()
+  const rowVariants = useMotionVariants(rowIn)
   // Finished steps fold to one line; anything unfinished or unusual keeps its explanation open.
   // A tool's detail is only its technical name, so it stays folded unless the tool failed.
   const [toggled, setToggled] = useState<boolean | null>(null)
@@ -55,7 +59,7 @@ function Step({step, now}: {step: ActivityStep; now: number}) {
     </>
   )
   return (
-    <motion.li className={'act-step is-' + step.state + ' kind-' + step.kind} variants={rowIn} initial="hidden" animate="shown">
+    <motion.li className={'act-step is-' + step.state + ' kind-' + step.kind} variants={rowVariants} initial={reduced?false:'hidden'} animate="shown">
       <span className="act-glyph">
         <Glyph state={step.state} />
       </span>
@@ -107,13 +111,13 @@ export function ActivityTimeline({run, onStop, stopping = false}: {run: Activity
       </div>
       <AnimatePresence initial={false}>
         {open && total > 0 && (
-          <motion.div className="act-body" variants={collapse} initial="hidden" animate="shown" exit="exit">
+          <MotionSurface className="act-body" variants={collapse}>
             <ol className="act-steps" id={listId}>
               {run.steps.map(step => (
                 <Step key={step.id} step={step} now={now} />
               ))}
             </ol>
-          </motion.div>
+          </MotionSurface>
         )}
       </AnimatePresence>
     </section>
