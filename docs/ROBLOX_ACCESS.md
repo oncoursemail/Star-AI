@@ -266,6 +266,14 @@ build). Fifty launches since, no hang. The official MCP switch is the key `"mcp-
 Studio's `AssistantSettings/<user id>.json`. A display without any window manager does not work either: Wine
 leaves Studio's loading box on top and ignores a resize, so the service runs one window manager and no desktop.
 
+**Restarts.** A watchdog restarts a Studio that cannot answer any more (its Wine server is gone, or its process
+vanished) and reopens the test place; the rules that rely on a connector probe never run while a client session
+holds the connector lock, and a restart keeps that lock so no connector starts in between. A Studio that was
+stopped by force leaves an auto-recovery file, and the next start then shows a dialog ("Auto Recovery File Found")
+that nobody answers: the service moves such files aside before it starts Studio (nothing is deleted). Edits that
+were not published before a forced restart are therefore not in the reopened place: a loop that must survive a
+restart publishes, or rebuilds from its own record.
+
 ## 7. What is not here
 
 - Nothing is ever made public, bought or spent; there is no code path for it.
