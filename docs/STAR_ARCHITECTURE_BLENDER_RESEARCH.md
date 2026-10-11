@@ -144,3 +144,69 @@ Success is not a claim of being 'smarter than every AI.' A measurable milestone 
 - [ ] Roblox Studio importer and reimport acceptance, functional collision/playtest.
 - [ ] Rendering and mobile profiling on real hardware.
 - [ ] Gate a new opt-in skill pack against STAR's existing creation evaluation suite before enabling it by default.
+
+
+## 7. Advanced creation tools and asset-license research (2026-10-11)
+
+### A. Blender's procedural authoring layers
+
+Blender **Geometry Nodes** (including node-based tools and asset-browser node groups) is a strong next layer above this initial Python emitter. A trusted asset library could expose narrow parameters like roof pitch, wall length, facade bay spacing, balcony depth, timber-joint style or masonry course scale. Updating a node group propagates reusable design logic instead of regenerating unrelated polygons. Official Blender manuals: https://docs.blender.org/manual/en/4.2/modeling/geometry_nodes/tools.html and https://docs.blender.org/manual/en/5.1/interface/controls/nodes/groups.html.
+
+The key abstraction is a structured `BuildingSpec` (rooms and circulation), `ArchitecturalGrammar` (masses, roof patterns, facade openings, structure), `ArtDirection` (references, material and silhouette language), then `AssetGraph` (actual Blender reusable meshes, materials and procedural nodes). **Do not prompt directly from 'beautiful house' to unrestricted Blender Python**; passing through reviewable constraints prevents obvious geometric faults and unbounded tool privileges. The generated source models must remain editable rather than flattening the output to a single unstructured mesh at the start of authoring. The 5-material-batch prototype is an export artifact, not a recommended editable source asset hierarchy for complicated buildings.
+
+Recommended additions, each requiring automated geometry checks and render fixtures:
+
+- `mesh.inspect`: vertex/edge/face counts, non-manifold/open bounds (unless intended), degenerate triangles, reversed normals, disconnected islands, UV overlaps and export object names; read only.
+- `architectural.validate`: bay sizes, entrance clearances, floor heights, stair rise/run/headroom and path connectivity relative to a chosen Roblox avatar; static constraints plus mandatory Studio playtest.
+- `assets.search`: search an **explicitly approved, licensed** project asset catalog by tags, dimensions, material, style and source.
+- `scene.preview`: Blender ortho/elevation/3-quarter views from fixed camera presets; downscaled drafts first.
+- `scene.visual_compare`: side-by-side reference differences and specific actionable faults; must distinguish visible evidence from vision-model guesses.
+- `scene.export`: a fixed, explicitly enabled Blender workflow (source .blend, mesh .glb and metadata) with bounded execution, source checksums and file-size limits.
+- `studio.review`: read Studio import logs/camera screenshots and collision/lighting checks via existing authorized guarded Studio integration.
+- `optimizer.profile`: pair measured material reuse/mesh reuse/collision draw time and memory with device class; preserve visual silhouette while tuning.
+
+Any future tool that runs Blender must use a curated executable path, consent for writes, output sandbox, cancellation, logs, process timeout and a user-checked review before Studio uploads. Arbitrary model-authored `bpy` scripts would be a separate, more privileged mode and should **not** silently inherit normal building access.
+
+### B. Free and open assets — confirmed license differences
+
+High-quality licensed source assets should be available **without** teaching STAR to fabricate architecture from random pieces:
+
+| Source | Useful content | Official license status checked on 2026-10-11 | Recommended STAR behavior |
+|---|---|---|---|
+| [Poly Haven](https://polyhaven.com/) | PBR textures, HDRIs and 3D objects | Site says CC0 for its downloadable assets ([license](https://polyhaven.com/license)). API use also has separate [service terms](https://github.com/Poly-Haven/Public-API/blob/master/ToS.md). | Let the owner curate/copy individual assets; record origin URL/license and dimensions; respect API terms, avoid unauthorized crawling. |
+| [Kenney](https://kenney.nl/assets) | Stylized low-poly modular packs, props and textures | Kenney [FAQ](https://kenney.nl/support) says asset pages are CC0; confirm the actual downloaded pack's license file. | Excellent prototyping library, but adapt forms, materials and silhouettes so a finished game doesn't look like a generic asset pack. |
+| [Quaternius](https://quaternius.com/) | Stylized 3D kits, environment models and characters | **Not a universal CC0 library anymore.** Their [QAL v1.0 license, updated 2026-08-28](https://quaternius.com/license.html) permits incorporation into commercial games but forbids standalone asset redistribution. Specific older asset releases may have distinct attached licenses. | Allow packaged usage only under the precise pack license; do not embed standalone Quaternius files into STAR's public GitHub source or republish as raw exports. |
+| [Blender Geometry Nodes](https://docs.blender.org/manual/en/4.2/modeling/geometry_nodes/tools.html) | Reusable procedural modeling operations | Native Blender functionality, not a source of third-party copyrighted assets. | Create versioned, parameterized in-house facade/roof/trim libraries, with visual regression renders. |
+
+Asset retrieval via an API is not automatically legal, trusted, fast or free of rate limits. Public GitHub source may contain the **manifest and URLs** but should not redistribute third-party models without a compatible license and explicit intent.
+
+### C. Generative image-to-3D research — powerful but not a replacement for architectural logic
+
+- [Microsoft TRELLIS.2](https://github.com/microsoft/TRELLIS.2) is an open image-to-3D research project generating textured 3D assets with PBR material properties. Its official repository states **Linux, NVIDIA GPU and at least 24 GB VRAM** for the tested setup. Performance claims reported for H100 are **not local consumer-device benchmarks**. A machine with 32 GB *system RAM* does not necessarily meet this GPU requirement.
+- [Tencent Hunyuan3D-2.1](https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1) offers shape and PBR texture generation and publishes weights/code with a license that requires review. Its repository reports approximately **10 GB VRAM for shape**, **21 GB for texture**, and **29 GB for both together**. Do not assume it runs on an unknown Windows GPU merely because the PC has 32 GB RAM.
+- These systems are candidates for producing *individual props, sculpt bases and concept meshes*, followed by retopology, UV cleanup, pivot/material conventions and human review. They are not guaranteed to produce real stairs, collision-safe windows, playable doors, room adjacencies or efficient modular kit pieces.
+
+STAR should prefer CPU-cheap deterministic geometry for architecture and use optional heavier 3D generation **selectively** for hero props. Heavy inference needs a measured GPU probe, user-approved install and potential remote worker; there must be a no-model fallback. Never auto-download large weights or imply trained-model quality has improved just by linking to a model.
+
+### D. Self-improvement that is real, measurable and reversible
+
+Separate four forms of adaptation:
+
+1. **Knowledge improvement**: versioned official-document retrieval, trusted links and reviewed project-specific style constraints; source date and stale-data handling.
+2. **Skill acquisition**: implement one bounded recipe, test it against an unfamiliar building, and keep the exact successful artifacts and corrections.
+3. **Preference learning**: preserve user-approved style direction and explicitly approved corrections as existing STAR project-scoped lessons. Never auto-promote AI-written aesthetic judgments to unquestionable truth.
+4. **Model fine-tuning**: only when enough rights-confirmed training examples exist, separate projects/asset families between train and holdout, and measure against the existing model. Fine-tuning is **not** accomplished by saving notes.
+
+A learning record should include `brief_hash`, generator/script version, Blender/Studio version, source URLs and license metadata, camera preset, screenshot paths, human rating and concrete defect category, proposed fix, actual render improvement and measured time. Do not keep secret credentials, unpublished third-party models or private game snapshots in the public repository.
+
+The acceptance benchmark should include previously unseen buildings and art styles; evaluate *geometry, gameplay, material coherence, reference fidelity, memory, p50/p95 latency and human edit count*. Freeze holdouts before tuning. A source-supported improvement to quality is meaningful; a faster but visually worse mesh is a regression. STAR's existing `docs/evals.md` skills gate remains authoritative; no model may rewrite the evaluation criteria and then declare itself smarter.
+
+### E. Performance beyond 'make it fast'
+
+Avoid launching a frontier 3D model for every wall. Batch shared geometry operations, cache deterministic `BuildingSpec` hashes, reuse trim sheets and MeshPart IDs, and send only changed modules through import/reimport. Roblox's official [performance guidance](https://create.roblox.com/docs/performance-optimization/improve) explicitly warns that importing a full map as many separate duplicated tiles can create unique assets instead of automatic de-duplication. An entire open world should **not** be fused into five gigantic meshes: streamable buildings/modules, reusable meshes and simple independent collisions generally suit Roblox better.
+
+Measure the complete **brief -> plan -> Blender build -> .glb export -> Studio import -> screenshot -> corrective iteration** path, not only Python generation. For Roblox targets, capture device name, graphics quality, join time, physics cost, MicroProfiler traces, render frame p50/p95, memory and streaming behavior. Choose budgets from real target devices; no universal '60 FPS' guarantee based on a desktop-only sample.
+
+## 8. Definition of the next milestone
+
+A user can request: "Build a stylized haunted timber shop using this reference board." STAR returns (a) a reviewable structural floor/mass diagram, (b) a set of modular Blender meshes with meaningful UVs/materials, (c) a Blender viewport comparison and source .blend, (d) a Roblox-imported private test-place screenshot, (e) an actual avatar walkthrough proving entrance and collisions, and (f) real device metrics. The owner accepts or rejects the art direction; STAR then makes a targeted revision using the actual feedback. **Until those artifacts exist, label the work a prototype.**
