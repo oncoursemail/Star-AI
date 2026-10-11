@@ -614,7 +614,7 @@ def launch():
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
             return start_model_router(self.runtime, self.settings_file, app_data(), source)
 
-        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
+        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False, retry_id=None):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
@@ -622,7 +622,8 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                user_id=(chats.recover_turn(settings.project,active_chat,retry_id,prompt) if retry_id is not None
+                         else chats.add(settings.project,'user',prompt,chat_id=active_chat))
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
@@ -950,7 +951,17 @@ def launch():
                     self.cancel_chat = threading.Event()
                     self.active_task=True
                     try:
-                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
+                        retry_id=body.get('retryMessageId')
+                    if retry_id is not None:
+                        if type(retry_id) is not int or retry_id < 1 or selected:
+                            raise ValueError('Invalid Retry request')
+                        chats=Conversations(app_data()/'conversations.sqlite3')
+                        try:
+                            current=Settings.load(self.settings_file).project
+                            chats.recover_turn(current,chats.active_chat(current),retry_id,prompt)
+                        finally:
+                            chats.close()
+                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github,retry_id=retry_id))
                     except Exception:
                         self.active_task=False
                         raise
