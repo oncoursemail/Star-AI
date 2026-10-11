@@ -11,14 +11,18 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+import hashlib
 import json
 import re
+
+from . import eval_gate
 
 COMMIT_SHA = re.compile(r"^[a-fA-F0-9]{40}$")
 VALID_SPLITS = {"development", "holdout"}
 VALID_VERDICTS = {"pass", "fail", "blocked"}
-# The evaluation gate's floor for "better": the same unchanged build flips about one task in six
-# between runs, so fewer net task wins than this is noise, not evidence. It can be raised, never lowered.
+# Promotion needs more than the evaluation gate's "no worse" (star/eval_gate.py has no number): the same
+# unchanged build flips about one task in six between runs, so fewer net task wins than this is noise,
+# not evidence. This floor is this module's own, on top of the gate. It can be raised, never lowered.
 MIN_NET_TASK_WINS = 5
 
 
@@ -72,21 +76,55 @@ def load_trials(path: Path) -> list[Trial]:
     return trials
 
 
+def gate_verdict(baseline_trials: dict, candidate_trials: dict, by_task: dict) -> eval_gate.Verdict:
+    """The evaluation gate's own verdict (`star.eval_gate.gate_change`) on the paired holdout trials.
+
+    The gate compares one status per task and confirms a regression with one re-run. The recorded
+    repeats are that re-run, so the trials are handed to it as three result sets:
+
+    * the baseline passed a task when any of its repeats passed;
+    * the candidate's run passed a task only when every repeat passed;
+    * the confirming re-run of a task the gate reports as a regression passed when any repeat passed.
+
+    So the gate itself decides: failing every repeat of a task the baseline passed is a regression
+    (blocked), failing only some repeats is flaky, and an improvement is a task the baseline failed on
+    every repeat and the candidate passed on every repeat. A task with a blocked trial has no score.
+    """
+    def results(trials: dict, passed) -> dict:
+        tasks = {}
+        for task in sorted(by_task):
+            verdicts = [trials[key].verdict for key in by_task[task]]
+            status = "error" if "blocked" in verdicts else "pass" if passed(v == "pass" for v in verdicts) else "fail"
+            tasks[task] = {"status": status}
+        return {"suite": suite, "tasks": tasks}
+
+    # Both arms are the same paired holdout trials by construction, which is what the gate's suite check asks.
+    paired = sorted([task, index] for task, keys in by_task.items() for _task, index in keys)
+    suite = {"sha256": hashlib.sha256(json.dumps(paired).encode("utf-8")).hexdigest()}
+    confirming = results(candidate_trials, any)
+    return eval_gate.gate_change(
+        results(baseline_trials, any), lambda: results(candidate_trials, all),
+        rerun=lambda task_ids: {"suite": suite, "tasks": {task: confirming["tasks"][task] for task in task_ids}})
+
+
 def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
                      minimum_holdout_tasks: int = 5, repeats: int = 2,
                      max_slowdown: float = 2.0, min_net_wins: int = MIN_NET_TASK_WINS) -> dict:
     """Produce an honest provisional decision, not a Studio QA certification.
 
     Acceptance requires identical holdout case/repeat keys, no hard-failure trials, no blocked
-    trials, no large latency increase, and the evaluation gate's rule, applied per holdout task:
+    trials, no large latency increase, and the evaluation gate's rule. The rule is not copied here:
+    `gate_verdict` hands the holdout trials to `star.eval_gate`, and its verdict decides
 
-    * a task the baseline passed must not fail now, even if other tasks improved. A failure counts
-      once its repeats confirm it (the gate's "re-run a regression once"): failing every repeat is a
-      regression and vetoes; failing some repeats is reported as flaky and counts against the net;
-    * a task counts as improved only when the baseline failed every repeat and the candidate passed
-      every repeat;
-    * improved tasks minus worse tasks must reach `min_net_wins` (5 or more). A higher pass rate
-      alone is not enough: one flipped task used to pass this check.
+    * regressions: a task the baseline passed must not fail now, even if other tasks improved. A
+      failure counts once its repeats confirm it (the gate's "re-run a regression once"): failing
+      every repeat is a regression and vetoes; failing some repeats is flaky;
+    * improvements: the baseline failed every repeat and the candidate passed every repeat.
+
+    On top of the gate, this module's own promotion floor: improved tasks minus worse tasks must reach
+    `min_net_wins` (5 or more), where worse is a regression or a flaky task on which the candidate
+    passed fewer repeats than the baseline. A higher pass rate alone is not enough: one flipped task
+    used to pass this check.
 
     Development-split results are ignored for promotion.
     """
@@ -131,19 +169,23 @@ def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
     by_task = defaultdict(list)
     for key in common_keys:
         by_task[key[0]].append(key)
-    improved, regressed, flaky = [], [], []
-    for task in sorted(by_task):
+    verdict = gate_verdict(a, b, by_task)
+    improved, regressed = sorted(verdict.improvements), sorted(verdict.regressions)
+
+    def fewer_passes(task: str) -> bool:
         keys = by_task[task]
-        before = sum(a[k].verdict == "pass" for k in keys)
-        after = sum(b[k].verdict == "pass" for k in keys)
-        if before == 0 and after == len(keys):
-            improved.append(task)
-        elif after < before:
-            (regressed if after == 0 else flaky).append(task)
+        return sum(b[k].verdict == "pass" for k in keys) < sum(a[k].verdict == "pass" for k in keys)
+    # A task that is noisy in both arms is flaky for the gate too, but the candidate did not make it worse.
+    flaky = sorted(task for task in verdict.flaky if fewer_passes(task))
     net_wins = len(improved) - len(regressed) - len(flaky)
     if regressed:
         problems.append(f"{len(regressed)} holdout task(s) the baseline passed now fail on every repeat; "
                         "a regression vetoes even when other tasks improved")
+    elif not verdict.allowed:
+        # Fail closed: blocked for another reason, or no verdict at all (nothing scored, a blocked trial).
+        state = {eval_gate.BLOCKED: "blocked", eval_gate.UNUSABLE: "nothing to compare",
+                 eval_gate.INCOMPLETE: "incomplete"}.get(verdict.code, f"code {verdict.code}")
+        problems.append("The evaluation gate did not allow the change (" + "; ".join([state] + verdict.notes) + ")")
     if net_wins < min_net_wins:
         problems.append(f"Net task wins {net_wins} ({len(improved)} improved on every repeat, "
                         f"{len(regressed) + len(flaky)} worse); the evaluation gate requires at least {min_net_wins}")
@@ -163,6 +205,7 @@ def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
         "flaky_tasks": flaky,
         "net_task_wins": net_wins,
         "required_net_task_wins": min_net_wins,
+        "gate": verdict.to_dict(),
         "decision": "candidate_for_independent_review" if not problems else "do_not_promote",
         "reasons": problems,
         "limitations": "Compares supplied results only. Does not verify that the evaluator ran, that artifacts correspond to commits, or that trial fixtures stayed hidden. An independent trusted runner must attest to these before any promotion."
