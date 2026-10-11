@@ -8,7 +8,7 @@ After=network-online.target star-brain.service star-knowledge.service
 # Pause without stopping:  touch /opt/star/training/PAUSE     Resume:  rm /opt/star/training/PAUSE
 # Not enabled at boot on purpose: `systemctl enable star-training-gen` makes it start with the container.
 # One request at a time to the brain; pauses while /opt/star/lock exists, while somebody else is using any model
-# (slot check every few seconds, then 45 quiet seconds), and outside STAR_TRAIN_WINDOW_UTC when that is set.
+# (slot check every few seconds, then 120 quiet seconds), and outside STAR_TRAIN_WINDOW_UTC when that is set.
 [Service]
 Type=simple
 User=star

@@ -44,7 +44,7 @@ signals, Players, RunService, CollectionService, TweenService, Vector3, UDim2, .
 * One request at a time; chat requests are streamed, so a running generation is dropped within about 3 seconds
   when somebody else starts using any loaded model (a second busy slot on the model we use, or a busy slot on
   another model), when `/opt/star/lock` appears (stale after 20 minutes, never removed here), when the PAUSE file
-  appears, or when the job is stopped. After someone else's activity it waits 45 quiet seconds.
+  appears, or when the job is stopped. After someone else's activity it waits 120 quiet seconds (a gap in a batch run is rarely longer).
 * `STAR_TRAIN_WINDOW_UTC=04:00-10:00` (in `/opt/star/training/env`) confines it to a nightly window; by default
   it may run at any time because it yields as above.
 * `Nice=19`, idle I/O class, `CPUWeight=5`, 2 GB memory cap, no network beyond the local brain.
