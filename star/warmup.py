@@ -31,6 +31,7 @@ from .desktop_core import (Settings, app_data, chat_history, memory_scope_for, s
 from .model_health import note_server_result, probe_server
 from .providers import llama_request_fields, open_client, provider_kind
 from . import server_roles, turn_memory
+from .conversation_memory import compose_memory, read_checkpoint
 
 # The priming turn. It is the last message of the request, so nothing after the
 # cached start depends on it; the single generated token is thrown away.
@@ -81,7 +82,8 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
     """
     history = chat_history(settings, home, chat_id)[0] if (home / 'conversations.sqlite3').is_file() else []
     scope = memory_scope_for(settings, chat_id)
-    memory = stable_memory(settings, _checkpoint(home, scope))
+    memory = compose_memory(stable_memory(settings, _checkpoint(home, scope)),
+                            read_checkpoint(home / 'conversations.sqlite3', settings.project, chat_id))
 
     def build(model: str, tools, guidance: str) -> dict:
         system = make_system_message(memory, tools_attached=bool(tools), guidance=guidance if tools else '')

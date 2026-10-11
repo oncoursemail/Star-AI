@@ -12,10 +12,10 @@ from .analytics import AnalyticsStore
 from dataclasses import dataclass, asdict, replace
 from typing import Callable
 
-from .agent import execute
-from .context_layout import conversation_window
+from .agent import execute, HistoryWindowPressure
 from .media import image_part
 from .memory import Memory
+from . import conversation_memory
 from .workspace import Workspace
 from .intelligence import for_settings
 from .mcp_connections import MCPGateway
@@ -383,6 +383,10 @@ class Conversations:
             (clip, *args)
         ).fetchall()
 
+    def raw_history_records(self, project: str, chat_id: str | None = None) -> list[dict]:
+        """Full ID-bearing records of exactly one chat, including terminal outcomes."""
+        return conversation_memory.raw_records(self.connection, project, chat_id)
+
     def recent_records(self, project: str, limit: int = 70, chat_id: str | None = None) -> list[dict]:
         """Like recent(), with row ids and turn outcome, for the UI state payload."""
         scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
@@ -642,7 +646,7 @@ def history_char_budget(settings: Settings) -> int:
 
     Cached history costs nothing per turn; what costs is the first message
     after a start and each time the window moves, when the server reads what is
-    in the window again (see context_layout.conversation_window: the window
+    in the window again (see conversation_memory.select_window: the window
     moves by half of this budget at a time, and one replayed message is at most
     a quarter of it).
 
@@ -687,13 +691,23 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
     UI) and is not history; an earlier message that never got a reply is kept,
     marked as unanswered (see context_layout.exchanges).
     """
+    window, rows = chat_history_snapshot(settings, home, chat_id)
+    return window.messages, [(row['role'], row['body']) for row in rows
+                             if row['role'] in {'user', 'assistant'}][-12:]
+
+
+def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *, current_text=None):
+    """Full scoped originals and a pure bounded window, shared with warm-up."""
     budget = history_char_budget(settings)
     dialogue = Conversations(home / 'conversations.sqlite3')
     try:
-        rows = dialogue.history_rows(settings.project, chat_id, clip=budget)
+        rows = dialogue.raw_history_records(settings.project, chat_id)
     finally:
         dialogue.close()
-    return conversation_window(rows, budget_chars=budget), rows[-12:]
+    window = conversation_memory.select_window(rows, budget, current_text=current_text)
+    checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
+                                                      chat_id, records=rows)
+    return conversation_memory.respect_checkpoint(window, checkpoint), rows
 
 
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
@@ -791,7 +805,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # Earlier turns are sent as real user/assistant messages, oldest first, and the
         # window over them only moves in whole blocks: the request starts with the same
         # bytes turn after turn, which is what lets the model server reuse its cache.
-        history, recent_all = chat_history(settings, home, chat_id)
+        history_window, conversation_records = chat_history_snapshot(
+            settings, home, chat_id, current_text=owner_text if owner_text is not None else prompt)
+        history = history_window.messages
+        recent_all = [(row['role'], row['body']) for row in conversation_records
+                      if row['role'] in {'user', 'assistant'}][-12:]
         # The UI saved the message being answered before calling this; it is not a prior turn.
         route_history = (
             recent_all[:-1] if recent_all and recent_all[-1][0] == 'user'
@@ -870,7 +888,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             elif event.get('event') == 'tool_started':
                 tools_ran = True
             inner_event(event)
+        prepared_conversation = None
         async def run():
+            nonlocal prepared_conversation
             from .web_search import search_web, source_context
             if research:
                 audited_event({'event': 'search_started'})
@@ -908,6 +928,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
+                              preserve_history=True,
                               # Only the lessons section may look like lessons (guard_sections).
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
@@ -934,13 +955,41 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     kwargs['document_tools'] = document_tools
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
-                    kwargs.update(model=model, request_extras=slot_fields(model))
-                    if allow_studio:
-                        async with connect() as session:
-                            return await execute(**kwargs, studio=session,
-                                discovered=await list_tools(session), studio_id=settings.studio_id,
-                                may_edit=settings.studio_edit)
-                    return await execute(**kwargs)
+                    nonlocal prepared_conversation
+                    window, candidate = history_window, None
+                    for attempt in range(5):
+                        candidate = await conversation_memory.prepare(
+                            helper, model, home / 'conversations.sqlite3', settings.project, chat_id,
+                            conversation_records, window,
+                            summary_chars=min(6000, max(700, allowed_context_chars // 4)),
+                            cancel_event=cancel_event, on_event=audited_event, candidate=candidate)
+                        kwargs.update(model=model, request_extras=slot_fields(model), history=window.messages,
+                            project_memory=conversation_memory.compose_memory(
+                                stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
+                        try:
+                            if allow_studio:
+                                async with connect() as session:
+                                    result = await execute(**kwargs, studio=session,
+                                        discovered=await list_tools(session), studio_id=settings.studio_id,
+                                        may_edit=settings.studio_edit)
+                            else:
+                                result = await execute(**kwargs)
+                        except HistoryWindowPressure as pressure:
+                            if pressure.dispatched or pressure.tool_actions_started:
+                                raise conversation_memory.ConversationRetentionError(
+                                    'Conversation context needs another recap after model/tool work; task stopped '
+                                    'without replaying actions. Original dialogue and prefix checkpoint are unchanged.')
+                            if pressure.dropped != window.messages[:len(pressure.dropped)]:
+                                raise conversation_memory.ConversationRetentionError(
+                                    'Request pressure does not match complete original exchanges; task stopped.')
+                            if attempt == 4:
+                                raise conversation_memory.ConversationRetentionError(
+                                    'Conversation preparation exceeded four budget retries; task stopped '
+                                    'with originals and the previous prefix checkpoint unchanged.')
+                            window = conversation_memory.omit_messages(window, len(pressure.dropped))
+                            continue
+                        prepared_conversation = candidate
+                        return result
                 used = route
                 try:
                     result = await answer_with(route.model)
@@ -998,6 +1047,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(answer, encoding='utf-8')
         memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
+        # Failed/cancelled answers, budget refusals and required archive/log
+        # failures never advance retention. Validate source/CAS after persistence.
+        conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
+                                   cancel_event=cancel_event)
         audited_event({'event': 'saved', 'run_id': stamp})
         metrics.record(settings.project, 'run_succeeded',elapsed_ms=int((time.monotonic()-started)*1000))
         # The answer exists: count the lessons that were in its context, then learn from the turn.
