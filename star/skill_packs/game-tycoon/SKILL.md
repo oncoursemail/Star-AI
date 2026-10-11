@@ -26,6 +26,7 @@ playerState[UserId]={cash,owned}; plotOwner[plot]=UserId; catalog is immutable s
 --!strict
 -- ServerScriptService/Tycoon.server.luau; configure Workspace.Plots/<Plot>/BuyPrompt
 local Players = game:GetService("Players")
+local store = game:GetService("DataStoreService"):GetDataStore("Tycoon_v1")
 local plots = workspace:WaitForChild("Plots")
 local state: {[number]: {cash: number, owned: boolean}} = {}
 local owners: {[Instance]: number} = {}
@@ -41,8 +42,30 @@ for _, plot in plots:GetChildren() do
         end)
     end
 end
+local function save(player: Player)
+    local s = state[player.UserId]; if not s then return end
+    local snapshot = {cash = s.cash, owned = s.owned}
+    for attempt = 1, 3 do
+        local ok = pcall(function()
+            store:UpdateAsync(tostring(player.UserId), function(old)
+                return snapshot -- Production: reconcile concurrent sessions.
+            end)
+        end)
+        if ok then return end
+        task.wait(attempt * 2)
+    end
+    warn("Tycoon save failed", player.UserId)
+end
 Players.PlayerAdded:Connect(function(player)
-    state[player.UserId] = {cash = 50, owned = false}
+    local loaded = nil
+    local ok = pcall(function() loaded = store:GetAsync(tostring(player.UserId)) end)
+    if not ok then player:Kick("Data unavailable; please rejoin."); return end
+    if type(loaded) ~= "table" then loaded = {} end
+    local record = loaded :: any
+    state[player.UserId] = {
+        cash = type(record.cash) == "number" and math.max(0, record.cash) or 50,
+        owned = record.owned == true,
+    }
     for _, plot in plots:GetChildren() do
         if owners[plot] == nil then owners[plot] = player.UserId; break end
     end
@@ -56,11 +79,15 @@ task.spawn(function()
     end
 end)
 Players.PlayerRemoving:Connect(function(player)
+    save(player)
     state[player.UserId] = nil
     for plot, owner in owners do if owner == player.UserId then owners[plot] = nil end end
 end)
--- Add DataStore GetAsync/UpdateAsync around this state with pcall,
--- save on PlayerRemoving/BindToClose and autosave with a budget.
+game:BindToClose(function()
+    for _, player in Players:GetPlayers() do task.spawn(save, player) end
+    task.wait(3) -- For production, join save tasks with a deadline.
+end)
+-- Add budgeted autosave; gate dropper/collector loops by plot owner.
 ```
 ## Studio playtest checklist
 - Two players receive distinct plots; other plot purchase denied; no duplicate buying; collector credits once; leave/rejoin restores cash and ownership after implementing persistence.
