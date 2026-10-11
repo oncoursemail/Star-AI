@@ -12,6 +12,8 @@ import re
 from jsonschema import Draft202012Validator
 
 from .agent_skills import SkillLibrary, install_starters
+from .architecture_pipeline import PALETTES, make_plan, validate_brief
+from .architecture_quality import design_summary
 from .skill_packs import PACKS_DIR
 from .brain_router import is_roblox_dev_prompt
 from .doc_knowledge import client_for
@@ -84,6 +86,22 @@ ROBLOX_VIDEO_TOOLS = (
     _tool("star_roblox_youtube_search", "Find Roblox-related public YouTube video metadata using a locally configured API key; otherwise return an explicit YouTube search link.", {"query": _s(140), "limit": _limit(10, 6)}, ("query",)),
     _tool("star_roblox_youtube_video", "Inspect one YouTube video's public metadata, thumbnail and statistics if available. This does NOT watch the footage or download captions.", {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}, ("video_id",)),
 )
+ARCHITECTURE_TOOLS = (
+    _tool("star_architecture_preview",
+          "Create a deterministic, read-only architectural shell plan for a Roblox building. "
+          "Returns real facade/roof metrics, palette, opening counts and validation warnings. "
+          "Does NOT use Blender, upload assets or edit Studio. Styles are prototypes, not AAA renders.",
+          {
+              "name": _s(48),
+              "style": {"type": "string", "enum": list(PALETTES)},
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+          },
+          ("name", "style", "width_studs", "depth_studs", "floors", "bays")),
+)
 _ID = {"type": "integer", "minimum": 1}
 # Roblox Open Cloud with the owner's API key (star/roblox_cloud.py). The first five only read. The two
 # "request" tools never touch Roblox: they queue an action the owner approves or rejects in Settings.
@@ -101,9 +119,12 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *ARCHITECTURE_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 
+_ARCHITECTURE_TRIGGER = re.compile(
+    r"\b(?:blender|buildings?|architecture|architectural|facades?|floorplans?|gables?|"
+    r"warehouses?|roofs?|shopfronts?|3d.meshes|gltf|glb)\b", re.I)
 _SKILL_TRIGGER = re.compile(r"\b(skill|expert|workflow|tool|roblox|luau|ui|design|debug|build|fix|test|code|studio|script)\b", re.I)
 _VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan)\b", re.I)
 _GRAPH_TRIGGER = re.compile(r"\b(graphify|graph|architecture|codebase|dependenc\w*|relationships?|connections?|module|function|imports?|calls?|trace|impact|bug|scripts?)\b", re.I)
@@ -158,6 +179,10 @@ class LocalIntelligence:
     def definitions(self, prompt: str) -> list[dict]:
         """Conserve small-model context and plain-chat streaming where possible."""
         result = []
+        # Plan generation is pure computation; no file writes or Studio privileges.
+        if _ARCHITECTURE_TRIGGER.search(prompt) and (
+                _ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)):
+            result.extend(ARCHITECTURE_TOOLS)
         if self.skills and _SKILL_TRIGGER.search(prompt):
             result.extend(SKILL_TOOLS)
         if self.vault and _VAULT_TRIGGER.search(prompt):
@@ -191,6 +216,8 @@ class LocalIntelligence:
         if name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
             raise PermissionError("Intelligence tool is not enabled for this task")
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
+        if name == "star_architecture_preview":
+            return design_summary(make_plan(validate_brief(args)))
         if name in _DOC_TOOL_NAMES:
             if self.docs is None:
                 raise PermissionError("STAR Knowledge is not configured")
