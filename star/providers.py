@@ -261,36 +261,18 @@ def server_slots(settings, model: str | None = None) -> int:
     known = _SERVER_LIMITS.get(_instance(settings, model))
     return known[1] if known else 0
 
-# Which slot each conversation uses, per (server, model). Process memory only. The
-# start is a hash of the conversation, so a chat finds its slot (and the prompt the
-# server still holds there) again after STAR restarts.
-_SLOT_TABLE: dict[tuple[str, str], dict] = {}
-_SLOT_TABLE_CHATS = 64
-
 def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, background: bool,
                        prime: bool) -> int:
-    import zlib
-    table = _SLOT_TABLE.setdefault(key, {"active": None, "slot": {}})
-    held: dict = table["slot"]
-    home = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
-    active = table["active"]
-    if background:
-        # Summaries, sub-agents and repairs have prompts of their own. They go to the slot
-        # next to the one the open chat uses, never into it.
-        keep = held.get(active) if active is not None else None
-        return ((held.get(conversation, home) if keep is None else keep) + 1) % slots
-    slot = held.get(conversation)
-    if slot is None or slot >= slots:
-        slot = home
-        if active is not None and active != conversation and held.get(active) == slot:
-            slot = (slot + 1) % slots   # another chat is open there: leave its prompt alone
-        if len(held) >= _SLOT_TABLE_CHATS:
-            for name in [name for name in held if name != active][:len(held) - _SLOT_TABLE_CHATS + 1]:
-                del held[name]
-        held[conversation] = slot
-    if not prime:
-        table["active"] = conversation   # a real turn: this is the chat the owner is in
-    return slot
+    """Stable across processes; never depend on which chat happened to run first.
+
+    Slot ids are local to a server/model. A hash cannot guarantee that arbitrary
+    conversations never collide, but it avoids always assigning slot zero.
+    """
+    import hashlib
+    digest = hashlib.blake2b(str(conversation).encode("utf-8", "replace"),
+                             digest_size=8, person=b"star-slot").digest()
+    return int.from_bytes(digest, "big") % slots
+
 
 def llama_request_fields(settings, *, conversation: str = "", tools: bool = False, model: str = "",
                          background: bool = False, prime: bool = False) -> dict:
@@ -315,10 +297,8 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
         the same chat has one slot on the quick model and one on the main model.
       * A chat keeps its slot. A chat that is opened while another one is in use
         takes a different slot, so switching back finds the first one cached.
-      * `background=True` (summaries, sub-agents, code repairs: prompts of their
-        own) always goes to the slot next to the open chat's, never into it.
-      * `prime=True` is the cache warm-up: it takes the chat's slot without
-        declaring that chat the one in use.
+      * `background=True` (summaries, sub-agents, code repairs) never pins a slot.
+      * `prime=True` is cache warm-up and never pins a slot.
       * `tools` no longer moves a request to the other slot. The tool prompt and
         the plain prompt of one chat share its slot; the server's RAM prompt
         cache brings back whichever was replaced (1.3-1.6 s, measured), and the
@@ -331,7 +311,7 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
         return {}
     fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
     slots = server_slots(settings, model or None) if kind == "lan" else 0
-    if slots >= 2:
+    if slots >= 2 and not background and not prime and conversation:
         fields["id_slot"] = _conversation_slot(_instance(settings, model or None), str(conversation), slots,
                                                background=background, prime=prime)
     return fields
@@ -376,10 +356,8 @@ class _PinnedClient:
 def background_client(client, settings, *, conversation: str = ""):
     """The client for model calls that are not the conversation itself.
 
-    On STAR Server every such call carries `llama_request_fields(...,
-    background=True)`: the slot next to the open chat's, so a summary or a
-    sub-agent never replaces the chat's cached prompt. For a cloud provider and
-    the on-PC brain (no slot count known) this is the plain client.
+    Background work retains llama.cpp prompt caching without explicitly pinning
+    a slot, leaving the server free to schedule available slots.
     """
     if provider_kind(settings) != "lan":
         return client
