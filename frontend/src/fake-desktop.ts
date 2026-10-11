@@ -102,6 +102,7 @@ export function installFakeDesktop() {
 
   return {
     calls,
+    snapshot: () => boot(),
     sent: (action: string) => calls.filter(c => c.action === action),
     requestOf,
     /** Start every test from a clean backend. */
