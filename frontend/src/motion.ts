@@ -7,12 +7,34 @@
  *  never uses these: tokens are appended to an already-mounted node, so a
  *  growing answer neither re-animates nor shifts what is above it.
  */
-import type {Transition, Variants} from 'motion/react'
+import type {TargetAndTransition, Transition, Variants} from 'motion/react'
 
 export const duration = {press: 0.09, hover: 0.12, menu: 0.16, message: 0.17, page: 0.2} as const
 export const ease = [0.2, 0.7, 0.2, 1] as const
 
 const tween = (seconds: number): Transition => ({duration: seconds, ease})
+export const instant: Transition = {type: 'tween', duration: 0, delay: 0}
+
+/** Reduced mode settles every explicit property, including opacity and height. */
+export function motionVariants(variants: Variants, reduced: boolean): Variants {
+  if (!reduced) return variants
+  // A duration change alone does not restart an in-flight animation whose target is unchanged.
+  // Final keyframes change the definition, so mounted messages and menus settle on preference changes.
+  const settle = (target: TargetAndTransition): TargetAndTransition => {
+    const values = Object.fromEntries(Object.entries(target).map(([key, value]) => {
+      if (key === 'transition' || key === 'transitionEnd') return [key, value]
+      const final = Array.isArray(value) ? [...value].reverse().find((item:unknown) => item !== null) : value
+      return [key, typeof final === 'number' || typeof final === 'string' ? [final, final] : value]
+    }))
+    return {...values, transition: instant}
+  }
+  return Object.fromEntries(Object.entries(variants).map(([name, variant]) => [name,
+    typeof variant === 'function' ? (...args: Parameters<typeof variant>) => {
+      const target = variant(...args)
+      return typeof target === 'string' ? target : settle(target)
+    } : settle(variant),
+  ]))
+}
 
 /** A new turn: fade plus a 5px rise. Used once per message, on mount. */
 export const messageIn: Variants = {

@@ -130,15 +130,24 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
     scroll-behavior: auto !important;
   }
 }
+html[data-star-reduced-motion='true'],
 .shell[data-reduced-motion='true'],
 .shell[data-reduced-motion='true'] *,
 .shell[data-reduced-motion='true'] *::before,
-.shell[data-reduced-motion='true'] *::after {
+.shell[data-reduced-motion='true'] *::after,
+html[data-star-reduced-motion='true'] .star-layer,
+html[data-star-reduced-motion='true'] .star-layer *,
+html[data-star-reduced-motion='true'] .star-layer *::before,
+html[data-star-reduced-motion='true'] .star-layer *::after {
   animation-duration: 0.01ms !important;
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
+  animation-delay: 0ms !important;
+  transition-delay: 0ms !important;
   scroll-behavior: auto !important;
 }
