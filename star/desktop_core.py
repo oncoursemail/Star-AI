@@ -565,6 +565,9 @@ def check_studio(settings: Settings | None = None, home: Path | None = None):
     return asyncio.run(discover(settings or Settings(), home=home if home is not None else app_data()))
 
 
+from .redact import redact_text
+
+
 def redact_for_logs(value):
     """Image bytes are retained in the artifact store, not duplicated in transcripts."""
     if isinstance(value, dict):
@@ -573,6 +576,8 @@ def redact_for_logs(value):
         return {str(k): redact_for_logs(v) for k, v in value.items()}
     if isinstance(value, list):
         return [redact_for_logs(v) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
     return value
 
 
@@ -1099,8 +1104,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             # Which model was asked and which one the server said answered.
             'route': {'profile': route.profile, 'requested_model': route.model,
                       'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
-        (runs / 'answer.md').write_text(answer, encoding='utf-8')
-        memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
+        (runs / 'answer.md').write_text(redact_text(answer), encoding='utf-8')
+        memory.event(memory_scope, {'run_id': stamp, 'answer': redact_text(answer[:10000])})
         # Failed/cancelled answers, budget refusals and required archive/log
         # failures never advance retention. Validate source/CAS after persistence.
         conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
