@@ -613,7 +613,7 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
     """
     text = prompt.lower()
     scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game', 'my files',
-              'project folder', 'current place')
+              'project folder', 'current place', 'blender', '3d asset', '3d model', '3d mesh', 'gltf', 'glb')
     actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
                'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
                'remove ', 'delete ', 'test ', 'make it', 'update ')
@@ -648,6 +648,11 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
     if not isinstance(prompt,str) or not prompt.strip():
         return False
     text=prompt.lower()
+    # Exporting a Blender asset for Roblox does not itself authorize Studio edits.
+    if 'blender' in text and not any(term in text for term in (
+            'studio', 'current place', 'selected place', 'my game', 'the place',
+            'game hierarchy', 'explorer tree', 'datamodel')):
+        return False
     actions=('inspect','edit','modify','build','create','fix','test ','run ','playtest',
              'open ','change ','update ','delete ','remove ','add ','insert ','scan ')
     requests_action=any(a in text for a in actions)
