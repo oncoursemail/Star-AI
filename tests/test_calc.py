@@ -66,7 +66,7 @@ def test_conversions(value, source, target, expected):
 
 @pytest.mark.parametrize(("op", "result"), [
     ("mean", 2.5), ("median", 2.5), ("mode", 1),
-    ("variance", 5 / 3), ("stdev", math.sqrt(5 / 3)),
+    ("variance", 11 / 3), ("stdev", math.sqrt(11 / 3)),
 ])
 def test_statistics(op, result):
     assert float(describe([1, 1, 3, 5], op)) == pytest.approx(result)
