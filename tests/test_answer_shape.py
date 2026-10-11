@@ -78,6 +78,22 @@ def test_splice_joins_whatever_shape_the_model_continues_in(answer_from_model):
     assert whole.count("```") == 2
 
 
+def test_text_before_a_fenced_continuation_never_lands_inside_the_code():
+    """Seen on the real server: a paragraph and a sources list came first, then the fenced continuation
+    (which also repeated the last line). Only the block belongs in the code."""
+    kept, _ = continuation(CUT)
+    reply = ("A ModuleScript is a special type of script [1][2].\n\n---\nSources (official documentation)\n\n"
+             "1. [Intro to module scripts](https://create.roblox.com/docs/x) · cited\n\n"
+             "```lua\n\tlocal self = {}\n\tfor i = 1, size do\n\t\tself[i] = i\n\tend\n\treturn self\nend\n\nreturn Pool\n```\n\n"
+             "This preallocates the pool.")
+    whole = splice(kept, reply)
+    code = whole.split("```luau\n", 1)[1].split("```", 1)[0]
+    assert "ModuleScript is a special" not in whole and "Sources" not in whole
+    assert code == ("local Pool = {}\n\nfunction Pool.new(size)\n\tlocal self = {}\n\tfor i = 1, size do\n\t\tself[i] = i\n"
+                    "\tend\n\treturn self\nend\n\nreturn Pool\n")
+    assert whole.rstrip().endswith("This preallocates the pool.") and not stops_inside_code(whole)
+
+
 def test_a_continuation_that_was_cut_too_leaves_the_block_open_and_an_empty_reply_changes_nothing():
     kept, _ = continuation(CUT)
     still_open = splice(kept, "```luau\n\tfor i = 1, size do\n")

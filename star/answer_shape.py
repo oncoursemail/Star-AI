@@ -91,6 +91,24 @@ def _strip_opener(text: str) -> str:
     return text[len(first) + 1:] if first.strip().startswith("```") and "\n" in text else text
 
 
+def _continuation_text(reply: str) -> str:
+    """The part of a continuation reply that belongs inside the open code block (plus what follows it).
+
+    Three shapes: the reply opens a fence first (the usual one): its content is the continuation.
+    The reply writes something else and then a fenced block: only the block counts and the text
+    before it is dropped, because it would otherwise land in the middle of the code (seen once: a
+    paragraph and a sources list before the fenced continuation). The reply has no opening fence:
+    its lines are the continuation, up to its closing fence if it wrote one.
+    """
+    if reply.lstrip().startswith("```"):
+        return _strip_opener(reply)
+    fences = [m for m in _FENCE_LINE.finditer(reply)]
+    if len(fences) >= 2:
+        opener_end = reply.find("\n", fences[0].start())
+        return reply[opener_end + 1:] if opener_end != -1 else ""
+    return reply
+
+
 def splice(kept: str, reply: str) -> str:
     """Join the kept part of a cut answer and the model's continuation into one answer.
 
@@ -103,7 +121,7 @@ def splice(kept: str, reply: str) -> str:
         return kept
     opener_at = [m.start() for m in _OPENER.finditer(kept)]
     block_start = opener_at[-1] if opener_at and stops_inside_code(kept) else None
-    reply_code = _strip_opener(reply) if reply.lstrip().startswith("```") else reply
+    reply_code = _continuation_text(reply)
     if block_start is not None:
         written = kept[block_start:].split("\n", 1)[1] if "\n" in kept[block_start:] else ""
         head = [line.strip() for line in written.splitlines() if line.strip()][:3]
