@@ -511,7 +511,8 @@ class RobloxCloud:
                 "id": name, "label": label, "granted": granted,
                 "needs": [f"{scope}:{ops.replace('|', ' or ')}" for scope, ops in needs],
                 "status": read_status.get(name),
-                "evidence": "read call" if read_status.get(name) is not None else "the key's scope list"})
+                "evidence": ("read call" if read_status.get(name) is not None else
+                             "the key's scope list" if needs else "works with any accepted key")})
         # "read or write" is satisfied by write, which the pipeline needs anyway: name that one.
         report["missing"] = list(dict.fromkeys(
             f"{scope}:{ops.split('|')[-1]}" for name, _label, needs in CAPABILITIES
