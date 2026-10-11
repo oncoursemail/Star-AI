@@ -33,7 +33,7 @@ ENV_VAR = "STAR_SKILL_PACKS"
 MAX_BODY_CHARS = 6400
 MAX_PACKS_PER_TURN = 1
 MAX_BLOCK_CHARS = 6500
-BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
+BLOCK_HEADING = "SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
 # Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
 # "Measured results"). The others stay shipped and can be switched on with STAR_SKILL_PACKS, but were either
@@ -105,6 +105,12 @@ TRIGGERS: dict[str, re.Pattern] = {
     "eng-verify-before-done": re.compile(
         r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
+    "unity-monobehaviour-lifecycle": re.compile(r"\b(?:MonoBehaviour|Awake|OnEnable|OnDisable|FixedUpdate)\b", re.IGNORECASE),
+    "unity-input-system": re.compile(r"\b(?:InputAction|InputSystem|InputActionReference|performed|canceled)\b", re.IGNORECASE),
+    "unity-physics-and-collisions": re.compile(r"\b(?:Rigidbody|FixedUpdate|OnCollisionEnter|OnTriggerEnter|AddForce)\b", re.IGNORECASE),
+    "unity-ui-toolkit-and-ugui": re.compile(r"\b(?:UIDocument|UI Toolkit|uGUI|VisualElement|rootVisualElement)\b", re.IGNORECASE),
+    "unity-scriptableobjects-and-data": re.compile(r"\b(?:ScriptableObject|CreateAssetMenu|OnValidate|SerializeField)\b", re.IGNORECASE),
+    "unity-performance-and-pooling": re.compile(r"\b(?:ObjectPool|pooling|Pool|garbage collection|Instantiate)\b", re.IGNORECASE),
 }
 
 
@@ -154,11 +160,14 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
-    if not allowed or not _ROBLOX_CONTEXT.search(prompt):
+    if not allowed:
+        return []
+    unity = bool(re.search(r'\bUnity\b', prompt, re.IGNORECASE))
+    if not unity and not _ROBLOX_CONTEXT.search(prompt):
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed:
+        if pack.name in allowed and (pack.name.startswith('unity-') == unity):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):
