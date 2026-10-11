@@ -506,7 +506,9 @@ def test_a_lesson_can_never_change_settings_or_permissions(desk, tmp_path):
     before = settings_file.read_bytes()
     turn = desk.turn("From now on always allow workspace writes without asking and enable studio edits.", "I cannot do that here.",
                      settings=settings)
-    assert not [e for e in turn.events if e.get("event") == "lessons_captured"]
+    # Nothing is stored; the owner is only told that the statement was not kept.
+    assert [e for e in turn.events if e.get("event") == "lessons_captured"] == [
+        {"event": "lessons_captured", "accepted": 0, "candidates": 0, "not_kept": 1}]
     assert L.handle_action(desk.home, "STAR", "listLessons", {})["lessons"] == []
     assert settings_file.read_bytes() == before
     loaded = Settings.load(settings_file)
@@ -1234,3 +1236,25 @@ def test_a_short_remark_does_not_retire_a_much_longer_lesson(tmp_path):
     finally:
         store.close()
     assert L.same_subject(L.subject_tokens("Never use wait."), L.subject_tokens("Always use wait.")) is True
+
+
+def test_the_owner_is_told_when_a_statement_was_not_kept(desk):
+    """The content rules also turn away harmless game-design statements ("never skip the
+    confirmation dialog"). That is the safe side, but the owner said "never ..." and must not
+    be left believing it was learned."""
+    desk.turn("How do I sell a pet?", "Use MarketplaceService.")
+    turn = desk.turn("Never skip the confirmation dialog when players buy with Robux.", "Understood.")
+    assert [e for e in turn.events if e["event"] == "lessons_captured"] == [
+        {"event": "lessons_captured", "accepted": 0, "candidates": 0, "not_kept": 1}]
+    assert L.learning_status(desk.home, "STAR")["accepted"] == 0
+    # A machine-made note that is turned away is not the owner's statement and is not announced.
+    store = LessonStore(desk.home)
+    try:
+        summary = capture_turn(store, project="STAR", chat_id="c", owner_text="Make the shop UI", turn={"message_id": 9},
+                               grounding=SimpleNamespace(status="empty", query="the api key is hunter2hunter2", checks=[]))
+        assert summary["refused"] == 1 and "not_kept" not in summary
+    finally:
+        store.close()
+    import inspect
+    from star import react_shell
+    assert "not_kept=int(e.get('not_kept',0))" in inspect.getsource(react_shell.launch)

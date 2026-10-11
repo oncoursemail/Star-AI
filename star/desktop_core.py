@@ -736,10 +736,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 lesson_store, project=settings.project, chat_id=chat_id, owner_text=said, turn=turn,
                 grounding=learned['grounding'], messages=learned['messages'],
                 auto_accept=settings.learning_auto_accept is True)
-            if on_event and (summary['accepted'] or summary['candidates']):
+            if on_event and (summary['accepted'] or summary['candidates'] or summary.get('not_kept')):
                 on_event({'event': 'lessons_captured', 'accepted': summary['accepted'],
                           'candidates': summary['candidates'],
-                          **({'replaced': summary['replaced']} if summary['replaced'] else {})})
+                          **({'replaced': summary['replaced']} if summary['replaced'] else {}),
+                          **({'not_kept': summary['not_kept']} if summary.get('not_kept') else {})})
         except Exception:
             pass
     try:

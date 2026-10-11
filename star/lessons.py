@@ -771,7 +771,7 @@ def capture_turn(store: LessonStore, *, project: str, chat_id: str | None, owner
 
     `turn` is Conversations.turn_context(): the message being answered and the turn before it.
     Returns counts for the interface: {'accepted': n, 'candidates': n, 'refused': n, 'replaced': n,
-    'ids': [...]}.
+    'ids': [...]}, plus 'not_kept': n when statements of the owner were refused by the content rules.
     """
     summary = {"accepted": 0, "candidates": 0, "refused": 0, "replaced": 0, "ids": []}
     chat = chat_id or "legacy"
@@ -802,12 +802,17 @@ def capture_turn(store: LessonStore, *, project: str, chat_id: str | None, owner
     typed = reads_as_typed(owner_text)
     for statement in owner_statements(owner_text, after_answer=answered):
         if statement.durable:
-            note(store.capture_owner(project=project, kind=statement.kind, text=statement.text,
-                                     message=owner_text, source=f"chat:{here}", evidence=context,
-                                     auto_accept=auto_accept and typed))
+            result = store.capture_owner(project=project, kind=statement.kind, text=statement.text,
+                                         message=owner_text, source=f"chat:{here}", evidence=context,
+                                         auto_accept=auto_accept and typed)
         else:
-            note(store.capture_inferred(project=project, kind=statement.kind, text=statement.text,
-                                        source_type=CONTEXT, source=f"chat:{here}", evidence=context))
+            result = store.capture_inferred(project=project, kind=statement.kind, text=statement.text,
+                                            source_type=CONTEXT, source=f"chat:{here}", evidence=context)
+        note(result)
+        if result.status == "refused":
+            # The owner stated something and it was turned away by the content rules: the
+            # interface says so, or they would believe it was learned.
+            summary["not_kept"] = summary.get("not_kept", 0) + 1
 
     if (previous.get("outcome") == "failed" and _normal(previous.get("text") or "") == _normal(owner_text)
             and previous.get("message_id")):

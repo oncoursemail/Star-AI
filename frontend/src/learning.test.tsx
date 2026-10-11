@@ -109,6 +109,18 @@ describe('rating an answer', () => {
     await desktop.emitRaw(desktop.requestOf('sendMessage'), 'result', {answer: 'Understood.', learned: {accepted: 1, candidates: 0}})
     expect(await screen.findByText('Noted for this project: 1 lesson from what you said. Review it under Projects.')).toBeTruthy()
   })
+
+  it('says so when a statement was turned away, instead of staying silent', async () => {
+    const user = userEvent.setup()
+    render(<App/>)
+    const box = await screen.findByRole('textbox', {name: /message star/i})
+    await user.type(box, 'Never skip the confirmation dialog.')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    await desktop.emitRaw(desktop.requestOf('sendMessage'), 'result', {answer: 'Understood.', learned: {accepted: 0, candidates: 0, not_kept: 1}})
+    expect(await screen.findByText(/That was not kept as a lesson: it reads like a permission or setting/)).toBeTruthy()
+    expect(screen.queryByText(/Noted for this project/)).toBeNull()
+  })
 })
 
 describe('reviewing lessons', () => {

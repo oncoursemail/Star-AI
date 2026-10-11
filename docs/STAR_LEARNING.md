@@ -51,7 +51,10 @@ Each lesson stores: project, text, kind (`preference | correction | pitfall | fa
 4. **A lesson is text and nothing else.** No code path reads a lesson to change a setting or a
    permission. Text that reads as a grant ("you may edit files", "without asking", "enable studio
    edits", "ignore the rules") or names a setting is refused, and so is anything that looks like a key,
-   token or password. Evidence excerpts are redacted the same way.
+   token or password. Evidence excerpts are redacted the same way. The rules are word patterns and
+   also turn away some harmless statements ("never skip the confirmation dialog", "always allow admin
+   players to bypass the cooldown", "the token is stored in a ModuleScript"); when a statement of
+   yours is refused the chat says that it was not kept.
 
 The single flag every reader checks is still `notes.reviewed`; `star/lessons.py` is the only writer that
 sets it for a lesson.

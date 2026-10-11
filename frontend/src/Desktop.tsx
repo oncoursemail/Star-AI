@@ -249,9 +249,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      streamRef.current='';sending.current=false
      setBusy(false);setStopping(false);setStreamingText('');setRetryText('');setNotice('')
      // What the turn taught is said once, plainly; the lesson itself is on the Projects page.
-     const learned=result?.learned as {accepted?:number;candidates?:number;replaced?:number}|undefined
+     const learned=result?.learned as {accepted?:number;candidates?:number;replaced?:number;not_kept?:number}|undefined
      if(learned?.accepted)setNotice(`Noted for this project: ${learned.accepted===1?'1 lesson':learned.accepted+' lessons'} from what you said.${learned.replaced?' It replaced an older lesson on the same subject.':''} Review it under Projects.`)
      else if(learned?.candidates)setNotice(`${learned.candidates===1?'1 note is':learned.candidates+' notes are'} waiting for your review under Projects.`)
+     // A statement the content rules turned away: say so, or the owner believes it was learned.
+     else if(learned?.not_kept)setNotice('That was not kept as a lesson: it reads like a permission or setting, or contains something like a key. Lessons cannot hold those.')
      if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current})
      setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
