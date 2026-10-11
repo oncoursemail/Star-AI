@@ -1,5 +1,6 @@
 """Build provenance is bounded, nonsecret, and not a claimed signature."""
 import json
+import pytest
 from star.build_info import read_build_info
 
 
@@ -49,3 +50,31 @@ def test_windows_release_pipeline_enforces_packaged_build_provenance():
     assert "STAR_EXPECTED_HEAD_SHA" in workflow
     assert "STAR_EXPECTED_HEAD_SHA" in launcher
     assert "--add-data 'star/build-info.json;star'" in workflow
+
+
+def test_local_build_has_exact_source_without_a_claimed_ci_run(tmp_path):
+    directory = tmp_path / "star"
+    directory.mkdir()
+    (directory / "build-info.json").write_text(json.dumps({
+        "schema": 1, "source_commit": "c" * 40, "head_commit": "c" * 40,
+        "build_event": "local_build", "run_id": "",
+    }), encoding="utf-8")
+    result = read_build_info(tmp_path)
+    assert result["stamped"]
+    assert result["build_event"] == "local_build"
+    assert result["source_commit"] == result["head_commit"] == "c" * 40
+    assert result["run_url"] == ""
+
+
+@pytest.mark.parametrize("changes", [
+    {"run_id": "123"}, {"run_id": None}, {"run_id": 0},
+    {"head_commit": "d" * 40}, {"run_id": False},
+])
+def test_local_metadata_cannot_forge_a_workflow_or_different_head(tmp_path, changes):
+    directory = tmp_path / "star"
+    directory.mkdir()
+    payload = {"schema": 1, "source_commit": "c" * 40, "head_commit": "c" * 40,
+               "build_event": "local_build", "run_id": ""}
+    payload.update(changes)
+    (directory / "build-info.json").write_text(json.dumps(payload), encoding="utf-8")
+    assert not read_build_info(tmp_path)["stamped"]
