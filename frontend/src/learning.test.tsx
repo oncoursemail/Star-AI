@@ -140,6 +140,25 @@ describe('reviewing lessons', () => {
     expect(screen.getByRole('tab', {name: /Set aside 1/})).toBeTruthy()
   })
 
+  it('shows the host\'s counts and says so when only the newest notes are loaded', async () => {
+    // The host sends the newest notes of each status and the true totals (star/lessons.py LIST_WINDOW).
+    const many = Array.from({length: 200}, (_, i) => lesson({id: 1000 - i, status: 'candidate', source_type: 'chat-correction',
+      text: `No, make part ${i} blue`, origin: 'You said this about one answer'}))
+    const invoke = vi.fn(async (action: string) => action === 'listLessons'
+      ? {lessons: [...many, lesson({id: 1})], counts: {candidate: 520, accepted: 1, rejected: 0, superseded: 0, merged: 0, pending: 520, uses: 0}}
+      : {})
+    render(<LearningPanel project="STAR" settings={settings} invoke={invoke}/>)
+    expect(await screen.findByText('No, make part 0 blue')).toBeTruthy()
+    expect(screen.getByText('520 waiting for review')).toBeTruthy()
+    expect(screen.getByRole('tab', {name: /Waiting 520/})).toBeTruthy()
+    expect(screen.getByText(/Showing the newest 200 of 520\./)).toBeTruthy()
+    expect(screen.getAllByRole('button', {name: /Approve/})).toHaveLength(200)
+    // The accepted lesson is on its tab even though 520 newer notes exist, and that tab is complete.
+    await userEvent.setup().click(screen.getByRole('tab', {name: /Accepted 1/}))
+    expect(screen.getByText('Always use task.wait instead of wait.')).toBeTruthy()
+    expect(screen.queryByText(/Showing the newest/)).toBeNull()
+  })
+
   it('approves a candidate only with the owner\'s explicit confirmation flag', async () => {
     const host = lessonHost(stored())
     const {user, refresh} = open(host)

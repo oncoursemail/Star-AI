@@ -54,6 +54,14 @@ LINE_OVERHEAD = 20         # "[#123 correction] " and the line break
 # about 90 tokens of lessons for a quick answer and 300 for a full one.
 RECALL_QUICK = (3, 360)
 RECALL_FULL = (8, 1200)
+# Rows the review page loads per status, newest first. Every accepted lesson that can be
+# recalled (RECALL_SCAN) is on the page, however many newer notes are waiting.
+LIST_WINDOW = {"accepted": RECALL_SCAN, "candidate": 200, "rejected": 50, "superseded": 50, "merged": 50}
+# Notes STAR makes by itself after a turn. While this many of them (and of the summaries made
+# from them) wait unreviewed, no further ones are recorded, so the table cannot grow with
+# every turn. The owner's own signals (their words, their thumbs) are never turned away.
+MACHINE_MADE = ("retry", "verified-fix", "doc")
+MAX_MACHINE_WAITING = 200
 
 
 class LessonRefused(ValueError):
@@ -517,6 +525,13 @@ class LessonStore:
         Always a candidate: there is no argument that makes this path trusted."""
         if source_type not in INFERRED:
             raise ValueError("Unknown inferred lesson source")
+        if source_type in MACHINE_MADE:
+            marks = ",".join("?" for _ in (*MACHINE_MADE, "summary"))
+            waiting = self.db.execute(
+                f"SELECT COUNT(*) FROM notes WHERE project=? AND status='candidate' AND source_type IN ({marks})",
+                (_project(project), *MACHINE_MADE, "summary")).fetchone()[0]
+            if waiting >= MAX_MACHINE_WAITING:
+                return Captured(None, "refused", "full")
         return self._insert(project=project, kind=kind, text=text, source=source, source_type=source_type,
                             evidence=evidence, accept=False, revision="candidate")
 
@@ -613,9 +628,19 @@ class LessonStore:
 
     def export(self, project: str) -> dict:
         """Every lesson of one project, with provenance, as plain data for the owner to keep."""
-        lessons = self.list(project, limit=500)
+        rows = self.db.execute(_SELECT + "WHERE n.project=? AND n.status IS NOT NULL ORDER BY n.id DESC",
+                               (_project(project),)).fetchall()
         return {"format": "star-lessons-v1", "project": project, "exported": now(),
-                "counts": self.counts(project), "lessons": [lesson.public() for lesson in lessons]}
+                "counts": self.counts(project), "lessons": [_lesson(row).public() for row in rows]}
+
+    def page(self, project: str) -> list[Lesson]:
+        """What the review page shows: the newest lessons of every status (LIST_WINDOW each),
+        newest first. Loading "the newest 200 of anything" would let waiting notes push an
+        accepted lesson off the page while it is still used in answers."""
+        found: list[Lesson] = []
+        for status, limit in LIST_WINDOW.items():
+            found += self.list(project, status, limit=limit)
+        return sorted(found, key=lambda lesson: -lesson.id)
 
     # -- using -----------------------------------------------------------------------------
 
@@ -891,8 +916,9 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
         if action == "listLessons":
             status = body.get("status")
             status = None if status in (None, "", "all") else str(status)
+            lessons = store.page(project) if status is None else store.list(project, status, limit=200)
             return {"project": project, "counts": store.counts(project),
-                    "lessons": [lesson.public() for lesson in store.list(project, status, limit=200)]}
+                    "lessons": [lesson.public() for lesson in lessons]}
         if action == "exportLessons":
             return store.export(project)
         if action == "reviewLesson":

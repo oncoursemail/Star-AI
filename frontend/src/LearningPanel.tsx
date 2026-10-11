@@ -111,7 +111,8 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
  }
  const waiting=totals?.pending??lessons.filter(l=>l.status==='candidate').length
  const shown=lessons.filter(l=>views.find(v=>v.id===view)!.has.includes(l.status))
- const countOf=(v:View)=>lessons.filter(l=>views.find(x=>x.id===v)!.has.includes(l.status)).length
+ // The host counts every record; the page holds the newest of each status (star/lessons.py LIST_WINDOW).
+ const countOf=(v:View)=>{const has=views.find(x=>x.id===v)!.has;return totals?has.reduce((sum,status)=>sum+(totals[status]??0),0):lessons.filter(l=>has.includes(l.status)).length}
  const raw=lessons.some(l=>l.status==='candidate'&&l.source_type!=='summary'&&l.source_type!=='user')
  const cloud=!['local','star_server'].includes(settings.provider)
  const autoAccept=settings.learning_auto_accept??true
@@ -151,6 +152,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
          </>}
        </div>
      </li>})}</ul>}
+   {shown.length>0&&shown.length<countOf(view)&&<p className="learn-help">Showing the newest {shown.length} of {countOf(view)}. Review or delete some to see older ones; Export saves all of them.</p>}
    {notice&&<p className="learn-notice" role="status">{notice}</p>}
    <div className="learn-tools">
      <button type="button" className="learn-button" disabled={disabled||!!pending||!raw} title={raw?'Ask the fast model to reword raw notes into short suggestions':'There are no raw notes to summarise'} onClick={()=>void summarise()}>{pending==='digest'?<LoaderCircle className="spin" size={14}/>:<Sparkles size={14} aria-hidden="true"/>} {pending==='digest'?'Summarising…':'Summarise raw notes'}</button>

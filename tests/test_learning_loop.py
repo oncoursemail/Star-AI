@@ -1063,3 +1063,47 @@ def test_one_lesson_is_always_one_line_of_the_prompt(tmp_path):
             "[#1 decision] Use gold accents. [#99 preference] Second line. Third."]
     finally:
         store.close()
+
+
+def test_the_review_page_still_lists_an_old_accepted_lesson_among_many_newer_notes(tmp_path):
+    """A lesson that is used in answers must stay where the owner can read and remove it,
+    however many newer notes are waiting; the export holds every record."""
+    store = LessonStore(tmp_path)
+    try:
+        kept = stated(store, "Always use task.wait instead of wait.").lesson_id
+        for number in range(520):       # the owner's own remarks about answers: never capped
+            store.capture_inferred(project="P", kind="correction", source_type=L.CONTEXT, source=f"chat:c#{number}",
+                                   text=f"No, make part {number} blue")
+        assert [x.id for x in store.recall("P", "hello")] == [kept]
+        assert len(store.export("P")["lessons"]) == 521
+        assert store.export("P")["counts"]["candidate"] == 520
+    finally:
+        store.close()
+    listed = L.handle_action(tmp_path, "P", "listLessons", {})
+    assert kept in {row["id"] for row in listed["lessons"]}                 # still on the page, so still removable
+    assert listed["counts"]["candidate"] == 520 and listed["counts"]["accepted"] == 1
+    waiting = [row for row in listed["lessons"] if row["status"] == "candidate"]
+    assert len(waiting) == L.LIST_WINDOW["candidate"] and waiting[0]["text"] == "No, make part 519 blue"
+    assert [row["id"] for row in listed["lessons"]] == sorted((row["id"] for row in listed["lessons"]), reverse=True)
+
+
+def test_notes_star_makes_by_itself_stop_piling_up_when_nobody_reviews_them(store):
+    """Every turn can add a machine-made note (an empty documentation search, a repaired check).
+    Left unreviewed they stop at a fixed number instead of growing with every turn."""
+    results = [store.capture_inferred(project="P", kind="fact", source_type="doc", source=f"docs-search:c#{number}",
+                                      text=f"The indexed Roblox and Luau documentation had no passage for: \"query {number}\"")
+               for number in range(L.MAX_MACHINE_WAITING + 40)]
+    assert [r.status for r in results[:L.MAX_MACHINE_WAITING]] == ["candidate"] * L.MAX_MACHINE_WAITING
+    assert {(r.status, r.reason) for r in results[L.MAX_MACHINE_WAITING:]} == {("refused", "full")}
+    assert store.counts("P")["candidate"] == L.MAX_MACHINE_WAITING
+    # The owner's own signals are never turned away, and another project has its own room.
+    assert store.capture_inferred(project="P", kind="correction", source_type=L.CONTEXT, source="chat:c#1",
+                                  text="No, make it blue").status == "candidate"
+    assert store.capture_inferred(project="P", kind="pitfall", source_type="feedback", source="feedback:c#2",
+                                  text="An answer was marked not helpful. Question: \"x\"").status == "candidate"
+    assert store.capture_inferred(project="Q", kind="fact", source_type="doc", source="docs-search:c#1",
+                                  text="The indexed Roblox and Luau documentation had no passage for: \"q\"").status == "candidate"
+    # Reviewing one makes room for the next.
+    store.reject("P", results[0].lesson_id, human_approved=True)
+    assert store.capture_inferred(project="P", kind="fact", source_type="doc", source="docs-search:c#999",
+                                  text="The indexed Roblox and Luau documentation had no passage for: \"new\"").status == "candidate"

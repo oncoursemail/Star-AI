@@ -101,6 +101,12 @@ Projects, "What STAR has learned": lessons by status (Waiting, Accepted, Set asi
 count, where each came from, approve / edit / reject / delete (delete asks twice) / restore, export to a
 JSON file you choose, and the three settings. Thumbs up and down sit under each stored answer.
 
+The page loads the newest records of each status (300 accepted, 200 waiting, 50 each of rejected,
+replaced and folded) with the true totals, and says when older ones are not shown; the export always
+holds every record. At most 200 notes STAR made by itself (failed-request retries, repaired checks,
+empty documentation searches, and summaries of them) wait at a time: further ones are not recorded
+until some are reviewed. Your own remarks and thumbs are never turned away.
+
 Bridge actions: `listLessons`, `reviewLesson {op, id, approved, text?}`, `exportLessons`,
 `messageFeedback {messageId, value}`, `digestLessons`; `rememberDecision` still saves a decision you type.
 
