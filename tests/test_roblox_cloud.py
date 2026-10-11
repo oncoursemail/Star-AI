@@ -7,6 +7,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import sys
+from types import ModuleType
 import xml.etree.ElementTree as ET
 
 import httpx
@@ -20,6 +22,7 @@ from tests.roblox_fakes import ACCOUNT, FULL_SCOPES, KEY, PLACE, UNIVERSE, FakeR
 
 REPO = Path(__file__).resolve().parents[1]
 EXAMPLE = REPO / "examples" / "roblox-test-place"
+_KEYRING_GET = rc._keyring_get
 
 
 @pytest.fixture(autouse=True)
@@ -36,6 +39,19 @@ def no_real_key(monkeypatch, tmp_path):
 @pytest.fixture
 def fake():
     return FakeRoblox()
+
+
+@pytest.fixture
+def isolated_keyring(monkeypatch, no_real_key):
+    """Exercise the real lazy keyring reader against an in-memory module only."""
+    module = ModuleType("keyring")
+    stored = {}
+    module.get_password = lambda service, name: stored.get((service, name))
+    module.set_password = lambda service, name, value: stored.update({(service, name): value})
+    module.delete_password = lambda service, name: stored.pop((service, name), None)
+    monkeypatch.setitem(sys.modules, "keyring", module)
+    monkeypatch.setattr(rc, "_keyring_get", _KEYRING_GET)
+    return module, stored
 
 
 def cloud_for(fake, tmp_path, **more) -> RobloxCloud:
@@ -87,12 +103,25 @@ def test_key_sources_in_order(monkeypatch, tmp_path, no_real_key):
     assert rc.load_key() == ("E" * 50, "environment")
 
 
-def test_saving_goes_to_the_keyring_and_a_failure_never_repeats_the_key(monkeypatch):
-    import keyring
-    stored = {}
-    monkeypatch.setattr(keyring, "set_password", lambda service, name, value: stored.update({(service, name): value}))
+def test_saving_goes_to_the_keyring_and_a_failure_never_repeats_the_key(monkeypatch, tmp_path, isolated_keyring):
+    keyring, stored = isolated_keyring
+    # Core installs may omit the desktop keyring dependency. That still supports
+    # the owner-selected key file and a sanitized refusal to save in the vault.
+    with monkeypatch.context() as missing:
+        missing.setitem(sys.modules, "keyring", None)
+        assert rc.load_key() == (None, "")
+        path = tmp_path / "star.env"
+        path.write_text(f"ROBLOX_OPEN_CLOUD_API_KEY={KEY}\n", encoding="utf-8")
+        missing.setenv(rc.KEY_FILE_ENV, str(path))
+        assert rc.load_key() == (KEY, "file")
+        with pytest.raises(CloudError) as unavailable:
+            rc.save_key(KEY)
+        assert KEY not in str(unavailable.value) and "star.env" in str(unavailable.value)
+        rc.clear_key()
+        assert stored == {}
     rc.save_key("  " + KEY + "\n")
     assert stored == {("STAR Intelligence", "roblox_open_cloud"): KEY}
+    assert rc.load_key() == (KEY, "keyring")
     for bad in ("", "short", "with space " + "x" * 30, None, 7):
         with pytest.raises(CloudError):
             rc.save_key(bad)
@@ -397,14 +426,13 @@ def test_waiting_actions_are_limited(fake, tmp_path):
         cloud.request_action("delete_everything", "no", {})
 
 
-def test_the_interface_actions(fake, tmp_path, monkeypatch, no_real_key):
-    import keyring
-    monkeypatch.setattr(keyring, "set_password", lambda _service, _name, value: no_real_key.update(key=value))
-    monkeypatch.setattr(keyring, "delete_password", lambda _service, _name: no_real_key.pop("key", None))
+def test_the_interface_actions(fake, tmp_path, isolated_keyring):
+    _keyring, stored = isolated_keyring
     ask = lambda action, **body: rc.handle_action(tmp_path, action, body, client=fake.client())  # noqa: E731
     assert ask("robloxStatus")["state"] == "no_key"
     saved = ask("robloxSaveKey", key=KEY)
     assert saved["key_present"] and saved["source"] == "keyring" and KEY not in json.dumps(saved)
+    assert stored == {("STAR Intelligence", "roblox_open_cloud"): KEY}
     tested = ask("robloxTestKey")
     assert tested["check"]["state"] == "valid" and KEY not in json.dumps(tested)
     with pytest.raises(PermissionError):
@@ -419,6 +447,7 @@ def test_the_interface_actions(fake, tmp_path, monkeypatch, no_real_key):
     assert ask("robloxDecideAction", id=action["id"], decision="approve", approved=True)["action"]["status"] == "done"
     assert ask("robloxClearTestExperience")["test_experience"] is None
     assert ask("robloxClearKey")["state"] == "no_key"
+    assert stored == {} and rc.load_key() == (None, "")
     with pytest.raises(PermissionError):
         rc.handle_action(tmp_path, "publishRobloxGame", {})
 
