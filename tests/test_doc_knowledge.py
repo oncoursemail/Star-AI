@@ -46,7 +46,7 @@ def test_explicit_address_wins_and_off_disables():
 
 @pytest.mark.parametrize("bad", [
     "http://8.8.8.8:8091",                 # public address
-    "http://knowledge.local:8091",         # host name: DNS could redirect the key
+    "http://169.254.169.254:8091",         # link-local metadata is never allowed
     "http://10.0.0.5:8091/v1",             # not this service's path
     "http://10.0.0.5:8091/../x",
     "http://user:pw@10.0.0.5:8091",
@@ -54,7 +54,7 @@ def test_explicit_address_wins_and_off_disables():
     "http://10.0.0.5",                     # no port
     "ftp://10.0.0.5:8091",
 ])
-def test_address_uses_the_same_private_ip_rule_as_the_server(bad):
+def test_address_uses_the_same_lan_rule_as_the_server(bad):
     with pytest.raises(ValueError, match="STAR Knowledge"):
         validate_knowledge_endpoint(bad)
     with pytest.raises(ValueError):

@@ -8,8 +8,8 @@ read-only questions:
   luau_check  does this Luau snippet compile and pass static type analysis (it is never run)
 
 Rules this module enforces:
-  * the address is the owner's setting, validated as a private IP literal exactly like the
-    STAR Server address; the model can never supply a host or a URL;
+  * the address is the owner's setting, validated as a local-network endpoint exactly like
+    the STAR Server address; the model can never supply a host or a URL;
   * the key is the STAR Server key from the OS keyring or environment, and it is only ever
     sent to that validated private address, never through a system proxy, never on a redirect;
   * every reply is size-capped and re-shaped field by field, so nothing the service returns
@@ -20,7 +20,6 @@ Rules this module enforces:
 from __future__ import annotations
 
 from dataclasses import dataclass
-import ipaddress
 import json
 import re
 from time import monotonic
@@ -52,11 +51,7 @@ class KnowledgeUnavailable(OSError):
 
 
 def validate_knowledge_endpoint(value) -> str:
-    """Canonical `scheme://private-ip:port` for the knowledge service, or raise ValueError.
-
-    Same fail-closed rule as the STAR Server address (private IP literal, explicit port, no
-    credentials, query or fragment); only the path differs: the service is served from the root.
-    """
+    """Canonical local-network URL for STAR Knowledge; only the path differs."""
     return validate_lan_endpoint(value, path="", label=_LABEL)
 
 
@@ -76,8 +71,7 @@ def knowledge_endpoint_for(settings) -> str:
     except ValueError:
         return ""
     url = urlsplit(server)
-    address = ipaddress.ip_address(url.hostname)
-    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
+    host = url.netloc.rsplit(":", 1)[0]  # already validated; works for DNS names and bracketed IPv6
     return f"{url.scheme}://{host}:{KNOWLEDGE_PORT}"
 
 
