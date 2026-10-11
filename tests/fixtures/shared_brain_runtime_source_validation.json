@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "kind": "development_source_validation",
+  "validation_id": "shared-brain-runtime-development-source-maintenance-v1",
+  "purpose": "Current development-only variant controls, separate from the original frozen retrieval comparison.",
+  "historical_fixture": "tests/fixtures/shared_brain_retrieval.json",
+  "historical_fixture_sha256": "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696",
+  "observed_parent_commit": "4b7058a5526d8e88b43d6a6d0f66e0782fe9516e",
+  "reviewed_dependency_commit": "52a7b5147297230c265a8c5b65f5221c1395bdd4",
+  "provenance": "Independent audit of all 12 development expected-source files found only lessons.py changed by the reviewed PR41 export path normalization. Its two development declarations and grounding excerpts are unchanged. Runtime intelligence.py is not an expected-source pin in this suite.",
+  "transport_rule": "Restore exact canonical CRLF bytes in disposable test copies only; pure LF is accepted only if reconstruction matches the explicit SHA256. Other content drift remains an error.",
+  "measurement_limits": "No holdout cases, queries, grading expectations, original source pins, archive or measurements changed. This overlay is not accepted by the benchmark and creates no new unseen-performance claim.",
+  "changed_sources": {
+    "star/lessons.py": {
+      "historical_crlf_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
+      "current_crlf_sha256": "8960237feeea5daef4b56067601b63f00337d1aa7050920e04d5c0e9707740e6",
+      "current_lf_sha256": "4c9ffc8a9a1f0188cbe8a096c6fb08b80ba5e63fd888350b25b1602e42d32c4e",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-08",
+          "qualified_symbol": "LessonStore.capture_inferred",
+          "current_declaration_line": 527,
+          "unchanged_grounding_excerpt": "Always a candidate: there is no argument that makes this path trusted."
+        },
+        {
+          "case_id": "retrieval-09",
+          "qualified_symbol": "LessonStore.recall",
+          "current_declaration_line": 657,
+          "unchanged_grounding_excerpt": "standing preferences and corrections, newest first, without repeats, within a budget."
+        }
+      ]
+    }
+  }
+}

@@ -1,12 +1,15 @@
-"""Independent controls from the frozen retrieval suite, on copied sources only.
+"""Independent development controls on a separately pinned current source copy.
 
-The fixture author owns these expectations. A proposed alias/recipe cannot edit
-them. Legacy and shared adapters read one official AST export of identical
-copied bytes; mutations never touch the real project graph or STAR profile.
+The original frozen retrieval expectations and measured source pins stay intact.
+A separate maintenance overlay identifies the current development source bytes;
+it is not a benchmark input. Legacy and shared adapters read one official AST
+export of identical copied bytes. No holdout runs or production mutations occur.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -23,6 +26,8 @@ from star.shared_brain.store import SharedBrain, serialize
 
 SUITE_SHA256 = "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696"
 SUITE_PATH = Path(__file__).parent / "fixtures" / "shared_brain_retrieval.json"
+SOURCE_VALIDATION_PATH = Path(__file__).parent / "fixtures" / "shared_brain_runtime_source_validation.json"
+SOURCE_VALIDATION_SHA256 = "0ce9202b56faa8b3a18c5404d3c263bdc11b627c4bff5eee81af13a1b236b5fb"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -98,9 +103,26 @@ def frozen_suite():
     return development, variants
 
 
-def test_real_frozen_sources_reconstruct_from_lf_checkout_without_graphify(frozen_suite):
+@pytest.fixture(scope="module")
+def current_validation_sources(frozen_suite):
     cases, _ = frozen_suite
     pins = {case["expected_source_file"]: case["grounding_sha256"] for case in cases.values()}
+    validation = json.loads(SOURCE_VALIDATION_PATH.read_text(encoding="utf-8"))
+    # Semantic JSON hashing survives Git's LF/CRLF transport without accepting
+    # changes to any source pin, provenance field or development expectation.
+    canonical = json.dumps(validation, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(canonical).hexdigest() == SOURCE_VALIDATION_SHA256
+    assert validation["kind"] == "development_source_validation"
+    assert validation["historical_fixture_sha256"] == SUITE_SHA256
+    assert set(validation["changed_sources"]) == {"star/lessons.py"}
+    for relative, current in validation["changed_sources"].items():
+        assert current["historical_crlf_sha256"] == pins[relative]
+        pins[relative] = current["current_crlf_sha256"]
+    return pins, validation
+
+
+def test_current_development_sources_reconstruct_from_lf_checkout_without_graphify(current_validation_sources):
+    pins, _ = current_validation_sources
     for relative, expected_sha in pins.items():
         raw = (PROJECT_ROOT / relative).read_bytes()
         lf_transport = raw.replace(b"\r\n", b"\n")
@@ -111,17 +133,73 @@ def test_real_frozen_sources_reconstruct_from_lf_checkout_without_graphify(froze
         assert frozen_source_bytes(restored, expected_sha) == restored
 
 
-@pytest.fixture
-def copied_project(tmp_path, frozen_suite):
-    pytest.importorskip("graphify")
+def test_current_overlay_preserves_development_symbol_grounding(frozen_suite, current_validation_sources):
     cases, _ = frozen_suite
+    _, validation = current_validation_sources
+    for relative, current in validation["changed_sources"].items():
+        text = (PROJECT_ROOT / relative).read_text(encoding="utf-8")
+        declarations = {}
+        def visit(node, ancestors=()):
+            for child in ast.iter_child_nodes(node):
+                qualified = ancestors
+                if isinstance(child, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+                    qualified = (*ancestors, child.name)
+                    declarations[".".join(qualified)] = child
+                visit(child, qualified)
+        visit(ast.parse(text))
+        expected = {case_id for case_id, case in cases.items() if case["expected_source_file"] == relative}
+        assert {record["case_id"] for record in current["development_grounding"]} == expected
+        for record in current["development_grounding"]:
+            case = cases[record["case_id"]]
+            assert record["qualified_symbol"] == case["expected_qualified_symbol"]
+            assert record["unchanged_grounding_excerpt"] == case["grounding_excerpt"]
+            declaration = declarations[record["qualified_symbol"]]
+            assert declaration.lineno == record["current_declaration_line"]
+            assert record["unchanged_grounding_excerpt"] in ast.get_source_segment(text, declaration)
+        normalized = (PROJECT_ROOT / relative).read_bytes().replace(b"\r\n", b"\n")
+        assert b"\r" not in normalized
+        assert hashlib.sha256(normalized).hexdigest() == current["current_lf_sha256"]
+
+
+def test_historical_pin_still_rejects_current_dependency_bytes(current_validation_sources):
+    _, validation = current_validation_sources
+    for relative, current in validation["changed_sources"].items():
+        raw = (PROJECT_ROOT / relative).read_bytes()
+        with pytest.raises(AssertionError, match="Source content differs"):
+            frozen_source_bytes(raw, current["historical_crlf_sha256"])
+        with pytest.raises(AssertionError, match="Source content differs"):
+            frozen_source_bytes(raw + b"\n# unreviewed source drift\n", current["current_crlf_sha256"])
+
+
+def test_benchmark_refuses_historical_lessons_before_query_or_store(frozen_suite, tmp_path, monkeypatch):
+    cases, _ = frozen_suite
+    # A development-only one-case guard probe must abort before any retrieval,
+    # store construction or timing; it is not another comparison measurement.
+    probe = tmp_path / "historical-development-guard.json"
+    probe.write_text(json.dumps({"cases": [cases["retrieval-08"]]}), encoding="utf-8")
+    spec = importlib.util.spec_from_file_location(
+        "shared_brain_benchmark_guard", PROJECT_ROOT / "scripts/shared_brain_benchmark.py")
+    benchmark = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(benchmark)
+    def forbidden(*args, **kwargs):
+        pytest.fail("Historical source refusal must precede retrieval and store access")
+    monkeypatch.setattr(benchmark, "GraphifyGraph", forbidden)
+    monkeypatch.setattr(benchmark, "SharedBrain", forbidden)
+    with pytest.raises(ValueError, match="Fixture source changed"):
+        benchmark.measure(PROJECT_ROOT, probe, split="development", repeats=1)
+
+
+@pytest.fixture
+def copied_project(tmp_path, current_validation_sources):
+    pytest.importorskip("graphify")
     root = tmp_path / "copied-project"
     root.mkdir()
-    expected_hashes = {case["expected_source_file"]: case["grounding_sha256"] for case in cases.values()}
+    expected_hashes, _ = current_validation_sources
     for relative, expected_sha in expected_hashes.items():
         raw = (PROJECT_ROOT / relative).read_bytes()
         # An LF Git transport is accepted only if the test copy is restored to
-        # exactly the pre-disclosure source bytes, proven by the existing pin.
+        # exactly the separately identified development-validation source bytes.
+        # Original benchmark pins remain unchanged and are not overridden there.
         raw = frozen_source_bytes(raw, expected_sha)
         assert hashlib.sha256(raw).hexdigest() == expected_sha, f"Source drift: {relative}"
         destination = root / relative
