@@ -173,7 +173,7 @@ def test_a_scripted_model_calls_the_skill_catalogue_and_gets_the_real_list(desk)
 
 
 EVERYTHING_PROMPT = (
-    "Research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
+     "Calculate 2 + 2, then research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
     "video tutorial, read the docs, check the Open Cloud data store, look at the graph of the codebase, "
     "list the MCP connector tool catalog, build a custom tool, and delegate to the research team.")
 
