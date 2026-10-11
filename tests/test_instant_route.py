@@ -330,5 +330,6 @@ def test_decision_overhead_benchmark():
     for _ in range(count):
         decide_instant_route(**BASE)
     microseconds = (time.perf_counter_ns() - start) / (count * 1000)
-    print(f"instant selector: {microseconds:.3f} microseconds per decision")
+    import warnings
+    warnings.warn(f"Instant routing decision overhead: {microseconds:.3f} microseconds/call over {count} calls", stacklevel=1)
     assert microseconds >= 0
