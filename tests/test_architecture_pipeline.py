@@ -91,6 +91,7 @@ def test_explicit_blender_path_fixed_script_argv_and_output_proof(tmp_path):
     argv = observed["argv"]
     assert argv[0] == str(exe) and "--disable-autoexec" in argv
     assert "--factory-startup" in argv and argv[-2].endswith("building-plan.json")
+    assert argv[argv.index("--python-exit-code") + 1] == "7"
     assert argv[argv.index("--python") + 1].endswith("scripts/blender_building.py")
     assert observed["kwargs"]["timeout"] == 180 and observed["kwargs"]["check"] is True
     assert "shell" not in observed["kwargs"]
