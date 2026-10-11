@@ -6,7 +6,7 @@ No direct main-branch changes, no PR merges, no workflow edits.
 import os
 import re
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import httpx
@@ -19,13 +19,23 @@ SAFE_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def valid_upload_path(path: str) -> bool:
-    """Source-only allowlist. Excludes local memory, secrets and CI policies."""
-    if path.startswith(("star/", "docs/", "tests/")) or path in {"README.md", "requirements.txt", "pyproject.toml"}:
-        suffix = path.rsplit("/", 1)[-1]
-        if ".." in path.split("/") or suffix.startswith(".") or "\\" in path:
-            return False
-        return suffix.endswith((".py", ".md", ".toml", ".txt"))
-    return False
+    """The only files STAR's own GitHub App may write to a branch: skill modules and their pages.
+
+    Exactly the self-builder's rule (`star.selfbuild.skill_path`; a test keeps the two equal):
+    `star/skills/*.py` except the package `__init__.py`, and `docs/skills/*.md`. Everything STAR is
+    judged or limited by stays out of its reach: tests, evaluation tasks and results, the gate, the
+    policy, this file, the build and dependency files, workflows and the rest of `star/` and `docs/`.
+    """
+    if not isinstance(path, str) or not path or len(path) > 170 or "\\" in path:
+        return False
+    parts = PurePosixPath(path)
+    if (path != parts.as_posix() or parts.is_absolute() or ".." in parts.parts
+            or any(part.startswith(".") for part in parts.parts)):
+        return False
+    if path == "star/skills/__init__.py":
+        return False  # what gets imported automatically stays under human control
+    return ((path.startswith("star/skills/") and path.endswith(".py")) or
+            (path.startswith("docs/skills/") and path.endswith(".md")))
 
 
 class GitHubApp:
