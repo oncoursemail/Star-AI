@@ -188,10 +188,10 @@ def desk(monkeypatch, tmp_path):
     chats.close()
 
 
-def run_saved_turn(desk, question, *, mode="fast"):
+def run_saved_turn(desk, question, *, mode="fast", **flags):
     desk.chats.add("STAR", "user", question, chat_id=desk.chat_id)
     answer = run_task(desk.settings, question, chat_id=desk.chat_id, mode=mode,
-                      on_event=desk.events.append)
+                      on_event=desk.events.append, **flags)
     desk.chats.add("STAR", "assistant", answer, chat_id=desk.chat_id)
     rows = desk.chats.recent_records("STAR", chat_id=desk.chat_id)
     record = json.loads(next((desk.home / "runs").glob("*/transcript.json")).read_text())
@@ -260,6 +260,36 @@ def test_instant_disabled_or_uninstalled_never_probes(monkeypatch, desk, flag):
     answer, rows, _ = run_saved_turn(desk, "What is a palindrome?")
     assert answer == "Server as selected."
     assert len(server_calls) == 1 and len(rows) == 2
+
+
+@pytest.mark.parametrize("case", ["attachment", "probe_error"])
+def test_attachment_and_failed_probe_keep_the_single_server_request(monkeypatch, desk, case):
+    probed = []
+
+    async def probe(*_):
+        probed.append("called")
+        if case == "probe_error":
+            raise RuntimeError("PC model endpoint unavailable")
+        return "pc-small"
+
+    monkeypatch.setattr(core, "loaded_local_model", probe)
+    monkeypatch.setattr(core, "answer_on_pc", lambda *_: pytest.fail("no local answer"))
+    requests = []
+
+    class Server:
+        async def create(self, **kwargs):
+            requests.append(kwargs)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content="Server answered once.", tool_calls=None))])
+
+    monkeypatch.setattr(core, "open_client", lambda *_: Client(Server()))
+    kwargs = {"attachment_count": 1} if case == "attachment" else {}
+    answer, rows, artifact = run_saved_turn(desk, "What is a palindrome?", **kwargs)
+    assert answer == "Server answered once."
+    assert [row["role"] for row in rows] == ["user", "assistant"]
+    assert len(requests) == 1
+    assert probed == ([] if case == "attachment" else ["called"])
+    assert artifact["answer_stats"]["brain"] == "server"
 
 
 def test_settings_and_sanitized_activity_are_nonsecret(tmp_path):
