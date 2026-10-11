@@ -81,6 +81,7 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
  const [note,setNote]=useState('')
  const [fileFound,setFileFound]=useState(false)
  const [fileError,setFileError]=useState('')
+ const testedSettings=useRef<AppSettings|null>(null)
  useEffect(()=>{let live=true;void invoke('serverKeyFileStatus').then(result=>{
    if(live&&result&&typeof result==='object'&&'found' in result)setFileFound(Boolean(result.found))
  });return()=>{live=false}},[invoke])
