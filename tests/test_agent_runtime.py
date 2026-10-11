@@ -187,3 +187,22 @@ def test_expired_stage_with_no_text_is_timed_out_not_success():
     result = asyncio.run(scenario())
     assert result.for_id("slow").status == "timed_out"
     assert not result.completed
+
+
+
+def test_timed_out_batch_does_not_starve_next_independent_stage():
+    async def worker(task, past):
+        if task.id in ("first", "second"):
+            raise TimeoutError("Deadline")
+        return "third specialist completed"
+
+    plan = TaskPlan([
+        Task("first", "research", "Examine first area"),
+        Task("second", "review", "Examine second area"),
+        Task("third", "ui", "Examine third independent area"),
+    ], max_parallel=2)
+    result = asyncio.run(run_plan(plan, worker))
+    assert result.peak_concurrency <= 2
+    assert result.for_id("first").status == "timed_out"
+    assert result.for_id("second").status == "timed_out"
+    assert result.for_id("third").status == "completed"
