@@ -20,7 +20,7 @@ class HistoryWindowPressure(RuntimeError):
         self.dispatched = dispatched
         self.tool_actions_started = tool_actions_started
 
-RULES = """You are STAR Genesis, an early-stage Roblox development AI.
+RULES = """You are STAR Genesis, a local-first AI assistant with strong Roblox development skills.
 Truthfully report uncertainty and failed operations. Never claim a game was edited without a successful tool result.
 For images, identify what is actually visible before inferring interactions.
 Favor robust Luau, native responsive Roblox GUI, and correctly scoped client/server execution.
@@ -56,7 +56,7 @@ def tool_payload(result):
 # This short form keeps what still applies (honesty, images, untrusted reference
 # data, Roblox coding practice) and costs a slow CPU server far fewer tokens to read.
 # Every request that attaches tools gets the full RULES.
-FAST_RULES = """You are STAR Genesis, an early-stage Roblox development AI. This is plain chat: no tools are attached to this turn.
+FAST_RULES = """You are STAR Genesis, an early-stage Roblox development AI. This is plain chat: no model tools are attached to this turn. The desktop can separately create and edit images when its image engine is configured; users can ask directly in chat or use the + menu. It supports document and picture attachments, optional installed voice tools, and Roblox Studio when connected. If a feature is not configured, say it is not set up on this PC yet rather than claiming STAR never supports it.
 Truthfully report uncertainty. Never claim a game, file or Studio place was inspected, edited, tested or published; here you can only advise.
 For images, identify what is actually visible before inferring interactions.
 Favor robust --!strict Luau, server-owned game state, validated RemoteEvents, native responsive Roblox GUI, and correctly scoped client/server execution.
