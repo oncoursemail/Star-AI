@@ -300,6 +300,60 @@ def foliage_script(quality: str = "medium") -> str:
             .replace("__DISTANCE__", str(distance)).replace("__BONES__", str(max_bones)))
 
 
+# Ambient effects remain bounded and review-only; the anchor and particle textures
+# must be created/approved in Studio by the owner.
+VFX_PRESETS = {
+    # rate, life_min, life_max, speed_min, speed_max, drag, gravity_y, color, size, glow, direction
+    "falling-snow": (14, 3, 6, 1, 3, 1.2, -4, "#EDF5FF", .22, 0, "Bottom"),
+    "floating-embers": (8, 1, 3, 1, 2, 2.0, 3, "#FF873C", .15, .7, "Top"),
+    "dust-motes": (5, 3, 7, .1, .5, 1.5, .5, "#E2D1B0", .10, 0, "Top"),
+}
+
+
+def vfx_recipe(name: str) -> str:
+    """Reviewable Attachment/ParticleEmitter Luau; never executed by this module."""
+    if name not in VFX_PRESETS:
+        raise ValueError(f"Unknown ambient VFX preset: {name}")
+    rate, life_min, life_max, speed_min, speed_max, drag, gravity_y, color, size, glow, direction = VFX_PRESETS[name]
+    return f'''-- STAR ambient effect preview: {name}
+-- Owner must add an Anchored BasePart named STAR_FX_Anchor in the correct scene position.
+-- Set an approved licensed Texture before production and profile overlapping transparent particles.
+local anchor = workspace:FindFirstChild("STAR_FX_Anchor")
+assert(anchor and anchor:IsA("BasePart"), "Create an anchored STAR_FX_Anchor part first")
+local attachment = anchor:FindFirstChild("STAR_FX_Attachment")
+if not attachment then
+    attachment = Instance.new("Attachment")
+    attachment.Name = "STAR_FX_Attachment"
+    attachment.Parent = anchor
+end
+local particles = attachment:FindFirstChild("STAR_Craft_{name}")
+if not particles then
+    particles = Instance.new("ParticleEmitter")
+    particles.Name = "STAR_Craft_{name}"
+    particles.Parent = attachment
+end
+particles.Enabled = true
+particles.Rate = {rate}
+particles.Lifetime = NumberRange.new({life_min}, {life_max})
+particles.Speed = NumberRange.new({speed_min}, {speed_max})
+particles.Drag = {drag}
+particles.WindAffectsDrag = true
+particles.Acceleration = Vector3.new(0, {gravity_y}, 0)
+particles.EmissionDirection = Enum.NormalId.{direction}
+particles.SpreadAngle = Vector2.new(65, 65)
+particles.Color = ColorSequence.new(Color3.fromRGB({_rgb(color)}))
+particles.Size = NumberSequence.new({size})
+particles.Transparency = NumberSequence.new({{
+    NumberSequenceKeypoint.new(0, 1),
+    NumberSequenceKeypoint.new(.2, .12),
+    NumberSequenceKeypoint.new(.8, .25),
+    NumberSequenceKeypoint.new(1, 1),
+}})
+particles.LightEmission = {glow}
+-- Avoid stacking multiple full-screen transparent emitters.
+'''
+
+
 def _write(path: Path | None, contents: str) -> None:
     if path is None:
         print(contents)
@@ -313,7 +367,7 @@ def _write(path: Path | None, contents: str) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline Roblox art-direction diagnostics and code previews")
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("inspect", "compare", "lighting", "foliage"):
+    for name in ("inspect", "compare", "lighting", "foliage", "vfx"):
         sub = commands.add_parser(name)
         if name in {"inspect", "compare"}:
             sub.add_argument("reference", type=Path)
@@ -321,6 +375,8 @@ def main(argv: list[str] | None = None) -> int:
             sub.add_argument("render", type=Path)
         if name == "lighting":
             sub.add_argument("preset", choices=sorted(PRESETS))
+        if name == "vfx":
+            sub.add_argument("preset", choices=sorted(VFX_PRESETS))
         if name == "foliage":
             sub.add_argument("--quality", choices=sorted(QUALITIES), default="medium")
         sub.add_argument("--out", type=Path)
@@ -332,8 +388,10 @@ def main(argv: list[str] | None = None) -> int:
             result = json.dumps(compare_render(args.reference, args.render), indent=2)
         elif args.command == "lighting":
             result = lighting_recipe(args.preset)
-        else:
+        elif args.command == "foliage":
             result = foliage_script(args.quality)
+        else:
+            result = vfx_recipe(args.preset)
         _write(args.out, result)
     except (OSError, ValueError) as exc:
         parser.error(str(exc))
