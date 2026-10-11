@@ -13,6 +13,8 @@ import json, sys
 for s in json.load(open(sys.argv[1], encoding="utf-8"))["sources"]:
     print(s["name"], s["repo"], s["branch"])
 PY
+  # One checkout is a work unit; use the same stale-aware lock check as Python jobs.
+  PYTHONPATH="$APP_DIR${PYTHONPATH:+:$PYTHONPATH}" python3 -m starkb.quiet
   DEST="$HOME_DIR/sources/$NAME"
   if [ -d "$DEST/.git" ]; then
     git -C "$DEST" fetch --quiet --depth 1 origin "$BRANCH"

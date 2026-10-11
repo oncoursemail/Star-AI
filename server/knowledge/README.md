@@ -62,7 +62,7 @@ short reply covers more pages (held-out questions: expected page in the top 5 fo
 
 - One request to the model server at a time.
 - Before every request or batch they wait while `/opt/star/lock` exists (someone is measuring timings). A lock older
-  than 20 minutes is treated as left behind and ignored; it is never removed by a job.
+  than 15 minutes is treated as left behind and ignored; it is never removed by a job.
 - A commit after every chunk or batch; SIGTERM finishes the request in flight and exits 0.
 - The index is rebuilt in one transaction. A failed fetch, a parse error or a result with under 80 % of the previous
   chunks leaves the working index untouched.

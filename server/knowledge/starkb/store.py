@@ -18,7 +18,9 @@ from pathlib import Path
 import re
 import sqlite3
 import subprocess
+import sys
 
+from .quiet import wait_while_locked
 from .chunking import Doc, chunk_markdown, chunk_reference_yaml
 
 EMBED_MAX_CHARS = 1600   # embedding input cap in characters; the server rejects inputs over 512 tokens, see embed.py
@@ -237,11 +239,18 @@ WALKERS = {"creator-docs": _creator_docs, "luau-site": _luau_site}
 
 def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = False,
           walkers: dict | None = None, source_metadata: dict | None = None,
-          preserve_other_sources: bool = False) -> dict:
+          preserve_other_sources: bool = False, log=None) -> dict:
     """Rebuild docs/chunks/FTS from the checked-out repositories, as one transaction (see the
     module text). Embeddings and generated questions are preserved. Raises RebuildRefused, and
     keeps the working index, when the result would have under MIN_REBUILD_RATIO of the chunks it
     had before; force=True skips that check."""
+    if log is None:
+        log = lambda message: print(message, file=sys.stderr)
+
+    def gate() -> None:
+        wait_while_locked(log=log)
+
+    gate()
     config = json.loads(manifest.read_text(encoding="utf-8"))
     db = connect(db_path)
     before = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
@@ -249,7 +258,8 @@ def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = Fal
     db.execute("BEGIN IMMEDIATE")
     try:
         stats = _build_into(db, sources_dir, config, walkers=walkers,
-                            source_metadata=source_metadata, preserve_other_sources=preserve_other_sources)
+                            source_metadata=source_metadata, preserve_other_sources=preserve_other_sources,
+                            gate=gate)
         after = stats["_all"]["chunks"]
         if before and after < before * MIN_REBUILD_RATIO and not force:
             raise RebuildRefused(f"the rebuild has {after} chunks, the working index has {before}; kept the working index")
@@ -263,6 +273,7 @@ def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = Fal
         db.rollback()
         db.close()
         raise
+    gate()
     db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
     db.commit()
     db.close()
@@ -270,7 +281,8 @@ def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = Fal
 
 
 def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = None,
-                source_metadata: dict | None = None, preserve_other_sources: bool = False) -> dict:
+                source_metadata: dict | None = None, preserve_other_sources: bool = False,
+                gate=None) -> dict:
     db.execute("DROP TABLE IF EXISTS chunks_fts")
     if preserve_other_sources:
         for source in config["sources"]:
@@ -287,6 +299,8 @@ def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = N
         questions.setdefault(sha, []).append(question)
     stats = {}
     for source in config["sources"]:
+        if gate:
+            gate()
         name = source["name"]
         repo = sources_dir / source.get("checkout", name)
         metadata = (source_metadata or {}).get(name)
@@ -297,6 +311,8 @@ def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = N
                     source["licence"], source["attribution"], now()))
         n_docs = n_chunks = n_chars = 0
         for doc in (WALKERS if walkers is None else walkers)[name](repo / source["content_root"], source["public_base"]):
+            if gate:
+                gate()
             if not doc.chunks:
                 continue
             doc_id = db.execute("INSERT INTO docs(source,path,kind,title,url) VALUES(?,?,?,?,?)",
@@ -304,6 +320,8 @@ def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = N
                                  doc.url)).lastrowid
             n_docs += 1
             for ord_, chunk in enumerate(doc.chunks):
+                if gate:
+                    gate()
                 sha = hashlib.sha256(embed_input(doc.title, chunk.heading, chunk.text).encode("utf-8")).hexdigest()
                 rowid = db.execute(
                     "INSERT INTO chunks(doc_id,ord,kind,heading,anchor,text,idents,text_sha) VALUES(?,?,?,?,?,?,?,?)",
@@ -313,6 +331,8 @@ def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = N
         stats[name] = {"commit": commit, "commit_date": commit_date, "docs": n_docs,
                        "chunks": n_chunks, "chars": n_chars}
     for row in db.execute("SELECT c.id,d.title,c.heading,c.idents,c.text,c.text_sha FROM chunks c JOIN docs d ON d.id=c.doc_id"):
+        if gate:
+            gate()
         db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
                    (*row[:5], "\n".join(questions.get(row[5], ()))))
     kinds = dict(db.execute("SELECT kind, COUNT(*) FROM chunks GROUP BY kind").fetchall())

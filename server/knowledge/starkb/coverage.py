@@ -8,8 +8,10 @@ must NOT be found.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
+from .quiet import wait_while_locked
 from .serve import MAX_SYMBOLS, _SYMBOL, api_lookup
 from .store import REFERENCE_GROUPS, connect_readonly
 
@@ -22,11 +24,13 @@ def symbols_from_sources(sources_dir: Path, manifest: Path) -> tuple[list[tuple[
     out: list[tuple[str, str]] = []
     unreadable: list[str] = []
     for source in json.loads(manifest.read_text(encoding="utf-8"))["sources"]:
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         ref = sources_dir / source["name"] / source["content_root"] / "reference" / "engine"
         if not ref.is_dir():
             continue
         for group in REFERENCE_GROUPS:
             for file in sorted((ref / group).glob("*.yaml")):
+                wait_while_locked(log=lambda message: print(message, file=sys.stderr))
                 try:
                     data = yaml.safe_load(file.read_text(encoding="utf-8"))
                     name = str(data["name"])
@@ -59,6 +63,7 @@ def run(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
     total: dict[str, int] = {}
     missing: list[dict] = []
     for start in range(0, len(symbols), MAX_SYMBOLS):
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         part = symbols[start:start + MAX_SYMBOLS]
         for (group, symbol), result in zip(part, api_lookup(db, [s for _, s in part])):
             total[group] = total.get(group, 0) + 1
@@ -73,6 +78,7 @@ def run(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
         + [f"Zq{o}Xx" for o in owners[:50]]
     wrongly_found = []
     for start in range(0, len(invented), MAX_SYMBOLS):
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         part = invented[start:start + MAX_SYMBOLS]
         wrongly_found += [s for s, r in zip(part, api_lookup(db, part)) if r.get("found")]
     db.close()
