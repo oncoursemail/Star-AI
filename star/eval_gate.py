@@ -30,6 +30,14 @@ _VALID_STATUS = {"pass", "fail", "error", "skipped"}
 _SCORED = ("pass", "fail")
 
 
+class _LoadedResult(dict):
+    """Result read by this module; caller-provided dicts cannot assert legacy status."""
+
+
+def _trusted_legacy(result: dict) -> bool:
+    return isinstance(result, _LoadedResult) and result.get("_legacy") is True
+
+
 @dataclass
 class Verdict:
     code: int
@@ -76,7 +84,7 @@ def load_result(path) -> dict:
     stored = Path(path).resolve()
     shipped = Path(__file__).resolve().parents[1] / "evals" / "results"
     data = {**data, "_legacy": stored.parent == shipped and stored.name in _LEGACY}
-    return data
+    return _LoadedResult(data)
 
 
 def _trial_summary(result: dict) -> bool:
@@ -116,12 +124,12 @@ def _validate(result: dict, label: str) -> list[str]:
             problems.append(f"{label}: missing run.{key}")
     for key in ("identity_sha256",):
         if not isinstance(suite.get(key), str) or not suite[key].strip():
-            if result.get("_legacy"):
+            if _trusted_legacy(result):
                 problems.append(f"{label}: legacy result missing suite.{key}; compatibility allowed")
             else:
                 problems.append(f"{label}: missing suite.{key}")
     if not isinstance(run.get("grader_sha256"), str) or not run.get("grader_sha256"):
-        if result.get("_legacy"):
+        if _trusted_legacy(result):
             problems.append(f"{label}: legacy result missing run.grader_sha256; compatibility allowed")
         else:
             problems.append(f"{label}: missing run.grader_sha256")
@@ -138,7 +146,7 @@ def _validate(result: dict, label: str) -> list[str]:
                                     or (status == "pass" and not record["passed"])
                                     or (status == "fail" and record["passed"])):
             problems.append(f"{label}: {tid}: inconsistent passed flag")
-        if status in _SCORED and not result.get("_legacy"):
+        if status in _SCORED and not _trusted_legacy(result):
             for key in ("passed", "reasons", "checks"):
                 if key not in record:
                     problems.append(f"{label}: {tid}: missing {key}")
