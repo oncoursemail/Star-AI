@@ -185,6 +185,36 @@ class ResearchWatcher:
             raise ValueError("No research observation with that ID")
         return {**dict(row), "untrusted_reference_only": True, "can_grant_permissions": False}
 
+    def nominate(self, observation_id: int, *, home: Path, project: str) -> dict:
+        """Send one documented excerpt to the existing human-reviewed lesson queue.
+
+        This never approves a note. The document cannot select the project,
+        author its own permissions, or supply code to execute. Repeated attempts
+        rely on LessonStore's duplicate detection. The owner must still review
+        the candidate in STAR's Projects -> Learning page.
+        """
+        observation = self.evidence(observation_id)
+        from .lessons import LessonStore
+        text = observation["excerpt"][:500].strip()
+        source = "research:" + observation["source_id"] + ":" + observation["digest"]
+        detail = "Untrusted official documentation candidate: " + observation["url"]
+        store = LessonStore(Path(home))
+        try:
+            result = store.capture_inferred(
+                project=project, kind="fact", text=text, source_type="doc",
+                source=source, evidence=detail[:900],
+            )
+        finally:
+            store.close()
+        return {
+            "source_id": observation["source_id"],
+            "digest": observation["digest"],
+            "lesson_id": result.lesson_id,
+            "status": result.status,
+            "reason": result.reason,
+            "automatically_trusted": False,
+        }
+
     def _mark(self, source_id: str, outcome: str, error_code: str = "") -> None:
         with self.db:
             self.db.execute(
