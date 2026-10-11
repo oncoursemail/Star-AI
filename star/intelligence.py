@@ -52,6 +52,7 @@ OBSIDIAN_TOOLS = (
           {"path": _s(500), "start_line": {"type": "integer", "minimum": 1, "maximum": 200000, "default": 1},
            "max_lines": _limit(250, 120)}, ("path",)),
     _tool("star_obsidian_list", "List up to 100 Markdown note paths in the authorized Obsidian vault.", {"limit": _limit(100, 60)}),
+    _tool("star_obsidian_links", "Find direct Obsidian wiki-links and backlinks to one selected Markdown note. Returns source note paths and line numbers, plus explicit partial-scan flags. Read only; never infer ambiguous relationships.", {"path": _s(500), "limit": _limit(40, 20)}, ("path",)),
 )
 GRAPHIFY_TOOLS = (
     _tool("star_graphify_query", "Query an existing Graphify graph.json for source-attributed codebase entities and relationships.", {"question": _s(220), "limit": _limit(15, 8)}, ("question",)),
@@ -105,7 +106,7 @@ ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRA
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 
 _SKILL_TRIGGER = re.compile(r"\b(skill|expert|workflow|tool|roblox|luau|ui|design|debug|build|fix|test|code|studio|script)\b", re.I)
-_VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan)\b", re.I)
+_VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan|backlinks?|wikilinks?|links?)\b", re.I)
 _GRAPH_TRIGGER = re.compile(r"\b(graphify|graph|architecture|codebase|dependenc\w*|relationships?|connections?|module|function|imports?|calls?|trace|impact|bug|scripts?)\b", re.I)
 _ROBLOX_TRIGGER = re.compile(r"\b(roblox|luau|devforum|studio|universe|obby|tycoon|gamepass|game.pass|battlegrounds|fps|roproxy)\b", re.I)
 _GAME_TRIGGER = re.compile(r"\b(games?|experiences?|types?|genres?|playing|players?|statistics|stats|visits|favorites|popular|compare|research|search|find|discover|trends?|universe|places?)\b", re.I)
@@ -238,6 +239,8 @@ class LocalIntelligence:
             return self.vault.read(args["path"], start_line=args.get("start_line", 1), max_lines=args.get("max_lines", 120))
         if name == "star_obsidian_list":
             return self.vault.list(limit=args.get("limit", 60))
+        if name == "star_obsidian_links":
+            return self.vault.links(args["path"], limit=args.get("limit", 20))
         if name == "star_graphify_query":
             return self.graph.query(args["question"], limit=args.get("limit", 8))
         if name == "star_graphify_explain":
