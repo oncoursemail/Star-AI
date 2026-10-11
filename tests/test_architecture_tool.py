@@ -1,0 +1,48 @@
+"""STAR chat can safely preview architecture without local write or Blender privileges."""
+from jsonschema import ValidationError
+import pytest
+
+from star.intelligence import LocalIntelligence
+
+REQUEST = {"name": "Stylized Workshop", "style": "industrial",
+           "width_studs": 48, "depth_studs": 24, "floors": 1, "bays": 4}
+
+
+def local_intelligence(tmp_path):
+    return LocalIntelligence(home=tmp_path, skills_enabled=False,
+                             graphify_enabled=False, roblox_research_enabled=False)
+
+
+def test_architecture_tool_is_discoverable_only_for_roblox_building_prompts(tmp_path):
+    local = local_intelligence(tmp_path)
+    tools = local.definitions("In my Roblox Studio game build a Blender building with real architecture")
+    assert [t["name"] for t in tools] == ["star_architecture_preview"]
+    assert local.definitions("Explain this GitHub codebase architecture") == []
+    assert local.definitions("hello") == []
+
+
+def test_architecture_tool_is_pure_read_only_and_reports_actual_geometry(tmp_path):
+    local = local_intelligence(tmp_path)
+    data = local.call("star_architecture_preview", REQUEST, enabled={"star_architecture_preview"})
+    assert data["openings"]["entrances"] == 1
+    assert data["openings"]["glazed_windows"] == 7
+    assert data["audit"]["valid"] is True, data["audit"]
+    assert data["roof"] == "flat"
+    assert data["dimensions_studs"] == [48, 24, 13]
+    assert data["output"].startswith("PLAN_ONLY:")
+    assert list(tmp_path.iterdir()) == []  # No Blender, output folder or Studio edit
+
+
+def test_architecture_tool_rejects_scope_and_bad_model_arguments(tmp_path):
+    local = local_intelligence(tmp_path)
+    with pytest.raises(PermissionError):
+        local.call("star_architecture_preview", REQUEST, enabled=set())
+    with pytest.raises(ValidationError):
+        local.call("star_architecture_preview", {**REQUEST, "python_script": "exec('x')"},
+                   enabled={"star_architecture_preview"})
+    with pytest.raises(ValidationError):
+        local.call("star_architecture_preview", {**REQUEST, "floors": True},
+                   enabled={"star_architecture_preview"})
+    with pytest.raises(ValueError, match="facade bay"):
+        local.call("star_architecture_preview", {**REQUEST, "bays": 8, "width_studs": 24},
+                   enabled={"star_architecture_preview"})
