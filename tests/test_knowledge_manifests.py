@@ -75,7 +75,7 @@ def test_the_existing_roblox_index_has_not_been_extended():
     lambda doc: doc.update(schema_version=True),
     lambda doc: doc["source"].update(url="http://example.org/docs"),
     lambda doc: doc["source"].update(kind=[]),
-    lambda doc: doc["source"].update(url="https://example.org/unsafe\\nline"),
+    lambda doc: doc["source"].update(url="https://example.org/unsafe" + chr(10)),
     lambda doc: doc["licence"]["text"].update(evidence_quote=""),
     lambda doc: doc["licence"]["text"].update(evidence_url="javascript:alert(1)"),
     lambda doc: doc["licence"]["text"].update(redistribution_allowed="yes"),
