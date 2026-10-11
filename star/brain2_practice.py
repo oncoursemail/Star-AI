@@ -221,7 +221,7 @@ class PracticeLedger:
             self.db.rollback()
             raise
 
-    def acknowledge(self, cycle_id: int, *, human_approved=False):
+    def acknowledge(self, cycle_id: int, *, plan: PracticePlan, human_approved=False):
         """Human-only acknowledgement after inspecting the Roblox version history."""
         if human_approved is not True:
             raise PermissionError("The operator must explicitly acknowledge the uncertain run")
@@ -231,8 +231,10 @@ class PracticeLedger:
         try:
             changed = self.db.execute(
                 "UPDATE practice_cycles SET status='acknowledged',finish_utc=? WHERE id=? "
+                "AND project=? AND universe_id=? AND place_id=? "
                 "AND status IN ('running','unknown')",
-                (self.clock().astimezone(timezone.utc).isoformat(timespec="seconds"), cycle_id),
+                (self.clock().astimezone(timezone.utc).isoformat(timespec="seconds"),
+                 cycle_id, plan.project, *plan.target),
             )
             if changed.rowcount != 1:
                 raise PracticeRefused("No unknown practice run has this identifier")
@@ -346,7 +348,7 @@ def main(argv=None) -> int:
         ledger = PracticeLedger(args.home / "brain2-practice.sqlite3")
         try:
             if args.acknowledge is not None:
-                ledger.acknowledge(args.acknowledge, human_approved=True)
+                ledger.acknowledge(args.acknowledge, plan=plan, human_approved=True)
                 print(json.dumps({"status": "acknowledged", "cycle_id": args.acknowledge}))
                 return 0
             if not args.run:
