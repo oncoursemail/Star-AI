@@ -372,7 +372,9 @@
   background: var(--star-bg);
 }
 .shell .toast {
-  top: calc(var(--star-topbar-h) + var(--star-2));
+  position: static;
+  flex: 0 0 auto;
+  margin: var(--star-2) var(--star-4);
   bottom: auto;
   border: 1px solid var(--star-stroke);
   border-radius: var(--star-r-md);
