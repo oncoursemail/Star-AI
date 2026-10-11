@@ -11,7 +11,7 @@ import {SiteChapters,SiteLimits} from './SiteChapters'
 import {SiteProgress} from './SiteProgress'
 import {SiteDownload} from './SiteDownload'
 import {LINKS,SOURCE_VERSION,formatBytes,formatDate,releaseFiles} from './siteContent'
-import {fetchLatestStableRelease,latestStable} from './githubPublic'
+import {compareVersions,fetchLatestStableRelease,latestStable} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 import {delay,staticMode,useActiveSection,useHeaderState,useProgress,useReveal} from './siteHooks'
 import './site.css'
@@ -102,6 +102,13 @@ export function Landing(){
       <ul className="sw-hero-facts sw-enter" style={delay(220)} aria-label="Local workspace essentials">
        <li>Windows workspace</li><li>Local or LAN model</li><li>Project-scoped context</li>
       </ul>
+      {latest&&compareVersions(SOURCE_VERSION,latest.tag)>0&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
+       <strong>Published: {latest.tag}.</strong> Source v{SOURCE_VERSION} features shown below are still in development.
+       <a href="#download"> Get the verified build</a>.
+      </p>}
+      {!latest&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
+       Release details could not be verified here. <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check GitHub Releases</a>.
+      </p>}
      </div>
      <div className="sw-hero-side">
      <SiteMascotHero/>
