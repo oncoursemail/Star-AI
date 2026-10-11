@@ -9,7 +9,7 @@ import re
 import sqlite3
 import time
 from .analytics import AnalyticsStore
-from dataclasses import dataclass, asdict, replace
+from dataclasses import dataclass, asdict, replace, field
 from typing import Callable
 
 from .agent import execute, HistoryWindowPressure
@@ -28,6 +28,8 @@ from .brain_router import select_route, validate_alias, is_roblox_task, deep_req
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs
+from . import studio_loop
+from .studio_connections import default_target, validate_target
 
 
 def app_data() -> Path:
@@ -50,7 +52,11 @@ class Settings:
     project: str = 'STAR'
     workspace: str = ''
     studio_id: str = ''
+    studio_target: str = field(default_factory=default_target)
     studio_edit: bool = False
+    # The sandbox rule itself is code (star/studio_loop.py): edits only in a blank unsaved place.
+    studio_own_places: bool = False       # ...and, when on, in places owned by STAR's own Roblox account
+    studio_luau: bool = False             # let STAR run Luau in that sandbox (needed to create instances)
     workspace_edit: bool = False
     max_calls: int = 12
     context_chars: int = 26000
@@ -104,9 +110,13 @@ class Settings:
         if not file.exists():
             return cls()
         raw = json.loads(file.read_text(encoding='utf-8'))
+        if 'studio_target' not in raw:
+            # An old ID was selected on an unknown implicit route; never rebind its grants.
+            raw = {**raw, 'studio_target': 'local_pc', 'studio_id': '', 'studio_edit': False, 'studio_luau': False}
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     def validate(self):
+        validate_target(self.studio_target)
         for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
             validate_alias(getattr(self, field), field=field)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
@@ -124,7 +134,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references')):
+                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -550,16 +560,9 @@ def query_models(settings: Settings) -> list[str]:
         return [str(item['id']) for item in data.get('data', []) if isinstance(item, dict) and item.get('id')]
 
 
-def check_studio():
-    from .studio import connect, list_tools
-    async def run():
-        async with connect() as session:
-            tools = await list_tools(session)
-            if 'list_roblox_studios' not in {t['name'] for t in tools}:
-                raise RuntimeError('Installed Studio MCP does not expose list_roblox_studios')
-            result = await session.call_tool('list_roblox_studios', arguments={})
-            return result.model_dump(by_alias=True, exclude_none=True)
-    return asyncio.run(run())
+def check_studio(settings: Settings | None = None):
+    from .studio_connections import discover
+    return asyncio.run(discover(settings or Settings()))
 
 
 def redact_for_logs(value):
@@ -752,7 +755,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
-    from .studio import connect, list_tools
     settings.validate()
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
@@ -1005,10 +1007,23 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
                         try:
                             if allow_studio:
-                                async with connect() as session:
-                                    result = await execute(**kwargs, studio=session,
-                                        discovered=await list_tools(session), studio_id=settings.studio_id,
-                                        may_edit=settings.studio_edit)
+                                from .local_mcp import connect_studio
+                                # One guarded connection per attempt: a retry below happens only when
+                                # nothing was sent to the model or to Studio, so nothing is replayed.
+                                async with connect_studio(settings, home) as guarded:
+                                    # The tool list is the connector's own, read now. What STAR may do in
+                                    # the open place is decided in code from what that place is.
+                                    discovered = guarded.discovered
+                                    sections = list(kwargs.get('turn_sections') or ())
+                                    # The verdict's text can quote the place; like every other section
+                                    # it may not look like lessons (guard_sections).
+                                    sections.extend(learning.guard_sections(
+                                        [('ROBLOX STUDIO PLACE', guarded.verdict.reason)]))
+                                    outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,
+                                        discovered=discovered, studio_id=settings.studio_id,
+                                        may_edit=guarded.verdict.editable,
+                                        allow_luau=guarded.verdict.editable and settings.studio_luau)
+                                    result = studio_loop.with_report(outcome, guarded)
                             else:
                                 result = await execute(**kwargs)
                         except HistoryWindowPressure as pressure:

@@ -33,6 +33,7 @@ from .chat_images import chat_image, generate_chat_image
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
+from .studio_connections import connection_status, validate_target, select_instance
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
@@ -41,10 +42,12 @@ from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher,
                             handle as handle_media_action)
 from . import media_places
 from .chat_media import prepare_turn
+from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
+                           handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
-    'installBrain','startBrain','listModels','testModel','discoverStudio',
+    'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
@@ -59,6 +62,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
 # Media: where images, voice and video run, the image engine on this PC, and a project's
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
+# Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
+# the model asked for (star/roblox_cloud.py, docs/ROBLOX_ACCESS.md). Never a publish action itself.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -74,7 +80,7 @@ PERMITTED_SETTINGS = frozenset({
     'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model',
     'router_models_dir','router_context','gpu_layers','roblox_research_enabled',
     'tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider',
-    'project','workspace','studio_id','studio_edit','workspace_edit','max_calls',
+    'project','workspace','studio_target','studio_edit','studio_own_places','studio_luau','workspace_edit','max_calls',
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
@@ -90,9 +96,14 @@ def apply_setting_changes(settings: Settings, changes: dict) -> Settings:
     """Copy only allowlisted fields from the interface onto saved settings."""
     if not isinstance(changes, dict):
         raise ValueError('Invalid settings')
+    changed_target = 'studio_target' in changes and validate_target(changes['studio_target']) != settings.studio_target
     for key, value in changes.items():
         if key in PERMITTED_SETTINGS:
             setattr(settings, key, value)
+    if changed_target:
+        settings.studio_id = ''
+        settings.studio_edit = False
+        settings.studio_luau = False
     return settings
 
 
@@ -389,6 +400,16 @@ def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
         emit(request_id, 'error', f'{type(exc).__name__}: {str(exc)[:350]}')
 
 
+def roblox_state(home: Path) -> dict:
+    """Roblox connection summary for the interface: no network call and never the key."""
+    try:
+        return RobloxCloud(home=home).status()
+    except Exception:
+        return {'key_present': False, 'source': '', 'state': 'no_key', 'message': '', 'last_check': None,
+                'test_experience': None, 'pending_actions': 0, 'denied_place_ids': [],
+                'denied_universe_ids': []}
+
+
 def file_allowed(path: Path, approved: set[Path]) -> Path:
     resolved = path.expanduser().resolve(strict=True)
     if resolved not in approved:
@@ -398,7 +419,7 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
     return resolved
 
 
-def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dict:
+def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
     settings = Settings.load(settings_file)
     home = app_data()
     chats = Conversations(home / 'conversations.sqlite3')
@@ -443,8 +464,10 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dic
         'learning':learning_status(home,settings.project),
         'credentials':credential_status(),
         'server':server_status(settings),
+        'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
+        'studio':connection_status(settings, studio_status),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -490,6 +513,7 @@ def launch():
             self.host = host
             self.settings_file = app_data() / 'settings.json'
             self.runtime = Runtime()
+            self.studio_status = None
             self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='star-react')
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
@@ -733,7 +757,7 @@ def launch():
                         self._run(rid,action,media_worker)
                         return json.dumps({'ok':True,'pending':True,'requestId':rid})
                     return json.dumps({'ok':True,'data':media_worker()},default=str)
-                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -787,6 +811,12 @@ def launch():
                             return json.dumps({'ok':True,'data':{'cancelled':True}})
                         data=write_export(Path(filename),data)
                     return json.dumps({'ok':True,'data':data},default=str)
+                if action in ROBLOX_ACTIONS:
+                    # Explicit owner clicks in Settings. The ones that talk to Roblox run off the UI thread.
+                    if action in ROBLOX_NETWORK_ACTIONS:
+                        self._run(rid,action,lambda:handle_roblox_action(app_data(),action,body))
+                        return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                    return json.dumps({'ok':True,'data':handle_roblox_action(app_data(),action,body)})
                 if action=='digestLessons':
                     # "Summarise now": the same background step, started by the owner for even one capture.
                     if self.active_task:raise RuntimeError('Wait for the current answer before summarising captures')
@@ -821,6 +851,8 @@ def launch():
                         store.close()
                     return json.dumps({'ok':True,'data':{'notes':notes}})
                 if action=='saveSettings':
+                    if self.active_task:
+                        raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
@@ -1029,7 +1061,34 @@ def launch():
                         return asyncio.run(gateway.probe(server))
                     self._run(rid,action,worker)
                 elif action=='discoverStudio':
-                    self._run(rid,action,lambda:{'studios':check_studio()})
+                    target = validate_target(body.get('target'))
+                    def discover_worker():
+                        current = Settings.load(self.settings_file)
+                        if current.studio_target != target:
+                            raise ValueError('Studio connection changed; test the selected connection again')
+                        self.studio_status = check_studio(current)
+                        return self.studio_status
+                    self._run(rid,action,discover_worker)
+                elif action=='selectStudio':
+                    if self.active_task:
+                        raise RuntimeError('Wait for the current task before selecting a Studio')
+                    identifier, target = body.get('studio_id'), validate_target(body.get('target'))
+                    def select_worker():
+                        import asyncio
+                        current = Settings.load(self.settings_file)
+                        if current.studio_target != target:
+                            raise ValueError('Studio connection changed; test the selected connection again')
+                        report = asyncio.run(select_instance(current, identifier))
+                        latest = Settings.load(self.settings_file)
+                        if latest.studio_target != target or self.active_task:
+                            raise ValueError('Studio connection changed while selecting; try again')
+                        latest.studio_id = current.studio_id
+                        latest.studio_edit = False
+                        latest.studio_luau = False
+                        latest.save(self.settings_file)
+                        self.studio_status = report
+                        return report
+                    self._run(rid,action,select_worker)
                 elif action=='checkUpdates':
                     from .updates import get_latest
                     self._run(rid,action,lambda:asdict(get_latest()))

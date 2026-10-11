@@ -25,6 +25,8 @@ STAR is an experimental **local-first** AI-development application. This is not 
 - `star/agent.py`: model/tool-calling loop, tool outcomes and context.
 - `star/policy.py`: executable scope enforcement (not just prompts).
 - `star/studio.py`: official Roblox Studio local MCP transport.
+- `star/studio_loop.py`: the Studio build loop; decides in code whether the open place may be edited (a blank unsaved place, or STAR's own account when the owner allowed it), keeps the change journal and undo ([docs/ROBLOX_ACCESS.md](docs/ROBLOX_ACCESS.md)).
+- `star/roblox_cloud.py`, `star/roblox_pipeline.py`, `star/roblox_place.py`: Roblox Open Cloud with the owner's API key. Documented endpoints only; every write goes to one owner-chosen private test experience and waits for the owner's approval; the place deny-list is code.
 - `star/github_app.py`: short-lived, repository-restricted installation tokens and draft PRs only.
 - `star/selfbuild.py`: syntax-checked candidate skills, not verified or auto-executed.
 - `star/knowledge.py`: project-scoped notes and immutable local reference artifacts.
