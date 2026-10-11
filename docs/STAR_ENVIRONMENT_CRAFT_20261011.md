@@ -46,11 +46,13 @@ python -m star.environment_craft inspect path/to/reference.png --out scene_refer
 python -m star.environment_craft compare path/to/reference.png path/to/studio_screenshot.png --out render_review.json
 python -m star.environment_craft lighting winter-shrine --out lighting_review.luau
 python -m star.environment_craft foliage --quality medium --out foliage_review.client.luau
+python -m star.environment_craft vfx falling-snow --out snow_review.luau
 ~~~
 
 - Inspect: source SHA256, image dimensions, six-color palette, mean RGB, 3×3 luminance grid and coarse edge-density proxy.
 - Compare: per-pixel RGB MAE, luminance, grid and detail change, with context-specific review suggestions. Rejects camera aspect differences >3%. Not semantic image similarity, segmentation, photogrammetry or exact geometry analysis.
 - Lighting: ten artist-authored starting points using Atmosphere, ColorCorrection and Bloom; not measured values extracted from the source artist scene. No auto execution.
+- Ambient VFX: three review-only ParticleEmitter templates for falling snow, floating embers and dust motes. Create a STAR_FX_Anchor yourself; add approved textures and profile transparency/overdraw before use.
 - Foliage: preview-only client LocalScript for tagged static Model trees. Tag as STAR_WindTree; weight manually rigged Bone descendants with a WindWeight (0..1). Low/medium/high caps: 128/256/512 participating bones, 10/15/20 Hz, 100/160/220 stud cull distance. Budgets require device benchmarks.
 - Safety: accepts local PNG/JPEG/WebP at most 20 MB and 32 megapixels, rejects symlinks and overwrite targets. No DataModel reads/writes, network, model weight changes or tool grants.
 
