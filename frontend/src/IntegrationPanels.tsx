@@ -79,7 +79,20 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
  const [keyBusy,setKeyBusy]=useState(false)
  const [keyStored,setKeyStored]=useState<boolean|null>(null)
  const [note,setNote]=useState('')
+ const [fileFound,setFileFound]=useState(false)
+ const [fileError,setFileError]=useState('')
+ useEffect(()=>{let live=true;void invoke('serverKeyFileStatus').then(result=>{
+   if(live&&result&&typeof result==='object'&&'found' in result)setFileFound(Boolean(result.found))
+ });return()=>{live=false}},[invoke])
  const {testing,report,run}=useServerTest(invoke,disabled)
+ useEffect(()=>{
+   if(!report?.ok||draft.provider==='star_server')return
+   const next={...draft,provider:'star_server'}
+   void invoke('saveSettings',{settings:next}).then(saved=>{
+     if(saved){onChange(next);setNote('Connected to STAR Server.')}
+     else setNote('Server responded, but settings could not be saved.')
+   })
+ },[report])
  const hasKey=keyStored??Boolean(credentials?.star_server)
  const change=(patch:Partial<AppSettings>)=>onChange({...draft,...patch})
  const saveKey=async()=>{
@@ -90,6 +103,15 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
      const saved=await invoke('saveProviderKey',{provider:'star_server',key:field.value.trim()})
      if(saved){setKeyStored(true);setNote('Server key saved in Windows Credential Manager.')}
    }finally{field.value='';setKeyTyped(false);setKeyBusy(false)}
+ }
+ const importKey=async()=>{
+   if(disabled||keyBusy)return
+   setKeyBusy(true);setFileError('')
+   try{
+     const saved=await invoke('importServerKeyFile')
+     if(saved){setKeyStored(true);setNote('Server key imported into the OS vault.')}
+     else setFileError('Key file could not be read or saved securely.')
+   }finally{setKeyBusy(false)}
  }
  const forgetKey=async()=>{
    if(disabled||keyBusy)return
@@ -124,6 +146,8 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
        {hasKey&&<span className="integrated-connected"><ShieldCheck size={14}/> Key present in OS vault</span>}
      </div>
    </div>
+   {fileFound&&<div className="integrated-actions"><span>A server key file was found on this PC</span><button type="button" className="secondary-button" disabled={disabled||keyBusy} onClick={()=>void importKey()}>Use it</button></div>}
+   {fileError&&<p role="alert" className="integrated-error">{fileError}</p>}
    <p className="integrated-help">Use the private IP address of your server, ending in /v1. Prompts go only to that address, never to a cloud provider. Plain http is not encrypted, so use it only on a network you trust.</p>
    <details><summary className="integrated-help">Server limits (optional)</summary>
      <div className="integrated-key-controls">
