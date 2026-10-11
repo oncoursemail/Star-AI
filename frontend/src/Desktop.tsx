@@ -531,7 +531,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
  const shownRun=busy?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
- const timeline=!query&&shownRun&&(isRich(shownRun)||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
+ const timeline=!query&&shownRun&&(isRich(shownRun)||!!shownRun.brain||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
  let lastUser=-1,lastStar=-1
  messages.forEach((m,i)=>{if(m.role==='user')lastUser=i;else if(m.role==='assistant')lastStar=i})
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
