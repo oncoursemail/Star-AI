@@ -393,7 +393,7 @@ class Promoter:
         else:
             current = self._setting(target)
         if current != json.loads(row["after_json"]):
-            raise RuntimeError("Target changed since promotion; refusing to overwrite it")
+            raise PromotionConflict("Target changed since promotion; refusing to overwrite it")
         self._restore(target, json.loads(row["before_json"]))
         self.db.execute("UPDATE promoter_changes SET state=? WHERE id=?", (reason, promotion_id))
         self.db.execute(
