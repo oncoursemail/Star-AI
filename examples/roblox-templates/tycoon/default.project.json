@@ -1,0 +1,17 @@
+{
+  "name": "STAR Tycoon Template",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$path": "ReplicatedStorage"
+    },
+    "ServerScriptService": {
+      "$path": "ServerScriptService"
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "$path": "StarterPlayer/StarterPlayerScripts"
+      }
+    }
+  }
+}
