@@ -99,6 +99,10 @@ TRIGGERS: dict[str, re.Pattern] = {
     "eng-verify-before-done": re.compile(
         r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
+    "roblox-architecture-blender": re.compile(
+        r"\b(?:Blender|architecture|architectural|facades?|rooflines?|gables?|glTF|GLB|FBX|3D Importer|"
+        r"UV unwrap\w*|modelling|modeling)\b", re.IGNORECASE),
+
 }
 
 

@@ -12,7 +12,7 @@ from star.desktop_core import Settings, run_task
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
-         "eng-debugging", "eng-test-first", "eng-verify-before-done"]
+         "eng-debugging", "eng-test-first", "eng-verify-before-done", "roblox-architecture-blender"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
@@ -190,3 +190,10 @@ def test_the_creation_packs_are_chosen_for_their_own_topic():
 def test_the_new_packs_are_off_until_the_gate_has_passed_them():
     assert "roblox-vfx" in skill_packs.enabled_names({skill_packs.ENV_VAR: "all"})
     assert skill_packs.enabled_names({}) == frozenset(skill_packs.DEFAULT_ENABLED) & frozenset(NAMES)
+
+
+def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
+    prompt = "In my Roblox project design an architectural facade in Blender and import a glTF."
+    assert skill_packs.matching_names(prompt, enabled=NAMES) == ["roblox-architecture-blender"]
+    assert skill_packs.matching_names(prompt) == []
+    assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
