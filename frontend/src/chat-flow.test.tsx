@@ -259,7 +259,7 @@ describe('history after a restart', () => {
       {status: 'failed', detail: failed, prompt: 'make the lobby', message_id: 1, created: ''})
     await user.click(await waitFor(() => retryButton()!))
     await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
-    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby', retryMessageId: 1})
     expect(retryButton()).toBeNull() // hidden while the retry runs
   })
 
@@ -271,7 +271,11 @@ describe('history after a restart', () => {
     expect((await screen.findAllByText(detail)).length).toBeGreaterThan(0)
     await user.click(retryButton()!)
     await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
-    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby', retryMessageId: 1})
+    expect(seen('make the lobby')).toHaveLength(1)
+    desktop.complete(desktop.requestOf('sendMessage'), 'Recovered reply.')
+    expect(await screen.findByText('Recovered reply.')).toBeTruthy()
+    expect(seen('make the lobby')).toHaveLength(1)
   })
 
   it('does not offer Retry on an old failure once a later question was answered', async () => {

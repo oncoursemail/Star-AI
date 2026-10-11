@@ -8,12 +8,18 @@ import os
 from pathlib import Path
 import sqlite3
 import subprocess
+import sys
 import tempfile
 from urllib.parse import quote
 
 from .corpus_formats import parse_source
 from .corpus_manifest import CorpusError, digest, git_read, read_manifest, tracked_read, verify_snapshot
 from . import store
+from .quiet import wait_while_locked
+
+
+def _quiet() -> None:
+    wait_while_locked(log=lambda message: print(message, file=sys.stderr))
 
 MAX_PREVIOUS_BYTES = 256 * 1024 * 1024
 
@@ -51,6 +57,7 @@ def _previous(path: Path | None) -> dict:
     sha = hashlib.sha256()
     with path.open("rb") as handle:
         for piece in iter(lambda: handle.read(1024 * 1024), b""):
+            _quiet()
             sha.update(piece)
     return {"files": files, "sources": sources, "policy": policies, "sha256": sha.hexdigest()}
 
@@ -70,6 +77,7 @@ def prepare(manifest: Path, sources_dir: Path, *, previous: Path | None = None,
     ready = {}
     global_bytes = global_chunks = 0
     for source in config["sources"]:
+        _quiet()
         name = source["name"]
         if selected is not None and name not in selected:
             continue
@@ -82,6 +90,7 @@ def prepare(manifest: Path, sources_dir: Path, *, previous: Path | None = None,
             inventory = []
             total_bytes = chunks = 0
             for path in source["paths"]:
+                _quiet()
                 raw = tracked_read(info["repo"], path, source["limits"]["file_bytes"])
                 total_bytes += len(raw)
                 if total_bytes > source["limits"]["total_bytes"]:
@@ -165,6 +174,7 @@ def build_candidate(manifest: Path, sources_dir: Path, output: Path, *, selected
                      for name in selected}
         db.close()
         for name in selected:
+            _quiet()
             new_count = sum(len(d.doc.chunks) for d in parsed[name])
             if old_counts.get(name, 0) and new_count < old_counts[name] * store.MIN_REBUILD_RATIO:
                 raise CorpusError("candidate would remove over 20% of " + name + " chunks; review scope first")
@@ -188,6 +198,7 @@ def build_candidate(manifest: Path, sources_dir: Path, output: Path, *, selected
                 CREATE TABLE IF NOT EXISTS candidate_policies(source TEXT PRIMARY KEY,policy_sha TEXT,metadata TEXT);
             """)
             for entry in report["sources"]:
+                _quiet()
                 name = entry["name"]
                 # IDs can be reused when the affected source is replaced. Remove metadata
                 # that is absent or belongs to updated sources before assigning new spans.
@@ -197,6 +208,7 @@ def build_candidate(manifest: Path, sources_dir: Path, output: Path, *, selected
                            (name, entry["policy_sha256"], json.dumps(ready[name])))
                 by_path = {d.doc.path: d for d in parsed[name]}
                 for file in entry["files"]:
+                    _quiet()
                     db.execute("INSERT INTO candidate_files VALUES(?,?,?,?)",
                                (name, file["path"], file["sha256"], json.dumps(file)))
                     rows = db.execute("SELECT c.id,c.ord FROM chunks c JOIN docs d ON d.id=c.doc_id WHERE d.source=? AND d.path=? ORDER BY c.ord",

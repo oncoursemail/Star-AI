@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "name": "luau",
+  "title": "Luau language documentation",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/luau-lang/site.git",
+    "revision": "master",
+    "content_root": "src/content",
+    "public_base": "https://luau.org/"
+  },
+  "licence": {
+    "text": {
+      "id": "MIT",
+      "url": "https://github.com/luau-lang/site/blob/master/LICENSE.md",
+      "redistribution_allowed": true,
+      "attribution": "Keep the Luau MIT copyright and permission notice in substantial copies; cite luau.org.",
+      "conditions": "Site documentation has a repository-wide MIT license.",
+      "evidence_url": "https://github.com/luau-lang/site/blob/master/LICENSE.md",
+      "evidence_quote": "Permission is hereby granted, free of charge"
+    },
+    "code_samples": {
+      "id": "MIT",
+      "url": "https://github.com/luau-lang/site/blob/master/LICENSE.md",
+      "redistribution_allowed": true,
+      "attribution": "Retain the original licence and copyright notice in substantial copies.",
+      "conditions": "Only Luau site repository samples; third-party examples require separate review.",
+      "evidence_url": "https://github.com/luau-lang/site/blob/master/LICENSE.md",
+      "evidence_quote": "The above copyright notice and this permission notice shall be included"
+    }
+  },
+  "include": [
+    "src/content/ syntax and types",
+    "src/content/ libraries and runtime behavior",
+    "src/content/ linting, debugging and performance guidance"
+  ],
+  "exclude": [
+    "Site build and Astro configuration",
+    "Logo, imagery and non-documentation assets",
+    "Third-party packages or examples",
+    "Duplicate indexing of the existing luau-site corpus"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 20,
+    "max": 1000,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "weekly",
+    "note": "The luau-site entry is already indexed through corpora.json; do not create a second checkout or index from this manifest."
+  },
+  "citation": {
+    "format": "Luau documentation: {title} — {url} (Roblox Corporation and Lua.org, MIT)",
+    "example": "Luau documentation: Type checking — https://luau.org/typecheck (MIT)"
+  }
+}

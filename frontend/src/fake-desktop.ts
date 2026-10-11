@@ -58,7 +58,7 @@ export function installFakeDesktop() {
       case 'bootstrap': return {ok: true, data: boot()}
       case 'sendMessage': case 'generateImage': case 'runTeam': {
         // The real worker saves the user message first, then answers asynchronously.
-        db.push({id: '', role: 'user', text: String(call.payload.prompt), created: stamp()})
+        if (call.payload.retryMessageId === undefined) db.push({id: '', role: 'user', text: String(call.payload.prompt), created: stamp()})
         retry = null
         return {ok: true, pending: true}
       }

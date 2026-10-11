@@ -27,11 +27,15 @@ The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**. GitHub Releas
 
 Source-level unit/build checks cannot replace live Windows GPU, installer-upgrade and Roblox Studio acceptance testing.
 
-### Three-step start
+### Getting started with v0.9.0
 
-1. Install the latest `STAR-Setup-vX.Y.Z.exe` from Releases. Existing installations are upgraded in place.
-2. Open STAR → **STAR Brain** → **Download & launch STAR Brain** to download a checksum-verified small local model and inference engine from trusted providers. No LM Studio or hosted model API key is required. Plan for several gigabytes of disk space.
-3. Open **Chat**, ask questions, attach references or connect an unpublished Roblox Studio test place under **Developer tools**. Start with read-only access.
+For setup, upgrades, connection choices, chat modes, Roblox Studio and Open Cloud, voice, images, skills, lessons, data backup and troubleshooting, read the [v0.9.0 Getting Started guide](docs/GETTING_STARTED.md).
+
+1. Install the latest **published** Windows Setup from [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest). Back up `%APPDATA%\\STAR` before upgrading. v0.9.0 is still a source candidate until a public release is verified; installer upgrade testing on real Windows hardware is **not confirmed**.
+2. In **Settings → Model & provider**, choose **Local STAR Brain** or **STAR Server (LAN)** on your own network. Use **Model & connection → Download and start** for a local model, or set the server address, model and credential then choose **Test server**. No local model download is needed when using STAR Server.
+3. In **Chat**, choose **Fast**, **Auto** or **Agent**. Open **Tools** to connect Roblox Studio on this PC, starting with read-only access. **Settings → Roblox** controls the separate Open Cloud key and private test experience.
+
+STAR does not silently fall back to a hosted model. Studio writes require scoped permission and a verified safe place. Voice calls have a backend prototype, but the complete React call screen is **not confirmed**. Read the full guide before enabling editing or remote tools.
 
 ### Website
 

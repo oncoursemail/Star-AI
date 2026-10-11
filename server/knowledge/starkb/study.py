@@ -30,6 +30,7 @@ import os
 from pathlib import Path
 import posixpath
 import re
+import sys
 import time
 
 from .client import Brain, EMBED_MODEL, QUERY_PREFIX
@@ -126,6 +127,7 @@ def plan(db_path: Path, sources_dir: Path, manifest: Path, *, size: int = 1500, 
         if not content.is_dir():
             continue
         for file in sorted(list(content.rglob("*.md")) + list(content.rglob("*.yaml"))):
+            wait_while_locked(log=lambda message: print(message, file=sys.stderr))
             rel = file.relative_to(root).as_posix()
             raw = file.read_text(encoding="utf-8", errors="replace")
             own = file.stem if "/reference/engine/" in rel else ""

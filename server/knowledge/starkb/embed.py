@@ -28,7 +28,7 @@ def pending(db, model: str, where: str = "", params: tuple = ()) -> list[tuple[s
     return [(r[0], embed_input(r[1], r[2], r[3])) for r in db.execute(sql, (model, *params))]
 
 
-def embed_batch(brain: Brain, texts: list[str], stats: dict) -> tuple[list[list[float]], int]:
+def embed_batch(brain: Brain, texts: list[str], stats: dict, gate=None) -> tuple[list[list[float]], int]:
     """Embed a batch; if the server says an input is too large, retry items one by one, shortened.
 
     The running `star-embed` instance has a physical batch size of 512 tokens (measured 2026-10-10:
@@ -43,6 +43,8 @@ def embed_batch(brain: Brain, texts: list[str], stats: dict) -> tuple[list[list[
             raise
     vectors, used = [], 0
     for text in texts:
+        if gate:
+            gate()
         for _ in range(8):
             try:
                 vec, n = brain.embed([text])
@@ -76,14 +78,19 @@ def run(db_path: Path, *, batch: int = 16, limit: int | None = None, where: str 
     paused = 0.0
     started = time.monotonic()
     log(f"embed: {total} chunk texts pending for model {EMBED_MODEL} (batch {batch})")
+
+    def gate() -> None:
+        nonlocal paused
+        paused += wait_while_locked(log, stop)
+
     for start in range(0, total, batch):
         part = todo[start:start + batch]
-        paused += wait_while_locked(log, stop)
+        gate()
         if stop():
             log("embed: stop requested, exiting cleanly (rerun to resume)")
             break
         batch_started = time.monotonic()
-        vectors, used = embed_batch(brain, [text for _, text in part], extra)
+        vectors, used = embed_batch(brain, [text for _, text in part], extra, gate=gate)
         batch_seconds = time.monotonic() - batch_started
         stamp = now()
         db.executemany(

@@ -169,15 +169,36 @@ def summarize(tasks: dict) -> dict:
             "median_seconds": round(statistics.median(seconds), 1) if seconds else None}
 
 
+def grader_sha256(root: Path = ROOT) -> str:
+    """Fingerprint code that computes grades, not just the answers being rescored."""
+    digest = hashlib.sha256()
+    for name in ("eval_checks.py", "eval_runner.py", "eval_sandbox.py"):
+        path = root / "star" / name
+        digest.update(name.encode("utf-8") + b"\\0")
+        digest.update(_lf(path.read_bytes()))
+    return digest.hexdigest()
+
+
+def suite_identity(suite: Suite) -> str:
+    """Include sidecar graders and the prelude, which the suite JSON hash omits."""
+    digest = hashlib.sha256(suite.sha256.encode("ascii"))
+    digest.update(suite.prelude.encode("utf-8"))
+    for task in suite.tasks:
+        unit = (task.get("auto") or {}).get("unit_test")
+        if unit:
+            digest.update(unit["file"].encode("utf-8") + b"\\0")
+            digest.update(suite.test_body(task).encode("utf-8"))
+    return digest.hexdigest()
+
+
 def git_state(root: Path = ROOT) -> dict:
-    forced = os.environ.get("STAR_EVAL_APP_COMMIT", "").strip()
     try:
-        head = forced or subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
+        head = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True,
                                         text=True, timeout=15).stdout.strip()
         dirty = bool(subprocess.run(["git", "-C", str(root), "status", "--porcelain", "--", "star", "evals"],
                                     capture_output=True, text=True, timeout=15).stdout.strip())
     except (OSError, subprocess.SubprocessError):
-        head, dirty = forced, False
+        head, dirty = "", False
     return {"app_commit": head or "unknown", "app_dirty": dirty}
 
 
@@ -282,15 +303,19 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
     result = {
         "schema": SCHEMA,
         "suite": {"file": suite.path.name, "sha256": suite.sha256, "tasks_total": len(suite.tasks),
-                  "automated": len(suite.runnable()), "selected": [t["id"] for t in selected]},
-        "run": {**run_info, "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
+                  "automated": len(suite.runnable()), "selected": [t["id"] for t in selected],
+                  "identity_sha256": suite_identity(suite)},
+        "run": {**run_info, "grader_sha256": grader_sha256(),
+                "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds")},
         "complete": False, "tasks": {},
     }
     out = Path(out)
     if resume and out.is_file():
         previous = json.loads(out.read_text(encoding="utf-8"))
         same = (previous.get("suite", {}).get("sha256") == suite.sha256
-                and previous.get("run", {}).get("fingerprint") == run_info.get("fingerprint"))
+                and previous.get("run", {}).get("fingerprint") == run_info.get("fingerprint")
+                and previous.get("suite", {}).get("identity_sha256") == suite_identity(suite)
+                and previous.get("run", {}).get("grader_sha256") == grader_sha256())
         if not same:
             raise ValueError(f"{out.name} exists from a different suite or configuration; use another --out or delete it")
         result["run"]["started_at"] = previous["run"].get("started_at", result["run"]["started_at"])
@@ -483,6 +508,8 @@ def rescore(suite: Suite, result: dict, scorer, *, log=print) -> dict:
         record.update({"status": status, "passed": score.passed, "reasons": score.reasons,
                        "checks": [c.record() for c in score.checks], "timings": {**record.get("timings", {}), **score.timings}})
     result["suite"].update({"sha256": suite.sha256, "tasks_total": len(suite.tasks), "automated": len(suite.runnable())})
+    result["suite"]["identity_sha256"] = suite_identity(suite)
+    result["run"]["grader_sha256"] = grader_sha256()
     result["run"]["rescored_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     result["summary"] = summarize(result["tasks"])
     log("rescored; changed: " + ("; ".join(changed) if changed else "none"))

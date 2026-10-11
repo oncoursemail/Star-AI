@@ -53,6 +53,7 @@ ALLOWED_ACTIONS = frozenset({
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
+    'serverKeyFileStatus','importServerKeyFile',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
@@ -614,7 +615,7 @@ def launch():
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
             return start_model_router(self.runtime, self.settings_file, app_data(), source)
 
-        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False):
+        def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False, retry_id=None):
             home=app_data()
             settings=Settings.load(self.settings_file)
             if not settings.model.strip():
@@ -622,7 +623,10 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                if retry_id is not None:
+                    user_id=chats.recover_turn(settings.project,active_chat,retry_id,prompt)
+                else:
+                    user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
@@ -862,6 +866,12 @@ def launch():
                     token=body.get('key','')
                     save_api_key(name,token)
                     return json.dumps({'ok':True,'data':{'connected':True}})
+                if action=='serverKeyFileStatus':
+                    from .server_key_file import key_file_status
+                    return json.dumps({'ok':True,'data':key_file_status()})
+                if action=='importServerKeyFile':
+                    from .server_key_file import import_key_file
+                    return json.dumps({'ok':True,'data':import_key_file()})
                 if action=='clearProviderKey':
                     name=str(body.get('provider',''))
                     clear_api_key(name)
@@ -953,7 +963,17 @@ def launch():
                     self.cancel_chat = threading.Event()
                     self.active_task=True
                     try:
-                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github))
+                        retry_id=body.get('retryMessageId')
+                        if retry_id is not None:
+                            if type(retry_id) is not int or retry_id < 1 or selected:
+                                raise ValueError('Invalid Retry request')
+                            chats=Conversations(app_data()/'conversations.sqlite3')
+                            try:
+                                current=Settings.load(self.settings_file).project
+                                chats.recover_turn(current,chats.active_chat(current),retry_id,prompt)
+                            finally:
+                                chats.close()
+                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github,retry_id=retry_id))
                     except Exception:
                         self.active_task=False
                         raise
@@ -1156,6 +1176,26 @@ def launch():
     app=QApplication.instance() or QApplication(sys.argv)
     app.setApplicationName('STAR Intelligence')
     app.setStyle('Fusion')
-    shell=Shell()
-    shell.show()
-    return app.exec()
+    from .single_instance import DesktopInstance, bypass_single_instance
+    shell = None
+
+    def activate():
+        if shell is not None:
+            if shell.isMinimized():
+                shell.showNormal()
+            shell.show()
+            shell.raise_()
+            shell.activateWindow()
+
+    instance = None
+    if not bypass_single_instance():
+        instance = DesktopInstance(app_data(), activate)
+        if not instance.primary:
+            return 0
+    try:
+        shell=Shell()
+        shell.show()
+        return app.exec()
+    finally:
+        if instance is not None:
+            instance.close()

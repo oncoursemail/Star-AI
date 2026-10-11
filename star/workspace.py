@@ -17,11 +17,22 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
     {"name": "workspace_read", "description": "Read a UTF-8 text file in the selected workspace (not secrets or binary files).",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}},
-    {"name": "workspace_search", "description": "Search UTF-8 text files by substring inside the selected workspace.",
-     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"], "additionalProperties": False}},
+    {"name": "workspace_search", "description": "Search local source/text files by substring, or find code declarations with mode=symbols (read-only, bounded).",
+     "inputSchema": {"type": "object", "properties": {"query": {"type": "string"},
+                                                "mode": {"type": "string", "enum": ["text", "symbols"], "default": "text"}},
+                     "required": ["query"], "additionalProperties": False}},
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
+    {"name": "workspace_game_discover", "description": "Discover Godot, Unity, and Unreal game projects in this selected workspace; read-only, bounded scan.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
+    {"name": "workspace_game_inspect", "description": "Inspect one Godot, Unity, or Unreal project: engine metadata, languages, sample scenes and export presets. Read-only.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False}},
+    {"name": "workspace_game_plan", "description": "Preview an engine-specific validation, import, test or export command. Never executes code or launches an editor.",
+     "inputSchema": {"type": "object", "properties": {
+         "path": {"type": "string"}, "action": {"type": "string", "enum": ["validate", "import", "test", "export"]},
+         "preset": {"type": "string"}, "output": {"type": "string"}},
+         "required": ["path", "action"], "additionalProperties": False}},
 ]
 TOOL_NAMES = {t['name'] for t in TOOLS}
 
@@ -53,9 +64,20 @@ class Workspace:
             raise ValueError('Unknown workspace tool')
         if not isinstance(args, dict):
             raise ValueError('Arguments must be an object')
-        from jsonschema import validate
+        from jsonschema import validate, ValidationError
         schema = next(t['inputSchema'] for t in TOOLS if t['name'] == name)
-        validate(args, schema)
+        try:
+            validate(args, schema)
+        except ValidationError:
+            raise ValueError('Invalid workspace tool arguments') from None
+        if name in {'workspace_game_discover', 'workspace_game_inspect', 'workspace_game_plan'}:
+            from . import game_projects
+            if name == 'workspace_game_discover':
+                return game_projects.discover(self, args.get('path', '.'))
+            if name == 'workspace_game_inspect':
+                return game_projects.inspect(self, args['path'])
+            return game_projects.plan(self, args['path'], args['action'],
+                                      preset=args.get('preset', ''), output=args.get('output', ''))
         if name == 'workspace_list':
             path = self.resolve(args.get('path', '.'))
             if not path.is_dir():
@@ -76,26 +98,8 @@ class Workspace:
                 raise ValueError('Not a small text file')
             return {'path': args['path'], 'content': path.read_text(encoding='utf-8')}
         if name == 'workspace_search':
-            query = args['query']
-            if not query or len(query) > 300:
-                raise ValueError('Query must be between 1 and 300 characters')
-            hits = []
-            for path in self.root.rglob('*'):
-                if len(hits) >= 80:
-                    break
-                if not path.is_file() or path.is_symlink() or path.stat().st_size > MAX_READ_BYTES:
-                    continue
-                try:
-                    self.resolve(path.relative_to(self.root).as_posix())
-                    text = path.read_text(encoding='utf-8')
-                except (OSError, UnicodeError, PermissionError, ValueError):
-                    continue
-                for idx, line in enumerate(text.splitlines(), 1):
-                    if query.lower() in line.lower():
-                        hits.append({'file': path.relative_to(self.root).as_posix(), 'line': idx, 'text': line[:200]})
-                        if len(hits) >= 80:
-                            break
-            return {'query': query, 'matches': hits}
+            from .code_navigation import search_workspace
+            return search_workspace(self, args['query'], mode=args.get('mode', 'text'))
         if not allow_write:
             raise PermissionError('Workspace editing is switched off')
         path = self.resolve(args['path'], allow_missing=True)

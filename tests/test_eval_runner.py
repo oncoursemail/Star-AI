@@ -334,3 +334,29 @@ def test_the_self_builder_cannot_write_the_graders_the_gate_or_the_packs():
                  "evals/results/baseline-v2.json", "star/eval_checks.py", "star/eval_gate.py", "star/eval_runner.py",
                  "star/eval_sandbox.py", "star/skill_packs/__init__.py", "star/skill_packs/roblox-ui-layout/SKILL.md"):
         assert not skill_path(path), path
+
+def test_grader_and_suite_revisions_are_written_and_rescored(tmp_path):
+    suite = mini_suite(tmp_path)
+    result = er.run_suite(suite, out=tmp_path / "r.json", ask=asker(), scorer=scorer_for({"A-1"}),
+                          run_info=dict(RUN_INFO), log=lambda m: None)
+    assert result["suite"]["identity_sha256"] == er.suite_identity(suite)
+    assert result["run"]["grader_sha256"] == er.grader_sha256()
+    result["run"].pop("grader_sha256")
+    rescored = er.rescore(suite, result, scorer_for({"A-1"}), log=lambda m: None)
+    assert rescored["run"]["grader_sha256"] == er.grader_sha256()
+    assert "rescored_at" in rescored["run"]
+
+
+def test_suite_revision_includes_external_grader_files(tmp_path):
+    tasks = [mini_task("A-1", auto={"code": False, "unit_test": {"file": "test.luau"}})]
+    (tmp_path / "test.luau").write_text("return true", encoding="utf-8")
+    suite = mini_suite(tmp_path, tasks)
+    before = er.suite_identity(suite)
+    (tmp_path / "test.luau").write_text("return false", encoding="utf-8")
+    assert er.suite_identity(suite) != before
+
+
+def test_operator_cannot_override_app_commit(tmp_path, monkeypatch):
+    monkeypatch.setenv("STAR_EVAL_APP_COMMIT", "fake-operator-commit")
+    state = er.git_state(ROOT)
+    assert state["app_commit"] != "fake-operator-commit"

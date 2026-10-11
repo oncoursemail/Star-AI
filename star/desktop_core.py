@@ -87,6 +87,8 @@ class Settings:
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
     specialist_parallelism: int = 1
+    team_timeout_min: int = 30      # bounded specialist request deadline, seconds
+    team_timeout_max: int = 900     # allows slow on-device and STAR Server inference
     mcp_graphify_docs: bool = False
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
@@ -144,6 +146,9 @@ class Settings:
             raise ValueError('Choose an existing workspace directory')
         if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1,2):
             raise ValueError('Limit specialists to 1 or 2 concurrent model calls')
+        if (type(self.team_timeout_min) is not int or type(self.team_timeout_max) is not int
+                or not 1 <= self.team_timeout_min <= self.team_timeout_max <= 1800):
+            raise ValueError('Team timeout minimum/maximum must be 1 to 1800 seconds')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
         if self.studio_edit and not self.studio_id.strip():
@@ -530,6 +535,14 @@ class Conversations:
                 'detail': 'No reply was recorded for this message. STAR may have been closed before it finished.',
                 'prompt': prompt, 'message_id': user_id, 'created': created}
 
+    def recover_turn(self, project: str, chat_id: str, message_id: int, prompt: str) -> int:
+        """Reuse an unanswered question after restart without inserting another user row."""
+        state = self.retry_state(project, chat_id)
+        if (state is None or type(message_id) is not int
+                or state['message_id'] != message_id or state['prompt'] != prompt):
+            raise ValueError('The question is no longer available for Retry')
+        return message_id
+
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
 
@@ -565,6 +578,9 @@ def check_studio(settings: Settings | None = None, home: Path | None = None):
     return asyncio.run(discover(settings or Settings(), home=home if home is not None else app_data()))
 
 
+from .redact import redact_text
+
+
 def redact_for_logs(value):
     """Image bytes are retained in the artifact store, not duplicated in transcripts."""
     if isinstance(value, dict):
@@ -573,6 +589,8 @@ def redact_for_logs(value):
         return {str(k): redact_for_logs(v) for k, v in value.items()}
     if isinstance(value, list):
         return [redact_for_logs(v) for v in value]
+    if isinstance(value, str):
+        return redact_text(value)
     return value
 
 
@@ -766,6 +784,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         image_part(Path(image))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
+    from .promoter import expire_due
+    expire_due(home)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
@@ -859,7 +879,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         route = select_route(server_roles.effective(settings),prompt,mode=mode,image_count=len(images),
                              research=research,project_tools=project_tools,
                              roblox_context=roblox_context,
-                             deep_model=server_roles.deep_model(settings) if wants_deep else '')
+                             deep_model=server_roles.deep_model(settings) if wants_deep else '',home=home)
         if document_tools is not None:
             # Allow read/recalculate/answer even in Fast mode. Retain the selected
             # model and ordinary tool permissions; attachment access grants no
@@ -942,7 +962,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     client=helper,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
                     parallelism=settings.specialist_parallelism,on_event=audited_event,
-                    web_enabled=bool(research)
+                    speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
+                               else settings.endpoint, route.subagent_model),
+                    timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
+                    web_enabled=bool(research),
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
@@ -964,7 +987,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 # >>> Skill packs (star/skill_packs): short Roblox guidance, only for prompts that match, and
                 # never in quick chat mode. It rides in the per-turn sections, after the documentation.
-                packs = [] if quick else skill_packs.select(prompt)
+                packs = [] if quick else skill_packs.select(prompt,home=home)
                 pack_block = skill_packs.render(packs)
                 if pack_block:
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
@@ -1105,8 +1128,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             # Which model was asked and which one the server said answered.
             'route': {'profile': route.profile, 'requested_model': route.model,
                       'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
-        (runs / 'answer.md').write_text(answer, encoding='utf-8')
-        memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
+        (runs / 'answer.md').write_text(redact_text(answer), encoding='utf-8')
+        memory.event(memory_scope, {'run_id': stamp, 'answer': redact_text(answer[:10000])})
         # Failed/cancelled answers, budget refusals and required archive/log
         # failures never advance retention. Validate source/CAS after persistence.
         conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,

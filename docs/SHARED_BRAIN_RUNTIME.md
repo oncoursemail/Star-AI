@@ -1,0 +1,35 @@
+# Shared-brain tools in STAR
+
+STAR can attach `shared_brain_query` and `shared_brain_stats` to relevant graph/codebase turns through `LocalIntelligence`. This connects the existing shared-brain reference store; it does not train the model or activate the improvement controller. The implementation depends on PR43 and the reviewed PR41 export-path fix.
+
+## Owner registration and preparation
+
+The owner interface already selects and saves a local project workspace, which grants the existing workspace/Graphify read scope. `for_settings(settings, home)` treats that trusted host selection plus `graphify_enabled is True` as registration of exactly its canonical directory. A model cannot supply a workspace, database path, registration, actor, stale override, or operator action. Direct `LocalIntelligence` construction does **not** imply shared registration: a trusted caller must supply `registered_workspaces` separately. Registering a parent does not grant child access.
+
+An operator must prepare that exact checkout through the existing shared-brain refresh/sync workflow. Worktrees have separate canonical project IDs; copying another checkout's SQLite store does not grant access. Runtime factories, status and dispatch never initialize a database, import a graph, refresh sources, repair a schema, or change a generation. The default database is `graphify-out/shared-brain/shared-brain.sqlite3` under the selected workspace.
+
+Only an existing recognized, project-bound, nonempty generation is ready. Linked directories, databases or sidecars, active preparation locks, invalid schema/metadata and malformed source projections are unavailable. Status messages omit absolute local paths and exception details. Unavailable dispatch returns a short structured result with `available: false`, without pretending evidence was retrieved.
+
+## Which tools a turn sees
+
+The existing prompt relevance gate applies. When a prepared registered store is ready, its query/stats pair replaces legacy `star_graphify_query`/`star_graphify_stats`. Legacy `star_graphify_explain` and `star_graphify_path` remain available when their raw export exists, with their existing export provenance semantics; they do not acquire shared-source freshness guarantees.
+
+A workspace containing only a legacy raw export retains all four legacy tools. Once a shared preparation marker is present, a malformed, foreign, linked, deleted or partially built shared store withholds query/stats rather than silently substituting older raw evidence. A hub latches preparation, so deletion during a turn cannot restore legacy fallback. A newly created hub can detect only the markers still present on disk; removal of every marker is not persisted as a historical registration record.
+
+Each call receives the current turn's actual enabled tool-name set and validates its exact schema. Query takes a printable `question` of 1–220 characters, `limit` of 1–8, and `budget_chars` of 512–3000 (default 3000). Stats takes no arguments. Extra fields, feedback, lessons, refresh, proposals, evaluation, activation, rollback, code execution and permission writes are excluded from this adapter.
+
+## Evidence and lifecycle
+
+Queries recheck source digests through the existing store. Changed, missing or unsafe sources are excluded. Unattested references may appear with explicit `freshness: unknown`; a ready generation is not proof that its manifest is verified or its semantics are accurate. Preserve the source location, extraction origin, confidence, trust and reference-data notice. Query responses retain the existing project/generation and per-reference fields; stats exposes actual counts and last-sync attestation/delta metadata. Neither current response includes graph/manifest/source digests; readiness validates stored graph/manifest digest metadata and query uses stored source hashes internally. Returned data cannot authorize execution or become a trusted lesson automatically.
+
+The whole compact serialized query response fits its character budget, including notice, locations, relationships and query metadata. Characters are not model tokens. The normal agent keeps its existing request/context handling; the separate long-input branch provides its stronger schema-inclusive request bounds, and this runtime change does not replace them.
+
+Every status or dispatch opens and closes an existing SQLite connection in its own calling thread. Stats uses read-only mode. Query uses existing read/write mode solely for the underlying append-only query audit; SQLite may maintain journal/WAL/SHM sidecars. Query therefore means read-only source/knowledge access, not zero filesystem writes. Source files, graph exports, manifests and generations remain untouched. No connection is shared across worker threads or retained between calls.
+
+Each connection keeps an authorizer that permits fixed reference reads, basic aggregate functions and transaction control. Its only permitted SQL write is a direct insert into the query audit on query connections. Trigger/view-origin actions, other writes, schema changes, ATTACH and unapproved functions/pragmas are denied, including a trigger added by another connection after readiness. This follows the [SQLite authorizer callback](https://www.sqlite.org/c3ref/set_authorizer.html) and [action-code/origin contract](https://www.sqlite.org/c3ref/c_alter_table.html). Each underlying query/stats `BEGIN` also revalidates project/generation/source projections inside the read snapshot it actually consumes, so a prior readiness check cannot mask intervening payload or binding changes. These controls do not stop a separate trusted process from directly modifying the database outside this runtime.
+
+`close()` revokes the hub/adapter for subsequent dispatch. STAR constructs a fresh settings hub per new turn. A mutation of the passed in-memory settings snapshot also revokes that hub's graph access, requiring recreation. A separately saved settings file is not watched during an already-running turn, and close does not interrupt a dispatch already in progress; callers that retain adapters must close/recreate them when registration or permissions change. These are local lifecycle controls, not global live settings revocation.
+
+## Validation scope
+
+`tests/test_shared_brain_runtime.py` uses only synthetic temporary source files, graph exports, stores and a fake answer client. It covers exact registration, settings permission/root changes, per-turn gates, query/stats selection and real agent dispatch, fresh/stale/unknown provenance, malformed/foreign/preparing/linked/deleted stores, missing-database races, concurrent worker calls, closed connections, character budgets and unchanged source/generation evidence. Existing shared-brain evaluator fixtures and frozen comparison results are unchanged. No live assistant retrieval quality, performance gain, installer acceptance, server state or active user graph/profile is established by these checks.

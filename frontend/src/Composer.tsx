@@ -148,7 +148,7 @@ export function Composer(props: ComposerProps) {
   const {inputRef, value, onChange, onSend, onStop, busy, stopping, files, mode, imageMode, teamMode, research, githubSource, connection} = props
   const [composerMenu, setComposerMenu] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
-  const [side, setSide] = useState<'above' | 'below'>('above')
+  const [side, setSide] = useState<'above' | 'below' | 'aside'>('above')
   const menuWrap = useRef<HTMLDivElement>(null)
   const menuTrigger = useRef<HTMLButtonElement>(null)
   const statusWrap = useRef<HTMLDivElement>(null)
@@ -291,7 +291,7 @@ export function Composer(props: ComposerProps) {
         <div className="cmp-bar-right">
           <div className="cmp-pop-wrap" ref={statusWrap}>
             <button ref={statusTrigger} type="button" className={'cmp-status is-' + connection.tone} aria-haspopup="dialog" aria-expanded={statusOpen} title={`${connection.label} — ${connection.state}`} onClick={() => {
-              setSide(sideFor(statusTrigger.current, 260))
+              setSide(statusTrigger.current?.closest('.thread.is-empty') ? 'aside' : sideFor(statusTrigger.current, 260))
               setComposerMenu(false)
               setStatusOpen(open => !open)
             }}>

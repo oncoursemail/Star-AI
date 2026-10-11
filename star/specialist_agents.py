@@ -18,6 +18,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 from .orchestration import ROLES, Task, TaskPlan
+from .team_deadlines import DeadlinePolicy, ProviderSpeeds, SPEEDS, collect_text
 from .web_search import _safe_results, search_web
 
 MAX_TASKS = 3
@@ -72,7 +73,10 @@ Keep your answer focused and actionable. You have no tools and no hidden side ef
 class ResearchTeam:
     def __init__(self, *, client, model: str, project: str, knowledge=None,
                  workspace=None, intelligence=None, parallelism: int = 1,
-                 on_event=None, web_enabled: bool = False, web_searcher=None):
+                 on_event=None, speed_key: tuple[str, ...] | None = None,
+                 speeds: ProviderSpeeds | None = None,
+                 timeout_min: int = 30, timeout_max: int = 900,
+                 web_enabled: bool = False, web_searcher=None):
         if type(parallelism) is not int or not 1 <= parallelism <= 2:
             raise ValueError("At most two concurrent read-only specialists are permitted")
         self.client = client
@@ -91,6 +95,9 @@ class ResearchTeam:
             self._definition["inputSchema"]["properties"]["tasks"]["items"][
                 "properties"]["sources"]["items"]["enum"] = sorted(LOCAL_SOURCES)
         self.event = on_event or (lambda _: None)
+        self.speed_key = speed_key or ("specialist", str(getattr(client, "base_url", "")), model)
+        self.speeds = speeds if speeds is not None else SPEEDS
+        self.policy = DeadlinePolicy(min_seconds=timeout_min, max_seconds=timeout_max)
         self._delegations = 0
         self._web_lookups = 0
 
@@ -167,6 +174,7 @@ class ResearchTeam:
         completed: set[str] = set()
         failed: set[str] = set()
         reports: dict[str, dict] = {}
+        partial_answers: dict[str, str] = {}
         calls = 0
 
         async def worker(task: Task) -> dict:
@@ -193,22 +201,27 @@ class ResearchTeam:
                                    "source_evidence": chunks,
                                    "dependent_analyses": parent_reports},
                                   ensure_ascii=False, default=str)[:4200]
-            response = await asyncio.wait_for(
-                self.client.chat.completions.create(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": INSTRUCTIONS},
-                        {"role": "user", "content": f"Specialist role: {task.role}\n"
-                         f"Task: {task.goal}\n\nUntrusted sources and prior candidate analyses:\n{evidence}"},
-                    ],
-                    temperature=0, max_tokens=850,
-                ), timeout=75.0)
-            answer = response.choices[0].message
-            # A worker has no tools; tool calls cannot create real side effects.
-            if getattr(answer, "tool_calls", None):
-                raise ValueError("Read-only specialist returned unexpected tool calls")
-            content = getattr(answer, "content", None)
-            if not isinstance(content, str) or not content.strip():
+            try:
+                content = await asyncio.wait_for(
+                    collect_text(
+                        self.client, model=self.model,
+                        messages=[
+                            {"role": "system", "content": INSTRUCTIONS},
+                            {"role": "user", "content": f"Specialist role: {task.role}\n"
+                             f"Task: {task.goal}\n\nUntrusted sources and prior candidate analyses:\n{evidence}"},
+                        ], max_tokens=850, speeds=self.speeds, speed_key=self.speed_key,
+                        on_partial=lambda text: partial_answers.__setitem__(task.id, text),
+                        forbid_tools=True, max_chars=2600,
+                    ),
+                    timeout=self.policy.stage_seconds(850, self.speeds.get(self.speed_key)),
+                )
+            except TimeoutError:
+                partial = partial_answers.get(task.id, "").strip()
+                return {"id": task.id, "role": task.role,
+                        "status": "incomplete" if partial else "timed_out",
+                        "analysis": partial, "sources": [e["source"] for e in chunks],
+                        "notice": "INCOMPLETE: specialist deadline expired; do not treat as a final analysis."}
+            if not content.strip():
                 raise ValueError("Read-only specialist returned no analysis")
             return {"id": task.id, "role": task.role, "status": "completed",
                     "analysis": content[:2600],
@@ -221,7 +234,7 @@ class ResearchTeam:
 
         while len(reports) < len(tasks):
             ready = [
-                task for task in plan.ready(completed)
+                task for task in plan.ready(completed, finished=set(reports))
                 if task.id not in reports
                 and set(task.dependencies).isdisjoint(failed)
             ]
@@ -246,7 +259,10 @@ class ResearchTeam:
                     failed.add(task.id)
                 else:
                     reports[task.id] = outcome
-                    completed.add(task.id)
+                    if outcome["status"] == "completed":
+                        completed.add(task.id)
+                    else:
+                        failed.add(task.id)
                 self.event({"event": "subagent_finished", "role": task.role,
                             "task_id": task.id, "status": reports[task.id]["status"]})
         return {"project": self.project, "worker_model": self.model, "model_calls": calls,

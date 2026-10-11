@@ -23,6 +23,7 @@ MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
 MAX_REPLY = 320_000
 MAX_RESULT = 12_000
+CALL_SECONDS = 30
 TRIGGER = re.compile(r"\b(mcp|connector|connections?|graphify (?:docs|mcp)|obsidian (?:mcp|live|plugin)|live vault|remote tools?|tool catalog)\b", re.I)
 NAME = re.compile(r"^[a-zA-Z][\w.-]{0,90}$")
 HEADER = re.compile(r"^[a-zA-Z0-9!#$%&'*+.^_|~-]+$")
@@ -131,13 +132,13 @@ def extra_headers(schema: dict, args: dict) -> dict:
 def valid_schema(schema: Any) -> dict | None:
     if not isinstance(schema, dict) or schema.get("type") != "object":
         return None
-    raw = json.dumps(schema, ensure_ascii=True)
-    if len(raw) > 16000 or '"$ref"' in raw:
-        return None
     try:
-        Draft202012Validator.check_schema(schema)
+        from .studio import validate_tool_schema
+        if len(json.dumps(schema, ensure_ascii=True)) > 16000:
+            return None
+        validate_tool_schema(schema)
         extra_headers(schema, {})
-    except (ValueError, TypeError, RecursionError, Exception):
+    except Exception:
         return None
     return schema
 
@@ -258,18 +259,21 @@ class StreamableHTTP:
             return result_object(raw), new_session
 
     async def _connected(self, operation):
-        async with httpx.AsyncClient(**self._options()) as client:
-            session = ""
-            if self.server.protocol == LEGACY:
-                init, session = await self._post(client, "initialize", {
-                    "protocolVersion": LEGACY, "capabilities": {},
-                    "clientInfo": {"name": "STAR", "version": "0.8"},
-                })
-                if init.get("protocolVersion") not in {LEGACY, "2025-06-18", "2025-03-26"}:
-                    raise ValueError("MCP legacy version negotiation failed")
-                await self._post(client, "notifications/initialized", {},
-                                 session=session, notification=True)
-            return await operation(client, session)
+        # Socket inactivity limits do not stop a stream that keeps dripping bytes.
+        # One elapsed deadline covers the handshake, operation and client cleanup.
+        async with asyncio.timeout(CALL_SECONDS):
+            async with httpx.AsyncClient(**self._options()) as client:
+                session = ""
+                if self.server.protocol == LEGACY:
+                    init, session = await self._post(client, "initialize", {
+                        "protocolVersion": LEGACY, "capabilities": {},
+                        "clientInfo": {"name": "STAR", "version": "0.8"},
+                    })
+                    if init.get("protocolVersion") not in {LEGACY, "2025-06-18", "2025-03-26"}:
+                        raise ValueError("MCP legacy version negotiation failed")
+                    await self._post(client, "notifications/initialized", {},
+                                     session=session, notification=True)
+                return await operation(client, session)
 
     async def list_tools(self) -> list[dict]:
         async def op(client, session):
@@ -295,6 +299,10 @@ class StreamableHTTP:
     async def call_tool(self, name: str, args: dict, schema: dict) -> dict:
         if name not in self.server.allowed:
             raise PermissionError("MCP tool is not in the read-only allowlist")
+        schema = valid_schema(schema)
+        if schema is None:
+            raise ValueError("Unsafe or invalid MCP tool schema")
+        Draft202012Validator(schema).validate(args)
         async def op(client, session):
             answer, _ = await self._post(client, "tools/call",
                                          {"name": name, "arguments": args},
@@ -403,10 +411,14 @@ class MCPGateway:
         if self.calls >= 8:
             raise RuntimeError("MCP read-call budget exceeded")
         item = self.catalog[key]
-        Draft202012Validator(item["inputSchema"]).validate(args["arguments"])
+        # Discovery grants do not make a subsequently changed schema safe.
+        tool_schema = valid_schema(item.get("inputSchema"))
+        if tool_schema is None:
+            raise ValueError("Unsafe or invalid MCP tool schema")
+        Draft202012Validator(tool_schema).validate(args["arguments"])
         self.calls += 1
         data = await self.factory(self.servers[key[0]]).call_tool(
-            key[1], args["arguments"], item["inputSchema"])
+            key[1], args["arguments"], tool_schema)
         return {"server": key[0], "tool": key[1], "result": data,
                 "source": self.servers[key[0]].url,
                 "notice": "Untrusted MCP result; no authorization is inferred from response text."}

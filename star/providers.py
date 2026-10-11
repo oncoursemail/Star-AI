@@ -12,7 +12,7 @@ Every provider has a typed kind, and callers branch on the kind, never on the id
 
 The LAN address is typed by the owner in Settings. It is validated here, at the
 one place every model call passes through, so the server key can only ever be
-sent to a private IP literal.
+sent only to a validated private address with no DNS lookup.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -44,8 +44,8 @@ PROVIDERS: dict[str, Provider] = {
 }
 LOCAL = "local"
 STAR_SERVER = "star_server"
-# Private providers never leave the owner's machines. Their address comes from
-# Settings (loopback for local, a validated private IP for the LAN server).
+# Private providers use owner-entered endpoints. The LAN endpoint is checked
+# before STAR reads the server credential.
 PRIVATE_PROVIDERS: dict[str, Provider] = {
     LOCAL: Provider("On-device (private)", "", "", "", kind="local",
                     base_url_from_settings=True, requires_key=False,
@@ -59,24 +59,20 @@ SEARCH_KEYS = {"brave": "BRAVE_SEARCH_API_KEY", "tavily": "TAVILY_API_KEY"}
 KEY_ENV = {**{name: provider.env_var for name, provider in ALL_PROVIDERS.items()
               if provider.requires_key}, **SEARCH_KEYS}
 
-# RFC 1918, loopback and link-local only. `ipaddress.is_private` is wider than
-# this (it also accepts 0.0.0.0/8, documentation ranges and 240.0.0.0/4).
+# Use explicit ranges: ipaddress.is_private also includes non-LAN addresses.
 _LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
-    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",   # RFC 1918 private
-    "127.0.0.0/8", "169.254.0.0/16",                   # loopback, link-local
-    "::1/128", "fc00::/7", "fe80::/10",                # IPv6 loopback, ULA, link-local
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",  # RFC 1918
+    "100.64.0.0/10", "127.0.0.0/8",                  # CGNAT, loopback
+    "::1/128", "fc00::/7",                           # IPv6 loopback, ULA
 ))
 _LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
 
+
 def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server") -> str:
-    """Return the canonical private `scheme://ip:port/v1` URL, or raise ValueError.
+    """Return a canonical local-network URL or raise ValueError.
 
-    Fail closed: an IP literal only (no hostnames, so DNS cannot redirect the
-    key), a private/loopback/link-local address, an explicit unprivileged port,
-    the exact path /v1, and no credentials, query or fragment.
-
-    `path` and `label` let another owner-entered LAN service (STAR Knowledge,
-    served from the root) reuse this one rule with its own fixed path and name.
+    Allow only explicitly listed private IP ranges; hostnames are refused until
+    connection-level DNS pinning prevents credential exfiltration via rebinding.
     """
     hint = _LAN_HINT if path == "/v1" else _LAN_HINT.replace(":8080/v1", ":8091")
     if not isinstance(value, str) or not value.strip():
@@ -97,17 +93,20 @@ def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server
     try:
         address = ipaddress.ip_address(url.hostname or "")
     except ValueError as exc:
-        raise ValueError(f"{label} address must use an IP address, not a host name. " + hint) from exc
-    if not any(address in network for network in _LAN_NETWORKS):
-        raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
-                         "127.x or link-local). Public addresses are refused.")
+        raise ValueError(f"{label} must use a private IP literal, not a hostname. " + hint) from exc
+    # IPv4-mapped IPv6 must pass the same ranges as its underlying IPv4.
+    checked = address
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        checked = address.ipv4_mapped
+    if not any(checked in network for network in _LAN_NETWORKS):
+        raise ValueError(f"{label} must use a loopback, private LAN, CGNAT or IPv6 ULA address. "
+                         "Public, link-local and special-purpose addresses are refused.")
+    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     if port is None or not 1024 <= port <= 65535:
         raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
                          + ("8080" if path == "/v1" else "8091"))
-    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     canonical = f"{url.scheme}://{host}:{port}{path}"
-    # What was validated must be exactly what is used: no odd encodings, extra
-    # path segments, leading zeros or anything urlsplit silently normalised.
+    # Check what will actually be used, not a silently normalised URL.
     if value not in (canonical, canonical + "/"):
         raise ValueError(f"{label} address must look exactly like {canonical}")
     return canonical

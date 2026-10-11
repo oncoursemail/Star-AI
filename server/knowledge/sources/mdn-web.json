@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "name": "mdn-web",
+  "title": "MDN Web Docs: JavaScript, HTML, CSS and Web APIs",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/mdn/content.git",
+    "revision": "main",
+    "content_root": "files/en-us/web/",
+    "public_base": "https://developer.mozilla.org/en-US/docs/Web/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-SA-2.5",
+      "url": "https://github.com/mdn/content/blob/main/LICENSE.md",
+      "redistribution_allowed": true,
+      "attribution": "Credit the individual page title and URL and Mozilla Contributors; retain licence link, share adaptations under CC BY-SA and note changes.",
+      "conditions": "Page-specific alternative licences override the default; exclude those pages pending separate review.",
+      "evidence_url": "https://github.com/mdn/content/blob/main/LICENSE.md",
+      "evidence_quote": "All prose content is available under"
+    },
+    "code_samples": {
+      "id": "CC0-1.0-or-MIT",
+      "url": "https://github.com/mdn/content/blob/main/LICENSE.md",
+      "redistribution_allowed": true,
+      "attribution": "Post-2010 CC0 snippets need no credit; pre-2010 MIT snippets require original author, revision year, copyright and licence notice.",
+      "conditions": "CC0 applies to examples added on or after 2010-08-20; older examples are MIT with author and revision-year attribution. Dates are not consistently recoverable in current MDN. Do not ingest code automatically until per-snippet licence and notices can be established.",
+      "evidence_url": "https://github.com/mdn/content/blob/main/LICENSE.md",
+      "evidence_quote": "Code examples and snippets added on or after August 20, 2010 are in the public domain"
+    }
+  },
+  "include": [
+    "files/en-us/web/javascript/",
+    "files/en-us/web/html/",
+    "files/en-us/web/css/",
+    "files/en-us/web/api/"
+  ],
+  "exclude": [
+    "files/en-us/learn_web_development/ (out of scope)",
+    "files/en-us/mdn/ and internal guides",
+    "Other Web technologies until reviewed",
+    "Images, interactive examples and third-party assets",
+    "Pages marked as under an alternative licence"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 3000,
+    "max": 50000,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "weekly",
+    "note": "Review weekly upstream content changes; record a per-page licence and authorship on any future import."
+  },
+  "citation": {
+    "format": "MDN Web Docs: {title} — {url} (Mozilla Contributors, CC BY-SA 2.5)",
+    "example": "MDN Web Docs: Array — https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array (Mozilla Contributors)"
+  }
+}

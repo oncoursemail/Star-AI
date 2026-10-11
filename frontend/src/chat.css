@@ -557,6 +557,11 @@
 .cmp-status-pop[data-side='below'] {
   transform-origin: top right;
 }
+.cmp-status-pop[data-side='aside'] {
+  right: calc(100% + var(--star-2));
+  bottom: 0;
+  transform-origin: bottom right;
+}
 .cmp-menu-item {
   display: flex;
   align-items: center;

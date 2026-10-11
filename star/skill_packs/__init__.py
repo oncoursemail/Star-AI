@@ -30,9 +30,9 @@ from ..agent_skills import _frontmatter
 
 PACKS_DIR = Path(__file__).resolve().parent
 ENV_VAR = "STAR_SKILL_PACKS"
-MAX_BODY_CHARS = 1100
+MAX_BODY_CHARS = 6400
 MAX_PACKS_PER_TURN = 1
-MAX_BLOCK_CHARS = 1200
+MAX_BLOCK_CHARS = 6500
 BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
 # Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
@@ -90,6 +90,12 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
         r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
     # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
+    "game-obby": re.compile(r"\b(?:obby|checkpoint|checkpoints|kill brick|stage progression|obstacle course)\b", re.IGNORECASE),
+    "game-tycoon": re.compile(r"\b(?:tycoon|dropper|droppers|collector|collectors|purchase button|factory plot)\b", re.IGNORECASE),
+    "game-simulator": re.compile(r"\b(?:simulator|clicker|rebirth|rebirths|leaderstats|upgrade loop)\b", re.IGNORECASE),
+    "game-rounds": re.compile(r"\b(?:rounds|round-based|intermission|round state|round timer|round winner|minigame)\b", re.IGNORECASE),
+    "game-inventory": re.compile(r"\b(?:inventory|equip|unequip|item pickup|item ownership|backpack)\b", re.IGNORECASE),
+    "game-npc-quests": re.compile(r"\b(?:NPC quest|NPC quests|quest|quests|quest reward|quest dialogue|dialogue)\b", re.IGNORECASE),
     "eng-debugging": re.compile(
         r"\b(?:debug\w*|bugs?|root cause|fix(?:es)?|stack trace|errors?|crash\w*|broken|fails|failing|attempt to \w+|regression)\b",
         re.IGNORECASE),
@@ -126,12 +132,16 @@ def available() -> tuple[Pack, ...]:
     return tuple(found)
 
 
-def enabled_names(environ=None) -> frozenset[str]:
+def enabled_names(environ=None, *, home=None) -> frozenset[str]:
     """Pack names that may be used now: STAR_SKILL_PACKS, else DEFAULT_ENABLED."""
     raw = (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower()
     known = {p.name for p in available()}
     if not raw:
-        return frozenset(known & set(DEFAULT_ENABLED))
+        defaults = frozenset(known & set(DEFAULT_ENABLED))
+        if home is not None:
+            from ..promoter import enabled_skill_packs
+            return enabled_skill_packs(home, defaults)
+        return defaults
     if raw in {"off", "none", "no", "false", "0"}:
         return frozenset()
     if raw in {"all", "on", "true", "1"}:
@@ -139,11 +149,11 @@ def enabled_names(environ=None) -> frozenset[str]:
     return frozenset(known & {part.strip() for part in raw.split(",")})
 
 
-def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN) -> list[Pack]:
+def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
     """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
-    allowed = enabled_names() if enabled is None else frozenset(enabled)
+    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
     if not allowed or not _ROBLOX_CONTEXT.search(prompt):
         return []
     scored = []
