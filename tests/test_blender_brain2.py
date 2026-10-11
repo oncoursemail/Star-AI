@@ -196,3 +196,55 @@ def test_mcp_server_exposes_build_only_after_owner_opt_in_and_validates(tmp_path
             assert status_reply["isError"] is False
     asyncio.run(run())
     assert not (tmp_path / "blender" / "jobs").exists()
+
+
+
+def test_brain_two_agent_can_call_blender_through_real_mcp_memory_transport(tmp_path):
+    from types import SimpleNamespace
+    from star.agent import execute
+
+    class Model:
+        def __init__(self):
+            self.seen = []
+
+        async def create(self, **kwargs):
+            self.seen.append(kwargs)
+            if len(self.seen) == 1:
+                call = SimpleNamespace(id="blender-1", function=SimpleNamespace(
+                    name=STATUS, arguments="{}"))
+                return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                    content="", tool_calls=[call]))])
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(
+                content="Blender was inspected without starting a scene job.", tool_calls=None))])
+
+    async def run():
+        model = Model()
+        client = SimpleNamespace(chat=SimpleNamespace(completions=model))
+        settings = Settings(blender_enabled=True, blender_edit=False)
+        async with connect_blender(settings, tmp_path) as blender:
+            answer, messages, _ = await execute(client=client, model="local",
+                prompt="Use Blender to check whether the local version is connected",
+                image_paths=[], blender=blender)
+        assert "inspected" in answer
+        assert any(m.get("role") == "tool" for m in messages)
+        assert STATUS in {item["function"]["name"] for item in model.seen[0]["tools"]}
+        assert BUILD not in {item["function"]["name"] for item in model.seen[0]["tools"]}
+        assert not (tmp_path / "blender" / "jobs").exists()
+
+    asyncio.run(run())
+
+
+def test_static_blender_worker_has_no_model_code_execution_or_asset_fetching():
+    import ast
+    source = Path(__file__).resolve().parents[1] / "star" / "blender_worker.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    imported = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            imported.add((node.module or "").split(".")[0])
+    assert imported <= {"__future__", "json", "math", "pathlib", "sys", "bpy", "mathutils"}
+    calls = [node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Name)]
+    assert not ({"exec", "eval", "compile", "__import__"} & set(calls))
