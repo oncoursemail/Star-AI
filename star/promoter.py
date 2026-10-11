@@ -91,7 +91,7 @@ def routing_role(home, profile: str) -> str | None:
     if profile not in _ROUTABLE:
         return None
     role = _readonly_setting(home, f"routing_rule:{profile}")
-    return role if role in _ROLES else None
+    return role if isinstance(role, str) and role in _ROLES else None
 
 
 def expire_due(home, now=None) -> list[int]:
