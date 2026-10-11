@@ -15,7 +15,7 @@ SCHEMA_VERSION = 1
 _MODES = {"ingest-allowed", "link-only"}
 _KINDS = {"git", "website", "zip"}
 # This is an explicit policy gate, not a conclusion that every page in a repo is licensed alike.
-_PERMITTED_TEXT_LICENCES = frozenset({"CC-BY-4.0", "CC-BY-SA-2.5-or-later", "PSF-2.0", "MIT", "CC-BY-3.0"})
+_PERMITTED_TEXT_LICENCES = frozenset({"CC-BY-4.0", "CC-BY-SA-2.5", "PSF-2.0", "MIT", "CC-BY-3.0"})
 _CADENCES = {"weekly", "monthly", "quarterly", "per-release", "as-published"}
 _NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
