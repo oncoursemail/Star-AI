@@ -27,15 +27,15 @@ describe('Star mascot',()=>{
  })
  it('hides when artwork is missing',()=>{
   render(<StarPet state="idle"/>)
-  fireEvent.error(screen.getAllByRole('img',{hidden:true})[0])
+  fireEvent.error(document.querySelector('.star-pet__image') as HTMLImageElement)
   expect(screen.queryByTestId('star-pet')).toBeNull()
  })
  it('does not alternate art with reduced motion',()=>{
   vi.useFakeTimers()
   const {container}=render(<StarPet state="streaming" reducedMotion/>)
-  expect(container.querySelector('.star-pet__pose')?.getAttribute('src')).toContain('type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toContain('type-1.png')
   vi.advanceTimersByTime(10000)
-  expect(container.querySelector('.star-pet__pose')?.getAttribute('src')).toContain('type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toContain('type-1.png')
  })
  it('shows status when clicked',()=>{
   render(<StarPet state="update"/>)
