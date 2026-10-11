@@ -57,7 +57,15 @@ STAR offers the following **source-level optional stdio server** (requires valid
 python -m star.local_mcp --settings C:\Path\To\OwnerSelectedSettings.json
 \`\`\`
 
-This command is NOT an internet-facing HTTP service and does NOT mean the Windows installed STAR.exe exposes that entry point. A compatible Brain 2 MCP client on the same host can spawn it with an explicitly configured settings file and request \`tools/list\` then \`star_connection_status\`. The host must supply the command/path; never derive them from a model prompt, web result or Registry metadata.
+This command is NOT an internet-facing HTTP service and does NOT mean the Windows installed STAR.exe exposes that entry point.
+
+The source tree also includes a **read-only external MCP client probe** that checks the real stdio initialization, available approved tools and status of a selected Studio without editing any place:
+
+```powershell
+python scripts/brain2_mcp_smoke.py --settings C:\Path\To\OwnerSelectedSettings.json
+```
+
+A success report says `verified_via_stdio`. Failure returns a nonzero exit code with a sanitized summary. This probe verifies the STAR MCP endpoint from an external Python client; it does **not** run the private Brain 2 service or prove play/edit/publish capabilities. A compatible Brain 2 MCP client on the same host can spawn it with an explicitly configured settings file and request \`tools/list\` then \`star_connection_status\`. The host must supply the command/path; never derive them from a model prompt, web result or Registry metadata.
 
 To verify Brain 2, its separately deployed maintainer must provide:
 
