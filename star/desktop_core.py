@@ -941,7 +941,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 specialists = (ResearchTeam(
                     client=helper,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
-                    parallelism=settings.specialist_parallelism,on_event=audited_event
+                    parallelism=settings.specialist_parallelism,on_event=audited_event,
+                    web_enabled=bool(research)
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
