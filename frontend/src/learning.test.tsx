@@ -107,7 +107,7 @@ describe('rating an answer', () => {
     await user.keyboard('{Enter}')
     await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
     await desktop.emitRaw(desktop.requestOf('sendMessage'), 'result', {answer: 'Understood.', learned: {accepted: 1, candidates: 0}})
-    expect(await screen.findByText(/Noted for this project: 1 lesson from what you said/)).toBeTruthy()
+    expect(await screen.findByText('Noted for this project: 1 lesson from what you said. Review it under Projects.')).toBeTruthy()
   })
 })
 

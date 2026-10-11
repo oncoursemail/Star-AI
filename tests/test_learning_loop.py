@@ -273,11 +273,14 @@ def test_a_newer_lesson_on_the_same_subject_replaces_the_older(store):
     old = stated(store, "Always use gold accents for the lobby interface.")
     new = stated(store, "Always use teal accents for the lobby interface.", source="chat:c#7")
     other = stated(store, "Never put game logic in LocalScripts.", source="chat:c#8")
+    # Related wording about something else does not retire a lesson (it would silently stop being used).
+    near = stated(store, "Always put UI logic in LocalScripts.", source="chat:c#9")
+    assert (old.replaced, new.replaced, other.replaced, near.replaced) == (None, old.lesson_id, None, None)
     assert store.get("P", old.lesson_id).status == "superseded"
     assert store.get("P", new.lesson_id).supersedes_id == old.lesson_id
     recalled = [x.text for x in store.recall("P", "style the lobby interface")]
     assert recalled[0].startswith("Always use teal") and not any("gold" in t for t in recalled)
-    assert store.get("P", other.lesson_id).status == "accepted"            # a different subject is untouched
+    assert {store.get("P", i).status for i in (other.lesson_id, near.lesson_id)} == {"accepted"}
     assert store.db.execute("SELECT reviewed FROM notes WHERE id=?", (old.lesson_id,)).fetchone()[0] == 0
     # The old record is kept and the owner can bring it back next to the new one.
     store.approve("P", old.lesson_id, human_approved=True, keep_both=True)
@@ -361,7 +364,7 @@ def test_tool_results_in_the_transcript_are_captured_as_candidates(store):
     ]
     summary = capture_turn(store, project="P", chat_id="c", owner_text="check my mesh code", turn={"message_id": 3},
                            messages=messages)
-    assert summary == {"accepted": 0, "candidates": 2, "refused": 0, "ids": summary["ids"]}
+    assert summary == {"accepted": 0, "candidates": 2, "refused": 0, "replaced": 0, "ids": summary["ids"]}
     found = {x.source_type: x for x in store.list("P")}
     assert "EditableMesh vertex colours" in found["doc"].text
     assert "could not be converted" in found["verified-fix"].text

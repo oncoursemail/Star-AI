@@ -62,8 +62,12 @@ sets it for a lesson.
 - Ranking: lessons that share subject words with the prompt first, then standing preferences,
   corrections and approved decisions, newest first. Pitfalls and facts are only recalled when the
   prompt is about them.
-- Supersession: accepting a lesson retires older accepted lessons on the same subject (most of the
-  shorter one's subject words shared). The older record is kept and can be restored next to the new one.
+- Supersession: accepting a lesson retires older accepted lessons on the same subject (at least three
+  quarters of the shorter one's subject words shared, and at least two). The rule is strict on purpose:
+  "use teal accents for the lobby interface" replaces "use gold accents for the lobby interface", while
+  "put UI logic in LocalScripts" does not replace "never put game logic in LocalScripts". The chat says
+  when a new lesson replaced an older one; the older record is kept under "Set aside" and can be restored
+  next to the new one.
 - Budget: at most 3 lessons / 360 characters for a quick answer and 8 lessons / 1,200 characters
   otherwise, 240 characters per lesson. The block is read on every turn and is not in the server's
   prompt cache, so on a CPU server each lesson costs time before the first token.

@@ -571,7 +571,8 @@ def launch():
                 def relay(e):
                     # What the turn taught is reported with the result, not as a progress step.
                     if e.get('event')=='lessons_captured':
-                        learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)))
+                        learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
+                                       replaced=int(e.get('replaced',0)))
                         return
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,

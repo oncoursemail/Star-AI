@@ -738,7 +738,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 auto_accept=settings.learning_auto_accept is True)
             if on_event and (summary['accepted'] or summary['candidates']):
                 on_event({'event': 'lessons_captured', 'accepted': summary['accepted'],
-                          'candidates': summary['candidates']})
+                          'candidates': summary['candidates'],
+                          **({'replaced': summary['replaced']} if summary['replaced'] else {})})
         except Exception:
             pass
     try:

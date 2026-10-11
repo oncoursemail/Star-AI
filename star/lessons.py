@@ -144,7 +144,7 @@ _STOP = frozenset("""a an the and or but if then so to of in on at for with from
  it its this that these those i you we my your our me us do does did don doesn dont not no yes never always use
  using used instead please should would could can will must want need like prefer rather than when where which
  what who how all any every each just only also too very really more most less now going forward future default
- remember make sure keep avoid stop ever again project game here there have has had get got put add added write
+ remember make sure keep avoid stop ever again project here there have has had get got put add added write
  writing wrote code script scripts star actually wrong correct right nope incorrect okay ok mine""".split())
 
 
@@ -169,13 +169,15 @@ def subject_key(text: str) -> str:
 
 
 def same_subject(first: frozenset[str], second: frozenset[str]) -> bool:
-    """Two lessons are about the same thing when most of the shorter one's subject words are shared."""
+    """Two lessons are about the same thing when at least three quarters of the shorter one's
+    subject words are shared. Deliberately strict: a lesson retired by mistake stops being
+    used, while two lessons that overlap are both visible on the review page."""
     if not first or not second:
         return False
     if first == second:
         return True
     shared = len(first & second)
-    return shared >= 2 and shared / min(len(first), len(second)) >= 0.6
+    return shared >= 2 and shared / min(len(first), len(second)) >= 0.75
 
 
 # --- what the owner said ---------------------------------------------------------------------
@@ -328,6 +330,7 @@ class Captured:
     lesson_id: int | None
     status: str          # accepted | candidate | duplicate | refused
     reason: str = ""
+    replaced: int | None = None   # the older accepted lesson this one retired
 
 
 _SELECT = ("SELECT n.id,n.project,n.kind,n.text,n.status,n.source,n.source_type,n.evidence,n.created,"
@@ -453,8 +456,7 @@ class LessonStore:
                    VALUES(?,?,?,?,?,0,?,'candidate',?,?,?,?)""",
                 (project, kind, text, source.strip(), "candidate", stamp, source_type, stamp,
                  subject_key(text), redact(evidence))).lastrowid)
-            if accept:
-                self._accept(project, lesson_id, revision, stamp)
+            replaced = self._accept(project, lesson_id, revision, stamp) if accept else None
             self.db.commit()
         except BaseException:
             self.db.rollback()
@@ -462,11 +464,13 @@ class LessonStore:
         self._count(project, "lesson_captured", source_type)
         if accept:
             self._count(project, "lesson_accepted", "automatic")
-        return Captured(lesson_id, "accepted" if accept else "candidate")
+        return Captured(lesson_id, "accepted" if accept else "candidate", replaced=replaced)
 
-    def _accept(self, project: str, lesson_id: int, revision: str, stamp: str, *, keep_both: bool = False) -> None:
+    def _accept(self, project: str, lesson_id: int, revision: str, stamp: str, *,
+                keep_both: bool = False) -> int | None:
         """Mark one lesson trusted and retire older accepted lessons on the same subject.
-        Runs inside the caller's transaction, so there is never a moment with both trusted."""
+        Runs inside the caller's transaction, so there is never a moment with both trusted.
+        Returns the id of the newest lesson it retired, if any."""
         row = self.db.execute("SELECT text FROM notes WHERE id=? AND project=?", (lesson_id, project)).fetchone()
         subject = subject_tokens(row["text"])
         replaced = None
@@ -482,6 +486,7 @@ class LessonStore:
             "UPDATE notes SET reviewed=1,status='accepted',revision=?,updated=?,"
             "supersedes_id=COALESCE(?,supersedes_id) WHERE id=? AND project=?",
             (revision, stamp, replaced, lesson_id, project))
+        return replaced
 
     def capture_owner(self, *, project: str, kind: str, text: str, message: str, source: str,
                       evidence: str = "", auto_accept: bool = True) -> Captured:
@@ -692,9 +697,10 @@ def capture_turn(store: LessonStore, *, project: str, chat_id: str | None, owner
     """Record what one finished turn taught. Regular expressions and a few rows; never a model call.
 
     `turn` is Conversations.turn_context(): the message being answered and the turn before it.
-    Returns counts for the interface: {'accepted': n, 'candidates': n, 'refused': n, 'ids': [...]}.
+    Returns counts for the interface: {'accepted': n, 'candidates': n, 'refused': n, 'replaced': n,
+    'ids': [...]}.
     """
-    summary = {"accepted": 0, "candidates": 0, "refused": 0, "ids": []}
+    summary = {"accepted": 0, "candidates": 0, "refused": 0, "replaced": 0, "ids": []}
     chat = chat_id or "legacy"
     turn = turn or {}
     message_id = turn.get("message_id")
@@ -704,6 +710,7 @@ def capture_turn(store: LessonStore, *, project: str, chat_id: str | None, owner
     def note(result: Captured) -> None:
         if result.status == "accepted":
             summary["accepted"] += 1
+            summary["replaced"] += 1 if result.replaced else 0
         elif result.status == "candidate":
             summary["candidates"] += 1
         elif result.status == "refused":
