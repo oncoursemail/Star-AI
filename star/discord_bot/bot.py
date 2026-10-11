@@ -85,6 +85,11 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             await problem(interaction, str(exc))
             return None
 
+    def require_voice_message_permissions(interaction):
+        permissions = interaction.app_permissions
+        if not (permissions.send_messages and permissions.attach_files and permissions.send_voice_messages):
+            raise ValueError("Give STAR Send Messages, Attach Files and Send Voice Messages permissions in this channel")
+
     async def handle_failure(interaction, exc: Exception):
         if isinstance(exc, (ValueError, FileNotFoundError)):
             await problem(interaction, str(exc))
@@ -116,6 +121,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 return
             await interaction.response.defer(ephemeral=True, thinking=True)
             try:
+                require_voice_message_permissions(interaction)
                 line = self.answer[:MAX_AUDIO_TEXT]
                 msg = await service.voice_message(line)
                 await post_voice_message(config.token, interaction.channel_id, msg)
@@ -198,6 +204,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         await interaction.response.defer(thinking=True, ephemeral=True)
         try:
+            require_voice_message_permissions(interaction)
             message = await service.voice_message(text)
             await post_voice_message(config.token, interaction.channel_id, message)
             await interaction.followup.send(embed=embed("✦ STAR · Spoken",
