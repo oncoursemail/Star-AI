@@ -33,6 +33,9 @@ describe('Research Watch candidate evidence',()=>{
       status:'candidate',excerpt:'The official docs discuss read-only Studio inspections.',
       untrusted_reference_only:true,can_grant_permissions:false,
     }}))
+    desktop.onAction('researchNominate',call=>({ok:true,data:{
+      lesson_id:9,status:'candidate',reason:'',observation:call.payload.observation,
+    }}))
     const user=userEvent.setup()
     render(<ResearchWatchPanel/>)
     expect(await screen.findByText('No research snapshots are recorded on this device yet.')).toBeTruthy()
@@ -53,6 +56,9 @@ describe('Research Watch candidate evidence',()=>{
     expect(desktop.sent('researchEvidence')[0].payload).toEqual({observation:7})
     expect(screen.getByText(/Not approved as fact/)).toBeTruthy()
     expect(screen.getByText('Off')).toBeTruthy()
+    await user.click(screen.getByRole('button',{name:'Send candidate to Learning review'}))
+    expect(await screen.findByText(/Candidate added to Projects/)).toBeTruthy()
+    expect(desktop.sent('researchNominate')[0].payload).toEqual({observation:7})
   })
 
   it('does not connect to public docs in the inactive website preview',async()=>{
