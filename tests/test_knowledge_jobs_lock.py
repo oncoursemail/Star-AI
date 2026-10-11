@@ -1,11 +1,24 @@
-"""Collect server-side knowledge lock regressions in the root offline test suite.
+"""Collect knowledge lock tests with the desktop's intentionally small dependencies.
 
-The default pytest configuration searches only tests/, not server/knowledge/tests/.
-Keep the detailed fixtures and tests with the service; this module exposes them to CI.
+Only import-time declarations of the search module need numpy in these tests; all
+embedding and lookup work is replaced with fakes, and numerical search is not run.
+The server's independent test suite can use real numpy as usual.
 """
 from pathlib import Path
 import sys
+from types import ModuleType
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server" / "knowledge" / "tests"))
 
-from test_jobs_lock import *  # noqa: E402,F401,F403
+try:
+    import numpy  # noqa: F401
+except ModuleNotFoundError as exc:
+    if exc.name != "numpy":
+        raise
+    sys.modules["numpy"] = ModuleType("numpy")
+    try:
+        from test_jobs_lock import *  # noqa: E402,F401,F403
+    finally:
+        del sys.modules["numpy"]
+else:
+    from test_jobs_lock import *  # noqa: E402,F401,F403
