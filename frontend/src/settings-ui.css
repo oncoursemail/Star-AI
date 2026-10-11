@@ -1,0 +1,150 @@
+/* Settings: the voice picker and the Roblox Studio choice.
+ * Tokens only (tokens.css); the sections reuse the quiet card, buttons, switch and option cards of
+ * learning.css and media.css. Only what those do not have is here. */
+.shell .voice-current {
+  margin: var(--star-4) 0 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+}
+.shell .voice-current strong {
+  color: var(--star-text);
+  font-weight: 650;
+}
+.shell .voice-style {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2);
+}
+.shell .voice-summary,
+.shell .voice-count {
+  margin: 0;
+  max-width: 76ch;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.6;
+}
+.shell .voice-count {
+  margin-top: var(--star-2);
+  color: var(--star-faint);
+}
+.shell .voice-summary code {
+  font-family: var(--star-mono);
+  font-weight: var(--star-mono-weight);
+  color: var(--star-body);
+}
+.shell .voice-opt-in {
+  margin-top: var(--star-2);
+  border-top: 1px solid var(--star-stroke-soft);
+}
+.shell .voice-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-1);
+}
+.shell .voice-tags:empty {
+  display: none;
+}
+.shell .voice-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-1);
+  padding: 1px var(--star-2);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: 999px;
+  color: var(--star-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.shell .voice-tag.is-chosen {
+  border-color: var(--star-gold-line);
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+}
+.shell .voice-tag.is-off {
+  border-color: var(--star-stroke);
+  color: var(--star-faint);
+}
+.shell .voice-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--star-3);
+  margin: var(--star-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.shell .voice-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--star-3);
+  min-width: 0;
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+}
+.shell .voice-row.is-chosen {
+  border-color: var(--star-gold-line);
+  background: var(--star-gold-wash);
+}
+.shell .voice-row.is-unavailable {
+  background: transparent;
+}
+.shell .voice-row.is-unavailable .voice-text strong {
+  color: var(--star-muted);
+}
+.shell .voice-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-1);
+  min-width: 0;
+}
+.shell .voice-text strong {
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+}
+.shell .voice-text small {
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.shell .voice-text small.media-unavailable {
+  color: var(--star-danger);
+}
+.shell .voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+}
+.shell .studio-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-3);
+  margin: var(--star-4) 0 0;
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.6;
+}
+.shell .studio-rule > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-success);
+}
+.shell .studio-rule strong {
+  color: var(--star-text);
+  font-weight: 650;
+}
+@media (max-width: 860px) {
+  .shell .voice-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
