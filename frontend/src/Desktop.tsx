@@ -347,7 +347,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const mine=beginRun(value,selected,makeImage?'image':teamMode?'team':'chat')
    setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=makeImage?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,makeImage?{prompt:intent?.prompt||value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
+   const res=await act(action,makeImage?{prompt:intent?.prompt||value,files:selected,size:imageSize,followup:!!intent&&selected.length===0&&messages.some(m=>!!m.image)&&!/^\s*(?:generate|draw|make|create|render|paint|design|produce|sketch)\s+(?:an?\s+)?(?:image|picture|photo|drawing|logo|icon|wallpaper|sprite|texture)/i.test(value)}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
