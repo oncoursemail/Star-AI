@@ -156,3 +156,12 @@ def test_only_two_named_legacy_baselines_are_exempt(tmp_path):
         copied.write_text(original.read_text(encoding="utf-8"), encoding="utf-8")
         assert not gate.load_result(copied)["_legacy"]
         assert gate.evaluate_change(copied, copied).code == gate.UNUSABLE
+
+def test_in_memory_paired_trial_summaries_do_not_make_untrusted_files_valid(tmp_path):
+    summary = {"suite": {"sha256": "paired"}, "tasks": {"A": {"status": "pass"}}}
+    assert gate.compare(summary, summary).allowed
+    stored = tmp_path / "trial.json"
+    stored.write_text(json.dumps(summary), encoding="utf-8")
+    assert gate.evaluate_change(stored, stored).code == gate.UNUSABLE
+    malformed = {"suite": {"sha256": "paired"}, "tasks": {"A": {"status": ["pass"]}}}
+    assert gate.compare(malformed, malformed).code == gate.UNUSABLE
