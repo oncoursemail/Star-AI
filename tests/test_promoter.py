@@ -258,3 +258,48 @@ def test_refuses_invalid_provenance_or_naive_expiry_timestamp(tmp_path):
             store.propose(change, {"reference": "../private/secret"})
         with pytest.raises(ValueError, match="timezone"):
             store.expire(datetime(2026, 10, 12))
+
+
+def test_a_stored_allowed_verdict_cannot_be_reused_for_an_altered_change(tmp_path):
+    original = {"type": "skill_pack", "name": "roblox-ui-layout", "enabled": True}
+    altered = {"type": "skill_pack", "name": "roblox-vfx", "enabled": False}
+    with promoter.Promoter(tmp_path) as store:
+        pid = propose_allowed(store, original)
+        store.db.execute(
+            "UPDATE promoter_changes SET change_json=?,change_sha256=? WHERE id=?",
+            (promoter._json(altered), promoter.change_digest(altered), pid))
+        store.db.commit()
+        with pytest.raises(PermissionError, match="exact change"):
+            store.apply(pid)
+        assert store.record(pid)["state"] == "pending"
+
+
+def test_expire_due_is_no_op_without_database_and_retires_due_before_recall(tmp_path):
+    assert promoter.expire_due(tmp_path) == []
+    assert not (tmp_path / "knowledge").exists()
+    change = {"type": "lesson", "action": "add", "project": "STAR",
+              "kind": "fact", "text": "Use anchored modular floors for large buildings."}
+    with promoter.Promoter(tmp_path) as store:
+        pid = propose_allowed(store, change)
+        receipt = store.apply(pid)
+        due = datetime.fromisoformat(receipt["expires_at"])
+    assert promoter.expire_due(tmp_path, due - timedelta(seconds=1)) == []
+    assert promoter.expire_due(tmp_path, due) == [pid]
+    with promoter.Promoter(tmp_path) as store:
+        assert store.record(pid)["state"] == "expired"
+        assert store.db.execute("SELECT 1 FROM notes WHERE source=?",
+                                (f"promoter:{pid}",)).fetchone() is None
+
+
+def test_undo_restores_even_a_previous_explicit_null_setting(tmp_path):
+    change = {"type": "routing_rule", "profile": "roblox", "role": "reasoning"}
+    with promoter.Promoter(tmp_path) as store:
+        store.db.execute(
+            "INSERT INTO promoter_settings(key,value_json) VALUES('routing_rule:roblox','null')")
+        store.db.commit()
+        pid = propose_allowed(store, change)
+        assert store.apply(pid)["before"] == {"present": True, "value": None}
+        assert store.undo(pid)
+        assert store.db.execute(
+            "SELECT value_json FROM promoter_settings WHERE key='routing_rule:roblox'"
+        ).fetchone()[0] == "null"
