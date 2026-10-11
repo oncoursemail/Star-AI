@@ -12,6 +12,7 @@ import './chat.css'
 import './learning.css'
 import {ProviderPanel,McpPanel} from './IntegrationPanels'
 import {RobloxPanel} from './RobloxPanel'
+import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
@@ -28,7 +29,7 @@ type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:b
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['library','Library',BookOpen],['tools','Tools',Workflow],['analytics','Analytics',Activity],['brain','Model & connection',BrainCircuit],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const fileName=(path:string)=>path.split(/[\\/]/).pop()||path
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,roblox_research_enabled:true,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_target:'local_pc',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,roblox_research_enabled:true,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 const CHAT_ACTIONS=['sendMessage','generateImage','runTeam']
@@ -100,7 +101,6 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [update,setUpdate]=useState<UpdateInfo|null>(null)
  const [updateBusy,setUpdateBusy]=useState(false)
  const [updateProgress,setUpdateProgress]=useState<{phase:string;downloaded:number;total:number}|null>(null)
- const [studio,setStudio]=useState('')
  const [draft,setDraft]=useState<AppSettings>(initial?.settings??defaultSettings)
  const [newProject,setNewProject]=useState('')
  const [leftOpen,setLeftOpen]=useState(false)
@@ -297,7 +297,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      setUpdateBusy(false);setUpdateProgress(null)
      setNotice('Verified setup launched. STAR will restart after installation.')
    }
-   else if(action==='discoverStudio')setStudio(JSON.stringify(result,null,2))
+   else if(action==='discoverStudio'||action==='selectStudio')void sync()
    else if(action==='listModels')setModelList(Array.isArray(result.models)?result.models as string[]:[])
    else if(action==='transcribe')setPrompt(p=>p+(p?'\n':'')+String(result.text||''))
    else void sync()
@@ -618,6 +618,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <div className="dock">
              {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={15} aria-hidden="true"/> Latest</button>}
              {(!inactive||!!fixture)&&!failedLast&&(connection.tone==='offline'||connection.tone==='attention')&&<div className={'dock-banner is-'+connection.tone} role="status"><CircleAlert size={15} aria-hidden="true"/><span><strong>{connection.state}.</strong> {connection.note}</span><button type="button" onClick={()=>nav('brain')}>Model &amp; connection</button></div>}
+             <div className="dock-hint"><button type="button" className="starter" onClick={()=>nav('tools')}><Workflow size={14} aria-hidden="true"/> Studio: {data.settings.studio_target==='host_launcher'?'practice host':'this PC'} · {data.studio?.state==='connected'&&data.studio.selected_valid?'selected':data.studio?.state==='connected'?'choose a place':data.studio?.state==='unavailable'?'unavailable':'connect & check MCP'}</button></div>
              <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
                files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>{setImageMode(false);void attach()}} onTranscribe={()=>void transcribe()}
                mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
@@ -662,7 +663,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             </Panel>
             </LocalBrainFallback>
           </div></div>}
-          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><Panel className="settings-section"><div className="tool-icon"><Workflow size={22}/></div><h2>Roblox Studio</h2><p>Connect to the official Roblox Studio MCP server. Start in an unpublished test place.</p><button className="secondary-button" onClick={()=>void act('discoverStudio')}><RefreshCcw size={15}/> Discover Studio instances</button>{studio&&<pre className="tool-output">{truncate(studio,2400)}</pre>}</Panel><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
+          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
               <Panel className="settings-section integration-panel">
                 <div className="integration-head"><div className="tool-icon"><BookOpen size={22}/></div><Tag kind={data.intelligence?.obsidian.enabled?'green':'neutral'}>{data.intelligence?.obsidian.enabled?'Read-only connected':'Off'}</Tag></div>
@@ -697,7 +698,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                <small>ComfyUI must already be running on localhost. Only approved core workflow nodes are allowed. Save settings below before generating.</small>
              </div>
            </details>
-           <details className="settings-advanced"><summary>Advanced settings <ChevronDown size={17}/></summary><div className="settings-advanced-body"><Panel className="settings-section"><h2>Developer permissions</h2><div className="field-grid"><label>Workspace folder<input value={draft.workspace} onChange={e=>setDraft(d=>({...d,workspace:e.target.value}))} placeholder="Choose a project folder"/></label><label>Roblox Studio instance ID<input value={draft.studio_id} onChange={e=>setDraft(d=>({...d,studio_id:e.target.value}))}/></label></div><label className="setting-switch"><span><strong>Allow workspace writes</strong><small>Only inside your selected workspace</small></span><input type="checkbox" checked={draft.workspace_edit} onChange={e=>setDraft(d=>({...d,workspace_edit:e.target.checked}))}/></label><label className="setting-switch"><span><strong>Allow Studio edits</strong><small>Use an unpublished disposable test place first</small></span><input type="checkbox" checked={draft.studio_edit} onChange={e=>setDraft(d=>({...d,studio_edit:e.target.checked}))}/></label></Panel>
+           <details className="settings-advanced"><summary>Advanced settings <ChevronDown size={17}/></summary><div className="settings-advanced-body"><Panel className="settings-section"><h2>Developer permissions</h2><div className="field-grid"><label>Workspace folder<input value={draft.workspace} onChange={e=>setDraft(d=>({...d,workspace:e.target.value}))} placeholder="Choose a project folder"/></label><label>Selected Roblox Studio<small>{data.settings.studio_id||'Connect an open place in Tools first'}</small><button className="secondary-button" onClick={()=>nav('tools')}>Open Studio connections</button></label></div><label className="setting-switch"><span><strong>Allow workspace writes</strong><small>Only inside your selected workspace</small></span><input type="checkbox" checked={draft.workspace_edit} onChange={e=>setDraft(d=>({...d,workspace_edit:e.target.checked}))}/></label><label className="setting-switch"><span><strong>Allow Studio edits</strong><small>Use an unpublished disposable test place first</small></span><input type="checkbox" checked={draft.studio_edit} onChange={e=>setDraft(d=>({...d,studio_edit:e.target.checked}))}/></label></Panel>
            <Panel className="settings-section">
              <div className="section-heading"><div><span className="eyebrow">LOCAL INTELLIGENCE</span><h2>Knowledge & expert tools</h2></div><BookOpen size={20}/></div>
              <p>New tools are strictly read-only. STAR discovers them on demand to avoid slowing ordinary conversations.</p>

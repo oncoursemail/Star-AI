@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
+from itertools import count
 from types import SimpleNamespace
 
 from jsonschema import Draft7Validator
@@ -124,6 +126,7 @@ TOOLS = [
 ]
 PIXEL = ("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")
 ARROW = chr(0x2192)
+_IDS = count(1)
 
 
 class Result:
@@ -145,7 +148,7 @@ class FakeStudio:
                  creator_type="User", tools=None, quote_results=False):
         self.studio_id, self.name = studio_id, name
         self.identity = {"placeId": place_id, "gameId": game_id, "creatorId": creator_id,
-                         "creatorType": creator_type, "name": name}
+                         "creatorType": creator_type, "name": name, "session": f"fake-game-{next(_IDS)}:workspace"}
         self.tools = list(TOOLS if tools is None else tools)
         self.quote_results = quote_results
         self.scripts: dict[str, dict] = {}                 # "ServerScriptService.Main" -> {class, source}
@@ -153,10 +156,20 @@ class FakeStudio:
                                            "Workspace.SpawnLocation": {"class": "SpawnLocation", "tags": set()}}
         self.marker = False
         self.playing = False
+        self.test_args = None
+        self.server_unreachable_reads = 0
+        self.server_unreachable_text = "Target is not reachable"
         self.console: list[str] = []
         self.calls: list[tuple[str, dict]] = []
         self.luau_effects = lambda code: []                # user code -> [(class, path), ...] it adds
         self.on_play = lambda studio: None                 # prints what the scripts would print
+        self.before_native = lambda studio, code: None     # switches AFTER host reads, BEFORE native guard
+        self.on_script_callback = lambda studio, path: None
+        self.history, self.redo = [], []
+        self.undo_fail = self.undo_no_effect = False
+        self.connector_recording = False  # native Assistant execute_luau owns an outer recording
+        self.recording_available = True
+        self.connector_history_count = 0
 
     # ---- the MCP surface STAR uses
     async def list_tools(self, cursor=None):
@@ -265,15 +278,167 @@ class FakeStudio:
         encoded = mark + json.dumps(value)
         return text(json.dumps(encoded) if self.quote_results else encoded)
 
+    def _snapshot(self):
+        return deepcopy({"scripts": self.scripts, "instances": self.instances, "marker": self.marker})
+
+    def _record(self, tag, before):
+        # Roblox DataModel history intentionally excludes Source on an existing
+        # LuaSourceContainer. Creation/deletion still belongs to DataModel history.
+        compared = deepcopy(before)
+        after = self._snapshot()
+        for path in before["scripts"].keys() & after["scripts"].keys():
+            if before["scripts"][path].get("_id") == after["scripts"][path].get("_id"):
+                compared["scripts"][path]["source"] = after["scripts"][path]["source"]
+        if compared == after:
+            return
+        self.history.append({"tag": tag, "before": before, "after": self._snapshot()})
+        self.redo.clear()
+
+    def _recording_tag(self, tag):
+        if not self.connector_recording:
+            return tag
+        self.connector_history_count += 1
+        return f"Assistant {self.connector_history_count}"
+
+    def owner_edit(self, change):
+        before = self._snapshot()
+        change(self)
+        self._record(f"OwnerEdit_{next(_IDS)}", before)
+
+    def _undo(self, tag):
+        if self.undo_fail or not self.history or self.history[-1]["tag"] != tag:
+            return False
+        record = self.history[-1]
+        changes = []
+        for category in ("scripts", "instances"):
+            before, after, current = record["before"][category], record["after"][category], getattr(self, category)
+            for path in before.keys() | after.keys():
+                old, new, now = deepcopy(before.get(path)), deepcopy(after.get(path)), deepcopy(current.get(path))
+                if category == "scripts" and old and new and old.get("_id") == new.get("_id"):
+                    old["source"] = new["source"] = now.get("source") if now else None
+                if old != new:
+                    if now != new:
+                        return False
+                    changes.append((current, path, old))
+        if record["before"]["marker"] != record["after"]["marker"] and self.marker != record["after"]["marker"]:
+            return False
+        if self.undo_no_effect:
+            return False
+        for current, path, value in changes:
+            if value is None:
+                current.pop(path, None)
+            else:
+                current[path] = value
+        if record["before"]["marker"] != record["after"]["marker"]:
+            self.marker = record["before"]["marker"]
+        self.redo.append(self.history.pop())
+        return True
+
+    @staticmethod
+    def _payload(code):
+        quoted = re.search(r'JSONDecode\(("(?:\\.|[^"\\])*")\)', code).group(1)
+        return json.loads(json.loads(quoted))
+
+    def _script_cas(self, code, pin):
+        if not self.connector_recording and not self.recording_available:
+            return text("STAR could not begin an undo recording", True)
+        request = self._payload(code)
+        path = request["path"]
+        script = self.scripts.get(path)
+        created = script is None
+        if created != (request["before"] is None) or (not created and script["source"] != request["before"]):
+            return text("STAR script conflict; owner changes preserved", True)
+        if not created:
+            script.setdefault("_id", f"script-{next(_IDS)}")
+        before = self._snapshot()
+        if created:
+            script = {"class": request["className"], "source": "", "_id": f"script-{next(_IDS)}"}
+            self.scripts[path] = script
+        self.on_script_callback(self, path)
+        ok = self._matches(pin) and self.scripts.get(path) is script \
+            and script["source"] == ("" if created else request["before"])
+        if ok:
+            script["source"] = request["after"]
+            self.marker = True
+        self._record(self._recording_tag(request["tag"]), before)
+        return self._reply("STAR_EDIT ", {"tag": request["tag"], "ok": ok, "created": created,
+                                         "recorded": not self.connector_recording, "connectorRecorded": self.connector_recording,
+                                         "instanceId": script["_id"],
+                                         "undoCan": bool(self.history), "undoName": self.history[-1]["tag"] if self.history else None})
+
+    def _matches(self, pin):
+        return all(self.identity.get(key) == value for key, value in pin.items())
+
     def _execute_luau(self, arguments):
         code = arguments["code"]
         if (arguments["datamodel_type"] == "Edit") == self.playing:
             return text("That datamodel is not available in the current mode", True)
+        if code.startswith(("-- STAR:play-stop-probe ", "-- STAR:play-stop-bound ")):
+            stop = code.startswith("-- STAR:play-stop-bound ")
+            expected = json.loads(code.split("\n", 1)[0].split(" ", 2)[2])
+            if arguments["datamodel_type"] != "Server":
+                return text("STAR stop requires the Server context", True)
+            if not stop and self.server_unreachable_reads:
+                self.server_unreachable_reads -= 1
+                return text(self.server_unreachable_text, True)
+            self.before_native(self, code)
+            if any(self.identity.get(key) != expected[key] for key in ("placeId", "gameId", "creatorId", "creatorType")):
+                return text("STAR stop target changed; no stop accepted", True)
+            if not isinstance(self.test_args, dict) or self.test_args.get("starSession") != expected["session"] or self.test_args.get("starRequest") != expected["request"]:
+                return text("STAR stop request changed; no stop accepted", True)
+            if stop:
+                self.playing = False
+                return self._reply("STAR_STOP ", {"request": expected["request"], "session": expected["session"], "requested": True})
+            return self._reply("STAR_PLAY_OWNER ", {"request": expected["request"], "session": expected["session"], "matched": True})
         if code.startswith("-- STAR:identity"):
             return self._reply("STAR_PLACE ", {**self.identity, "scripts": len(self.scripts), "marker": self.marker})
         if code.startswith("-- STAR:mark"):
             self.marker = True
             return text("marked")
+        pin = None
+        if code.startswith("-- STAR:bound "):
+            pin = json.loads(code.split("\n", 1)[0].removeprefix("-- STAR:bound "))
+            self.before_native(self, code)
+            if not self._matches(pin):
+                return text("STAR target changed; no mutation accepted", True)
+            code = code[code.index("end\n__star_check()\n") + len("end\n__star_check()\n"):]
+        if code.startswith("-- STAR:script-cas"):
+            return self._script_cas(code, pin)
+        if code.startswith("-- STAR:script-undo-cas"):
+            request = self._payload(code)
+            script = self.scripts.get(request["path"])
+            if not script or script.get("_id") != request["instanceId"] or script["source"] != request["after"]:
+                return text("STAR undo conflict; owner changes preserved", True)
+            if request["created"]:
+                if not self._undo(request["tag"]):
+                    return text("STAR undo conflict or restoration not confirmed", True)
+            else:
+                if not request["connectorRecorded"] and (bool(self.history) != request["undoCan"]
+                    or (self.history[-1]["tag"] if self.history else None) != request["undoName"]):
+                    return text("STAR undo conflict; newer DataModel history must be reviewed first", True)
+                self.on_script_callback(self, request["path"])
+                if not self._matches(pin) or self.scripts.get(request["path"]) is not script or script["source"] != request["after"]:
+                    return text("STAR undo conflict; owner changes preserved", True)
+                script["source"] = request["before"]
+            restored = self.scripts.get(request["path"])
+            confirmed = restored is None if request["created"] else bool(
+                restored and restored.get("_id") == request["instanceId"] and restored["source"] == request["before"])
+            return self._reply("STAR_EDIT ", {"undone": request["tag"], "ok": confirmed})
+        if code.startswith("-- STAR:recording-undo "):
+            tag = code.split("\n", 1)[0].split()[-1]
+            if not self._undo(tag):
+                return text("STAR undo conflict or restoration not confirmed", True)
+            if not self.redo or self.redo[-1]["tag"] != tag:
+                return text("STAR recording undo not confirmed", True)
+            return self._reply("STAR_EDIT ", {"undone": tag, "ok": True})
+        if code.startswith("-- STAR:play-bound"):
+            tag = re.search(r'starRequest = "(StarEdit_[0-9a-f]{8})"', code).group(1)
+            if self.playing:
+                return self._reply("STAR_PLAY ", {"request": tag, "requested": False, "status": "failed"})
+            self.playing = True
+            self.test_args = {"starSession": pin["session"], "starRequest": tag}
+            self.on_play(self)
+            return self._reply("STAR_PLAY ", {"request": tag, "requested": True, "status": "starting"})
         if code.startswith("-- STAR:undo "):
             tag = code.split("\n", 1)[0].split()[-1]
             doomed = [path for path, item in self.instances.items() if tag in item["tags"]]
@@ -285,13 +450,18 @@ class FakeStudio:
             return self._reply("STAR_EDIT ", {"undone": "script", "removed": int(self.scripts.pop(path, None) is not None)})
         wrapped = re.search(r'AddTag\(item, "(StarEdit_[0-9a-f]{8})"\)', code)
         if wrapped and code.startswith("local __s = {added"):
+            if not self.connector_recording and not self.recording_available:
+                return text("STAR could not begin an undo recording", True)
+            before = self._snapshot()
             user = code.split("pcall(function() ", 1)[1].rsplit("\nend)\ntask.wait()", 1)[0]
             failed = "error(" in user
             added = [] if failed else list(self.luau_effects(user))
             for class_name, path in added:
                 self.instances[path] = {"class": class_name, "tags": {wrapped.group(1)}}
             self.marker = True
-            return self._reply("STAR_EDIT ", {"tag": wrapped.group(1), "ok": not failed, "recorded": True,
+            self._record(self._recording_tag(wrapped.group(1)), before)
+            return self._reply("STAR_EDIT ", {"tag": wrapped.group(1), "ok": not failed,
+                                              "recorded": not self.connector_recording, "connectorRecorded": self.connector_recording,
                                               "added": [f"{c} {p}" for c, p in added], "addedCount": len(added),
                                               "removed": 0})
         return text("nil")

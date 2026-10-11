@@ -22,13 +22,14 @@ from .roblox_cloud import NO_EXPERIENCE, CloudError, RobloxCloud
 from .roblox_place import BuildError, Build, build_place, rojo_build
 
 RESULT_MARK = "STAR_TEST_RESULT "
+MAX_TEST_CASES = 200
 # Runs inside the published place on Roblox's servers. Every ModuleScript under
 # ServerScriptService.Tests whose name ends in ".spec" returns a table of named functions.
 TEST_HARNESS = r"""
 local HttpService = game:GetService("HttpService")
 local ServerScriptService = game:GetService("ServerScriptService")
 
-local report = { passed = 0, failed = 0, cases = {} }
+local report = { passed = 0, failed = 0, executed = 0, cases = {} }
 local function record(name, ok, message)
 	if ok then
 		report.passed += 1
@@ -51,21 +52,31 @@ else
 	table.sort(modules, function(a, b)
 		return a:GetFullName() < b:GetFullName()
 	end)
+	if #modules == 0 then
+		record("ServerScriptService.Tests", false, "no .spec ModuleScripts were found")
+	end
 	for _, module in ipairs(modules) do
+		local moduleName = module:GetFullName()
 		local loaded, cases = pcall(require, module)
 		if not loaded or type(cases) ~= "table" then
-			record(module.Name, false, if loaded then "the spec must return a table of functions" else cases)
+			record(moduleName, false, if loaded then "the spec must return a table of functions" else cases)
 		else
 			local names = {}
 			for name, case in pairs(cases) do
-				if type(name) == "string" and type(case) == "function" then
+				if type(name) == "string" and string.find(name, "%S") and type(case) == "function" then
 					table.insert(names, name)
+				else
+					record(moduleName, false, "each case must have a nonempty string name and be a function")
 				end
+			end
+			if #names == 0 then
+				record(moduleName, false, "the spec has no callable test cases")
 			end
 			table.sort(names)
 			for _, name in ipairs(names) do
+				report.executed += 1
 				local ok, message = pcall(cases[name])
-				record(module.Name .. ": " .. name, ok, message)
+				record(moduleName .. ": " .. name, ok, message)
 			end
 		end
 	end
@@ -85,26 +96,71 @@ OWNER_STEPS = (
     "(or run: python -m star.roblox_pipeline --set-test-experience <universe> <place>).")
 
 
+def _test_summary(item) -> dict | None:
+    """Validate the complete report; never discard cases to manufacture a passing result."""
+    if not isinstance(item, dict):
+        return None
+    passed, failed, cases = item.get("passed"), item.get("failed"), item.get("cases")
+    if type(passed) is not int or type(failed) is not int or passed < 0 or failed < 0:
+        return None
+    if not isinstance(cases, list) or not 0 < len(cases) <= MAX_TEST_CASES or passed + failed != len(cases):
+        return None
+    kept = []
+    names = set()
+    for case in cases:
+        if not isinstance(case, dict) or not isinstance(case.get("name"), str) \
+                or not case["name"].strip() or len(case["name"]) > 160 or type(case.get("ok")) is not bool:
+            return None
+        if case["name"] in names:
+            return None
+        names.add(case["name"])
+        message = case.get("message")
+        if message is not None and not isinstance(message, str):
+            return None
+        kept.append({"name": case["name"], "ok": case["ok"],
+                     **({"message": message[:400]} if message else {})})
+    if passed != sum(case["ok"] for case in kept):
+        return None
+    summary = {"passed": passed, "failed": failed, "cases": kept}
+    # Older harness reports lack this field; their passing records also came only from case calls.
+    # The current harness distinguishes case calls from discovery/loading failures explicitly.
+    if "executed" in item:
+        executed = item["executed"]
+        if type(executed) is not int or not passed <= executed <= passed + failed:
+            return None
+        summary["executed"] = executed
+    return summary
+
+
 def summarize_test(record: dict) -> dict | None:
-    """The harness report: from the task's returned value, else from its marked log line."""
+    """Prefer one returned report, otherwise the latest marked log; malformed evidence fails closed."""
+    if not isinstance(record, dict):
+        return None
     output = record.get("output")
     results = output.get("results") if isinstance(output, dict) else None
-    candidates = list(results) if isinstance(results, list) else []
-    for line in reversed(record.get("logs") or []):
+    if results is not None and not isinstance(results, list):
+        return None
+    if isinstance(results, list):
+        reports = [item for item in results if isinstance(item, dict)
+                   and any(key in item for key in ("passed", "failed", "cases", "executed"))]
+        if reports:
+            return _test_summary(reports[0]) if len(reports) == 1 else None
+    logs = record.get("logs")
+    for line in reversed(logs if isinstance(logs, list) else []):
+        if not isinstance(line, str):
+            continue
         position = line.find(RESULT_MARK)
         if position >= 0:
             try:
-                candidates.append(json.loads(line[position + len(RESULT_MARK):]))
+                return _test_summary(json.loads(line[position + len(RESULT_MARK):]))
             except ValueError:
-                pass
-    for item in candidates:
-        if isinstance(item, dict) and type(item.get("passed")) is int and type(item.get("failed")) is int:
-            cases = item.get("cases") if isinstance(item.get("cases"), list) else []
-            return {"passed": item["passed"], "failed": item["failed"],
-                    "cases": [{"name": str(case.get("name"))[:160], "ok": case.get("ok") is True,
-                               **({"message": str(case.get("message"))[:400]} if case.get("message") else {})}
-                              for case in cases if isinstance(case, dict)][:200]}
+                return None
     return None
+
+
+def _target_matches(record, only: tuple[int, int]) -> bool:
+    return isinstance(record, dict) and all(type(record.get(key)) is int and record[key] == value
+                                           for key, value in zip(("universe_id", "place_id"), only))
 
 
 def run_pipeline(cloud: RobloxCloud, source: Path, *, publish_and_test: bool = False,
@@ -141,6 +197,7 @@ def run_pipeline(cloud: RobloxCloud, source: Path, *, publish_and_test: bool = F
         return stop("test experience", str(exc), OWNER_STEPS if str(exc) == NO_EXPERIENCE else "")
     steps.append({"step": "test experience", "ok": True, "universe_id": target["universe_id"],
                   "place_id": target["place_id"], "visibility": target["visibility"]})
+    only = (target["universe_id"], target["place_id"])
 
     if not publish_and_test:
         report.update(ok=True, stopped_at="publish",
@@ -148,23 +205,38 @@ def run_pipeline(cloud: RobloxCloud, source: Path, *, publish_and_test: bool = F
                                    "experience and run the tests.")
         return report
     try:
-        published = cloud.publish_place(build.data, xml=True, version_type="Saved")
+        published = cloud.publish_place(build.data, xml=True, version_type="Saved", only=only)
     except CloudError as exc:
         return stop("publish", str(exc))
-    steps.append({"step": "publish", "ok": True, **published})
+    if not _target_matches(published, only) or type(published.get("version")) is not int \
+            or published["version"] <= 0 or published.get("version_type") != "Saved":
+        return stop("publish", "The publish result did not confirm the approved test experience and a saved "
+                    "version. No test was started; verify the place's version history before retrying.")
+    steps.append({**published, "step": "publish", "ok": True})
 
     try:
-        record = cloud.run_luau(script, version=published["version"])
+        record = cloud.run_luau(script, version=published["version"], only=only)
     except CloudError as exc:
         return stop("run test", str(exc))
-    summary = summarize_test(record)
-    finished = record.get("state") == "COMPLETE" and not record.get("error")
-    steps.append({"step": "run test", "ok": finished, **record})
+    if not _target_matches(record, only) or type(record.get("version")) is not int \
+            or record["version"] != published["version"]:
+        return stop("run test", "The test result did not confirm the approved test experience and the exact "
+                    "version just saved. It cannot establish a successful test of this build.")
+    finished = record.get("state") == "COMPLETE" and not record.get("error") \
+        and record.get("task_error") is None
+    steps.append({**record, "step": "run test", "ok": finished})
     if not finished:
         report["stopped_at"] = "run test"
         return report
-    steps.append({"step": "result", "ok": bool(summary) and summary["failed"] == 0, "summary": summary})
-    report["ok"] = bool(summary) and summary["failed"] == 0
+    summary = summarize_test(record)
+    if summary is None:
+        return stop("result", "No valid, nonempty, consistent test report was returned. Zero tests, malformed "
+                    "or incomplete case evidence cannot establish success.")
+    succeeded = summary["passed"] > 0 and summary["failed"] == 0
+    steps.append({"step": "result", "ok": succeeded, "summary": summary})
+    report["ok"] = succeeded
+    if not succeeded:
+        report["stopped_at"] = "result"
     return report
 
 

@@ -9,7 +9,7 @@ import re
 import sqlite3
 import time
 from .analytics import AnalyticsStore
-from dataclasses import dataclass, asdict, replace
+from dataclasses import dataclass, asdict, replace, field
 from typing import Callable
 
 from .agent import execute
@@ -29,6 +29,7 @@ from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding
 from . import studio_loop
+from .studio_connections import default_target, validate_target
 
 
 def app_data() -> Path:
@@ -51,6 +52,7 @@ class Settings:
     project: str = 'STAR'
     workspace: str = ''
     studio_id: str = ''
+    studio_target: str = field(default_factory=default_target)
     studio_edit: bool = False
     # The sandbox rule itself is code (star/studio_loop.py): edits only in a blank unsaved place.
     studio_own_places: bool = False       # ...and, when on, in places owned by STAR's own Roblox account
@@ -98,9 +100,13 @@ class Settings:
         if not file.exists():
             return cls()
         raw = json.loads(file.read_text(encoding='utf-8'))
+        if 'studio_target' not in raw:
+            # An old ID was selected on an unknown implicit route; never rebind its grants.
+            raw = {**raw, 'studio_target': 'local_pc', 'studio_id': '', 'studio_edit': False, 'studio_luau': False}
         return cls(**{k: v for k, v in raw.items() if k in cls.__dataclass_fields__})
 
     def validate(self):
+        validate_target(self.studio_target)
         for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
             validate_alias(getattr(self, field), field=field)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
@@ -529,16 +535,9 @@ def query_models(settings: Settings) -> list[str]:
         return [str(item['id']) for item in data.get('data', []) if isinstance(item, dict) and item.get('id')]
 
 
-def check_studio():
-    from .studio import connect, list_tools
-    async def run():
-        async with connect() as session:
-            tools = await list_tools(session)
-            if 'list_roblox_studios' not in {t['name'] for t in tools}:
-                raise RuntimeError('Installed Studio MCP does not expose list_roblox_studios')
-            result = await session.call_tool('list_roblox_studios', arguments={})
-            return result.model_dump(by_alias=True, exclude_none=True)
-    return asyncio.run(run())
+def check_studio(settings: Settings | None = None):
+    from .studio_connections import discover
+    return asyncio.run(discover(settings or Settings()))
 
 
 def redact_for_logs(value):
@@ -712,7 +711,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
-    from .studio import connect, list_tools
     settings.validate()
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
@@ -912,14 +910,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 async def answer_with(model):
                     kwargs.update(model=model, request_extras=slot_fields(model))
                     if allow_studio:
-                        async with connect() as session:
+                        from .local_mcp import connect_studio
+                        async with connect_studio(settings, home) as guarded:
                             # The tool list is the connector's own, read now. What STAR may do in
                             # the open place is decided in code from what that place is.
-                            discovered = await list_tools(session)
-                            guarded = await studio_loop.open_guarded(
-                                session, discovered, studio_id=settings.studio_id,
-                                opted_in=settings.studio_edit, own_places=settings.studio_own_places,
-                                own_account_id=studio_loop.own_account_id(home))
+                            discovered = guarded.discovered
                             sections = list(kwargs.get('turn_sections') or ())
                             sections.append(('ROBLOX STUDIO PLACE', guarded.verdict.reason))
                             outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,

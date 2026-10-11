@@ -298,13 +298,15 @@ def test_the_same_blank_place_stays_editable_through_a_whole_turn():
     assert studio.verdict.editable and len(studio.journal.entries) == 5
 
 
-def test_a_playtest_can_always_be_stopped():
+def test_a_foreign_playtest_is_never_stopped_after_target_change():
     fake_studio = FakeStudio()
     studio = run(opened(fake_studio))
     assert not run(studio.call_tool("start_stop_play", dict(PLAY))).model_dump()["isError"]
-    fake_studio.identity.update(placeId=777, gameId=77)        # whatever is open now, stopping is never refused
-    assert not run(studio.call_tool("start_stop_play", {**PLAY, "is_start": False})).model_dump()["isError"]
-    assert not fake_studio.playing
+    fake_studio.identity.update(placeId=777, gameId=77)
+    assert run(studio.call_tool("start_stop_play", {**PLAY, "is_start": False})).model_dump()["isError"]
+    assert fake_studio.playing
+    assert not [args for name, args in fake_studio.calls if name == "execute_luau"
+                and args["code"].startswith("-- STAR:play-stop-bound ")]
 
 
 # ------------------------------------------------------------------ 8. "running" is not forever

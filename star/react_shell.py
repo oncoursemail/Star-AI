@@ -33,6 +33,7 @@ from .chat_images import chat_image, generate_chat_image
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
+from .studio_connections import connection_status, validate_target, select_instance
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
@@ -42,7 +43,7 @@ from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
-    'installBrain','startBrain','listModels','testModel','discoverStudio',
+    'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
@@ -72,7 +73,7 @@ PERMITTED_SETTINGS = frozenset({
     'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model',
     'router_models_dir','router_context','gpu_layers','roblox_research_enabled',
     'tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider',
-    'project','workspace','studio_id','studio_edit','studio_own_places','studio_luau','workspace_edit','max_calls',
+    'project','workspace','studio_target','studio_edit','studio_own_places','studio_luau','workspace_edit','max_calls',
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
@@ -86,9 +87,14 @@ def apply_setting_changes(settings: Settings, changes: dict) -> Settings:
     """Copy only allowlisted fields from the interface onto saved settings."""
     if not isinstance(changes, dict):
         raise ValueError('Invalid settings')
+    changed_target = 'studio_target' in changes and validate_target(changes['studio_target']) != settings.studio_target
     for key, value in changes.items():
         if key in PERMITTED_SETTINGS:
             setattr(settings, key, value)
+    if changed_target:
+        settings.studio_id = ''
+        settings.studio_edit = False
+        settings.studio_luau = False
     return settings
 
 
@@ -388,7 +394,7 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
     return resolved
 
 
-def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dict:
+def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
     settings = Settings.load(settings_file)
     home = app_data()
     chats = Conversations(home / 'conversations.sqlite3')
@@ -436,6 +442,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dic
         'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
+        'studio':connection_status(settings, studio_status),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
 
@@ -481,6 +488,7 @@ def launch():
             self.host = host
             self.settings_file = app_data() / 'settings.json'
             self.runtime = Runtime()
+            self.studio_status = None
             self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='star-react')
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
@@ -711,7 +719,7 @@ def launch():
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action in VOICE_ACTIONS:
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
-                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -803,6 +811,8 @@ def launch():
                         store.close()
                     return json.dumps({'ok':True,'data':{'notes':notes}})
                 if action=='saveSettings':
+                    if self.active_task:
+                        raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
@@ -1004,7 +1014,34 @@ def launch():
                         return asyncio.run(gateway.probe(server))
                     self._run(rid,action,worker)
                 elif action=='discoverStudio':
-                    self._run(rid,action,lambda:{'studios':check_studio()})
+                    target = validate_target(body.get('target'))
+                    def discover_worker():
+                        current = Settings.load(self.settings_file)
+                        if current.studio_target != target:
+                            raise ValueError('Studio connection changed; test the selected connection again')
+                        self.studio_status = check_studio(current)
+                        return self.studio_status
+                    self._run(rid,action,discover_worker)
+                elif action=='selectStudio':
+                    if self.active_task:
+                        raise RuntimeError('Wait for the current task before selecting a Studio')
+                    identifier, target = body.get('studio_id'), validate_target(body.get('target'))
+                    def select_worker():
+                        import asyncio
+                        current = Settings.load(self.settings_file)
+                        if current.studio_target != target:
+                            raise ValueError('Studio connection changed; test the selected connection again')
+                        report = asyncio.run(select_instance(current, identifier))
+                        latest = Settings.load(self.settings_file)
+                        if latest.studio_target != target or self.active_task:
+                            raise ValueError('Studio connection changed while selecting; try again')
+                        latest.studio_id = current.studio_id
+                        latest.studio_edit = False
+                        latest.studio_luau = False
+                        latest.save(self.settings_file)
+                        self.studio_status = report
+                        return report
+                    self._run(rid,action,select_worker)
                 elif action=='checkUpdates':
                     from .updates import get_latest
                     self._run(rid,action,lambda:asdict(get_latest()))

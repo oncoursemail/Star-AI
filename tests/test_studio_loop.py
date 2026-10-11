@@ -118,7 +118,7 @@ def test_a_blank_baseplate_is_identified_and_may_be_edited():
         fake = FakeStudio(quote_results=quoted)
         studio = run(opened(fake))
         assert studio.verdict.editable and studio.verdict.kind == "blank"
-        assert studio.verdict.identity == identity()
+        assert studio.verdict.identity == identity(session=fake.identity["session"])
         assert fake.names() == ["list_roblox_studios", "execute_luau"]
         assert fake.calls[1][1]["code"] == sl.IDENTITY_PROBE and fake.calls[1][1]["datamodel_type"] == "Edit"
 
@@ -189,7 +189,8 @@ def test_a_luau_edit_is_wrapped_tagged_and_listed():
     code = "local lobby = Instance.new('Model')\nlobby.Name = 'Lobby' -- last line is a comment"
     result = run(studio.call_tool("execute_luau", {"studio_id": SID, "datamodel_type": "Edit", "code": code}))
     sent = fake.calls[-1][1]["code"]
-    assert sent.split("\n")[0].endswith("pcall(function() local lobby = Instance.new('Model')")   # line 1 stays line 1
+    assert sent.startswith("-- STAR:bound ")
+    assert json.loads(sent.split("\n", 1)[0].removeprefix("-- STAR:bound "))["session"] == fake.identity["session"]
     assert "\nlobby.Name = 'Lobby' -- last line is a comment\nend)" in sent
     assert "TryBeginRecording" in sent and "FinishRecording" in sent and "StarSandbox" in sent
     assert not result.model_dump()["isError"]
@@ -197,7 +198,7 @@ def test_a_luau_edit_is_wrapped_tagged_and_listed():
     assert entry["known"] and entry["ok"] and entry["added_count"] == 2
     assert entry["added"] == ["Model Workspace.Lobby", "Part Workspace.Lobby.Floor"]
     assert "2 instance(s) added" in studio.journal.report()["changes"][0]["what"]
-    assert run(studio.undo())["undone"] == ["removed 2 added instance(s)"]
+    assert run(studio.undo())["undone"] == ["undid recorded Luau edit"]
     assert "Workspace.Lobby" not in fake.instances and "Workspace.Baseplate" in fake.instances
 
 
@@ -255,7 +256,10 @@ def test_an_existing_script_is_restored_exactly(tmp_path):
     assert fake.scripts["ReplicatedStorage.Config"]["source"] == "local a = 2\nprint(a)"
     entry = studio.journal.entries[0]
     assert entry == {"kind": "script", "path": "game.ReplicatedStorage.Config", "created": False,
-                     "before": original, "restorable": True}
+                     "before": original, "after": "local a = 2\nprint(a)", "restorable": True,
+                     "tag": entry["tag"], "instance_id": fake.scripts["ReplicatedStorage.Config"]["_id"],
+                     "known": True, "ok": True, "undo_can": False, "undo_name": None,
+                     "recorded": True, "connector_recorded": False}
     assert run(studio.undo())["undone"] == ["restored script game.ReplicatedStorage.Config"]
     assert fake.scripts["ReplicatedStorage.Config"]["source"] == original
 
@@ -273,7 +277,7 @@ def test_a_failed_edit_is_not_journaled_and_a_failed_luau_edit_is_reported():
 
 def test_stars_fixed_snippets_are_fixed_text():
     wrapped, tag = sl.wrap_edit("return 1", "StarEdit_0123abcd")
-    assert tag == "StarEdit_0123abcd" and wrapped.count(tag) == 2
+    assert tag == "StarEdit_0123abcd" and wrapped.count(tag) == 4
     with pytest.raises(ValueError):
         sl.wrap_edit("return 1", 'x") game:Destroy() --')
     assert "Destroy" not in sl.IDENTITY_PROBE and "SetAttribute" not in sl.IDENTITY_PROBE     # the question only reads

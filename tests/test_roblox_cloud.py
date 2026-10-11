@@ -513,10 +513,10 @@ def test_without_the_owners_flag_nothing_is_published(fake, tmp_path):
 
 def test_failing_tests_fail_the_pipeline_and_the_log_line_is_enough(fake, tmp_path):
     fake.task_result = {"state": "COMPLETE", "output": {}}        # no returned value: read the marked log line
-    fake.logs = ["hello", 'STAR_TEST_RESULT {"passed":1,"failed":1,"cases":[{"name":"a","ok":false,"message":"boom"}]}']
+    fake.logs = ["hello", 'STAR_TEST_RESULT {"passed":0,"failed":1,"cases":[{"name":"a","ok":false,"message":"boom"}]}']
     report = run_pipeline(ready(fake, tmp_path), EXAMPLE, publish_and_test=True)
     assert not report["ok"]
-    assert report["steps"][-1]["summary"] == {"passed": 1, "failed": 1,
+    assert report["steps"][-1]["summary"] == {"passed": 0, "failed": 1,
                                               "cases": [{"name": "a", "ok": False, "message": "boom"}]}
     assert summarize_test({"logs": ["nothing useful"]}) is None
 
