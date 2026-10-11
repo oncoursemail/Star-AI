@@ -264,4 +264,8 @@ def test_cli_is_non_mutating_without_explicit_run_and_sanitized(tmp_path, monkey
     output = json.loads(capsys.readouterr().out)
     assert output["status"] == "dry_run"
     assert "No Roblox request" in output["notice"]
-    assert main(argv + ["--cycles", "0"]) != 0 if False else True
+    with pytest.raises(SystemExit):
+        main(argv + ["--cycles", "0"])
+    with pytest.raises(SystemExit):
+        main(argv + ["--run", "--acknowledge", "1"])
+
