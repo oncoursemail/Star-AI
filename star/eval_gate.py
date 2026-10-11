@@ -104,9 +104,9 @@ def _validate(result: dict, label: str) -> list[str]:
     for key in ("sha256", "file"):
         if not isinstance(suite.get(key), str) or not suite[key].strip():
             problems.append(f"{label}: missing suite.{key}")
-    if not isinstance(suite.get("tasks_total"), int) or suite["tasks_total"] < 1:
+    if type(suite.get("tasks_total")) is not int or suite["tasks_total"] < 1:
         problems.append(f"{label}: invalid suite.tasks_total")
-    if not isinstance(suite.get("automated"), int) or suite["automated"] < 0:
+    if type(suite.get("automated")) is not int or suite["automated"] < 0:
         problems.append(f"{label}: invalid suite.automated")
     selected = suite.get("selected")
     if not isinstance(selected, list) or any(not isinstance(t, str) or not t for t in selected) or len(set(selected)) != len(selected):
