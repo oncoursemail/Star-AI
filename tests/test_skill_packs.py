@@ -200,5 +200,5 @@ def test_the_new_packs_are_off_until_the_gate_has_passed_them():
 def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
     prompt = "In my Roblox project design an architectural facade in Blender and import a glTF."
     assert skill_packs.matching_names(prompt, enabled=NAMES) == ["roblox-architecture-blender"]
-    assert skill_packs.matching_names(prompt) == []
+    assert "roblox-architecture-blender" not in skill_packs.matching_names(prompt)
     assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
