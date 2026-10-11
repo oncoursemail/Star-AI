@@ -279,9 +279,40 @@ def pick_block(blocks: list[str], how: str = "longest") -> str:
 
 # --- the whole task -------------------------------------------------------------------------------
 
-def _first_errors(result: dict, limit: int = 2) -> str:
-    errors = result.get("errors") or []
+def _first_errors(errors: list, limit: int = 2) -> str:
     return "; ".join(f"line {e.get('line')}: {str(e.get('message'))[:90]}" for e in errors[:limit])
+
+
+_UNKNOWN_GLOBAL = re.compile(r"Unknown global '([A-Za-z_]\w*)'")
+_IDENT = re.compile(r"[A-Za-z_]\w*")
+_STRICT_HEADER = re.compile(r"\A(\s*)--!strict")
+
+
+def lenient_source(code: str) -> str:
+    """The same code with a leading `--!strict` turned into `--!nonstrict`.
+
+    The knowledge service types Roblox classes as unknown, and strict mode then rejects ordinary
+    operations on them ("string .. unknown"). Those errors say nothing about the answer, so Roblox
+    tasks are checked in non-strict mode: syntax errors, unknown locals and real type mismatches
+    still fail. Pure-Luau tasks use compile_mode "exact" and are checked as written.
+    """
+    return _STRICT_HEADER.sub(r"\1--!nonstrict", code, count=1)
+
+
+def effective_errors(result: dict, prompt: str) -> list:
+    """Diagnostics that count against the answer.
+
+    A global the task's own prompt names (`BuyItem`, `giveItem`, `door` in a pasted snippet) is context
+    the answer is expected to use without defining, so its "Unknown global" error is not a defect.
+    """
+    named = set(_IDENT.findall(prompt or ""))
+    kept = []
+    for error in result.get("errors") or []:
+        found = _UNKNOWN_GLOBAL.search(str(error.get("message")))
+        if found and found.group(1) in named:
+            continue
+        kept.append(error)
+    return kept
 
 
 def citation_check(auto: dict, footer: str) -> Check:
@@ -324,11 +355,13 @@ def score_answer(task: dict, answer: str, *, luau_check, sandbox=None, prelude: 
             if len(code) > MAX_CHECK_CHARS:
                 score.checks.append(Check(f"luau_check[{index}]", False, f"block is longer than {MAX_CHECK_CHARS} characters"))
                 continue
+            exact = auto.get("compile_mode") == "exact"
             try:
-                result = luau_check(code, strict=bool(auto.get("strict")))
+                result = luau_check(code if exact else lenient_source(code), strict=bool(auto.get("strict")))
             except (OSError, ValueError) as exc:
                 raise InfraError("Luau check unavailable: " + type(exc).__name__) from None
-            score.checks.append(Check(f"luau_check[{index}]", bool(result.get("ok")), _first_errors(result)))
+            errors = effective_errors(result, task.get("prompt", ""))
+            score.checks.append(Check(f"luau_check[{index}]", not errors, _first_errors(errors)))
     score.timings["luau_check_s"] = round(clock() - started, 2)
 
     probe = auto.get("typecheck_probe")

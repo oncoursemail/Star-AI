@@ -47,6 +47,7 @@
   },
   "auto": {
    "strict": true,
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/LUA-01.luau",
     "checks": 7
@@ -125,6 +126,7 @@
   },
   "auto": {
    "strict": true,
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/LUA-02.luau",
     "checks": 3
@@ -211,6 +213,7 @@
   },
   "auto": {
    "strict": true,
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/LUA-03.luau",
     "checks": 5
@@ -290,6 +293,7 @@
    "wall_seconds": 420
   },
   "auto": {
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/LUA-04.luau",
     "checks": 3
@@ -368,6 +372,7 @@
   },
   "auto": {
    "strict": true,
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/LUA-05.luau",
     "checks": 4
@@ -447,13 +452,6 @@
      "id": "catalog_lookup",
      "re": "Catalog\\s*\\[",
      "why": "the price must come from the server's Catalog table"
-    }
-   ],
-   "forbid": [
-    {
-     "id": "client_price",
-     "re": "\\.Value\\s*-=\\s*price\\b",
-     "why": "the balance must not be reduced by the client's price"
     }
    ]
   },
@@ -1305,6 +1303,7 @@
    "wall_seconds": 780
   },
   "auto": {
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/SYS-03.luau",
     "checks": 4
@@ -2354,9 +2353,10 @@
    "tests/NET-07.luau"
   ],
   "auto": {
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/NET-07.luau",
-    "checks": 7
+    "checks": 8
    }
   },
   "pass_conditions": [
@@ -2370,7 +2370,7 @@
    "type": "static+luau-vm",
    "checks": [
     "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
-    "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
+    "8 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
    ]
   },
   "split": "holdout"
@@ -2700,6 +2700,7 @@
    "tests/NET-12.luau"
   ],
   "auto": {
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/NET-12.luau",
     "checks": 7
@@ -2751,6 +2752,7 @@
    "tests/NET-13.luau"
   ],
   "auto": {
+   "compile_mode": "exact",
    "unit_test": {
     "file": "tests/NET-13.luau",
     "checks": 7

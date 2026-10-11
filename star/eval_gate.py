@@ -142,11 +142,11 @@ def gate_change(baseline, run_candidate, *, rerun=None, allow_partial: bool = Fa
     if verdict.regressions and rerun is not None:
         again = rerun(list(verdict.regressions))
         confirmed = [t for t in verdict.regressions if _status(again, t) != "pass"]
-        verdict.flaky = [t for t in verdict.regressions if t not in confirmed]
-        merged = {**candidate, "tasks": {**candidate["tasks"], **{t: again["tasks"][t] for t in verdict.flaky}}}
+        flaky = [t for t in verdict.regressions if t not in confirmed]
+        merged = {**candidate, "tasks": {**candidate["tasks"], **{t: again["tasks"][t] for t in flaky}}}
         verdict = compare(base, merged, allow_partial=allow_partial)
-        verdict.flaky = [t for t in verdict.flaky if t not in verdict.regressions]
-        if verdict.flaky:
+        verdict.flaky = flaky
+        if flaky:
             verdict.notes.append("regressions that passed on the confirming re-run are treated as noise")
     return verdict
 
