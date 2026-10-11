@@ -92,7 +92,7 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','research_auto_check',
     'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -521,6 +521,13 @@ def launch():
             self.runtime = Runtime()
             self.studio_status = None
             self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='star-react')
+            self.research_running = threading.Event()
+            # Starts no public network activity unless the owner opts in.
+            self.research_timer = QTimer(self)
+            self.research_timer.setInterval(60 * 60 * 1000)
+            self.research_timer.timeout.connect(self._research_tick)
+            self.research_timer.start()
+            QTimer.singleShot(10_000, self._research_tick)
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
             self.active_task = False
@@ -532,6 +539,34 @@ def launch():
             self.comfy_launcher = ComfyLauncher()
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _research_tick(self):
+            """Check due official sources off the GUI thread, at most daily.
+
+            The desktop owns this scheduler, not the model or external web text.
+            Each failure is recorded as a source status; nothing is trusted,
+            executed or committed to GitHub. The timer merely checks eligibility.
+            """
+            if self.active_task or self.research_running.is_set():
+                return
+            if not Settings.load(self.settings_file).research_auto_check:
+                return
+            self.research_running.set()
+
+            def worker():
+                try:
+                    from .evolution_research import ResearchWatcher
+                    with ResearchWatcher(app_data() / 'research-watch.sqlite3') as watcher:
+                        due = watcher.due_sources()
+                        if due:
+                            watcher.check_many(due)
+                finally:
+                    self.research_running.clear()
+
+            try:
+                self.pool.submit(worker)
+            except RuntimeError:
+                self.research_running.clear()
 
         def _warm_target(self):
             """What a message sent now would talk to. Runs on the warm-up thread."""
@@ -885,6 +920,8 @@ def launch():
                         raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
+                    if old.research_auto_check:
+                        QTimer.singleShot(200, self._research_tick)
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action in STUDIO_HOST_ACTIONS:
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
@@ -1169,6 +1206,7 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            self.research_timer.stop()
             self.voice.close()
             self.cancel_chat.set()
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
