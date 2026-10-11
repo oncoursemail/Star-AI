@@ -153,10 +153,12 @@ class Brain:
                     abort["timeout"] = True
                     reason = "timeout"
                 else:
+                    t_check = self._clock()
                     try:
                         reason = should_yield() or ""
                     except Exception:      # a failing check must never kill the request silently
                         reason = ""
+                    trace["slowest_check_s"] = max(trace.get("slowest_check_s", 0.0), round(self._clock() - t_check, 1))
                 if reason:
                     abort["reason"] = reason
                     trace["yield_signalled"] = round(self._clock() - started, 1)

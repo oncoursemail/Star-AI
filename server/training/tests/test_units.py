@@ -144,6 +144,9 @@ def test_g0_rules():
     assert gates.g0_shape(cand(tests=GOOD_TESTS + '\ncheck("same", M.f(1) == M.f(1))\n-- ' + "x" * 120), s).code == "tautological_check"
     assert gates.g0_shape(cand(tests=GOOD_TESTS + '\ncheck("always", true)\n-- ' + "x" * 120), s).code == "constant_check"
     assert gates.g0_shape(cand(tests="local M = load_answer()\ncheck('a', M.f(1) == 1)\n-- " + "x" * 150), s).code == "few_checks_written"
+    assert gates.g0_shape(cand(prompt="p" * 40 + " which computes $\\sin(x)$ is not needed, just 1 - t " + "p" * 40), s).code == "teacher_rambling"
+    assert gates.g0_shape(cand(tests=GOOD_TESTS + '\ncheck("is it symmetric? No, just check value", M.f(1) == 1)\n-- ' + "x" * 120), s).code == "teacher_rambling"
+    assert gates.g0_shape(cand(prompt="Write a module that calls task.wait(1) before it waits for the child to exist, then returns it. " * 2), s).ok
     assert gates.g0_shape(cand(prompt="short"), s).code == "prompt_length"
     secret = "ghp_" + "a" * 30
     assert gates.g0_shape(cand(response=secret), s).code == "credential_pattern"

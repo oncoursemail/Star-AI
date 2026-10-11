@@ -37,6 +37,9 @@ DEPRECATED: list[tuple[re.Pattern, str, bool]] = [
     (re.compile(r"[\"'](?:BodyVelocity|BodyPosition|BodyGyro|BodyForce|BodyAngularVelocity|BodyThrust)[\"']"), "LinearVelocity / AlignPosition", True),
     (re.compile(r":FindPartOnRay\w*\s*\("), "workspace:Raycast", False),
 ]
+# Self-correction text a teacher sometimes leaves in a task ("... is not needed, just ...", "No, just check ...").
+_RAMBLING = re.compile(r"\$\\|\$[A-Za-z(]|\b(?:no, just|actually,|hmm|let me|on second thought|scratch that|wait,)", re.I)
+_RAMBLING_CHECK = re.compile(r"check\s*\(\s*[\"'][^\"']*(?:\?|\bno, just\b|\bhmm\b|\bactually\b)", re.I)
 _STRICT_HEAD = re.compile(r"\A\s*--!strict\b")
 
 
@@ -75,6 +78,8 @@ def g0_shape(c: dict, s) -> Verdict:
         return reject("G0", "credential_pattern")
     if "\x00" in prompt + resp + tests:
         return reject("G0", "nul_byte")
+    if _RAMBLING.search(prompt) or _RAMBLING_CHECK.search(tests):
+        return reject("G0", "teacher_rambling", "self-correction or LaTeX text leaked into the task or the test names")
     masked = _blank(code)
     if re.search(r"\b(loadstring|dofile|getfenv|setfenv)\b|(?<![\w.])require\s*\(", masked):
         return reject("G0", "forbidden_call", "loadstring / require / environment access")

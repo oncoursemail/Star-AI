@@ -97,7 +97,7 @@ In the container: `systemctl start|stop star-training-gen`, `journalctl -u star-
 ## Tests
 
 ```bash
-python -m pytest -q server/training/tests          # 37 tests on the PC: parsing, mutants, similarity, decontamination,
+python -m pytest -q server/training/tests          # 43 tests on the PC: parsing, mutants, similarity, decontamination,
                                                    # gates without tools, quiet rules, store, the loop with a scripted brain
 bash server/training/deploy.sh --live              # on the server: real Luau tools, limits, wrong solutions rejected
 ```
