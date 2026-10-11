@@ -57,7 +57,7 @@ def main() -> int:
     for name, file in SETS.items():
         for view, scope_file in (("whole index", None), ("studied only", scope)):
             wait_while_locked()
-            result = run_eval(args.db, APP / "eval" / file, modes, scope_file=scope_file, details=False)
+            result = run_eval(args.db, APP / "eval" / file, modes, scope_file=scope_file, details=False, reuse_query_vectors=True)
             out["views"][f"{name} / {view}"] = result
             for mode, s in result["summary"].items():
                 print(f"{name:<10} {view:<13} {mode:<10} {s['n']:>3} {s['hits@5']:>6} {s['recall@5'] or 0:>6.3f} {s['mrr@10'] or 0:>7.3f}")
@@ -68,7 +68,7 @@ def main() -> int:
             for view, scope_file in (("whole index", None), ("studied only", scope)):
                 wait_while_locked()
                 s = run_eval(args.db, APP / "eval" / SETS["dev30"], ["vector+q"], scope_file=scope_file,
-                             question_scale=scale, details=False)["summary"]["vector+q"]
+                             question_scale=scale, details=False, reuse_query_vectors=True)["summary"]["vector+q"]
                 out["scales"][f"{scale} / {view}"] = s
                 print(f"  scale {scale:<5} {view:<13} n={s['n']:>3} hit@5={s['hits@5']:>3} mrr={s['mrr@10']}")
     args.out.write_text(json.dumps(out, indent=1), encoding="utf-8")

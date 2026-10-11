@@ -47,7 +47,7 @@ def parse_mode(mode: str) -> tuple[str, dict]:
 
 def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_embedded: bool = False,
              rerank_n: int = 15, scope_file: Path | None = None, question_scale: float | None = None,
-             details: bool = True) -> dict:
+             details: bool = True, reuse_query_vectors: bool = False) -> dict:
     """scope_file: a list of text hashes; every mode then searches only those chunks, and only the
     questions with at least one expected page inside the scope are counted (`n` says how many)."""
     questions = load_questions(questions_path)
@@ -55,7 +55,8 @@ def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_emb
     if scope_file is not None:
         scope_shas = {line.split()[0] for line in scope_file.read_text(encoding="utf-8").splitlines()
                       if line.strip() and not line.startswith("#")}
-    searcher = Searcher(db_path, scope_embedded=scope_embedded, scope_shas=scope_shas, question_scale=question_scale)
+    searcher = Searcher(db_path, scope_embedded=scope_embedded, scope_shas=scope_shas, question_scale=question_scale,
+                        reuse_query_vectors=reuse_query_vectors)
     known = {r[0] for r in searcher.db.execute("SELECT path FROM docs")}
     for q in questions:  # a typo in an expected path must fail loudly, not look like a miss
         for path in q["expected"]:

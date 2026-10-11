@@ -169,12 +169,17 @@ class VectorCache:
 class Searcher:
     def __init__(self, db_path: Path, brain: Brain | None = None, *, scope_embedded: bool = False,
                  vectors: VectorCache | None = None, readonly: bool = False,
-                 scope_shas: set[str] | None = None, question_scale: float | None = None):
+                 scope_shas: set[str] | None = None, question_scale: float | None = None,
+                 reuse_query_vectors: bool = False):
         """scope_embedded=True restricts *all* modes to chunks that have an embedding, so BM25 and
         hybrid are compared on exactly the same candidate set when only a subset is embedded.
         scope_shas restricts all modes to the chunks with these text hashes (subset experiments).
-        readonly=True (the service) opens the index without any write access."""
+        readonly=True (the service) opens the index without any write access.
+        reuse_query_vectors=True keeps each query's embedding for the life of this object, so an
+        evaluation that asks the same question in several modes embeds it once (the reported
+        embedding time of the later modes is then near zero)."""
         self.db = connect_readonly(db_path) if readonly else connect(db_path)
+        self._query_vectors: dict[str, np.ndarray] | None = {} if reuse_query_vectors else None
         self.brain = brain or Brain()
         self.scope_embedded = scope_embedded
         self.question_scale = QUESTION_SCALE if question_scale is None else question_scale
@@ -313,7 +318,11 @@ class Searcher:
             partial = fallback and self._scope is None and len(self._ids) < self.chunk_count()
             t = time.perf_counter()
             try:
-                qvec = np.asarray(self.brain.embed_query(query), dtype=np.float32)
+                qvec = self._query_vectors.get(query) if self._query_vectors is not None else None
+                if qvec is None:
+                    qvec = np.asarray(self.brain.embed_query(query), dtype=np.float32)
+                    if self._query_vectors is not None:
+                        self._query_vectors[query] = qvec
             except RuntimeError:
                 if not degrade:
                     raise
