@@ -63,4 +63,18 @@ describe('guided STAR Server connection',()=>{
    desktop.emitRaw('server-connect-test','result',okReport)
    await waitFor(()=>expect(backend.calls.filter(c=>c.action==='saveSettings').at(-1)?.params.settings).toMatchObject({provider:'star_server'}))
  })
+
+ it('never promotes a server address changed after the successful probe began',async()=>{
+   const backend=host()
+   render(<Harness backend={backend}/>)
+   await userEvent.click(screen.getByRole('button',{name:'Connect to STAR Server'}))
+   await userEvent.type(screen.getByRole('textbox',{name:'Server address'}),'http://192.168.1.20:8080/v1')
+   await userEvent.click(screen.getByRole('button',{name:'Test server'}))
+   await waitFor(()=>expect(backend.calls.filter(c=>c.action==='saveSettings')).toHaveLength(1))
+   await userEvent.clear(screen.getByRole('textbox',{name:'Server address'}))
+   await userEvent.type(screen.getByRole('textbox',{name:'Server address'}),'http://192.168.1.99:8080/v1')
+   desktop.emitRaw('server-connect-test','result',okReport)
+   expect(await screen.findByText('Server settings changed during the test. Test again before connecting.')).toBeTruthy()
+   expect(backend.calls.filter(c=>c.action==='saveSettings')).toHaveLength(1)
+ })
 })
