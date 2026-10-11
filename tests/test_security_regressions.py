@@ -83,3 +83,27 @@ def test_selfbuild_compiles_but_does_not_execute_new_skill(tmp_path):
     assert "syntax check passed" in message
     assert (tmp_path / "star/skills/proposed_skill.py").exists()
     assert not (tmp_path / "executed").exists()
+
+
+def test_json_shaped_secrets_and_event_payload_are_redacted(tmp_path):
+    import sqlite3
+
+    from star.memory import Memory
+
+    secret = "do-not-persist-secret-value-1234567"
+    json_error = '{"api_key": "' + secret + '", "error": "denied"}'
+    safe = redact_text(json_error)
+    assert secret not in safe
+    assert "[REDACTED]" in safe
+    assert secret not in redact_text("access_token: " + secret)
+    assert secret not in redact_text("password=" + secret)
+
+    memory = Memory(tmp_path / "memory.sqlite3")
+    try:
+        memory.event("Test", {"run_id": "test", "answer": redact_text("api_key: " + secret)})
+    finally:
+        memory.close()
+    with sqlite3.connect(tmp_path / "memory.sqlite3") as db:
+        event = db.execute("SELECT event FROM events").fetchone()[0]
+    assert secret not in event
+    assert "[REDACTED]" in event
