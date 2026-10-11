@@ -343,7 +343,7 @@ def test_evaluation_waits_between_queries(fake_clock, tmp_path, monkeypatch):
             if "SELECT path FROM docs" in sql:
                 return [("guide.md",)]
             if "SELECT COUNT(*) FROM chunks" in sql:
-                return [(1,)]
+                return SimpleNamespace(fetchone=lambda: (1,))
             raise AssertionError("unexpected SQL query")
 
     starts = []
