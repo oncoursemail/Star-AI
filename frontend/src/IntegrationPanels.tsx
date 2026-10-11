@@ -203,12 +203,12 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
  return <section className="integrated-panel" aria-label="AI provider settings">
    <div className="integrated-heading"><KeyRound size={18}/><div><strong>Model & provider</strong><span>Local by default. STAR Server keeps everything on your own network. Cloud providers are optional and require your own key.</span></div></div>
    <label className="integrated-field">Inference provider
-     <select value={draft.provider||'local'} disabled={disabled} onChange={e=>onChange({...draft,provider:e.target.value as Provider})}>
+     <select value={connecting?'star_server':draft.provider||'local'} disabled={disabled} onChange={e=>{if(e.target.value==='star_server'){setConnecting(true)}else{setConnecting(false);onChange({...draft,provider:e.target.value as Provider})}}}>
        {providers.map(x=><option value={x} key={x}>{providerNames[x]}</option>)}
      </select>
    </label>
    <p className="integrated-help">After changing provider, save Settings. STAR sends your prompt only to the provider you explicitly selected; ordinary local chat never silently falls back to a cloud model.</p>
-   {usesStarServer(draft)?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
+   {(connecting||usesStarServer(draft))?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
    <div className="integrated-key-controls">
      <label className="integrated-field">Cloud key provider
        <select value={selected} disabled={disabled||pending} onChange={e=>setSelected(e.target.value as CloudProvider)}>

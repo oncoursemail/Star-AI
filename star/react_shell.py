@@ -53,6 +53,7 @@ ALLOWED_ACTIONS = frozenset({
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
+    'serverKeyFileStatus','importServerKeyFile',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
@@ -862,6 +863,12 @@ def launch():
                     token=body.get('key','')
                     save_api_key(name,token)
                     return json.dumps({'ok':True,'data':{'connected':True}})
+                if action=='serverKeyFileStatus':
+                    from .server_key_file import key_file_status
+                    return json.dumps({'ok':True,'data':key_file_status()})
+                if action=='importServerKeyFile':
+                    from .server_key_file import import_key_file
+                    return json.dumps({'ok':True,'data':import_key_file()})
                 if action=='clearProviderKey':
                     name=str(body.get('provider',''))
                     clear_api_key(name)
