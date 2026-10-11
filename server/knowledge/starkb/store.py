@@ -101,6 +101,7 @@ def fts_has_questions(db) -> bool:
 def rebuild_fts(db) -> int:
     """Re-create the FTS table from `chunks` (no sources needed), in one transaction. Used once
     to add the questions column to an index built before the study job existed."""
+    wait_while_locked(log=lambda message: print(message, file=sys.stderr))
     if db.in_transaction:
         db.commit()
     db.execute("BEGIN IMMEDIATE")
@@ -113,6 +114,7 @@ def rebuild_fts(db) -> int:
         n = 0
         for row in db.execute("""SELECT c.id, d.title, c.heading, c.idents, c.text, c.text_sha
                                  FROM chunks c JOIN docs d ON d.id=c.doc_id ORDER BY c.id""").fetchall():
+            wait_while_locked(log=lambda message: print(message, file=sys.stderr))
             db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
                        (row[0], row[1], row[2], row[3], row[4], "\n".join(questions.get(row[5], ()))))
             n += 1
@@ -187,6 +189,7 @@ def _creator_docs(root: Path, base: str):
     class_files = sorted((ref / "classes").glob("*.yaml"))
     raw_cache = {}
     for file in class_files:  # first pass: inheritance map for "Inherits: A > B > C"
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         raw = file.read_text(encoding="utf-8")
         raw_cache[file] = raw
         try:
@@ -196,6 +199,7 @@ def _creator_docs(root: Path, base: str):
             continue
     for group in REFERENCE_GROUPS:
         for file in sorted((ref / group).glob("*.yaml")):
+            wait_while_locked(log=lambda message: print(message, file=sys.stderr))
             rel = file.relative_to(root).as_posix()
             raw = raw_cache.get(file) or file.read_text(encoding="utf-8")
             url = f"{base}/reference/engine/{group}/{file.stem}"
@@ -204,6 +208,7 @@ def _creator_docs(root: Path, base: str):
             except Exception as exc:  # report, never silently drop
                 print(f"SKIP {rel}: {type(exc).__name__}: {exc}")
     for file in sorted(root.rglob("*.md")):
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         rel = file.relative_to(root).as_posix()
         if rel.startswith("includes/"):
             continue  # partials that are transcluded into other pages; no public URL of their own
@@ -220,6 +225,7 @@ def _creator_docs(root: Path, base: str):
 def _luau_site(root: Path, base: str):
     docs = root / "docs"
     for file in sorted(list(docs.rglob("*.md")) + list(docs.rglob("*.mdx"))):
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         rel = file.relative_to(root).as_posix()
         raw = file.read_text(encoding="utf-8", errors="replace")
         from .chunking import frontmatter
@@ -229,6 +235,7 @@ def _luau_site(root: Path, base: str):
             slug = slug[:-5].rstrip("/")
         yield chunk_markdown(raw, path=rel, url=base + ("/" + slug if slug else ""))
     for file in sorted((root / "news").glob("*.md")):
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         rel = file.relative_to(root).as_posix()
         yield chunk_markdown(file.read_text(encoding="utf-8", errors="replace"), path=rel,
                              url=f"{base}/news/{file.stem}", kind="news")

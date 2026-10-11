@@ -281,3 +281,48 @@ def test_initial_fetch_script_uses_shared_quiet_gate_per_checkout():
     script = (Path(__file__).resolve().parents[1] / "fetch.sh").read_text(encoding="utf-8")
     assert script.index("while read -r NAME REPO BRANCH") < script.index("python3 -m starkb.quiet")
     assert script.index("python3 -m starkb.quiet") < script.index('DEST="$HOME_DIR/sources/$NAME"')
+
+def test_full_text_index_migration_checks_between_rows(fake_clock, tmp_path, monkeypatch):
+    index = tmp_path / "index.sqlite3"
+    minimal_index(index)
+    db = store.connect(index)
+    actual = quiet.wait_while_locked
+    checkpoints = []
+
+    def gate(*args, **kwargs):
+        checkpoints.append(fake_clock.now)
+        if len(checkpoints) == 3:
+            fake_clock.arm()
+        return actual(*args, **kwargs)
+
+    monkeypatch.setattr(store, "wait_while_locked", gate)
+    try:
+        assert store.rebuild_fts(db) == 2
+        assert db.execute("SELECT COUNT(*) FROM chunks_fts").fetchone()[0] == 2
+    finally:
+        db.close()
+    assert len(checkpoints) == 3
+    assert fake_clock.sleeps == [5, 5]
+
+
+@pytest.mark.parametrize("walker", ["creator", "luau"])
+def test_document_walkers_pause_between_source_files(fake_clock, tmp_path, monkeypatch, walker):
+    root = tmp_path / "source"
+    docs = root if walker == "creator" else root / "docs"
+    docs.mkdir(parents=True)
+    for name in ("a.md", "b.md"):
+        (docs / name).write_text("# Example\\nEvidence.\\n", encoding="utf-8")
+    parsed = []
+
+    def parse(raw, *, path, url, **_kwargs):
+        parsed.append(path)
+        if len(parsed) == 1:
+            fake_clock.arm()
+        document = Doc(path=path, kind="guide", title=path, url=url)
+        document.chunks.append(Chunk(kind="guide", heading=path, anchor="", text=raw, idents=""))
+        return document
+
+    monkeypatch.setattr(store, "chunk_markdown", parse)
+    make_docs = store._creator_docs if walker == "creator" else store._luau_site
+    assert len(list(make_docs(root, "https://example.invalid"))) == 2
+    assert len(parsed) == 2 and fake_clock.sleeps == [5, 5]
