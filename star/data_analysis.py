@@ -427,6 +427,8 @@ def analyze(datasets: list[dict], arguments: dict) -> dict:
     if operation == "profile":
         if "filters" in arguments or "group_by" in arguments:
             raise ValueError("Profile does not accept filters or grouping; select a specific column instead")
+        if "column" in arguments and arguments["column"] is None:
+            raise ValueError("Profile column must be an exact nonblank column name when supplied")
         return _profile(table, arguments.get("column"))
     numeric_column = None
     if operation == "count":
