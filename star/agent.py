@@ -287,6 +287,13 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 "query": {"type": "string", "description": "Specific research question, at most 600 characters"}
             }, "required": ["query"], "additionalProperties": False}
         }})
+    # MCP Registry is discovery metadata only, never an executable connector.
+    from .tool_discovery import REGISTRY_TOOL, wants_tool_discovery
+    registry_enabled = bool(web_search_enabled and wants_tool_discovery(prompt))
+    if registry_enabled:
+        definitions.append({"type": "function", "function": {
+            "name": REGISTRY_TOOL["name"], "description": REGISTRY_TOOL["description"],
+            "parameters": REGISTRY_TOOL["inputSchema"]}})
     if workspace is not None:
         definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
     def selected(source) -> list[dict]:
@@ -543,6 +550,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             raise PermissionError('Web search is not authorized')
                         if not isinstance(args['query'], str) or not 1 <= len(args['query'].strip()) <= 600:
                             raise ValueError('Invalid web search query')
+                    elif name == 'star_mcp_registry_search':
+                        if (not registry_enabled or not isinstance(args,dict)
+                                or not {'query'} <= set(args) <= {'query','limit'}):
+                            raise PermissionError('Registry discovery is not authorized')
                     elif intelligence is not None and intelligence.owns(name):
                         if name not in enabled_intelligence:
                             raise PermissionError("Intelligence tool not authorized for this task")
@@ -599,6 +610,16 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             data = {"isError": False, "content": [{"type": "text", "text": source_context(found)}]}
                         except Exception as exc:
                             data = {"isError": True, "content": [{"type": "text", "text": f"Search failed: {type(exc).__name__}: {str(exc)[:180]}"}]}
+                    elif name == 'star_mcp_registry_search':
+                        try:
+                            from .tool_discovery import discover_registry
+                            found = await discover_registry(
+                                args['query'], limit=args.get('limit', 5))
+                            data = {"isError": False, "content": [{"type": "text",
+                                    "text": json.dumps(found, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Registry discovery failed: {type(exc).__name__}"}]}
                     elif intelligence is not None and intelligence.owns(name):
                         try:
                             local_output = intelligence.call(name, args, enabled=enabled_intelligence)
