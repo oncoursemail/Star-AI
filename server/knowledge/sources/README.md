@@ -19,7 +19,7 @@ third-party art, translations and external examples must be reviewed separately.
 | Unity Manual | CC BY-NC-ND 4.0 | Unity Companion License v1.4 | **link-only** |
 | Unity Scripting API | CC BY-NC-ND 4.0 | Unity Companion License v1.4 | **link-only** |
 | Microsoft C#/.NET | CC BY 4.0 | MIT | metadata marked ingest-allowed |
-| MDN Web Docs | CC BY-SA 2.5+ (page exceptions) | CC0 for newer snippets, MIT for older | metadata marked ingest-allowed; preserve legacy snippet credits |
+| MDN Web Docs | CC BY-SA 2.5 (page exceptions) | CC0 for newer snippets, MIT for older | metadata marked ingest-allowed; preserve legacy snippet credits |
 | Python standard library | PSF v2 | PSF v2 or 0BSD (modern examples) | metadata marked ingest-allowed |
 | TypeScript Handbook | CC BY 4.0 | MIT | metadata marked ingest-allowed |
 | Lua 5.4 Reference Manual | Lua MIT | Lua MIT | metadata marked ingest-allowed |
