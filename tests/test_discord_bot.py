@@ -320,7 +320,7 @@ def test_registration_uses_real_discord_library_if_optional_dependency_is_instal
     assert group is not None
     names = {cmd.name for cmd in group.commands}
     assert {"ask", "research", "doctor", "converse", "hear", "join", "say", "stop", "leave", "reset"} <= names
-    assert bot.tree.get_command("Ask STAR about this") is not None
+    assert bot.tree.get_command("Ask STAR about this", type=discord.AppCommandType.message) is not None
     asyncio.run(bot.close())
 
 
