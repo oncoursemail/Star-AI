@@ -186,6 +186,7 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
  const [apiKey,setApiKey]=useState('')
  const [pending,setPending]=useState(false)
  const [message,setMessage]=useState('')
+ const [connecting,setConnecting]=useState(false)
  const save=async()=>{
    if(disabled||pending||!apiKey.trim())return
    setPending(true);setMessage('')
@@ -202,6 +203,7 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
  }
  return <section className="integrated-panel" aria-label="AI provider settings">
    <div className="integrated-heading"><KeyRound size={18}/><div><strong>Model & provider</strong><span>Local by default. STAR Server keeps everything on your own network. Cloud providers are optional and require your own key.</span></div></div>
+   {!usesStarServer(draft)&&!connecting&&<button type="button" className="secondary-button" disabled={disabled} onClick={()=>setConnecting(true)}>Connect to STAR Server</button>}
    <label className="integrated-field">Inference provider
      <select value={connecting?'star_server':draft.provider||'local'} disabled={disabled} onChange={e=>{if(e.target.value==='star_server'){setConnecting(true)}else{setConnecting(false);onChange({...draft,provider:e.target.value as Provider})}}}>
        {providers.map(x=><option value={x} key={x}>{providerNames[x]}</option>)}
