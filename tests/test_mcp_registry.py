@@ -95,3 +95,58 @@ def test_cursor_passthrough_remains_query_parameter_not_url():
     data = asyncio.run(RegistryDiscovery(transport=httpx.MockTransport(answer)).call(
         "star_mcp_registry_search", {"query": "roblox", "cursor": "io.github.author/mcp:1.0"}))
     assert data["next_cursor"] == ""
+
+
+def test_agent_registry_tool_is_prompt_gated_and_executes_no_installer():
+    from types import SimpleNamespace
+    from star.agent import execute
+
+    def reply(content=None, calls=None):
+        return SimpleNamespace(choices=[SimpleNamespace(
+            message=SimpleNamespace(content=content, tool_calls=calls))])
+
+    def call(name, args):
+        return SimpleNamespace(id="registry1", function=SimpleNamespace(
+            name=name, arguments=json.dumps(args)))
+
+    class FakeModel:
+        def __init__(self, responses):
+            self.responses = list(responses)
+            self.requests = []
+            self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
+
+        async def create(self, **kwargs):
+            self.requests.append(kwargs)
+            return self.responses.pop(0)
+
+    discovered = RegistryDiscovery(transport=httpx.MockTransport(_registry_response))
+    model = FakeModel([
+        reply(calls=[call("star_mcp_registry_search", {"query": "roblox"})]),
+        reply("Found metadata, not installed tools"),
+    ])
+    answer, messages, _ = asyncio.run(execute(
+        client=model, model="offline-test", prompt="Find Roblox MCP connector tools",
+        image_paths=[], mcp_registry=discovered,
+    ))
+    assert "not installed" in answer
+    declared = {tool["function"]["name"] for tool in model.requests[0]["tools"]}
+    assert "star_mcp_registry_search" in declared
+    assert any("metadata_only_not_connected" in str(msg.get("content"))
+               for msg in messages if msg.get("role") == "tool")
+    assert discovered.calls == 1
+
+    unauthorized = RegistryDiscovery(transport=httpx.MockTransport(_registry_response))
+    model = FakeModel([
+        reply(calls=[call("star_mcp_registry_search", {"query": "roblox"})]),
+        reply("Registry not attached"),
+    ])
+    answer, messages, _ = asyncio.run(execute(
+        client=model, model="offline-test", prompt="Make a chair",
+        image_paths=[], mcp_registry=unauthorized,
+    ))
+    assert answer == "Registry not attached"
+    assert all(tool["function"]["name"] != "star_mcp_registry_search"
+               for tool in (model.requests[0].get("tools") or []))
+    assert any("Tool request rejected" in str(msg.get("content"))
+               for msg in messages if msg.get("role") == "tool")
+    assert unauthorized.calls == 0
