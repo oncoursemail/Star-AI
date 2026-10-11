@@ -27,7 +27,7 @@
       "attribution": "Retain MIT copyright and permission notices in all substantial code copies.",
       "conditions": "Only code within this repository; sample projects elsewhere need their own licence review.",
       "evidence_url": "https://github.com/dotnet/docs/blob/main/LICENSE-CODE",
-      "evidence_quote": "MIT License"
+      "evidence_quote": "The MIT License (MIT)"
     }
   },
   "include": [
