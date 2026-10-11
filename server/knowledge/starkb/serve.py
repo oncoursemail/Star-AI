@@ -41,7 +41,7 @@ import time
 
 from . import luaucheck
 from .client import Brain, DEFAULT_KEY_FILE
-from .search import Searcher, VectorCache
+from .search import Searcher, VectorCache, built_stamp
 from .store import now
 
 SERVICE_MODES = ("vector", "bm25", "hybrid")   # rerank costs about 14 s per query and is not offered
@@ -58,7 +58,7 @@ HEADER_DEADLINE = 5.0           # seconds from accept until the request line and
 BODY_DEADLINE = 10.0            # seconds from the end of the headers until the whole body has arrived
 CACHE_ENTRIES = 512             # search-result cache size
 CACHE_TTL = 900.0               # ... and the age (seconds) after which an entry is recomputed
-GENERATION_RECHECK = 20.0       # how often the index generation is re-read (seconds)
+VECTOR_RECHECK = 300.0          # how often the number of stored vectors is re-read (seconds); a rebuild is seen at once
 _BUSY = (b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 16\r\n"
          b"Retry-After: 1\r\nConnection: close\r\n\r\n" + b'{"error":"busy"}')
 EMBED_TIMEOUT = 5.0             # below the desktop client's 8 s search timeout, so a busy brain degrades to BM25 in time
@@ -93,8 +93,19 @@ def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict
             continue
         owner, _, member = symbol.replace(":", ".").partition(".")
         inherited_from = ""
-        if owner == "Enum" and member:  # Enum.EasingStyle or Enum.EasingStyle.Linear -> the enum page
-            row = _member_row(db, "Enum." + member.split(".")[0])
+        if owner == "Enum" and member:  # Enum.EasingStyle -> the enum page; Enum.EasingStyle.Linear -> its item
+            enum, _, item = member.partition(".")
+            row = _member_row(db, "Enum." + enum)
+            if row is not None and item:
+                # an enum page lists its items as "- Enum.Name.Item = value"; a long enum spans several chunks
+                row = db.execute(
+                    """SELECT c.kind, c.heading, c.anchor, c.text, d.url, d.path, d.title, d.source
+                       FROM chunks c JOIN docs d ON d.id=c.doc_id
+                       WHERE c.heading=? AND c.kind='enum' AND instr(c.text, ?) > 0 ORDER BY c.ord LIMIT 1""",
+                    ("Enum." + enum, f"- Enum.{enum}.{item} =")).fetchone()
+                if row is None:
+                    out.append({"symbol": symbol, "found": False, "reason": f"Enum.{enum} exists but has no item {item}"})
+                    continue
         elif member:
             member = member.split(".")[0]
             row = _member_row(db, f"{owner} > {member}")
@@ -195,7 +206,7 @@ class Service:
         self.db_path = db_path
         self.keys = keys
         self.brain = brain or Brain(timeout=EMBED_TIMEOUT, retries=1)
-        self.vectors = VectorCache()
+        self.vectors = VectorCache(recheck=VECTOR_RECHECK)
         self.started = time.time()
         self.inflight = threading.BoundedSemaphore(MAX_INFLIGHT)
         self.luau_slots = threading.BoundedSemaphore(MAX_LUAU_INFLIGHT)
@@ -203,27 +214,15 @@ class Service:
         self._count_lock = threading.Lock()
         self.log_queries = os.environ.get("STAR_KB_LOG_QUERIES") == "1"
         self.cache = ResultCache()
-        self._generation: tuple = ()
-        self._generation_checked = 0.0
         self.server: "Server | None" = None
 
-    def generation(self, db) -> tuple:
-        """What a cached reply depends on: the build stamp and how many vectors and generated
-        questions exist. Re-read at most every GENERATION_RECHECK seconds."""
-        with self._count_lock:
-            fresh = time.monotonic() - self._generation_checked < GENERATION_RECHECK and self._generation
-        if fresh:
-            return self._generation
-        built = db.execute("SELECT value FROM meta WHERE name='built_at'").fetchone()
-        vectors = db.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
-        try:
-            questions = db.execute("SELECT COUNT(*) FROM chunk_questions").fetchone()[0]
-        except Exception:
-            questions = 0
-        generation = (built[0] if built else "", vectors, questions)
-        with self._count_lock:
-            self._generation, self._generation_checked = generation, time.monotonic()
-        return generation
+    def generation(self, searcher: Searcher) -> tuple:
+        """What a cached reply depends on: the index build (its stamp is read on every call, it
+        is one row) and the vector set this process has loaded. A rebuilt index or newly loaded
+        vectors therefore never get an old reply; within one loaded set a reply may be up to
+        CACHE_TTL old."""
+        searcher.embedded_count()   # loads or re-checks the shared vectors
+        return (built_stamp(searcher.db), self.vectors.loaded_at)
 
     def count(self, name: str) -> None:
         with self._count_lock:
@@ -298,7 +297,7 @@ class Service:
         started = time.perf_counter()
         s = self.searcher()
         try:
-            key = (self.generation(s.db), mode, top, query)
+            key = (self.generation(s), mode, top, query)
             hit = self.cache.get(key)
             if hit is not None:
                 return 200, {**hit, "cached": True,

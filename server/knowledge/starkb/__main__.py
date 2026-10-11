@@ -1,4 +1,5 @@
-"""CLI: python -m starkb {build|stats|subset|embed|search|ask|api-lookup|luau-check|serve|eval}
+"""CLI: python -m starkb {build|stats|subset|embed|search|ask|api-lookup|luau-check|serve|eval|
+                         study-plan|study|study-status|refresh|api-coverage}
 
 Paths default to the deployed layout in the container:
   /opt/star/knowledge/app      this code
@@ -22,7 +23,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--db", type=Path, default=HOME / "data" / "kb.sqlite3")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("build", help="chunk the checked-out sources and rebuild the FTS5 index")
+    p = sub.add_parser("build", help="chunk the checked-out sources and rebuild the FTS5 index (one transaction)")
+    p.add_argument("--force", action="store_true", help="accept a result with far fewer chunks than before")
     sub.add_parser("stats", help="print index statistics")
 
     p = sub.add_parser("subset", help="write the text hashes of a focus-area subset to a file")
@@ -64,9 +66,33 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("file", type=Path)
     p.add_argument("--mode", choices=["strict", "nonstrict"])
 
+    p = sub.add_parser("study-plan", help="write the first study subset (most-mentioned API, most-linked guides)")
+    p.add_argument("--out", type=Path, default=HOME / "data" / "study-subset.txt")
+    p.add_argument("--size", type=int, default=1500)
+
+    p = sub.add_parser("study", help="doc2query: write questions each chunk answers (resumable, low priority)")
+    p.add_argument("--order-file", type=Path, help="text hashes to study first, in this order (study-plan)")
+    p.add_argument("--only-listed", action="store_true", help="stop when the order file is done")
+    p.add_argument("--limit", type=int)
+    p.add_argument("--max-seconds", type=float)
+    p.add_argument("--dry-run", action="store_true", help="print the questions, store nothing")
+
+    sub.add_parser("study-status", help="how far the study job is")
+
+    p = sub.add_parser("refresh", help="nightly: fetch, rebuild, embed changed chunks, check, write a report line")
+    p.add_argument("--modes", default="bm25,vector", help="modes for the 30-question check")
+    p.add_argument("--max-wait", type=float, default=3 * 3600, help="give up if the server lock is held this long")
+    p.add_argument("--report", type=Path)
+
+    p = sub.add_parser("api-coverage", help="is every class and member of the API reference found by api-lookup?")
+    p.add_argument("--out", type=Path)
+
     p = sub.add_parser("eval", help="recall@k / MRR / latency on a question file")
     p.add_argument("--questions", type=Path, default=APP / "eval" / "questions.jsonl")
-    p.add_argument("--modes", default="bm25,vector,hybrid,hybrid+rerank")
+    p.add_argument("--modes", default="bm25,vector,hybrid,hybrid+rerank",
+                   help="comma list; flags: +q (generated questions), +fallback, +rerank")
+    p.add_argument("--scope-file", type=Path, help="text hashes: search only these chunks (subset experiments)")
+    p.add_argument("--question-scale", type=float, help="override search.QUESTION_SCALE for this run")
     p.add_argument("--scope-embedded", action="store_true",
                    help="restrict every mode to chunks that have an embedding (subset experiments)")
     p.add_argument("--out", type=Path)
@@ -76,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd == "build":
         from .store import build
-        stats = build(args.db, HOME / "sources", APP / "corpora.json")
+        stats = build(args.db, HOME / "sources", APP / "corpora.json", force=args.force)
         print(json.dumps(stats, indent=2))
         return 0
 
@@ -89,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
             "chunks": db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0],
             "chunks_by_kind": dict(db.execute("SELECT kind, COUNT(*) FROM chunks GROUP BY kind").fetchall()),
             "embeddings": dict(db.execute("SELECT model, COUNT(*) FROM embeddings GROUP BY model").fetchall()),
+            "generated_questions": db.execute("SELECT COUNT(*) FROM chunk_questions").fetchone()[0],
+            "chunks_with_questions": db.execute(
+                "SELECT COUNT(*) FROM chunks c WHERE EXISTS (SELECT 1 FROM chunk_questions q WHERE q.text_sha=c.text_sha)").fetchone()[0],
             "chunks_with_embedding": db.execute(
                 "SELECT COUNT(*) FROM chunks c WHERE EXISTS (SELECT 1 FROM embeddings e WHERE e.text_sha=c.text_sha)").fetchone()[0],
             "db_bytes": args.db.stat().st_size,
@@ -148,10 +177,48 @@ def main(argv: list[str] | None = None) -> int:
         serve(args.db, host=args.host, port=args.port)
         return 0
 
+    if args.cmd == "study-plan":
+        from .study import plan
+        order, counts = plan(args.db, HOME / "sources", APP / "corpora.json", size=args.size)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text("".join(f"{sha} {reason}\n" for sha, reason in order), encoding="utf-8")
+        print(json.dumps({**counts, "out": str(args.out)}, indent=2))
+        return 0
+
+    if args.cmd == "study":
+        from .study import run
+        result = run(args.db, order_file=args.order_file, only_listed=args.only_listed, limit=args.limit,
+                     max_seconds=args.max_seconds, dry_run=args.dry_run, log=lambda m: print(m, flush=True))
+        print(json.dumps(result, indent=2))
+        return 1 if result["status"] == "failed" else 0
+
+    if args.cmd == "study-status":
+        from .store import connect
+        from .study import progress
+        print(json.dumps(progress(connect(args.db)), indent=2))
+        return 0
+
+    if args.cmd == "refresh":
+        from .refresh import run
+        result = run(args.db, HOME, APP, max_wait=args.max_wait, modes=args.modes, report=args.report,
+                     log=lambda m: print(m, flush=True))
+        return 0 if result["status"] in ("ok", "unchanged", "skipped-lock") else 1
+
+    if args.cmd == "api-coverage":
+        from .coverage import run
+        result = run(args.db, HOME / "sources", APP / "corpora.json")
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(json.dumps(result, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(json.dumps({k: v for k, v in result.items() if k != "missing"}, indent=2))
+        print("first misses:", json.dumps(result["missing"][:40]))
+        return 0
+
     if args.cmd == "eval":
         from .evaluate import run_eval
         result = run_eval(args.db, args.questions, [m.strip() for m in args.modes.split(",") if m.strip()],
-                          scope_embedded=args.scope_embedded, rerank_n=args.rerank_n)
+                          scope_embedded=args.scope_embedded, rerank_n=args.rerank_n,
+                          scope_file=args.scope_file, question_scale=args.question_scale)
         text = json.dumps(result, indent=2, ensure_ascii=False)
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)

@@ -124,11 +124,18 @@ def load_vectors(db) -> Vectors:
     return Vectors(ids, matrix, q_rows, q_matrix)
 
 
+def built_stamp(db) -> str:
+    row = db.execute("SELECT value FROM meta WHERE name='built_at'").fetchone()
+    return row[0] if row else ""
+
+
 class VectorCache:
     """One read-only copy of the embedding matrix for every request thread of the service.
 
-    The embedding job may be resumed later, so the number of stored embeddings is re-read at
-    most every `recheck` seconds and the matrix is reloaded when it changed.
+    * A rebuild renumbers the chunks, so the build stamp is compared on EVERY call (one row) and
+      the vectors are reloaded at once when it changed.
+    * The embedding and study jobs add vectors while the service runs, so the number of stored
+      vectors is re-read at most every `recheck` seconds and the matrix reloaded when it changed.
     """
 
     def __init__(self, recheck: float = 60.0):
@@ -136,6 +143,7 @@ class VectorCache:
         self._lock = threading.Lock()
         self._state: Vectors | None = None
         self._count = -1
+        self._built = None
         self._checked = 0.0
         self.chunks = 0
         self.loaded_at = ""
@@ -143,13 +151,15 @@ class VectorCache:
 
     def get(self, db) -> Vectors:
         with self._lock:
+            built = built_stamp(db)
             stale = time.monotonic() - self._checked > self.recheck
-            if self._state is None or stale:
+            if self._state is None or stale or built != self._built:
                 count = db.execute("SELECT COUNT(*) FROM embeddings WHERE model=?", (EMBED_MODEL,)).fetchone()[0]
                 self._checked = time.monotonic()
-                if self._state is None or count != self._count:
+                if self._state is None or count != self._count or built != self._built:
                     self._state = load_vectors(db)
                     self._count = count
+                    self._built = built
                     self.chunks = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
                     self.loaded_at = now()
             return self._state

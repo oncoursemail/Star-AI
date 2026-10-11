@@ -40,7 +40,6 @@ def build_index(path: Path) -> None:
 def running(tmp_path, monkeypatch):
     monkeypatch.setattr(serve, "HEADER_DEADLINE", 0.6)
     monkeypatch.setattr(serve, "BODY_DEADLINE", 0.6)
-    monkeypatch.setattr(serve, "GENERATION_RECHECK", 0.0)
     index = tmp_path / "kb.sqlite3"
     build_index(index)
     service = serve.Service(index, [KEY], brain=object())

@@ -1,0 +1,30 @@
+[Unit]
+Description=STAR Knowledge nightly refresh (pull docs, rebuild, embed changed chunks, 30-question check)
+Documentation=file:/opt/star/knowledge/app/starkb/refresh.py
+After=network-online.target star-brain.service
+Wants=network-online.target
+
+# Run once by hand:  systemctl start star-knowledge-refresh    Report: /opt/star/knowledge/data/refresh-report.log
+[Service]
+Type=oneshot
+User=star
+Group=star
+WorkingDirectory=/opt/star/knowledge/app
+Environment=PYTHONUNBUFFERED=1
+Environment=STAR_KB_HOME=/opt/star/knowledge
+Environment=STAR_BRAIN_URL=http://127.0.0.1:8080
+Environment=STAR_BRAIN_KEY_FILE=/opt/star/secrets/api_keys
+Environment=GIT_TERMINAL_PROMPT=0 GIT_CONFIG_GLOBAL=/dev/null
+ExecStart=/opt/star/knowledge/venv/bin/python -m starkb refresh
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=6h
+MemoryMax=4G
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/star/knowledge/data /opt/star/knowledge/sources
+RestrictSUIDSGID=yes
+LockPersonality=yes
