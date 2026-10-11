@@ -157,7 +157,8 @@ take the test result from the marked log line.
 ## 6. Studio build loop
 
 `star/studio.py` starts Studio's own MCP launcher and reads the connector's tool list at runtime.
-`star/policy.py` sorts every tool; one it does not know is reported as new and never offered to a model.
+`star/policy.py` sorts every tool; one it does not know is reported as new and never offered to a model, and
+the guard in front of the connector (`GuardedStudio`) refuses it as well.
 With the connector of 2026-10-11 (30 tools):
 
 | Group | Tools | When a model gets them |

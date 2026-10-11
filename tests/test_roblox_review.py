@@ -236,3 +236,19 @@ def test_an_answer_that_echoes_the_key_is_cleaned_before_anyone_sees_it(fake, tm
     assert KEY not in (tmp_path / "roblox" / "actions.json").read_text(encoding="utf-8")
 
 
+# ------------------------------------------------------------------ 5. the guard passes reads it knows, nothing else
+
+def test_the_studio_guard_refuses_a_tool_star_has_never_seen():
+    newer = [*TOOLS, {"name": "publish_to_roblox", "description": "new in some later connector",
+                      "inputSchema": {"type": "object", "properties": {"studio_id": {"type": "string"}}}}]
+    fake_studio = FakeStudio(tools=newer)
+    studio = run(opened(fake_studio))
+    assert studio.verdict.editable
+    before = len(fake_studio.calls)
+    for name in ("publish_to_roblox", "save_place", ""):
+        refused = run(studio.call_tool(name, {"studio_id": SID}))
+        assert refused.model_dump()["isError"]
+    assert len(fake_studio.calls) == before                   # nothing reached the connector
+    assert not run(studio.call_tool("get_studio_state", {"studio_id": SID})).model_dump()["isError"]
+
+

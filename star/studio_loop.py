@@ -20,7 +20,7 @@ import json
 import re
 import secrets
 
-from .policy import BLOCKED_TOOLS, WRITE_TOOLS, classify
+from .policy import BLOCKED_TOOLS, READ_TOOLS, WRITE_TOOLS, classify
 from .roblox_cloud import DENIED_PLACE_IDS, DENIED_UNIVERSE_IDS
 
 PLACE_MARK, EDIT_MARK = "STAR_PLACE ", "STAR_EDIT "
@@ -316,9 +316,10 @@ class _Refused:
 class GuardedStudio:
     """What the agent loop talks to instead of the raw connector session.
 
-    Reads pass through. An edit is refused unless the verdict allows it and it targets the
-    instance that was judged; allowed edits are written to the journal, and a sandbox Luau edit
-    is wrapped so it is one undo step and its additions are known.
+    Reads STAR knows pass through. An edit is refused unless the verdict allows it and it targets
+    the instance that was judged; allowed edits are written to the journal, and a sandbox Luau edit
+    is wrapped so it is one undo step and its additions are known. A tool this class has no rule
+    for (one a later connector adds, whatever it is called) is refused, never passed on.
     """
 
     def __init__(self, session, *, studio_id: str, verdict: Verdict, tools: set[str],
@@ -331,8 +332,10 @@ class GuardedStudio:
         arguments = dict(arguments or {})
         if name in BLOCKED_TOOLS:
             return _Refused("STAR does not use this Studio tool")
-        if name not in WRITE_TOOLS:
+        if name in READ_TOOLS:
             return await self.session.call_tool(name, arguments=arguments)
+        if name not in WRITE_TOOLS:
+            return _Refused("STAR does not know this Studio tool, so it does not use it")
         if not self.verdict.editable:
             return _Refused("Edit refused: " + self.verdict.reason)
         if arguments.get("studio_id") != self.studio_id:
