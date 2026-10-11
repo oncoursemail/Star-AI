@@ -101,6 +101,20 @@ ARCHITECTURE_TOOLS = (
               "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
           },
           ("name", "style", "width_studs", "depth_studs", "floors", "bays")),
+    _tool("star_architecture_compare_styles",
+          "Compare 2-8 procedural architectural art grammars for one Roblox building brief. "
+          "Runs only deterministic local geometry. Does not render or claim visual acceptance.",
+          {
+              "name": _s(48),
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+              "styles": {"type": "array", "items": {"type": "string", "enum": list(PALETTES)},
+                         "minItems": 2, "maxItems": 8, "uniqueItems": True},
+          },
+          ("name", "width_studs", "depth_studs", "floors", "bays")),
 )
 _ID = {"type": "integer", "minimum": 1}
 # Roblox Open Cloud with the owner's API key (star/roblox_cloud.py). The first five only read. The two
@@ -218,6 +232,25 @@ class LocalIntelligence:
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
         if name == "star_architecture_preview":
             return design_summary(make_plan(validate_brief(args)))
+        if name == "star_architecture_compare_styles":
+            names = args.get("styles", list(PALETTES))
+            variants = []
+            for style in names:
+                brief = {key: value for key, value in args.items() if key != "styles"}
+                brief["style"] = style
+                summary = design_summary(make_plan(validate_brief(brief)))
+                variants.append({
+                    "style": style, "roof": summary["roof"],
+                    "grammar": summary["style_grammar"],
+                    "estimated_triangles": summary["audit"]["metrics"]["triangles"],
+                    "prototype_parts": summary["audit"]["metrics"]["parts"],
+                    "static_valid": summary["audit"]["valid"],
+                })
+            return {
+                "variants": variants,
+                "rendered": False, "studio_imported": False,
+                "note": "These are deterministic design prototypes, not ranked visual-quality results.",
+            }
         if name in _DOC_TOOL_NAMES:
             if self.docs is None:
                 raise PermissionError("STAR Knowledge is not configured")

@@ -16,7 +16,7 @@ def local_intelligence(tmp_path):
 def test_architecture_tool_is_discoverable_only_for_roblox_building_prompts(tmp_path):
     local = local_intelligence(tmp_path)
     tools = local.definitions("In my Roblox Studio game build a Blender building with real architecture")
-    assert [t["name"] for t in tools] == ["star_architecture_preview"]
+    assert {t["name"] for t in tools} == {"star_architecture_preview", "star_architecture_compare_styles"}
     assert local.definitions("Explain this GitHub codebase architecture") == []
     assert local.definitions("hello") == []
 
@@ -46,3 +46,27 @@ def test_architecture_tool_rejects_scope_and_bad_model_arguments(tmp_path):
     with pytest.raises(ValueError, match="facade bay"):
         local.call("star_architecture_preview", {**REQUEST, "bays": 8, "width_studs": 24},
                    enabled={"star_architecture_preview"})
+
+
+def test_compare_eight_styles_without_blender_or_any_file_write(tmp_path):
+    local = local_intelligence(tmp_path)
+    request = {key: value for key, value in REQUEST.items() if key != "style"}
+    result = local.call("star_architecture_compare_styles", request,
+                        enabled={"star_architecture_compare_styles"})
+    assert len(result["variants"]) == 8
+    assert {row["style"] for row in result["variants"]} == {
+        "storybook", "industrial", "modern", "spaceport",
+        "gothic", "brutalist", "coastal", "anime_city",
+    }
+    assert all(row["static_valid"] and row["estimated_triangles"] > 0 for row in result["variants"])
+    assert result["rendered"] is False and result["studio_imported"] is False
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_compare_styles_rejects_invalid_unknown_style(tmp_path):
+    local = local_intelligence(tmp_path)
+    request = {key: value for key, value in REQUEST.items() if key != "style"}
+    with pytest.raises(ValidationError):
+        local.call("star_architecture_compare_styles",
+                   {**request, "styles": ["storybook", "unknown"]},
+                   enabled={"star_architecture_compare_styles"})
