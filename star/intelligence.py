@@ -176,6 +176,8 @@ class LocalIntelligence:
                          "read_only": True,
                          "note": "Select an Obsidian vault folder and explicitly enable access."},
             "roblox_research": self.roblox.status() if self.roblox else {"enabled": False},
+            "craft": {"enabled": self.roblox is not None, "read_only": True,
+                      "tools": [tool["name"] for tool in CRAFT_TOOLS] if self.roblox else []},
             "doc_knowledge": {"enabled": self.docs is not None, "read_only": True},
         }
 
