@@ -88,7 +88,7 @@ PERMITTED_SETTINGS = frozenset({
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud',
-    'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
+    'media_images','media_voice','media_video','media_chat_auto','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
 
@@ -665,7 +665,7 @@ def launch():
             self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
-        def _run_image(self, request_id, prompt, files=(), size='square'):
+        def _run_image(self, request_id, prompt, files=(), size='square', followup=False):
             settings=Settings.load(self.settings_file)
             home=app_data()
             self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating your image on this PC...'})
@@ -685,8 +685,14 @@ def launch():
                 if self.cancel_chat.is_set():
                     raise RuntimeError('cancelled by user')
                 self._emit(request_id,'progress',{'phase':'Creating your image on this PC...'})
+            source=files[0] if files else None
+            if followup and source is None:
+                from .chat_images import latest_generated_path
+                source=latest_generated_path(home, settings.project, active_chat)
+                if source is None:
+                    raise ValueError('The previous picture is no longer available to edit.')
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat,size=size,
-                                       source=files[0] if files else None,
+                                       source=source,
                                        mask=files[1] if len(files)>1 else None)
             chats=Conversations(home/'conversations.sqlite3')
             try:
@@ -977,7 +983,7 @@ def launch():
                     self.active_task=True
                     self.cancel_chat = threading.Event()
                     try:
-                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size))
+                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True))
                     except Exception:
                         self.active_task=False
                         raise
