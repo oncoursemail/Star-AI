@@ -38,6 +38,7 @@ export function ResearchWatchPanel({disabled=false}:{disabled?:boolean}) {
   const [evidence,setEvidence]=useState<Evidence|null>(null)
   const [checking,setChecking]=useState(false)
   const [message,setMessage]=useState('')
+  const [nominated,setNominated]=useState('')
   const pending=useRef('')
   const refresh=useCallback(async()=>{
     const reply=await request<ResearchStatus>('researchStatus')
@@ -82,9 +83,21 @@ export function ResearchWatchPanel({disabled=false}:{disabled?:boolean}) {
 
   const showEvidence=async(id:number)=>{
     setEvidence(null)
+    setNominated('')
     const reply=await request<Evidence>('researchEvidence',{observation:id})
     if(reply.ok&&reply.data)setEvidence(reply.data)
     else setMessage(reply.error||'Could not read that observation.')
+  }
+
+  const nominate=async()=>{
+    if(!evidence||disabled)return
+    const reply=await request<{status:string;reason:string;lesson_id:number|null}>(
+      'researchNominate',{observation:evidence.id}
+    )
+    if(!reply.ok||!reply.data)setNominated(reply.error||'Could not queue this evidence.')
+    else if(reply.data.status==='candidate')setNominated('Candidate added to Projects → Learning for your review.')
+    else if(reply.data.status==='duplicate')setNominated('This candidate is already in your Learning review.')
+    else setNominated('Candidate refused by the local lesson safety rules: '+reply.data.reason)
   }
 
   return <Panel className="settings-section integration-panel">
@@ -124,6 +137,8 @@ export function ResearchWatchPanel({disabled=false}:{disabled?:boolean}) {
       <h3>{sourceTitle(evidence.source_id)}</h3>
       <p><ShieldCheck size={15}/> Untrusted source excerpt. Not approved as fact or executable instruction.</p>
       <p style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere',maxHeight:320,overflow:'auto'}}>{evidence.excerpt}</p>
+      <button className="secondary-button" type="button" disabled={disabled} onClick={()=>void nominate()}>Send candidate to Learning review</button>
+      {nominated&&<p role="status">{nominated}</p>}
     </section>}
   </Panel>
 }
