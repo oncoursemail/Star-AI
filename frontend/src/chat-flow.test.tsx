@@ -372,3 +372,22 @@ describe('notices', () => {
     expect(seen('Hi.')).toHaveLength(1)
   })
 })
+
+
+describe('Team and Research are composable', () => {
+  it('lets Research be enabled while Team is active and sends an explicit boolean', async () => {
+    const user = await openChat([], null, {credentials: {brave: true, tavily: false}})
+    await user.click(screen.getByRole('button', {name: /add files and tools/i}))
+    await user.click(screen.getByRole('menuitemcheckbox', {name: /use a team/i}))
+    await user.click(screen.getByRole('button', {name: /add files and tools/i}))
+    const search = screen.getByRole('menuitemcheckbox', {name: /search the web/i})
+    expect(search.getAttribute('aria-disabled')).not.toBe('true')
+    await user.click(search)
+    expect(screen.getByRole('button', {name: /stop searching the web/i})).toBeTruthy()
+    await say(user, 'Investigate Roblox animation references')
+    await waitFor(() => expect(desktop.sent('runTeam')).toHaveLength(1))
+    expect(desktop.sent('runTeam')[0].payload).toMatchObject({
+      prompt: 'Investigate Roblox animation references', research: true,
+    })
+  })
+})
