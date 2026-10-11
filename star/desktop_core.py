@@ -942,11 +942,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         prepared_conversation = None
         async def run():
             nonlocal prepared_conversation
-            from .web_search import search_web, source_context
+            from .deep_research import research_web
+            from .web_search import source_context
             if research:
                 audited_event({'event': 'search_started'})
-                found = await search_web(prompt[:600], limit=5)
-                turn_sections.append(('WEB SEARCH', source_context(found)))
+                batch = await research_web(prompt)
+                evidence = source_context(list(batch.sources))
+                if batch.failed_queries:
+                    evidence += (f"\n\nResearch warning: {batch.failed_queries} of "
+                                 f"{batch.planned_queries} search angles returned no usable snippets.")
+                turn_sections.append(('WEB SEARCH', evidence))
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
@@ -960,6 +965,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
                                else settings.endpoint, route.subagent_model),
                     timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
+                    web_enabled=bool(research),
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
