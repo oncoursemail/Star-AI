@@ -6,7 +6,7 @@ import struct
 import pytest
 
 from star.architecture_pipeline import make_plan, validate_brief
-from star.architecture_quality import audit_plan, design_summary, inspect_glb
+from star.architecture_quality import audit_plan, collision_hints, design_summary, inspect_glb
 
 BRIEF = {"name": "Workshop", "style": "storybook", "width_studs": 36,
          "depth_studs": 24, "floors": 2, "bays": 3}
@@ -96,3 +96,21 @@ def test_glb_inspector_rejects_symlink(tmp_path):
         pytest.skip("Symlinks unavailable")
     with pytest.raises(ValueError, match="ordinary"):
         inspect_glb(link)
+
+
+def test_candidate_collision_kit_preserves_entry_and_window_gaps():
+    plan = fixture_plan()
+    collision = collision_hints(plan)
+    assert collision["verified_in_studio"] is False
+    assert collision["automatic_studio_placement"] is False
+    assert collision["box_count"] > 20
+    assert collision["coordinate_space"] == "Blender XYZ, Z-up, studs"
+    names = {item["name"] for item in collision["boxes"]}
+    assert "foundation" in names and "front_f0_b0_left" in names
+    assert "entry_door" not in names
+    assert not any(name.endswith("_glazing") for name in names)
+    assert all(min(item["size"]) > 0 for item in collision["boxes"])
+    corrupted = fixture_plan()
+    corrupted["parts"][0]["size"] = [0, 0, 0]
+    with pytest.raises(ValueError, match="rejected"):
+        collision_hints(corrupted)
