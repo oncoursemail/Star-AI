@@ -110,6 +110,7 @@ class Window:
     omitted: list[dict]
     through_id: int
     exchanges: list[list[dict]] = field(default_factory=list)
+    records: list[dict] = field(default_factory=list)
 
 
 def select_window(records: list[dict], budget_chars: int, *, current_text: str | None = None) -> Window:
@@ -170,7 +171,7 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
     omitted = [record for record in records if record['id'] <= through_id]
     messages = [message for _, pair, _ in eligible[start:] for message in pair]
     return Window(messages, omitted, through_id,
-                  [group for group, _, _ in eligible[start:]])
+                  [group for group, _, _ in eligible[start:]], records)
 
 
 def omit_messages(window: Window, count: int) -> Window:
@@ -178,11 +179,14 @@ def omit_messages(window: Window, count: int) -> Window:
     if type(count) is not int or count <= 0 or count % 2 or count > len(window.messages):
         raise _error('request pressure did not identify complete replay exchanges')
     cut = count // 2
-    newly_omitted = [record for group in window.exchanges[:cut] for record in group]
+    boundary = window.exchanges[cut - 1][-1]['id']
+    newly_omitted = [record for record in window.records
+                     if window.through_id < record['id'] <= boundary]
     if not newly_omitted:
         raise _error('request pressure has no corresponding original records')
     omitted = [*window.omitted, *newly_omitted]
-    return Window(window.messages[count:], omitted, omitted[-1]['id'], window.exchanges[cut:])
+    return Window(window.messages[count:], omitted, omitted[-1]['id'],
+                  window.exchanges[cut:], window.records)
 
 
 def respect_checkpoint(window: Window, checkpoint: Checkpoint | None) -> Window:
