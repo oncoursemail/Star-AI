@@ -909,6 +909,9 @@ def learning_status(home: Path, project: str) -> dict:
 def write_export(destination: Path, data: dict) -> dict:
     """Save an export where the owner chose. Returns a nonsecret receipt for the interface."""
     destination = Path(destination).expanduser()
+    # Collapse parent traversal before opening: on POSIX, missing-dir/../ still fails.
+    # Keep the final name so replacing an existing destination keeps its usual semantics.
+    destination = destination.parent.resolve(strict=False) / destination.name
     if not destination.suffix:
         destination = destination.with_suffix(".json")
     temporary = destination.with_name(destination.name + ".part")
