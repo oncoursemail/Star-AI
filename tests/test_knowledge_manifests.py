@@ -22,7 +22,7 @@ from starkb.manifests import (  # noqa: E402
 # One independently asserted licence decision for each proposed corpus.
 CORPORA = [
     ("unity-manual", "link-only", "CC-BY-NC-ND-4.0", "Unity-Companion-License-1.4"),
-    ("unity-scripting-api", "link-only", "CC-BY-NC-ND-4.0", "Unity-Companion-License-1.4"),
+    ("unity-scripting-api", "link-only", "CC-BY-NC-ND-4.0", "Unity-Scripting-Reference-Examples-Grant"),
     ("microsoft-dotnet", "ingest-allowed", "CC-BY-4.0", "MIT"),
     ("mdn-web", "ingest-allowed", "CC-BY-SA-2.5", "CC0-1.0-or-MIT"),
     ("python-stdlib", "ingest-allowed", "PSF-2.0", "PSF-2.0-OR-0BSD"),
@@ -40,7 +40,7 @@ def test_official_corpus_manifest_has_verified_rights_and_citations(name, mode, 
     assert doc["licence"]["text"]["id"] == text_licence
     assert doc["licence"]["code_samples"]["id"] == sample_licence
     assert doc["licence"]["text"]["redistribution_allowed"] == (mode == "ingest-allowed")
-    assert doc["licence"]["code_samples"]["redistribution_allowed"] == (mode == "ingest-allowed")
+    assert doc["licence"]["code_samples"]["redistribution_allowed"] == (mode == "ingest-allowed" or name == "unity-scripting-api")
     assert doc["source"]["url"].startswith("https://") and doc["source"]["public_base"].startswith("https://")
     assert doc["include"] and doc["exclude"] and doc["expected_size"]["max"] >= doc["expected_size"]["min"]
     assert doc["update_cadence"]["frequency"] and doc["citation"]["example"].startswith(("Unity", "Microsoft", "MDN", "Python", "TypeScript", "Lua", "Luau", "Godot"))
@@ -75,9 +75,11 @@ def test_the_existing_roblox_index_has_not_been_extended():
     lambda doc: doc.update(schema_version=True),
     lambda doc: doc["source"].update(url="http://example.org/docs"),
     lambda doc: doc["source"].update(kind=[]),
+    lambda doc: doc["source"].update(url="https://example.org/unsafe\\nline"),
     lambda doc: doc["licence"]["text"].update(evidence_quote=""),
     lambda doc: doc["licence"]["text"].update(evidence_url="javascript:alert(1)"),
     lambda doc: doc["licence"]["text"].update(redistribution_allowed="yes"),
+    lambda doc: doc["licence"]["text"].update(id="Unreviewed-Licence"),
     lambda doc: doc["expected_size"].update(min=0),
     lambda doc: doc["expected_size"].update(max=1),
     lambda doc: doc["update_cadence"].update(frequency=[]),
