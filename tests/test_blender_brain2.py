@@ -119,7 +119,8 @@ def test_disabled_tools_cannot_mutate_and_catalog_is_bounded(tmp_path):
 
 def test_probe_and_actual_new_job_does_not_touch_existing_files(tmp_path, monkeypatch):
     import star.blender_bridge as bridge
-    executable = tmp_path / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    executable = tmp_path / "fake-bin" / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    executable.parent.mkdir()
     executable.write_text("test-binary")
     executable.chmod(0o755)
     monkeypatch.setattr(bridge, "discover_blender", lambda _: executable)
