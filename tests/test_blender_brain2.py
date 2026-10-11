@@ -108,6 +108,8 @@ def test_disabled_tools_cannot_mutate_and_catalog_is_bounded(tmp_path):
     assert BUILD not in {t["name"] for t in catalog}
     with pytest.raises(PermissionError):
         asyncio.run(controller.build(SCENE))
+    with pytest.raises(PermissionError):
+        controller.inspect("0" * 24)
     assert not list(tmp_path.iterdir())
 
 
@@ -140,7 +142,7 @@ def test_probe_and_actual_new_job_does_not_touch_existing_files(tmp_path, monkey
     with pytest.raises(ValueError):
         host.inspect("../secret")
     with pytest.raises(ValueError):
-        BlenderController(settings=Settings(project="Other Project"), home=tmp_path).inspect(first["job_id"])
+        BlenderController(settings=Settings(project="Other Project", blender_enabled=True), home=tmp_path).inspect(first["job_id"])
 
 
 def test_process_environment_drops_secrets(monkeypatch):
