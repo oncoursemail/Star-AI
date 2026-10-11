@@ -1,0 +1,37 @@
+[Unit]
+Description=STAR Knowledge study job (doc2query: writes the questions each documentation chunk answers)
+Documentation=file:/opt/star/knowledge/app/starkb/study.py
+After=network-online.target star-brain.service star-knowledge.service
+
+# Start:   systemctl start --no-block star-knowledge-study
+# Stop:    systemctl stop star-knowledge-study      (finishes the chunk in flight, loses nothing)
+# Watch:   journalctl -fu star-knowledge-study      Progress: python -m starkb study-status
+# It is resumable: start it again and it continues. It exits by itself when every chunk is done.
+# The CPU is spent inside star-brain (one request at a time on the small model); the job waits
+# while /opt/star/lock exists.
+[Service]
+Type=oneshot
+User=star
+Group=star
+WorkingDirectory=/opt/star/knowledge/app
+Environment=PYTHONUNBUFFERED=1
+Environment=STAR_KB_HOME=/opt/star/knowledge
+Environment=STAR_BRAIN_URL=http://127.0.0.1:8080
+Environment=STAR_BRAIN_KEY_FILE=/opt/star/secrets/api_keys
+ExecStart=/opt/star/knowledge/venv/bin/python -m starkb study --order-file /opt/star/knowledge/data/study-subset.txt
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=infinity
+TimeoutStopSec=240
+KillMode=mixed
+Restart=on-failure
+RestartSec=300
+MemoryMax=2G
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/star/knowledge/data
+RestrictSUIDSGID=yes
+LockPersonality=yes

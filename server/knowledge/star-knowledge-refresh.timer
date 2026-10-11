@@ -1,0 +1,11 @@
+[Unit]
+Description=STAR Knowledge nightly refresh (10:00 UTC, when the server is least used)
+
+[Timer]
+OnCalendar=*-*-* 10:00:00 UTC
+RandomizedDelaySec=900
+Persistent=true
+Unit=star-knowledge-refresh.service
+
+[Install]
+WantedBy=timers.target

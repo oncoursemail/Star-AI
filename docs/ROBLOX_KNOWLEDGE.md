@@ -70,7 +70,7 @@ offered only for Roblox prompts and only when the knowledge service is configure
 | Tool | Purpose |
 |---|---|
 | `star_docs_search(query, top?)` | Passages from the official Roblox Creator Docs and Luau documentation, with title, URL, commit and licence |
-| `star_api_lookup(symbols[])` | Whether exact engine names exist, their signature, deprecation, and where an inherited member is defined |
+| `star_api_lookup(symbols[])` | Whether exact engine names exist, their signature, deprecation, and where an inherited member is defined. Also answers for globals (`print`, `workspace`) and for enum items: `Enum.KeyCode.Nope` is reported as not found |
 | `star_luau_check(code, strict?)` | Compile and type-analyse a snippet; never runs it |
 
 ## Sources and licences
@@ -81,7 +81,20 @@ code samples) and the Luau documentation, (c) 2019-2026 Roblox Corporation, (c) 
 The index lives on your own STAR Server; nothing from it is shipped with STAR. Passages are shortened excerpts; the
 sources list under an answer links each one to its page and names the repository commit and licence.
 
+## The server side
+
+The service itself is in this repository under `server/knowledge/` (see its README): the HTTP service, the index
+builder, and two background jobs that run on the STAR Server while it is idle.
+
+- **Nightly refresh** (a systemd timer): pulls the two documentation repositories, rebuilds the index, embeds only
+  the chunks whose text changed, checks retrieval on 30 fixed questions and appends one line to a report file. A
+  failed download or a rebuild that would shrink the index leaves the working index untouched.
+- **Study job** (started by hand, resumable): the small model reads each chunk and writes the questions a developer
+  might ask that the chunk answers. The questions are index material only; they are searched, never shown to a model.
+
+Both wait while someone is measuring timings on the server, and both send one request at a time.
+
 ## Code map
 
-`star/doc_knowledge.py` (client and address rule), `star/doc_grounding.py` (prepare and finalize),
+`server/knowledge/` (the service and its jobs), `star/doc_knowledge.py` (client and address rule), `star/doc_grounding.py` (prepare and finalize),
 `star/brain_router.py` (`grounding_plan`), `star/intelligence.py` (tools), `frontend/src/sources.ts` (sources row).
