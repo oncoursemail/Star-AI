@@ -483,7 +483,9 @@ class LessonStore:
         except BaseException:
             self.db.rollback()
             raise
-        self._count(project, "lesson_captured", source_type)
+        if source_type != "summary":
+            # A summary rewords notes that were counted when they were captured.
+            self._count(project, "lesson_captured", source_type)
         if accept:
             self._count(project, "lesson_accepted", "automatic")
         return Captured(lesson_id, "accepted" if accept else "candidate", replaced=replaced)

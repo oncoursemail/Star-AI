@@ -1177,3 +1177,22 @@ def test_deleting_a_summary_gives_its_raw_notes_back_for_review(tmp_path):
         assert store.get("Q", again[0]).status == "rejected"
     finally:
         store.close()
+
+
+def test_a_summary_is_not_counted_as_a_second_captured_lesson(tmp_path):
+    """"Lessons captured" counts what a turn taught. A summary rewords notes that were counted
+    when they were captured; counting it again would double the number without anything new."""
+    metrics = AnalyticsStore(tmp_path / "analytics.sqlite3")
+    store = LessonStore(tmp_path, record=metrics.record)
+    try:
+        for number in range(3):
+            store.capture_inferred(project="P", kind="correction", source_type=L.CONTEXT, source=f"chat:c#{number}",
+                                   text=f"No, make part {number} blue")
+        made = digest.apply_digest(store, "P", digest.waiting(store, "P"),
+                                   [{"from": [1, 2, 3], "kind": "preference", "text": "The owner wants the parts blue."}], "m")
+        assert len(made) == 1 and metrics.summary("P")["learning"] == {"captured": 3, "accepted": 0, "used": 0}
+        store.approve("P", made[0], human_approved=True)
+        assert metrics.summary("P")["learning"] == {"captured": 3, "accepted": 1, "used": 0}
+    finally:
+        store.close()
+        metrics.close()

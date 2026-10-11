@@ -37,7 +37,7 @@ export function AnalyticsView({data}:{data:Analytics}) {
           {[
             {label:'Lessons captured',value:learning.captured,meta:'Last 14 days'},
             {label:'Lessons accepted',value:learning.accepted,meta:'Last 14 days'},
-            {label:'Answers that used lessons',value:learning.used,meta:'Turns with accepted lessons in context'},
+            {label:'Answers given with lessons',value:learning.used,meta:'Accepted lessons were in the prompt'},
             {label:'Waiting for review',value:learning.pending??0,meta:'Right now, on the Projects page'},
           ].map(item=><Panel key={item.label} className="metric-card"><div className="metric-top"><span>{item.label}</span></div><strong>{item.value}</strong><small>{item.meta}</small></Panel>)}
         </div>

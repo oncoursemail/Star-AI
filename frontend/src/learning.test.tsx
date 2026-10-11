@@ -145,7 +145,7 @@ describe('reviewing lessons', () => {
     const many = Array.from({length: 200}, (_, i) => lesson({id: 1000 - i, status: 'candidate', source_type: 'chat-correction',
       text: `No, make part ${i} blue`, origin: 'You said this about one answer'}))
     const invoke = vi.fn(async (action: string) => action === 'listLessons'
-      ? {lessons: [...many, lesson({id: 1})], counts: {candidate: 520, accepted: 1, rejected: 0, superseded: 0, merged: 0, pending: 520, uses: 0}}
+      ? {lessons: [...many, lesson({id: 1, uses: 3})], counts: {candidate: 520, accepted: 1, rejected: 0, superseded: 0, merged: 0, pending: 520, uses: 3}}
       : {})
     render(<LearningPanel project="STAR" settings={settings} invoke={invoke}/>)
     expect(await screen.findByText('No, make part 0 blue')).toBeTruthy()
@@ -157,6 +157,9 @@ describe('reviewing lessons', () => {
     await userEvent.setup().click(screen.getByRole('tab', {name: /Accepted 1/}))
     expect(screen.getByText('Always use task.wait instead of wait.')).toBeTruthy()
     expect(screen.queryByText(/Showing the newest/)).toBeNull()
+    // The count says the lesson was in the prompt, not that the model followed it.
+    expect(screen.getByText(/sent with 3 answers/)).toBeTruthy()
+    expect(screen.queryByText(/used in 3 answers/)).toBeNull()
   })
 
   it('approves a candidate only with the owner\'s explicit confirmation flag', async () => {
@@ -276,13 +279,13 @@ describe('learning counts in Analytics', () => {
     render(<AnalyticsView data={{...base, learning: {captured: 7, accepted: 3, used: 12, pending: 2}}}/>)
     expect(value('Lessons captured')).toBe('7')
     expect(value('Lessons accepted')).toBe('3')
-    expect(value('Answers that used lessons')).toBe('12')
+    expect(value('Answers given with lessons')).toBe('12')
     expect(value('Waiting for review')).toBe('2')
     expect(screen.getByText(/not model training/)).toBeTruthy()
   })
 
   it('shows zeros, not invented activity, when nothing was learned', () => {
     render(<AnalyticsView data={base}/>)
-    for (const label of ['Lessons captured', 'Lessons accepted', 'Answers that used lessons', 'Waiting for review']) expect(value(label)).toBe('0')
+    for (const label of ['Lessons captured', 'Lessons accepted', 'Answers given with lessons', 'Waiting for review']) expect(value(label)).toBe('0')
   })
 })

@@ -129,7 +129,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    :<ul className="learn-list">{shown.map(lesson=>{
      const busy=pending.endsWith(':'+lesson.id)
      return <li key={lesson.id} className="lesson">
-       <div className="lesson-top"><span className="lesson-kind">{kindNames[lesson.kind]||lesson.kind}</span><span className="lesson-origin">{lesson.origin}{day(lesson.created)?' · '+day(lesson.created):''}{lesson.uses?` · used in ${lesson.uses} ${lesson.uses===1?'answer':'answers'}`:''}</span></div>
+       <div className="lesson-top"><span className="lesson-kind">{kindNames[lesson.kind]||lesson.kind}</span><span className="lesson-origin">{lesson.origin}{day(lesson.created)?' · '+day(lesson.created):''}{lesson.uses?` · sent with ${lesson.uses} ${lesson.uses===1?'answer':'answers'}`:''}</span></div>
        {editing===lesson.id
          ?<label className="lesson-edit">New wording<textarea rows={3} maxLength={600} value={draft} autoFocus onChange={e=>setDraft(e.target.value)}/></label>
          :<p className="lesson-text">{lesson.text}</p>}
