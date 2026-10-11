@@ -23,6 +23,8 @@ import re
 DATA_TOOL_NAME = "star_data_analyze"
 MAX_DATASETS = 64
 MAX_ROWS = 50_000
+MAX_PROFILE_COLUMNS = 40
+MAX_PROFILE_CELLS = 200_000
 MAX_COLUMNS = 256
 MAX_FILTERS = 4
 MAX_GROUPS = 100
@@ -39,7 +41,7 @@ _CALC_CONTEXT = Context(
     prec=_SUM_PRECISION, rounding=ROUND_HALF_EVEN, Emin=-999999, Emax=999999,
     capitals=1, clamp=0, traps=[InvalidOperation, DivisionByZero, Overflow],
 )
-_OPERATIONS = {"count", "sum", "mean", "min", "max"}
+_OPERATIONS = {"count", "sum", "mean", "min", "max", "profile"}
 _FILTER_OPERATORS = {"eq", "ne", "gt", "gte", "lt", "lte"}
 _NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
 
@@ -52,10 +54,11 @@ def data_tool_schema() -> dict:
         "function": {
             "name": DATA_TOOL_NAME,
             "description": (
-                "Calculate count, sum, mean, min, or max from an attached data table. "
-                "Use its exact dataset id and column names. Optional filters and grouping "
-                "are bounded. Values come from Decimal calculations, never estimates or "
-                "spreadsheet formula evaluation. Missing numeric cells are reported."
+                "Calculate exact count, sum, mean, min, max, or a bounded quality profile "
+                "from an attached data table. Use exact dataset IDs and column names. "
+                "Aggregates allow bounded filters and grouping; profile reports missing, "
+                "numeric, text, boolean, and formula-looking cells without interpreting formulas. "
+                "Calculations use Decimal; input warnings and partial evidence remain visible."
             ),
             "parameters": {
                 "type": "object",
@@ -64,7 +67,7 @@ def data_tool_schema() -> dict:
                     "operation": {"type": "string", "enum": sorted(_OPERATIONS)},
                     "column": {
                         "type": "string", "minLength": 1, "maxLength": MAX_LABEL_CHARS,
-                        "description": "Exact numeric column name, required except for count. Omit for count.",
+                        "description": "Exact numeric column for aggregate operations; optional for profile (otherwise profiles all columns). Omit for count.",
                     },
                     "group_by": {
                         "type": "string", "minLength": 1, "maxLength": MAX_LABEL_CHARS,
@@ -313,6 +316,95 @@ def _warnings(raw: list[str], results: list[dict]) -> list[str]:
     return warnings[:MAX_WARNINGS - len(extra)] + extra
 
 
+
+def _profile(table: dict, column: str | None) -> dict:
+    """Inspect bounded table shape and mixed types without executing formula text.
+
+    A profile is observational: type_assessment is a heuristic based on parsed
+    cells, not a declared database schema. Never include raw string samples.
+    """
+    columns, rows = table["columns"], table["rows"]
+    if column is None:
+        if len(columns) > MAX_PROFILE_COLUMNS:
+            raise ValueError(f"Profiling more than {MAX_PROFILE_COLUMNS} columns requires an exact column")
+        selected = list(enumerate(columns))
+    else:
+        selected = [(_column(columns, column, "Profile column"), column)]
+    if len(rows) * len(selected) > MAX_PROFILE_CELLS:
+        raise ValueError(
+            f"Profile exceeds {MAX_PROFILE_CELLS} cells; select one column or a smaller attached table"
+        )
+
+    profiles = []
+    for index, name in selected:
+        missing = numeric = text = boolean = formula = invalid_numeric = 0
+        minimum = maximum = None
+        for row_number, row in enumerate(rows, start=1):
+            value = row[index]
+            if value is None or (type(value) is str and not value.strip()):
+                missing += 1
+                continue
+            if type(value) is bool:
+                boolean += 1
+                continue
+            if type(value) is str and value.lstrip().startswith("="):
+                formula += 1
+                continue
+            numeric_like = type(value) in (int, float) or (
+                type(value) is str and len(value.strip()) <= MAX_NUMERIC_CHARS
+                and _NUMBER.fullmatch(value.strip()) is not None
+            )
+            if not numeric_like:
+                text += 1
+                continue
+            try:
+                number = _numeric(value, f"Profile column {name}, row {row_number}")
+            except ValueError:
+                invalid_numeric += 1
+                continue
+            if number is None:
+                missing += 1
+                continue
+            numeric += 1
+            minimum = number if minimum is None else min(minimum, number)
+            maximum = number if maximum is None else max(maximum, number)
+        categories = (
+            (["numeric"] if numeric else [])
+            + (["text"] if text or formula else [])
+            + (["boolean"] if boolean else [])
+            + (["out_of_range_numeric"] if invalid_numeric else [])
+        )
+        profiles.append({
+            "column": name,
+            "type_assessment": "empty" if not categories else categories[0] if len(categories) == 1 else "mixed",
+            "missing_rows": missing,
+            "numeric_rows": numeric,
+            "text_rows": text,
+            "boolean_rows": boolean,
+            "formula_text_rows": formula,
+            "invalid_numeric_rows": invalid_numeric,
+            "numeric_min": None if minimum is None else _decimal_text(minimum),
+            "numeric_max": None if maximum is None else _decimal_text(maximum),
+        })
+
+    extra = []
+    if any(item["type_assessment"] == "mixed" for item in profiles):
+        extra.append("Mixed columns cannot be treated as fully numeric without inspecting source cells.")
+    if any(item["formula_text_rows"] for item in profiles):
+        extra.append("Formula-looking text was counted only; STAR did not evaluate spreadsheet formulas.")
+    if any(item["invalid_numeric_rows"] for item in profiles):
+        extra.append("Some numeric-looking cells exceed accepted size or precision bounds.")
+    source_warnings = _warnings(table["warnings"], [{"exact": True, "value": 0}])
+    return {
+        "dataset_id": table["id"], "dataset_name": table["name"], "operation": "profile",
+        "column": column, "source": table["source"], "input_rows": len(rows),
+        "total_columns": len(columns), "profiled_columns": len(profiles),
+        "profiles": profiles, "counts_exact": True,
+        "warnings": source_warnings[:MAX_WARNINGS - len(extra)] + extra,
+        "notice": "Observed types are heuristic; missing source rows and spreadsheet formula caches are not inferred.",
+    }
+
+
 def analyze(datasets: list[dict], arguments: dict) -> dict:
     """Analyze one attached dataset; invalid requests/data raise ValueError.
 
@@ -332,6 +424,10 @@ def analyze(datasets: list[dict], arguments: dict) -> dict:
         raise ValueError("Unsupported data-analysis operation")
     table = _dataset(datasets, dataset_id)
     columns = table["columns"]
+    if operation == "profile":
+        if "filters" in arguments or "group_by" in arguments:
+            raise ValueError("Profile does not accept filters or grouping; select a specific column instead")
+        return _profile(table, arguments.get("column"))
     numeric_column = None
     if operation == "count":
         if "column" in arguments:
