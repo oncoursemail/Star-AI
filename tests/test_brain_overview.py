@@ -16,7 +16,8 @@ def test_brain_snapshot_reads_temporary_profile_without_network(tmp_path: Path):
     settings.save(settings_file)
     result = brain_snapshot(settings_file, profile)
     assert "brainSnapshot" in ALLOWED_ACTIONS
-    assert result["models"] == ["configured-model", "fast-model"]
+    assert result["models"] == []
+    assert result["configured_models"] == ["configured-model", "fast-model"]
     assert result["skills"]["enabled"] is False
     assert result["lessons"]["candidate"] == 0
     assert result["evaluation"] is None
