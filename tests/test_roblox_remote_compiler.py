@@ -67,7 +67,7 @@ def test_golden_validators():
 
 def test_golden_client_signatures_and_remote_classes():
     output = compile_remotes(SCHEMA)
-    assert sorted(output) == ["Client.luau", "RateLimiter.luau", "Server.luau", "Validators.luau"]
+    assert sorted(output) == ["Client.luau", "RateLimiter.luau", "Remote.spec.luau", "Server.luau", "Validators.luau"]
     client = output["Client.luau"]
     assert "function API.Buy(quantity: number, item: string): any\n    return remote_Buy:InvokeServer(quantity, item)\nend" in client
     assert "function API.Look(yaw: number)\n    remote_Look:FireServer(yaw)\nend" in client
@@ -100,3 +100,10 @@ def test_empty_schema_generates_valid_module_fixtures():
     )
     assert "return API\n" in output["Client.luau"]
     assert "return API\n" in output["Server.luau"]
+
+
+def test_generated_luau_spec_covers_rate_and_validation():
+    spec = compile_remotes(SCHEMA)["Remote.spec.luau"]
+    assert 'assert(not limiter:allow(player, "Probe", 2, 0))' in spec
+    assert "limiter:remove(player)" in spec
+    assert "assert(not Validators.Buy(nil, nil))" in spec
