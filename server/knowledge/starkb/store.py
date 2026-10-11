@@ -235,7 +235,9 @@ def _luau_site(root: Path, base: str):
 WALKERS = {"creator-docs": _creator_docs, "luau-site": _luau_site}
 
 
-def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = False) -> dict:
+def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = False,
+          walkers: dict | None = None, source_metadata: dict | None = None,
+          preserve_other_sources: bool = False) -> dict:
     """Rebuild docs/chunks/FTS from the checked-out repositories, as one transaction (see the
     module text). Embeddings and generated questions are preserved. Raises RebuildRefused, and
     keeps the working index, when the result would have under MIN_REBUILD_RATIO of the chunks it
@@ -246,7 +248,8 @@ def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = Fal
     old_shas = {r[0] for r in db.execute("SELECT DISTINCT text_sha FROM chunks")}
     db.execute("BEGIN IMMEDIATE")
     try:
-        stats = _build_into(db, sources_dir, config)
+        stats = _build_into(db, sources_dir, config, walkers=walkers,
+                            source_metadata=source_metadata, preserve_other_sources=preserve_other_sources)
         after = stats["_all"]["chunks"]
         if before and after < before * MIN_REBUILD_RATIO and not force:
             raise RebuildRefused(f"the rebuild has {after} chunks, the working index has {before}; kept the working index")
@@ -266,11 +269,18 @@ def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = Fal
     return stats
 
 
-def _build_into(db, sources_dir: Path, config: dict) -> dict:
+def _build_into(db, sources_dir: Path, config: dict, *, walkers: dict | None = None,
+                source_metadata: dict | None = None, preserve_other_sources: bool = False) -> dict:
     db.execute("DROP TABLE IF EXISTS chunks_fts")
-    db.execute("DELETE FROM chunks")
-    db.execute("DELETE FROM docs")
-    db.execute("DELETE FROM sources")
+    if preserve_other_sources:
+        for source in config["sources"]:
+            db.execute("DELETE FROM chunks WHERE doc_id IN (SELECT id FROM docs WHERE source=?)", (source["name"],))
+            db.execute("DELETE FROM docs WHERE source=?", (source["name"],))
+            db.execute("DELETE FROM sources WHERE name=?", (source["name"],))
+    else:
+        db.execute("DELETE FROM chunks")
+        db.execute("DELETE FROM docs")
+        db.execute("DELETE FROM sources")
     db.execute(FTS)
     questions: dict[str, list[str]] = {}
     for sha, question in db.execute("SELECT text_sha, question FROM chunk_questions ORDER BY text_sha, ord"):
@@ -278,18 +288,19 @@ def _build_into(db, sources_dir: Path, config: dict) -> dict:
     stats = {}
     for source in config["sources"]:
         name = source["name"]
-        repo = sources_dir / name
-        commit = _git(repo, "rev-parse", "HEAD")
-        commit_date = _git(repo, "log", "-1", "--format=%cI")
+        repo = sources_dir / source.get("checkout", name)
+        metadata = (source_metadata or {}).get(name)
+        commit = metadata["commit"] if metadata else _git(repo, "rev-parse", "HEAD")
+        commit_date = metadata["commit_date"] if metadata else _git(repo, "log", "-1", "--format=%cI")
         db.execute("INSERT INTO sources VALUES(?,?,?,?,?,?,?,?)",
                    (name, source["repo"], source["branch"], commit, commit_date,
                     source["licence"], source["attribution"], now()))
         n_docs = n_chunks = n_chars = 0
-        for doc in WALKERS[name](repo / source["content_root"], source["public_base"]):
+        for doc in (WALKERS if walkers is None else walkers)[name](repo / source["content_root"], source["public_base"]):
             if not doc.chunks:
                 continue
             doc_id = db.execute("INSERT INTO docs(source,path,kind,title,url) VALUES(?,?,?,?,?)",
-                                (name, source["content_root"] + "/" + doc.path, doc.kind, doc.title,
+                                (name, "/".join(p for p in (source["content_root"], doc.path) if p), doc.kind, doc.title,
                                  doc.url)).lastrowid
             n_docs += 1
             for ord_, chunk in enumerate(doc.chunks):
@@ -297,13 +308,13 @@ def _build_into(db, sources_dir: Path, config: dict) -> dict:
                 rowid = db.execute(
                     "INSERT INTO chunks(doc_id,ord,kind,heading,anchor,text,idents,text_sha) VALUES(?,?,?,?,?,?,?,?)",
                     (doc_id, ord_, chunk.kind, chunk.heading, chunk.anchor, chunk.text, chunk.idents, sha)).lastrowid
-                db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
-                           (rowid, doc.title, chunk.heading, chunk.idents, chunk.text,
-                            "\n".join(questions.get(sha, ()))))
                 n_chunks += 1
                 n_chars += len(chunk.text)
         stats[name] = {"commit": commit, "commit_date": commit_date, "docs": n_docs,
                        "chunks": n_chunks, "chars": n_chars}
+    for row in db.execute("SELECT c.id,d.title,c.heading,c.idents,c.text,c.text_sha FROM chunks c JOIN docs d ON d.id=c.doc_id"):
+        db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
+                   (*row[:5], "\n".join(questions.get(row[5], ()))))
     kinds = dict(db.execute("SELECT kind, COUNT(*) FROM chunks GROUP BY kind").fetchall())
     sizes = [r[0] for r in db.execute("SELECT length(text) FROM chunks ORDER BY 1")]
     stats["_all"] = {"chunks": len(sizes), "by_kind": kinds,
