@@ -39,8 +39,16 @@ jobs:
           blender --version | head -n 2
       - name: Generate a real Blender source file and GLB
         run: |
-          python -m star.architecture_pipeline examples/architecture/storybook_shop.json \
-            --out architecture-smoke-output --blender "$(command -v blender)"
+          # The distro Blender's embedded Python does not see apt's dist-packages
+          # unless this explicitly trusted CI process enables the system environment.
+          # STAR's ordinary Blender launch intentionally does NOT enable this mode.
+          mkdir -p "$RUNNER_TEMP/star-blender-bin"
+          printf '%s\n' '#!/bin/sh' 'exec /usr/bin/blender --python-use-system-env "$@"' \
+            > "$RUNNER_TEMP/star-blender-bin/blender"
+          chmod 755 "$RUNNER_TEMP/star-blender-bin/blender"
+          PYTHONPATH=/usr/lib/python3/dist-packages \
+            python -m star.architecture_pipeline examples/architecture/storybook_shop.json \
+            --out architecture-smoke-output --blender "$RUNNER_TEMP/star-blender-bin/blender"
       - name: Verify independent exported GLB evidence
         run: |
           python - <<'PY'
