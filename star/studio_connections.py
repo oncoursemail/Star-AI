@@ -25,16 +25,15 @@ def validate_target(target: str) -> str:
     return target
 
 
-def connection_status(settings, cached: dict | None = None) -> dict:
+def connection_status(settings, cached: dict | None = None, *, home=None) -> dict:
     target = validate_target(settings.studio_target)
     if (cached and cached.get('target') == target
             and cached.get('selected_id', '') == settings.studio_id):
         return dict(cached)
     configured = True
     if target == 'host_launcher':
-        from .studio import custom_launcher
         try:
-            configured = custom_launcher() is not None
+            configured = studio.configured_command(home) is not None
         except Exception:
             configured = False
     return {'target': target, 'label': TARGETS[target],
@@ -50,8 +49,8 @@ def _text(value, bound=200):
             and value == value.strip() and not any(ord(c) < 32 for c in value))
 
 
-def normalize_probe(settings, value) -> dict:
-    result = connection_status(settings)
+def normalize_probe(settings, value, *, home=None) -> dict:
+    result = connection_status(settings, home=home)
     if (type(value) is not dict or value.get('status') not in {'tools_and_instances_discovered', 'tools_discovered_no_instances'}
             or value.get('target') != settings.studio_target
             or value.get('local_mcp') != 'memory' or value.get('server_name') != 'STAR local MCP'
@@ -73,14 +72,14 @@ def normalize_probe(settings, value) -> dict:
     return result
 
 
-async def discover(settings) -> dict:
-    result = connection_status(settings)
+async def discover(settings, *, home=None) -> dict:
+    result = connection_status(settings, home=home)
     if result['state'] == 'unconfigured':
         return result
     from . import local_mcp
     try:
-        value = await asyncio.wait_for(local_mcp.discover(target=settings.studio_target), PROBE_SECONDS)
-        return normalize_probe(settings, value)
+        value = await asyncio.wait_for(local_mcp.discover(target=settings.studio_target, home=home), PROBE_SECONDS)
+        return normalize_probe(settings, value, home=home)
     except asyncio.CancelledError:
         raise
     except Exception as exc:
@@ -90,10 +89,10 @@ async def discover(settings) -> dict:
         return result
 
 
-async def select_instance(settings, identifier: str) -> dict:
+async def select_instance(settings, identifier: str, *, home=None) -> dict:
     if not _text(identifier):
         raise ValueError('Choose a discovered Studio instance')
-    report = await discover(settings)
+    report = await discover(settings, home=home)
     if report['state'] != 'connected' or identifier not in {item['id'] for item in report['instances']}:
         raise ValueError('The selected Studio is not available on this connection; test it again')
     settings.studio_id = identifier

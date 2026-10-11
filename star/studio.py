@@ -5,13 +5,16 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import stat
 import sys
 
 # The owner's launcher for a Studio that is not on this PC, for example one reached over SSH:
 # a JSON list, program first, e.g. ["ssh", "-o", "BatchMode=yes", "<host>", "<launcher script>"].
-# It must speak the Studio connector's MCP over standard input and output. Read from the process
-# environment only: a model, a project file or a tool result cannot set it.
+# It must speak the Studio connector's MCP over standard input and output. Legacy calls read the
+# process environment; the desktop also accepts a validated snapshot from its explicit operator
+# data home. A model, a project file or a tool result cannot set the command.
 COMMAND_ENV = "STAR_STUDIO_MCP_COMMAND"
+MAX_COMMAND_BYTES = 22_000
 INITIALIZE_SECONDS = 30
 DISCOVERY_SECONDS = 20
 INSTANCE_SECONDS = 15
@@ -57,30 +60,133 @@ def _errors(error):
     return [error]
 
 
+def validate_command(parts):
+    """Freeze host-only argv; no shell parsing and no public argument diagnostics."""
+    if (type(parts) not in (list, tuple) or not 1 <= len(parts) <= 40
+            or any(not isinstance(part, str) or not part or len(part) > 500
+                   or any(ord(c) < 32 or ord(c) == 127 for c in part) for part in parts)
+            or not parts[0].strip()):
+        raise StudioTransportError("The host-defined Studio launcher command is invalid.")
+    try:
+        if _json_bytes(parts) > MAX_COMMAND_BYTES:
+            raise ValueError
+    except (ValueError, TypeError, UnicodeError):
+        raise StudioTransportError("The host-defined Studio launcher command is invalid.") from None
+    return tuple(parts)
+
+
 def custom_launcher():
     """(program, arguments) from STAR_STUDIO_MCP_COMMAND, or None when it is not set."""
     raw = os.environ.get(COMMAND_ENV, "").strip()
     if not raw:
         return None
-    if len(raw) > 22_000:
-        raise RuntimeError(f"{COMMAND_ENV} must be a bounded JSON list of strings")
     try:
+        if len(raw.encode("utf-8")) > MAX_COMMAND_BYTES:
+            raise ValueError
         parts = json.loads(raw)
-    except ValueError:
-        parts = None
-    if (not isinstance(parts, list) or not 1 <= len(parts) <= 40
-            or any(not isinstance(part, str) or not part or len(part) > 500
-                   or any(ord(c) < 32 or ord(c) == 127 for c in part) for part in parts)
-            or not parts[0].strip()):
-        raise RuntimeError(f"{COMMAND_ENV} must be a JSON list of strings: the program, then its arguments")
-    return parts[0], parts[1:]
+        if type(parts) is not list:
+            raise ValueError
+        command = validate_command(parts)
+    except (ValueError, UnicodeError, RecursionError, StudioTransportError):
+        raise StudioTransportError("The host-defined Studio launcher environment must be a bounded JSON list of strings.") from None
+    return command[0], list(command[1:])
 
 
-def launcher(target=None):
+def _plain_file(info):
+    return (stat.S_ISREG(info.st_mode) and info.st_nlink == 1
+            and not getattr(info, "st_file_attributes", 0) & 0x400)
+
+
+def _directory_stamp(path):
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or getattr(info, "st_file_attributes", 0) & 0x400:
+        raise ValueError
+    return info.st_dev, info.st_ino
+
+
+def configured_command(home=None):
+    """Snapshot operator argv: environment first, then this explicit home's file.
+
+    The file's target field never selects a route or grants permissions. Missing
+    configuration is unconfigured; malformed/unreadable/linked files fail closed.
+    No file is created, repaired, or disclosed to the UI/model.
+    """
+    try:
+        profile = Path(home) if home is not None else None
+        if profile is not None and (not profile.is_absolute() or ".." in profile.parts):
+            raise ValueError
+        # Never treat a linked ancestor as this explicit host-selected profile.
+        parents, profile_exists = [], True
+        if profile is not None:
+            for parent in [*reversed(profile.parents), profile]:
+                try:
+                    parents.append((parent, _directory_stamp(parent)))
+                except FileNotFoundError:
+                    profile_exists = False
+                    break
+        custom = custom_launcher()
+        if custom is not None:
+            if any(_directory_stamp(parent) != stamp for parent, stamp in parents):
+                raise ValueError
+            return (custom[0], *custom[1])
+        if profile is None or not profile_exists:
+            return None
+        folder = profile / "studio"
+        path = folder / "remote.json"
+        try:
+            parents.append((folder, _directory_stamp(folder)))
+        except FileNotFoundError:
+            return None
+        try:
+            before = path.lstat()
+        except FileNotFoundError:
+            return None
+        if not _plain_file(before) or before.st_size > MAX_COMMAND_BYTES:
+            raise ValueError
+        flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+        with os.fdopen(os.open(path, flags), "rb") as stream:
+            opened = os.fstat(stream.fileno())
+            if not _plain_file(opened) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+                raise ValueError
+            raw = stream.read(MAX_COMMAND_BYTES + 1)
+            after = os.fstat(stream.fileno())
+        if (len(raw) > MAX_COMMAND_BYTES or len(raw) != after.st_size
+                or (opened.st_size, opened.st_mtime_ns) != (after.st_size, after.st_mtime_ns)):
+            raise ValueError
+        if any(_directory_stamp(parent) != stamp for parent, stamp in parents):
+            raise ValueError
+        current = path.lstat()
+        if (not _plain_file(current) or (current.st_dev, current.st_ino, current.st_size, current.st_mtime_ns)
+                != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)):
+            raise ValueError
+
+        def unique_keys(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError
+                result[key] = value
+            return result
+
+        saved = json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_keys)
+        if type(saved) is not dict or "command" not in saved:
+            raise ValueError
+        parts = saved["command"]
+        return None if type(parts) is list and not parts else validate_command(parts)
+    except (OSError, ValueError, UnicodeError, RecursionError, StudioTransportError):
+        raise StudioTransportError("The host-defined Studio launcher configuration is invalid or unavailable.") from None
+
+
+def launcher(target=None, *, command=None):
     """An explicit host-selected route wins over legacy environment inference."""
     if target not in (None, "local_pc", "host_launcher"):
         raise StudioTransportError("Unknown Studio connection target; choose local_pc or host_launcher.")
     if target != "local_pc":
+        if command is not None:
+            if target != "host_launcher":
+                raise StudioTransportError("An explicit Studio command requires the configured-host target.")
+            argv = validate_command(command)
+            return argv[0], list(argv[1:]), None
         custom = custom_launcher()
         if custom:
             return custom[0], custom[1], None
@@ -97,7 +203,7 @@ def launcher(target=None):
 
 
 @asynccontextmanager
-async def connect(*, target=None):
+async def connect(*, target=None, command=None):
     """Initialize a transport, not a health claim. Discover tools/instances separately.
 
     MCP SDK context managers stay in their owning task; only the request is timed.
@@ -106,7 +212,7 @@ async def connect(*, target=None):
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
     from mcp.shared.exceptions import McpError
-    command, args, path = launcher(target)
+    program, args, path = launcher(target, command=command)
     if path is not None and not path.is_file():
         raise RuntimeError("Roblox Studio MCP launcher is missing. Enable Studio MCP and update Studio.")
     safe_vars = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP",
@@ -118,7 +224,7 @@ async def connect(*, target=None):
     # The SDK merges its own fixed safe defaults; do not pass ambient provider keys,
     # the custom command itself, or shell-function definitions to the child.
     env = {k: v for k, v in os.environ.items() if k.upper() in safe_vars and not v.startswith("()")}
-    params = StdioServerParameters(command=command, args=list(args), env=dict(env),
+    params = StdioServerParameters(command=program, args=list(args), env=dict(env),
                                    cwd=path.parent if path is not None else None)
     stage, caller_error = "process startup", None
     try:

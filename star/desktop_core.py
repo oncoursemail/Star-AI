@@ -535,9 +535,9 @@ def query_models(settings: Settings) -> list[str]:
         return [str(item['id']) for item in data.get('data', []) if isinstance(item, dict) and item.get('id')]
 
 
-def check_studio(settings: Settings | None = None):
+def check_studio(settings: Settings | None = None, home: Path | None = None):
     from .studio_connections import discover
-    return asyncio.run(discover(settings or Settings()))
+    return asyncio.run(discover(settings or Settings(), home=home if home is not None else app_data()))
 
 
 def redact_for_logs(value):
@@ -701,7 +701,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
              cancel_event=None, github_enabled: bool = False, chat_id: str | None = None,
-             owner_text: str | None = None) -> str:
+             owner_text: str | None = None, studio_configuration_home: Path | None = None) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in.
 
     `owner_text` is what the owner typed, when `prompt` also carries text STAR added (an
@@ -911,7 +911,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     kwargs.update(model=model, request_extras=slot_fields(model))
                     if allow_studio:
                         from .local_mcp import connect_studio
-                        async with connect_studio(settings, home) as guarded:
+                        async with connect_studio(settings, home, studio_configuration_home=studio_configuration_home) as guarded:
                             # The tool list is the connector's own, read now. What STAR may do in
                             # the open place is decided in code from what that place is.
                             discovered = guarded.discovered

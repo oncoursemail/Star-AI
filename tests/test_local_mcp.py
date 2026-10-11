@@ -168,10 +168,11 @@ def test_mcp_calls_are_serialized():
 def test_discovery_uses_exact_route_and_actual_local_status_protocol(monkeypatch):
     seen = []
     remote = object()
+    monkeypatch.setenv(local_mcp.studio.COMMAND_ENV, '["fixture-launcher"]')
 
     @asynccontextmanager
-    async def connect(*, target):
-        seen.append(target)
+    async def connect(*, target, command=None):
+        seen.append((target, command))
         yield remote
 
     async def probe(client, *, studio_id=None):
@@ -182,7 +183,7 @@ def test_discovery_uses_exact_route_and_actual_local_status_protocol(monkeypatch
     monkeypatch.setattr(local_mcp.studio, "connect", connect)
     monkeypatch.setattr(local_mcp.studio, "probe", probe)
     result = run(local_mcp.discover(target="host_launcher", studio_id="s1"))
-    assert seen == ["host_launcher"] and result["local_mcp"] == "memory"
+    assert seen == [("host_launcher", ("fixture-launcher",))] and result["local_mcp"] == "memory"
     assert result["server_name"] == "STAR local MCP" and result["selected"]["id"] == "s1"
 
 
@@ -198,6 +199,141 @@ def test_discovery_failure_does_not_become_connected(monkeypatch):
     monkeypatch.setattr(local_mcp.studio, "probe", probe)
     with pytest.raises(local_mcp.studio.StudioTransportError):
         run(local_mcp.discover())
+
+
+@pytest.mark.parametrize('mode', ['discover', 'factory'])
+def test_per_home_command_routes_through_real_local_mcp_without_global_env_or_auto_grants(monkeypatch, tmp_path, mode):
+    import json
+    import os
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio
+    seen, closed = [], []
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV, raising=False)
+
+    @asynccontextmanager
+    async def connect(*, target, command=None):
+        assert target == 'host_launcher' and type(command) is tuple
+        assert local_mcp.studio.COMMAND_ENV not in os.environ
+        seen.append(command)
+        fake = FakeStudio()
+        try:
+            yield fake
+        finally:
+            closed.append(command)
+            assert fake.scripts == {} and not fake.history
+            assert local_mcp.studio.COMMAND_ENV not in os.environ
+
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio_loop, 'own_account_id', lambda *_: pytest.fail('No account read without own-place opt-in'))
+    async def scenario():
+        for index in range(2):
+            home = tmp_path / str(index)
+            path = home / 'studio' / 'remote.json'
+            path.parent.mkdir(parents=True)
+            # The stored target cannot override the explicit host route or grant edits.
+            path.write_text(json.dumps({'target':'pc', 'command':['fixture-launcher', f'private-argument-{index}']}))
+            fake_id = FakeStudio().studio_id
+            if mode == 'discover':
+                result = await local_mcp.discover(target='host_launcher', studio_id=fake_id, home=home)
+            else:
+                current = Settings(studio_target='host_launcher', studio_id=fake_id)
+                async with local_mcp.connect_studio(current, home) as connection:
+                    assert not connection.verdict.editable
+                    assert not current.studio_edit and not current.studio_luau
+                    response = await connection.client.call_tool(local_mcp.STATUS_TOOL, {})
+                    assert not response.isError
+                    result = response.structuredContent
+            assert result['target'] == 'host_launcher' and result['selected']['id'] == fake_id
+            assert result['local_mcp'] == 'memory'
+            assert f'private-argument-{index}' not in json.dumps(result)
+    run(scenario())
+    assert seen == [('fixture-launcher', 'private-argument-0'), ('fixture-launcher', 'private-argument-1')]
+    assert closed == seen
+
+
+@pytest.mark.parametrize('mode', ['discover', 'factory'])
+def test_local_pc_never_reads_host_file_or_environment_in_local_mcp(monkeypatch, tmp_path, mode):
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio
+    fake, routes = FakeStudio(), []
+    path = tmp_path / 'studio' / 'remote.json'
+    path.parent.mkdir()
+    path.write_text('invalid fixture-secret')
+    monkeypatch.setenv(local_mcp.studio.COMMAND_ENV, 'invalid fixture-secret')
+    monkeypatch.setattr(local_mcp.studio, 'configured_command', lambda *_: pytest.fail('This PC must ignore host configuration'))
+    @asynccontextmanager
+    async def connect(*, target, command=None):
+        assert command is None
+        routes.append(target)
+        yield fake
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    async def scenario():
+        if mode == 'discover':
+            result = await local_mcp.discover(home=tmp_path)
+        else:
+            async with local_mcp.connect_studio(Settings(studio_id=fake.studio_id), tmp_path) as connection:
+                result = connection.status
+        assert result['target'] == 'local_pc' and result['local_mcp'] == 'memory'
+    run(scenario())
+    assert routes == ['local_pc'] and fake.scripts == {} and not fake.history
+
+
+def test_configuration_home_never_moves_native_account_or_durable_ledger_home(monkeypatch, tmp_path):
+    import json
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio
+    persistence, configuration = tmp_path / 'persistence', tmp_path / 'configuration'
+    persistence.mkdir()
+    configuration.mkdir()
+    for home, name in [(persistence, 'wrong-launcher'), (configuration, 'selected-launcher')]:
+        path = home / 'studio' / 'remote.json'
+        path.parent.mkdir()
+        path.write_text(json.dumps({'command':[name]}))
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV, raising=False)
+    accounts, routes = [], []
+    def account(home):accounts.append(home);return 0
+    fake = FakeStudio()
+    @asynccontextmanager
+    async def connect(*, target, command=None):
+        routes.append((target, command))
+        yield fake
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio_loop, 'own_account_id', account)
+    async def scenario():
+        current = Settings(studio_target='host_launcher', studio_id=fake.studio_id, studio_own_places=True)
+        async with local_mcp.connect_studio(current, persistence, studio_configuration_home=configuration) as connection:
+            assert connection.guarded._uncertainty_store.path == persistence / 'studio-uncertainty.sqlite3'
+            response = await connection.client.call_tool(local_mcp.STATUS_TOOL, {})
+            assert not response.isError and response.structuredContent['selected']['id'] == fake.studio_id
+        assert routes == [('host_launcher', ('selected-launcher',))] and accounts == [persistence]
+        assert not (configuration / 'studio-uncertainty.sqlite3').exists()
+    run(scenario())
+
+
+@pytest.mark.parametrize('mode', ['discover', 'factory'])
+@pytest.mark.parametrize('raw', [None, '[]', '{"command":[]}', 'invalid fixture-secret'])
+def test_bad_or_absent_host_configuration_never_connects_or_falls_back(monkeypatch, tmp_path, mode, raw):
+    from star.desktop_core import Settings
+    monkeypatch.delenv(local_mcp.studio.COMMAND_ENV, raising=False)
+    if raw is not None:
+        path = tmp_path / 'studio' / 'remote.json'
+        path.parent.mkdir()
+        path.write_text(raw)
+    @asynccontextmanager
+    async def connect(**_):
+        pytest.fail('Invalid host configuration cannot launch a connector')
+        yield
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    async def scenario():
+        with pytest.raises(local_mcp.studio.StudioTransportError) as error:
+            if mode == 'discover':
+                await local_mcp.discover(target='host_launcher', home=tmp_path)
+            else:
+                async with local_mcp.connect_studio(Settings(studio_target='host_launcher'), tmp_path):
+                    pytest.fail('Invalid configuration must refuse before opening a task')
+        assert 'fixture-secret' not in str(error.value)
+        assert not (tmp_path / 'studio-uncertainty.sqlite3').exists()
+    run(scenario())
 
 
 def test_empty_remote_instances_are_explicit_and_never_selected(monkeypatch):
@@ -227,6 +363,7 @@ def test_real_local_protocol_accepts_delayed_unnamed_studio_without_reconnecting
     from star.desktop_core import Settings
     from tests.studio_fake import FakeStudio, text
     fake = FakeStudio()
+    monkeypatch.setenv(local_mcp.studio.COMMAND_ENV, '["fixture-launcher"]')
     original = fake.call_tool
     attempts, routes = [], []
     async def delayed(name, arguments=None):
@@ -237,8 +374,9 @@ def test_real_local_protocol_accepts_delayed_unnamed_studio_without_reconnecting
             return text({'studios': [] if len(attempts) < 3 else [item]})
         return await original(name, arguments)
     @asynccontextmanager
-    async def connect(*, target):
+    async def connect(*, target, command=None):
         routes.append(target)
+        assert command == (("fixture-launcher",) if target == 'host_launcher' else None)
         yield fake
     fake.call_tool = delayed
     monkeypatch.setattr(local_mcp.studio, 'connect', connect)
@@ -461,10 +599,13 @@ def test_proxy_host_undo_waits_for_active_tool():
 async def bound_fake(monkeypatch, tmp_path, fake, *, target='local_pc', editable=True):
     """Real desktop bridge + SDK memory transport + actual guard; only Roblox is fake."""
     from star.desktop_core import Settings
+    if target == 'host_launcher':
+        monkeypatch.setenv(local_mcp.studio.COMMAND_ENV, '["fixture-launcher"]')
     routes=[]
     @asynccontextmanager
-    async def connect(*,target):
+    async def connect(*,target,command=None):
         routes.append(target)
+        assert command == (("fixture-launcher",) if target == 'host_launcher' else None)
         yield fake
     monkeypatch.setattr(local_mcp.studio,'connect',connect)
     monkeypatch.setattr(local_mcp.studio_loop,'own_account_id',lambda _:None)

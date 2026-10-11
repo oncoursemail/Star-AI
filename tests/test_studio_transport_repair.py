@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import json
+import os
 from types import SimpleNamespace
 
 import pytest
@@ -89,6 +90,193 @@ def install_sdk(monkeypatch, tmp_path, *, custom=False, mode=None):
     monkeypatch.setattr(mcp, "ClientSession", FakeSession)
     monkeypatch.setattr(mcp.client.stdio, "stdio_client", fake_stdio)
     return captured, parent
+
+
+def write_host_config(home, command, **extra):
+    path = home / "studio" / "remote.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"target": "server", "command": command, **extra}), encoding="utf-8")
+    return path
+
+
+def test_profile_commands_are_isolated_immutable_and_do_not_change_environment(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    first, second = tmp_path / "first", tmp_path / "second"
+    write_host_config(first, ["first-launcher", "first-argument"])
+    write_host_config(second, ["second-launcher", "second-argument"])
+    frozen = studio.configured_command(first)
+    assert frozen == ("first-launcher", "first-argument")
+    assert studio.configured_command(second) == ("second-launcher", "second-argument")
+    write_host_config(first, ["changed-launcher"])
+    assert frozen == ("first-launcher", "first-argument")
+    assert studio.COMMAND_ENV not in os.environ
+    assert studio.configured_command(tmp_path / "missing") is None
+    write_host_config(first, [])
+    assert studio.configured_command(first) is None
+
+
+def test_host_environment_precedence_and_invalid_environment_never_falls_back(monkeypatch, tmp_path):
+    path = write_host_config(tmp_path, ["file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, '["environment-launcher", "argument"]')
+    assert studio.configured_command(tmp_path) == ("environment-launcher", "argument")
+    path.write_bytes(b"invalid file that an explicit valid environment overrides")
+    assert studio.configured_command(tmp_path) == ("environment-launcher", "argument")
+    write_host_config(tmp_path, ["file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, "fixture-secret invalid environment")
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value)
+
+
+@pytest.mark.parametrize("raw", [
+    b"", b"not JSON fixture-secret", b"[]", b"{}", b'{"command":null}',
+    b'{"command":"fixture-secret"}', b'{"command":[] ,"command":["other"]}',
+    b'{"command":["program","bad\\nargument"]}', b'{"command":[" "]}',
+    b'{"command":["program",false]}', b'{"command":["program","bad\\u007fargument"]}',
+    b'\xff', b" " * (studio.MAX_COMMAND_BYTES + 1),
+])
+def test_malformed_or_oversize_host_file_fails_closed_without_private_diagnostics(monkeypatch, tmp_path, raw):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    path = write_host_config(tmp_path, [])
+    path.write_bytes(raw)
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value) and str(path) not in str(failure.value)
+
+
+@pytest.mark.parametrize("command", [["x"] * 41, ["x" * 501], ["program", "x" * 501], [""]])
+def test_host_argv_limits_apply_to_file_and_explicit_transport(monkeypatch, tmp_path, command):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    write_host_config(tmp_path, command)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    with pytest.raises(studio.StudioTransportError):
+        studio.launcher("host_launcher", command=command)
+
+
+def test_nonregular_linked_and_unreadable_config_are_refused(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    path = write_host_config(tmp_path, ["program"])
+    other = tmp_path / "hardlink.json"
+    os.link(path, other)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    other.unlink()
+    path.unlink()
+    path.mkdir()
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(tmp_path)
+    path.rmdir()
+    write_host_config(tmp_path, ["program"])
+    monkeypatch.setattr(studio.os, "open", lambda *_: (_ for _ in ()).throw(PermissionError("fixture-secret")))
+    with pytest.raises(studio.StudioTransportError) as failure:
+        studio.configured_command(tmp_path)
+    assert "fixture-secret" not in str(failure.value)
+
+
+@pytest.mark.parametrize("directory", [False, True])
+def test_symlink_host_file_or_folder_is_refused(monkeypatch, tmp_path, directory):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    source = write_host_config(tmp_path / "source", ["program"])
+    home = tmp_path / "linked"
+    home.mkdir()
+    if not directory:
+        (home / "studio").mkdir()
+    link = home / "studio" if directory else home / "studio" / "remote.json"
+    try:
+        link.symlink_to(source.parent if directory else source, target_is_directory=directory)
+    except OSError:
+        pytest.skip("Host cannot create a synthetic symlink")
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(home)
+
+
+@pytest.mark.parametrize('home', ['relative', '.', '..'])
+def test_relative_profile_root_is_refused_even_with_valid_environment(monkeypatch, home):
+    monkeypatch.setenv(studio.COMMAND_ENV, '["fixture-launcher"]')
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(home)
+
+
+@pytest.mark.parametrize('ancestor', [False, True])
+def test_linked_profile_root_or_ancestor_is_refused(monkeypatch, tmp_path, ancestor):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    real = tmp_path / 'real'
+    write_host_config(real / 'profile' if ancestor else real, ['fixture-launcher'])
+    link = tmp_path / 'linked'
+    if os.name == 'nt':
+        import _winapi
+        _winapi.CreateJunction(str(real), str(link))
+    else:
+        link.symlink_to(real, target_is_directory=True)
+    try:
+        with pytest.raises(studio.StudioTransportError):
+            studio.configured_command(link / 'profile' if ancestor else link)
+    finally:
+        link.rmdir() if os.name == 'nt' else link.unlink()
+
+
+def test_parent_replacement_during_read_is_refused(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    profile = tmp_path / 'profile'
+    write_host_config(profile, ['original-launcher'])
+    original_stamp = studio._directory_stamp
+    calls = 0
+    def replaced(path):
+        nonlocal calls
+        if path == profile:
+            calls += 1
+            if calls == 2:
+                profile.rename(tmp_path / 'old-profile')
+                write_host_config(profile, ['replacement-launcher'])
+        return original_stamp(path)
+    monkeypatch.setattr(studio, '_directory_stamp', replaced)
+    with pytest.raises(studio.StudioTransportError):
+        studio.configured_command(profile)
+    assert calls == 2 and (tmp_path / 'old-profile' / 'studio' / 'remote.json').exists()
+
+
+def test_host_file_read_has_a_hard_byte_bound(monkeypatch, tmp_path):
+    monkeypatch.delenv(studio.COMMAND_ENV, raising=False)
+    write_host_config(tmp_path, ['fixture-launcher'])
+    original_fdopen = studio.os.fdopen
+    reads = []
+    class Reader:
+        def __init__(self, fd, mode):self.stream = original_fdopen(fd, mode)
+        def __enter__(self):self.stream.__enter__();return self
+        def __exit__(self, *args):return self.stream.__exit__(*args)
+        def fileno(self):return self.stream.fileno()
+        def read(self, size):reads.append(size);return self.stream.read(size)
+    monkeypatch.setattr(studio.os, 'fdopen', Reader)
+    assert studio.configured_command(tmp_path) == ('fixture-launcher',)
+    assert reads == [studio.MAX_COMMAND_BYTES + 1]
+
+
+def test_explicit_host_argv_is_a_connection_snapshot_without_environment_mutation(monkeypatch, tmp_path):
+    captured, _ = install_sdk(monkeypatch, tmp_path)
+    write_host_config(tmp_path, ["profile-launcher", "private-fixture-argument"])
+    command = studio.configured_command(tmp_path)
+    write_host_config(tmp_path, ["changed-file-launcher"])
+    monkeypatch.setenv(studio.COMMAND_ENV, '["later-environment-launcher"]')
+
+    async def scenario():
+        async with studio.connect(target="host_launcher", command=command):
+            assert captured["params"].command == "profile-launcher"
+            assert captured["params"].args == ["private-fixture-argument"]
+            assert captured["params"].cwd is None
+            assert studio.COMMAND_ENV not in captured["params"].env
+    run(scenario())
+    assert captured["initialized"] == 1 and captured["closed"] == ["session", "transport"]
+
+
+def test_this_pc_ignores_host_argv_and_environment_even_when_invalid(monkeypatch, tmp_path):
+    captured, parent = install_sdk(monkeypatch, tmp_path)
+    monkeypatch.setenv(studio.COMMAND_ENV, "invalid fixture-secret")
+    async def scenario():
+        async with studio.connect(target="local_pc", command=object()):
+            assert captured["params"].command == "cmd.exe"
+            assert captured["params"].args == ["/d", "/c", str(parent / "mcp.bat")]
+    run(scenario())
 
 
 def test_local_batch_parent_cwd_and_initialize_is_not_a_health_probe(monkeypatch, tmp_path):
