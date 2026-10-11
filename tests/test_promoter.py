@@ -323,11 +323,12 @@ def test_expiry_never_overwrites_a_lesson_changed_after_promotion(tmp_path):
         first_receipt = store.apply(first)
         note_id = first_receipt["after"]["row"]["id"]
         second = propose_allowed(store, other)
-        store.apply(second)
+        second_receipt = store.apply(second)
         store.db.execute("UPDATE notes SET text=? WHERE id=?",
                          ("Owner-edited lesson must be preserved", note_id))
         store.db.commit()
-        due = datetime.fromisoformat(first_receipt["expires_at"])
+        due = max(datetime.fromisoformat(first_receipt["expires_at"]),
+                  datetime.fromisoformat(second_receipt["expires_at"]))
         # One conflicted expiry must not abort the other due expiry.
         assert store.expire(due) == [second]
         assert store.record(first)["state"] == "applied"
