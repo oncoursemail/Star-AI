@@ -22,9 +22,9 @@ import httpx
 
 # Fixed, reviewed URL allowlist. Adding a source requires normal code review.
 SOURCES = {
-    "roblox-studio-mcp": "https://create.roblox.com/docs/studio/mcp",
-    "roblox-external-tools": "https://create.roblox.com/docs/projects/external-tools",
-    "luau-typechecking": "https://luau.org/typecheck",
+    "roblox-studio-mcp": "https://create.roblox.com/docs/studio/mcp.md",
+    "roblox-external-tools": "https://create.roblox.com/docs/projects/external-tools.md",
+    "luau-typechecking": "https://luau.org/types/",
     "github-actions-security": "https://docs.github.com/en/actions/reference/security/secure-use",
     "github-build-attestations": "https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations",
 }
