@@ -24,7 +24,7 @@ CORPORA = [
     ("unity-manual", "link-only", "CC-BY-NC-ND-4.0", "Unity-Companion-License-1.4"),
     ("unity-scripting-api", "link-only", "CC-BY-NC-ND-4.0", "Unity-Companion-License-1.4"),
     ("microsoft-dotnet", "ingest-allowed", "CC-BY-4.0", "MIT"),
-    ("mdn-web", "ingest-allowed", "CC-BY-SA-2.5-or-later", "CC0-1.0-or-MIT"),
+    ("mdn-web", "ingest-allowed", "CC-BY-SA-2.5", "CC0-1.0-or-MIT"),
     ("python-stdlib", "ingest-allowed", "PSF-2.0", "PSF-2.0-OR-0BSD"),
     ("typescript-handbook", "ingest-allowed", "CC-BY-4.0", "MIT"),
     ("lua-5-4", "ingest-allowed", "MIT", "MIT"),
