@@ -952,16 +952,16 @@ def launch():
                     self.active_task=True
                     try:
                         retry_id=body.get('retryMessageId')
-                    if retry_id is not None:
-                        if type(retry_id) is not int or retry_id < 1 or selected:
-                            raise ValueError('Invalid Retry request')
-                        chats=Conversations(app_data()/'conversations.sqlite3')
-                        try:
-                            current=Settings.load(self.settings_file).project
-                            chats.recover_turn(current,chats.active_chat(current),retry_id,prompt)
-                        finally:
-                            chats.close()
-                    self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github,retry_id=retry_id))
+                        if retry_id is not None:
+                            if type(retry_id) is not int or retry_id < 1 or selected:
+                                raise ValueError('Invalid Retry request')
+                            chats=Conversations(app_data()/'conversations.sqlite3')
+                            try:
+                                current=Settings.load(self.settings_file).project
+                                chats.recover_turn(current,chats.active_chat(current),retry_id,prompt)
+                            finally:
+                                chats.close()
+                        self._run(rid,action,lambda:self._run_chat(rid,prompt,selected,mode=mode,research=research,github=github,retry_id=retry_id))
                     except Exception:
                         self.active_task=False
                         raise
