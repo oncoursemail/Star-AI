@@ -94,10 +94,10 @@ Executed in an isolated source overlay with no Discord token, GPU, bot, or live 
 ```text
 python -m compileall -q star/discord_bot
 PYTHONPATH=<isolated_overlay> python -m pytest -q tests/test_discord_bot.py
-14 passed; one optional test skipped when discord.py was not installed
+15 passed; one optional test skipped when discord.py was not installed
 ```
 
-Tested pure permission validation, isolated/expiring bounded memory, message formatting, voice waveform and metadata, audio constraints, fake model calls without tools, source-grounded research seam, global-sync safety, privacy-safe diagnostics, and turn-based recorded conversation orchestration. The optional test verifies actual application command registration **only when discord.py is installed**; this environment did not satisfy that condition.
+Tested pure permission validation, isolated/expiring bounded memory, message formatting, voice waveform and metadata, audio constraints, fake model calls without tools, source-grounded research seam, global-sync safety, privacy-safe diagnostics, and turn-based recorded conversation orchestration. Real FFmpeg OGG/Opus encode/decode also passed on the local test host; tests skip this step if FFmpeg is absent. GitHub Actions verified the Discord-specific test job on both Ubuntu and Windows, with `discord.py[voice]` installed and the command-registration test exercising the actual library. This is not a live Discord bot or encrypted voice channel test. The optional test verifies actual application command registration **only when discord.py is installed**; this environment did not satisfy that condition.
 
 **Not tested here:** live Discord auth, OAuth, channel permissions, app command registration, real model generation, verified full-duplex live voice, actual Opus encode in a user environment, real Discord native player display, microphone or real STT/TTS output, Windows 11 installer/tray lifecycle, real 403/429 behaviors, real-world latency/availability or the repository's entire Python/TypeScript test suites.
 
