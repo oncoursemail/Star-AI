@@ -322,3 +322,18 @@ def test_registration_uses_real_discord_library_if_optional_dependency_is_instal
     assert {"ask", "research", "doctor", "converse", "hear", "join", "say", "stop", "leave", "reset"} <= names
     assert bot.tree.get_command("Ask STAR about this") is not None
     asyncio.run(bot.close())
+
+
+def test_real_ffmpeg_round_trip_when_system_codec_is_available():
+    """Run real audio encoding/decoding without GPU, model keys or Discord network."""
+    import shutil
+    binary = shutil.which("ffmpeg")
+    if not binary:
+        pytest.skip("FFmpeg is optional and not installed on this runner")
+    pcm = b"\x01\x04" * 16000  # one second, 16 kHz mono PCM
+    msg = voice_message(pcm, 16000, executable=binary)
+    assert msg.ogg.startswith(b"OggS")
+    assert abs(msg.duration_secs - 1.0) < 0.01
+    assert len(base64.b64decode(msg.waveform)) == 10
+    decoded = decode_attachment(msg.ogg, executable=binary)
+    assert abs(len(decoded) - len(pcm)) < 3200  # Opus has codec delay/priming
