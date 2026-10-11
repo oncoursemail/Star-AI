@@ -61,6 +61,21 @@ describe('Research Watch candidate evidence',()=>{
     expect(desktop.sent('researchNominate')[0].payload).toEqual({observation:7})
   })
 
+  it('starts with background research off and only enables via owner setting',async()=>{
+    const onChange=vi.fn()
+    desktop.onAction('researchStatus',()=>({ok:true,data:initial}))
+    const user=userEvent.setup()
+    const {rerender}=render(<ResearchWatchPanel autoCheck={false} onAutoChange={onChange}/>)
+    const checkbox=screen.getByRole('checkbox',{name:'Daily automatic research'})
+    expect((checkbox as HTMLInputElement).checked).toBe(false)
+    expect(desktop.sent('researchCheck')).toHaveLength(0)
+    await user.click(checkbox)
+    expect(onChange).toHaveBeenCalledWith(true)
+    expect(desktop.sent('researchCheck')).toHaveLength(0)
+    rerender(<ResearchWatchPanel autoCheck={true} onAutoChange={onChange}/>)
+    expect((screen.getByRole('checkbox',{name:'Daily automatic research'}) as HTMLInputElement).checked).toBe(true)
+  })
+
   it('does not connect to public docs in the inactive website preview',async()=>{
     render(<ResearchWatchPanel disabled/>)
     expect(screen.getByRole('button',{name:'Check official sources'}).hasAttribute('disabled')).toBe(true)
