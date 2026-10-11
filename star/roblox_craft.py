@@ -49,7 +49,10 @@ def _instance_path(value: object) -> str:
 def _number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
     return number if math.isfinite(number) else None
 
 
@@ -147,8 +150,8 @@ def audit(instances: list[dict], scripts: list[dict] | None = None, *, target: s
                     and not any(q["class"] == "UITextSizeConstraint" and p.rpartition(".")[0] == path
                                 for p, q in by_path.items()):
                 add("ui-text-constraint", "ui", "review", path,
-                    "TextScaled is true and no UITextSizeConstraint child appears in the complete snapshot.",
-                    "Consider explicit text constraints and test the player's preferred text size.",
+                    "TextScaled is true; no UITextSizeConstraint child appears in the supplied sample.",
+                    "Check for an existing child constraint in Studio, then test preferred text size.",
                     doc="accessibility", certainty="heuristic")
             if prop.get("TextWrapped") is False and isinstance(prop.get("Text"), str) \
                     and len(prop["Text"]) > 65:
