@@ -60,6 +60,20 @@ Expect `[PASS] W03b Matches SHA256SUMS.txt` and `[PASS] W03c Matches the digest 
 
 Expect: the wizard reuses the previous folder; it replaces `_internal` only. It must not touch `%APPDATA%\STAR`.
 
+### W04b Run Setup while STAR is open [manual, Restart Manager]
+
+1. Launch the OLD STAR version and begin a long streamed response; leave STAR open.
+2. Run the NEW Setup executable over that installation, including a silent-install trial.
+3. Confirm Windows Restart Manager closes STAR automatically without the dialog
+   "Setup was unable to automatically close all applications" and without manually ending STAR in Task Manager.
+4. Relaunch STAR, reopen the chat, and verify the interrupted turn has a saved
+   cancellation notice (not a completed answer). Check that the installer replaced the runtime
+   and preserved the existing profile. Record whether shutdown completed within two seconds.
+5. Also repeat with STAR idle and with a Windows sign-out/session-end request.
+
+Expect: Setup finishes without a close-applications failure, STAR exits promptly,
+no duplicate answer is saved, and existing chat history remains available.
+
 ### W05 STAR launches and the old runtime is gone [manual]
 
 Expect: the window title reads `STAR Intelligence — vX.Y.Z` with the new version, the sidebar shows your old chats, and no error dialog appears. Record the exact version shown. (`W07` and `W08` below prove replacement and preservation by measurement.)
