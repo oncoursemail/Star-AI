@@ -7,6 +7,7 @@ tool. Actual test evidence is stored locally; learned advice needs human review.
 from __future__ import annotations
 
 import argparse
+import hashlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
@@ -60,7 +61,7 @@ class PracticePlan:
         for name in ("universe_id", "place_id"):
             if type(raw[name]) is not int or not 0 < raw[name] < 2**63:
                 raise ValueError("Practice target IDs must be positive integers")
-        if raw["builder"] not in {"builtin", "rojo"}:
+        if not isinstance(raw["builder"], str) or raw["builder"] not in {"builtin", "rojo"}:
             raise ValueError("Practice builder must be builtin or rojo")
         interval = raw["interval_seconds"]
         daily = raw["daily_limit"]
@@ -154,7 +155,11 @@ class PracticeLedger:
                 (plan.project, *plan.target, today),).fetchall()
             if len(existing) >= plan.daily_limit:
                 raise PracticeRefused("Practice daily budget exhausted for this target")
-            last = existing[0] if existing else None
+            # Enforce the minimum interval even across UTC date boundaries.
+            last = self.db.execute(
+                "SELECT start_utc FROM practice_cycles WHERE project=? AND "
+                "universe_id=? AND place_id=? ORDER BY id DESC LIMIT 1",
+                (plan.project, *plan.target)).fetchone()
             if last is not None:
                 try:
                     recent = datetime.fromisoformat(last["start_utc"]).timestamp()
@@ -172,12 +177,12 @@ class PracticeLedger:
             self.db.rollback()
             raise
 
-    def previous_failure(self, plan: PracticePlan) -> dict | None:
+    def previous_failure(self, plan: PracticePlan, before_cycle: int) -> dict | None:
         row = self.db.execute(
-            "SELECT source_sha256,cases_json,saved_version FROM practice_cycles "
-            "WHERE project=? AND universe_id=? AND place_id=? AND status='failed' "
-            "ORDER BY id DESC LIMIT 1", (plan.project, *plan.target)).fetchone()
-        if row is None:
+            "SELECT status,source_sha256,cases_json,saved_version FROM practice_cycles "
+            "WHERE project=? AND universe_id=? AND place_id=? AND id<? "
+            "ORDER BY id DESC LIMIT 1", (*((plan.project,) + plan.target), before_cycle)).fetchone()
+        if row is None or row["status"] != "failed":
             return None
         return {"sha256": row["source_sha256"], "cases": json.loads(row["cases_json"]),
                 "version": row["saved_version"]}
@@ -287,10 +292,10 @@ def practice_once(cloud: RobloxCloud, plan: PracticePlan, ledger: PracticeLedger
                                              zip(("universe_id", "place_id"), plan.target)):
         raise PracticeRefused("Roblox did not confirm the operator-selected target")
     cycle_id = ledger.reserve(plan)
-    prior = ledger.previous_failure(plan)
+    prior = ledger.previous_failure(plan, cycle_id)
     try:
         report = pipeline(pinned, plan.source, publish_and_test=True,
-                          builder=plan.builder)
+                          builder=plan.builder, home=ledger.path.parent)
         status, sha, version, summary = _verified_result(report, plan)
     except BaseException:
         # A remote write may have completed before our process lost its response.
@@ -313,7 +318,7 @@ def practice_once(cloud: RobloxCloud, plan: PracticePlan, ledger: PracticeLedger
             evidence = f"prior sha={prior['sha256'][:12]} new sha={sha[:12]} saved version={version}"
             recorded = lessons.capture_inferred(project=plan.project, kind="pitfall", text=text,
                                                 source_type="verified-fix",
-                                                source=f"brain2-practice:{cycle_id}:{_clean_name(case_name)[:60]}",
+                                                source=f"brain2-practice:{cycle_id}:{hashlib.sha256(case_name.encode()).hexdigest()[:12]}",
                                                 evidence=evidence)
             if recorded.status == "candidate":
                 result["learning_candidates"] += 1
@@ -373,6 +378,10 @@ def main(argv=None) -> int:
     except KeyboardInterrupt:
         print(json.dumps({"status": "interrupted", "notice": "An in-flight Roblox write may have continued. Check the ledger and version history."}))
         return 130
+    except Exception as exc:
+        print(json.dumps({"status": "unknown", "reason": type(exc).__name__,
+                          "notice": "Inspect the pending practice ledger and Roblox version history."}))
+        return 1
 
 
 if __name__ == "__main__":
