@@ -193,6 +193,7 @@ describe('Roblox test experience and approvals', () => {
   it('describes outcomes without inventing a success', () => {
     expect(describeAction(waiting)).toContain('as a saved version')
     expect(describeResult({...waiting, status: 'failed', result: {error: 'Publishing failed: the key lacks the permission for this (HTTP 403)'}})).toContain('HTTP 403')
+    expect(describeResult({...waiting, status: 'unknown', result: {error: 'The place file was sent, but no answer came back from Roblox (ReadTimeout). It is not known whether Roblox saved a new version'}})).toContain('not known')
     expect(describeResult({...waiting, status: 'rejected'})).toBe('You rejected this.')
     expect(describeResult({...waiting, status: 'expired'})).toBe('Expired before a decision.')
     expect(describeResult({...waiting, kind: 'run_test', status: 'failed', result: {state: 'FAILED', log_lines: 3}})).toBe('Test run ended as FAILED with 3 log lines.')

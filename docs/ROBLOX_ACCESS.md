@@ -75,6 +75,10 @@ Settings > Roblox > Actions waiting for you. An approved action is carried out o
 minutes; at most five can wait. The model cannot approve: approval is an interface action, not a tool.
 An approval is for the place the action named: if another test experience is chosen before the owner decides,
 the action fails without sending anything.
+An action ends as **done**, **failed** or **unknown**. "Unknown" means the request was sent and no answer came
+back (a time-out, a dropped connection): Roblox may or may not have carried it out, and STAR says so instead of
+calling it failed. A read that fails while a test is running is tried again until the deadline, and a finished
+test keeps its result even when its log lines could not be fetched.
 Publishing always creates a **saved** version (`versionType=Saved`), never a live one.
 
 ## 4. Headless pipeline (no Studio, runs on the PC or a Linux server)

@@ -51,6 +51,14 @@ class CloudError(ValueError):
     """A refusal or failure whose text is safe to show to the owner and to the model."""
 
 
+class OutcomeUnknown(CloudError):
+    """A write was sent and no answer came back. It may have happened: never reported as "failed"."""
+
+
+# With these the request never left this machine, so a write certainly did not happen.
+_NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
+
+
 # --------------------------------------------------------------------------- endpoints
 
 @dataclass(frozen=True)
@@ -301,6 +309,8 @@ class OpenCloud:
                 status = response.status_code
         except httpx.HTTPError as exc:
             # The exception text can hold the URL, never a header; the type name is enough.
+            if spec.write and not isinstance(exc, _NOT_SENT):
+                raise OutcomeUnknown(f"no answer came back from Roblox ({type(exc).__name__})") from None
             raise CloudError(f"Roblox could not be reached ({type(exc).__name__})") from None
         try:
             data = json.loads(b"".join(chunks)) if chunks else None
@@ -672,10 +682,15 @@ class RobloxCloud:
         target = self.guard_write(only)
         if not scope_allows(self._scopes, "universe-places", "write", target["universe_id"]):
             raise CloudError("The key lacks universe-places:write for the test experience")
-        reply = self._cloud().call(
-            "publish_place", universe=target["universe_id"], place=target["place_id"],
-            params={"versionType": version_type}, content=data, timeout=120.0,
-            content_type="application/xml" if xml else "application/octet-stream")
+        try:
+            reply = self._cloud().call(
+                "publish_place", universe=target["universe_id"], place=target["place_id"],
+                params={"versionType": version_type}, content=data, timeout=120.0,
+                content_type="application/xml" if xml else "application/octet-stream")
+        except OutcomeUnknown as exc:
+            raise OutcomeUnknown(
+                f"The place file was sent, but {exc}. It is not known whether Roblox saved a new version: "
+                "look at the place's version history on create.roblox.com before publishing again.") from None
         version = reply.data.get("versionNumber") if isinstance(reply.data, dict) else None
         if reply.status != 200 or type(version) is not int:
             raise CloudError(f"Publishing failed: {explain_status(reply.status)} (HTTP {reply.status}) "
@@ -693,11 +708,15 @@ class RobloxCloud:
         if not scope_allows(self._scopes, "universe.place.luau-execution-session", "write", target["universe_id"]):
             raise CloudError("The key lacks universe.place.luau-execution-session:write for the test experience")
         ids = {"universe": target["universe_id"], "place": target["place_id"]}
-        if version is not None:
-            created = self._cloud().call("luau_create", body={"script": script}, timeout=60.0,
-                                         version=positive_id(version, "version"), **ids)
-        else:
-            created = self._cloud().call("luau_create_latest", body={"script": script}, timeout=60.0, **ids)
+        try:
+            if version is not None:
+                created = self._cloud().call("luau_create", body={"script": script}, timeout=60.0,
+                                             version=positive_id(version, "version"), **ids)
+            else:
+                created = self._cloud().call("luau_create_latest", body={"script": script}, timeout=60.0, **ids)
+        except OutcomeUnknown as exc:
+            raise OutcomeUnknown(f"The test was asked for, but {exc}. It is not known whether it started; "
+                                 "if it did, it runs for at most five minutes.") from None
         record = {"universe_id": ids["universe"], "place_id": ids["place"], "version": version,
                   "http": {"create": created.status}, "state": "NOT_CREATED", "started_at": _utc(self.now())}
         path = self._task_path(created.data.get("path") if isinstance(created.data, dict) else None, ids)
@@ -709,9 +728,16 @@ class RobloxCloud:
         deadline = self.now() + wait_seconds
         task = None
         while True:
-            reply = self._cloud().call("luau_task", **path["ids"])
-            record["http"]["task"] = reply.status
-            if reply.status == 200 and isinstance(reply.data, dict):
+            # The task exists on Roblox from here on. A read that does not get through is tried
+            # again until the deadline; it never throws away the record of a test that is running.
+            try:
+                reply = self._cloud().call("luau_task", **path["ids"])
+            except CloudError as exc:
+                reply, unread = None, str(exc)
+            record["http"]["task"] = reply.status if reply is not None else None
+            if reply is None:
+                pass
+            elif reply.status == 200 and isinstance(reply.data, dict):
                 task = reply.data
                 record["state"] = str(task.get("state") or record["state"])
                 if record["state"] in ("COMPLETE", "FAILED", "CANCELLED"):
@@ -720,7 +746,8 @@ class RobloxCloud:
                 record["error"] = f"Reading the test failed: {explain_status(reply.status)} (HTTP {reply.status})"
                 break
             if self.now() >= deadline:
-                record["error"] = f"The test did not finish within {int(wait_seconds)} seconds"
+                record["error"] = (f"The test did not finish within {int(wait_seconds)} seconds"
+                                   + (f" (the last read failed: {unread})" if reply is None else ""))
                 record["state"] = "TIMED_OUT"
                 break
             self.sleep(poll_seconds)
@@ -742,7 +769,11 @@ class RobloxCloud:
                 "ids": {**ids, "version": int(found.group(3)), "session": found.group(4), "task": found.group(5)}}
 
     def _logs(self, ids: dict) -> dict:
-        reply = self._cloud().call("luau_logs", params={"maxPageSize": 1000}, **ids)
+        try:
+            reply = self._cloud().call("luau_logs", params={"maxPageSize": 1000}, **ids)
+        except CloudError as exc:
+            # The test's state and returned value are already known; only its log lines are missing.
+            return {"logs": [], "log_lines": 0, "logs_http": None, "logs_error": f"The logs could not be read: {exc}"}
         lines: list[str] = []
         if reply.status == 200 and isinstance(reply.data, dict):
             for chunk in reply.data.get("luauExecutionSessionTaskLogs") or ():
@@ -827,6 +858,8 @@ class RobloxCloud:
             failed = bool(result.get("error")) or result.get("state") in ("FAILED", "CANCELLED", "TIMED_OUT",
                                                                            "NOT_CREATED")
             outcome = ("failed" if failed else "done", result)
+        except OutcomeUnknown as exc:
+            outcome = ("unknown", {"error": str(exc)[:400]})
         except (CloudError, OSError, KeyError) as exc:
             outcome = ("failed", {"error": str(exc)[:400]})
         with _LOCK:

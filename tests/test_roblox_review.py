@@ -136,3 +136,81 @@ def test_the_owner_is_shown_the_whole_script_of_a_waiting_action(fake, tmp_path)
     assert len(asked["detail"]["script_preview"]) <= 300
 
 
+# ------------------------------------------------------------------ 4. "failed" only when it is known to have failed
+
+def test_no_answer_after_a_place_file_was_sent_is_unknown_not_failed(fake, tmp_path):
+    sent = []
+
+    def lost(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/versions"):
+            sent.append(request.url.path)
+            raise httpx.ReadTimeout("no answer", request=request)
+        return fake.handle(request)
+
+    cloud = ready(fake, tmp_path, lost)
+    data = build_place(EXAMPLE).data
+    with pytest.raises(rc.OutcomeUnknown, match="not known"):
+        cloud.publish_place(data)
+    action = cloud.request_action("publish", "Publish the shop", {"sha256": cloud.store_build(data)})
+    done = cloud.decide(action["id"], approved=True, human_approved=True)
+    assert len(sent) == 2 and done["status"] == "unknown" and "not known" in done["result"]["error"]
+    report = run_pipeline(cloud, EXAMPLE, publish_and_test=True)
+    assert not report["ok"] and report["stopped_at"] == "publish" and "not known" in report["steps"][-1]["detail"]
+
+
+def test_a_connection_that_never_opened_is_a_plain_failure(fake, tmp_path):
+    def down(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("/versions"):
+            raise httpx.ConnectError("refused", request=request)
+        return fake.handle(request)
+
+    cloud = ready(fake, tmp_path, down)
+    with pytest.raises(CloudError, match="could not be reached") as caught:
+        cloud.publish_place(build_place(EXAMPLE).data)
+    assert not isinstance(caught.value, rc.OutcomeUnknown)
+
+
+def test_a_test_that_may_have_started_is_unknown(fake, tmp_path):
+    def lost(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST" and request.url.path.endswith("luau-execution-session-tasks"):
+            raise httpx.ReadTimeout("no answer", request=request)
+        return fake.handle(request)
+
+    cloud = ready(fake, tmp_path, lost)
+    action = cloud.request_action("run_test", "Run", {"script": "return 1"})
+    done = cloud.decide(action["id"], approved=True, human_approved=True)
+    assert done["status"] == "unknown" and "not known" in done["result"]["error"]
+
+
+def test_a_network_error_while_waiting_does_not_lose_the_test(fake, tmp_path):
+    trouble = {"task": 2, "logs": 1}                          # how many times each read breaks first
+
+    def flaky(request: httpx.Request) -> httpx.Response:
+        kind = "logs" if request.url.path.endswith("/logs") else "task" if "/tasks/" in request.url.path else ""
+        if request.method == "GET" and trouble.get(kind):
+            trouble[kind] -= 1
+            raise httpx.ReadError("connection reset", request=request)
+        return fake.handle(request)
+
+    cloud = ready(fake, tmp_path, flaky)
+    record = cloud.run_luau("return 1", version=4)
+    assert record["state"] == "COMPLETE" and record["task"].startswith(f"universes/{UNIVERSE}/places/{PLACE}/")
+    assert record["output"]["results"][0]["passed"] == 2      # the finished test's result is kept
+    assert record["logs"] == [] and record["logs_http"] is None and "could not be read" in record["logs_error"]
+    assert "error" not in record
+
+
+def test_a_task_that_stays_unreachable_is_reported_with_its_path(fake, tmp_path):
+    def cut(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET" and "/tasks/" in request.url.path:
+            raise httpx.ConnectError("offline", request=request)
+        return fake.handle(request)
+
+    clock = iter(range(0, 10 ** 6, 100))
+    cloud = ready(fake, tmp_path)
+    cloud = RobloxCloud(home=tmp_path, key=KEY, sleep=lambda _s: None, now=lambda: next(clock),
+                        client=httpx.Client(transport=httpx.MockTransport(cut)))
+    record = cloud.run_luau("return 1", wait_seconds=250)
+    assert record["state"] == "TIMED_OUT" and record["task"] and "did not finish" in record["error"]
+
+
