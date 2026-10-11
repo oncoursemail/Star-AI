@@ -51,6 +51,16 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 
 Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
+### Blender for STAR Brain 2 (experimental first-party MCP)
+
+STAR's optional **local Blender MCP** lets Brain 2 create actual editable .blend scenes and Roblox-compatible .glb assets using a small, constrained scene recipe. It has no unrestricted model-authored Python, no third-party Blender addon and no public listener. Scene creation writes **new private per-project outputs only**, and is disabled by default.
+
+Install Blender yourself from [Blender.org](https://www.blender.org/download/), then open **Tools → Blender for Brain 2**. Enable the connector, save settings, and run **Test local Blender**. Only then, if you wish, enable **Allow Blender scene creation** and save. You may specify the trusted Blender executable path if automatic local discovery fails.
+
+The same first-party server is available to an explicitly configured source MCP client with \`python -m star.blender_mcp --settings <local-STAR-settings.json>\`. Optional owner-run smoke recipes live in \`examples/blender/\`. The connector does not install Blender or import/publish assets into Roblox automatically; Studio import, visual quality and live Blender performance still require device testing.
+
+See [Brain 2 Blender MCP setup, architecture, examples and QA](docs/STAR_BLENDER_BRAIN2_MCP.md).
+
 ## Architecture
 
 | Component | Implementation |
