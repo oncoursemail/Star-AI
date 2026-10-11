@@ -17,8 +17,8 @@ async function start(){
  await user.type(composer,'Explain the terrain')
  await user.keyboard('{Enter}')
  const id=await waitFor(()=>bridge.requestOf('sendMessage'))
- bridge.delta(id,'Building the ')
- await screen.findByText('Building the ')
+ bridge.delta(id,'Building the')
+ await screen.findByText('Building the')
  return {user,id}
 }
 
@@ -26,7 +26,7 @@ for(const page of ['Analytics','Settings','Model']){
  it('keeps streaming when visiting '+page+' and returning',async()=>{
   const {user,id}=await start()
   await user.click(screen.getByRole('button',{name:page}))
-  bridge.delta(id,'mountains')
+  bridge.delta(id,' mountains')
   expect(bridge.sent('cancelMessage')).toHaveLength(0)
   await user.click(screen.getByRole('button',{name:'Chat'}))
   expect(await screen.findByText('Building the mountains')).toBeTruthy()
@@ -51,7 +51,7 @@ it('keeps a running turn in its original chat when another chat is viewed',async
  const {user,id}=await start()
  await user.click(screen.getByRole('button',{name:'Other chat'}))
  await waitFor(()=>expect(bridge.sent('switchChat')).toHaveLength(1))
- bridge.delta(id,'mountains')
+ bridge.delta(id,' mountains')
  expect(screen.queryByText('Building the mountains')).toBeNull()
  expect(bridge.sent('cancelMessage')).toHaveLength(0)
  await user.click(screen.getByRole('button',{name:'Test chat'}))
