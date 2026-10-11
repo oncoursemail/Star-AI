@@ -97,6 +97,23 @@ PERMITTED_SETTINGS = frozenset({
 })
 
 
+def finish_desktop_update(shell, instance) -> None:
+    """Close desktop resources and release the single-instance lock before Setup.
+
+    The bridge worker only stages a verified candidate and requests Qt to quit.
+    Launch must happen after the event loop has stopped, not on that worker.
+    """
+    candidate = shell.bridge.pending_update if shell is not None else None
+    try:
+        if shell is not None:
+            shell.close()
+    finally:
+        finish_desktop_update(shell, instance)
+    if candidate is not None:
+        from .updates import launch_installer
+        launch_installer(candidate, unattended=True)
+
+
 def apply_setting_changes(settings: Settings, changes: dict) -> Settings:
     """Copy only allowlisted fields from the interface onto saved settings."""
     if not isinstance(changes, dict):
@@ -526,6 +543,7 @@ def launch():
             self.cancel_chat = threading.Event()
             self.turn: TurnRef | None = None
             self.active_update = False
+            self.pending_update = None
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
@@ -1120,7 +1138,7 @@ def launch():
                     from .updates import get_latest
                     self._run(rid,action,lambda:asdict(get_latest()))
                 elif action=='installUpdate':
-                    from .updates import stage_installer, launch_installer, get_latest
+                    from .updates import stage_installer, get_latest
                     if self.active_update:
                         raise RuntimeError('STAR is already installing an update')
                     self.active_update = True
@@ -1135,9 +1153,9 @@ def launch():
                                                   'downloaded':1,'total':1})
                         # Only checksum-verified GitHub assets may run unattended.
                         # Setup replaces the application and relaunches STAR; user data is outside {app}.
-                        launch_installer(candidate,unattended=True)
+                        self.pending_update = candidate
                         self.shutdownRequested.emit()
-                        return {'status':'launched_installer','version':candidate.version}
+                        return {'status':'pending_restart','version':candidate.version}
                     self._run(rid,action,worker)
                 elif action=='transcribe':
                     path=file_allowed(Path(str(body.get('file',''))),self.allowed_files)
