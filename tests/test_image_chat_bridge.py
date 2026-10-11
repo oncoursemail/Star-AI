@@ -26,7 +26,9 @@ def bridge_class():
 def host(tmp_path, monkeypatch):
     monkeypatch.setattr(shell, 'app_data', lambda: tmp_path)
     settings_file = tmp_path / 'settings.json'
-    Settings().save(settings_file)
+    settings = Settings()
+    settings.model = 'test-model'
+    settings.save(settings_file)
     instance = bridge_class()()
     instance.settings_file = settings_file
     instance.cancel_chat = threading.Event()
