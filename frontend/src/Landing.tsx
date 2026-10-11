@@ -10,7 +10,7 @@ import {SiteShowcase} from './SiteShowcase'
 import {SiteChapters,SiteLimits} from './SiteChapters'
 import {SiteProgress} from './SiteProgress'
 import {SiteDownload} from './SiteDownload'
-import {LINKS,SOURCE_VERSION,formatBytes,formatDate,releaseFiles} from './siteContent'
+import {LINKS,SOURCE_VERSION,formatBytes,formatDate,modelLabelForRelease,releaseFiles} from './siteContent'
 import {compareVersions,fetchLatestStableRelease,latestStable} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 import {delay,staticMode,useActiveSection,useHeaderState,useProgress,useReveal} from './siteHooks'
@@ -117,7 +117,7 @@ export function Landing(){
       <div><dt>Published</dt><dd>{latest?formatDate(latest.publishedAt):'unavailable'}</dd></div>
       <div><dt>Platform</dt><dd>Windows 11 · x64</dd></div>
       <div><dt>Installer</dt><dd>{files.setup?formatBytes(files.setup.size):'on GitHub'}</dd></div>
-      <div><dt>Model</dt><dd>Local, LAN or opt-in hosted</dd></div>
+      <div><dt>Model</dt><dd>{modelLabelForRelease(latest)}</dd></div>
       <div><dt>Status</dt><dd>Early software</dd></div>
      </dl>
      </div>

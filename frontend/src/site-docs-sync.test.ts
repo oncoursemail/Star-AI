@@ -1,13 +1,21 @@
 import {readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {describe,expect,it} from 'vitest'
-import {LINKS,SOURCE_VERSION,evalResults} from './siteContent'
+import {LINKS,SOURCE_VERSION,evalResults,modelLabelForRelease} from './siteContent'
 
 const root=resolve(process.cwd(),'..')
 const readme=readFileSync(resolve(root,'README.md'),'utf8')
 const handoff=readFileSync(resolve(root,'docs','WEBSITE_RELEASE_CHECKLIST.md'),'utf8')
 
 describe('README and website release transparency',()=>{
+ it('does not advertise v0.9 LAN and hosted models as shipped in v0.8.1',()=>{
+  const release={tag:'v0.8.1',name:'STAR',publishedAt:'2026-10-10T00:00:00Z',
+   url:LINKS.latest,prerelease:false,assets:[]}
+  expect(modelLabelForRelease(release)).toBe('On-device model option')
+  expect(modelLabelForRelease({...release,tag:'v0.9.0'})).toBe('Local, LAN or opt-in hosted')
+  expect(modelLabelForRelease(null)).toBe('Check GitHub')
+  expect(modelLabelForRelease({...release,tag:'unverified'})).toBe('Check GitHub')
+ })
  it('separates development source from a public Windows installer',()=>{
   expect(readme).toContain('[Latest published Windows release]('+LINKS.latest+')')
   expect(readme).toContain('v'+SOURCE_VERSION+' is a source candidate')
