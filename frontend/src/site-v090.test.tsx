@@ -2,7 +2,7 @@
 import {afterEach,describe,expect,it} from 'vitest'
 import {cleanup,render,screen} from '@testing-library/react'
 import {readFileSync,existsSync} from 'node:fs'
-import {fileURLToPath} from 'node:url'
+import {resolve} from 'node:path'
 import {renderToString} from 'react-dom/server'
 import {Landing} from './Landing'
 import {SiteDownload} from './SiteDownload'
@@ -27,7 +27,7 @@ describe('website v0.9.0 claims',()=>{
   for(const feature of capabilities){
    expect(feature.doc.startsWith(prefix),feature.name).toBe(true)
    const source=feature.doc.slice(prefix.length)
-   expect(existsSync(fileURLToPath(new URL('../../'+source,import.meta.url))),source).toBe(true)
+   expect(existsSync(resolve(process.cwd(),'..',source)),source).toBe(true)
   }
  })
  it('does not call candidate source a published release',()=>{
@@ -69,13 +69,13 @@ describe('site navigation, assets and accessibility',()=>{
   for(const files of Object.values(media.images))for(const asset of files){
    expect(asset.width).toBeGreaterThan(0)
    expect(asset.height).toBeGreaterThan(0)
-   const path=fileURLToPath(new URL('../public/site/'+asset.file,import.meta.url))
+   const path=resolve(process.cwd(),'public','site',asset.file)
    expect(existsSync(path),asset.file).toBe(true)
   }
-  expect(existsSync(fileURLToPath(new URL('../public/star-mark.svg',import.meta.url)))).toBe(true)
+  expect(existsSync(resolve(process.cwd(),'public','star-mark.svg'))).toBe(true)
  })
  it('retains visible keyboard focus, skip navigation and reduced-motion rules',()=>{
-  const css=readFileSync(fileURLToPath(new URL('./site.css',import.meta.url)),'utf8')
+  const css=readFileSync(resolve(process.cwd(),'src','site.css'),'utf8')
   expect(css).toContain('.sw :focus-visible')
   expect(css).toContain('.sw-skip:focus')
   expect(css).toContain('@media (prefers-reduced-motion:reduce)')
