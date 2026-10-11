@@ -12,13 +12,12 @@ Every provider has a typed kind, and callers branch on the kind, never on the id
 
 The LAN address is typed by the owner in Settings. It is validated here, at the
 one place every model call passes through, so the server key can only ever be
-sent only to a validated local-network endpoint.
+sent only to a validated private address with no DNS lookup.
 """
 from __future__ import annotations
 from dataclasses import dataclass
 import ipaddress
 import os
-import re
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -66,28 +65,14 @@ _LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
     "100.64.0.0/10", "127.0.0.0/8",                  # CGNAT, loopback
     "::1/128", "fc00::/7",                           # IPv6 loopback, ULA
 ))
-_LAN_DNS_LABEL = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\Z")
-_LAN_NAME_SUFFIXES = (".local", ".lan", ".home.arpa")
-# inet_aton and some HTTP stacks accept these as encoded IPv4 addresses.
-_LAN_NUMERIC_HOST = re.compile(r"(?:0x[0-9a-f]+|0o[0-7]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|0o[0-7]+|[0-9]+))*\Z")
 _LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
-
-
-def _lan_hostname(hostname: str) -> bool:
-    """Permit a plain DNS label or a name under one of the local-use suffixes."""
-    labels = hostname.split(".")
-    return (bool(hostname) and hostname.isascii()
-            and all(_LAN_DNS_LABEL.fullmatch(label) for label in labels)
-            and not _LAN_NUMERIC_HOST.fullmatch(hostname)
-            and (len(labels) == 1 or any(hostname.endswith(suffix) for suffix in _LAN_NAME_SUFFIXES)))
 
 
 def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server") -> str:
     """Return a canonical local-network URL or raise ValueError.
 
-    Allow only explicitly listed LAN IP ranges or restricted local-use DNS names,
-    an explicit unprivileged port, the fixed path, and no URL credentials, query,
-    fragment or escapes. DNS resolution of an allowed name happens later.
+    Allow only explicitly listed private IP ranges; hostnames are refused until
+    connection-level DNS pinning prevents credential exfiltration via rebinding.
     """
     hint = _LAN_HINT if path == "/v1" else _LAN_HINT.replace(":8080/v1", ":8091")
     if not isinstance(value, str) or not value.strip():
@@ -108,18 +93,15 @@ def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server
     try:
         address = ipaddress.ip_address(url.hostname or "")
     except ValueError as exc:
-        host = url.hostname or ""
-        if not _lan_hostname(host):
-            raise ValueError(f"{label} must use a LAN IP or a local host name. " + hint) from exc
-    else:
-        # IPv4-mapped IPv6 must pass the same ranges as its underlying IPv4.
-        checked = address
-        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
-            checked = address.ipv4_mapped
-        if not any(checked in network for network in _LAN_NETWORKS):
-            raise ValueError(f"{label} must use a loopback, private LAN, CGNAT or IPv6 ULA address. "
-                             "Public, link-local and special-purpose addresses are refused.")
-        host = f"[{address.compressed}]" if address.version == 6 else address.compressed
+        raise ValueError(f"{label} must use a private IP literal, not a hostname. " + hint) from exc
+    # IPv4-mapped IPv6 must pass the same ranges as its underlying IPv4.
+    checked = address
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+        checked = address.ipv4_mapped
+    if not any(checked in network for network in _LAN_NETWORKS):
+        raise ValueError(f"{label} must use a loopback, private LAN, CGNAT or IPv6 ULA address. "
+                         "Public, link-local and special-purpose addresses are refused.")
+    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     if port is None or not 1024 <= port <= 65535:
         raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
                          + ("8080" if path == "/v1" else "8091"))
