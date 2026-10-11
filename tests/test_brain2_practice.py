@@ -125,8 +125,8 @@ def test_ledger_unknown_survives_restart_and_needs_human_acknowledgement(tmp_pat
     with pytest.raises(PracticeUnknown):
         reopened.reserve(scope)
     with pytest.raises(PermissionError):
-        reopened.acknowledge(cycle)
-    reopened.acknowledge(cycle, human_approved=True)
+        reopened.acknowledge(cycle, plan=scope)
+    reopened.acknowledge(cycle, plan=scope, human_approved=True)
     another = reopened.reserve(scope)
     assert another != cycle
     reopened.finish(another, status="unknown")
