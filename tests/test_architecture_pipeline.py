@@ -125,3 +125,27 @@ def test_blender_fake_cannot_claim_success_with_fake_glb(tmp_path):
     with pytest.raises(RuntimeError, match="not validated"):
         create_package(BASE, tmp_path / "invalid-glb", blender=exe, run=wrong_glb)
     assert not (tmp_path / "invalid-glb" / "asset-manifest.json").exists()
+
+
+def test_preview_requires_explicit_blender_and_does_not_create_output(tmp_path):
+    with pytest.raises(ValueError, match="real Blender"):
+        create_package(BASE, tmp_path / "preview", preview=True)
+    assert not (tmp_path / "preview").exists()
+
+
+def test_preview_is_optional_and_requires_genuine_png_evidence(tmp_path):
+    exe = tmp_path / "blender.exe"
+    exe.write_bytes(b"fake")
+    def fake_preview(argv, **kwargs):
+        assert argv[-1] == "--preview"
+        plan = json.loads(Path(argv[-3]).read_text())
+        glb = Path(argv[-2])
+        glb.write_bytes(_glb_for_roles(plan["palette"]))
+        glb.with_suffix(".blend").write_bytes(b"blend")
+        glb.with_name("building-preview.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"x" * 200)
+        return SimpleNamespace(returncode=0)
+    create_package(BASE, tmp_path / "preview", blender=exe, preview=True, run=fake_preview)
+    manifest = json.loads((tmp_path / "preview" / "asset-manifest.json").read_text())
+    assert manifest["preview_rendered"] is True
+    assert manifest["visual_quality_verified"] is False
+    assert "building-preview.png" in manifest["files"]
