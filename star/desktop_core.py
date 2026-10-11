@@ -10,6 +10,7 @@ import sqlite3
 import time
 from .analytics import AnalyticsStore
 from dataclasses import dataclass, asdict, replace, field
+from contextlib import AsyncExitStack
 from typing import Callable
 
 from .agent import execute, HistoryWindowPressure
@@ -93,6 +94,9 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
+    blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
+    blender_executable: str = ''           # installed local executable; '' = discover without downloading
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
@@ -136,7 +140,8 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau')):
+                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'blender_enabled', 'blender_edit')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -151,6 +156,13 @@ class Settings:
             raise ValueError('Team timeout minimum/maximum must be 1 to 1800 seconds')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
+        if self.blender_edit and not self.blender_enabled:
+            raise ValueError('Enable Blender before enabling Blender scene creation')
+        if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
+                or '\x00' in self.blender_executable
+                or self.blender_executable.startswith(('\\\\', '//'))
+                or '://' in self.blender_executable):
+            raise ValueError('Choose a trusted local Blender executable, not a URL or network share')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
@@ -922,6 +934,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     workspace=workspace,intelligence=intelligence)
         allow_studio = bool(use_tools and settings.studio_id and
                             needs_studio_connection(prompt,recent_users))
+        from .blender_mcp import wants_blender
+        allow_blender = bool(use_tools and settings.blender_enabled and wants_blender(prompt))
         mcp_gateway = MCPGateway(settings) if use_tools else None
         connection_for(settings)  # fail early (missing key, bad address) before any work
         limits = call_limits(settings)
@@ -1030,12 +1044,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             project_memory=conversation_memory.compose_memory(
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
                         try:
-                            if allow_studio:
-                                from .local_mcp import connect_studio
+                            async with AsyncExitStack() as connections:
+                                tool_kwargs = dict(kwargs)
+                                if allow_blender:
+                                    from .blender_mcp import connect_blender
+                                    tool_kwargs["blender"] = await connections.enter_async_context(
+                                        connect_blender(settings, home))
+                                if allow_studio:
+                                    from .local_mcp import connect_studio
                                 # One guarded connection per attempt: a retry below happens only when
                                 # nothing was sent to the model or to Studio, so nothing is replayed.
-                                async with connect_studio(settings, home,
-                                        studio_configuration_home=studio_configuration_home) as guarded:
+                                    guarded = await connections.enter_async_context(
+                                        connect_studio(settings, home,
+                                            studio_configuration_home=studio_configuration_home))
                                     # The tool list is the connector's own, read now. What STAR may do in
                                     # the open place is decided in code from what that place is.
                                     discovered = guarded.discovered
@@ -1044,13 +1065,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     # it may not look like lessons (guard_sections).
                                     sections.extend(learning.guard_sections(
                                         [('ROBLOX STUDIO PLACE', guarded.verdict.reason)]))
-                                    outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,
+                                    outcome = await execute(**{**tool_kwargs, 'turn_sections': sections}, studio=guarded,
                                         discovered=discovered, studio_id=settings.studio_id,
                                         may_edit=guarded.verdict.editable,
                                         allow_luau=guarded.verdict.editable and settings.studio_luau)
                                     result = studio_loop.with_report(outcome, guarded)
-                            else:
-                                result = await execute(**kwargs)
+                                else:
+                                    result = await execute(**tool_kwargs)
                         except HistoryWindowPressure as pressure:
                             if pressure.dispatched or pressure.tool_actions_started:
                                 raise conversation_memory.ConversationRetentionError(
