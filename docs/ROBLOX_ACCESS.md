@@ -69,7 +69,8 @@ data store names of the test experience, and the status and result of an action.
 
 Write tools do not write. `star_roblox_cloud_request_publish` (build a place from a folder of the workspace) and
 `star_roblox_cloud_request_test` (run a Luau test) record a **pending action** with exactly what would be sent:
-the built file's size, hash and file list, or the script. The owner approves or rejects each action under
+the built file's size, hash and file list, or the script (a waiting action shows the whole script, however
+long). The owner approves or rejects each action under
 Settings > Roblox > Actions waiting for you. An approved action is carried out once; an action expires after 15
 minutes; at most five can wait. The model cannot approve: approval is an interface action, not a tool.
 An approval is for the place the action named: if another test experience is chosen before the owner decides,

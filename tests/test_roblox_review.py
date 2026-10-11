@@ -120,3 +120,19 @@ def test_an_approval_is_not_carried_over_to_another_test_experience(fake, tmp_pa
     assert fake.writes() == [] and fake.published == [] and fake.tasks == {}
 
 
+# ------------------------------------------------------------------ 3. the owner reads what they approve
+
+def test_the_owner_is_shown_the_whole_script_of_a_waiting_action(fake, tmp_path):
+    cloud = ready(fake, tmp_path)
+    script = "-- looks harmless\n" + "local x = 1\n" * 2000 + "game:GetService('DataStoreService')  -- far below\n"
+    assert len(script) > 8000
+    asked = cloud.request_action("run_test", "Run one check", {"script": script})
+    shown = rc.handle_action(tmp_path, "robloxListActions", {}, client=fake.client())["actions"][0]
+    assert shown["id"] == asked["id"] and shown["detail"]["script_preview"] == script
+    assert shown["detail"]["script_chars"] == len(script)
+    assert shown["detail"]["script_sha256"] == hashlib.sha256(script.encode()).hexdigest()
+    # The model that wrote it gets a short reminder back, not the whole text again.
+    assert len(cloud.action(asked["id"])["detail"]["script_preview"]) <= 8000
+    assert len(asked["detail"]["script_preview"]) <= 300
+
+

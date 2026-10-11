@@ -847,15 +847,18 @@ class RobloxCloud:
         return digest
 
 
-def public_action(action: dict, *, full: bool = False) -> dict:
-    """An action as the interface and the model see it. A long script is shown by size and hash."""
+def public_action(action: dict, *, full: bool = False, whole_script: bool = False) -> dict:
+    """An action as the interface and the model see it. A long script is shown by size and hash.
+
+    `whole_script` is for the owner's list of waiting actions: what they approve, they can read to
+    the last character. The model only gets a reminder of the text it wrote itself.
+    """
     detail = dict(action.get("detail") or {})
     script = detail.pop("script", None)
     if isinstance(script, str):
         detail["script_chars"] = len(script)
         detail["script_sha256"] = hashlib.sha256(script.encode()).hexdigest()
-        # The owner approves what they can read: the interface gets the script itself.
-        detail["script_preview"] = script[:8000 if full else 300]
+        detail["script_preview"] = script if whole_script else script[:8000 if full else 300]
     shown = {k: action.get(k) for k in ("id", "kind", "status", "summary", "target", "created", "expires",
                                          "decided", "finished") if action.get(k) is not None}
     shown["detail"] = detail
@@ -908,7 +911,9 @@ def handle_action(home: Path, action: str, body: dict, *, client: httpx.Client |
         elif action == "robloxClearTestExperience":
             cloud.clear_test_experience()
         elif action == "robloxListActions":
-            return {"actions": [public_action(item, full=True) for item in reversed(cloud.actions())][:20]}
+            # A waiting action carries its whole script: the owner approves nothing they cannot read.
+            return {"actions": [public_action(item, full=True, whole_script=item.get("status") == "pending")
+                                for item in list(reversed(cloud.actions()))[:20]]}
         elif action == "robloxDecideAction":
             return {"action": cloud.decide(str(body.get("id", ""))[:40], approved=body.get("decision") == "approve",
                                            human_approved=body.get("approved") is True)}
