@@ -66,8 +66,11 @@ sets it for a lesson.
 - Ranking: lessons that share subject words with the prompt first, then standing preferences,
   corrections and approved decisions, newest first. Pitfalls and facts are only recalled when the
   prompt is about them.
-- Supersession: accepting a lesson retires older accepted lessons on the same subject (at least three
-  quarters of the shorter one's subject words shared, and at least two). The rule is strict on purpose:
+- Supersession: accepting a lesson retires older accepted lessons on the same subject (at least two
+  subject words shared, which are at least three quarters of the shorter lesson's and at least half of
+  the longer one's, so a short remark never retires a long decision). The rule is word overlap, not
+  meaning: "I prefer camelCase for local variables" and "I prefer snake_case for local variables" are
+  both kept (and both sent, the newer first) until you stop one. The rule is strict on purpose:
   "use teal accents for the lobby interface" replaces "use gold accents for the lobby interface", while
   "put UI logic in LocalScripts" does not replace "never put game logic in LocalScripts". The chat says
   when a new lesson replaced an older one; the older record is kept under "Set aside" and can be restored

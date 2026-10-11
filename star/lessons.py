@@ -176,14 +176,17 @@ def subject_key(text: str) -> str:
 
 def same_subject(first: frozenset[str], second: frozenset[str]) -> bool:
     """Two lessons are about the same thing when at least three quarters of the shorter one's
-    subject words are shared. Deliberately strict: a lesson retired by mistake stops being
-    used, while two lessons that overlap are both visible on the review page."""
+    subject words are shared, and those are at least half of the longer one's. Deliberately
+    strict: a lesson retired by mistake stops being used, while two lessons that overlap are
+    both visible on the review page. The second condition keeps a short remark ("I prefer
+    gold accents") from retiring a long decision that only mentions the same two words."""
     if not first or not second:
         return False
     if first == second:
         return True
     shared = len(first & second)
-    return shared >= 2 and shared / min(len(first), len(second)) >= 0.75
+    return (shared >= 2 and shared / min(len(first), len(second)) >= 0.75
+            and shared / max(len(first), len(second)) >= 0.5)
 
 
 # --- what the owner said ---------------------------------------------------------------------

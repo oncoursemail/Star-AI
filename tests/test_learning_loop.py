@@ -1212,3 +1212,25 @@ def test_the_automatic_summary_does_not_start_during_a_voice_call():
     source = inspect.getsource(react_shell.launch)
     assert "may_start_automatic(report,turn_running=self.active_task,voice_call=self._in_voice_call())" in source
     assert "self.voice.handle('voiceStatus',{}).get('inCall')" in source
+
+
+def test_a_short_remark_does_not_retire_a_much_longer_lesson(tmp_path):
+    """"I prefer gold accents." shares both of its subject words with a long approved design
+    decision. It adds nothing that contradicts it, and retiring the decision would drop the
+    rest of what it says (the shop, the padding, the font) from every later answer."""
+    decision = ("Lobby design: use gold accents on the selected tab, silver accents in the shop, 12px padding, "
+                "rounded corners of 8px and the Gotham font for every heading.")
+    approve_learning(tmp_path, project="P", text=decision, human_approved=True)
+    store = LessonStore(tmp_path)
+    try:
+        summary = capture_turn(store, project="P", chat_id="c", owner_text="I prefer gold accents.", turn={"message_id": 5})
+        assert (summary["accepted"], summary["replaced"]) == (1, 0)
+        assert {x.status for x in store.list("P")} == {"accepted"}
+        assert {x.text for x in store.recall("P", "build the shop")} == {decision, "I prefer gold accents."}
+        # A restatement of comparable size still replaces the older lesson.
+        stated(store, "Use gold accents for the lobby interface.", source="chat:c#6")
+        newer = stated(store, "Use teal accents for the lobby interface.", source="chat:c#7")
+        assert newer.replaced is not None and store.get("P", newer.replaced).status == "superseded"
+    finally:
+        store.close()
+    assert L.same_subject(L.subject_tokens("Never use wait."), L.subject_tokens("Always use wait.")) is True
