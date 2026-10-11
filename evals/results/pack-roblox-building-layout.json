@@ -1,0 +1,340 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "BLD-01",
+   "BLD-02",
+   "BLD-03"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-building-layout",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "79d157ed2e1d",
+  "started_at": "2026-10-11T09:03:05+00:00",
+  "waited_for_lock_s": 1.4,
+  "finished_at": "2026-10-11T09:11:56+00:00",
+  "rescored_at": "2026-10-11T10:37:57+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "BLD-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "2cc87e776db61da9",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:error",
+     "ok": true
+    }
+   ],
+   "seconds": 239.5,
+   "timings": {
+    "luau_check_s": 0.14,
+    "unit_s": 0.5
+   },
+   "blocks": 2,
+   "answer_chars": 5144,
+   "answer_sha256": "ed6166fdffe041fa8aa7ec3c04eb78fae92043d81652d626302bc9efc6802a19",
+   "packs": [
+    "roblox-building-layout"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 358
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-building-layout"
+     ],
+     "chars": 1040
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the pure-Luau `ModuleScript` implementing the requested wall layout logic.\n\n### `WallLayout.lua` (ModuleScript)\n\n```lua\n--!strict\n\nlocal WallLayout = {}\n\n-- Snaps a single numeric value to the nearest multiple of grid.\n-- Uses the standard rounding formula: floor(value / grid + 0.5) * grid.\nfunction WallLayout.snap(value: number, grid: number): number\n\treturn math.floor(value / grid + 0.5) * grid\nend\n\n-- Snaps every component of a 3D point {x, y, z} to the nearest multiple of grid.\n-- Returns a NEW table {x, y, z} containing the snapped coordinates.\nfunction WallLayout.snapPoint(p: {x: number, y: number, z: number}, grid: number): {x: number, y: number, z: number}\n\treturn {\n\t\tx = WallLayout.snap(p.x, grid),\n\t\ty = WallLayout.snap(p.y, grid),\n\t\tz = WallLayout.snap(p.z, grid),\n\t}\nend\n\n-- Returns an ordered array of {piece = number, offset = number} that covers a wall\n-- of a given length using the fewest pieces possible (greedy approach: 16, then 8, then 4).\n-- Throws an error if length is not a positive multiple of 4.\nfunction WallLayout.layoutWall(length: number): { [number]: { piece: number, offset: number } }\n\t-- Validate input: must be a positive number and a multiple of 4\n\tif type(length) ~= \"number\" or length <= 0 or length % 4 ~= 0 then\n\t\terror(\"length must be a positive multiple of 4\", 2)\n\tend\n\n\tlocal layout: { [number]: { piece: number, offset: number } } = {}\n\tlocal currentOffset: number = 0\n\n\t-- 1. Use as many 16-stud pieces as possible\n\tlocal count16: number = math.floor(length / 16)\n\tfor _ = 1, count16 do\n\t\ttable.insert(layout, { piece = 16, offset = currentOffset })\n\t\tcurrentOffset += 16\n\tend\n\n\t-- 2. Use as many 8-stud pieces as possible for the remainder\n\tlocal remainder: number = length - currentOffset\n\tlocal count8: number = math.floor(remainder / 8)\n\tfor _ = 1, count8 do\n\t\ttable.insert(layout, { piece = 8, offset = currentOffset })\n\t\tcurrentOffset += 8\n\tend\n\n\t-- 3. Use 4-stud pieces for any remaining length (guaranteed to be 0, 4, or 8 at this stage)\n\tremainder = length - currentOffset\n\tlocal count4: number = math.floor(remainder / 4)\n\tfor _ = 1, count4 do\n\t\ttable.insert(layout, { piece = 4, offset = currentOffset })\n\t\tcurrentOffset += 4\n\tend\n\n\treturn layout\nend\n\nreturn WallLayout\n```\n\n### Usage Example\n\n```lua\nlocal WallLayout = {}\n\nfunction WallLayout.snap(value, grid)\n\treturn math.floor(value / grid + 0.5) * grid\nend\n\nfunction WallLayout.snapPoint(p, grid)\n\treturn {\n\t\tx = WallLayout.snap(p.x, grid),\n\t\ty = WallLayout.snap(p.y, grid),\n\t\tz = WallLayout.snap(p.z, grid)\n\t}\nend\n\nfunction WallLayout.layoutWall(length)\n\tif type(length) ~= \"number\" or length <= 0 or length % 4 ~= 0 then\n\t\terror(\"length must be a positive multiple of 4\")\n\tend\n\n\tlocal pieces = {}\n\tlocal remaining = length\n\n\twhile remaining > 0 do\n\t\tif remaining >= 16 then\n\t\t\ttable.insert(pieces, { piece = 16, offset = length - remaining })\n\t\t\tremaining = remaining - 16\n\t\telseif remaining >= 8 then\n\t\t\ttable.insert(pieces, { piece = 8, offset = length - remaining })\n\t\t\tremaining = remaining - 8\n\t\telse\n\t\t\ttable.insert(pieces, { piece = 4, offset = length - remaining })\n\t\t\tremaining = remaining - 4\n\t\tend\n\tend\n\n\treturn pieces\nend\n\nreturn WallLayout\n```\n\n### Notes\n*   **Validation**: The `layoutWall` function explicitly checks for `length <= 0` and `length % 4 ~= 0`, calling `error()` as requested.\n*   **Greedy Algorithm**: By checking 16-stud pieces first, then 8, then 4, the function guarantees the minimum number of pieces required to cover the wall length.\n*   **Immutability**: `snapPoint` creates and returns a brand new table, ensuring the original input table `p` is not mutated.\n*   **Grid Reference**: The logic aligns with standard modular building kit practices where assets are designed to snap to specific increments (e.g., 4 studs) to ensure seamless tiling [2][3].\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Table type '{  }' not compatible with type '{ offset: number, piece: number }' because the former is missing fields 'offset', and 'piece', line 30). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 first failed the static Luau check (Unknown global 'path'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · retrieved, not cited\n2. [Snap to grid](https://create.roblox.com/docs/education/build-it-play-it-create-and-destroy/snap-to-grid) · cited\n3. [Assemble modular environments > Configure snapping behavior](https://create.roblox.com/docs/tutorials/use-case-tutorials/modeling/assemble-modular-environments#configure-snapping-behavior) · retrieved, not cited\n4. [Solid modeling > In-game solid modeling > Fragment](https://create.roblox.com/docs/parts/solid-modeling#fragment) · retrieved, not cited\n"
+  },
+  "BLD-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "4d0d8652b47b772f",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:model",
+     "ok": true
+    },
+    {
+     "id": "require:name",
+     "ok": true
+    },
+    {
+     "id": "require:anchored",
+     "ok": true
+    },
+    {
+     "id": "require:material",
+     "ok": true
+    },
+    {
+     "id": "require:pivot",
+     "ok": true
+    },
+    {
+     "id": "require:grid",
+     "ok": true
+    },
+    {
+     "id": "require:door_w",
+     "ok": true
+    },
+    {
+     "id": "require:door_h",
+     "ok": true
+    },
+    {
+     "id": "require:door_h_value",
+     "ok": true
+    },
+    {
+     "id": "require:door_w_value",
+     "ok": true
+    },
+    {
+     "id": "require:size",
+     "ok": true
+    },
+    {
+     "id": "require:parent_last",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated_pivot",
+     "ok": true
+    },
+    {
+     "id": "forbid:parent_arg",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 171.7,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 5249,
+   "answer_sha256": "774f7196e4797525ba9b96eb461aba561682188e4dcdc5bbb77c59d5722d5f1d",
+   "packs": [
+    "roblox-building-layout"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 343
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-building-layout"
+     ],
+     "chars": 1040
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a complete, server-side Script that builds the room exactly to your specifications.\n\n### The Script\n\n```lua\n--!strict\n\n-- 1. Constants\nlocal GRID = 4\nlocal ROOM_SIZE = 24\nlocal WALL_HEIGHT = 12\nlocal WALL_THICKNESS = 2\nlocal DOOR_WIDTH = 4\nlocal DOOR_HEIGHT = 7\n\n-- 2. Helper: Create a Part\nlocal function createPart(name: string, size: Vector3, position: Vector3, color: Color3)\n\tlocal part = Instance.new(\"Part\")\n\tpart.Name = name\n\tpart.Size = size\n\tpart.Position = position\n\tpart.Anchored = true\n\tpart.CanCollide = true\n\tpart.Material = Enum.Material.Neon -- Distinct visual material\n\tpart.Color = color\n\treturn part\nend\n\n-- 3. Build the Room Model\nlocal room = Instance.new(\"Model\")\nroom.Name = \"Room\"\n\n-- Floor (24x24 studs)\nlocal floor = createPart(\"Floor\", Vector3.new(ROOM_SIZE, 1, ROOM_SIZE), Vector3.new(0, 0.5, 0), Color3.fromRGB(100, 100, 255))\nfloor.Parent = room\n\n-- Wall Thickness Helper\nlocal halfThick = WALL_THICKNESS / 2\nlocal halfRoom = ROOM_SIZE / 2\n\n-- Wall 1: Back (Z = -halfRoom)\nlocal wall1 = createPart(\"Wall_Back\", Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS), Vector3.new(0, WALL_HEIGHT / 2, -halfRoom), Color3.fromRGB(255, 100, 100))\nwall1.Parent = room\n\n-- Wall 2: Front (Z = +halfRoom)\nlocal wall2 = createPart(\"Wall_Front\", Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS), Vector3.new(0, WALL_HEIGHT / 2, halfRoom), Color3.fromRGB(255, 100, 100))\nwall2.Parent = room\n\n-- Wall 3: Left (X = -halfRoom)\nlocal wall3 = createPart(\"Wall_Left\", Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE), Vector3.new(-halfRoom, WALL_HEIGHT / 2, 0), Color3.fromRGB(100, 255, 100))\nwall3.Parent = room\n\n-- Wall 4: Right (X = +halfRoom)\nlocal wall4 = createPart(\"Wall_Right\", Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE), Vector3.new(halfRoom, WALL_HEIGHT / 2, 0), Color3.fromRGB(100, 255, 100))\nwall4.Parent = room\n\n-- Wall 5: Front Wall with Doorway (Built from pieces around the gap)\n-- Gap is centered at X=0. \n-- Left of door: Width = (24 - 4) / 2 = 10 studs\nlocal leftDoorWidth = (ROOM_SIZE - DOOR_WIDTH) / 2\nlocal rightDoorWidth = leftDoorWidth\n\n-- 5a: Left section of the front wall\nlocal frontLeft = createPart(\"Front_Wall_Left\", Vector3.new(leftDoorWidth, WALL_HEIGHT, WALL_THICKNESS), Vector3.new(-halfRoom + leftDoorWidth / 2, WALL_HEIGHT / 2, halfRoom), Color3.fromRGB(255, 100, 100))\nfrontLeft.Parent = room\n\n-- 5b: Right section of the front wall\nlocal frontRight = createPart(\"Front_Wall_Right\", Vector3.new(rightDoorWidth, WALL_HEIGHT, WALL_THICKNESS), Vector3.new(halfRoom - rightDoorWidth / 2, WALL_HEIGHT / 2, halfRoom), Color3.fromRGB(255, 100, 100))\nfrontRight.Parent = room\n\n-- 5c: Lintel (Above the door)\n-- Height of lintel = WALL_HEIGHT - DOOR_HEIGHT = 12 - 7 = 5 studs\nlocal lintelHeight = WALL_HEIGHT - DOOR_HEIGHT\nlocal lintel = createPart(\"Front_Wall_Lintel\", Vector3.new(DOOR_WIDTH, lintelHeight, WALL_THICKNESS), Vector3.new(0, DOOR_HEIGHT + lintelHeight / 2, halfRoom), Color3.fromRGB(255, 100, 100))\nlintel.Parent = room\n\n-- 4. Position the Model\n-- Place the room at a grid-snapped position (e.g., 48, 0, 48)\nlocal gridPosition = Vector3.new(48, 0, 48)\nroom:PivotTo(CFrame.new(gridPosition))\n\n-- 5. Parent to Workspace\nroom.Parent = workspace\n```\n\n### How it works:\n1.  **Constants:** All dimensions are defined at the top for easy tweaking.\n2.  **Helper Function:** `createPart` ensures every piece is `Anchored`, `CanCollide`, and has a `Material` set immediately.\n3.  **The Doorway:** The front wall is split into three parts: a left block, a right block, and a top \"lintel\" block. This creates a 4x7 stud opening that a standard R15 character (approx. 5 studs tall) can walk through easily.\n4.  **Grid Snapping:** The room is placed at `Vector3.new(48, 0, 48)`, which is perfectly divisible by the 4-stud `GRID` constant.\n5.  **Model:PivotTo:** The entire `Room` model is moved using `PivotTo`, which is the modern, recommended way to position models in Roblox [3].\n\n### Notes:\n*   The walls are 2 studs thick, which is standard for Roblox building to ensure proper collision and visual depth.\n*   The floor is 1 stud high, sitting at `Y=0.5` so its top surface is exactly at `Y=1`.\n*   The lintel is 5 studs high (12 total height - 7 door height), providing a standard 12-stud ceiling height.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Building system > Work with terrain](https://create.roblox.com/docs/resources/battle-royale/building-system#work-with-terrain) · retrieved, not cited\n2. [Create your first game > Create a project](https://create.roblox.com/docs/tutorials/first-experience#create-a-project) · retrieved, not cited\n3. [Construct your world > Apply your asset library > Floors](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#floors) · cited\n4. [Construct your world > Apply your asset library > Perimeter hallways](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#perimeter-hallways) · retrieved, not cited\n"
+  },
+  "BLD-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9c5321f1f80709b5",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:clock",
+     "ok": true
+    },
+    {
+     "id": "require:ambient",
+     "ok": true
+    },
+    {
+     "id": "require:atmosphere",
+     "ok": true
+    },
+    {
+     "id": "require:density",
+     "ok": true
+    },
+    {
+     "id": "require:haze",
+     "ok": true
+    },
+    {
+     "id": "require:bloom",
+     "ok": true
+    },
+    {
+     "id": "require:intensity",
+     "ok": true
+    },
+    {
+     "id": "require:cc",
+     "ok": true
+    },
+    {
+     "id": "require:contrast",
+     "ok": true
+    },
+    {
+     "id": "require:tint",
+     "ok": true
+    },
+    {
+     "id": "require:reuse",
+     "ok": true
+    },
+    {
+     "id": "require:lighting",
+     "ok": true
+    },
+    {
+     "id": "forbid:technology",
+     "ok": true
+    },
+    {
+     "id": "forbid:parent_arg",
+     "ok": true
+    }
+   ],
+   "seconds": 117.4,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 4340,
+   "answer_sha256": "6b5e4d03cfa30cc4bfb86a9eb04e269d605b53597b3f9d7945fae0ad8019929f",
+   "packs": [
+    "roblox-building-layout"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-building-layout"
+     ],
+     "chars": 1040
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a robust server Script that configures the moody dusk look as requested. It uses `FindFirstChildOfClass` to reuse existing effects and parents new ones to `Lighting` only if they don't already exist.\n\n### Server Script\n\n```lua\n--!strict\n\n-- 1. Reference the Lighting service\nlocal Lighting = game:GetService(\"Lighting\")\n\n-- 2. Set basic time and ambient properties\nLighting.ClockTime = 17.5\nLighting.OutdoorAmbient = Color3.fromRGB(100, 80, 100) -- Warm, slightly purple/dusk hue\n\n-- 3. Helper function to get or create an effect\nlocal function get_or_create_effect(className: string): Instance\n\tlocal existing = Lighting:FindFirstChildOfClass(className)\n\tif existing then\n\t\treturn existing\n\tend\n\t\n\tlocal newEffect = Instance.new(className)\n\tnewEffect.Parent = Lighting\n\treturn newEffect\nend\n\n-- 4. Configure Atmosphere\nlocal atmosphere = get_or_create_effect(\"Atmosphere\")\natmosphere.Density = 0.35\natmosphere.Haze = 0.35 -- Matching haze for consistent moody look\natmosphere.Color = Color3.fromRGB(255, 200, 150) -- Warm tint\natmosphere.Decay = Color3.fromRGB(100, 100, 150) -- Cool distant haze\n\n-- 5. Configure BloomEffect\nlocal bloom = get_or_create_effect(\"BloomEffect\")\nbloom.Intensity = 0.5 -- Low intensity for subtle glow\nbloom.Size = 20\nbloom.Threshold = 0.8\n\n-- 6. Configure ColorCorrectionEffect\nlocal colorCorrection = get_or_create_effect(\"ColorCorrectionEffect\")\ncolorCorrection.Contrast = 1.15 -- Slightly raised contrast\ncolorCorrection.TintColor = Color3.fromRGB(255, 220, 180) -- Warm orange/amber tint\ncolorCorrection.Brightness = 0.05 -- Slight brightness lift to counter dusk dimming\n\nprint(\"Dusk lighting setup applied successfully.\")\n```\n\n### Key Implementation Details\n\n*   **Reuse Logic:** The `get_or_create_effect` helper function checks `Lighting:FindFirstChildOfClass(className)` first. If an `Atmosphere`, `BloomEffect`, or `ColorCorrectionEffect` already exists in the hierarchy, it returns that existing instance rather than creating a duplicate. This prevents stacking multiple effects if the script runs multiple times or if a developer has already added one manually [3].\n*   **Warm OutdoorAmbient:** `Lighting.OutdoorAmbient` is set to a warm, dusky RGB value (`100, 80, 100`) to complement the `ClockTime` of 17.5 (5:30 PM) [4].\n*   **Atmosphere:** Set to `Density = 0.35` and `Haze = 0.35` to create a soft, foggy dusk atmosphere. The `Color` is warm (orange-ish) while `Decay` is cooler (blue-ish) to simulate atmospheric scattering at sunset.\n*   **BloomEffect:** `Intensity` is set to `0.5` (low) to avoid washing out the scene, providing a subtle glow on bright areas like the sky or lights [3].\n*   **ColorCorrectionEffect:** `Contrast` is raised to `1.15` for a slightly punchier look, and `TintColor` is set to a warm amber (`255, 220, 180`) to enhance the dusk feel.\n*   **No Technology Change:** The script does not touch `Lighting.Technology`, as this property is Studio-only and cannot be set at runtime [3].\n\n### Placement\nPlace this script inside a **Script** (not LocalScript) within **ServerScriptService** to ensure it runs on the server and affects all clients.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Enhance indoor environments with realistic lighting > Configure global lighting > Choose a complementary skybox](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#choose-a-complementary-skybox) · retrieved, not cited\n2. [Construct your world > Configure lighting sources > Local lighting](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#local-lighting) · retrieved, not cited\n3. [Create volcanic eruptions with VFX > Configure lighting > Global lighting](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/create-volcanoes#global-lighting) · cited\n4. [Enhance indoor environments with realistic lighting > Configure global lighting > Adjust the color of ambient light](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#adjust-the-color-of-ambient-light) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 3,
+  "fail": 0,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 1.0,
+  "median_seconds": 171.7
+ }
+}

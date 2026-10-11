@@ -1,0 +1,266 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "ENG-01",
+   "ENG-04",
+   "ENG-06"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "eng-debugging",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "490d0875329f",
+  "started_at": "2026-10-11T09:20:38+00:00",
+  "waited_for_lock_s": 2.3,
+  "finished_at": "2026-10-11T09:33:36+00:00",
+  "rescored_at": "2026-10-11T10:38:01+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "ENG-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "93012d4e5532f8e4",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:root_cause",
+     "ok": true
+    },
+    {
+     "id": "require:signature",
+     "ok": true
+    }
+   ],
+   "seconds": 113.8,
+   "timings": {
+    "luau_check_s": 0.17,
+    "unit_s": 0.5
+   },
+   "blocks": 2,
+   "answer_chars": 3693,
+   "answer_sha256": "8819ca8d1aaef290d709e328c9d678eea236f89749dfa813b590cbe477861dc7",
+   "packs": [
+    "eng-debugging"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 31
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-debugging"
+     ],
+     "chars": 719
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Let me analyze the `addItem` function to find the root cause of the bug.\n\n## Code Analysis\n\nThe function has two main phases:\n1. **First `for` loop**: Tries to fill existing stacks that match the item name and have room.\n2. **`while` loop**: Creates new stacks for any remaining amount.\n\n### The Bug\n\nIn the `while` loop, the code calculates `put` correctly but then inserts a stack with `count = amount` instead of `count = put`:\n\n```lua\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = put })\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n```\n\n### What happens with 70 potions, maxStack 20:\n\n1. **First loop**: No existing stacks, so nothing happens. `amount` is still 70.\n2. **While loop iteration 1**:\n   - `put = math.min(20, 70) = 20`\n   - Inserts `{ name = name, count = 70 }` ← **Wrong!** Should be 20\n   - `amount = 70 - 20 = 50`\n3. **While loop iteration 2**:\n   - `put = math.min(20, 50) = 20`\n   - Inserts `{ name = name, count = 50 }` ← **Wrong!** Should be 20\n   - `amount = 50 - 20 = 30`\n4. **While loop iteration 3**:\n   - `put = math.min(20, 30) = 20`\n   - Inserts `{ name = name, count = 30 }` ← **Wrong!** Should be 20\n   - `amount = 30 - 20 = 10`\n5. **While loop iteration 4**:\n   - `put = math.min(20, 10) = 10`\n   - Inserts `{ name = name, count = 10 }` ← Correct by coincidence\n   - `amount = 10 - 10 = 0`\n\nResult: `[70, 50, 30, 10]` instead of `[20, 20, 20, 10]`.\n\n## The Fix\n\nChange `count = amount` to `count = put` in the `table.insert` call.\n\n```lua\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = put })  -- Fixed: was `amount`\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n```\n\n## Root Cause\n\n**The `while` loop inserted new stacks with `count = amount` (the remaining total) instead of `count = put` (the calculated portion for that stack), causing each new stack to contain the wrong quantity.**\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Unknown global 'amount'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Roblox developer 101 > 4 - Adventure game part 2 > Appendix > Troubleshooting and classroom tips](https://create.roblox.com/docs/education/lesson-plans/roblox-developer-lesson#troubleshooting-and-classroom-tips) · retrieved, not cited\n2. [Recap: July 2021 > Editor features](https://luau.org/news/2021-07-30-luau-recap-july-2021#editor-features) · retrieved, not cited\n3. [Stacks > Implement stacks](https://create.roblox.com/docs/luau/stacks#implement-stacks) · retrieved, not cited\n4. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n"
+  },
+  "ENG-04": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "83b854c2b109fd06",
+   "reasons": [
+    "require:signature: the signature is unchanged"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:signature",
+     "ok": false,
+     "detail": "the signature is unchanged"
+    },
+    {
+     "id": "require:cause",
+     "ok": true
+    }
+   ],
+   "seconds": 137.3,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.48
+   },
+   "blocks": 1,
+   "answer_chars": 2567,
+   "answer_sha256": "754093877af39af2dc3e3d4c5a57806ddba6db862c394ba97a4b0979b855b6c2",
+   "packs": [
+    "eng-debugging"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 296
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-debugging"
+     ],
+     "chars": 719
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The fixed code compiles cleanly. Here's the corrected function:\n\n```lua\n--!strict\n\nlocal COOLDOWNS: { [string]: number } = { dash = 3, fireball = 8 }\n\ntype State = {\n\tlast: { [string]: number }\n}\n\nlocal function tryUse(state: State, ability: string, now: number): boolean\n\t-- Unknown ability: never allowed, no error\n\tif COOLDOWNS[ability] == nil then\n\t\treturn false\n\tend\n\n\t-- First use: state.last[ability] is nil → allowed\n\tif state.last[ability] == nil then\n\t\tstate.last[ability] = now\n\t\treturn true\n\tend\n\n\t-- Cooldown check: allowed if cooldown seconds have passed (boundary included)\n\tif now - state.last[ability] >= COOLDOWNS[ability] then\n\t\tstate.last[ability] = now\n\t\treturn true\n\tend\n\n\treturn false\nend\n\nreturn tryUse\n```\n\n## Summary\n\n| Problem | Cause | Fix |\n|---|---|---|\n| `nil - number` on first use | `state.last[ability]` doesn't exist yet | Explicit `nil` check before arithmetic |\n| `number >= nil` on unknown ability | `COOLDOWNS[ability]` is `nil` | Guard with `COOLDOWNS[ability] == nil` check first |\n\n**Behavior preserved:**\n- First use of a known ability → allowed, `state.last` set to `now`\n- Unknown ability → returns `false`, no error, `state.last` unchanged\n- Cooldown not elapsed → returns `false`, `state.last` unchanged\n- Cooldown elapsed (including exact boundary) → allowed, `state.last` updated to `now`\n\n**Luau check by STAR:** The code block first failed the static Luau check (Type function instance sub<T, T> depends on generic function parameters but does not appear in the function signature; this construct cannot be type-checked at this time, line 18). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n2. [Custom abilities > Ability definition](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-definition) · retrieved, not cited\n3. [Custom abilities > Ability registration](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-registration) · retrieved, not cited\n4. [Script capabilities > Capabilities](https://create.roblox.com/docs/scripting/capabilities#capabilities) · retrieved, not cited\n"
+  },
+  "ENG-06": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "636105e93ac0f499",
+   "reasons": [
+    "unit_tests: 7/8 passed; failed: a handler that disconnects itself does not make the next one skip"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[3]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "7/8 passed; failed: a handler that disconnects itself does not make the next one skip"
+    },
+    {
+     "id": "require:root_cause",
+     "ok": true
+    }
+   ],
+   "seconds": 166.5,
+   "timings": {
+    "luau_check_s": 0.22,
+    "unit_s": 0.48
+   },
+   "blocks": 3,
+   "answer_chars": 7870,
+   "answer_sha256": "11f685b37dfe5919f9f475b7e7994b4bbefc4db29c3159d90f7f27fded41d70e",
+   "packs": [
+    "eng-debugging"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 32
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-debugging"
+     ],
+     "chars": 719
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "The root cause was that the `Fire` method iterates directly over the mutable `self.handlers` table with `ipairs`, so when a handler disconnects itself by calling `table.remove` on that same table during iteration, it shifts subsequent elements down and causes the iterator to skip the next handler.\n\nHere is the fix:\n\n```lua\nlocal Signal = {}\nSignal.__index = Signal\n\nfunction Signal.new()\n\treturn setmetatable({ handlers = {} }, Signal)\nend\n\nfunction Signal:Connect(fn)\n\ttable.insert(self.handlers, fn)\n\tlocal handlers = self.handlers\n\treturn {\n\t\tDisconnect = function()\n\t\t\tlocal i = table.find(handlers, fn)\n\t\t\tif i then\n\t\t\t\ttable.remove(handlers, i)\n\t\t\tend\n\t\tend,\n\t}\nend\n\nfunction Signal:Fire(...)\n\t-- Snapshot the handlers list at the start of Fire.\n\t-- This ensures we iterate over a stable list of the connections\n\t-- that existed when Fire was called. If a handler disconnects\n\t-- itself during iteration, it is still called (since it was in\n\t-- the snapshot), but new handlers added during Fire will not\n\t-- be called until the next Fire.\n\tlocal handlers = self.handlers\n\tfor i = 1, #handlers do\n\t\tlocal fn = handlers[i]\n\t\t-- Check if the handler is still connected (not yet removed\n\t\t-- by a previous handler's Disconnect call).\n\t\tif fn then\n\t\t\tfn(...)\n\t\tend\n\tend\nend\n\nreturn Signal\n```\n\n### Explanation of the Fix\n\n1.  **Snapshotting:** Instead of iterating over `self.handlers` directly with `ipairs` (which is sensitive to table mutations), we capture a reference to the current handlers table (`local handlers = self.handlers`) and iterate by index from `1` to `#handlers`.\n2.  **Handling Self-Disconnection:** When a handler calls `Disconnect()`, it calls `table.remove(handlers, i)`. This shifts all subsequent elements in the `handlers` array down by one index. By iterating with an explicit index `i` and accessing `handlers[i]` each time, we naturally \"skip\" the element that was shifted into position `i` by the removal. However, the requirement states that *every handler connected when Fire started is called once*.\n    \n    *Wait, the simple index iteration with `table.remove` actually causes the skip behavior described in the bug.* If I remove index `i`, the element at `i+1` moves to `i`. The loop then increments `i` to `i+1`, skipping the element that just moved to `i`.\n\n    To fix this correctly while keeping the API, we need to ensure that if a handler disconnects itself, it is still called, but we don't skip the next one. The standard way to handle this in Lua is to iterate backwards or to mark handlers as disconnected rather than removing them immediately, or to copy the list.\n\n    Let's re-read the requirement: *\"After the fix every handler that was connected when Fire started is called once, in connection order, unless it was disconnected before its turn\"*.\n\n    This implies:\n    - If Handler A disconnects Handler B *before* Handler B's turn, Handler B is NOT called.\n    - If Handler A disconnects *itself*, it IS called (since it was connected when Fire started, and it hasn't disconnected *before* its turn—it disconnects *during* its turn).\n    - Handlers connected *during* Fire are NOT called in the current Fire.\n\n    The simplest robust way to achieve this is to **copy the handlers list** at the start of `Fire`. This way, the iteration is over a static snapshot, and any `Disconnect` calls during `Fire` only affect `self.handlers`, not the snapshot being iterated.\n\n    ```lua\n    function Signal:Fire(...)\n        -- Create a shallow copy of the handlers list to iterate over.\n        -- This prevents modifications to self.handlers during iteration\n        -- from affecting the current Fire's execution order or skipping handlers.\n        local snapshot = {}\n        for i, fn in ipairs(self.handlers) do\n            snapshot[i] = fn\n        end\n\n        for _, fn in ipairs(snapshot) do\n            fn(...)\n        end\n    end\n    ```\n\n    This approach ensures:\n    1.  Every handler in `self.handlers` at the start of `Fire` is in `snapshot`.\n    2.  They are called in order.\n    3.  If a handler disconnects itself, it is still in `snapshot` and gets called.\n    4.  If a handler disconnects another handler, that other handler is still in `snapshot` and gets called (unless the requirement implies that disconnecting *another* handler should prevent it from being called? The prompt says \"unless it was disconnected before its turn\". If Handler A disconnects Handler B, Handler B is disconnected before its turn. So Handler B should NOT be called).\n\n    The snapshot approach calls Handler B even if Handler A disconnected it. This violates \"unless it was disconnected before its turn\".\n\n    So, we need to check if the handler is still connected before calling it. But `Disconnect` removes it from `self.handlers`. If we iterate over `self.handlers` directly, we have the skip problem.\n\n    The correct pattern is to iterate over a copy, but check if the handler is still in `self.handlers` before calling it? No, `table.find` is O(N).\n\n    Actually, the standard solution for this specific problem (\"disconnect during iteration\") is to iterate **backwards**.\n\n    ```lua\n    function Signal:Fire(...)\n        for i = #self.handlers, 1, -1 do\n            self.handlers[i](...)\n        end\n    end\n    ```\n\n    If we iterate backwards:\n    - Handler 1, Handler 2, Handler 3.\n    - Handler 1 disconnects itself. `table.remove` removes index 1. Handler 2 moves to index 1, Handler 3 moves to index 2.\n    - Next iteration is index 2 (which is now Handler 3). Handler 2 (now at index 1) is skipped.\n\n    Backwards iteration doesn't solve the skip issue if we use `table.remove`.\n\n    The correct solution that satisfies \"called once unless disconnected before its turn\" is to **mark handlers as disconnected** rather than removing them, or to use a **copy and check**.\n\n    Let's use the copy and check approach, but efficiently. We can store a `connected` flag on the connection object, but the API returns a table with `Disconnect`. We can add a `connected` field to the returned table.\n\n    Revised Fix:\n\n    ```lua\n    local Signal = {}\n    Signal.__index = Signal\n\n    function Signal.new()\n        return setmetatable({ handlers = {} }, Signal)\n    end\n\n    function Signal:Connect(fn)\n        local connection = {\n            connected = true,\n            Disconnect = function()\n                connection.connected = false\n                -- We don't remove from self.handlers here to avoid iteration issues.\n                -- We will clean up later or check the flag.\n            end,\n        }\n        table.insert(self.handlers, { fn, connection })\n        return connection\n    end\n\n    function Signal:Fire(...)\n        for i = #self.handlers, 1, -1 do\n            local entry = self.handlers[i]\n            local fn,\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. 1 other code block(s) were not checked. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Events > Disconnect functions from events](https://create.roblox.com/docs/scripting/events#disconnect-functions-from-events) · retrieved, not cited\n2. [Events > Connect functions to events](https://create.roblox.com/docs/scripting/events#connect-functions-to-events) · retrieved, not cited\n3. [Remote events and callbacks > Delivery guarantees > RemoteEvents](https://create.roblox.com/docs/scripting/events/remote#remoteevents) · retrieved, not cited\n4. [Deferred engine events > Common affected code patterns > Listen for the first occurrence of an event](https://create.roblox.com/docs/scripting/events/deferred#listen-for-the-first-occurrence-of-an-event) · retrieved, not cited\n",
+   "truncation_retries": 2,
+   "truncated": true
+  }
+ },
+ "summary": {
+  "pass": 1,
+  "fail": 2,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 0.3333,
+  "median_seconds": 137.3
+ }
+}

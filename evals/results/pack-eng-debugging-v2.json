@@ -1,0 +1,128 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "LUA-02"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "eng-debugging",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "490d0875329f",
+  "started_at": "2026-10-11T09:33:37+00:00",
+  "waited_for_lock_s": 0.5,
+  "finished_at": "2026-10-11T09:35:23+00:00",
+  "rescored_at": "2026-10-11T10:38:09+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "LUA-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "e0e3c92c26ca6988",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "require:alias_kept",
+     "ok": true
+    },
+    {
+     "id": "require:signature_kept",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_any",
+     "ok": true
+    }
+   ],
+   "seconds": 104.9,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 3226,
+   "answer_sha256": "8b2746d91638a6e05cd1d039297d22a3aa15a704923a5124f87f70e506df8c67",
+   "packs": [
+    "eng-debugging"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 218
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-debugging"
+     ],
+     "chars": 719
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Let's analyze the code and fix the issues.\n\n### Root Cause Analysis\n\nThe original code has two main problems:\n1.  **Runtime Crash on `nil` Profile:** The function `describe` accepts a `Profile?` (which can be `nil`), but immediately tries to access `p.name`. If `p` is `nil`, this causes a runtime error (\"attempt to index nil with 'name'\").\n2.  **Type Error on `nil` Level:** The field `level` is defined as `number?` (optional number). If `p.level` is `nil`, the expression `p.level + 1` attempts to add `nil` and `number`, which causes a runtime error (\"attempt to perform arithmetic (add) on nil and number\"). Additionally, in strict mode, accessing a field on a type that might be `nil` without a check is a type error.\n\n### The Fix\n\n1.  **Handle `nil` Profile:** Check if `p` is `nil` at the start of the function. If it is, return \"unknown\".\n2.  **Handle `nil` Level:** Use the null-coalescing operator `??` to provide a default value of `0` if `p.level` is `nil`. This ensures `p.level + 1` always operates on numbers.\n\n### Corrected Code\n\n```lua\n--!strict\n\ntype Profile = { name: string, level: number? }\n\nlocal function describe(p: Profile?): string\n\tif p == nil then\n\t\treturn \"unknown\"\n\tend\n\t\n\tlocal level = p.level or 0\n\treturn p.name .. \" (level \" .. (level + 1) .. \")\"\nend\n\nreturn describe\n```\n\n### Verification\n\n*   **Strict Type Checking:** The code uses `--!strict`. The `??` operator is valid in Luau for null-coalescing. The type of `p.level ?? 0` is `number`, so `level + 1` is valid.\n*   **Nil Profile:** If `p` is `nil`, the function returns \"unknown\" immediately.\n*   **Nil Level:** If `p` is not `nil` but `p.level` is `nil`, `level` becomes `0`, and the result is `name .. \" (level 1)\"`.\n*   **No `any` used:** The code relies on explicit types and safe operators.\n\n### Confirmation\n\nYou can confirm this fix by:\n1.  Running the Luau type checker on this code. It should pass without errors.\n2.  Testing the function with `describe(nil)` -> should return \"unknown\".\n3.  Testing the function with `{ name = \"Player1\" }` (no level) -> should return \"Player1 (level 1)\".\n4.  Testing the function with `{ name = \"Player2\", level = 5 }` -> should return \"Player2 (level 6)\".\n\n**Luau check by STAR:** The code block first failed the static Luau check (Expected identifier when parsing expression, got '?', line 11). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Type checking > Types](https://create.roblox.com/docs/luau/type-checking#types) · retrieved, not cited\n2. [Recap: October 2020 > Types are very close](https://luau.org/news/2020-10-30-luau-recap-october-2020#types-are-very-close) · retrieved, not cited\n3. [Luau Type Checking Release > What is type checking?](https://luau.org/news/2020-11-19-luau-type-checking-release#what-is-type-checking) · retrieved, not cited\n4. [Recap: June 2021 > Typechecking improvements](https://luau.org/news/2021-06-30-luau-recap-june-2021#typechecking-improvements) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 1,
+  "fail": 0,
+  "error": 0,
+  "scored": 1,
+  "pass_rate": 1.0,
+  "median_seconds": 104.9
+ }
+}

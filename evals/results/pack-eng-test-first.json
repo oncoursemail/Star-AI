@@ -1,0 +1,207 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "ENG-02",
+   "ENG-05"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "eng-test-first",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "e57fd0d5ecbd",
+  "started_at": "2026-10-11T09:35:24+00:00",
+  "waited_for_lock_s": 0.9,
+  "finished_at": "2026-10-11T09:45:31+00:00",
+  "rescored_at": "2026-10-11T10:38:03+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "ENG-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "00abb3b50cab6fd2",
+   "reasons": [
+    "luau_check[1]: line 7: Operator '..' could not be applied to operands of types unknown and string; there is no co; line 7: Operator '..' could not be applied to operands of types unknown and string; there is no co",
+    "luau_check[2]: line 31: Operator '*' could not be applied to operands of types number? and number; there is no cor; line 31: Operator '*' could not be applied to operands of types number? and number; there is no cor"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 7: Operator '..' could not be applied to operands of types unknown and string; there is no co; line 7: Operator '..' could not be applied to operands of types unknown and string; there is no co"
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": false,
+     "detail": "line 31: Operator '*' could not be applied to operands of types number? and number; there is no cor; line 31: Operator '*' could not be applied to operands of types number? and number; there is no cor"
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:tests_present",
+     "ok": true
+    },
+    {
+     "id": "require:has_function",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_run",
+     "ok": true
+    }
+   ],
+   "seconds": 291.8,
+   "timings": {
+    "luau_check_s": 0.19,
+    "unit_s": 0.47
+   },
+   "blocks": 2,
+   "answer_chars": 6536,
+   "answer_sha256": "ff4e8fed0bf350efeff7168194bb8054115ce004609d47b4d6f3aa184866d43e",
+   "packs": [
+    "eng-test-first"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 313
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-test-first"
+     ],
+     "chars": 618
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 17
+    }
+   ],
+   "answer": "Here is the test-first implementation of `parseDuration`.\n\n### Part 1: The Tests\nThese assertions can be run immediately. They will fail because the function is not yet defined.\n\n```lua\n--!strict\n\n-- 1. Helper to run tests\nlocal function test(name, fn)\n    local success, result = pcall(fn)\n    if not success then\n        warn(\"FAIL: \" .. name .. \" - \" .. tostring(result))\n    else\n        print(\"PASS: \" .. name)\n    end\nend\n\n-- 2. The Tests\ntest(\"Bare number is seconds\", function()\n    assert(parseDuration(\"90\") == 90)\nend)\n\ntest(\"Seconds unit\", function()\n    assert(parseDuration(\"45s\") == 45)\nend)\n\ntest(\"Minutes unit\", function()\n    assert(parseDuration(\"2m\") == 120)\nend)\n\ntest(\"Hours unit\", function()\n    assert(parseDuration(\"1h\") == 3600)\nend)\n\ntest(\"Combined hours and minutes\", function()\n    assert(parseDuration(\"1h30m\") == 5400)\nend)\n\ntest(\"Combined minutes and seconds with spaces\", function()\n    assert(parseDuration(\"2m 10s\") == 130)\nend)\n\ntest(\"Complex duration\", function()\n    assert(parseDuration(\"1h 15m 30s\") == 4530)\nend)\n\ntest(\"Empty string returns nil\", function()\n    assert(parseDuration(\"\") == nil)\nend)\n\ntest(\"Letters only returns nil\", function()\n    assert(parseDuration(\"abc\") == nil)\nend)\n\ntest(\"Unknown unit returns nil\", function()\n    assert(parseDuration(\"5x\") == nil)\nend)\n\ntest(\"Invalid mixed input returns nil\", function()\n    assert(parseDuration(\"1h 5x\") == nil)\nend)\n\nprint(\"--- Tests Complete ---\")\n```\n\n### Part 2: The Implementation\n\n```lua\n--!strict\n\n--!region parseDuration\n--- Parses a duration string into seconds.\n--- Supports 'h' (hours), 'm' (minutes), 's' (seconds).\n--- A bare number is treated as seconds.\n--- Returns nil for invalid input.\n--- @param text string\n--- @return number?\nlocal function parseDuration(text: string): number?\n\tif not text or text == \"\" then\n\t\treturn nil\n\tend\n\n\t-- Case 1: Bare number (e.g., \"90\")\n\tif text:match(\"^%d+$\") then\n\t\treturn tonumber(text)\n\tend\n\n\t-- Case 2: Structured duration (e.g., \"1h30m\", \"2m 10s\")\n\tlocal totalSeconds = 0\n\tlocal foundUnits = false\n\n\t-- We iterate through the string looking for number+unit pairs\n\t-- Pattern matches: optional spaces, digits, then a unit (h, m, s)\n\tlocal pattern = \"(%d+)%s*([hms])\"\n\t\n\tfor value, unit in text:gmatch(pattern) do\n\t\tlocal num = tonumber(value)\n\t\tif unit == \"h\" then\n\t\t\ttotalSeconds += num * 3600\n\t\telseif unit == \"m\" then\n\t\t\ttotalSeconds += num * 60\n\t\telseif unit == \"s\" then\n\t\t\ttotalSeconds += num\n\t\tend\n\t\tfoundUnits = true\n\tend\n\n\t-- If we didn't find any valid units, or the string contained garbage\n\t-- that didn't match the pattern (like \"5x\"), return nil.\n\tif not foundUnits then\n\t\treturn nil\n\tend\n\n\t-- Verify the entire string was consumed by valid patterns.\n\t-- If there is leftover text that wasn't part of a number+unit pair, it's invalid.\n\t-- We do this by removing all valid \"number+unit\" chunks (with optional spaces)\n\t-- and checking if anything remains.\n\tlocal cleaned = text:gsub(\"%d+%s*[hms]\", \"\")\n\tif cleaned:gsub(\"%s\", \"\") ~= \"\" then\n\t\treturn nil\n\tend\n\n\treturn totalSeconds\nend\n--!endregion\n\nreturn parseDuration\n```\n\n### Part 3: How to Run the Tests\n\n1.  **Create a Script:** In Roblox Studio, create a new **Script** (Server Script) or a **ModuleScript**.\n2.  **Paste:** Paste the **Tests** block first, followed by the **Implementation** block.\n3.  **Run:** Press **Play**.\n4.  **Output:** Check the **Output** window. You should see a series of `PASS:` messages. If any assertion fails, you will see a `FAIL:` message with the error details.\n\n**Alternative (Luau CLI):**\nIf you have the Luau command-line tool installed, save the code to `duration.luau` and run:\n```bash\nluau duration.luau\n```\n\n### Notes on Implementation\n*   **Regex Logic:** The function uses `gmatch` to extract all `number + unit` pairs. It sums them up.\n*   **Validation:** To ensure strings like `\"1h 5x\"` return `nil`, the function strips all valid `number+unit` patterns (and spaces) from the original string. If anything remains, the input was invalid.\n*   **Bare Numbers:** The function checks for a pure digit string first using `match(\"^%d+$\")` to handle the \"90\" case correctly before attempting unit parsing.\n*   **Type Safety:** The function is annotated with `--!strict` and uses proper Luau types (`string` input, `number?` output).\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 7: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n- line 7: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n- line 9: Operator '..' could not be applied to operands of types string and unknown; there is no corresponding overload for __concat (TypeError)\n- line 15: Unknown global 'parseDuration'; consider assigning to it first (TypeError) Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 31: Operator '*' could not be applied to operands of types number? and number; there is no corresponding overload for __mul (TypeError)\n- line 31: Operator '*' could not be applied to operands of types number? and number; there is no corresponding overload for __mul (TypeError)\n- line 33: Operator '*' could not be applied to operands of types number? and number; there is no corresponding overload for __mul (TypeError)\n- line 33: Operator '*' could not be applied to operands of types number? and number; there is no corresponding overload for __mul (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Create a GUI > Set up values and functions > Display the timer](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#display-the-timer) · retrieved, not cited\n2. [Type checking > Types](https://create.roblox.com/docs/luau/type-checking#types) · retrieved, not cited\n3. [An introduction to Luau > Creating a script](https://luau.org/getting-started#creating-a-script) · retrieved, not cited\n4. [Timers and events > Completed scripts](https://create.roblox.com/docs/education/battle-royale-series/timers-and-events#completed-scripts) · retrieved, not cited\n"
+  },
+  "ENG-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "5a350f243a2be9a2",
+   "reasons": [
+    "unit_tests: 0/8 passed; test aborted: ./t.luau:276: attempt to call a nil value | 0 of 8 assertions ran"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "0/8 passed; test aborted: ./t.luau:276: attempt to call a nil value | 0 of 8 assertions ran"
+    },
+    {
+     "id": "require:tests_present",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_run",
+     "ok": true
+    }
+   ],
+   "seconds": 313.4,
+   "timings": {
+    "luau_check_s": 0.19,
+    "unit_s": 0.49
+   },
+   "blocks": 2,
+   "answer_chars": 6600,
+   "answer_sha256": "efbbeedda2ebe87bd25300614ebcde2a25d7266d494c1e7060b46eb66b6d4c32",
+   "packs": [
+    "eng-test-first"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "eng-test-first"
+     ],
+     "chars": 618
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 10
+    }
+   ],
+   "answer": "Here is the test-first implementation of `chunk(list, size)`.\n\n### Part 1: The Unit Tests\n\nThese tests cover normal cases, edge cases (empty list, size 1), and invalid inputs. They use `pcall` to verify that `error()` is called for bad arguments.\n\n```lua\n--!strict\n\n-- Helper to run a test and print result\nlocal function test(name: string, fn: () -> ())\n\tlocal success, err = pcall(fn)\n\tif success then\n\t\tprint(\"✅ PASS:\", name)\n\telse\n\t\tprint(\"❌ FAIL:\", name, \"-\", err)\n\tend\nend\n\n-- 1. Basic chunking\ntest(\"Basic chunking into equal parts\", function()\n\tlocal input = {1, 2, 3, 4, 5, 6}\n\tlocal result = chunk(input, 2)\n\tassert(#result == 3, \"Expected 3 chunks\")\n\tassert(result[1] == {1, 2}, \"First chunk incorrect\")\n\tassert(result[2] == {3, 4}, \"Second chunk incorrect\")\n\tassert(result[3] == {5, 6}, \"Third chunk incorrect\")\nend)\n\n-- 2. Chunking with a remainder\ntest(\"Chunking with a remainder\", function()\n\tlocal input = {1, 2, 3, 4, 5}\n\tlocal result = chunk(input, 2)\n\tassert(#result == 3, \"Expected 3 chunks\")\n\tassert(result[3] == {5}, \"Last chunk should be shorter\")\nend)\n\n-- 3. Chunk size larger than list\ntest(\"Chunk size larger than list\", function()\n\tlocal input = {1, 2}\n\tlocal result = chunk(input, 5)\n\tassert(#result == 1, \"Expected 1 chunk\")\n\tassert(result[1] == {1, 2}, \"Chunk should contain all items\")\nend)\n\n-- 4. Chunk size of 1\ntest(\"Chunk size of 1\", function()\n\tlocal input = {1, 2, 3}\n\tlocal result = chunk(input, 1)\n\tassert(#result == 3, \"Expected 3 chunks\")\n\tassert(result[1] == {1}, \"First chunk incorrect\")\n\tassert(result[2] == {2}, \"Second chunk incorrect\")\n\tassert(result[3] == {3}, \"Third chunk incorrect\")\nend)\n\n-- 5. Empty list\ntest(\"Empty list\", function()\n\tlocal input = {}\n\tlocal result = chunk(input, 3)\n\tassert(#result == 0, \"Expected 0 chunks\")\nend)\n\n-- 6. Invalid size: zero\ntest(\"Invalid size: zero\", function()\n\tlocal input = {1, 2}\n\tlocal success, _ = pcall(function() chunk(input, 0) end)\n\tassert(not success, \"Should error on size 0\")\nend)\n\n-- 7. Invalid size: negative\ntest(\"Invalid size: negative\", function()\n\tlocal input = {1, 2}\n\tlocal success, _ = pcall(function() chunk(input, -1) end)\n\tassert(not success, \"Should error on negative size\")\nend)\n\n-- 8. Invalid size: non-integer (float)\ntest(\"Invalid size: float\", function()\n\tlocal input = {1, 2, 3}\n\tlocal success, _ = pcall(function() chunk(input, 1.5) end)\n\tassert(not success, \"Should error on float size\")\nend)\n\n-- 9. Invalid size: string\ntest(\"Invalid size: string\", function()\n\tlocal input = {1, 2}\n\tlocal success, _ = pcall(function() chunk(input, \"2\") end)\n\tassert(not success, \"Should error on string size\")\nend)\n\n-- 10. Immutability check\ntest(\"Input list is not modified\", function()\n\tlocal input = {1, 2, 3, 4}\n\t-- Create a copy to compare later\n\tlocal original = {table.unpack(input)}\n\t\n\tchunk(input, 2)\n\t\n\t-- Verify input hasn't been altered (e.g., by accident)\n\tassert(input[1] == original[1] and input[4] == original[4], \"Input list should remain unchanged\")\nend)\n\nprint(\"\\n--- All tests finished ---\")\n```\n\n### Part 2: The Implementation\n\n```lua\n--!strict\n\n--- Splits a list into sub-lists of at most `size` items.\n--- @param list any[] The input array to split.\n--- @param size number The maximum size of each chunk.\n--- @return any[] An array of arrays.\nlocal function chunk(list: {any}, size: number): {any}\n\t-- Validate size: must be a positive integer\n\tif type(size) ~= \"number\" or math.floor(size) ~= size or size <= 0 then\n\t\terror(\"size must be a positive integer\", 2)\n\tend\n\n\tlocal chunks: {any} = {}\n\tlocal index = 1\n\tlocal listLength = #list\n\n\twhile index <= listLength do\n\t\t-- table.unpack handles the range safely\n\t\t-- We create a new table for each chunk to ensure immutability of the input\n\t\tlocal chunkSize = math.min(size, listLength - index + 1)\n\t\tlocal newChunk: {any} = {}\n\t\t\n\t\tfor i = 1, chunkSize do\n\t\t\tnewChunk[i] = list[index + i - 1]\n\t\tend\n\t\t\n\t\ttable.insert(chunks, newChunk)\n\t\tindex = index + chunkSize\n\tend\n\n\treturn chunks\nend\n\nreturn chunk\n```\n\n### Part 3: How to Run the Tests\n\n1.  **Create a file:** Create a new file named `test_chunk.luau` in your project.\n2.  **Combine:** Paste the **Tests** code first, then the **Implementation** code below it. Ensure the `return chunk` is at the very end.\n3.  **Run in Studio:**\n    *   Insert a `Script` into `ServerScriptService`.\n    *   Paste the contents of `test_chunk.luau` into it.\n    *   Press **Play**. Check the Output window for `✅ PASS` or `❌ FAIL` messages.\n4.  **Run via Command Line (Luau):**\n    *   If you have the Luau CLI installed, you can run the standalone test file directly:\n        ```bash\n        luau test_chunk.luau\n        ```\n\n### Notes on Implementation\n\n*   **Validation:** The check `math.floor(size) ~= size` ensures the number is an integer (e.g., `2.0` passes, `2.5` fails). Combined with `size <= 0`, this covers all invalid cases requested.\n*   **Immutability:** The function creates new tables (`newChunk`) for each chunk. It reads from `list` but never writes to it, satisfying the \"without changing the input\" requirement.\n*   **Performance:** Using a `while` loop with `table.insert` is efficient for typical game data sizes. For extremely large lists, pre-allocating the inner tables could offer minor gains, but this is robust and clean for general use.\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 16: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 26: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 34: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 42: Unknown global 'chunk'; consider assigning to it first (TypeError) Code block 2 compiles and passes Luau type analysis.\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [An introduction to Luau > Creating a script](https://luau.org/getting-started#creating-a-script) · retrieved, not cited\n2. [Luau Type Checking Release > What is type checking?](https://luau.org/news/2020-11-19-luau-type-checking-release#what-is-type-checking) · retrieved, not cited\n3. [Luau globals > loadstring](https://create.roblox.com/docs/reference/engine/globals/LuaGlobals#loadstring) · retrieved, not cited\n4. [An introduction to Luau > Type checking](https://luau.org/getting-started#type-checking) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 0,
+  "fail": 2,
+  "error": 0,
+  "scored": 2,
+  "pass_rate": 0.0,
+  "median_seconds": 302.6
+ }
+}

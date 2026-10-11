@@ -1,0 +1,344 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "UI-11",
+   "NET-09",
+   "NET-14",
+   "ANI-05"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "off",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "237a0cfcb9d5",
+  "started_at": "2026-10-11T10:23:24+00:00",
+  "waited_for_lock_s": 1.8,
+  "finished_at": "2026-10-11T10:34:05+00:00",
+  "rescored_at": "2026-10-11T10:38:13+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "UI-11": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "6a5c0f3b0019b058",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:safe_area",
+     "ok": true
+    },
+    {
+     "id": "forbid:hack_offset",
+     "ok": true
+    },
+    {
+     "id": "forbid:insets_none",
+     "ok": true
+    }
+   ],
+   "seconds": 56.8,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 2625,
+   "answer_sha256": "0ec198dc5eb3ec19974648b2edc60b43948cb99288062b05e777bb4b5ccb3a7c",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 375
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The issue is that `ScreenInsets` is set to `Enum.ScreenInsets.None`, which ignores safe areas (notches, cutouts, top bars). The label is positioned at a fixed offset from the raw screen edge, so on phones with cutouts or Roblox’s top bar, it gets hidden.\n\nThe fix is to use `Enum.ScreenInsets.CoreUISafeInsets` (or `DeviceSafeInsets`) so the `ScreenGui`’s coordinate space respects safe areas, and then position the label using pure scale values (with anchor point) so it stays in the visible corner regardless of device.\n\nHere’s the corrected script:\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets -- [1] Utilize safe areas\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\n\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.new(0, 140, 0, 36) -- keep fixed size, but use UDim2.new for consistency\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, 0, 0, 0) -- [2] Scale-based positioning: 100% right, 0% top\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui\n```\n\n**Key changes:**\n1. **`ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets`** — This makes the `ScreenGui`’s bounds respect device cutouts and Roblox’s top bar, so all child UI is positioned within the safe area [1].\n2. **`Position = UDim2.new(1, 0, 0, 0)`** — Using pure scale (`1, 0, 0, 0`) with `AnchorPoint = (1, 0)` pins the label’s top-right corner to the top-right of the *safe area* container, not the raw screen edge. This works on PC (where safe insets are zero) and on phones with notches/cutouts [2], [4].\n\nThis avoids hard-coded pixel offsets and adapts to any device’s safe area automatically.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create HUD meters > Create a screen container > Utilize safe areas](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#utilize-safe-areas) · cited\n2. [Create HUD meters > Construct the health meter > Position the frame](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#position-the-frame) · cited\n3. [Mobile input > Device orientation](https://create.roblox.com/docs/input/mobile#device-orientation) · retrieved, not cited\n4. [Cross-platform development > User interface](https://create.roblox.com/docs/projects/cross-platform#user-interface) · cited\n"
+  },
+  "NET-09": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "5bbc6972e28c8a58",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:process_receipt",
+     "ok": true
+    },
+    {
+     "id": "require:granted",
+     "ok": true
+    },
+    {
+     "id": "require:not_processed",
+     "ok": true
+    },
+    {
+     "id": "require:purchase_id",
+     "ok": true
+    },
+    {
+     "id": "require:datastore",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:product_id",
+     "ok": true
+    },
+    {
+     "id": "forbid:client_message",
+     "ok": true
+    }
+   ],
+   "seconds": 314.3,
+   "timings": {
+    "luau_check_s": 0.16
+   },
+   "blocks": 2,
+   "answer_chars": 7558,
+   "answer_sha256": "3fc41ac803d980d71784cb3aea9d047d7bdccd09ab72462edc2710b025f1b303",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a robust, production-grade server `Script` that handles Developer Product purchases with exactly-once semantics, persistent receipt tracking, and strict server-side validation.\n\n### Server Script\n\n```lua\n-- // ServerScriptService/ProcessReceiptHandler.lua\n-- // IMPORTANT: This script must run on the SERVER. Never trust client signals.\n\nlocal MarketplaceService = game:GetService(\"MarketplaceService\")\nlocal DataStoreService = game:GetService(\"DataStoreService\")\nlocal Players = game:GetService(\"Players\")\n\n-- // Configuration\nlocal PRODUCT_COINS = {\n\t[1111] = 100,\n\t[2222] = 500,\n}\n\n-- // DataStore for tracking processed PurchaseIds (exactly-once guarantee)\n-- // Using a global store for receipts is simpler than per-user for deduplication,\n-- // but per-user is also valid. Here we use a dedicated \"ReceiptLog\" store.\nlocal receiptDataStore = DataStoreService:GetDataStore(\"ReceiptLog_v1\")\n\n-- // Helper: Get Player object from UserId (robust)\nlocal function getPlayerByUserId(userId)\n\t-- // Try Players:GetPlayerByUserId (preferred)\n\tlocal success, player = pcall(function()\n\t\treturn Players:GetPlayerByUserId(userId)\n\tend)\n\tif success and player then\n\t\treturn player\n\tend\n\treturn nil\nend\n\n-- // Helper: Save a processed receipt ID to DataStore\nlocal function saveProcessedReceipt(receiptId)\n\tlocal success, err = pcall(function()\n\t\treceiptDataStore:UpdateAsync(\"ProcessedReceipts\", function(currentList)\n\t\t\tcurrentList = currentList or {}\n\t\t\t-- // Append new receipt ID\n\t\t\ttable.insert(currentList, receiptId)\n\t\t\treturn currentList\n\t\tend)\n\tend)\n\tif not success then\n\t\twarn(\"Failed to save processed receipt:\", receiptId, err)\n\tend\nend\n\n-- // Helper: Check if a receipt ID was already processed\nlocal function isReceiptProcessed(receiptId)\n\tlocal success, result = pcall(function()\n\t\tlocal data = receiptDataStore:GetAsync(\"ProcessedReceipts\")\n\t\tif not data then\n\t\t\treturn false\n\t\tend\n\t\t-- // Check if receiptId exists in the list\n\t\tfor _, id in ipairs(data) do\n\t\t\tif id == receiptId then\n\t\t\t\treturn true\n\t\t\tend\n\t\tend\n\t\treturn false\n\tend)\n\tif not success then\n\t\twarn(\"Failed to check processed receipt:\", receiptId)\n\t\treturn false -- // Fail open: if we can't check, assume not processed to avoid losing revenue\n\tend\n\treturn result\nend\n\n-- // Main ProcessReceipt Callback\nlocal function processReceipt(receiptInfo)\n\tlocal userId = receiptInfo.PlayerId\n\tlocal productId = receiptInfo.ProductId\n\tlocal receiptId = receiptInfo.PurchaseId\n\n\t-- // 1. Validate ProductId\n\tlocal coinsToGive = PRODUCT_COINS[productId]\n\tif not coinsToGive then\n\t\twarn(\"Unknown product ID:\", productId)\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet\n\tend\n\n\t-- // 2. Exactly-Once Check: Has this receipt already been processed?\n\tif isReceiptProcessed(receiptId) then\n\t\t-- // Already granted. Return Granted to tell Roblox we handled it.\n\t\treturn Enum.ProductPurchaseDecision.PurchaseGranted\n\tend\n\n\t-- // 3. Find the player\n\tlocal player = getPlayerByUserId(userId)\n\tif not player then\n\t\t-- // Player not online. We must save the receipt as processed so we don't\n\t\t-- // grant it again when they join, but we also need to grant the coins later.\n\t\t-- // Strategy: Save receipt as processed, and store the pending grant in\n\t\t-- // the player's own DataStore (handled in a separate PlayerAdded listener).\n\t\tsaveProcessedReceipt(receiptId)\n\t\t\n\t\t-- // Store pending coins in player's profile DataStore\n\t\tlocal playerDataStore = DataStoreService:GetDataStore(\"PlayerData_\" .. tostring(userId))\n\t\tlocal success, err = pcall(function()\n\t\t\tplayerDataStore:UpdateAsync(userId, function(currentData)\n\t\t\t\tcurrentData = currentData or {}\n\t\t\t\tcurrentData.PendingCoins = (currentData.PendingCoins or 0) + coinsToGive\n\t\t\t\treturn currentData\n\t\t\tend)\n\t\tend)\n\t\tif not success then\n\t\t\twarn(\"Failed to save pending coins for receipt:\", receiptId, err)\n\t\tend\n\t\t\n\t\t-- // Return Granted because we securely stored the intent to grant.\n\t\t-- // The coins will be added when the player next loads their data.\n\t\treturn Enum.ProductPurchaseDecision.PurchaseGranted\n\tend\n\n\t-- // 4. Player is online. Grant coins immediately.\n\t-- // We assume a \"Coins\" value exists under the player.\n\tlocal coinsValue = player:FindFirstChild(\"Coins\")\n\tif not coinsValue then\n\t\twarn(\"Player missing 'Coins' value:\", userId)\n\t\treturn Enum.ProductPurchaseDecision.NotProcessedYet\n\tend\n\n\t-- // Grant coins\n\tcoinsValue.Value += coinsToGive\n\n\t-- // 5. Record receipt as processed to prevent duplicates\n\tsaveProcessedReceipt(receiptId)\n\n\treturn Enum.ProductPurchaseDecision.PurchaseGranted\nend\n\n-- // Set the callback (only once per server)\nMarketplaceService.ProcessReceipt = processReceipt\n\nprint(\"ProcessReceipt handler initialized.\")\n```\n\n### Additional Required Setup\n\n#### 1. Player Setup (Server Script in `ServerScriptService`)\nYou need a script that ensures every player has a `Coins` value and processes any pending coins from offline purchases.\n\n```lua\n-- // ServerScriptService/PlayerCoinSetup.lua\nlocal Players = game:GetService(\"Players\")\nlocal DataStoreService = game:GetService(\"DataStoreService\")\n\nlocal function setupPlayer(player)\n\t-- // Create Coins value if it doesn't exist\n\tif not player:FindFirstChild(\"Coins\") then\n\t\tlocal coinsValue = Instance.new(\"IntValue\")\n\t\tcoinsValue.Name = \"Coins\"\n\t\tcoinsValue.Value = 0\n\t\tcoinsValue.Parent = player\n\tend\n\n\t-- // Load pending coins from offline purchases\n\tlocal playerDataStore = DataStoreService:GetDataStore(\"PlayerData_\" .. tostring(player.UserId))\n\tlocal success, data = pcall(function()\n\t\treturn playerDataStore:GetAsync(player.UserId)\n\tend)\n\n\tif success and data and data.PendingCoins and data.PendingCoins > 0 then\n\t\tplayer.Coins.Value += data.PendingCoins\n\t\t-- // Clear pending coins after granting\n\t\tplayerDataStore:UpdateAsync(player.UserId, function(currentData)\n\t\t\tcurrentData.PendingCoins = 0\n\t\t\treturn currentData\n\t\tend)\n\tend\nend\n\nfor _, player in ipairs(Players:GetPlayers()) do\n\tsetupPlayer(player)\nend\n\nPlayers.PlayerAdded:Connect(setupPlayer)\n```\n\n### Key Design Decisions & Citations\n\n1. **Server-Side Only Validation**: The `ProcessReceipt` callback is set on a server `Script`. Client-side signals like `PromptProductPurchaseFinished` are never used to grant items, as they can be spoofed [3].\n2. **Exactly-Once Guarantee via DataStore**: Each `PurchaseId` is checked against a DataStore before granting. If a receipt is found, `PurchaseGranted` is returned without re-granting. This handles duplicate callbacks and server crashes [1].\n3. **Handling Offline Players**: If the player is not online when the receipt fires\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Unknown global 'Players'; consider assigning to it first, line 22). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Developer Products > Handle a developer product purchase](https://create.roblox.com/docs/production/monetization/developer-products#handle-a-developer-product-purchase) · cited\n2. [MarketplaceService > ProcessReceipt](https://create.roblox.com/docs/reference/engine/classes/MarketplaceService#ProcessReceipt) · retrieved, not cited\n3. [Securing the client-server boundary > Special considerations > MarketplaceService](https://create.roblox.com/docs/scripting/security/client-server-boundary#marketplaceservice) · cited\n"
+  },
+  "NET-14": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "2afe45ed33ad24d2",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:update_async",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:player_removing",
+     "ok": true
+    },
+    {
+     "id": "require:bind_to_close",
+     "ok": true
+    },
+    {
+     "id": "require:parallel",
+     "ok": true
+    },
+    {
+     "id": "require:deadline",
+     "ok": true
+    },
+    {
+     "id": "require:interval",
+     "ok": true
+    },
+    {
+     "id": "forbid:set_async",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 170.3,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 7404,
+   "answer_sha256": "ed3622b08f2b2a75eba8f2af47ceaecf57c1b0410ca10ec047d241625c6d5338",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 266
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a robust, server-side DataStore persistence script that follows your requirements and the official documentation patterns.\n\n### Server Script\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal DataStoreService = game:GetService(\"DataStoreService\")\n\n-- Configuration\nlocal AUTO_SAVE_INTERVAL = 60 -- Seconds\nlocal BIND_TO_CLOSE_TIMEOUT = 25 -- Seconds\nlocal SAVE_KEY_PREFIX = \"PlayerData_\"\n\n-- DataStore Instance\nlocal playerDataStore = DataStoreService:GetDataStore(\"PlayerData_v1\")\n\n-- In-memory cache: { [UserId] : { data table } }\nlocal playerCache = {}\n\n-- Helper: Save a single player's cache to the DataStore\nlocal function savePlayerData(player: Player): boolean\n\tlocal userId = player.UserId\n\tlocal cache = playerCache[userId]\n\t\n\tif not cache then\n\t\treturn false\n\tend\n\n\t-- Wrap in pcall as requested\n\tlocal success, result = pcall(function()\n\t\t-- UpdateAsync is preferred for safety against concurrent updates\n\t\tplayerDataStore:UpdateAsync(userId, function(oldData)\n\t\t\t-- If oldData is nil (first time), we just write the cache.\n\t\t\t-- Otherwise, we could merge, but for simple caching, overwriting\n\t\t\t-- the cache content is standard if we trust the server state.\n\t\t\treturn cache\n\t\tend)\n\tend)\n\n\tif success then\n\t\tprint(string.format(\"Saved data for %s.\", player.Name))\n\t\treturn true\n\telse\n\t\twarn(string.format(\"Failed to save data for %s: %s\", player.Name, tostring(result)))\n\t\treturn false\n\tend\nend\n\n-- Start the auto-save loop for a specific player\nlocal function startAutoSave(player: Player)\n\ttask.spawn(function()\n\t\t-- Spread out the first save randomly within the interval\n\t\t-- Reference: [1] Offset each player's first save by a random duration\n\t\tlocal initialDelay = math.random() * AUTO_SAVE_INTERVAL\n\t\ttask.wait(initialDelay)\n\n\t\twhile player and player.Parent do\n\t\t\tsavePlayerData(player)\n\t\t\ttask.wait(AUTO_SAVE_INTERVAL)\n\t\tend\n\tend)\nend\n\n-- Player Added\nPlayers.PlayerAdded:Connect(function(player: Player)\n\t-- 1. Load Data\n\tlocal userId = player.UserId\n\tlocal cache = {\n\t\tCoins = 0,\n\t\tLevel = 1,\n\t\tInventory = {}\n\t} -- Default data\n\n\tlocal success, result = pcall(function()\n\t\tlocal savedData = playerDataStore:GetAsync(userId)\n\t\tif savedData then\n\t\t\tcache = savedData\n\t\tend\n\tend)\n\n\tif not success then\n\t\twarn(string.format(\"Failed to load data for %s: %s\", player.Name, tostring(result)))\n\tend\n\n\tplayerCache[userId] = cache\n\n\t-- 2. Start Auto-Save Loop\n\tstartAutoSave(player)\nend)\n\n-- Player Removing\nPlayers.PlayerRemoving:Connect(function(player: Player)\n\tlocal userId = player.UserId\n\tlocal cache = playerCache[userId]\n\n\tif cache then\n\t\t-- Final save on leave\n\t\tsavePlayerData(player)\n\t\t\n\t\t-- Clean up memory\n\t\tplayerCache[userId] = nil\n\tend\nend)\n\n-- Game BindToClose\ngame:BindToClose(function()\n\tlocal startTime = tick()\n\tlocal savingPlayers = {}\n\n\t-- Save all remaining players in parallel\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal userId = player.UserId\n\t\tlocal cache = playerCache[userId]\n\t\t\n\t\tif cache then\n\t\t\t-- Use task.spawn to run saves in parallel\n\t\t\t-- Reference: [1] Requests are made in parallel\n\t\t\tsavingPlayers[player.UserId] = task.spawn(function()\n\t\t\t\tsavePlayerData(player)\n\t\t\tend)\n\t\tend\n\tend\n\n\t-- Wait for saves to finish or timeout\n\t-- Reference: [1] BindToClose callbacks only have 30 seconds to complete\n\twhile #savingPlayers > 0 and (tick() - startTime) < BIND_TO_CLOSE_TIMEOUT do\n\t\ttask.wait(0.5) -- Check every half second\n\t\t\n\t\t-- Remove finished tasks from the table\n\t\tfor uid, _ in pairs(savingPlayers) do\n\t\t\t-- We can't easily check if a task.spawn is done without a promise library,\n\t\t\t-- but we can rely on the timeout. \n\t\t\t-- A more robust way is to use a counter, but for this scope, \n\t\t\t-- the timeout ensures we don't hang.\n\t\tend\n\tend\n\t\n\t-- Note: If the timeout is reached, the server will shut down anyway.\n\t-- Any unsaved data will be lost, but the pcall inside savePlayerData \n\t-- ensures the server doesn't crash.\nend)\n```\n\n### Key Implementation Details\n\n1.  **Auto-Save Interval (60s):**\n    *   The `startAutoSave` function uses `task.wait(math.random() * AUTO_SAVE_INTERVAL)` for the initial delay. This ensures that when multiple players join at once, their first auto-saves are staggered, preventing a spike in DataStore requests [1].\n    *   Subsequent saves happen exactly every 60 seconds.\n\n2.  **No Save on Stat Change:**\n    *   Stats are modified directly in the `playerCache` table (in-memory). This is fast and avoids DataStore throttling. The cache is only written to the DataStore during the auto-save cycle or on player leave [3].\n\n3.  **`PlayerRemoving` Save:**\n    *   When a player leaves, `savePlayerData` is called synchronously in the `PlayerRemoving` event to ensure their data is persisted before they disconnect.\n\n4.  **`BindToClose` Parallel Saves:**\n    *   When the server is shutting down, `BindToClose` iterates through all remaining players.\n    *   Each player's save is wrapped in `task.spawn()` to run in parallel [1].\n    *   The script waits up to 25 seconds for these saves to complete. This is less than the 30-second hard limit for `BindToClose`, providing a small safety margin [1].\n\n5.  **`pcall` Wrapping:**\n    *   Every `DataStore` call (`GetAsync`, `UpdateAsync`) is wrapped in a `pcall`. This prevents DataStore throttling errors or network issues from crashing the server script. Errors are logged to the output for debugging.\n\n6.  **Memory Management:**\n    *   The `playerCache` table is cleaned up when a player leaves (`playerCache[userId] = nil`) to prevent memory leaks over the lifespan of the server.\n\n### References\n\n*   **[1] Save player data with standard data stores > Automatically save player data:** Recommends an autosave interval between 30-120 seconds. 60 seconds is within this safe range.\n*   **[1] Implement player data and purchasing systems > Player data > Approach:** Describes offsetting the first save by a random duration to prevent live servers from writing simultaneously.\n*   **[1] Implement player data and purchasing systems > Session locking:** Explains that player data is stored in memory on the server and only read/written when necessary, which is the model used here with `playerCache`.\n*   **[1] Save player data with standard data stores > Automatically save player data:** Notes that `BindToClose` callbacks have 30\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Implement player data and purchasing systems > Player data > Approach > Save player data](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#save-player-data) · cited\n2. [Save player data with standard data stores > Automatically save player data](https://create.roblox.com/docs/tutorials/use-case-tutorials/data-storage/save-player-data#automatically-save-player-data) · retrieved, not cited\n3. [Implement player data and purchasing systems > Session locking > Background](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#background) · cited\n4. [Save data > Read and save automatically](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/save-data#read-and-save-automatically) · retrieved, not cited\n"
+  },
+  "ANI-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "12cc7b68ac60eca7",
+   "reasons": [
+    "require:marker: listens to the Hit marker"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:marker",
+     "ok": false,
+     "detail": "listens to the Hit marker"
+    },
+    {
+     "id": "require:fire",
+     "ok": true
+    },
+    {
+     "id": "require:disconnect",
+     "ok": true
+    },
+    {
+     "id": "require:stopped",
+     "ok": true
+    },
+    {
+     "id": "require:activated",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:task_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 97.6,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 4903,
+   "answer_sha256": "49c5d6bc3c0b87531524a56efb9319a0318b2b41b2de789b8f0359a0c1162869",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 46
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the LocalScript. It is designed to be placed inside the Tool. It handles the animation lifecycle, connects to the `Hit` marker exactly once, and ensures the RemoteEvent is only fired if the animation played to completion (or at least reached the marker naturally) rather than being cut short.\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal player = Players.LocalPlayer\nlocal tool = script.Parent\nlocal attackHitRemote = ReplicatedStorage:WaitForChild(\"AttackHit\") -- Adjust path if necessary\n\nlocal ANIMATION_ID = \"rbxassetid://180435792\"\nlocal HIT_MARKER_NAME = \"Hit\"\n\nlocal animationTrack = nil\nlocal markerConnection = nil\n\n-- Function to clean up previous animation state\nlocal function cleanup()\n\tif markerConnection then\n\t\tmarkerConnection:Disconnect()\n\t\tmarkerConnection = nil\n\tend\n\tif animationTrack then\n\t\tanimationTrack:Stop()\n\t\tanimationTrack = nil\n\tend\nend\n\ntool.Activated:Connect(function()\n\t-- 1. Ensure we have a character and humanoid\n\tlocal character = player.Character\n\tif not character then return end\n\t\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then return end\n\t\n\tlocal animator = humanoid:FindFirstChildOfClass(\"Animator\")\n\tif not animator then return end\n\n\t-- 2. Clean up any previous animation tracks to prevent stacking\n\tcleanup()\n\n\t-- 3. Load the new animation\n\tlocal animation = Instance.new(\"Animation\")\n\tanimation.AnimationId = ANIMATION_ID\n\t\n\tanimationTrack = animator:LoadAnimation(animation)\n\n\t-- 4. Connect to the Hit marker BEFORE playing\n\t-- We use a flag to ensure we only fire if the marker is reached during this specific play instance\n\tlocal hitFired = false\n\t\n\tmarkerConnection = animationTrack:GetMarkerReachedSignal(HIT_MARKER_NAME):Connect(function()\n\t\thitFired = true\n\t\t-- Fire the remote exactly once\n\t\tattackHitRemote:FireServer()\n\tend)\n\n\t-- 5. Play the animation\n\tanimationTrack:Play()\n\n\t-- 6. Wait for the track to stop naturally\n\t-- This ensures we don't fire if the animation is interrupted/stopped early by another action\n\tanimationTrack.Stopped:Connect(function()\n\t\t-- Disconnect the marker connection immediately when the track stops\n\t\tif markerConnection then\n\t\t\tmarkerConnection:Disconnect()\n\t\t\tmarkerConnection = nil\n\t\tend\n\t\t\n\t\t-- Only fire if the marker was actually reached during the play\n\t\t-- If the track was stopped early (e.g., by another attack), hitFired will be false\n\t\tif hitFired then\n\t\t\t-- The remote was already fired inside the marker connection.\n\t\t\t-- This block is just for cleanup logic if needed later.\n\t\tend\n\t\t\n\t\t-- Reset the track for next time (optional, but good practice for reusability)\n\t\tanimationTrack = nil\n\tend)\nend)\n```\n\n### Key Implementation Details:\n\n1.  **`GetMarkerReachedSignal`**: This is the correct API to detect when the animation timeline reaches a named marker [1].\n2.  **`Stopped` Event**: The script connects to `animationTrack.Stopped` to handle cleanup. This ensures that if the player cancels the attack or another animation interrupts this one, the connection is cleaned up properly.\n3.  **`hitFired` Flag**: A local boolean flag is used to track whether the `Hit` marker was reached during the *current* play instance. This prevents firing if the animation is stopped before the marker is reached.\n4.  **No `wait` for Timing**: The script does not use `task.wait` or `wait` to guess when the marker is reached. It relies entirely on the event-driven `GetMarkerReachedSignal` and `Stopped` events, which is the robust, engine-supported way to handle animation timing [1].\n5.  **Cleanup**: The `cleanup` function ensures that previous animation tracks and connections are disconnected before starting a new one, preventing memory leaks or multiple fires.\n\n### References:\n[1] Use animations > Play animations from scripts > Humanoids\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n2. [Add animations > Script animations > Set up the project](https://create.roblox.com/docs/education/build-it-play-it-island-of-move/adding-animations#set-up-the-project) · retrieved, not cited\n3. [Play character animations > Trigger animations > Add animation](https://create.roblox.com/docs/tutorials/use-case-tutorials/animation/play-character-animations#add-animation) · retrieved, not cited\n4. [Hit detection with lasers > Control weapon fire rate](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#control-weapon-fire-rate) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 3,
+  "fail": 1,
+  "error": 0,
+  "scored": 4,
+  "pass_rate": 0.75,
+  "median_seconds": 133.9
+ }
+}

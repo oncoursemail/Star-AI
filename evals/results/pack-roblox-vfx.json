@@ -1,0 +1,492 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "VFX-01",
+   "VFX-02",
+   "VFX-03",
+   "VFX-04",
+   "VFX-05"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-vfx",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "f609bb720e77",
+  "started_at": "2026-10-11T08:47:07+00:00",
+  "waited_for_lock_s": 2.4,
+  "finished_at": "2026-10-11T09:03:04+00:00",
+  "rescored_at": "2026-10-11T10:37:56+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "VFX-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "3a66ac0dafce73fb",
+   "reasons": [
+    "require:lifetime: Lifetime is a NumberRange",
+    "require:speed: Speed is a NumberRange",
+    "require:size_seq: Size is a NumberSequence",
+    "require:transp_seq: Transparency is a NumberSequence",
+    "require:color_seq: Color is a ColorSequence"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:emitter",
+     "ok": true
+    },
+    {
+     "id": "require:attachment",
+     "ok": true
+    },
+    {
+     "id": "require:emit",
+     "ok": true
+    },
+    {
+     "id": "require:twenty",
+     "ok": true
+    },
+    {
+     "id": "require:rate0",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": false,
+     "detail": "Lifetime is a NumberRange"
+    },
+    {
+     "id": "require:speed",
+     "ok": false,
+     "detail": "Speed is a NumberRange"
+    },
+    {
+     "id": "require:spread",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:size_seq",
+     "ok": false,
+     "detail": "Size is a NumberSequence"
+    },
+    {
+     "id": "require:transp_seq",
+     "ok": false,
+     "detail": "Transparency is a NumberSequence"
+    },
+    {
+     "id": "require:color_seq",
+     "ok": false,
+     "detail": "Color is a ColorSequence"
+    },
+    {
+     "id": "require:cleanup",
+     "ok": true
+    },
+    {
+     "id": "forbid:invented",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 307.2,
+   "timings": {
+    "luau_check_s": 0.19
+   },
+   "blocks": 2,
+   "answer_chars": 6561,
+   "answer_sha256": "b6da255715abd9686a01ecf94a70fa61d5afcb2a14d9ff841885105e104d91da",
+   "packs": [
+    "roblox-vfx"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 327
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-vfx"
+     ],
+     "chars": 1097
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `HitEffect` ModuleScript. It creates a reusable, self-cleaning impact spark burst using a single invisible Part, an Attachment, and a `ParticleEmitter` configured for a one-shot burst.\n\n### `HitEffect` ModuleScript\n\n```lua\n--!strict\n\nlocal HitEffect = {}\n\n-- Configuration for the spark effect\nlocal SPARK_CONFIG = {\n\tEmitCount = 20,\n\tLifetime = NumberRange.new(0.2, 0.5), -- Sparks live under half a second\n\tSpeed = NumberRange.new(20, 40),      -- 20 to 40 studs/s\n\tSpreadAngle = Vector2.new(180, 180),  -- All directions (spherical burst)\n\tDrag = 10,                            -- High drag to stop sparks quickly\n\tLightEmission = 1,                    -- Full glow for sparks\n}\n\n-- ColorSequence: White/Yellow -> Orange\n-- Starts bright (1, 1, 1) and (1, 0.8, 0), ends deep orange (1, 0.4, 0)\nlocal COLOR_SEQUENCE = ColorSequence.new({\n\tColorSequenceKeypoint.new(0.0, Color3.fromRGB(255, 255, 240)), -- White-ish\n\tColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 220, 50)),  -- Yellow\n\tColorSequenceKeypoint.new(1.0, Color3.fromRGB(255, 120, 0)),   -- Orange\n})\n\n-- NumberSequence: Shrink over time (Size)\n-- Starts at 0.4 studs, shrinks to 0.05 studs\nlocal SIZE_SEQUENCE = NumberSequence.new({\n\tNumberSequenceKeypoint.new(0.0, 0.4),\n\tNumberSequenceKeypoint.new(1.0, 0.05),\n})\n\n-- NumberSequence: Fade out over time (Transparency)\n-- Starts opaque (0), ends invisible (1)\nlocal TRANSPARENCY_SEQUENCE = NumberSequence.new({\n\tNumberSequenceKeypoint.new(0.0, 0),\n\tNumberSequenceKeypoint.new(1.0, 1),\n})\n\n--- Spawns a one-shot impact spark burst at the given position.\n-- @param position Vector3: The world position to spawn the sparks.\nfunction HitEffect.play(position: Vector3)\n\t-- 1. Create the container Part (invisible and anchored)\n\tlocal sparkPart = Instance.new(\"Part\")\n\tsparkPart.Name = \"HitSparkEffect\"\n\tsparkPart.Anchored = true\n\tsparkPart.CanCollide = false\n\tsparkPart.Transparency = 1 -- Invisible\n\tsparkPart.Size = Vector3.new(0.5, 0.5, 0.5) -- Small hitbox\n\tsparkPart.Position = position\n\n\t-- 2. Create an Attachment for the ParticleEmitter to emit from\n\tlocal attachment = Instance.new(\"Attachment\")\n\tattachment.Name = \"SparkAttachment\"\n\tattachment.Parent = sparkPart\n\n\t-- 3. Create the ParticleEmitter\n\tlocal emitter = Instance.new(\"ParticleEmitter\")\n\temitter.Name = \"SparkEmitter\"\n\temitter.Parent = attachment\n\n\t-- 4. Configure Emitter for One-Shot Burst\n\temitter.Rate = 0 -- Do not emit continuously; we use :Emit() manually\n\temitter.Lifetime = SPARK_CONFIG.Lifetime\n\temitter.Speed = SPARK_CONFIG.Speed\n\temitter.SpreadAngle = SPARK_CONFIG.SpreadAngle\n\temitter.Drag = SPARK_CONFIG.Drag\n\temitter.LightEmission = SPARK_CONFIG.LightEmission\n\temitter.Texture = \"rbxassetid://6101261905\" -- Electric spark texture\n\n\t-- 5. Shape the particle's life with Sequences\n\temitter.Color = COLOR_SEQUENCE -- White/Yellow to Orange\n\temitter.Size = SIZE_SEQUENCE   -- Shrink over life\n\temitter.Transparency = TRANSPARENCY_SEQUENCE -- Fade out over life\n\n\t-- 6. Emit the particles\n\temitter:Emit(SPARK_CONFIG.EmitCount)\n\n\t-- 7. Clean up the Part after the longest particle has died\n\t-- Max lifetime is 0.5s, plus a small buffer for safety\n\tlocal cleanupTime = SPARK_CONFIG.Lifetime.Max + 0.2\n\ttask.delay(cleanupTime, function()\n\t\tif sparkPart and sparkPart.Parent then\n\t\t\tsparkPart:Destroy()\n\t\tend\n\tend)\nend\n\nreturn HitEffect\n```\n\n### How to Use\n\n1.  Save this script as a **ModuleScript** named `HitEffect` in `ServerScriptService` (or `ReplicatedStorage` if you prefer).\n2.  Call it from your server-side hit detection logic:\n\n```lua\nlocal HitEffect = require(game.ServerScriptService.HitEffect)\n\n-- Example: When a bullet hits a part\nlocal function onHit(hitPart, position)\n\t-- Spawn the spark effect\n\tHitEffect.play(position)\n\t\n\t-- ... handle damage ...\nend\n```\n\n### Key Properties Explained\n\n| Property | Value | Purpose |\n| :--- | :--- | :--- |\n| `Rate` | `0` | Disables continuous emission. We manually trigger the burst with `:Emit()`. |\n| `Emit(count)` | `20` | Releases 20 particles instantly in a single burst. |\n| `Lifetime` | `0.2, 0.5` | Particles exist for 0.2 to 0.5 seconds, ensuring they disappear quickly. |\n| `Speed` | `20, 40` | Particles fly out at 20–40 studs per second, creating a fast impact feel. |\n| `SpreadAngle` | `180, 180` | Fires particles in a full spherical pattern (all directions). |\n| `Drag` | `10` | High drag slows particles down rapidly, making the burst feel \"heavy\" and impactful. |\n| `LightEmission` | `1` | Makes the sparks glow brightly against the environment. |\n| `Color` | `ColorSequence` | Transitions from bright white/yellow (impact flash) to orange (ember fade). |\n| `Size` | `NumberSequence` | Shrinks particles from 0.4 to 0.05 studs over their lifetime. |\n| `Transparency` | `NumberSequence` | Fades particles from opaque to invisible over their lifetime. |\n| `task.delay` | `0.7s` | Cleans up the invisible Part after the longest possible particle lifetime (0.5s + 0.2s buffer). |\n\n### Notes\n\n-   **Performance:** The effect is self-cleaning. The Part is destroyed after 0.7 seconds, preventing memory leaks from repeated hits.\n-   **Texture:** The spark texture (`rbxassetid://6101261905`) is a standard Roblox electric spark. If you want a different look, you can change the `Texture` property to a custom asset ID.\n-   **Server-Side:** This script is\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Key 'ColorSequence' not found in table 'SPARK_CONFIG', line 70). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create explosions with VFX > Emitter setup](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#emitter-setup) · retrieved, not cited\n2. [Create explosions with VFX > Test particle bursts](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#test-particle-bursts) · retrieved, not cited\n3. [Use particles for actions > Make particles spread](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/using-particles-for-actions#make-particles-spread) · retrieved, not cited\n4. [Basic particle effects > Particle properties > Color](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/basic-particle-effects#color) · retrieved, not cited\n"
+  },
+  "VFX-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "0f4572906d24856a",
+   "reasons": [
+    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": false,
+     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+    },
+    {
+     "id": "require:beam",
+     "ok": true
+    },
+    {
+     "id": "require:att0",
+     "ok": true
+    },
+    {
+     "id": "require:att1",
+     "ok": true
+    },
+    {
+     "id": "require:width",
+     "ok": true
+    },
+    {
+     "id": "require:face",
+     "ok": true
+    },
+    {
+     "id": "require:segments",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:trail",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": true
+    },
+    {
+     "id": "require:trail_transparency",
+     "ok": true
+    },
+    {
+     "id": "require:enabled",
+     "ok": true
+    },
+    {
+     "id": "require:switch_off",
+     "ok": true
+    },
+    {
+     "id": "forbid:trail_width",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 198.2,
+   "timings": {
+    "luau_check_s": 0.17
+   },
+   "blocks": 2,
+   "answer_chars": 5617,
+   "answer_sha256": "1b24b8bc5185117a5f1cac9421746b87df18299ffa400d4808fa9b0d5f62c47f",
+   "packs": [
+    "roblox-vfx"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 312
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-vfx"
+     ],
+     "chars": 1097
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 1
+    }
+   ],
+   "answer": "Here is the ModuleScript containing `makeBeam`, `makeTrail`, and `swing`.\n\n```lua\n-- // BeamTrailTools\n-- A utility module for creating laser beams and sword trails.\n\nlocal BeamTrailTools = {}\n\n--- Creates a red laser beam between two parts.\n-- @param a BasePart - The starting part.\n-- @param b BasePart - The ending part.\n-- @return Beam - The created Beam instance.\nfunction BeamTrailTools.makeBeam(a: BasePart, b: BasePart): Beam\n\t-- Create Attachments\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Parent = a\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Parent = b\n\n\t-- Create Beam\n\tlocal beam = Instance.new(\"Beam\")\n\tbeam.Attachment0 = attachment0\n\tbeam.Attachment1 = attachment1\n\tbeam.Width0 = 0.1 -- Thin\n\tbeam.Width1 = 0.1 -- Thin\n\tbeam.Segments = 4\n\tbeam.FaceCamera = true\n\tbeam.LightEmission = 1 -- Glowing\n\tbeam.Color = Color3.fromRGB(255, 0, 0) -- Red\n\tbeam.Texture = \"rbxassetid://6060542021\" -- Laser texture [4]\n\tbeam.Parent = a.Parent -- Parent to workspace or common ancestor\n\n\treturn beam\nend\n\n--- Creates a trail on a sword handle.\n-- @param handle BasePart - The sword handle (blade base).\n-- @return Trail - The created Trail instance.\nfunction BeamTrailTools.makeTrail(handle: BasePart): Trail\n\t-- Create Attachments on the handle\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Parent = handle\n\tattachment0.Position = Vector3.new(0, 0.5, 0) -- Blade base\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Parent = handle\n\tattachment1.Position = Vector3.new(0, -0.5, 0) -- Tip (adjust based on model orientation)\n\n\t-- Create Trail\n\tlocal trail = Instance.new(\"Trail\")\n\ttrail.Attachment0 = attachment0\n\ttrail.Attachment1 = attachment1\n\ttrail.Lifetime = 0.25\n\ttrail.MinLength = 0.1\n\ttrail.Enabled = false\n\ttrail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))\n\ttrail.Transparency = NumberSequence.new({\n\t\tNumberSequenceKeypoint.new(0, 0),\n\t\tNumberSequenceKeypoint.new(1, 1) -- Fades to fully transparent\n\t})\n\ttrail.Parent = handle\n\n\treturn trail\nend\n\n--- Activates a trail for a duration, then deactivates it.\n-- @param trail Trail - The trail instance to control.\n-- @param duration number - How long the trail should be visible in seconds.\nfunction BeamTrailTools.swing(trail: Trail, duration: number)\n\tif not trail or trail:IsA(\"Trail\") then\n\t\twarn(\"swing: Invalid trail instance\")\n\t\treturn\n\tend\n\n\ttrail.Enabled = true\n\n\ttask.delay(duration, function()\n\t\ttrail.Enabled = false\n\tend)\nend\n\nreturn BeamTrailTools\n```\n\n### Notes on Implementation\n\n1.  **`makeBeam`**:\n    *   Creates `Attachment` instances in each part to define the beam's start and end points [3].\n    *   Sets `Width0` and `Width1` to a small value (0.1) for a thin laser look [4].\n    *   Sets `FaceCamera = true` so the beam remains visible from all angles [4].\n    *   Sets `LightEmission = 1` for a glowing effect [4].\n    *   Uses a standard laser texture (`rbxassetid://6060542021`) which is commonly used for sci-fi lasers [4].\n    *   Parents the beam to the parent of part `a` (usually `Workspace` or a `Tool`) so it is rendered.\n\n2.  **`makeTrail`**:\n    *   Creates two `Attachment` instances on the `handle` part. The positions (0.5 and -0.5) are relative to the part's origin; you may need to adjust these based on your specific sword model's scale and orientation.\n    *   Sets `Lifetime = 0.25` as requested.\n    *   Sets `Enabled = false` initially.\n    *   Uses a `NumberSequence` for `Transparency` that starts at 0 (opaque) and ends at 1 (fully transparent) to create a fading tail effect.\n    *   Uses a `ColorSequence` for `Color`. You can customize this to change the trail color (e.g., to red or blue).\n\n3.  **`swing`**:\n    *   Enables the trail.\n    *   Uses `task.delay` to disable the trail after the specified `duration` seconds. This is the standard, non-blocking way to schedule events in modern Luau.\n\n### Usage Example\n\n```lua\nlocal BeamTrailTools = require(path.to.ModuleScript)\n\n-- Example: Create a laser beam between two parts\nlocal partA = workspace.PartA\nlocal partB = workspace.PartB\nlocal laser = BeamTrailTools.makeBeam(partA, partB)\n\n-- Example: Create a trail on a sword handle\nlocal swordHandle = workspace.Sword.Handle\nlocal trail = BeamTrailTools.makeTrail(swordHandle)\n\n-- Example: Swing the sword (activate trail for 0.5 seconds)\nBeamTrailTools.swing(trail, 0.5)\n```\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 1: Unknown global 'path'; consider assigning to it first (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Create the laser part](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#create-the-laser-part) · retrieved, not cited\n2. [Create laser beams with VFX](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams) · retrieved, not cited\n3. [Create engaging experiences > Beams and attachments](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/creating-engaging-experiences#beams-and-attachments) · cited\n4. [Create laser beams with VFX > Customize the beam](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams#customize-the-beam) · cited\n"
+  },
+  "VFX-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "0a07a2e9b11c94b5",
+   "reasons": [
+    "unit_tests: 9/10 passed; failed: 50 acquire/release cycles build only one object"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "9/10 passed; failed: 50 acquire/release cycles build only one object"
+    }
+   ],
+   "seconds": 197.8,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.5
+   },
+   "blocks": 2,
+   "answer_chars": 6239,
+   "answer_sha256": "f59a7b33801f23b2603345b8d788e08f4c749747afde5175c76f69ec4266c1ea",
+   "packs": [
+    "roblox-vfx"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 295
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-vfx"
+     ],
+     "chars": 1097
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a pure-Luau `EffectPool` ModuleScript. It contains no Roblox class instantiations or API calls; it is a generic object pool that the caller uses to manage particle effects (or any other visual objects).\n\n```lua\n-- EffectPool.lua\n-- A pure-Luau object pool for managing visual effects to prevent frame rate drops.\n-- Reference: Excessive object density and draw calls can cause performance issues [2].\n\nlocal EffectPool = {}\nEffectPool.__index = EffectPool\n\n--- Creates a new EffectPool.\n-- @param maxActive number: The maximum number of effects that can be active simultaneously.\n-- @param factory function: A function that returns a new effect object when called.\n-- @return table: The EffectPool instance.\nfunction EffectPool.new(maxActive, factory)\n\tassert(type(maxActive) == \"number\" and maxActive > 0, \"maxActive must be a positive number\")\n\tassert(type(factory) == \"function\", \"factory must be a function\")\n\n\tlocal pool = {\n\t\t-- List of available (idle) effect objects\n\t\t_idle = {},\n\t\t-- List of currently active effect objects\n\t\t_active = {},\n\t\t-- Total number of effects ever created\n\t\t_totalCreated = 0,\n\t\t-- Maximum number of active effects allowed\n\t\t_maxActive = maxActive,\n\t\t-- Factory function to create new effects\n\t\t_factory = factory,\n\t}\n\n\tsetmetatable(pool, EffectPool)\n\treturn pool\nend\n\n--- Acquires an effect from the pool.\n-- Returns an idle effect if available, creates a new one if under the limit, or returns nil if the limit is reached.\n-- @return any|nil: The effect object, or nil if the pool is at capacity.\nfunction EffectPool:acquire()\n\t-- Check if we can create a new effect\n\tif self._totalCreated < self._maxActive then\n\t\tself._totalCreated = self._totalCreated + 1\n\t\tlocal effect = self._factory()\n\t\tif effect then\n\t\t\ttable.insert(self._active, effect)\n\t\t\treturn effect\n\t\tend\n\t\t-- If factory failed, decrement counter and return nil\n\t\tself._totalCreated = self._totalCreated - 1\n\t\treturn nil\n\tend\n\n\t-- Check if there are any idle effects to reuse\n\tif #self._idle > 0 then\n\t\tlocal effect = table.remove(self._idle)\n\t\ttable.insert(self._active, effect)\n\t\treturn effect\n\tend\n\n\t-- Pool is at capacity and no idle effects are available\n\treturn nil\nend\n\n--- Releases an effect back to the pool.\n-- @param effect any: The effect object to release.\n-- @return boolean: True if the effect was successfully released, false otherwise.\nfunction EffectPool:release(effect)\n\t-- Check if the effect is currently active\n\tlocal isActive = false\n\tfor i = 1, #self._active do\n\t\tif self._active[i] == effect then\n\t\t\ttable.remove(self._active, i)\n\t\t\tisActive = true\n\t\t\tbreak\n\t\tend\n\tend\n\n\t-- If it was active, move it to idle\n\tif isActive then\n\t\ttable.insert(self._idle, effect)\n\t\treturn true\n\tend\n\n\t-- Effect was not active (double release or foreign object)\n\treturn false\nend\n\n--- Returns the number of currently active effects.\n-- @return number: The count of active effects.\nfunction EffectPool:activeCount()\n\treturn #self._active\nend\n\n--- Returns the total number of effects ever created by this pool.\n-- @return number: The total count of created effects.\nfunction EffectPool:totalCreated()\n\treturn self._totalCreated\nend\n\nreturn EffectPool\n```\n\n### Usage Example\n\n```lua\nlocal EffectPool = {}\nEffectPool.__index = EffectPool\n\nfunction EffectPool.new(maxActive, factory)\n\tlocal self = setmetatable({}, EffectPool)\n\tself.maxActive = maxActive\n\tself.factory = factory\n\tself.active = {}\n\tself.idle = {}\n\tself.totalCreated = 0\n\treturn self\nend\n\nfunction EffectPool:acquire()\n\tif #self.idle > 0 then\n\t\treturn table.remove(self.idle)\n\tend\n\tif #self.active < self.maxActive then\n\t\tlocal effect = self.factory()\n\t\ttable.insert(self.active, effect)\n\t\tself.totalCreated = self.totalCreated + 1\n\t\treturn effect\n\tend\n\treturn nil\nend\n\nfunction EffectPool:release(effect)\n\tlocal isActive = false\n\tfor _, activeEffect in ipairs(self.active) do\n\t\tif activeEffect == effect then\n\t\t\tisActive = true\n\t\t\tbreak\n\t\tend\n\tend\n\tif isActive then\n\t\ttable.remove(self.active, table.find(self.active, effect))\n\t\ttable.insert(self.idle, effect)\n\tend\nend\n\nfunction EffectPool:activeCount()\n\treturn #self.active\nend\n\nfunction EffectPool:totalCreated()\n\treturn self.totalCreated\nend\n\nreturn EffectPool\n```\n\n### Key Design Points\n\n1.  **Pure Luau**: The module contains no Roblox API calls. It operates on generic Lua tables and values, making it easy to test and reuse.\n2.  **Capacity Management**: `acquire()` checks both the total created count and the idle list. This ensures that the pool never exceeds `maxActive` effects, even if some are released and re-acquired multiple times.\n3.  **Safe Release**: `release()` verifies that the effect is currently active before moving it to the idle list. This prevents errors from double-releasing or releasing foreign objects.\n4.  **Performance**: By reusing effect objects, the pool reduces the overhead of creating and destroying instances, which can help mitigate the performance issues associated with excessive object density [2].\n\n### References\n\n-   [2] Improve performance > Rendering > Other common problems: Excessive object density and draw calls can cause performance issues.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 first failed the static Luau check (Unknown global 'path'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n2. [Improve performance > Rendering > Other common problems](https://create.roblox.com/docs/performance-optimization/improve#other-common-problems) · cited\n3. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · retrieved, not cited\n4. [Roblox for Unity developers > Scripting > Luau code sample](https://create.roblox.com/docs/unity#luau-code-sample) · retrieved, not cited\n"
+  },
+  "VFX-04": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "072e7bb6e6b04fed",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:sort",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_waiting",
+     "ok": true
+    }
+   ],
+   "seconds": 186.6,
+   "timings": {
+    "luau_check_s": 0.17,
+    "unit_s": 0.48
+   },
+   "blocks": 2,
+   "answer_chars": 6027,
+   "answer_sha256": "b853c251f4d0291e802e827af335df1af314534ee9f25198f81a1ce86780c608",
+   "packs": [
+    "roblox-vfx"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 375
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-vfx"
+     ],
+     "chars": 1097
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a pure-Luau `ModuleScript` implementing the `Timeline` class exactly to spec.\n\n```lua\n-- Timeline.lua\n-- @classmod Timeline\n\nlocal Timeline = {}\nTimeline.__index = Timeline\n\n--- Create a new Timeline.\n-- @param cues table Array of { at = number, name = string, fn = function? }\n-- @return Timeline\nfunction Timeline.new(cues)\n\tlocal self = setmetatable({}, Timeline)\n\n\t-- Pre-sort cues: primary key = time (ascending), secondary key = original array index (ascending)\n\t-- This guarantees deterministic order: time order, then array order for ties.\n\tlocal sorted = {}\n\tfor i = 1, #cues do\n\t\tsorted[i] = {\n\t\t\tat = cues[i].at,\n\t\t\tname = cues[i].name,\n\t\t\tfn = cues[i].fn,\n\t\t\t_index = i, -- preserve original array order for tie-breaking\n\t\t}\n\tend\n\n\ttable.sort(sorted, function(a, b)\n\t\tif a.at ~= b.at then\n\t\t\treturn a.at < b.at\n\t\tend\n\t\treturn a._index < b._index\n\tend)\n\n\tself._cues = sorted\n\tself._elapsed = 0\n\tself._fired = {} -- set of cue names that have already fired\n\tself._done = false\n\n\treturn self\nend\n\n--- Advance the timeline by dt seconds.\n-- Fires every cue whose `at` <= elapsed, exactly once, in time order (ties broken by array order).\n-- @param dt number Delta time in seconds (can be negative for rewinding, but typically >= 0)\n-- @return table Array of cue names that fired during this advance\nfunction Timeline:advance(dt)\n\tif self._done then\n\t\treturn {}\n\tend\n\n\tself._elapsed = self._elapsed + dt\n\n\tlocal fired_this_step = {}\n\n\tfor _, cue in ipairs(self._cues) do\n\t\t-- Fire only if:\n\t\t-- 1. The cue's time has been reached (at <= elapsed)\n\t\t-- 2. The cue has not already fired\n\t\tif cue.at <= self._elapsed and not self._fired[cue.name] then\n\t\t\tself._fired[cue.name] = true\n\t\t\ttable.insert(fired_this_step, cue.name)\n\n\t\t\tif cue.fn then\n\t\t\t\tcue.fn()\n\t\t\tend\n\t\tend\n\tend\n\n\t-- Check if all cues have fired\n\tlocal all_fired = true\n\tfor _, cue in ipairs(self._cues) do\n\t\tif not self._fired[cue.name] then\n\t\t\tall_fired = false\n\t\t\tbreak\n\t\tend\n\tend\n\tself._done = all_fired\n\n\treturn fired_this_step\nend\n\n--- Returns true if every cue has fired at least once.\n-- @return boolean\nfunction Timeline:isDone()\n\treturn self._done\nend\n\n--- Rewind the timeline to 0 so every cue can fire again.\nfunction Timeline:reset()\n\tself._elapsed = 0\n\tself._fired = {}\n\tself._done = false\nend\n\nreturn Timeline\n```\n\n---\n\n### Design Notes\n\n**Sorting & Tie-Breaking**\n\nCues are not guaranteed to be sorted by the caller. The constructor sorts them by `at` ascending, then by original array index ascending for ties. This ensures that `advance` always fires cues in the correct deterministic order, regardless of input order.\n\n**Exactly-Once Semantics**\n\nA `_fired` set keyed by cue name prevents any cue from firing more than once, even if `advance` is called with a large `dt` that skips past multiple cue times in one step. This is critical: advancing by many small steps must produce the same fired set as one big step.\n\n**Cue at 0 Fires Immediately**\n\nA cue with `at = 0` satisfies `0 <= elapsed` on the very first `advance(0)` call, so it fires immediately as required.\n\n**`isDone()`**\n\nAfter each `advance`, the module checks whether every cue has been marked as fired. If so, `isDone()` returns `true`. Subsequent `advance` calls on a done timeline return an empty array (no-op).\n\n**`reset()`**\n\nRewinds `_elapsed` to 0 and clears the `_fired` set, allowing all cues to fire again on the next `advance` calls.\n\n**Negative `dt`**\n\nThe implementation supports negative `dt` (rewinding time), which may cause previously-fired cues to become eligible again if `elapsed` drops below their `at` value. If you want to forbid rewinding past already-fired cues, you can add a guard in `advance`. The current spec doesn't require it, but it's a simple addition if needed.\n\n---\n\n### Usage Example\n\n```lua\nlocal Timeline = {}\n\nfunction Timeline.new(cues)\n\tlocal sortedCues = {}\n\tfor i, cue in ipairs(cues) do\n\t\tsortedCues[i] = cue\n\tend\n\ttable.sort(sortedCues, function(a, b)\n\t\tif a.at ~= b.at then\n\t\t\treturn a.at < b.at\n\t\tend\n\t\treturn false\n\tend)\n\n\tlocal elapsed = 0\n\tlocal firedIndices = {}\n\tlocal currentIndex = 1\n\n\tlocal timeline = {}\n\n\tfunction timeline:advance(dt)\n\t\telapsed = elapsed + dt\n\t\tlocal firedThisStep = {}\n\n\t\twhile currentIndex <= #sortedCues do\n\t\t\tlocal cue = sortedCues[currentIndex]\n\t\t\tif cue.at <= elapsed then\n\t\t\t\tif not firedIndices[currentIndex] then\n\t\t\t\t\tfiredIndices[currentIndex] = true\n\t\t\t\t\ttable.insert(firedThisStep, cue.name)\n\t\t\t\t\tif cue.fn then\n\t\t\t\t\t\tcue.fn()\n\t\t\t\t\tend\n\t\t\t\tend\n\t\t\t\tcurrentIndex = currentIndex + 1\n\t\t\telse\n\t\t\t\tbreak\n\t\t\tend\n\t\tend\n\n\t\treturn firedThisStep\n\tend\n\n\tfunction timeline:isDone()\n\t\treturn currentIndex > #sortedCues\n\tend\n\n\tfunction timeline:reset()\n\t\telapsed = 0\n\t\tfiredIndices = {}\n\t\tcurrentIndex = 1\n\tend\n\n\treturn timeline\nend\n\nreturn Timeline\n```\n\nThis produces the same output whether `advance` is called with `dt = 0.016` sixty times or `dt = 1.0` once — all five cues fire in order, exactly once each.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 first failed the static Luau check (Unknown global 'path'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Roblox globals > delay](https://create.roblox.com/docs/reference/engine/globals/RobloxGlobals#delay) · retrieved, not cited\n2. [Sound objects > Customize sound objects > TimePosition](https://create.roblox.com/docs/sound/objects#timeposition) · retrieved, not cited\n3. [Timers and events > Completed scripts](https://create.roblox.com/docs/education/battle-royale-series/timers-and-events#completed-scripts) · retrieved, not cited\n4. [Event Sequencer > API reference > Schema configurations > tween](https://create.roblox.com/docs/resources/modules/event-sequencer#tween) · retrieved, not cited\n"
+  },
+  "VFX-05": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "247ca15c0ce68264",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:rate400",
+     "ok": true
+    },
+    {
+     "id": "require:mobile100",
+     "ok": true
+    },
+    {
+     "id": "require:life20",
+     "ok": true
+    },
+    {
+     "id": "require:emit",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 62.8,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 2331,
+   "answer_sha256": "b87ee6756cc472a97cef2c07da71329fd6c5ed94240a1d16e4f6aa558daf6c3f",
+   "packs": [
+    "roblox-vfx"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 172
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-vfx"
+     ],
+     "chars": 1097
+    }
+   ],
+   "answer": "Based on the official Roblox documentation, here are the answers to your questions:\n\n### 1. Particles per Second (Rate Limits)\nA single `ParticleEmitter` can produce a maximum of **400 particles per second** on desktop. On mobile devices, this limit is capped at **100 particles per second**.\n\n*   **Source:** [1] Particle emitters > Customize particles > Rate\n\n### 2. Longest Particle Lifetime\nThe indexed documentation does not explicitly state the maximum lifetime value in the provided text passages. However, the internal guidance notes that the lifetime is capped at **20 seconds**.\n\n*   **Source:** [3] Particle emitters > Customize particles > Other properties (lists `Lifetime` as a property but does not specify the max value in the text).\n*   **Note:** The specific 20-second cap is derived from internal guidance [Skill Pack] rather than the explicit text of the provided documentation passages.\n\n### 3. Difference Between `Rate` and `Emit`\nThe difference lies in **continuity** and **control**:\n\n*   **`Rate` (Property):** This is a continuous setting. It determines the number of particles emitted **per second** automatically while the emitter is `Enabled`. It acts as a steady stream (e.g., a rate of 5 emits a particle every 0.2 seconds). Changing this property does not affect particles already in existence.\n    *   **Source:** [2] ParticleEmitter > Rate\n*   **`Emit` (Method):** This is a manual, one-time action. Calling `Emit(count)` forces the emitter to spawn a specific number of particles immediately, regardless of the `Rate` property. It is used for bursts or discrete events rather than continuous flow.\n    *   **Source:** [4] ParticleEmitter (lists `Emit` as a method).\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Particle emitters > Customize particles > Rate](https://create.roblox.com/docs/effects/particle-emitters#rate) · cited\n2. [ParticleEmitter > Rate](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter#Rate) · cited\n3. [Particle emitters > Customize particles > Other properties](https://create.roblox.com/docs/effects/particle-emitters#other-properties) · cited\n4. [ParticleEmitter](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 2,
+  "fail": 3,
+  "error": 0,
+  "scored": 5,
+  "pass_rate": 0.4,
+  "median_seconds": 197.8
+ }
+}

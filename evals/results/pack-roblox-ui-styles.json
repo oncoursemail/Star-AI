@@ -1,0 +1,351 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "BLD-03",
+   "UIS-01",
+   "UIS-02"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-ui-styles",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "aab895996001",
+  "started_at": "2026-10-11T09:11:57+00:00",
+  "waited_for_lock_s": 1.4,
+  "finished_at": "2026-10-11T09:20:37+00:00",
+  "rescored_at": "2026-10-11T10:37:59+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "BLD-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9c5321f1f80709b5",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:clock",
+     "ok": true
+    },
+    {
+     "id": "require:ambient",
+     "ok": true
+    },
+    {
+     "id": "require:atmosphere",
+     "ok": true
+    },
+    {
+     "id": "require:density",
+     "ok": true
+    },
+    {
+     "id": "require:haze",
+     "ok": true
+    },
+    {
+     "id": "require:bloom",
+     "ok": true
+    },
+    {
+     "id": "require:intensity",
+     "ok": true
+    },
+    {
+     "id": "require:cc",
+     "ok": true
+    },
+    {
+     "id": "require:contrast",
+     "ok": true
+    },
+    {
+     "id": "require:tint",
+     "ok": true
+    },
+    {
+     "id": "require:reuse",
+     "ok": true
+    },
+    {
+     "id": "require:lighting",
+     "ok": true
+    },
+    {
+     "id": "forbid:technology",
+     "ok": true
+    },
+    {
+     "id": "forbid:parent_arg",
+     "ok": true
+    }
+   ],
+   "seconds": 93.0,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 4150,
+   "answer_sha256": "645d89626dc4abbd6734792a1f0d484b4f280018477a8dc6a9ad76bc00bb0b03",
+   "packs": [
+    "roblox-ui-styles"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 31
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-ui-styles"
+     ],
+     "chars": 1028
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a robust server Script that configures the moody dusk look as requested. It uses `FindFirstChildOfClass` to reuse existing effect instances and parents them to `Lighting` if they don't exist.\n\n### Server Script\n\n```lua\n--!strict\n\n-- 1. Configure Global Lighting\nlocal Lighting = game:GetService(\"Lighting\")\n\n-- Set ClockTime to 17.5 (5:30 PM) for dusk\nLighting.ClockTime = 17.5\n\n-- Set a warm OutdoorAmbient (e.g., a soft orange/brown hue)\nLighting.OutdoorAmbient = Color3.fromRGB(180, 140, 120)\n\n-- 2. Create/Reuse Atmosphere\nlocal atmosphere = Lighting:FindFirstChildOfClass(\"Atmosphere\")\nif not atmosphere then\n\tatmosphere = Instance.new(\"Atmosphere\")\n\tatmosphere.Parent = Lighting\nend\n\natmosphere.Density = 0.35\natmosphere.Haze = 0.35 -- Matching haze for consistent moody look\n\n-- 3. Create/Reuse BloomEffect\nlocal bloom = Lighting:FindFirstChildOfClass(\"BloomEffect\")\nif not bloom then\n\tbloom = Instance.new(\"BloomEffect\")\n\tbloom.Parent = Lighting\nend\n\nbloom.Intensity = 0.5 -- Low intensity for a subtle glow\nbloom.Size = 20       -- Moderate size to keep it contained\nbloom.Threshold = 0.8 -- Only bright areas bloom\n\n-- 4. Create/Reuse ColorCorrectionEffect\nlocal colorCorrection = Lighting:FindFirstChildOfClass(\"ColorCorrectionEffect\")\nif not colorCorrection then\n\tcolorCorrection = Instance.new(\"ColorCorrectionEffect\")\n\tcolorCorrection.Parent = Lighting\nend\n\ncolorCorrection.Contrast = 1.15   -- Slightly raised contrast\ncolorCorrection.TintColor = Color3.fromRGB(255, 220, 180) -- Warm tint (orange/pinkish)\ncolorCorrection.Brightness = 0.05 -- Slight brightness boost to counteract dusk dimming\n\n-- Optional: Ensure Lighting.Technology is not changed (as requested)\n-- We do not touch Lighting.Technology here.\n```\n\n### Key Details\n- **Reusability**: Each effect uses `Lighting:FindFirstChildOfClass(...)` to check if an instance already exists. If it does, it updates the properties; if not, it creates a new one and parents it to `Lighting`.\n- **Moody Dusk Settings**:\n  - `ClockTime = 17.5`: Sets the time to 5:30 PM, typical for dusk.\n  - `OutdoorAmbient = Color3.fromRGB(180, 140, 120)`: A warm, muted ambient light.\n  - `Atmosphere`: Density and Haze set to 0.35 for a soft, hazy dusk feel.\n  - `BloomEffect`: Low intensity (0.5) to avoid over-brightening the scene.\n  - `ColorCorrectionEffect`: Slightly raised contrast (1.15) and a warm `TintColor` to enhance the dusk aesthetic.\n- **No Technology Change**: The script does not modify `Lighting.Technology`, preserving the current setting.\n\n### Notes\n- This script should be placed in a `Script` (server-side) within `ServerScriptService` or `Lighting` itself.\n- The `Color3.fromRGB` values are chosen to create a warm, moody dusk look. Adjust as needed for your specific game’s art style.\n- The `BloomEffect` and `ColorCorrectionEffect` properties are set to subtle values to enhance the mood without overpowering the scene.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Enhance indoor environments with realistic lighting > Configure global lighting > Choose a complementary skybox](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#choose-a-complementary-skybox) · retrieved, not cited\n2. [Construct your world > Configure lighting sources > Local lighting](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#local-lighting) · retrieved, not cited\n3. [Create volcanic eruptions with VFX > Configure lighting > Global lighting](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/create-volcanoes#global-lighting) · retrieved, not cited\n4. [Enhance indoor environments with realistic lighting > Configure global lighting > Adjust the color of ambient light](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#adjust-the-color-of-ambient-light) · retrieved, not cited\n"
+  },
+  "UIS-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "98eb5daf3a0e4f95",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:theme",
+     "ok": true
+    },
+    {
+     "id": "require:corner",
+     "ok": true
+    },
+    {
+     "id": "require:stroke",
+     "ok": true
+    },
+    {
+     "id": "require:apply_mode",
+     "ok": true
+    },
+    {
+     "id": "require:gradient",
+     "ok": true
+    },
+    {
+     "id": "require:scale",
+     "ok": true
+    },
+    {
+     "id": "require:tween",
+     "ok": true
+    },
+    {
+     "id": "require:tweeninfo",
+     "ok": true
+    },
+    {
+     "id": "require:quad",
+     "ok": true
+    },
+    {
+     "id": "require:enter",
+     "ok": true
+    },
+    {
+     "id": "require:leave",
+     "ok": true
+    },
+    {
+     "id": "require:press",
+     "ok": true
+    },
+    {
+     "id": "require:pressed_scale",
+     "ok": true
+    },
+    {
+     "id": "require:autocolor",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated_tween",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 195.3,
+   "timings": {
+    "luau_check_s": 0.2
+   },
+   "blocks": 2,
+   "answer_chars": 6282,
+   "answer_sha256": "d30b2beb01e396feadad31e08d1dac5070c2774c9749f466d4c840e5c84c099a",
+   "packs": [
+    "roblox-ui-styles"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 313
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-ui-styles"
+     ],
+     "chars": 1028
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a complete, production-ready ModuleScript that implements your theming system.\n\n### 1. The ModuleScript (`ThemeButtonStyle`)\n\nPlace this in `ReplicatedStorage`. It handles the configuration and the application of styles.\n\n```lua\n-- // ReplicatedStorage.ThemeButtonStyle\n-- // A centralized theme manager for consistent button styling.\n\nlocal ThemeButtonStyle = {}\n\n-- // 1. The Theme Configuration\n-- // Change these values in one place to restyle all buttons.\nThemeButtonStyle.Theme = {\n\tPrimary = {\n\t\tBackgroundColor3 = Color3.fromRGB(0, 120, 255), -- Bright Blue\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\tDanger = {\n\t\tBackgroundColor3 = Color3.fromRGB(230, 40, 40), -- Red\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\tGhost = {\n\t\tBackgroundColor3 = Color3.fromRGB(255, 255, 255), -- White\n\t\tTextStrokeColor3 = Color3.fromRGB(0, 0, 0),\n\t},\n\t\n\tText = Color3.fromRGB(255, 255, 255), -- White text for all variants\n\tFont = Enum.Font.GothamBold,\n\tCornerRadius = UDim.new(0, 8), -- 8px rounded corners\n\tStrokeThickness = 2,\n}\n\n-- // 2. The Helper Function\nfunction ThemeButtonStyle.styleButton(button: TextButton, variant: string)\n\tlocal theme = ThemeButtonStyle.Theme\n\t\n\t-- Validate variant\n\tif not theme[variant] then\n\t\twarn(string.format(\"ThemeButtonStyle: Unknown variant '%s'. Expected 'Primary', 'Danger', or 'Ghost'.\", variant))\n\t\treturn\n\tend\n\t\n\tlocal colors = theme[variant]\n\t\n\t-- // Disable AutoButtonColor so our tweens control the color completely\n\tbutton.AutoButtonColor = false\n\t\n\t-- // Base Properties\n\tbutton.BackgroundColor3 = colors.BackgroundColor3\n\tbutton.TextColor3 = theme.Text\n\tbutton.Font = theme.Font\n\tbutton.BorderSizePixel = 0 -- We use UIStroke instead\n\t\n\t-- // UICorner\n\tlocal corner = button:FindFirstChildOfClass(\"UICorner\")\n\tif not corner then\n\t\tcorner = Instance.new(\"UICorner\")\n\t\tcorner.Name = \"UICorner\"\n\t\tcorner.Parent = button\n\tend\n\tcorner.CornerRadius = theme.CornerRadius\n\t\n\t-- // UIStroke (ApplyStrokeMode = Border)\n\tlocal stroke = button:FindFirstChildOfClass(\"UIStroke\")\n\tif not stroke then\n\t\tstroke = Instance.new(\"UIStroke\")\n\t\tstroke.Name = \"UIStroke\"\n\t\tstroke.Parent = button\n\tend\n\tstroke.Thickness = theme.StrokeThickness\n\tstroke.Color = colors.TextStrokeColor3\n\tstroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border\n\t\n\t-- // UIGradient (Primary Variant Only)\n\t-- // Adds a subtle top-to-bottom lightness shift for depth\n\tif variant == \"Primary\" then\n\t\tlocal gradient = button:FindFirstChildOfClass(\"UIGradient\")\n\t\tif not gradient then\n\t\t\tgradient = Instance.new(\"UIGradient\")\n\t\t\tgradient.Name = \"UIGradient\"\n\t\t\tgradient.Rotation = 90\n\t\t\tgradient.Parent = button\n\t\tend\n\t\tgradient.Enabled = true\n\t\tgradient.Color = Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 255, 255) -- Handled below\n\t\tgradient.Transparency = NumberSequence.new({\n\t\t\tNumberSequenceKeypoint.new(0, 0),\n\t\t\tNumberSequenceKeypoint.new(1, 0.15) -- 15% white overlay at the bottom\n\t\t})\n\telse\n\t\t-- Disable gradient for Danger and Ghost\n\t\tlocal gradient = button:FindFirstChildOfClass(\"UIGradient\")\n\t\tif gradient then\n\t\t\tgradient.Enabled = false\n\t\tend\n\tend\n\t\n\t-- // UIScale (Press Feedback)\n\tlocal scale = button:FindFirstChildOfClass(\"UIScale\")\n\tif not scale then\n\t\tscale = Instance.new(\"UIScale\")\n\t\tscale.Name = \"UIScale\"\n\t\tscale.Parent = button\n\tend\n\tscale.Scale = 1 -- Reset to default\n\t\n\t-- // TweenService Feedback\n\tlocal TweenService = game:GetService(\"TweenService\")\n\tlocal tweenInfo = TweenInfo.new(\n\t\t0.12, \n\t\tEnum.EasingStyle.Quad, \n\t\tEnum.EasingDirection.Out\n\t)\n\t\n\t-- Hover: Brighten Background\n\tbutton.MouseEnter:Connect(function()\n\t\tif variant == \"Primary\" then\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(255, 255, 255), 0.15)}):Play()\n\t\telseif variant == \"Danger\" then\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(255, 255, 255), 0.15)}):Play()\n\t\telse\n\t\t\t-- Ghost: Darken slightly on hover for contrast\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3:lerp(Color3.fromRGB(0, 0, 0), 0.05)}):Play()\n\t\tend\n\tend)\n\t\n\tbutton.MouseLeave:Connect(function()\n\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = colors.BackgroundColor3}):Play()\n\tend)\n\t\n\t-- Press: Shrink UIScale\n\tbutton.MouseButton1Down:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 0.96}):Play()\n\tend)\n\t\n\tbutton.MouseButton1Up:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 1}):Play()\n\tend)\n\t\n\t-- Ensure text stroke is applied for readability\n\tbutton.TextStrokeTransparency = 0.5\n\tbutton.TextStrokeColor3 = colors.TextStrokeColor3\nend\n\nreturn ThemeButtonStyle\n```\n\n### 2. How to use it in your game\n\nIn a **LocalScript** inside your ScreenGui (or wherever your buttons are):\n\n```lua\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal ThemeButtonStyle = require(ReplicatedStorage.ThemeButtonStyle)\n\n-- Apply styles to existing buttons\nThemeButtonStyle.styleButton(script.Parent.PrimaryButton, \"Primary\")\nThemeButtonStyle.styleButton(script.Parent.DangerButton, \"Danger\")\nThemeButtonStyle.styleButton(script.Parent.GhostButton, \"Ghost\")\n```\n\n### Key Implementation Details\n\n1.  **Centralized Theme:** The `Theme` table holds all colors, fonts, and dimensions. Changing `Theme.CornerRadius` or `Theme.Primary.BackgroundColor3` instantly updates the logic for any new buttons you style.\n2.  **UIStroke & ApplyStrokeMode:** We explicitly set `ApplyStrokeMode = Enum.ApplyStrokeMode.Border` as requested. This ensures the stroke draws *\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n2. [Enum.ButtonStyle](https://create.roblox.com/docs/reference/engine/enums/ButtonStyle) · retrieved, not cited\n3. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n"
+  },
+  "UIS-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "cea35387904c35b8",
+   "reasons": [
+    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": false,
+     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:pow",
+     "ok": true
+    }
+   ],
+   "seconds": 228.9,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.48
+   },
+   "blocks": 2,
+   "answer_chars": 5581,
+   "answer_sha256": "aadc9ec5c32d2a420b04601610eebc9e3db0498c740ded33a84e608368a3d4f2",
+   "packs": [
+    "roblox-ui-styles"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 468
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-ui-styles"
+     ],
+     "chars": 1028
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 1
+    }
+   ],
+   "answer": "Here is the pure-Luau ModuleScript implementing the requested color utilities. It uses no Roblox API, no `Color3`, and operates entirely on the specified `{r, g, b}` table format.\n\n```lua\n-- ColorUtils\n-- Pure-Luau color math module.\n-- Input/Output format: { r = number, g = number, b = number } where each is 0..1.\n\nlocal ColorUtils = {}\n\n-- Gamma-compress a single linear channel value.\n-- WCAG 2.x formula: v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ^ 2.4\nlocal function gamma_compress(v)\n\tif v <= 0.03928 then\n\t\treturn v / 12.92\n\telse\n\t\treturn ((v + 0.055) / 1.055) ^ 2.4\n\tend\nend\n\n--- Calculate WCAG relative luminance of a color.\n-- @param c table { r, g, b }\n-- @return number luminance (0..1)\nfunction ColorUtils.luminance(c)\n\tlocal r = gamma_compress(c.r)\n\tlocal g = gamma_compress(c.g)\n\tlocal b = gamma_compress(c.b)\n\treturn 0.2126 * r + 0.7152 * g + 0.0722 * b\nend\n\n--- Calculate WCAG contrast ratio between two colors.\n-- @param a table { r, g, b }\n-- @param b table { r, g, b }\n-- @return number contrast ratio (1..21)\nfunction ColorUtils.contrast(a, b)\n\tlocal lumA = ColorUtils.luminance(a)\n\tlocal lumB = ColorUtils.luminance(b)\n\n\tlocal lighter = math.max(lumA, lumB)\n\tlocal darker = math.min(lumA, lumB)\n\n\treturn (lighter + 0.05) / (darker + 0.05)\nend\n\n--- Pick the text color with the higher contrast against the background.\n-- @param bg table { r, g, b } background color\n-- @param light table { r, g, b } light text candidate\n-- @param dark table { r, g, b } dark text candidate\n-- @return table the chosen text color (light if equal)\nfunction ColorUtils.pickText(bg, light, dark)\n\tlocal contrastLight = ColorUtils.contrast(bg, light)\n\tlocal contrastDark = ColorUtils.contrast(bg, dark)\n\n\tif contrastLight >= contrastDark then\n\t\treturn light\n\telse\n\t\treturn dark\n\tend\nend\n\n--- Shade a color by moving channels toward white (positive) or black (negative).\n-- @param c table { r, g, b }\n-- @param amount number clamped to [-1, 1]\n-- @return table a NEW color table\nfunction ColorUtils.shade(c, amount)\n\t-- Clamp amount to [-1, 1]\n\tif amount > 1 then amount = 1\n\telseif amount < -1 then amount = -1\n\tend\n\n\tlocal r, g, b = c.r, c.g, c.b\n\n\tif amount >= 0 then\n\t\t-- Move toward white (1, 1, 1)\n\t\tr = r + (1 - r) * amount\n\t\tg = g + (1 - g) * amount\n\t\tb = b + (1 - b) * amount\n\telse\n\t\t-- Scale toward black (0, 0, 0)\n\t\tr = r * (1 + amount)\n\t\tg = g * (1 + amount)\n\t\tb = b * (1 + amount)\n\tend\n\n\treturn { r = r, g = g, b = b }\nend\n\nreturn ColorUtils\n```\n\n### Notes on Implementation\n\n1.  **`luminance`**: Follows the WCAG 2.x specification exactly. Each channel is gamma-compressed individually before applying the sRGB luminance coefficients (0.2126, 0.7152, 0.0722) [1].\n2.  **`contrast`**: Computes the relative luminance of both inputs, identifies the lighter and darker, and applies the standard WCAG ratio formula: `(L_lighter + 0.05) / (L_darker + 0.05)`.\n3.  **`pickText`**: Returns `light` on a tie (`>=`), as specified. This ensures consistent behavior when the background is exactly midway between the two candidates.\n4.  **`shade`**:\n    *   **Positive amount**: Linearly interpolates each channel toward `1.0` (white). Formula: `c + (1 - c) * amount`.\n    *   **Negative amount**: Scales each channel by `(1 + amount)`, effectively moving it toward `0.0` (black). For example, `amount = -0.5` results in `c * 0.5`.\n    *   Returns a **new** table, leaving the original unchanged.\n    *   Amount is clamped to `[-1, 1]` to prevent invalid color values.\n\n### Usage Example\n\n```lua\nlocal ColorUtils = require(path.to.ColorUtils)\n\nlocal bg = { r = 0.1, g = 0.1, b = 0.1 } -- Dark gray\nlocal white = { r = 1, g = 1, b = 1 }\nlocal black = { r = 0, g = 0, b = 0 }\n\n-- Pick the best text color\nlocal textColor = ColorUtils.pickText(bg, white, black)\n-- textColor will be white (higher contrast against dark bg)\n\n-- Shade the background slightly lighter\nlocal lighterBg = ColorUtils.shade(bg, 0.2)\n\n-- Check contrast\nlocal ratio = ColorUtils.contrast(bg, textColor)\nprint(string.format(\"Contrast ratio: %.2f\", ratio))\n-- Should be ~12.6 for white on dark gray\n```\n\n### References\n*   The WCAG relative luminance and contrast ratio formulas are standard accessibility specifications. The provided documentation confirms Roblox uses RGB values for color properties but does not specify the WCAG algorithm, so this implementation is **unverified** against official Roblox docs [1].\n*   Roblox `Color3` uses `0..1` ranges, which aligns with the input format specified [1].\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 1: Unknown global 'path'; consider assigning to it first (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Object properties > Add comments to scripts > Change a property with code](https://create.roblox.com/docs/tutorials/fundamentals/coding-1/object-properties#change-a-property-with-code) · cited\n2. [CSS Comparisons > Queries](https://create.roblox.com/docs/ui/styling/css-comparisons#queries) · retrieved, not cited\n3. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n4. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 2,
+  "fail": 1,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 0.6667,
+  "median_seconds": 195.3
+ }
+}

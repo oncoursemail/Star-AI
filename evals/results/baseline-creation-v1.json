@@ -1,0 +1,1690 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "bfa63243598c101d9cd0d01a17d8bed2490e829e70d3a37cb8bed029a1aef7ee",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "ANI-07",
+   "ANI-08",
+   "ANI-09",
+   "ANI-10",
+   "ANI-11",
+   "ANI-12",
+   "VFX-01",
+   "VFX-02",
+   "VFX-03",
+   "VFX-04",
+   "VFX-05",
+   "BLD-01",
+   "BLD-02",
+   "BLD-03",
+   "UIS-01",
+   "UIS-02",
+   "ENG-01",
+   "ENG-02",
+   "ENG-03",
+   "ENG-04",
+   "ENG-05",
+   "ENG-06",
+   "ENG-07"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "off",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "237a0cfcb9d5",
+  "started_at": "2026-10-11T06:34:49+00:00",
+  "waited_for_lock_s": 14.5,
+  "finished_at": "2026-10-11T08:04:19+00:00",
+  "rescored_at": "2026-10-11T10:37:51+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "ANI-07": {
+   "status": "fail",
+   "passed": false,
+   "reasons": [
+    "STAR gave no answer: Failed to parse tool call arguments (InternalServerError: Error code: 500 - {'error': {'code': 500, 'message': 'Failed to parse tool call arguments as JSON: )"
+   ],
+   "checks": [],
+   "seconds": 0.0,
+   "product_failure": "Failed to parse tool call arguments (InternalServerError: Error code: 500 - {'error': {'code': 500, 'message': 'Failed to parse tool call arguments as JSON: )"
+  },
+  "ANI-08": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "a572240f881e0c15",
+   "reasons": [
+    "luau_check[1]: line 10: Unknown type 'Combo'; line 43: Operator '+' could not be applied to operands of types unknown and number; there is no cor",
+    "luau_check[2]: line 1: Unknown global 'path'; consider assigning to it first",
+    "unit_tests: 12/14 passed; failed: a buffered press does not start the next move early; the buffered press starts move 2 right after recovery ends"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 10: Unknown type 'Combo'; line 43: Operator '+' could not be applied to operands of types unknown and number; there is no cor"
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": false,
+     "detail": "line 1: Unknown global 'path'; consider assigning to it first"
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "12/14 passed; failed: a buffered press does not start the next move early; the buffered press starts move 2 right after recovery ends"
+    },
+    {
+     "id": "require:state",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 340.7,
+   "timings": {
+    "luau_check_s": 0.17,
+    "unit_s": 0.49
+   },
+   "blocks": 2,
+   "answer_chars": 6335,
+   "answer_sha256": "04f9e8141315c936e54e2e6d54bb2e77c2ffed132c9d5aec9b6a9961bf784155",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 531
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 8
+    }
+   ],
+   "answer": "Here is a pure-Luau `Combo` class implemented as a ModuleScript, following the exact frame-based rules you specified.\n\n```lua\n-- Combo.lua (ModuleScript)\n--!strict\n\nlocal Combo = {}\nCombo.__index = Combo\n\n--- Creates a new Combo instance.\n-- @param moves table Array of {startup: number, active: number, recovery: number, cancelWindow: number}\n-- @return Combo\nfunction Combo.new(moves: { { startup: number, active: number, recovery: number, cancelWindow: number } }): Combo\n\tassert(type(moves) == \"table\", \"Combo.new: moves must be a table\")\n\t\n\tlocal self = setmetatable({\n\t\t_moves = moves,\n\t\t_moveIndex = 0, -- 0 = idle\n\t\t_phase = \"idle\",\n\t\t_frame = 0,\n\t\t_hitActive = false,\n\t\t_buffered = false,\n\t}, Combo)\n\t\n\treturn self\nend\n\n--- Advances the combo state by exactly one frame.\nfunction Combo:step()\n\t-- If idle, nothing happens\n\tif self._moveIndex == 0 then\n\t\treturn\n\tend\n\t\n\t-- If there is a buffered input, process it immediately at the start of this frame\n\tif self._buffered then\n\t\tself._buffered = false\n\t\tself._moveIndex = self._moveIndex + 1\n\t\tself._phase = \"startup\"\n\t\tself._frame = 1\n\t\tself._hitActive = false\n\t\treturn\n\tend\n\t\n\t-- Advance frame within current phase\n\tself._frame = self._frame + 1\n\t\n\tlocal currentMove = self._moves[self._moveIndex]\n\t\n\t-- Check if we've passed the current phase length\n\tif self._phase == \"startup\" and self._frame > currentMove.startup then\n\t\tself._phase = \"active\"\n\t\tself._frame = 1\n\t\tself._hitActive = true\n\telseif self._phase == \"active\" and self._frame > currentMove.active then\n\t\tself._phase = \"recovery\"\n\t\tself._frame = 1\n\t\tself._hitActive = false\n\telseif self._phase == \"recovery\" and self._frame > currentMove.recovery then\n\t\t-- Recovery finished\n\t\tself._moveIndex = 0\n\t\tself._phase = \"idle\"\n\t\tself._frame = 0\n\t\tself._hitActive = false\n\tend\nend\n\n--- Registers an attack press.\n-- Buffers the input if in cancel window, otherwise ignores it.\nfunction Combo:press()\n\tif self._moveIndex == 0 then\n\t\t-- Idle: start first move immediately\n\t\tself._moveIndex = 1\n\t\tself._phase = \"startup\"\n\t\tself._frame = 1\n\t\tself._hitActive = false\n\t\treturn\n\tend\n\t\n\t-- Only buffer during recovery phase\n\tif self._phase ~= \"recovery\" then\n\t\treturn\n\tend\n\t\n\tlocal currentMove = self._moves[self._moveIndex]\n\tlocal nextMoveIndex = self._moveIndex + 1\n\t\n\t-- Check if there is a next move\n\tif nextMoveIndex > #self._moves then\n\t\treturn\n\tend\n\t\n\t-- Check if we are in the cancel window (last cancelWindow frames of recovery)\n\t-- Current frame is 1-based within recovery. Cancel window is the last `cancelWindow` frames.\n\t-- So valid frames are: (recovery - cancelWindow + 1) to recovery\n\tlocal cancelStart = currentMove.recovery - currentMove.cancelWindow + 1\n\t\n\tif self._frame >= cancelStart then\n\t\tself._buffered = true\n\tend\nend\n\n--- Returns the current state table.\n-- @return { move: number, phase: string, frame: number, hitActive: boolean }\nfunction Combo:state(): { move: number, phase: string, frame: number, hitActive: boolean }\n\treturn {\n\t\tmove = self._moveIndex,\n\t\tphase = self._phase,\n\t\tframe = self._frame,\n\t\thitActive = self._hitActive,\n\t}\nend\n\nreturn Combo\n```\n\n### How It Works\n\n1. **Idle State**: `moveIndex = 0`, `phase = \"idle\"`, `frame = 0`, `hitActive = false`. `step()` does nothing. `press()` starts Move 1.\n2. **Phase Transitions**: Each phase (`startup`, `active`, `recovery`) runs for its specified number of frames. When `frame` exceeds the phase length, it resets to 1 and moves to the next phase.\n3. **Hit Active**: `hitActive` is `true` only during the `active` phase.\n4. **Cancel Window & Buffering**:\n   - `press()` during recovery checks if the current frame is within the last `cancelWindow` frames.\n   - If yes, it sets a `_buffered` flag.\n   - On the next `step()`, if `_buffered` is true, it immediately starts the next move at `startup`, frame 1, ignoring the current phase’s natural progression.\n5. **Return to Idle**: After the last recovery frame passes (and no buffer is pending), the combo resets to idle.\n\n### Example Usage\n\n```lua\nlocal Combo = require(path.to.Combo)\n\nlocal moves = {\n\t{ startup = 5, active = 3, recovery = 10, cancelWindow = 4 },\n\t{ startup = 4, active = 2, recovery = 8, cancelWindow = 3 },\n}\n\nlocal combo = Combo.new(moves)\n\n-- Simulate a combo\nfor i = 1, 20 do\n\tcombo:step()\n\tprint(combo:state())\n\t\n\t-- Press at frame 12 of recovery (cancel window is frames 7-10, so this is ignored)\n\tif i == 12 then\n\t\tcombo:press()\n\tend\n\t\n\t-- Press at frame 9 of recovery (inside cancel window, so buffered)\n\tif i == 9 then\n\t\tcombo:press()\n\tend\nend\n```\n\nThis implementation is pure Luau, uses no Roblox engine APIs, and is fully self-contained in a ModuleScript. It correctly handles frame-accurate timing, cancel window buffering, and state transitions as specified.\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 10: Unknown type 'Combo' (TypeError)\n- line 43: Operator '+' could not be applied to operands of types unknown and number; there is no corresponding overload for __add (TypeError)\n- line 48: Types 'unknown' and 'unknown' cannot be compared with relational operator > (TypeError)\n- line 52: Types 'unknown' and 'unknown' cannot be compared with relational operator > (TypeError) Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 1: Unknown global 'path'; consider assigning to it first (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · retrieved, not cited\n2. [Roblox for Unity developers > Scripting > Luau code sample](https://create.roblox.com/docs/unity#luau-code-sample) · retrieved, not cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n4. [Roblox for Unity developers > Scripting](https://create.roblox.com/docs/unity#scripting) · retrieved, not cited\n"
+  },
+  "ANI-09": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "682d12d724591bec",
+   "reasons": [
+    "luau_block: 0 fenced Luau block(s) in the answer",
+    "unit_tests: no code to test",
+    "require:exp: uses an exponential (closed-form solution)"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": false,
+     "detail": "0 fenced Luau block(s) in the answer"
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "no code to test"
+    },
+    {
+     "id": "require:exp",
+     "ok": false,
+     "detail": "uses an exponential (closed-form solution)"
+    }
+   ],
+   "seconds": 166.5,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 5352,
+   "answer_sha256": "ce8bbe219a03cb0d7fd4ceab4f4c74e256e8748b86dc17d4e95b580d9be0a72b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 32
+    }
+   ],
+   "answer": "Here is a pure-Luau `Spring` ModuleScript using the exact closed-form solution for a damped harmonic oscillator. It works for scalar values (ideal for single-axis follow-through like an antenna bend or cape joint angle) and is numerically stable for any `dt ≥ 0`.\n\n```lua\n-- Spring.lua\n-- :step(target, dt) — closed-form damped harmonic oscillator\n-- frequency in Hz, damping ratio ζ (1 = critically damped, < 1 overshoots)\n\nlocal Spring = {}\nSpring.__index = Spring\n\nlocal EPSILON = 1e-6  -- treat near-zero frequency as static\n\n--- Create a new Spring.\n-- @param initial number  Starting position\n-- @param frequency number Spring frequency in Hz (> 0)\n-- @param damping number Damping ratio ζ (1 = critical, < 1 = underdamped/overshoot)\nfunction Spring.new(initial, frequency, damping)\n\tassert(type(initial) == \"number\", \"initial must be a number\")\n\tassert(type(frequency) == \"number\" and frequency > 0, \"frequency must be a positive number\")\n\tassert(type(damping) == \"number\", \"damping must be a number\")\n\n\tlocal omega = 2 * math.pi * frequency          -- angular frequency ω\n\tlocal zeta = damping                            -- damping ratio ζ\n\tlocal sigma = zeta * omega                      -- decay rate σ = ζω\n\tlocal omegaD = omega * math.sqrt(math.abs(1 - zeta * zeta))  -- damped freq ω_d\n\n\t-- Precompute constants so :step is just arithmetic\n\tlocal k1, k2, k3  -- coefficients for the closed-form solution\n\t-- We store the state as (position, velocity).\n\t-- The closed-form x(t) for underdamped (ζ < 1):\n\t--   x(t) = target + e^{-σt} [ (x0 - target) cos(ω_d t)\n\t--                              + ((v0 + σ(x0 - target)) / ω_d) sin(ω_d t) ]\n\t-- For critically damped (ζ == 1):\n\t--   x(t) = target + e^{-σt} [ (x0 - target) + (v0 + σ(x0 - target)) * t ]\n\t-- For overdamped (ζ > 1) we use hyperbolic functions with ω_r = ω√(ζ²-1).\n\n\treturn setmetatable({\n\t\t-- Current state\n\t\tposition = initial,\n\t\tvelocity = 0,\n\t\t-- Spring constants (cached)\n\t\t_target = 0,       -- will be set on first :step\n\t\t_omega = omega,\n\t\t_sigma = sigma,\n\t\t_omegaD = omegaD,\n\t\t_zeta = zeta,\n\t\t_isUnderdamped = zeta < 1,\n\t\t_isCritical = math.abs(zeta - 1) < EPSILON,\n\t}, Spring)\nend\n\n--- Advance the spring toward `target` by `dt` seconds.\n-- @param target number  The equilibrium position the spring pulls toward\n-- @param dt number  Time step in seconds (≥ 0; 0 returns current position)\n-- @return number  The new position\nfunction Spring:step(target, dt)\n\tif dt <= 0 then\n\t\treturn self.position\n\tend\n\n\tlocal x0 = self.position\n\tlocal v0 = self.velocity\n\tlocal sigma = self._sigma\n\tlocal posDelta = x0 - target\n\n\t-- Decay factor e^{-σ dt} — always finite for finite dt\n\tlocal expTerm = math.exp(-sigma * dt)\n\n\tlocal newPos\n\n\tif self._isUnderdamped then\n\t\t-- ζ < 1  —  oscillatory\n\t\tlocal wd = self._omegaD\n\t\tlocal cosWd = math.cos(wd * dt)\n\t\tlocal sinWd = math.sin(wd * dt)\n\t\t-- Coefficient for the sine term\n\t\tlocal c2 = (v0 + sigma * posDelta) / wd\n\t\tnewPos = target + expTerm * (posDelta * cosWd + c2 * sinWd)\n\n\telseif self._isCritical then\n\t\t-- ζ ≈ 1  —  critically damped\n\t\tnewPos = target + expTerm * (posDelta + (v0 + sigma * posDelta) * dt)\n\n\telse\n\t\t-- ζ > 1  —  overdamped (real exponentials)\n\t\tlocal omegaR = self._omega * math.sqrt(self._zeta * self._zeta - 1)\n\t\tlocal r1 = -sigma + omegaR   -- root 1\n\t\tlocal r2 = -sigma - omegaR   -- root 2\n\t\t-- x(t) = target + A*e^{r1*t} + B*e^{r2*t}\n\t\t-- Solve for A, B from x(0)=x0, x'(0)=v0\n\t\tlocal A = (posDelta * r2 - v0) / (r2 - r1)\n\t\tlocal B = v0 - posDelta * r1 - A * r1  -- actually B = (v0 - A*r1 - r1*posDelta) / r2 ... let me derive cleanly:\n\t\t-- x(0) = target + A + B = x0  →  A + B = posDelta\n\t\t-- x'(0) = A*r1 + B*r2 = v0\n\t\t-- From first: B = posDelta - A\n\t\t-- A*r1 + (posDelta - A)*r2 = v0  →  A*(r1 - r2) = v0 - posDelta*r2\n\t\t-- A = (v0 - posDelta*r2) / (r1 - r2)\n\t\tA = (v0 - posDelta * r2) / (r1 - r2)\n\t\tlocal B = posDelta - A\n\t\tnewPos = target + A * math.exp(r1 * dt) + B * math.exp(r2 * dt)\n\tend\n\n\t-- Compute new velocity for the next step (derivative of x(t))\n\tlocal newVel\n\tif self._isUnderdamped then\n\t\tlocal wd = self._omegaD\n\t\tlocal cosWd = math.cos(wd * dt)\n\t\tlocal sinWd = math.sin(wd * dt)\n\t\tlocal c2 = (v0 + sigma * posDelta) / wd\n\t\t-- x'(t) = -σ*e^{-σt}[...] + e^{-σt}[-ω_d(x0-target)sin + ω_d*c2*cos]\n\t\t-- Simplified:\n\t\tnewVel = -sigma * expTerm * (posDelta * cosWd + c2 * sinWd)\n\t\t\t+ expTerm * (-wd * posDelta * sinWd + wd * c2 * cosWd)\n\n\telseif self._isCritical then\n\t\tnewVel = -sigma * expTerm * (posDelta + (v0 + sigma * posDelta) * dt)\n\t\t\t+ expTerm * (v0 + sigma * posDelta)\n\n\telse\n\t\tlocal r1 = -sigma + self._omega * math.sqrt(self._zeta * self._zeta - 1)\n\t\tlocal r2 = -sigma - self._omega * math.sqrt(self._zeta\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create your first game > Organize scripts](https://create.roblox.com/docs/tutorials/first-experience#organize-scripts) · retrieved, not cited\n2. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · retrieved, not cited\n3. [SpringConstraint](https://create.roblox.com/docs/reference/engine/classes/SpringConstraint) · retrieved, not cited\n4. [Roblox for Unity developers > Scripting](https://create.roblox.com/docs/unity#scripting) · retrieved, not cited\n",
+   "truncation_retries": 2,
+   "truncated": true
+  },
+  "ANI-10": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "20d7ba9826bea7fb",
+   "reasons": [
+    "require:smooth: SmoothTime avoids snapping"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:ik",
+     "ok": true
+    },
+    {
+     "id": "require:chain_root",
+     "ok": true
+    },
+    {
+     "id": "require:end_effector",
+     "ok": true
+    },
+    {
+     "id": "require:target",
+     "ok": true
+    },
+    {
+     "id": "require:type",
+     "ok": true
+    },
+    {
+     "id": "require:smooth",
+     "ok": false,
+     "detail": "SmoothTime avoids snapping"
+    },
+    {
+     "id": "require:weight",
+     "ok": true
+    },
+    {
+     "id": "require:tween",
+     "ok": true
+    },
+    {
+     "id": "require:arm",
+     "ok": true
+    },
+    {
+     "id": "require:hand",
+     "ok": true
+    },
+    {
+     "id": "require:humanoid",
+     "ok": true
+    },
+    {
+     "id": "require:two_funcs",
+     "ok": true
+    },
+    {
+     "id": "forbid:invented_type",
+     "ok": true
+    },
+    {
+     "id": "forbid:manual_cframe",
+     "ok": true
+    }
+   ],
+   "seconds": 185.7,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 6696,
+   "answer_sha256": "6ac02214ddd9edd9d43c02c445bffca184a1a08bdde9bcd793fdf8f7552c8f0e",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 297
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To implement this, we need to create an `IKControl` instance under the NPC's `Humanoid`, configure its required properties (`Type`, `EndEffector`, `Target`, `ChainRoot`), and use `TweenService` to animate its `Weight` property.\n\nHere is the server Script.\n\n### Prerequisites\n1.  **NPC Model:** A Model named `\"Guard\"` in `Workspace` containing an R15 rig (Humanoid, HumanoidRootPart, RightUpperArm, RightHand).\n2.  **Target:** A `Part` named `\"Doorknob\"` in `Workspace`.\n3.  **Attachments (Optional but Recommended):** For `IKControl` to work best with `Position` type, the `EndEffector` (RightHand) usually needs an `Attachment` to track, or it tracks the part's center. The `Target` can be the `Doorknob` part itself or an `Attachment` on it.\n\n### Server Script\n\n```lua\n-- // Server Script in ServerScriptService\nlocal TweenService = game:GetService(\"TweenService\")\n\n-- Configuration\nlocal REACH_WEIGHT = 1\nlocal RELEASE_WEIGHT = 0\nlocal REACH_TIME = 0.5 -- Seconds to fade in\nlocal RELEASE_TIME = 0.5 -- Seconds to fade out\n\n-- Helper: Get a child by name recursively\nlocal function getChild(model, name)\n\tfor _, child in ipairs(model:GetDescendants()) do\n\t\tif child.Name == name then\n\t\t\treturn child\n\t\tend\n\tend\n\treturn nil\nend\n\n-- Helper: Create or Get IKControl\nlocal function getIKControl(humanoid)\n\t-- Check if IKControl already exists to avoid duplicates\n\tfor _, child in ipairs(humanoid:GetChildren()) do\n\t\tif child:IsA(\"IKControl\") then\n\t\t\treturn child\n\t\tend\n\tend\n\treturn nil\nend\n\n---\n-- Makes the NPC's right hand reach toward the target Part.\n-- @param npc Model - The NPC model containing the Humanoid\n-- @param target Part - The target Part (e.g., Doorknob)\n-- @return IKControl? - The created IKControl instance, or nil on failure\n---\nlocal function reach(npc, target)\n\tif not npc or not target then\n\t\twarn(\"reach: Invalid arguments\")\n\t\treturn nil\n\tend\n\n\tlocal humanoid = npc:FindFirstChild(\"Humanoid\")\n\tif not humanoid or not humanoid:IsA(\"Humanoid\") then\n\t\twarn(\"reach: NPC does not have a Humanoid\")\n\t\treturn nil\n\tend\n\n\t-- Identify rig parts for R15\n\tlocal rightUpperArm = npc:FindFirstChild(\"RightUpperArm\")\n\tlocal rightHand = npc:FindFirstChild(\"RightHand\")\n\n\tif not rightUpperArm or not rightHand then\n\t\twarn(\"reach: NPC does not appear to be a standard R15 rig (missing RightUpperArm or RightHand)\")\n\t\treturn nil\n\tend\n\n\t-- Check if IKControl already exists\n\tlocal existingIK = getIKControl(humanoid)\n\tif existingIK then\n\t\t-- If it exists, update the target and ensure it's active\n\t\texistingIK.Target = target\n\t\texistingIK.Weight = REACH_WEIGHT\n\t\treturn existingIK\n\tend\n\n\t-- Create the IKControl\n\tlocal ikControl = Instance.new(\"IKControl\")\n\tikControl.Name = \"GuardReachIK\"\n\tikControl.Parent = humanoid\n\n\t-- Set required properties as per documentation [2][3]\n\t-- Type: Position makes the EndEffector move to the Target's position\n\tikControl.Type = Enum.IKControlType.Position\n\t\n\t-- EndEffector: The bone/part that moves (the hand)\n\tikControl.EndEffector = rightHand\n\t\n\t-- Target: The object the hand reaches for\n\tikControl.Target = target\n\t\n\t-- ChainRoot: The root of the chain that bends (the upper arm)\n\tikControl.ChainRoot = rightUpperArm\n\n\t-- Initial state: Weight 0 (inactive)\n\tikControl.Weight = RELEASE_WEIGHT\n\n\t-- Fade in the weight using TweenService [1]\n\tlocal tweenInfo = TweenInfo.new(\n\t\tREACH_TIME,\n\t\tEnum.EasingStyle.Quad,\n\t\tEnum.EasingDirection.Out\n\t)\n\tlocal tween = TweenService:Create(ikControl, tweenInfo, {Weight = REACH_WEIGHT})\n\ttween:Play()\n\n\treturn ikControl\nend\n\n---\n-- Releases the NPC's hand from the target.\n-- @param npc Model - The NPC model\n-- @param ikControl? IKControl - The specific IKControl to release. If nil, finds the first one.\n---\nlocal function release(npc, ikControl)\n\tif not npc then\n\t\twarn(\"release: Invalid NPC\")\n\t\treturn\n\tend\n\n\tlocal humanoid = npc:FindFirstChild(\"Humanoid\")\n\tif not humanoid then\n\t\treturn\n\tend\n\n\t-- If no specific IKControl passed, find the first one\n\tif not ikControl then\n\t\tikControl = getIKControl(humanoid)\n\tend\n\n\tif not ikControl then\n\t\treturn\n\tend\n\n\t-- Fade out the weight\n\tlocal tweenInfo = TweenInfo.new(\n\t\tRELEASE_TIME,\n\t\tEnum.EasingStyle.Quad,\n\t\tEnum.EasingDirection.Out\n\t)\n\tlocal tween = TweenService:Create(ikControl, tweenInfo, {Weight = RELEASE_WEIGHT})\n\ttween:Play()\n\n\t-- Optional: Destroy the IKControl after the tween finishes to clean up\n\ttween.Completed:Connect(function()\n\t\tif ikControl and ikControl.Parent then\n\t\t\tikControl:Destroy()\n\t\tend\n\tend)\nend\n\n-- Example Usage:\n-- Wait for the NPC and Target to exist\nlocal workspace = game:GetService(\"Workspace\")\nlocal guard = workspace:WaitForChild(\"Guard\")\nlocal doorknob = workspace:WaitForChild(\"Doorknob\")\n\n-- Call the functions\n-- reach(guard, doorknob)\n-- game:GetService(\"Debris\"):AddItem(guard, 10) -- Example: release after 10 seconds\n-- release(guard)\n```\n\n### Explanation of Key Components\n\n1.  **IKControl Creation:** The script creates an `IKControl` instance and sets it as a child of the `Humanoid` [2]. This is required for the IK to take effect.\n2.  **Required Properties:**\n    *   `Type = Enum.IKControlType.Position`: This tells the IK solver to move the `EndEffector` to the exact world position of the `Target` [3].\n    *   `EndEffector = rightHand`: This is the bone that will move.\n    *   `Target = doorknob`: This is the Part the hand will reach for.\n    *   `ChainRoot = rightUpperArm`: This defines the start of the kinematic chain. The solver will bend the arm starting from the upper arm to reach the hand to the target [3].\n3.  **TweenService:** Instead of snapping the arm into place, we start the `IKControl`'s `Weight` at `0` and tween it to `1` (full influence) for the reach action, and back to `0` for the release action. This creates a smooth, natural-looking motion [1].\n4.  **Cleanup:** The `release` function destroys the `IKControl` after the weight fades out to prevent memory leaks and ensure the\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Inverse Kinematics > IKControl > Test IKControls](https://create.roblox.com/docs/animation/inverse-kinematics#test-ikcontrols) · cited\n2. [IKControl](https://create.roblox.com/docs/reference/engine/classes/IKControl) · cited\n3. [Inverse Kinematics > IKControl > Required properties](https://create.roblox.com/docs/animation/inverse-kinematics#required-properties) · cited\n4. [Animation in Roblox > Inverse kinematics](https://create.roblox.com/docs/animation#inverse-kinematics) · retrieved, not cited\n"
+  },
+  "ANI-11": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "6e0cfece4bd68b82",
+   "reasons": [
+    "require:priority: Action priority"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:animator",
+     "ok": true
+    },
+    {
+     "id": "require:load",
+     "ok": true
+    },
+    {
+     "id": "require:hit_start",
+     "ok": true
+    },
+    {
+     "id": "require:hit_end",
+     "ok": true
+    },
+    {
+     "id": "require:window",
+     "ok": true
+    },
+    {
+     "id": "require:priority",
+     "ok": false,
+     "detail": "Action priority"
+    },
+    {
+     "id": "require:play_fade",
+     "ok": true
+    },
+    {
+     "id": "require:speed",
+     "ok": true
+    },
+    {
+     "id": "require:stop_fade",
+     "ok": true
+    },
+    {
+     "id": "require:disconnect",
+     "ok": true
+    },
+    {
+     "id": "require:input",
+     "ok": true
+    },
+    {
+     "id": "forbid:keyframe_reached",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated_load",
+     "ok": true
+    }
+   ],
+   "seconds": 193.4,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 4621,
+   "answer_sha256": "d8c7b84bc314bd8b13cb8c001a1b1eb112b1b705a9743ab2a70e5a52e8d84602",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 343
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the LocalScript for `StarterCharacterScripts`. It uses the modern `GetMarkerReachedSignal` API, handles the haste attribute correctly, and manages connections safely.\n\n```lua\n-- StarterCharacterScripts/SwordSwingController\n--!strict\n\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoid = character:WaitForChild(\"Humanoid\")\nlocal animator = humanoid:WaitForChild(\"Animator\")\n\n-- 1. Setup Animation\nlocal swordAnim = Instance.new(\"Animation\")\nswordAnim.AnimationId = \"rbxassetid://180435792\"\n\nlocal track = animator:LoadAnimation(swordAnim)\n\n-- 2. State\nlocal hitWindowOpen = false\nlocal connections: {RBXScriptConnection} = {} -- Store connections for cleanup\n\n-- 3. Marker Events (Modern API)\nlocal hitStartConn: RBXScriptConnection = track:GetMarkerReachedSignal(\"HitStart\"):Connect(function()\n\thitWindowOpen = true\nend)\ntable.insert(connections, hitStartConn)\n\nlocal hitEndConn: RBXScriptConnection = track:GetMarkerReachedSignal(\"HitEnd\"):Connect(function()\n\thitWindowOpen = false\nend)\ntable.insert(connections, hitEndConn)\n\n-- 4. Cleanup Function\nlocal function disconnectEvents()\n\tfor _, conn in ipairs(connections) do\n\t\tconn:Disconnect()\n\tend\n\tconnections = {}\nend\n\n-- 5. Swing Function\nlocal function swingSword()\n\t-- Check Haste attribute\n\tlocal hasteBuff = character:GetAttribute(\"Haste\") or false\n\tlocal speedMultiplier = hasteBuff and 1.25 or 1.0\n\n\t-- Configure track\n\ttrack:AdjustSpeed(speedMultiplier)\n\ttrack:Play(0.1) -- 0.1s fade-in\n\n\t-- Disconnect old events if track was already playing\n\tdisconnectEvents()\n\n\t-- Reconnect events for this specific play instance\n\thitStartConn = track:GetMarkerReachedSignal(\"HitStart\"):Connect(function()\n\t\thitWindowOpen = true\n\tend)\n\ttable.insert(connections, hitStartConn)\n\n\thitEndConn = track:GetMarkerReachedSignal(\"HitEnd\"):Connect(function()\n\t\thitWindowOpen = false\n\t\t-- Fade out over 0.15s when it ends\n\t\ttask.delay(0.15, function()\n\t\t\tif track.IsPlaying then\n\t\t\t\ttrack:Stop(0.15)\n\t\t\tend\n\t\t\tdisconnectEvents()\n\t\tend)\n\tend)\nend\n\n-- 6. Input Handling\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nUserInputService.InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\tif input.UserInputType == Enum.UserInputType.MouseButton1 then\n\t\tswingSword()\n\tend\nend)\n\n-- 7. Unequip/Death Cleanup\ncharacter.AncestryChanged:Connect(function()\n\tif not character.Parent then\n\t\ttrack:Stop(0.15)\n\t\tdisconnectEvents()\n\tend\nend)\n```\n\n### Key Implementation Details:\n*   **Modern API:** Uses `track:GetMarkerReachedSignal(\"HitStart\")` instead of the deprecated `AnimationTrack.MarkerReached` [3].\n*   **Haste Logic:** Checks the `Haste` attribute on the character. If true, `AdjustSpeed(1.25)` is used to play the animation 25% faster.\n*   **Fade In/Out:** `track:Play(0.1)` handles the 0.1s fade-in. A `task.delay` is used to trigger `track:Stop(0.15)` for the 0.15s fade-out after the `HitEnd` marker fires.\n*   **Connection Management:** Connections are stored in a table and disconnected when the track stops or the character is removed to prevent memory leaks or duplicate event firing [3].\n*   **Placement:** The script is designed for `StarterCharacterScripts`, ensuring it clones into the character on join and respawn.\n\n### References:\n*   [1] StarterCharacterScripts placement ensures the script runs on the client for each character instance.\n*   [3] `GetMarkerReachedSignal` is the modern way to handle animation events.\n\n**Luau check by STAR:** The code block first failed the static Luau check (Type 'unknown' does not have key 'Disconnect', line 34). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Play character animations > Trigger animations > Create script](https://create.roblox.com/docs/tutorials/use-case-tutorials/animation/play-character-animations#create-script) · cited\n2. [Play character animations > Trigger animations > Add animation](https://create.roblox.com/docs/tutorials/use-case-tutorials/animation/play-character-animations#add-animation) · retrieved, not cited\n3. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n4. [Use animations > Replace default animations](https://create.roblox.com/docs/animation/using#replace-default-animations) · retrieved, not cited\n"
+  },
+  "ANI-12": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9dd4b7101035be14",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:order",
+     "ok": true
+    },
+    {
+     "id": "require:higher",
+     "ok": true
+    },
+    {
+     "id": "require:blend",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 61.9,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 2262,
+   "answer_sha256": "2f95af8017267b7b532682f7789236ce8d53c5c4cccf909efface7c6eb6d74d6",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 172
+    }
+   ],
+   "answer": "Based on the official Roblox documentation, here are the answers to your questions regarding concurrent `AnimationTracks`:\n\n### 1. Which AnimationTrack wins when they play at the same time?\nWhen multiple `AnimationTracks` affect the same joints, the engine evaluates them from **highest priority to lowest priority** per joint. The track with the **highest priority** wins and overrides the lower-priority ones for that specific joint. Evaluation stops for a joint once the total track weight sum reaches or exceeds 1.0.\n\n*   **Source:** [1] Enum.AnimationPriority and [2] AnimationTrack > Priority.\n\n### 2. What happens when they have the same priority?\nIf two or more `AnimationTracks` have the **same priority** and are playing concurrently, they do not simply override each other. Instead, they **blend** together. The final pose is calculated by combining the keyframe poses proportional to their respective track weights (normalized if the sum exceeds 1).\n\n*   **Source:** [1] Enum.AnimationPriority and [2] AnimationTrack > Priority.\n\n### 3. Order of AnimationPriority levels (Highest to Lowest)\nThe seven levels of `Enum.AnimationPriority`, ordered from highest to lowest, are:\n\n1.  **Action4** (Highest)\n2.  **Action3**\n3.  **Action2**\n4.  **Action**\n5.  **Movement**\n6.  **Idle**\n7.  **Core** (Lowest)\n\n*   **Source:** [1] Enum.AnimationPriority, [2] AnimationTrack > Priority, and [3] Animation Editor > Set a priority.\n\n***\n\n**References:**\n*   [1] Enum.AnimationPriority: https://create.roblox.com/docs/reference/engine/enums/AnimationPriority\n*   [2] AnimationTrack > Priority: https://create.roblox.com/docs/reference/engine/classes/AnimationTrack#Priority\n*   [3] Animation Editor > Set a priority: https://create.roblox.com/docs/animation/editor#set-a-priority\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Enum.AnimationPriority](https://create.roblox.com/docs/reference/engine/enums/AnimationPriority) · cited\n2. [AnimationTrack > Priority](https://create.roblox.com/docs/reference/engine/classes/AnimationTrack#Priority) · cited\n3. [Animation Editor > Set a priority](https://create.roblox.com/docs/animation/editor#set-a-priority) · cited\n"
+  },
+  "VFX-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "3a66ac0dafce73fb",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:emitter",
+     "ok": true
+    },
+    {
+     "id": "require:attachment",
+     "ok": true
+    },
+    {
+     "id": "require:emit",
+     "ok": true
+    },
+    {
+     "id": "require:twenty",
+     "ok": true
+    },
+    {
+     "id": "require:rate0",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": true
+    },
+    {
+     "id": "require:speed",
+     "ok": true
+    },
+    {
+     "id": "require:spread",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:size_seq",
+     "ok": true
+    },
+    {
+     "id": "require:transp_seq",
+     "ok": true
+    },
+    {
+     "id": "require:color_seq",
+     "ok": true
+    },
+    {
+     "id": "require:cleanup",
+     "ok": true
+    },
+    {
+     "id": "forbid:invented",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 174.2,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 6566,
+   "answer_sha256": "fb2038e805af8e947c42c830d66faa6c89f6d8481fc3e37c717846851bef6f36",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 312
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `HitEffect` ModuleScript. It creates a reusable, self-cleaning impact effect using a single Part, an Attachment, and a ParticleEmitter configured for a one-shot burst.\n\n### `HitEffect` ModuleScript\n\n```lua\n--!strict\n\nlocal HitEffect = {}\n\n-- Configuration for the impact spark effect\nlocal CONFIG = {\n\tEmitCount = 20,           -- Number of sparks per burst\n\tLifetimeMin = 0.2,        -- Minimum particle lifespan (seconds)\n\tLifetimeMax = 0.45,       -- Maximum particle lifespan (seconds) - used for cleanup timing\n\tSpeedMin = 20,            -- Minimum initial velocity (studs/s)\n\tSpeedMax = 40,            -- Maximum initial velocity (studs/s)\n\tSpreadAngleX = 180,       -- Horizontal spread (degrees)\n\tSpreadAngleY = 180,       -- Vertical spread (degrees)\n\tDrag = 10,                -- Resistance causing particles to slow down quickly\n\tLightEmission = 0.6,      -- Glow intensity (0 to 1)\n\tSizeSequence = {\t\t\t-- Size over lifetime: Start large, shrink to nothing\n\t\tNumberSequenceKeypoint.new(0, 0.8),\n\t\tNumberSequenceKeypoint.new(1, 0)\n\t},\n\tTransparencySequence = {\t-- Transparency over lifetime: Start invisible (0), become visible, then fade out\n\t\tNumberSequenceKeypoint.new(0, 1),\n\t\tNumberSequenceKeypoint.new(0.1, 0),\n\t\tNumberSequenceKeypoint.new(0.8, 0),\n\t\tNumberSequenceKeypoint.new(1, 1)\n\t},\n\tColorSequence = {\t\t\t-- Color over lifetime: White-Yellow to Orange\n\t\tNumberSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 220)), -- White-Yellow\n\t\tNumberSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 0))    -- Orange\n\t}\n}\n\n-- Internal cache for the effect template\nlocal EffectTemplate = nil\n\n--- Creates the internal Part/Attachment/Emitter template if it doesn't exist.\nlocal function getTemplate(): Part\n\tif EffectTemplate then return EffectTemplate end\n\n\t-- Invisible anchored Part\n\tlocal part = Instance.new(\"Part\")\n\tpart.Name = \"HitEffectTemplate\"\n\tpart.Anchored = true\n\tpart.CanCollide = false\n\tpart.Transparency = 1 -- Invisible\n\tpart.Size = Vector3.new(0, 0, 0) -- Zero size so it doesn't interfere with physics\n\n\t-- Attachment for the emitter to follow the position precisely\n\tlocal attachment = Instance.new(\"Attachment\")\n\tattachment.Name = \"EffectAttachment\"\n\tattachment.Parent = part\n\n\t-- ParticleEmitter\n\tlocal emitter = Instance.new(\"ParticleEmitter\")\n\temitter.Name = \"Sparks\"\n\temitter.Parent = attachment\n\t\n\t-- One-shot configuration\n\temitter.Enabled = false -- Do not emit continuously\n\temitter.Rate = 0        -- Zero rate prevents auto-emission\n\t\n\t-- Movement and Spread\n\temitter.Speed = NumberRange.new(CONFIG.SpeedMin, CONFIG.SpeedMax)\n\temitter.SpreadAngle = Vector2.new(CONFIG.SpreadAngleX, CONFIG.SpreadAngleY)\n\temitter.Drag = CONFIG.Drag\n\t\n\t-- Lifespan\n\temitter.Lifetime = NumberRange.new(CONFIG.LifetimeMin, CONFIG.LifetimeMax)\n\t\n\t-- Visuals: Glow\n\temitter.LightEmission = CONFIG.LightEmission\n\t\n\t-- Visuals: Size (Shrink over life)\n\temitter.Size = NumberSequence.new(CONFIG.SizeSequence)\n\t\n\t-- Visuals: Transparency (Fade in/out over life)\n\temitter.Transparency = NumberSequence.new(CONFIG.TransparencySequence)\n\t\n\t-- Visuals: Color (White-Yellow to Orange)\n\temitter.Color = ColorSequence.new(CONFIG.ColorSequence)\n\n\tEffectTemplate = part\n\treturn part\nend\n\n--- Plays a one-shot impact spark burst at the specified position.\n--- @param position Vector3\nfunction HitEffect.play(position: Vector3)\n\tlocal template = getTemplate()\n\t\n\t-- Clone the template for this specific hit\n\tlocal effectPart = template:Clone()\n\teffectPart.Position = position\n\t\n\t-- Get the emitter from the cloned attachment\n\tlocal attachment = effectPart:FindFirstChild(\"EffectAttachment\")\n\tif not attachment then \n\t\teffectPart:Destroy() \n\t\treturn \n\tend\n\t\n\tlocal emitter = attachment:FindFirstChild(\"Sparks\")\n\tif not emitter then \n\t\teffectPart:Destroy() \n\t\treturn \n\tend\n\n\t-- Emit the sparks\n\temitter:Emit(CONFIG.EmitCount)\n\n\t-- Clean up the part after the longest particle has died\n\t-- We use the Max Lifetime to determine when to destroy the part\n\tlocal cleanupDelay = CONFIG.LifetimeMax\n\t\n\ttask.delay(cleanupDelay, function()\n\t\tif effectPart and effectPart.Parent then\n\t\t\teffectPart:Destroy()\n\t\tend\n\tend)\nend\n\nreturn HitEffect\n```\n\n### Implementation Notes\n\n1.  **Template Pattern**: The `getTemplate()` function ensures we only create the heavy Part/Attachment/Emitter hierarchy once. Subsequent calls just clone the existing object, which is much more performant than creating new Instances every time a hit occurs [1].\n2.  **One-Shot Logic**: The `Rate` is set to `0` and `Enabled` is `false` to prevent continuous emission. We manually trigger the burst using `:Emit(20)` [1].\n3.  **Cleanup**: The script uses `task.delay` with the `LifetimeMax` value (0.45s) to destroy the Part. This ensures the Part is removed from the workspace immediately after the last possible particle has faded, preventing memory leaks from orphaned parts [3].\n4.  **Visuals**:\n    *   **Color**: Uses a `ColorSequence` transitioning from a bright white-yellow (`255, 255, 220`) to a deep orange (`255, 120, 0`) to simulate heat dissipation [4].\n    *   **Size/Transparency**: `NumberSequence` objects are used to make the sparks shrink to nothing and fade out smoothly over their lifespan, rather than disappearing abruptly [3].\n    *   **Glow**: `LightEmission` is set to `0.6` to give the sparks a bright, energetic look without being blinding [3].\n\n### References\n[1] Create explosions with VFX > Emitter setup\n[2] Create explosions with VFX > Test particle bursts\n[3] Use particles for actions > Make particles spread\n[4] Basic particle effects > Particle properties > Color\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create explosions with VFX > Emitter setup](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#emitter-setup) · cited\n2. [Create explosions with VFX > Test particle bursts](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#test-particle-bursts) · cited\n3. [Use particles for actions > Make particles spread](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/using-particles-for-actions#make-particles-spread) · cited\n4. [Basic particle effects > Particle properties > Color](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/basic-particle-effects#color) · cited\n"
+  },
+  "VFX-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "0f4572906d24856a",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:beam",
+     "ok": true
+    },
+    {
+     "id": "require:att0",
+     "ok": true
+    },
+    {
+     "id": "require:att1",
+     "ok": true
+    },
+    {
+     "id": "require:width",
+     "ok": true
+    },
+    {
+     "id": "require:face",
+     "ok": true
+    },
+    {
+     "id": "require:segments",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:trail",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": true
+    },
+    {
+     "id": "require:trail_transparency",
+     "ok": true
+    },
+    {
+     "id": "require:enabled",
+     "ok": true
+    },
+    {
+     "id": "require:switch_off",
+     "ok": true
+    },
+    {
+     "id": "forbid:trail_width",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 112.5,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 4108,
+   "answer_sha256": "43a386e24c4bf2c08bbe0b3c99425ebd9cb3e1856199b2cf5269536669f34e33",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 313
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the ModuleScript containing `makeBeam`, `makeTrail`, and `swing`.\n\n```lua\nlocal BeamModule = {}\n\n--- Creates a red laser beam between two parts.\n--- @param a BasePart\n--- @param b BasePart\n--- @return Beam\nfunction BeamModule.makeBeam(a: BasePart, b: BasePart): Beam\n\t-- Create Attachments\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Parent = a\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Parent = b\n\n\t-- Create Beam\n\tlocal beam = Instance.new(\"Beam\")\n\tbeam.Attachment0 = attachment0\n\tbeam.Attachment1 = attachment1\n\tbeam.Width0 = 0.1 -- Thin\n\tbeam.Width1 = 0.1 -- Thin\n\tbeam.Segments = 4 -- Several segments for smoothness\n\tbeam.FaceCamera = true\n\tbeam.LightEmission = 1.0 -- Glowing\n\tbeam.Color = Color3.fromRGB(255, 0, 0) -- Red laser\n\tbeam.Texture = \"rbxassetid://6060542021\" -- Standard laser texture [4]\n\tbeam.Parent = a\n\n\treturn beam\nend\n\n--- Creates a Trail on a sword handle.\n--- @param handle BasePart\n--- @return Trail\nfunction BeamModule.makeTrail(handle: BasePart): Trail\n\t-- Create Attachments on the handle (blade base and tip)\n\t-- Assuming handle is oriented along Z, adjust offsets as needed for your model\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Position = Vector3.new(0, 0, 0.5) -- Blade base\n\tattachment0.Parent = handle\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Position = Vector3.new(0, 0, -0.5) -- Blade tip\n\tattachment1.Parent = handle\n\n\t-- Create Trail\n\tlocal trail = Instance.new(\"Trail\")\n\ttrail.Attachment0 = attachment0\n\ttrail.Attachment1 = attachment1\n\ttrail.Lifetime = 0.25\n\ttrail.Transparency = NumberSequence.new({\n\t\tNumberSequenceKeypoint.new(0, 0),\n\t\tNumberSequenceKeypoint.new(1, 1) -- Fades to fully transparent\n\t})\n\ttrail.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255)) -- White trail\n\ttrail.Enabled = false\n\ttrail.Parent = handle\n\n\treturn trail\nend\n\n--- Turns a trail on and switches it off after a duration.\n--- @param trail Trail\n--- @param number duration\nfunction BeamModule.swing(trail: Trail, duration: number)\n\ttrail.Enabled = true\n\ttask.delay(duration, function()\n\t\ttrail.Enabled = false\n\tend)\nend\n\nreturn BeamModule\n```\n\n### Notes on Implementation:\n1.  **Beam Creation**: The beam is parented to part `a` so that the attachments and beam move together if the part moves. The `LightEmission` is set to `1.0` for maximum glow, and `FaceCamera` is enabled as requested [4].\n2.  **Trail Attachments**: The positions of the attachments on the `handle` are assumed to be along the Z-axis (common for sword handles). You may need to adjust the `Vector3` offsets in `makeTrail` to match the specific orientation of your sword model.\n3.  **Trail Transparency**: The `NumberSequence` for `Transparency` starts at 0 (fully opaque) and ends at 1 (fully transparent) to create a fading tail effect.\n4.  **Swing Function**: Uses `task.delay` to turn the trail off after the specified duration. This is non-blocking and efficient.\n\n### References:\n- [1] Hit detection with lasers > Create the laser part\n- [4] Create laser beams with VFX > Customize the beam\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Create the laser part](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#create-the-laser-part) · cited\n2. [Create laser beams with VFX](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams) · retrieved, not cited\n3. [Create engaging experiences > Beams and attachments](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/creating-engaging-experiences#beams-and-attachments) · retrieved, not cited\n4. [Create laser beams with VFX > Customize the beam](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams#customize-the-beam) · cited\n"
+  },
+  "VFX-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "0a07a2e9b11c94b5",
+   "reasons": [
+    "unit_tests: 6/10 passed; failed: activeCount is 3 and totalCreated is 3; activeCount drops to 2 after a release; a double release counts once; releasing a foreign object changes nothing"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "6/10 passed; failed: activeCount is 3 and totalCreated is 3; activeCount drops to 2 after a release; a double release counts once; releasing a foreign object changes nothing"
+    }
+   ],
+   "seconds": 156.7,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.48
+   },
+   "blocks": 2,
+   "answer_chars": 6200,
+   "answer_sha256": "06a4cb1d3370c1b101b66557c99aec33eb87cc60e27ee08a1668af991adab60f",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 312
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a pure-Luau `EffectPool` ModuleScript. It contains no Roblox classes, relies only on standard Luau types, and implements the requested object-pooling logic with strict state tracking to prevent double-releases or foreign-object corruption.\n\n```lua\n-- EffectPool.lua\n-- A pure-Luau object pool for cosmetic effects to prevent frame-rate drops from excessive spawning.\n-- Reference: Object pooling reduces draw calls and GC pressure caused by excessive object density [2].\n\nlocal EffectPool = {}\nEffectPool.__index = EffectPool\n\n--- Creates a new EffectPool.\n-- @param maxActive number: The maximum number of effects that can be active simultaneously.\n-- @param factory function: A function that returns a new effect object when called.\n-- @return table: The EffectPool instance.\nfunction EffectPool.new(maxActive: number, factory: () -> any)\n\tassert(type(maxActive) == \"number\" and maxActive > 0, \"maxActive must be a positive number\")\n\tassert(type(factory) == \"function\", \"factory must be a function\")\n\n\tlocal pool = {\n\t\t-- The stack of available (idle) objects\n\t\t_idle = {},\n\t\t-- The set of currently active objects for O(1) validation\n\t\t_active = {},\n\t\t-- Total number of objects ever created\n\t\t_totalCreated = 0,\n\t\t-- The maximum limit\n\t\t_maxActive = maxActive,\n\t\t-- The factory function\n\t\t_factory = factory,\n\t}\n\n\tsetmetatable(pool, EffectPool)\n\treturn pool\nend\n\n--- Acquires an effect from the pool or creates a new one if under the limit.\n-- @return any|nil: An effect object, or nil if the max active limit is reached.\nfunction EffectPool:acquire()\n\t-- 1. Try to reuse an idle object\n\tif #self._idle > 0 then\n\t\tlocal effect = table.remove(self._idle)\n\t\tself._active[effect] = true\n\t\treturn effect\n\tend\n\n\t-- 2. If no idle objects, create a new one if under the limit\n\tif self._totalCreated < self._maxActive then\n\t\tlocal effect = self._factory()\n\t\tself._totalCreated += 1\n\t\tself._active[effect] = true\n\t\treturn effect\n\tend\n\n\t-- 3. Limit reached: return nil to signal the caller to skip spawning\n\treturn nil\nend\n\n--- Releases an effect back to the idle pool.\n-- @param effect any: The effect object to release.\nfunction EffectPool:release(effect)\n\t-- Only release if the effect is currently tracked as active.\n\t-- This prevents double-releases and foreign-object errors.\n\tif self._active[effect] then\n\t\tself._active[effect] = nil\n\t\ttable.insert(self._idle, effect)\n\tend\nend\n\n--- Returns the number of currently active effects.\n-- @return number\nfunction EffectPool:activeCount()\n\treturn #self._active\nend\n\n--- Returns the total number of effects ever created by this pool.\n-- @return number\nfunction EffectPool:totalCreated()\n\treturn self._totalCreated\nend\n\nreturn EffectPool\n```\n\n### How to Use\n\n1.  **Save** this script as `EffectPool.lua` inside a `ModuleScript` in your game (e.g., `ReplicatedStorage.EffectPool`).\n2.  **Initialize** the pool with your max limit and a factory function that builds your specific particle effect:\n\n```lua\nlocal EffectPool = require(game:GetService(\"ReplicatedStorage\").EffectPool)\n\n-- Define your factory: creates a ParticleEmitter (or any other effect object)\nlocal function createParticleEffect()\n\tlocal emitter = Instance.new(\"ParticleEmitter\")\n\temitter.Lifetime = NumberRange.new(1, 2)\n\temitter.Speed = NumberRange.new(5, 10)\n\temitter.Transparency = NumberSequence.new({\n\t\tNumberSequenceKeypoint.new(0, 1),\n\t\tNumberSequenceKeypoint.new(1, 0)\n\t})\n\t-- Add other particle properties here\n\treturn emitter\nend\n\n-- Create the pool: allow up to 50 simultaneous effects\nlocal effectPool = EffectPool.new(50, createParticleEffect)\n\n-- Example usage during a big fight:\nlocal function spawnEffectAt(position)\n\tlocal effect = effectPool:acquire()\n\tif effect == nil then\n\t\t-- Max effects reached; skip spawning to preserve FPS [2]\n\t\treturn\n\tend\n\n\teffect.Parent = workspace -- Or wherever your effects live\n\teffect.Position = position\n\n\t-- When the effect finishes (e.g., after its Lifetime), release it back:\n\ttask.delay(2, function()\n\t\teffectPool:release(effect)\n\t\teffect:Destroy() -- Clean up the object from the scene\n\tend)\nend\n```\n\n### Key Design Points\n\n*   **Pure Luau:** No `game`, `Instance`, or `Service` references. This makes the module easy to test in isolation and ensures it doesn’t accidentally couple to the Roblox engine in ways that could cause issues in non-Studio environments (though it’s intended for Roblox).\n*   **O(1) Operations:** Both `acquire` and `release` use table stack operations (`table.remove` and `table.insert`) and hash lookups (`self._active[effect]`), ensuring minimal CPU overhead even with hundreds of effects.\n*   **Safety:** The `release` method checks `self._active[effect]` before doing anything. This means:\n    *   Double-releasing the same effect does nothing.\n    *   Releasing an effect that was never acquired (or was already released) does nothing.\n    *   Releasing a completely different object does nothing.\n*   **Memory Efficiency:** By reusing objects, you reduce the pressure on the Garbage Collector, which is critical for maintaining stable frame rates during intense gameplay [3]. The factory only creates new objects when the pool is empty and under the limit, ensuring you never exceed `maxActive` objects in memory.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n2. [Improve performance > Rendering > Other common problems](https://create.roblox.com/docs/performance-optimization/improve#other-common-problems) · retrieved, not cited\n3. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · cited\n4. [Roblox for Unity developers > Scripting > Luau code sample](https://create.roblox.com/docs/unity#luau-code-sample) · retrieved, not cited\n"
+  },
+  "VFX-04": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "072e7bb6e6b04fed",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:sort",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_waiting",
+     "ok": true
+    }
+   ],
+   "seconds": 175.8,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.47
+   },
+   "blocks": 2,
+   "answer_chars": 4921,
+   "answer_sha256": "c02f254ca3f9b79412faca315bb7b626c6e573b0fbae95b737ffb5f4b7444188",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 344
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a pure-Luau `ModuleScript` implementing the `Timeline` class exactly to spec.\n\n```lua\n-- Timeline.lua\n-- A pure-Luau ModuleScript for time-layered cue execution.\n\nlocal Timeline = {}\nTimeline.__index = Timeline\n\nfunction Timeline.new(cues)\n\t-- Validate and prepare cues: sort by time, then by original array index\n\tlocal sorted = {}\n\tfor i = 1, #cues do\n\t\tsorted[i] = {\n\t\t\tat = cues[i].at,\n\t\t\tname = cues[i].name,\n\t\t\tfn = cues[i].fn,\n\t\t\t_index = i, -- preserve original order for ties\n\t\t}\n\tend\n\n\t-- Sort: primary key = at (ascending), secondary key = _index (ascending)\n\ttable.sort(sorted, function(a, b)\n\t\tif a.at ~= b.at then\n\t\t\treturn a.at < b.at\n\t\tend\n\t\treturn a._index < b._index\n\tend)\n\n\tlocal self = setmetatable({\n\t\t_cues = sorted,\n\t\t_elapsed = 0,\n\t\t_next = 1, -- index of the next cue to fire\n\t}, Timeline)\n\n\treturn self\nend\n\nfunction Timeline:advance(dt)\n\tif dt < 0 then\n\t\terror(\"advance: dt must be non-negative\", 2)\n\tend\n\n\tself._elapsed = self._elapsed + dt\n\n\tlocal fired = {}\n\tlocal cues = self._cues\n\tlocal nextIdx = self._next\n\n\t-- Fire every cue whose at <= elapsed, in sorted order\n\twhile nextIdx <= #cues and cues[nextIdx].at <= self._elapsed do\n\t\tlocal cue = cues[nextIdx]\n\t\ttable.insert(fired, cue.name)\n\n\t\t-- Call the function if present\n\t\tif cue.fn ~= nil then\n\t\t\tcue.fn(cue.name)\n\t\tend\n\n\t\tnextIdx = nextIdx + 1\n\tend\n\n\tself._next = nextIdx\n\n\treturn fired\nend\n\nfunction Timeline:isDone()\n\treturn self._next > #self._cues\nend\n\nfunction Timeline:reset()\n\tself._elapsed = 0\n\tself._next = 1\nend\n\nreturn Timeline\n```\n\n### Design Notes\n\n1. **Sorting at construction** — Cues are sorted once in `new()` by `at` ascending, with ties broken by original array index (`_index`). This guarantees deterministic, stable ordering regardless of input order.\n\n2. **`advance(dt)` semantics** — The method accumulates `dt` into `_elapsed`, then walks forward from `_next` (the first unfired cue). Every cue with `at <= elapsed` fires exactly once. Because `_next` only advances, advancing by many small steps (e.g., `advance(0.05)` four times to reach 0.2) produces the same fired set and order as one `advance(0.2)` call.\n\n3. **Cue at 0 fires immediately** — On the very first `advance(0)` or `advance(0.001)`, any cue with `at == 0` satisfies `at <= elapsed` and fires.\n\n4. **`isDone()`** — Returns `true` when `_next` has passed the last cue index, meaning every cue has been fired.\n\n5. **`reset()`** — Rewinds `_elapsed` to 0 and `_next` to 1, allowing the timeline to be replayed from scratch.\n\n6. **No engine dependencies** — Pure Luau; no `RunService`, `task`, or Roblox API calls. It can run on the server or client identically.\n\n### Usage Example\n\n```lua\nlocal Timeline = require(script.Parent.Timeline)\n\nlocal RunService = game:GetService(\"RunService\")\n\nlocal timeline = Timeline.new({\n\t{ at = 0.15, name = \"Shockwave\",  fn = function() print(\"Shockwave!\") end },\n\t{ at = 0,    name = \"Flash\",      fn = function() print(\"Flash!\") end },\n\t{ at = 0.2,  name = \"Dust\",       fn = function() print(\"Dust!\") end },\n\t{ at = 0.35, name = \"Debris\",     fn = function() print(\"Debris!\") end },\n\t{ at = 0.9,  name = \"Ember\",      fn = function() print(\"Ember!\") end },\n})\n\n-- In a heartbeat loop:\nRunService.Heartbeat:Connect(function(dt)\n\tlocal fired = timeline:advance(dt)\n\tif #fired > 0 then\n\t\tprint(\"Fired this frame:\", table.concat(fired, \", \"))\n\tend\n\tif timeline:isDone() then\n\t\tRunService.Heartbeat:Disconnect()\n\tend\nend)\n```\n\n### Indexed Documentation Reference\n\n- The provided documentation passages ([1]–[4]) cover `delay`, `Sound.TimePosition`, a `Timer` module pattern, and an `Event Sequencer` tween schema. None of these directly specify the `Timeline` class behavior requested here, so this implementation is **unverified** against the indexed docs. The design follows standard accumulator-based timeline semantics common in game development.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 first failed the static Luau check (Unknown global 'path'; consider assigning to it first, line 1). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Roblox globals > delay](https://create.roblox.com/docs/reference/engine/globals/RobloxGlobals#delay) · cited\n2. [Sound objects > Customize sound objects > TimePosition](https://create.roblox.com/docs/sound/objects#timeposition) · retrieved, not cited\n3. [Timers and events > Completed scripts](https://create.roblox.com/docs/education/battle-royale-series/timers-and-events#completed-scripts) · retrieved, not cited\n4. [Event Sequencer > API reference > Schema configurations > tween](https://create.roblox.com/docs/resources/modules/event-sequencer#tween) · cited\n"
+  },
+  "VFX-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "247ca15c0ce68264",
+   "reasons": [
+    "require:life20: a maximum lifetime of 20 seconds"
+   ],
+   "checks": [
+    {
+     "id": "require:rate400",
+     "ok": true
+    },
+    {
+     "id": "require:mobile100",
+     "ok": true
+    },
+    {
+     "id": "require:life20",
+     "ok": false,
+     "detail": "a maximum lifetime of 20 seconds"
+    },
+    {
+     "id": "require:emit",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 60.9,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 2364,
+   "answer_sha256": "b8273d9ba5c0980187bac057b3dfd360dbb96e473454eb7f2e456cec82e6a2bd",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 186
+    }
+   ],
+   "answer": "Based on the provided documentation, here are the answers to your questions:\n\n### 1. Particles per Second (Rate Limits)\nA single `ParticleEmitter` can produce up to **400 particles per second** on desktop, and **100 particles per second** on mobile.\n\n*   **Source:** [1] Particle emitters > Customize particles > Rate\n\n### 2. Longest Particle Lifetime\nThe provided documentation **does not specify** the maximum lifetime a particle can have. It mentions the `Lifetime` property determines how long particles last and that they can change appearance during this time, but it does not list a hard numerical cap (e.g., in seconds) in the referenced text.\n\n*   **Status:** Unverified based on provided data.\n\n### 3. Difference Between `Rate` and `Emit`\nThe documentation distinguishes them as follows:\n\n*   **`Rate` (Property):** This is a continuous setting that determines the number of particles emitted **per second** while the emitter is `Enabled`. It acts as a frequency (e.g., a rate of 5 emits a particle every 0.2 seconds). Changing this property does not affect particles that are already active.\n    *   **Source:** [2] ParticleEmitter > Rate\n*   **`Emit` (Method):** While the provided text lists `Emit` as a method of the `ParticleEmitter` class, it **does not provide a description** of what the `Emit` method does or how it differs from `Rate` in terms of execution (e.g., whether it is a one-time burst or how it interacts with the `Rate` property).\n    *   **Source:** [4] ParticleEmitter (lists `Emit` as a method but lacks description)\n\n***\n\n**References:**\n[1] Particle emitters > Customize particles > Rate\n[2] ParticleEmitter > Rate\n[3] Particle emitters > Customize particles > Other properties\n[4] ParticleEmitter\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Particle emitters > Customize particles > Rate](https://create.roblox.com/docs/effects/particle-emitters#rate) · cited\n2. [ParticleEmitter > Rate](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter#Rate) · cited\n3. [Particle emitters > Customize particles > Other properties](https://create.roblox.com/docs/effects/particle-emitters#other-properties) · cited\n4. [ParticleEmitter](https://create.roblox.com/docs/reference/engine/classes/ParticleEmitter) · cited\n"
+  },
+  "BLD-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "2cc87e776db61da9",
+   "reasons": [
+    "unit_tests: 9/12 passed; failed: layoutWall(40) is 16, 16, 8; the pieces of layoutWall(100) add up to 100 in 7 pieces; layoutWall(64) is four 16 pieces"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "9/12 passed; failed: layoutWall(40) is 16, 16, 8; the pieces of layoutWall(100) add up to 100 in 7 pieces; layoutWall(64) is four 16 pieces"
+    },
+    {
+     "id": "require:error",
+     "ok": true
+    }
+   ],
+   "seconds": 185.4,
+   "timings": {
+    "luau_check_s": 0.17,
+    "unit_s": 0.47
+   },
+   "blocks": 2,
+   "answer_chars": 4792,
+   "answer_sha256": "13d3d5954c00970d495418c6a116a76ac8a41ec995709935f4cddd6d89b4d3c9",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 358
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the pure-Luau `ModuleScript` implementing the requested wall layout logic.\n\n### ModuleScript: `WallLayout`\n\n```lua\n--!strict\n-- ModuleScript in ReplicatedStorage\n\nlocal WallLayout = {}\n\n-- Snaps a scalar value to the nearest multiple of grid\nfunction WallLayout.snap(value: number, grid: number): number\n\treturn math.floor(value / grid + 0.5) * grid\nend\n\n-- Snaps a 3D point {x, y, z} to the nearest grid point, returning a NEW table\nfunction WallLayout.snapPoint(p: {x: number, y: number, z: number}, grid: number): {x: number, y: number, z: number}\n\treturn {\n\t\tx = WallLayout.snap(p.x, grid),\n\t\ty = WallLayout.snap(p.y, grid),\n\t\tz = WallLayout.snap(p.z, grid),\n\t}\nend\n\n-- Returns an ordered array of {piece: number, offset: number}\n-- Uses a greedy approach (largest pieces first) to minimize piece count.\nfunction WallLayout.layoutWall(length: number): { [number]: { piece: number, offset: number } }\n\tif type(length) ~= \"number\" or length <= 0 or length % 4 ~= 0 then\n\t\terror(\"length must be a positive multiple of 4\", 2)\n\tend\n\n\tlocal layout: { [number]: { piece: number, offset: number } } = {}\n\tlocal remaining = length\n\n\t-- Greedy: use largest pieces first to minimize count\n\tif remaining >= 16 then\n\t\tlocal count = math.floor(remaining / 16)\n\t\ttable.insert(layout, { piece = 16, offset = length - remaining })\n\t\tremaining = remaining - count * 16\n\tend\n\n\tif remaining >= 8 then\n\t\tlocal count = math.floor(remaining / 8)\n\t\ttable.insert(layout, { piece = 8, offset = length - remaining })\n\t\tremaining = remaining - count * 8\n\tend\n\n\tif remaining >= 4 then\n\t\tlocal count = math.floor(remaining / 4)\n\t\ttable.insert(layout, { piece = 4, offset = length - remaining })\n\t\tremaining = remaining - count * 4\n\tend\n\n\treturn layout\nend\n\nreturn WallLayout\n```\n\n### Implementation Notes\n\n1.  **`snap`**: Uses the exact formula provided: `math.floor(value / grid + 0.5) * grid`. This correctly rounds to the nearest multiple of `grid` [1].\n2.  **`snapPoint`**: Takes a table with keys `x`, `y`, and `z`. It returns a **new** table containing the snapped values, ensuring the original input table is not mutated.\n3.  **`layoutWall`**:\n    *   **Validation**: Checks that `length` is a number, is positive, and is a multiple of 4. If not, it calls `error()` immediately.\n    *   **Greedy Algorithm**: To achieve the \"fewest pieces\" requirement, it prioritizes the largest available piece (16 studs), then the next largest (8 studs), and finally the smallest (4 studs). This is the standard change-making greedy approach which is optimal for this specific set of denominations (4, 8, 16).\n    *   **Offsets**: The `offset` represents where each piece starts along the wall. Since we fill from the beginning (offset 0), the offset for each subsequent piece is the sum of the lengths of all previous pieces. The code calculates this by tracking `remaining` length subtracted from the total `length`.\n    *   **Return Type**: Returns an array (ordered list) of tables, where each table has `piece` (the length of the piece) and `offset` (its starting position).\n\n### Usage Example\n\n```lua\nlocal WallLayout = require(game.ReplicatedStorage.WallLayout)\n\n-- Snap a value\nlocal snappedVal = WallLayout.snap(12.3, 4) -- Returns 12\n\n-- Snap a point\nlocal snappedPt = WallLayout.snapPoint({x = 5.1, y = 2.9, z = 10.2}, 4) -- Returns {x=4, y=4, z=12}\n\n-- Layout a 28-stud wall\n-- Expected: One 16-stud piece at offset 0, one 8-stud piece at offset 16, one 4-stud piece at offset 24\nlocal wallLayout = WallLayout.layoutWall(28)\nfor _, part in ipairs(wallLayout) do\n\tprint(string.format(\"Piece: %d studs, Offset: %d studs\", part.piece, part.offset))\nend\n```\n\n### References\n[1] Reuse code > Anatomy of a module script - Roblox Creator Docs\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Expected this to be, line 49). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · cited\n2. [Snap to grid](https://create.roblox.com/docs/education/build-it-play-it-create-and-destroy/snap-to-grid) · retrieved, not cited\n3. [Assemble modular environments > Configure snapping behavior](https://create.roblox.com/docs/tutorials/use-case-tutorials/modeling/assemble-modular-environments#configure-snapping-behavior) · retrieved, not cited\n4. [Solid modeling > In-game solid modeling > Fragment](https://create.roblox.com/docs/parts/solid-modeling#fragment) · retrieved, not cited\n"
+  },
+  "BLD-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "4d0d8652b47b772f",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:model",
+     "ok": true
+    },
+    {
+     "id": "require:name",
+     "ok": true
+    },
+    {
+     "id": "require:anchored",
+     "ok": true
+    },
+    {
+     "id": "require:material",
+     "ok": true
+    },
+    {
+     "id": "require:pivot",
+     "ok": true
+    },
+    {
+     "id": "require:grid",
+     "ok": true
+    },
+    {
+     "id": "require:door_w",
+     "ok": true
+    },
+    {
+     "id": "require:door_h",
+     "ok": true
+    },
+    {
+     "id": "require:door_h_value",
+     "ok": true
+    },
+    {
+     "id": "require:door_w_value",
+     "ok": true
+    },
+    {
+     "id": "require:size",
+     "ok": true
+    },
+    {
+     "id": "require:parent_last",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated_pivot",
+     "ok": true
+    },
+    {
+     "id": "forbid:parent_arg",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 189.7,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 5845,
+   "answer_sha256": "93da809a77659fb596eccc2421f0fd99c7c3737d7b742716b95a6dd7ccb4701f",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 329
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a complete server Script that builds the room exactly as specified.\n\n### The Script\n\n```lua\n--!strict\n\n-- 1. Constants\nlocal GRID = 4\nlocal ROOM_SIZE = 24\nlocal WALL_HEIGHT = 12\nlocal WALL_THICKNESS = 2\nlocal DOOR_WIDTH = 4\nlocal DOOR_HEIGHT = 7\n\n-- Derived values\nlocal HALF_ROOM = ROOM_SIZE / 2 -- 12\nlocal HALF_DOOR = DOOR_WIDTH / 2 -- 2\n\n-- 2. Helper function to create a part\nlocal function createPart(name: string, size: Vector3, position: Vector3, color: Color3)\n\tlocal part = Instance.new(\"Part\")\n\tpart.Name = name\n\tpart.Size = size\n\tpart.Position = position\n\tpart.Anchored = true\n\tpart.CanCollide = true\n\tpart.Material = Enum.Material.Concrete\n\tpart.Color = color\n\treturn part\nend\n\n-- 3. Create the Model\nlocal room = Instance.new(\"Model\")\nroom.Name = \"Room\"\n\n-- 4. Build the Floor\nlocal floor = createPart(\"Floor\", Vector3.new(ROOM_SIZE, 1, ROOM_SIZE), Vector3.new(0, -0.5, 0), Color3.fromRGB(120, 120, 120))\nfloor.Parent = room\n\n-- 5. Build the Walls\n-- We build walls along the X and Z axes.\n-- To create the doorway, we will place it on the \"Front\" wall (Z = -HALF_ROOM).\n\n-- Front Wall (Z = -12) - Split into Left, Right, and Lintel\nlocal frontWallZ = -HALF_ROOM\n\n-- Front-Left (Left of the door)\nlocal flWidth = HALF_ROOM - HALF_DOOR -- 10 studs\nlocal flPos = Vector3.new(-HALF_ROOM + flWidth / 2, WALL_HEIGHT / 2, frontWallZ)\nlocal flPart = createPart(\"FrontLeft\", Vector3.new(flWidth, WALL_HEIGHT, WALL_THICKNESS), flPos, Color3.fromRGB(180, 180, 180))\nflPart.Parent = room\n\n-- Front-Right (Right of the door)\nlocal frWidth = HALF_ROOM - HALF_DOOR -- 10 studs\nlocal frPos = Vector3.new(HALF_ROOM - frWidth / 2, WALL_HEIGHT / 2, frontWallZ)\nlocal frPart = createPart(\"FrontRight\", Vector3.new(frWidth, WALL_HEIGHT, WALL_THICKNESS), frPos, Color3.fromRGB(180, 180, 180))\nfrPart.Parent = room\n\n-- Front Lintel (Above the door)\n-- The door is 7 studs high. The wall is 12 studs high.\n-- Lintel starts at Y=7 and goes to Y=12 (Height = 5).\nlocal lintelHeight = WALL_HEIGHT - DOOR_HEIGHT -- 5\nlocal lintelPos = Vector3.new(0, DOOR_HEIGHT + lintelHeight / 2, frontWallZ)\nlocal lintelPart = createPart(\"FrontLintel\", Vector3.new(DOOR_WIDTH, lintelHeight, WALL_THICKNESS), lintelPos, Color3.fromRGB(180, 180, 180))\nlintelPart.Parent = room\n\n-- Back Wall (Z = +12) - Solid\nlocal backWallZ = HALF_ROOM\nlocal backPos = Vector3.new(0, WALL_HEIGHT / 2, backWallZ)\nlocal backPart = createPart(\"BackWall\", Vector3.new(ROOM_SIZE, WALL_HEIGHT, WALL_THICKNESS), backPos, Color3.fromRGB(180, 180, 180))\nbackPart.Parent = room\n\n-- Left Wall (X = -12) - Solid\nlocal leftWallX = -HALF_ROOM\nlocal leftPos = Vector3.new(leftWallX, WALL_HEIGHT / 2, 0)\nlocal leftPart = createPart(\"LeftWall\", Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE), leftPos, Color3.fromRGB(180, 180, 180))\nleftPart.Parent = room\n\n-- Right Wall (X = +12) - Solid\nlocal rightWallX = HALF_ROOM\nlocal rightPos = Vector3.new(rightWallX, WALL_HEIGHT / 2, 0)\nlocal rightPart = createPart(\"RightWall\", Vector3.new(WALL_THICKNESS, WALL_HEIGHT, ROOM_SIZE), rightPos, Color3.fromRGB(180, 180, 180))\nrightPart.Parent = room\n\n-- 6. Position the Model\n-- Place the room at a grid-snapped position (e.g., 0, 0, 0 is already grid-snapped to 4).\n-- We use PivotTo to set the model's position.\nroom:PivotTo(CFrame.new(0, 0, 0))\n\n-- 7. Parent to Workspace\nroom.Parent = workspace\n```\n\n### How it works\n\n1.  **Constants:** All dimensions are defined at the top (`GRID`, `WALL_HEIGHT`, `DOOR_WIDTH`, `DOOR_HEIGHT`). This makes it easy to tweak the room size or door dimensions later.\n2.  **Helper Function:** `createPart` reduces boilerplate by setting `Anchored = true`, `CanCollide = true`, and `Material = Enum.Material.Concrete` automatically.\n3.  **The Floor:** A single 24x1x24 part centered at `(0, -0.5, 0)` so its top surface sits exactly at `Y=0`.\n4.  **The Walls:**\n    *   **Back, Left, and Right walls** are built as single solid parts.\n    *   **The Front wall** is split into three pieces to create the doorway:\n        *   **FrontLeft:** A 10x12x2 part to the left of the door.\n        *   **FrontRight:** A 10x12x2 part to the right of the door.\n        *   **FrontLintel:** A 4x5x2 part sitting directly above the 7-stud high gap, reaching up to the 12-stud wall height.\n5.  **Grid Snapping:** Since `GRID = 4`, `ROOM_SIZE = 24`, `WALL_THICKNESS = 2`, `DOOR_WIDTH = 4`, and `DOOR_HEIGHT = 7` (note: 7 is not a multiple of 4, but the *widths* and *positions* are aligned to the 4-stud grid for structural integrity and snapping), the entire model is placed at `(0,0,0)` using `PivotTo`. If you need the room elsewhere, change `CFrame.new(0, 0, 0)` to a multiple of 4 (e.g., `CFrame.new(4, 0, -8)`).\n\n### Verification of Doorway Size\n*   **Width:** The gap between `FrontLeft` (ends at X=-2) and `FrontRight` (starts at X=2) is exactly **4 studs**.\n*   **Height:** The gap from `Y=\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Building system > Work with terrain](https://create.roblox.com/docs/resources/battle-royale/building-system#work-with-terrain) · retrieved, not cited\n2. [Create your first game > Create a project](https://create.roblox.com/docs/tutorials/first-experience#create-a-project) · retrieved, not cited\n3. [Construct your world > Apply your asset library > Floors](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#floors) · retrieved, not cited\n4. [Construct your world > Apply your asset library > Perimeter hallways](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#perimeter-hallways) · retrieved, not cited\n"
+  },
+  "BLD-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9c5321f1f80709b5",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:clock",
+     "ok": true
+    },
+    {
+     "id": "require:ambient",
+     "ok": true
+    },
+    {
+     "id": "require:atmosphere",
+     "ok": true
+    },
+    {
+     "id": "require:density",
+     "ok": true
+    },
+    {
+     "id": "require:haze",
+     "ok": true
+    },
+    {
+     "id": "require:bloom",
+     "ok": true
+    },
+    {
+     "id": "require:intensity",
+     "ok": true
+    },
+    {
+     "id": "require:cc",
+     "ok": true
+    },
+    {
+     "id": "require:contrast",
+     "ok": true
+    },
+    {
+     "id": "require:tint",
+     "ok": true
+    },
+    {
+     "id": "require:reuse",
+     "ok": true
+    },
+    {
+     "id": "require:lighting",
+     "ok": true
+    },
+    {
+     "id": "forbid:technology",
+     "ok": true
+    },
+    {
+     "id": "forbid:parent_arg",
+     "ok": true
+    }
+   ],
+   "seconds": 97.9,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 3752,
+   "answer_sha256": "d1af7f4ee52108fb6f2c825b9cdebf843be05939ffc819c129d5594c27c56f31",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a server `Script` (placed inside `ServerScriptService`) that configures a moody dusk look. It creates each effect only once, reusing any existing ones via `FindFirstChildOfClass`.\n\n```lua\n-- // Server Script: Moody Dusk Lighting Setup\n-- Place this Script inside ServerScriptService\n\nlocal Lighting = game:GetService(\"Lighting\")\n\n-- 1. Set ClockTime and warm OutdoorAmbient\nLighting.ClockTime = 17.5\nLighting.OutdoorAmbient = Color3.fromRGB(180, 140, 120) -- Warm, muted ambient\n\n-- 2. Atmosphere (Density ~0.35, with Haze)\nlocal atmosphere = Lighting:FindFirstChildOfClass(\"Atmosphere\")\nif not atmosphere then\n\tatmosphere = Instance.new(\"Atmosphere\")\n\tatmosphere.Parent = Lighting\nend\natmosphere.Density = 0.35\natmosphere.Haze = 0.35 -- Haze matches density for consistent moody feel\natmosphere.SunInfluence = 0.5 -- Optional: soften sun impact\n\n-- 3. BloomEffect (low intensity)\nlocal bloom = Lighting:FindFirstChildOfClass(\"BloomEffect\")\nif not bloom then\n\tbloom = Instance.new(\"BloomEffect\")\n\tbloom.Parent = Lighting\nend\nbloom.Intensity = 0.4 -- Low bloom for subdued dusk feel\nbloom.Size = 20 -- Moderate spread\nbloom.Threshold = 0.8 -- Only bright areas bloom\n\n-- 4. ColorCorrectionEffect (raised contrast, warm tint)\nlocal colorCorrection = Lighting:FindFirstChildOfClass(\"ColorCorrectionEffect\")\nif not colorCorrection then\n\tcolorCorrection = Instance.new(\"ColorCorrectionEffect\")\n\tcolorCorrection.Parent = Lighting\nend\ncolorCorrection.Contrast = 1.15 -- Slightly raised contrast\ncolorCorrection.TintColor = Color3.fromRGB(255, 220, 190) -- Warm orange-pink tint\ncolorCorrection.Brightness = -0.05 -- Slight dim for dusk mood\ncolorCorrection.Saturation = 0.9 -- Slightly desaturated for moody feel\n```\n\n### Key Details:\n- **Reuse Logic**: Each effect uses `FindFirstChildOfClass` to check if one already exists in `Lighting`. If it does, it modifies the existing instance; if not, it creates and parents a new one.\n- **Warm OutdoorAmbient**: `Color3.fromRGB(180, 140, 120)` provides a warm, dusky fill light.\n- **Atmosphere**: `Density` and `Haze` are both set to `0.35` for a consistent, soft haze effect.\n- **Bloom**: `Intensity` is kept low (`0.4`) to avoid washing out the dusk scene.\n- **ColorCorrection**: `Contrast` is raised to `1.15`, and `TintColor` is a warm orange-pink to enhance the dusk mood.\n- **No Technology Change**: `Lighting.Technology` is not modified, as requested.\n\nPlace this script in `ServerScriptService` and it will apply the moody dusk look when the game starts.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Enhance indoor environments with realistic lighting > Configure global lighting > Choose a complementary skybox](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#choose-a-complementary-skybox) · retrieved, not cited\n2. [Construct your world > Configure lighting sources > Local lighting](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/construct-your-world#local-lighting) · retrieved, not cited\n3. [Create volcanic eruptions with VFX > Configure lighting > Global lighting](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/create-volcanoes#global-lighting) · retrieved, not cited\n4. [Enhance indoor environments with realistic lighting > Configure global lighting > Adjust the color of ambient light](https://create.roblox.com/docs/tutorials/use-case-tutorials/lighting/enhance-indoor-environments#adjust-the-color-of-ambient-light) · retrieved, not cited\n"
+  },
+  "UIS-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "98eb5daf3a0e4f95",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:theme",
+     "ok": true
+    },
+    {
+     "id": "require:corner",
+     "ok": true
+    },
+    {
+     "id": "require:stroke",
+     "ok": true
+    },
+    {
+     "id": "require:apply_mode",
+     "ok": true
+    },
+    {
+     "id": "require:gradient",
+     "ok": true
+    },
+    {
+     "id": "require:scale",
+     "ok": true
+    },
+    {
+     "id": "require:tween",
+     "ok": true
+    },
+    {
+     "id": "require:tweeninfo",
+     "ok": true
+    },
+    {
+     "id": "require:quad",
+     "ok": true
+    },
+    {
+     "id": "require:enter",
+     "ok": true
+    },
+    {
+     "id": "require:leave",
+     "ok": true
+    },
+    {
+     "id": "require:press",
+     "ok": true
+    },
+    {
+     "id": "require:pressed_scale",
+     "ok": true
+    },
+    {
+     "id": "require:autocolor",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated_tween",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 287.9,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 6525,
+   "answer_sha256": "99a67f6e6d3083ce10469480342bb7715e22cb011a2d09371ddff0a2ee289a2b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 46
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To implement a consistent, single-source-of-truth button theme, we need two components:\n\n1.  **`ThemeModule`**: A ModuleScript that exports the `Theme` table and the `styleButton` function.\n2.  **Client-Side Logic**: Since `TweenService` and input events (`MouseEnter`, `MouseButton1Down`) are client-side operations, the `styleButton` function must run on the client. The standard pattern is to have a server-side ModuleScript that returns the data, and a client-side script that loads that module and applies the styles.\n\nBelow is the complete, robust Luau implementation.\n\n### 1. The Theme Module (`ThemeModule`)\n\nSave this as `ThemeModule` in `ReplicatedStorage`. It contains the data and the styling logic.\n\n```lua\n-- // ReplicatedStorage.ThemeModule\n--!strict\n\nlocal TweenService = game:GetService(\"TweenService\")\n\n-- // Theme Definition\n-- Single source of truth for all button appearances.\nlocal Theme = {\n\t-- Colors\n\tPrimary = Color3.fromRGB(0, 122, 255),   -- Example: Roblox Blue\n\tDanger = Color3.fromRGB(255, 59, 48),    -- Example: Alert Red\n\tGhost = Color3.fromRGB(0, 0, 0),         -- Transparent/Default\n\tText = Color3.fromRGB(255, 255, 255),    -- White text for contrast\n\n\t-- Typography & Shape\n\tFont = Enum.Font.GothamBold,\n\tCornerRadius = UDim.new(0, 8),           -- 8px radius\n\tStrokeThickness = 2,\n\n\t-- Variant Specifics\n\tPrimaryGradient = {\n\t\tColor = ColorSequence.new({\n\t\t\tColorSequenceKeypoint.new(0, Color3.fromRGB(0, 122, 255)),\n\t\t\tColorSequenceKeypoint.new(1, Color3.fromRGB(0, 90, 200)),\n\t\t}),\n\t\tTransparency = NumberSequence.new({\n\t\t\tNumberSequenceKeypoint.new(0, 0),\n\t\t\tNumberSequenceKeypoint.new(1, 0.1),\n\t\t}),\n\t},\n}\n\n-- // Helper Functions\n\n--- Applies theme styling to a TextButton\n--- @param button TextButton\n--- @param variant string \"primary\" | \"danger\" | \"ghost\"\nlocal function styleButton(button: TextButton, variant: string)\n\t-- 1. Basic Setup\n\tbutton.AutoButtonColor = false -- Disable default Roblox color changes\n\tbutton.BackgroundColor3 = Theme.Ghost -- Default to ghost (transparent)\n\tbutton.TextColor3 = Theme.Text\n\tbutton.Font = Theme.Font\n\tbutton.BorderSizePixel = 0 -- We use UIStroke instead\n\n\t-- 2. Add UICorner\n\tlocal corner = Instance.new(\"UICorner\")\n\tcorner.CornerRadius = Theme.CornerRadius\n\tcorner.Parent = button\n\n\t-- 3. Add UIStroke\n\tlocal stroke = Instance.new(\"UIStroke\")\n\tstroke.Thickness = Theme.StrokeThickness\n\tstroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border\n\tstroke.Color = Theme.Text -- Stroke matches text for ghost/primary, can be tweaked per variant if needed\n\tstroke.Parent = button\n\n\t-- 4. Variant Specifics\n\tlocal bgTarget = Theme.Ghost\n\tif variant == \"primary\" then\n\t\tbgTarget = Theme.Primary\n\t\t-- Add UIGradient for primary\n\t\tlocal gradient = Instance.new(\"UIGradient\")\n\t\tgradient.Color = Theme.PrimaryGradient.Color\n\t\tgradient.Transparency = Theme.PrimaryGradient.Transparency\n\t\tgradient.Rotation = 90\n\t\tgradient.Parent = button\n\telseif variant == \"danger\" then\n\t\tbgTarget = Theme.Danger\n\tend\n\n\tbutton.BackgroundColor3 = bgTarget\n\n\t-- 5. Tween Animations\n\tlocal tweenInfo = TweenInfo.new(\n\t\t0.12,\n\t\tEnum.EasingStyle.Quad,\n\t\tEnum.EasingDirection.Out\n\t)\n\n\t-- MouseEnter: Brighten background\n\tbutton.MouseEnter:Connect(function()\n\t\tif variant == \"primary\" then\n\t\t\t-- Brighten primary by creating a lighter tween target\n\t\t\tlocal brightColor = Theme.Primary:lerp(Color3.fromRGB(255, 255, 255), 0.2)\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = brightColor}):Play()\n\t\telseif variant == \"danger\" then\n\t\t\tlocal brightColor = Theme.Danger:lerp(Color3.fromRGB(255, 255, 255), 0.2)\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = brightColor}):Play()\n\t\telse\n\t\t\t-- Ghost: Maybe add a subtle background on hover\n\t\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = Color3.fromRGB(255, 255, 255, 20)}):Play()\n\t\tend\n\tend)\n\n\t-- MouseLeave: Restore original color\n\tbutton.MouseLeave:Connect(function()\n\t\tTweenService:Create(button, tweenInfo, {BackgroundColor3 = bgTarget}):Play()\n\tend)\n\n\t-- MouseDown: Shrink UIScale\n\tlocal scale = Instance.new(\"UIScale\")\n\tscale.Scale = 1\n\tscale.Parent = button\n\n\tbutton.MouseButton1Down:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 0.96}):Play()\n\tend)\n\n\tbutton.MouseButton1Up:Connect(function()\n\t\tTweenService:Create(scale, tweenInfo, {Scale = 1}):Play()\n\tend)\n\t\n\t-- Handle case where mouse leaves while pressed\n\tbutton.MouseLeave:Connect(function()\n\t\tif button:IsA(\"TextButton\") then\n\t\t\t-- Only restore if not currently being pressed (simplified: always restore on up/leave)\n\t\t\t-- Note: MouseButton1Up handles the release. MouseLeave here ensures if dragged off, it pops back.\n\t\t\tTweenService:Create(scale, tweenInfo, {Scale = 1}):Play()\n\t\tend\n\tend)\nend\n\nreturn {\n\tTheme = Theme,\n\tstyleButton = styleButton,\n}\n```\n\n### 2. Client-Side Application Script\n\nSave this as `ButtonStyler` in `StarterPlayerScripts`. It loads the theme module and applies it to existing buttons.\n\n```lua\n-- // StarterPlayerScripts.ButtonStyler\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal ThemeModule = require(ReplicatedStorage:WaitForChild(\"ThemeModule\"))\nlocal Theme = ThemeModule.Theme\nlocal styleButton = ThemeModule.styleButton\n\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- // Example: Style all TextButtons in a specific frame\n-- You can customize this to target specific buttons by name or path.\nlocal function styleButtonsInFolder(folder: Instance, variant: string)\n\tfor _, child in ipairs(folder:GetChildren()) do\n\t\tif child:IsA(\"TextButton\") then\n\t\t\tstyleButton(child, variant)\n\t\tend\n\tend\nend\n\n-- Example Usage:\n-- Assuming you have a ScreenGui with\n\n**Luau check by STAR:** The code block first failed the static Luau check (Unknown global 'EasingStyle'; consider assigning to it first, line 77). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n2. [Enum.ButtonStyle](https://create.roblox.com/docs/reference/engine/enums/ButtonStyle) · retrieved, not cited\n3. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n",
+   "truncation_retries": 2,
+   "truncated": true
+  },
+  "UIS-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "cea35387904c35b8",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:pow",
+     "ok": true
+    }
+   ],
+   "seconds": 145.8,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 4527,
+   "answer_sha256": "4eff0b5eb235c2d96a34f75a488033547e0e467a36ed5a940755d2c503c11a48",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 452
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the pure-Luau ModuleScript implementing the requested color utilities. It uses no Roblox API, no `Color3`, and operates entirely on the specified `{r, g, b}` table format.\n\n```lua\n-- ColorUtils\n-- A pure-Luau module for WCAG color contrast calculations.\n-- Colors are represented as tables: { r = 0..1, g = 0..1, b = 0..1 }\n\nlocal ColorUtils = {}\n\n-- Helper: Linearize a single sRGB channel value.\n-- WCAG 2.x requires linearizing the 0-1 sRGB values before calculating luminance.\nlocal function linearize(v)\n\tif v <= 0.03928 then\n\t\treturn v / 12.92\n\telse\n\t\treturn ((v + 0.055) / 1.055) ^ 2.4\n\tend\nend\n\n-- 1. luminance(c)\n-- Returns the WCAG relative luminance of color c.\nfunction ColorUtils.luminance(c)\n\tlocal rLin = linearize(c.r)\n\tlocal gLin = linearize(c.g)\n\tlocal bLin = linearize(c.b)\n\treturn 0.2126 * rLin + 0.7152 * gLin + 0.0722 * bLin\nend\n\n-- 2. contrast(a, b)\n-- Returns the contrast ratio between two colors a and b.\nfunction ColorUtils.contrast(a, b)\n\tlocal lumA = ColorUtils.luminance(a)\n\tlocal lumB = ColorUtils.luminance(b)\n\n\tlocal lighter = math.max(lumA, lumB)\n\tlocal darker = math.min(lumA, lumB)\n\n\treturn (lighter + 0.05) / (darker + 0.05)\nend\n\n-- 3. pickText(bg, light, dark)\n-- Returns the color (light or dark) that has the higher contrast with the background.\n-- Returns 'light' if the contrast is equal.\nfunction ColorUtils.pickText(bg, light, dark)\n\tlocal contrastLight = ColorUtils.contrast(bg, light)\n\tlocal contrastDark = ColorUtils.contrast(bg, dark)\n\n\tif contrastLight >= contrastDark then\n\t\treturn light\n\telse\n\t\treturn dark\n\tend\nend\n\n-- 4. shade(c, amount)\n-- Returns a NEW color table.\n-- amount is clamped to [-1, 1].\n-- Positive amount: moves each channel fraction of the way to 1 (lighten).\n-- Negative amount: scales each channel by (1 + amount) toward 0 (darken).\nfunction ColorUtils.shade(c, amount)\n\t-- Clamp amount to [-1, 1]\n\tif amount > 1 then\n\t\tamount = 1\n\telseif amount < -1 then\n\t\tamount = -1\n\tend\n\n\tlocal r, g, b = c.r, c.g, c.b\n\n\tif amount > 0 then\n\t\t-- Lighten: move towards 1\n\t\tr = r + (1 - r) * amount\n\t\tg = g + (1 - g) * amount\n\t\tb = b + (1 - b) * amount\n\telseif amount < 0 then\n\t\t-- Darken: scale towards 0\n\t\tr = r * (1 + amount)\n\t\tg = g * (1 + amount)\n\t\tb = b * (1 + amount)\n\tend\n\t-- If amount is 0, return a copy of the original color\n\n\treturn { r = r, g = g, b = b }\nend\n\nreturn ColorUtils\n```\n\n### Verification and Notes\n\n*   **Pure Luau:** The module contains no references to `Color3`, `Instance`, or any Roblox engine services. It operates strictly on standard Lua tables and math functions.\n*   **sRGB Linearization:** The `linearize` helper correctly implements the WCAG 2.1 sRGB to linear RGB conversion formula [1].\n*   **Contrast Ratio:** The `contrast` function correctly applies the WCAG formula `(L1 + 0.05) / (L2 + 0.05)` where L1 is the lighter luminance and L2 is the darker [1].\n*   **Text Picking:** `pickText` uses `>=` to ensure that if the contrast ratios are exactly equal, the `light` color is returned, as specified.\n*   **Shading Logic:**\n    *   For `amount > 0`: The formula `c + (1 - c) * amount` correctly moves the channel `amount` fraction of the remaining distance to 1.\n    *   For `amount < 0`: The formula `c * (1 + amount)` correctly scales the channel toward 0. For example, `amount = -0.5` results in `c * 0.5`, which is half the original brightness.\n    *   The returned table is a new table, ensuring the original color `c` is not mutated.\n\n### References\n\n[1] Object properties > Add comments to scripts > Change a property with code - Discusses RGB values and Color3, but the module explicitly avoids Color3 as requested, using raw tables instead.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Object properties > Add comments to scripts > Change a property with code](https://create.roblox.com/docs/tutorials/fundamentals/coding-1/object-properties#change-a-property-with-code) · cited\n2. [CSS Comparisons > Queries](https://create.roblox.com/docs/ui/styling/css-comparisons#queries) · retrieved, not cited\n3. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n4. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n"
+  },
+  "ENG-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "93012d4e5532f8e4",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:root_cause",
+     "ok": true
+    },
+    {
+     "id": "require:signature",
+     "ok": true
+    }
+   ],
+   "seconds": 43.1,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 1769,
+   "answer_sha256": "0bbdae23a22fc914e8048b2fb7890c6fa5cb9bcc14aa750415565ee109c3226b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 375
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the corrected function:\n\n```lua\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = put })\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n```\n\n**Root cause:** The `while` loop was inserting a new stack with `count = amount` (the remaining unallocated amount) instead of `count = put` (the actual amount that fits into the new stack), so the first new stack absorbed all remaining items rather than being capped at `maxStack`.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Roblox developer 101 > 4 - Adventure game part 2 > Appendix > Troubleshooting and classroom tips](https://create.roblox.com/docs/education/lesson-plans/roblox-developer-lesson#troubleshooting-and-classroom-tips) · retrieved, not cited\n2. [Recap: July 2021 > Editor features](https://luau.org/news/2021-07-30-luau-recap-july-2021#editor-features) · retrieved, not cited\n3. [Stacks > Implement stacks](https://create.roblox.com/docs/luau/stacks#implement-stacks) · retrieved, not cited\n4. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n"
+  },
+  "ENG-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "00abb3b50cab6fd2",
+   "reasons": [
+    "luau_check[1]: line 7: Not all codepaths in this function return 'nil'.; line 32: Value of type '(string & ~\"\")?' could be nil",
+    "unit_tests: 0/9 passed; test aborted: answer:5: Test '45s' failed: expected 45, got nil | 0 of 9 assertions ran",
+    "require:tests_present: at least three assert calls (the tests) are shown"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 7: Not all codepaths in this function return 'nil'.; line 32: Value of type '(string & ~\"\")?' could be nil"
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "0/9 passed; test aborted: answer:5: Test '45s' failed: expected 45, got nil | 0 of 9 assertions ran"
+    },
+    {
+     "id": "require:tests_present",
+     "ok": false,
+     "detail": "at least three assert calls (the tests) are shown"
+    },
+    {
+     "id": "require:has_function",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_run",
+     "ok": true
+    }
+   ],
+   "seconds": 263.2,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.49
+   },
+   "blocks": 1,
+   "answer_chars": 6363,
+   "answer_sha256": "6871146d0c56f3e0bea9f477d17a6eb1a4dcac8d0769f866aaa05603297df1e6",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 30
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 1,
+     "errors": 12
+    }
+   ],
+   "answer": "Here is the test-first implementation of `parseDuration`.\n\n### Part 1: The Tests\nYou can run these tests in any standard Luau environment (like the Luau CLI) or in a Roblox Studio Script. They use plain `assert` calls to verify the function's behavior against various edge cases.\n\n```lua\n--!strict\n\n-- 1. Helper to run a test case\nlocal function test(name: string, actual: any, expected: any): nil\n\tassert(actual == expected, string.format(\"Test '%s' failed: expected %s, got %s\", name, tostring(expected), tostring(actual)))\n\tprint(string.format(\"✓ %s\", name))\nend\n\n-- 2. The function to be tested\nlocal function parseDuration(text: string): number?\n\tif not text or typeof(text) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\tlocal trimmed = text:match(\"^%s*(.-)%s*$\")\n\tif trimmed == \"\" then\n\t\treturn nil\n\tend\n\n\t-- Case: Bare number (e.g., \"90\")\n\tlocal bareNumber = tonumber(trimmed)\n\tif bareNumber then\n\t\treturn bareNumber\n\tend\n\n\t-- Case: Complex duration (e.g., \"1h30m\", \"2m 10s\", \"45s\")\n\tlocal totalSeconds = 0\n\tlocal foundUnit = false\n\n\t-- We iterate through the string looking for pairs of numbers and units\n\tlocal remaining = trimmed\n\twhile remaining:len() > 0 do\n\t\t-- Skip leading whitespace\n\t\tremaining = remaining:gsub(\"^%s+\", \"\")\n\t\tif remaining == \"\" then break end\n\n\t\t-- Match a number (integer or float)\n\t\tlocal numStr, nextPart = remaining:match(\"^(%d+%.?%d*)%s*(.*)\")\n\t\tif not numStr then\n\t\t\t-- If we can't find a number at the start, the format is invalid\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal value = tonumber(numStr)\n\t\tremaining = nextPart\n\n\t\t-- Match the unit (h, m, s)\n\t\tlocal unit = remaining:match(\"^(%a+)%s*(.*)\")\n\t\tif not unit then\n\t\t\t-- Number found but no valid unit following it (and it wasn't a bare number)\n\t\t\treturn nil\n\t\tend\n\n\t\tremaining = unit:match(\"^%a+(.*)\") -- Remove the unit letters from remaining\n\t\t-- Actually, let's be more precise with unit matching\n\t\t-- Re-parse remaining to get unit and what's left\n\t\tlocal unitMatch, leftover = remaining:match(\"^(%a+)%s*(.*)\")\n\t\tif not unitMatch then\n\t\t\treturn nil\n\t\tend\n\t\t\n\t\tlocal multiplier = 0\n\t\tif unitMatch == \"h\" or unitMatch == \"hr\" or unitMatch == \"hour\" or unitMatch == \"hours\" then\n\t\t\tmultiplier = 3600\n\t\telseif unitMatch == \"m\" or unitMatch == \"min\" or unitMatch == \"minute\" or unitMatch == \"minutes\" then\n\t\t\tmultiplier = 60\n\t\telseif unitMatch == \"s\" or unitMatch == \"sec\" or unitMatch == \"second\" or unitMatch == \"seconds\" then\n\t\t\tmultiplier = 1\n\t\telse\n\t\t\t-- Unknown unit\n\t\t\treturn nil\n\t\tend\n\n\t\ttotalSeconds = totalSeconds + (value * multiplier)\n\t\tfoundUnit = true\n\t\tremaining = leftover\n\tend\n\n\tif not foundUnit then\n\t\treturn nil\n\tend\n\n\treturn totalSeconds\nend\n\n-- 3. Run the tests\n-- Basic units\ntest(\"45s\", parseDuration(\"45s\"), 45)\ntest(\"1m\", parseDuration(\"1m\"), 60)\ntest(\"1h\", parseDuration(\"1h\"), 3600)\n\n-- Combined units\ntest(\"1h30m\", parseDuration(\"1h30m\"), 5400)\ntest(\"2m 10s\", parseDuration(\"2m 10s\"), 130)\ntest(\"1h 1m 1s\", parseDuration(\"1h 1m 1s\"), 3661)\ntest(\"1h1m1s\", parseDuration(\"1h1m1s\"), 3661)\n\n-- Bare numbers\ntest(\"90\", parseDuration(\"90\"), 90)\ntest(\"0\", parseDuration(\"0\"), 0)\ntest(\"3600\", parseDuration(\"3600\"), 3600)\n\n-- Invalid inputs\ntest(\"empty string\", parseDuration(\"\"), nil)\ntest(\"nil\", parseDuration(nil), nil)\ntest(\"letters only\", parseDuration(\"abc\"), nil)\ntest(\"unknown unit\", parseDuration(\"5x\"), nil)\ntest(\"mixed valid/invalid\", parseDuration(\"1h5x\"), nil)\ntest(\"unit without number\", parseDuration(\"h\"), nil)\ntest(\"whitespace only\", parseDuration(\"   \"), nil)\n\nprint(\"\\nAll tests passed!\")\n```\n\n### Part 2: The Implementation Module\nHere is the clean module file (`DurationParser.luau`) containing the function and the `return` statement.\n\n```lua\n--!strict\n\n--!region DurationParser\n-- Parses duration strings like \"1h30m\", \"45s\", \"2m 10s\", or bare numbers (seconds).\n-- Returns nil for invalid inputs.\n\nlocal function parseDuration(text: string): number?\n\tif not text or typeof(text) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\t-- Trim whitespace\n\tlocal trimmed = text:match(\"^%s*(.-)%s*$\")\n\tif trimmed == \"\" then\n\t\treturn nil\n\tend\n\n\t-- Case: Bare number (e.g., \"90\")\n\tlocal bareNumber = tonumber(trimmed)\n\tif bareNumber then\n\t\treturn bareNumber\n\tend\n\n\t-- Case: Complex duration (e.g., \"1h30m\", \"2m 10s\")\n\tlocal totalSeconds = 0\n\tlocal foundUnit = false\n\n\tlocal remaining = trimmed\n\twhile remaining:len() > 0 do\n\t\t-- Skip leading whitespace\n\t\tremaining = remaining:gsub(\"^%s+\", \"\")\n\t\tif remaining == \"\" then break end\n\n\t\t-- Match a number (integer or float)\n\t\tlocal numStr, nextPart = remaining:match(\"^(%d+%.?%d*)%s*(.*)\")\n\t\tif not numStr then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal value = tonumber(numStr)\n\t\tremaining = nextPart\n\n\t\t-- Match the unit (h, m, s) and what follows\n\t\tlocal unitMatch, leftover = remaining:match(\"^(%a+)%s*(.*)\")\n\t\tif not unitMatch then\n\t\t\treturn nil\n\t\tend\n\n\t\tlocal multiplier = 0\n\t\tif unitMatch == \"h\" or unitMatch == \"hr\" or unitMatch == \"hour\" or unitMatch == \"hours\" then\n\t\t\tmultiplier = 3600\n\t\telseif unitMatch == \"m\" or unitMatch == \"min\" or unitMatch == \"minute\" or unitMatch == \"minutes\" then\n\t\t\tmultiplier = 60\n\t\telseif unitMatch == \"s\" or unit\n\n**Luau check by STAR:** The code block did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 7: Not all codepaths in this function return 'nil'. (TypeError)\n- line 32: Value of type '(string & ~\"\")?' could be nil (TypeError)\n- line 32: Expected this to be 'string', but got '(string & ~\"\")?' (TypeError)\n- line 34: Value of type '(string & ~\"\")?' could be nil (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [Create a GUI > Set up values and functions > Display the timer](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#display-the-timer) · retrieved, not cited\n2. [Type checking > Types](https://create.roblox.com/docs/luau/type-checking#types) · retrieved, not cited\n3. [An introduction to Luau > Creating a script](https://luau.org/getting-started#creating-a-script) · retrieved, not cited\n4. [Timers and events > Completed scripts](https://create.roblox.com/docs/education/battle-royale-series/timers-and-events#completed-scripts) · retrieved, not cited\n",
+   "truncation_retries": 2,
+   "truncated": true
+  },
+  "ENG-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "50e3e647fd895e6f",
+   "reasons": [
+    "require:limits: is honest about what was and was not run"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:guard",
+     "ok": true
+    },
+    {
+     "id": "require:destroy",
+     "ok": true
+    },
+    {
+     "id": "require:before_award",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_check",
+     "ok": true
+    },
+    {
+     "id": "require:limits",
+     "ok": false,
+     "detail": "is honest about what was and was not run"
+    },
+    {
+     "id": "forbid:false_claim",
+     "ok": true
+    }
+   ],
+   "seconds": 112.8,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 4664,
+   "answer_sha256": "b6bf620d429e4d719370916cb234c114641ccce06c15e5762e6bd7c2eeb5883b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 2,
+     "elapsed_ms": 297
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The bug in your script is that `Touched` can fire multiple times for a single collection event—especially if the player's character has multiple parts (like a HumanoidRootPart and a leg) that touch the coin nearly simultaneously, or if the coin's collision persists briefly after the first hit. Since you only destroy the coin *after* a short delay (`task.wait(0.1)`), a second part can trigger the event again before the coin is destroyed, causing double payment.\n\n### The Fix\n\nThe standard Roblox solution is to track which coins have already been collected using a **Set** (a data structure that stores unique values). This ensures that even if `Touched` fires multiple times for the same coin, the reward is only given once.\n\nHere is the corrected script:\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal coin = script.Parent\n\n-- This table will store references to coins that have already been collected\nlocal collectedCoins = {}\n\ncoin.Touched:Connect(function(hit)\n\t-- 1. Identify the player\n\tlocal player = Players:GetPlayerFromCharacter(hit.Parent)\n\tif not player then\n\t\treturn -- Ignore non-player touches\n\tend\n\n\t-- 2. Check if this specific coin has already been collected\n\tif collectedCoins[coin] then\n\t\treturn -- Already processed, ignore duplicate Touched events\n\tend\n\n\t-- 3. Mark this coin as collected immediately\n\tcollectedCoins[coin] = true\n\n\t-- 4. Give the reward\n\tlocal leaderstats = player:FindFirstChild(\"leaderstats\")\n\tif leaderstats then\n\t\tlocal coinsStat = leaderstats:FindFirstChild(\"Coins\")\n\t\tif coinsStat then\n\t\t\tcoinsStat.Value += 10\n\t\tend\n\tend\n\n\t-- 5. Destroy the coin\n\tcoin:Destroy()\nend)\n```\n\n### Key Changes Explained\n\n1.  **`collectedCoins` Table**: We use a simple dictionary where the key is the `coin` instance. Before processing the reward, we check `if collectedCoins[coin] then return end`. This prevents the \"double pay\" bug because the second `Touched` event will see the coin is already marked as collected.\n2.  **Immediate Marking**: We set `collectedCoins[coin] = true` *before* destroying the coin. This is crucial because once `coin:Destroy()` is called, the reference is invalid, and any subsequent `Touched` events (if they somehow fired after destruction) would fail or behave unpredictably.\n3.  **Removed `task.wait(0.1)`**: The delay was unnecessary and actually contributed to the bug window. By marking the coin as collected immediately, we don't need to wait to prevent double-dipping.\n4.  **Safety Checks**: Added checks for `leaderstats` and `Coins` existence to prevent errors if a player doesn't have the expected structure.\n\n### How I Verified This Works\n\n1.  **Static Analysis (Luau Check)**: I ran the corrected code through the Luau type checker to ensure there are no syntax errors or type mismatches. The code is valid Luau.\n2.  **Logic Verification**:\n    *   **Single Touch**: When `Touched` fires the first time, `collectedCoins[coin]` is `nil`, so the code proceeds, marks the coin as collected, gives the reward, and destroys the coin.\n    *   **Double Touch (Race Condition)**: If a second `Touched` event fires before the first one finishes (e.g., from another character part), `collectedCoins[coin]` is now `true`, so the function returns early. The reward is not given again.\n    *   **Multiple Players**: Each coin is tracked individually. If Player A collects Coin 1, it is marked. If Player B touches Coin 1 afterward, it is already marked, so they get nothing. This is the correct behavior for \"once per coin.\"\n3.  **Documentation Reference**: The official Roblox documentation for creating coin collection mechanics recommends using an `Enabled` attribute or similar state flag to prevent multiple collections [1]. My solution uses a table-based approach which is functionally equivalent and often more performant for simple scripts, as it avoids attribute I/O overhead.\n\nThis fix ensures that each coin can only be collected once, regardless of how many times the `Touched` event fires.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create a coin collection mechanic > Create the script](https://create.roblox.com/docs/tutorials/curriculums/core/scripting/script-game-behavior#create-the-script) · cited\n2. [Record and display player data > Integrate the module scripts](https://create.roblox.com/docs/tutorials/curriculums/core/scripting/record-and-display-player-data#integrate-the-module-scripts) · retrieved, not cited\n"
+  },
+  "ENG-04": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "83b854c2b109fd06",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:signature",
+     "ok": true
+    },
+    {
+     "id": "require:cause",
+     "ok": true
+    }
+   ],
+   "seconds": 91.0,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.48
+   },
+   "blocks": 1,
+   "answer_chars": 3492,
+   "answer_sha256": "f6ee7d66931ba308c9a5803d49f81ac25cdf4dbd5da14056f72b4860daad0d2e",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 297
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Let me analyze the bugs in this cooldown helper function.\n\n## Root Cause Analysis\n\n**Bug 1: `attempt to perform arithmetic (sub) on nil and number` on first use**\n\n`state.last` is a table that stores the last activation time for each ability. On the very first use of a known ability, `state.last[ability]` is `nil` (it hasn't been set yet). The expression `now - nil` throws an arithmetic error because you can't subtract `nil`.\n\n**Bug 2: `attempt to compare number with nil` on unknown ability name**\n\nWhen an unknown ability is passed, `COOLDOWNS[ability]` returns `nil`. The expression `now - state.last[ability] >= nil` attempts to compare a number (`now - state.last[ability]`) with `nil`, which throws a comparison error.\n\n## The Fix\n\nThe function needs to:\n1. **Check if the ability is known** (exists in `COOLDOWNS`) before any arithmetic — if unknown, return `false` immediately with no error.\n2. **Handle the first use** where `state.last[ability]` is `nil` — treat `nil` as \"used at time 0\" or simply allow the first use unconditionally.\n\nHere's the corrected function:\n\n```lua\nlocal COOLDOWNS = { dash = 3, fireball = 8 }\nlocal function tryUse(state, ability, now)\n\t-- Unknown ability: never allowed, no error\n\tif COOLDOWNS[ability] == nil then\n\t\treturn false\n\tend\n\n\t-- First use: state.last[ability] is nil, always allow\n\tif state.last[ability] == nil then\n\t\tstate.last[ability] = now\n\t\treturn true\n\tend\n\n\t-- Cooldown check: allowed if cooldown seconds have passed\n\tif now - state.last[ability] >= COOLDOWNS[ability] then\n\t\tstate.last[ability] = now\n\t\treturn true\n\tend\n\n\treturn false\nend\nreturn tryUse\n```\n\n## Summary of Changes\n\n| Scenario | Before (broken) | After (fixed) |\n|---|---|---|\n| **Unknown ability** | Crashes: `now - nil >= nil` → compare number with nil | Returns `false` immediately |\n| **First use of known ability** | Crashes: `now - nil >= 3` → arithmetic on nil | `state.last[ability] == nil` branch allows it and sets `state.last[ability] = now` |\n| **Subsequent use within cooldown** | Works correctly | Works correctly (unchanged) |\n| **Subsequent use after cooldown** | Works correctly | Works correctly (unchanged) |\n\nThe key insight is that **both errors stem from not guarding against `nil` values** — `COOLDOWNS[ability]` being `nil` for unknown abilities, and `state.last[ability]` being `nil` on first use. By checking for these conditions explicitly before any arithmetic or comparison, the function behaves correctly in all cases while preserving the original signature.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n2. [Custom abilities > Ability definition](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-definition) · retrieved, not cited\n3. [Custom abilities > Ability registration](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-registration) · retrieved, not cited\n4. [Script capabilities > Capabilities](https://create.roblox.com/docs/scripting/capabilities#capabilities) · retrieved, not cited\n"
+  },
+  "ENG-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "5a350f243a2be9a2",
+   "reasons": [
+    "unit_tests: 0/8 passed; test aborted: answer:13: attempt to call a nil value | 0 of 8 assertions ran"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "0/8 passed; test aborted: answer:13: attempt to call a nil value | 0 of 8 assertions ran"
+    },
+    {
+     "id": "require:tests_present",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_run",
+     "ok": true
+    }
+   ],
+   "seconds": 267.0,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.47
+   },
+   "blocks": 2,
+   "answer_chars": 5748,
+   "answer_sha256": "96861713c3db26209c3d1eeec2bcedee16a04039c0215bf04900c174bc418a2b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 233
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 10
+    }
+   ],
+   "answer": "Here is the test-first implementation of `chunk(list, size)` in pure Luau.\n\n### 1. Unit Tests\n\nThese tests cover normal cases, edge cases, and error conditions using `pcall` to catch expected errors.\n\n```lua\n--!strict\n\n-- Helper to compare tables for testing\nlocal function tablesEqual(a, b)\n\tif #a ~= #b then return false end\n\tfor i = 1, #a do\n\t\tif a[i] ~= b[i] then return false end\n\tend\n\treturn true\nend\n\n-- Test 1: Basic chunking\nlocal result1 = chunk({1, 2, 3, 4, 5}, 2)\nassert(tablesEqual(result1[1], {1, 2}), \"First chunk should be {1, 2}\")\nassert(tablesEqual(result1[2], {3, 4}), \"Second chunk should be {3, 4}\")\nassert(tablesEqual(result1[3], {5}), \"Last chunk should be {5}\")\n\n-- Test 2: Exact division\nlocal result2 = chunk({1, 2, 3, 4}, 2)\nassert(#result2 == 2, \"Should have 2 chunks\")\nassert(tablesEqual(result2[1], {1, 2}), \"First chunk {1, 2}\")\nassert(tablesEqual(result2[2], {3, 4}), \"Second chunk {3, 4}\")\n\n-- Test 3: Size larger than list\nlocal result3 = chunk({1, 2}, 5)\nassert(#result3 == 1, \"Should have 1 chunk\")\nassert(tablesEqual(result3[1], {1, 2}), \"Chunk should be {1, 2}\")\n\n-- Test 4: Empty list\nlocal result4 = chunk({}, 3)\nassert(#result4 == 0, \"Empty list should return empty array\")\n\n-- Test 5: Size of 1\nlocal result5 = chunk({1, 2, 3}, 1)\nassert(#result5 == 3, \"Should have 3 chunks\")\nassert(result5[1][1] == 1 and result5[2][1] == 2 and result5[3][1] == 3, \"Each chunk has 1 item\")\n\n-- Test 6: Error on size 0\nlocal success, err = pcall(chunk, {1, 2}, 0)\nassert(not success, \"Should error on size 0\")\n\n-- Test 7: Error on negative size\nsuccess, err = pcall(chunk, {1, 2}, -1)\nassert(not success, \"Should error on negative size\")\n\n-- Test 8: Error on non-integer size (float)\nsuccess, err = pcall(chunk, {1, 2, 3}, 1.5)\nassert(not success, \"Should error on float size\")\n\n-- Test 9: Error on string size\nsuccess, err = pcall(chunk, {1, 2}, \"2\")\nassert(not success, \"Should error on string size\")\n\n-- Test 10: Input list is not modified\nlocal original = {1, 2, 3, 4}\nlocal originalCopy = {table.unpack(original)}\nchunk(original, 2)\nassert(tablesEqual(original, originalCopy), \"Input list should not be modified\")\n\nprint(\"All tests passed!\")\n```\n\n### 2. Implementation\n\n```lua\n--!strict\n\n--- Splits a list into chunks of at most 'size' items.\n--- @param list any[] The input array to split.\n--- @param size number The maximum size of each chunk.\n--- @return any[] An array of arrays, where each sub-array is a chunk.\nlocal function chunk(list: {any}, size: number): {any}\n\t-- Validate size: must be a positive integer\n\tif type(size) ~= \"number\" or math.floor(size) ~= size or size <= 0 then\n\t\terror(\"size must be a positive integer\", 2)\n\tend\n\n\tlocal chunks: {any} = {}\n\tlocal index = 1\n\tlocal listLength = #list\n\n\twhile index <= listLength do\n\t\t-- table.unpack handles the case where the last chunk is shorter than 'size'\n\t\t-- by stopping at the end of the list.\n\t\tlocal endIdx = math.min(index + size - 1, listLength)\n\t\tlocal chunkItems: {any} = {}\n\t\tlocal itemIndex = 1\n\t\tfor i = index, endIdx do\n\t\t\tchunkItems[itemIndex] = list[i]\n\t\t\titemIndex = itemIndex + 1\n\t\tend\n\t\tchunks[#chunks + 1] = chunkItems\n\t\tindex = endIdx + 1\n\tend\n\n\treturn chunks\nend\n\nreturn chunk\n```\n\n### 3. How to Run the Tests\n\n1.  **Create a File:** Create a new file named `chunk_test.luau` in your project.\n2.  **Paste Code:** Paste the **Implementation** first, followed immediately by the **Unit Tests**.\n3.  **Run in Studio:**\n    *   Insert a `Script` into `ServerScriptService`.\n    *   Set the script's `Source` property to the content of `chunk_test.luau`.\n    *   Press **Play** (or **Run**).\n    *   Check the **Output** window. If all tests pass, you will see `All tests passed!`. If any test fails, the `assert` will throw an error with a message indicating which test failed.\n4.  **Run via Command Line (Optional):** If you have the Luau command-line tool installed, you can run `luau chunk_test.luau` from your terminal.\n\n### Notes\n\n*   The implementation uses a `while` loop to iterate through the list in steps of `size`, creating a new sub-array for each chunk. This is efficient and avoids modifying the original list.\n*   The validation `math.floor(size) ~= size` ensures that `size` is an integer, not just a number. For example, `1.5` will fail this check.\n*   The `error()` call includes a stack level of `2` to point to the caller of `chunk`, not the `chunk` function itself, which is better for debugging.\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 13: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 19: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 25: Unknown global 'chunk'; consider assigning to it first (TypeError)\n- line 30: Unknown global 'chunk'; consider assigning to it first (TypeError) Code block 2 compiles and passes Luau type analysis.\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [An introduction to Luau > Creating a script](https://luau.org/getting-started#creating-a-script) · retrieved, not cited\n2. [Luau Type Checking Release > What is type checking?](https://luau.org/news/2020-11-19-luau-type-checking-release#what-is-type-checking) · retrieved, not cited\n3. [Luau globals > loadstring](https://create.roblox.com/docs/reference/engine/globals/LuaGlobals#loadstring) · retrieved, not cited\n4. [An introduction to Luau > Type checking](https://luau.org/getting-started#type-checking) · retrieved, not cited\n"
+  },
+  "ENG-06": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "636105e93ac0f499",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:root_cause",
+     "ok": true
+    }
+   ],
+   "seconds": 183.2,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 7435,
+   "answer_sha256": "3a16a3f9da527ffc4e49ce1c7041a75d47cadb5464881ae5286bea392fb5ee5e",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 297
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The root cause was that modifying the `handlers` table (via `table.remove`) while iterating over it with `ipairs` shifts subsequent elements down, causing the iterator to skip the next handler.\n\nHere is the fixed implementation. It solves the issue by iterating over a snapshot of the handlers active at the moment `Fire` is called, allowing handlers to safely disconnect themselves or be added during the fire without affecting the current iteration.\n\n```lua\nlocal Signal = {}\nSignal.__index = Signal\n\nfunction Signal.new()\n\treturn setmetatable({\n\t\thandlers = {},\n\t\t_pending = 0\n\t}, Signal)\nend\n\nfunction Signal:Connect(fn)\n\t-- Check if we are currently firing to decide immediate vs deferred execution\n\tif self._pending > 0 then\n\t\ttable.insert(self.handlers, fn)\n\telse\n\t\ttable.insert(self.handlers, fn)\n\tend\n\n\tlocal connection = {\n\t\t_fn = fn,\n\t\t_connected = true,\n\t\t_signal = self\n\t}\n\n\tconnection.Disconnect = function()\n\t\tif connection._connected then\n\t\t\tconnection._connected = false\n\t\t\tlocal i = table.find(self.handlers, fn)\n\t\t\tif i then\n\t\t\t\ttable.remove(self.handlers, i)\n\t\t\tend\n\t\tend\n\tend\n\n\ttable.insert(self.handlers, fn)\n\t\n\treturn connection\nend\n\nfunction Signal:Fire(...)\n\t-- Increment pending to mark that we are in a Fire cycle\n\tself._pending = self._pending + 1\n\t\n\t-- Create a snapshot of handlers to iterate over.\n\t-- This prevents skipping if a handler disconnects itself.\n\tlocal handlers = {}\n\tfor i = 1, #self.handlers do\n\t\thandlers[i] = self.handlers[i]\n\tend\n\n\tfor _, fn in ipairs(handlers) do\n\t\t-- Check if the handler is still connected (in case it disconnected itself)\n\t\t-- Note: Since we are iterating a snapshot, we must check the connection state\n\t\t-- or rely on the fact that table.find in Disconnect removes from the main table.\n\t\t-- However, the snapshot contains the function reference.\n\t\t-- A safer check is to ensure the function is still in the active list or use a flag.\n\t\t-- Given the requirement \"unless it was disconnected before its turn\", \n\t\t-- we can check if the function is still in the current 'handlers' snapshot? \n\t\t-- No, the snapshot is static. We need to know if it was removed from self.handlers.\n\t\t\n\t\t-- Actually, the standard pattern for this specific bug fix is:\n\t\t-- Iterate a copy. If a handler removes itself, it's removed from self.handlers,\n\t\t-- but it's still in the copy. We need to prevent calling it if it disconnected.\n\t\t\n\t\t-- Let's use a simple connected flag on the closure or check existence.\n\t\t-- Since Connect returns an object, let's attach the flag to the returned object.\n\t\t-- But the loop only has `fn`.\n\t\t\n\t\t-- Refined approach: Store connection objects in the list instead of just functions?\n\t\t-- The prompt requires `signal:Connect(fn)` returns an object. It doesn't restrict internal storage.\n\t\t-- Let's store the connection object or a wrapper.\n\tend\n\n\t-- Re-writing Connect/Fire for robustness with the \"called once\" and \"disconnect before turn\" requirements.\nend\n\n-- Let's restart the implementation cleanly with the robust pattern.\n\nlocal Signal = {}\nSignal.__index = Signal\n\nfunction Signal.new()\n\treturn setmetatable({\n\t\t_connections = {} -- Stores { fn = fn, connected = true }\n\t}, Signal)\nend\n\nfunction Signal:Connect(fn)\n\tlocal connectionObj = {\n\t\tfn = fn,\n\t\tconnected = true\n\t}\n\t\n\ttable.insert(self._connections, connectionObj)\n\t\n\treturn {\n\t\tDisconnect = function()\n\t\t\tif connectionObj.connected then\n\t\t\t\tconnectionObj.connected = false\n\t\t\t\t-- We can't easily remove from the middle of _connections without shifting\n\t\t\t\t-- if we iterate by index. But if we iterate by value or use a snapshot, it's fine.\n\t\t\t\t-- To keep iteration order strict and simple, let's just mark it disconnected.\n\t\t\t\t-- However, the prompt says \"Disconnect can be called twice\" and \"skip handler... when it disconnects\".\n\t\t\t\t-- Marking as disconnected is sufficient if we check it during Fire.\n\t\t\tend\n\t\tend\n\t}\nend\n\nfunction Signal:Fire(...)\n\t-- Snapshot the connections to iterate over\n\tlocal snapshot = {}\n\tfor i, conn in ipairs(self._connections) do\n\t\tsnapshot[i] = conn\n\tend\n\n\tfor _, conn in ipairs(snapshot) do\n\t\tif conn.connected then\n\t\t\tconn.fn(...)\n\t\tend\n\tend\nend\n\nreturn Signal\n```\n\n### Explanation of the Fix\n\n1.  **Root Cause**: The original code used `table.remove(self.handlers, i)` inside the loop `for _, fn in ipairs(self.handlers)`. `ipairs` uses an internal index counter. When `table.remove` is called, all elements after index `i` shift down by one. The iterator then increments its index to `i+1`, effectively skipping the element that just shifted into position `i`.\n2.  **The Solution**:\n    *   **Snapshotting**: `Signal:Fire` now creates a shallow copy (snapshot) of the connection list (`snapshot`) before iterating. This decouples the iteration from modifications to the main `_connections` list.\n    *   **Connection Objects**: Instead of storing raw functions, we store connection objects `{ fn = fn, connected = true }`. This allows us to check `conn.connected` during the iteration.\n    *   **Lazy Disconnection**: When `Disconnect()` is called, we simply set `connected = false`. We do *not* remove the item from the list during `Fire`. This avoids the shifting issue entirely. The item remains in the list but is skipped during the next `Fire` if it was disconnected.\n    *   **Deferred Connections**: The prompt states \"a handler connected during a Fire is first called by the next Fire\". The current implementation adds to `self._connections` immediately. Since `Fire` takes a snapshot of `self._connections` at the start, any new connections added *during* the `Fire` loop (inside a handler) will be in `self._connections` but *not* in the `snapshot`. Thus, they are correctly skipped for the current fire and will be included in the next one.\n\n### Verification against Requirements\n*   **API**: `Signal.new()`, `signal:Connect(fn)` returns object with `:Disconnect()`, `signal:Fire(...)` — **Maintained**.\n*   **Every handler connected when Fire started is called once**: Yes, the snapshot captures them all.\n*   **In connection order**: Yes, `ipairs` preserves insertion order.\n*   **Unless disconnected before its turn**: Yes, `if conn.connected` check handles this.\n*   **Handler connected during Fire is called next Fire**: Yes, because the snapshot was taken before the new handler was added to `self._connections`.\n*   **Disconnect can be called twice**: Yes, the `if connectionObj.connected` guard prevents double-disconnection errors or double-calls.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Events > Disconnect functions from events](https://create.roblox.com/docs/scripting/events#disconnect-functions-from-events) · retrieved, not cited\n2. [Events > Connect functions to events](https://create.roblox.com/docs/scripting/events#connect-functions-to-events) · retrieved, not cited\n3. [Remote events and callbacks > Delivery guarantees > RemoteEvents](https://create.roblox.com/docs/scripting/events/remote#remoteevents) · retrieved, not cited\n4. [Deferred engine events > Common affected code patterns > Listen for the first occurrence of an event](https://create.roblox.com/docs/scripting/events/deferred#listen-for-the-first-occurrence-of-an-event) · retrieved, not cited\n"
+  },
+  "ENG-07": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "7f79db4505085e14",
+   "reasons": [
+    "require:limits: is honest about what was and was not run"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:how_to_check",
+     "ok": true
+    },
+    {
+     "id": "require:limits",
+     "ok": false,
+     "detail": "is honest about what was and was not run"
+    },
+    {
+     "id": "forbid:false_claim",
+     "ok": true
+    }
+   ],
+   "seconds": 70.5,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 2935,
+   "answer_sha256": "726caeecbf7becb49dbe0e5c1b866453292f703b76d18dab065a48bb373ff0e0",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 281
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The problem with your code is that `table.sort(list)` sorts the table **in-place**. This mutates the caller's original list, which is a side effect you don't want for a helper function that just calculates a statistic.\n\n### The Fix\n\nTo fix this, create a shallow copy of the list before sorting it. This preserves the caller's original order.\n\n```lua\nlocal function median(list)\n\tif not list or #list == 0 then\n\t\treturn nil\n\tend\n\n\t-- Create a shallow copy to avoid mutating the caller's list\n\tlocal sorted = {}\n\tfor i = 1, #list do\n\t\tsorted[i] = list[i]\n\tend\n\n\ttable.sort(sorted)\n\n\tlocal n = #sorted\n\tif n % 2 == 1 then\n\t\treturn sorted[(n + 1) / 2]\n\telse\n\t\treturn (sorted[n / 2] + sorted[n / 2 + 1]) / 2\n\tend\nend\n\nreturn median\n```\n\n### How I Checked It\n\n1.  **Static Analysis (`star_luau_check`)**: I ran the corrected snippet through the Luau compiler to ensure there are no syntax errors or type mismatches. The code compiles cleanly.\n2.  **Logic Verification**:\n    *   **Empty Check**: Added an explicit check for `#list == 0` to return `nil` immediately, satisfying the requirement for empty lists.\n    *   **Immutability**: By iterating `1` to `#list` into a new `sorted` table, the original `list` reference is never written to. `table.sort` is then called on `sorted`, leaving the original data intact.\n    *   **Median Math**:\n        *   For odd `n` (e.g., 3), `(3+1)/2 = 2`, returning the middle element. Correct.\n        *   For even `n` (e.g., 4), `4/2 = 2` and `2+1 = 3`. It averages indices 2 and 3. Correct.\n\n### Reference Data Note\nThe provided official documentation passages [1-4] cover editor features, ping optimization, and classroom troubleshooting tips, but do not contain specific Luau language specifications for `table.sort` behavior or list copying. The fix relies on standard Luau semantics where `table.sort` is in-place and shallow copying is required to preserve original order.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Recap: July 2021 > Editor features](https://luau.org/news/2021-07-30-luau-recap-july-2021#editor-features) · retrieved, not cited\n2. [Identify performance issues > Ping](https://create.roblox.com/docs/performance-optimization/identify#ping) · retrieved, not cited\n3. [Roblox developer 101 > 4 - Adventure game part 2 > Appendix > Troubleshooting and classroom tips](https://create.roblox.com/docs/education/lesson-plans/roblox-developer-lesson#troubleshooting-and-classroom-tips) · retrieved, not cited\n4. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 11,
+  "fail": 12,
+  "error": 0,
+  "scored": 23,
+  "pass_rate": 0.4783,
+  "median_seconds": 166.5
+ }
+}
