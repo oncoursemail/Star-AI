@@ -16,7 +16,7 @@ This folder is the source of truth. Nothing in it names a server: the address co
 | `deploy.sh` | copy this folder to the server; `--install` also installs the units |
 | `install-service.sh` | runs as root in the container: Luau tools, systemd units |
 | `star-knowledge.service` | the HTTP service on port 8091 |
-| `star-knowledge-study.service` | the study job (started by hand, resumable) |
+| `star-knowledge-study.service` | the study job (experimental, not installed by `install-service.sh`; see `starkb/study.py`) |
 | `star-knowledge-refresh.service` / `.timer` | the nightly refresh (10:00 UTC) |
 | `eval/questions.jsonl` | 30 development questions (tune on these) |
 | `eval/heldout.jsonl` | 40 held-out questions (never tune on these) |
@@ -51,8 +51,12 @@ $PY -m starkb refresh                  # what the nightly timer runs
 $PY -m starkb api-coverage             # every reference symbol through api-lookup
 ```
 
-Units: `systemctl start --no-block star-knowledge-study`, `systemctl stop star-knowledge-study` (finishes the chunk in
-flight), `systemctl start star-knowledge-refresh`, `systemctl list-timers star-knowledge-refresh.timer`.
+Units: `systemctl start star-knowledge-refresh` (one run now), `systemctl list-timers star-knowledge-refresh.timer`.
+The study job is not installed. Measured with 286 chunks studied, the generated questions did not improve retrieval,
+so search ignores them (`STAR_KB_QUESTIONS=1` turns them on) and the unit file is only kept for further experiments.
+
+`POST /search` takes an optional `per_page` (1..3, default 2): how many passages one page may contribute. With 1 a
+short reply covers more pages (held-out questions: expected page in the top 5 for 37 instead of 35 of 40).
 
 ## Rules the background jobs keep
 

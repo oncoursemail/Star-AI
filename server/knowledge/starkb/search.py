@@ -34,7 +34,7 @@ BM25_QUESTION_WEIGHT = 2.0          # generated questions, weighted like a headi
 BASE_COLUMNS = "{title heading idents text}"   # FTS5 column filter: match outside the questions column only
 # A query and a generated question are both embedded with the query prompt, so their cosine runs
 # higher than query-to-passage cosine. The question score is scaled before it competes with the
-# passage score; the value was chosen on the 30 development questions (see docs/agents/knowledge-study.md).
+# passage score. On the development questions 0.8-0.9 were the best of 0.7 / 0.8 / 0.9 / 1.0 (286 chunks studied).
 QUESTION_SCALE = float(os.environ.get("STAR_KB_QUESTION_SCALE", "0.85"))
 # Long task prompts ("write a script that does A, B and C") ask for several things at once and one
 # query vector cannot be near all of them. With facets on, a query of FACET_MIN_CHARS or more is

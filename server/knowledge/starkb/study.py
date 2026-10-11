@@ -1,5 +1,11 @@
 """Study job ("doc2query"): the server reads its own documentation index while it is idle.
 
+STATUS: experimental and switched off. Measured on 2026-10-11 with 286 chunks studied (832
+questions), every search mode compared with and without the questions on three question sets:
+recall@5 moved by at most one question in either direction, and MRR went up on the development
+set but down on the held-out set. Search therefore ignores the questions unless
+STAR_KB_QUESTIONS=1, and the unit is not installed. `eval/study_effect.py` repeats the measurement.
+
 For each chunk the small fast model (`star-quick`, an alias of `star-voice`) writes two or three
 short questions a developer might type that this chunk answers. The questions are stored linked
 to the chunk by its text hash (so they survive an index rebuild and are only regenerated when the

@@ -11,10 +11,9 @@
 #     existing build in /opt/star/bench/tools/luau into /opt/star/knowledge/tools and records
 #     the Luau source revision in tools/VERSION (no compiling, no downloads);
 #   * installs /etc/systemd/system/star-knowledge.service and enables + (re)starts it.
-#   * installs the units of the two background jobs: star-knowledge-study.service (doc2query,
-#     not started here) and star-knowledge-refresh.service + .timer (nightly, timer enabled).
+#   * installs the nightly refresh: star-knowledge-refresh.service + .timer (timer enabled).
 # It does not touch star-brain, /opt/star/config, /opt/star/models or the index.
-# Uninstall: systemctl disable --now star-knowledge star-knowledge-refresh.timer star-knowledge-study
+# Uninstall: systemctl disable --now star-knowledge star-knowledge-refresh.timer
 #            rm /etc/systemd/system/star-knowledge*.service /etc/systemd/system/star-knowledge-refresh.timer
 set -eu
 HOME_DIR=/opt/star/knowledge
@@ -41,9 +40,11 @@ if [ -d "$LUAU_BUILD/.git" ]; then
 fi
 
 install -o root -g root -m 0644 "$HOME_DIR/app/$UNIT" "/etc/systemd/system/$UNIT"
-# The background jobs: installed, never started here. The refresh timer is enabled; the study job
-# is started by the owner (systemctl start --no-block star-knowledge-study).
-for extra in star-knowledge-study.service star-knowledge-refresh.service star-knowledge-refresh.timer; do
+# The nightly refresh: installed and its timer enabled, never started here.
+# The study job (star-knowledge-study.service) is NOT installed: measured on 2026-10-11 it did not
+# improve retrieval (see starkb/study.py). To run the experiment further, copy that unit to
+# /etc/systemd/system by hand and `systemctl start --no-block star-knowledge-study`.
+for extra in star-knowledge-refresh.service star-knowledge-refresh.timer; do
   install -o root -g root -m 0644 "$HOME_DIR/app/$extra" "/etc/systemd/system/$extra"
 done
 systemctl daemon-reload
