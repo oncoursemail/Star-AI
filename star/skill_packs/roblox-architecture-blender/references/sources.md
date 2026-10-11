@@ -1,6 +1,6 @@
 # Grounding sources for roblox-architecture-blender
 
-Reviewed public Creator Hub pages on 2026-10-11; API names **not verified with the knowledge service /api-lookup** in this change. The official public docs below support the cited workflows, not the aesthetic quality of generated meshes.
+Reviewed public Creator Hub pages on 2026-10-11; API names not yet verified by STAR Knowledge /api-lookup in this change. The official public docs below support the cited workflows, not the aesthetic quality of generated meshes.
 
 - Blender / Studio unit, axis and export settings: https://create.roblox.com/docs/art/blender
 - Importing DCC assets: https://create.roblox.com/docs/art/overview-dcc
