@@ -87,13 +87,20 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
  });return()=>{live=false}},[invoke])
  const {testing,report,run}=useServerTest(invoke,disabled)
  useEffect(()=>{
-   if(!report?.ok||draft.provider==='star_server')return
+   if(!report)return
+   const tested=testedSettings.current
+   testedSettings.current=null
+   if(!report.ok||draft.provider==='star_server'||!tested)return
+   if(draft.server_endpoint!==tested.server_endpoint||draft.model!==tested.model){
+     setNote('Server settings changed during the test. Test again before connecting.')
+     return
+   }
    const next:AppSettings={...draft,provider:'star_server'}
    void invoke('saveSettings',{settings:next}).then(saved=>{
      if(saved){onChange(next);setNote('Connected to STAR Server.')}
      else setNote('Server responded, but settings could not be saved.')
    })
- },[report])
+ },[report,draft,onChange,invoke])
  const hasKey=keyStored??Boolean(credentials?.star_server)
  const change=(patch:Partial<AppSettings>)=>onChange({...draft,...patch})
  const saveKey=async()=>{
