@@ -3,10 +3,10 @@ import re
 
 _REDACTED = "[REDACTED]"
 _PATTERNS = (
-    re.compile(r"(?i)\\bBearer\\s+[^\\s,;\\\"']+"),
-    re.compile(r"(?i)\\b(?:key|api_key|access_token|token|password|secret)\\s*=\\s*[^\\s&;\\\"']+"),
-    re.compile(r"(?i)\\b(?:https?|wss?)://[^\\s/@]+:[^\\s/@]+@"),
-    re.compile(r"\\bsk-[A-Za-z0-9_-]{20,}\\b"),
+    re.compile(r"(?i)\bBearer\s+[^\s,;\\"']+"),
+    re.compile(r"(?i)\b(?:key|api_key|access_token|token|password|secret)\s*=\s*[^\s&;\\"']+"),
+    re.compile(r"(?i)\b(?:https?|wss?)://[^\s/@]+:[^\s/@]+@"),
+    re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
 )
 
 
