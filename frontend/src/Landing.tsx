@@ -4,7 +4,8 @@
  */
 import {Suspense,useEffect,useMemo,useRef,useState} from 'react'
 import {ArrowDown,ArrowUpRight,Github,Menu,X} from 'lucide-react'
-import {StarConstruction,StarLockup,StarMark} from './SiteBrand'
+import {StarLockup,StarMark} from './SiteBrand'
+import {SiteMascotHero,SiteMascotMeet,SiteMascotFooter} from './SiteMascot'
 import {SiteShowcase} from './SiteShowcase'
 import {SiteChapters,SiteLimits} from './SiteChapters'
 import {SiteProgress} from './SiteProgress'
@@ -103,7 +104,7 @@ export function Landing(){
       </ul>
      </div>
      <div className="sw-hero-side">
-     <StarConstruction/>
+     <SiteMascotHero/>
      <dl className="sw-spec sw-enter" style={delay(240)} aria-label="Current release">
       <div><dt>Release</dt><dd>{latest?<a href={latest.url} target="_blank" rel="noopener noreferrer">{latest.tag}</a>:'See GitHub'}</dd></div>
       <div><dt>Published</dt><dd>{latest?formatDate(latest.publishedAt):'unavailable'}</dd></div>
@@ -118,6 +119,7 @@ export function Landing(){
 
    {/* Each boundary hydrates as its own task, so the prerendered page never blocks input for long. */}
    <Suspense><SiteShowcase latest={latest}/></Suspense>
+   <SiteMascotMeet/>
    <Suspense><SiteChapters latest={latest} setupSize={files.setup?.size??null}/></Suspense>
    <Suspense><SiteProgress progress={progress}/></Suspense>
    <Suspense><SiteLimits/></Suspense>
@@ -130,6 +132,7 @@ export function Landing(){
      <span className="sw-footer-mark"><StarMark size={22}/><strong>STAR Intelligence</strong></span>
      <p>A local-first AI workspace for Windows. Built in the open.</p>
      <p className="sw-fine">This site sets no cookies and runs no analytics. Repository data comes from GitHub's public API.</p>
+     <SiteMascotFooter/>
     </div>
     <nav aria-label="Product">
      <h2>Product</h2>
