@@ -275,6 +275,16 @@ def digest_once(settings, home: Path, project: str, *, cancel_event=None, minimu
             metrics.close()
 
 
+def may_start_automatic(report, *, turn_running: bool, voice_call: bool) -> bool:
+    """Whether the automatic run may start once the warm-up after a turn has finished.
+
+    Not while a turn is running, not when a real request cancelled the warm-up, and not
+    during a voice call: on a STAR Server the spare model is the one that speaks in the call,
+    and a call sends no bridge action that would cancel a summary started after it began.
+    """
+    return not (turn_running or voice_call or (report or {}).get("cancelled"))
+
+
 class Digester:
     """At most one digest at a time, on a daemon thread of its own. `cancel()` returns at once."""
 

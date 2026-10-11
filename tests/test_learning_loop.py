@@ -1196,3 +1196,19 @@ def test_a_summary_is_not_counted_as_a_second_captured_lesson(tmp_path):
     finally:
         store.close()
         metrics.close()
+
+
+def test_the_automatic_summary_does_not_start_during_a_voice_call():
+    """On a STAR Server the spare model of the summary step is the model that speaks in a voice
+    call. A call started while the warm-up was still running sends no further bridge action,
+    so nothing would cancel a summary that starts when the warm-up ends."""
+    assert digest.may_start_automatic({"primed": True}, turn_running=False, voice_call=False) is True
+    assert digest.may_start_automatic(None, turn_running=False, voice_call=False) is True
+    assert digest.may_start_automatic({"primed": True}, turn_running=False, voice_call=True) is False
+    assert digest.may_start_automatic({"primed": True}, turn_running=True, voice_call=False) is False
+    assert digest.may_start_automatic({"primed": False, "cancelled": True}, turn_running=False, voice_call=False) is False
+    import inspect
+    from star import react_shell
+    source = inspect.getsource(react_shell.launch)
+    assert "may_start_automatic(report,turn_running=self.active_task,voice_call=self._in_voice_call())" in source
+    assert "self.voice.handle('voiceStatus',{}).get('inCall')" in source

@@ -36,7 +36,7 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
-from .lesson_digest import Digester
+from .lesson_digest import Digester, may_start_automatic
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -489,9 +489,13 @@ def launch():
         def _digest_when_idle(self, report=None):
             """After a turn and its cache warm-up: let the fast model reword raw captures into
             candidate lessons. Not a turn, never trusted output, and any real request stops it."""
-            if self.active_task or (report or {}).get('cancelled'):
+            if not may_start_automatic(report,turn_running=self.active_task,voice_call=self._in_voice_call()):
                 return
             self.digester.start(self._digest_target)
+
+        def _in_voice_call(self):
+            try:return bool(self.voice.handle('voiceStatus',{}).get('inCall'))
+            except Exception:return False
 
         def _save_voice_turn(self, user_text: str, reply_text: str):
             # A call shows up in the active chat like typed messages do.
