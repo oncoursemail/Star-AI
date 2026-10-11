@@ -41,6 +41,24 @@ async function say(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.keyboard('{Enter}')
 }
 
+describe('image requests directly in chat', () => {
+  it('routes a picture request into the existing image action, preserving the typed message', async () => {
+    const user = await openChat()
+    await say(user, 'Generate an image of a dog')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt:'a dog',display_prompt:'Generate an image of a dog'})
+    expect(seen('Generate an image of a dog')).toHaveLength(1)
+    expect(stopButton()).not.toBeNull()
+  })
+  it('keeps requests for Roblox ImageLabel code in the text model', async () => {
+    const user = await openChat()
+    await say(user, 'how do I generate an ImageLabel in Roblox')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+})
+
 describe('sending a message', () => {
   it('sends the typed text once, shows it immediately and clears the composer', async () => {
     const user = await openChat()
