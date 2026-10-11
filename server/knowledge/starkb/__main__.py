@@ -93,6 +93,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="comma list; flags: +q (generated questions), +fallback, +rerank")
     p.add_argument("--scope-file", type=Path, help="text hashes: search only these chunks (subset experiments)")
     p.add_argument("--question-scale", type=float, help="override search.QUESTION_SCALE for this run")
+    p.add_argument("--per-doc", type=int, default=2, help="passages allowed from one page (the service uses 2)")
     p.add_argument("--scope-embedded", action="store_true",
                    help="restrict every mode to chunks that have an embedding (subset experiments)")
     p.add_argument("--out", type=Path)
@@ -217,7 +218,8 @@ def main(argv: list[str] | None = None) -> int:
         from .evaluate import run_eval
         result = run_eval(args.db, args.questions, [m.strip() for m in args.modes.split(",") if m.strip()],
                           scope_embedded=args.scope_embedded, rerank_n=args.rerank_n,
-                          scope_file=args.scope_file, question_scale=args.question_scale)
+                          scope_file=args.scope_file, question_scale=args.question_scale, per_doc=args.per_doc,
+                          reuse_query_vectors=True)
         text = json.dumps(result, indent=2, ensure_ascii=False)
         if args.out:
             args.out.parent.mkdir(parents=True, exist_ok=True)

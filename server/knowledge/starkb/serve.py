@@ -2,7 +2,7 @@
 
   GET  /health                       liveness, index counts, source commits            (no key)
   GET  /stats                        index and request counters                         (Bearer key)
-  POST /search      {query, mode?, top?}        cited passages from the official docs   (Bearer key)
+  POST /search      {query, mode?, top?, per_page?}  cited passages from the official docs  (Bearer key)
   POST /api-lookup  {symbols: ["A:B", "C.D"]}   exact Roblox engine class/member lookup (Bearer key)
   POST /luau/check  {code, mode?}               compile + type-analyse, never executes  (Bearer key)
 
@@ -50,6 +50,12 @@ MAX_BODY = 16_384
 MAX_LUAU_BODY = 96 * 1024
 MAX_QUERY = 600
 MAX_TOP = 10
+MAX_PER_PAGE = 3
+# Passages one page may contribute to a reply. 2 is the long-standing default. With 1 the reply
+# covers more pages: measured on the full index in `vector` mode, an expected page was in the
+# top 5 for 37 instead of 35 of the 40 held-out questions and 15 instead of 14 of the 25 golden
+# prompts (development set unchanged, 27 of 30). The price is the second section of the same page.
+DEFAULT_PER_PAGE = int(os.environ.get("STAR_KB_PER_PAGE", "2"))
 MAX_SYMBOLS = 40
 SOCKET_TIMEOUT = 15.0           # one write may block this long
 MAX_CONNECTIONS = int(os.environ.get("STAR_KB_MAX_CONNECTIONS", "48"))   # sockets served at once (one thread each)
@@ -281,7 +287,8 @@ class Service:
                          "max_code_bytes": luaucheck.MAX_CODE_BYTES, "timeout_s": luaucheck.TIMEOUT_SECONDS,
                          "memory_bytes": luaucheck.MEMORY_BYTES},
                 "limits": {"max_body": MAX_BODY, "max_luau_body": MAX_LUAU_BODY, "max_query": MAX_QUERY,
-                           "max_top": MAX_TOP, "embed_timeout_s": EMBED_TIMEOUT,
+                           "max_top": MAX_TOP, "max_per_page": MAX_PER_PAGE, "default_per_page": DEFAULT_PER_PAGE,
+                           "embed_timeout_s": EMBED_TIMEOUT,
                            "max_connections": MAX_CONNECTIONS, "max_per_client": MAX_PER_CLIENT,
                            "header_deadline_s": HEADER_DEADLINE, "body_deadline_s": BODY_DEADLINE},
                 "connections": self.server.connection_stats() if self.server is not None else {},
@@ -296,20 +303,23 @@ class Service:
         query = body.get("query")
         mode = body.get("mode", DEFAULT_MODE)
         top = body.get("top", 5)
+        per_page = body.get("per_page", DEFAULT_PER_PAGE)
         if not isinstance(query, str) or not 1 <= len(query.strip()) <= MAX_QUERY:
             return 400, {"error": f"query must be 1..{MAX_QUERY} characters"}
         if mode not in SERVICE_MODES or type(top) is not int or not 1 <= top <= MAX_TOP:
             return 400, {"error": "mode must be one of " + ", ".join(SERVICE_MODES) + f" and top 1..{MAX_TOP}"}
+        if type(per_page) is not int or not 1 <= per_page <= MAX_PER_PAGE:
+            return 400, {"error": f"per_page must be 1..{MAX_PER_PAGE}"}
         query = " ".join(query.split())
         started = time.perf_counter()
         s = self.searcher()
         try:
-            key = (self.generation(s), mode, top, query)
+            key = (self.generation(s), mode, top, per_page, query)
             hit = self.cache.get(key)
             if hit is not None:
                 return 200, {**hit, "cached": True,
                              "timing_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 1)}}
-            passages, timing = s.search(query, mode=mode, top=top, fallback=True, degrade=True)
+            passages, timing = s.search(query, mode=mode, top=top, per_doc=per_page, fallback=True, degrade=True)
             degraded = bool(timing.pop("degraded", 0))
             reply = {
                 "mode": mode, "mode_used": "bm25" if degraded else mode, "degraded": degraded,

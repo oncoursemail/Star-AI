@@ -52,7 +52,7 @@ def parse_mode(mode: str) -> tuple[str, dict]:
 
 def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_embedded: bool = False,
              rerank_n: int = 15, scope_file: Path | None = None, question_scale: float | None = None,
-             details: bool = True, reuse_query_vectors: bool = False) -> dict:
+             details: bool = True, reuse_query_vectors: bool = False, per_doc: int = 2) -> dict:
     """scope_file: a list of text hashes; every mode then searches only those chunks, and only the
     questions with at least one expected page inside the scope are counted (`n` says how many)."""
     questions = load_questions(questions_path)
@@ -78,7 +78,7 @@ def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_emb
         ranks, totals, stages = [], [], {}
         rows = []
         for q in questions:
-            passages, timing = searcher.search(q["question"], mode=real, top=10, per_doc=2, rerank_n=rerank_n, **options)
+            passages, timing = searcher.search(q["question"], mode=real, top=10, per_doc=per_doc, rerank_n=rerank_n, **options)
             rank = next((p.rank for p in passages if p.path in q["expected"]), None)
             ranks.append(rank)
             totals.append(timing["total_ms"])
@@ -113,7 +113,7 @@ def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_emb
         "chunks_embedded": searcher.embedded_count(),
         "question_vectors": searcher.question_count(), "question_scale": searcher.question_scale,
         "sources": {n: {"commit": s["commit_sha"], "commit_date": s["commit_date"]} for n, s in searcher.sources.items()},
-        "rerank_n": rerank_n, "summary": summary,
+        "rerank_n": rerank_n, "per_doc": per_doc, "summary": summary,
     }
     if details:
         out["details"] = rows_by_mode

@@ -168,3 +168,13 @@ def test_the_cache_forgets_old_and_surplus_entries():
     assert cache.get("b") is None and cache.get("a") == 1 and cache.get("c") == 3
     clock[0] = 11.0
     assert cache.get("a") is None
+
+
+def test_per_page_limits_how_many_passages_one_page_contributes(running):
+    _, _, port, _ = running
+    two = post(port, "/search", {"query": "tween remote events boundary parts", "mode": "bm25", "top": 5})[1]
+    one = post(port, "/search", {"query": "tween remote events boundary parts", "mode": "bm25", "top": 5, "per_page": 1})[1]
+    assert len(two["passages"]) == 2 and len(one["passages"]) == 1      # both test chunks are on the same page
+    assert one["cached"] is False                                       # a different reply, not the cached one
+    assert post(port, "/search", {"query": "tween", "per_page": 0, "mode": "bm25"})[0] == 400
+    assert post(port, "/search", {"query": "tween", "per_page": "1", "mode": "bm25"})[0] == 400
