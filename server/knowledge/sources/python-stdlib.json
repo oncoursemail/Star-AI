@@ -18,7 +18,7 @@
       "attribution": "Preserve the Python Software Foundation copyright notice and licence; identify modified content and summarize changes.",
       "conditions": "Documentation is under PSF License v2, apart from separately credited third-party content.",
       "evidence_url": "https://github.com/python/cpython/blob/main/Doc/license.rst",
-      "evidence_quote": "Python software and documentation are licensed under the Python Software Foundation License Version 2."
+      "evidence_quote": "Python Software Foundation License Version 2."
     },
     "code_samples": {
       "id": "PSF-2.0-OR-0BSD",
