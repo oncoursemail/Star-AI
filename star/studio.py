@@ -15,6 +15,7 @@ COMMAND_ENV = "STAR_STUDIO_MCP_COMMAND"
 INITIALIZE_SECONDS = 30
 DISCOVERY_SECONDS = 20
 INSTANCE_SECONDS = 15
+INSTANCE_POLL_SECONDS = 0.25
 MAX_TOOLS = 128
 MAX_TOOL_BYTES = 64_000
 MAX_DISCOVERY_BYTES = 256_000
@@ -239,28 +240,32 @@ def validate_tool_schema(schema, *, input_schema=True):
         raise StudioTransportError("Studio MCP returned an invalid tool schema.") from None
 
 
-def _validate_studios(items):
+def _validate_studios(items, *, allow_empty=False):
     if isinstance(items, list) and not items:
+        if allow_empty:
+            return []
         raise StudioNoInstancesError("The Studio MCP connector answered, but there are no connected Studios. Open a place and enable its MCP server.")
     if not isinstance(items, list) or not 1 <= len(items) <= 32:
         raise StudioTransportError("Studio MCP returned no connected Studios or an invalid instance list.")
     result, ids = [], set()
     for item in items:
+        name = item.get("name") if isinstance(item, dict) else None
         if (not isinstance(item, dict) or not _identifier(item.get("id"))
-                or not isinstance(item.get("name"), str) or len(item["name"]) > 200
-                or any(ord(c) < 32 or ord(c) == 127 for c in item["name"])):
+                or name is not None and (not isinstance(name, str) or len(name) > 200
+                    or any(ord(c) < 32 or ord(c) == 127 for c in name))):
             raise StudioTransportError("Studio MCP returned an invalid Studio instance.")
         if item["id"] in ids:
             raise StudioTransportError("Studio MCP returned duplicate Studio instance ids.")
         ids.add(item["id"])
-        result.append({"id": item["id"], "name": item["name"]})
+        result.append({"id": item["id"], "name": "Unnamed Studio" if name is None else name})
     return result
 
 
 def parse_studios(result):
     """Validate the connector's existing {studios: [{id, name}]} result contract."""
     try:
-        data = result.model_dump(by_alias=True, exclude_none=True) if hasattr(result, "model_dump") else result
+        # Preserve nulls until the two raw representations have been compared.
+        data = result.model_dump(by_alias=True, exclude_none=False) if hasattr(result, "model_dump") else result
         if (not isinstance(data, dict) or _json_bytes(data) > MAX_INSTANCE_BYTES
                 or data.get("isError") is not None and data.get("isError") is not False):
             raise StudioTransportError("Studio MCP instance discovery failed or exceeds its response bound.")
@@ -269,20 +274,57 @@ def parse_studios(result):
             raise StudioTransportError("Studio MCP returned invalid instance discovery content.")
         text = "\n".join(p["text"] for p in parts if isinstance(p, dict) and p.get("type") == "text"
                          and isinstance(p.get("text"), str))
-        textual = json.loads(text) if text.strip() else None
+        has_text = bool(text.strip())
+        textual = json.loads(text) if has_text else None
         structured = data.get("structuredContent")
         source = structured if structured is not None else textual
         if not isinstance(source, dict):
             raise StudioTransportError("Studio MCP returned invalid instance discovery content.")
-        items = _validate_studios(source.get("studios"))
-        if structured is not None and textual is not None:
-            if not isinstance(textual, dict) or _validate_studios(textual.get("studios")) != items:
+        raw_items = source.get("studios")
+        items = _validate_studios(raw_items, allow_empty=True)
+        if structured is not None and has_text:
+            if not isinstance(textual, dict):
                 raise StudioTransportError("Studio MCP instance discovery representations disagree.")
+            _validate_studios(textual.get("studios"), allow_empty=True)
+            if textual.get("studios") != raw_items:
+                raise StudioTransportError("Studio MCP instance discovery representations disagree.")
+        if not items:
+            _validate_studios([])
         return items
     except StudioTransportError:
         raise
     except Exception:
         raise StudioTransportError("Studio MCP returned invalid instance discovery content.") from None
+
+
+async def list_studios(client, *, tool_count=0):
+    """Poll only validated empty discovery replies within one aggregate deadline.
+
+    An unanswered request, MCP error or malformed response is never retried.
+    Only a deadline reached while waiting after a valid empty reply means no
+    instances; a deadline inside a request remains a visible timeout.
+    """
+    last_empty, requesting = None, False
+    try:
+        async with asyncio.timeout(INSTANCE_SECONDS):
+            while True:
+                requesting = True
+                reply = await client.call_tool("list_roblox_studios", arguments={})
+                requesting = False
+                try:
+                    return parse_studios(reply)
+                except StudioNoInstancesError as error:
+                    error.tool_count = tool_count
+                    last_empty = error
+                await asyncio.sleep(INSTANCE_POLL_SECONDS)
+    except TimeoutError:
+        if last_empty is not None and not requesting:
+            raise last_empty from None
+        raise StudioTransportError("Studio MCP instance discovery timed out.") from None
+    except StudioTransportError:
+        raise
+    except Exception:
+        raise StudioTransportError("Studio MCP instance discovery failed.") from None
 
 
 def select_studio(instances, studio_id):
@@ -310,17 +352,7 @@ async def probe(client=None, *, studio_id=None, target=None):
     tools = await list_tools(client)
     if "list_roblox_studios" not in {tool["name"] for tool in tools}:
         raise StudioTransportError("Studio MCP does not expose instance discovery; Studio health is unverified.")
-    try:
-        reply = await asyncio.wait_for(client.call_tool("list_roblox_studios", arguments={}), timeout=INSTANCE_SECONDS)
-    except TimeoutError:
-        raise StudioTransportError("Studio MCP instance discovery timed out.") from None
-    except Exception:
-        raise StudioTransportError("Studio MCP instance discovery failed.") from None
-    try:
-        instances = parse_studios(reply)
-    except StudioNoInstancesError as error:
-        error.tool_count = len(tools)
-        raise
+    instances = await list_studios(client, tool_count=len(tools))
     selected = select_studio(instances, studio_id) if studio_id is not None else None
     return {"status": "tools_and_instances_discovered", "tool_count": len(tools),
             "studios": instances, "selected": selected}

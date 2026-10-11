@@ -247,8 +247,7 @@ async def connect_studio(settings, home):
         discovered = await studio.list_tools(remote)
         if "list_roblox_studios" not in {tool["name"] for tool in discovered}:
             raise studio.StudioTransportError("Studio MCP does not expose instance discovery.")
-        async with asyncio.timeout(studio.INSTANCE_SECONDS):
-            instances = studio.parse_studios(await remote.call_tool("list_roblox_studios", arguments={}))
+        instances = await studio.list_studios(remote, tool_count=len(discovered))
         studio.select_studio(instances, settings.studio_id)
         guarded = await studio_loop.open_guarded(remote, discovered, studio_id=settings.studio_id,
             opted_in=settings.studio_edit, own_places=settings.studio_own_places,

@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from . import studio
 
 TARGETS = {'local_pc': 'Roblox Studio on this PC',
            'host_launcher': 'Practice Studio (configured host)'}
-PROBE_SECONDS = 15
+# Include each bounded connector stage and the private local MCP status exchange.
+PROBE_SECONDS = studio.INITIALIZE_SECONDS + studio.DISCOVERY_SECONDS + studio.INSTANCE_SECONDS + 5
 
 
 def default_target() -> str:

@@ -201,6 +201,7 @@ def test_discovery_failure_does_not_become_connected(monkeypatch):
 
 
 def test_empty_remote_instances_are_explicit_and_never_selected(monkeypatch):
+    monkeypatch.setattr(local_mcp.studio, "INSTANCE_SECONDS", .05)
     @asynccontextmanager
     async def connect(*, target):
         yield object()
@@ -217,6 +218,130 @@ def test_empty_remote_instances_are_explicit_and_never_selected(monkeypatch):
     assert result["local_mcp"] == "memory" and result["tool_count"] == 30 and result["selected"] is None
     with pytest.raises(local_mcp.studio.StudioNoInstancesError):
         run(local_mcp.discover(studio_id="missing"))
+
+
+@pytest.mark.parametrize('target', ['local_pc', 'host_launcher'])
+@pytest.mark.parametrize('mode', ['discover', 'factory'])
+@pytest.mark.parametrize('name_present', [False, True])
+def test_real_local_protocol_accepts_delayed_unnamed_studio_without_reconnecting(monkeypatch, tmp_path, target, mode, name_present):
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio, text
+    fake = FakeStudio()
+    original = fake.call_tool
+    attempts, routes = [], []
+    async def delayed(name, arguments=None):
+        if name == 'list_roblox_studios':
+            assert arguments == {}
+            attempts.append(name)
+            item = {'id': fake.studio_id, **({'name': None} if name_present else {})}
+            return text({'studios': [] if len(attempts) < 3 else [item]})
+        return await original(name, arguments)
+    @asynccontextmanager
+    async def connect(*, target):
+        routes.append(target)
+        yield fake
+    fake.call_tool = delayed
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio, 'INSTANCE_POLL_SECONDS', .005)
+    async def scenario():
+        if mode == 'discover':
+            result = await local_mcp.discover(target=target, studio_id=fake.studio_id)
+        else:
+            settings = Settings(studio_target=target, studio_id=fake.studio_id)
+            async with local_mcp.connect_studio(settings, tmp_path) as connection:
+                reply = await connection.client.call_tool(local_mcp.STATUS_TOOL, arguments={})
+                assert not reply.isError
+                result = reply.structuredContent
+                assert not connection.verdict.editable and not connection.journal.entries
+        assert routes == [target] and len(attempts) >= 3
+        assert result['local_mcp'] == 'memory' and result['status'] == 'tools_and_instances_discovered'
+        assert result['selected'] == {'id': fake.studio_id, 'name': 'Unnamed Studio'}
+        assert result['tool_count'] == 30 and result['label'] == local_mcp.route_label(target)
+        assert fake.scripts == {} and not fake.history
+    run(scenario())
+
+
+def test_factory_empty_discovery_never_opens_guard_or_selects_other_instance(monkeypatch, tmp_path):
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio, text
+    fake = FakeStudio()
+    calls = []
+    async def empty(name, arguments=None):
+        assert name == 'list_roblox_studios' and arguments == {}
+        calls.append(name)
+        return text({'studios': []})
+    @asynccontextmanager
+    async def connect(*, target):
+        yield fake
+    async def guard(*args, **kwargs):
+        pytest.fail('Empty discovery must not open a guarded tool session')
+    fake.call_tool = empty
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio, 'INSTANCE_SECONDS', .1)
+    monkeypatch.setattr(local_mcp.studio, 'INSTANCE_POLL_SECONDS', .005)
+    monkeypatch.setattr(local_mcp.studio_loop, 'open_guarded', guard)
+    async def scenario():
+        with pytest.raises(local_mcp.studio.StudioNoInstancesError) as caught:
+            async with local_mcp.connect_studio(Settings(studio_id='absent'), tmp_path):
+                pytest.fail('Empty discovery is not connected')
+        assert caught.value.tool_count == 30 and len(calls) >= 2
+        assert fake.scripts == {} and not (tmp_path / 'studio-uncertainty.sqlite3').exists()
+    run(scenario())
+
+
+@pytest.mark.parametrize('malformed', [False, True])
+def test_factory_error_after_valid_empty_is_not_retried_or_reported_connected(monkeypatch, tmp_path, malformed):
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio, text
+    fake = FakeStudio()
+    attempts, routes = [], []
+    async def failed(name, arguments=None):
+        assert name == 'list_roblox_studios' and arguments == {}
+        attempts.append(name)
+        if len(attempts) == 1:
+            return text({'studios': []})
+        return text({'studios': [{'id': 7}]} if malformed else 'private-remote-error', not malformed)
+    @asynccontextmanager
+    async def connect(*, target):
+        routes.append(target)
+        yield fake
+    async def guard(*args, **kwargs):
+        pytest.fail('Unverified discovery must not open a guarded tool session')
+    fake.call_tool = failed
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio, 'INSTANCE_POLL_SECONDS', .005)
+    monkeypatch.setattr(local_mcp.studio_loop, 'open_guarded', guard)
+    async def scenario():
+        with pytest.raises(local_mcp.studio.StudioTransportError) as caught:
+            async with local_mcp.connect_studio(Settings(studio_id=fake.studio_id), tmp_path):
+                pytest.fail('Failed discovery is not connected')
+        assert not isinstance(caught.value, local_mcp.studio.StudioNoInstancesError)
+        assert 'private-remote-error' not in str(caught.value)
+        assert routes == ['local_pc'] and attempts == ['list_roblox_studios'] * 2
+        assert fake.scripts == {} and not fake.history
+    run(scenario())
+
+
+def test_factory_never_falls_back_when_exact_selected_id_is_absent(monkeypatch, tmp_path):
+    from star.desktop_core import Settings
+    from tests.studio_fake import FakeStudio
+    fake = FakeStudio()
+    routes = []
+    @asynccontextmanager
+    async def connect(*, target):
+        routes.append(target)
+        yield fake
+    async def guard(*args, **kwargs):
+        pytest.fail('Missing selected id must not open a guarded tool session')
+    monkeypatch.setattr(local_mcp.studio, 'connect', connect)
+    monkeypatch.setattr(local_mcp.studio_loop, 'open_guarded', guard)
+    async def scenario():
+        with pytest.raises(local_mcp.studio.StudioTransportError, match='no other instance'):
+            async with local_mcp.connect_studio(Settings(studio_id='absent'), tmp_path):
+                pytest.fail('Another instance must never be selected')
+        assert routes == ['local_pc'] and fake.names() == ['list_roblox_studios']
+        assert fake.scripts == {} and not fake.history
+    run(scenario())
 
 
 def test_local_proxy_reports_and_undo_share_same_guard():

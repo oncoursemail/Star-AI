@@ -5,7 +5,7 @@ import json
 from types import SimpleNamespace
 
 import pytest
-from mcp.types import Tool
+from mcp.types import CallToolResult, TextContent, Tool
 
 from star import studio
 
@@ -389,6 +389,45 @@ def test_instance_error_size_and_representation_disagreement_are_visible():
             studio.parse_studios(bad)
 
 
+@pytest.mark.parametrize("item", [{"id": "exact-id", "name": None}, {"id": "exact-id"}])
+def test_unnamed_studio_keeps_exact_identity_and_only_normalizes_display(item):
+    assert studio.parse_studios(instances([item])) == [{"id": "exact-id", "name": "Unnamed Studio"}]
+
+
+@pytest.mark.parametrize("name", [False, 7, {}, [], "bad\nname", "bad\x7f", "x" * 201])
+def test_optional_display_name_does_not_relax_other_name_validation(name):
+    with pytest.raises(studio.StudioTransportError, match="invalid Studio instance"):
+        studio.parse_studios(instances([{"id": "exact-id", "name": name}]))
+
+
+@pytest.mark.parametrize("textual,structured", [
+    ([{"id": "a", "name": None}], [{"id": "a"}]),
+    ([{"id": "a", "name": None}], [{"id": "a", "name": "Unnamed Studio"}]),
+    ([{"id": "a"}], [{"id": "a", "name": "Unnamed Studio"}]),
+    ([], [{"id": "a", "name": None}]),
+    ([{"id": "a", "name": None}], []),
+])
+def test_raw_name_or_empty_representation_disagreement_is_not_normalized_away(textual, structured):
+    reply = CallToolResult(content=[TextContent(type="text", text=json.dumps({"studios": textual}))],
+                           structuredContent={"studios": structured})
+    with pytest.raises(studio.StudioTransportError, match="representations disagree"):
+        studio.parse_studios(reply)
+
+
+def test_real_sdk_null_name_agrees_before_display_normalization():
+    items = [{"id": "exact-id", "name": None}]
+    reply = CallToolResult(content=[TextContent(type="text", text=json.dumps({"studios": items}))],
+                           structuredContent={"studios": items})
+    assert studio.parse_studios(reply) == [{"id": "exact-id", "name": "Unnamed Studio"}]
+
+
+def test_textual_json_null_is_malformed_even_with_valid_structured_instances():
+    reply = CallToolResult(content=[TextContent(type="text", text="null")],
+                           structuredContent={"studios": [{"id": "a", "name": None}]})
+    with pytest.raises(studio.StudioTransportError, match="representations disagree"):
+        studio.parse_studios(reply)
+
+
 def test_instance_selection_never_falls_back_to_first():
     values = [{"id": "a", "name": "one"}, {"id": "b", "name": "two"}]
     with pytest.raises(studio.StudioTransportError, match="explicitly"):
@@ -411,7 +450,8 @@ def test_probe_only_discovers_and_never_auto_selects():
     assert "editable" not in result and "healthy" not in result
 
 
-def test_probe_rejects_missing_instance_tool_and_zero_instances():
+def test_probe_rejects_missing_instance_tool_and_zero_instances(monkeypatch):
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.02)
     with pytest.raises(studio.StudioTransportError, match="does not expose"):
         run(studio.probe(Pages([([tool(name="other")], None)])))
     class Empty(Pages):
@@ -419,6 +459,102 @@ def test_probe_rejects_missing_instance_tool_and_zero_instances():
             return instances([])
     with pytest.raises(studio.StudioTransportError, match="no connected Studios"):
         run(studio.probe(Empty([([tool()], None)])))
+
+
+def test_delayed_attach_is_polled_on_the_same_client_and_exact_selection(monkeypatch):
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.2)
+    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.005)
+    class Delayed(Pages):
+        instance_calls = 0
+        async def call_tool(self, name, arguments):
+            assert name == "list_roblox_studios" and arguments == {}
+            self.instance_calls += 1
+            return instances([] if self.instance_calls < 3 else [{"id": "b", "name": None}])
+    client = Delayed([([tool()], None)])
+    selected = run(studio.probe(client, studio_id="b"))
+    assert selected["selected"] == {"id": "b", "name": "Unnamed Studio"}
+    assert selected["tool_count"] == 1 and client.instance_calls == 3 and client.calls == [None]
+    client = Delayed([([tool()], None)])
+    with pytest.raises(studio.StudioTransportError, match="no other instance"):
+        run(studio.probe(client, studio_id="missing"))
+    assert client.instance_calls == 3 and client.calls == [None]
+
+
+def test_permanent_validated_empty_is_bounded_across_requests_and_sleeps(monkeypatch):
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.15)
+    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.08)
+    class Empty:
+        calls = 0
+        async def call_tool(self, name, arguments):
+            assert name == "list_roblox_studios" and arguments == {}
+            self.calls += 1
+            await asyncio.sleep(0.005)
+            return instances([])
+    async def scenario():
+        client = Empty()
+        before = asyncio.get_running_loop().time()
+        with pytest.raises(studio.StudioNoInstancesError) as caught:
+            await studio.list_studios(client, tool_count=30)
+        assert 0.1 <= asyncio.get_running_loop().time() - before < 0.5
+        assert caught.value.tool_count == 30 and 2 <= client.calls <= 6
+    run(scenario())
+
+
+@pytest.mark.parametrize("failure", [RuntimeError("private-launcher-secret"), TimeoutError("private-launcher-secret"),
+    instances([], isError=True), instances([{"id": 7}]),
+    instances([], structuredContent={"studios": [{"id": "a", "name": None}]})])
+def test_instance_poll_never_retries_error_or_malformed_reply(failure):
+    class Failed:
+        calls = 0
+        async def call_tool(self, name, arguments):
+            self.calls += 1
+            if isinstance(failure, Exception):
+                raise failure
+            return failure
+    client = Failed()
+    with pytest.raises(studio.StudioTransportError) as caught:
+        run(studio.list_studios(client))
+    assert client.calls == 1 and not isinstance(caught.value, studio.StudioNoInstancesError)
+    assert "private-launcher-secret" not in str(caught.value)
+
+
+def test_timeout_after_an_empty_reply_is_not_reported_as_no_instances(monkeypatch):
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.15)
+    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.005)
+    class Waiting:
+        calls = 0
+        async def call_tool(self, name, arguments):
+            self.calls += 1
+            if self.calls == 1:
+                return instances([])
+            await asyncio.Event().wait()
+    client = Waiting()
+    with pytest.raises(studio.StudioTransportError, match="timed out") as caught:
+        run(studio.list_studios(client))
+    assert client.calls == 2 and not isinstance(caught.value, studio.StudioNoInstancesError)
+
+
+@pytest.mark.parametrize("during", ["request", "empty_poll"])
+def test_instance_poll_cancellation_propagates_without_another_request(monkeypatch, during):
+    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 1)
+    async def scenario():
+        entered = asyncio.Event()
+        class Waiting:
+            calls = 0
+            async def call_tool(self, name, arguments):
+                self.calls += 1
+                entered.set()
+                if during == "request":
+                    await asyncio.Event().wait()
+                return instances([])
+        client = Waiting()
+        task = asyncio.create_task(studio.list_studios(client))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert client.calls == 1
+    run(scenario())
 
 
 def test_probe_host_target_is_forwarded_once_and_no_second_connection_is_opened(monkeypatch):

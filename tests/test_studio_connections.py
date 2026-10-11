@@ -119,6 +119,40 @@ def test_probe_deadline_cancels_and_has_no_fallback_or_replay(monkeypatch):
     assert calls==[{'target':'local_pc'}]
 
 
+def test_desktop_probe_budget_covers_each_bounded_stage_and_local_status():
+    from star import studio
+    assert connections.PROBE_SECONDS == (studio.INITIALIZE_SECONDS + studio.DISCOVERY_SECONDS
+                                          + studio.INSTANCE_SECONDS + 5)
+    assert 15 < connections.PROBE_SECONDS <= 70
+
+
+def test_app_reports_no_instances_after_a_real_bounded_empty_attach_window(monkeypatch):
+    from contextlib import asynccontextmanager
+    from star import studio
+    from tests.studio_fake import FakeStudio, text
+    fake=FakeStudio()
+    routes=[]
+    attempts=[]
+    async def empty(name,arguments=None):
+        assert name=='list_roblox_studios' and arguments=={}
+        attempts.append(name)
+        return text({'studios':[]})
+    @asynccontextmanager
+    async def connect(*,target):
+        routes.append(target)
+        await asyncio.sleep(.01)
+        yield fake
+    fake.call_tool=empty
+    monkeypatch.setattr(studio,'connect',connect)
+    monkeypatch.setattr(studio,'INSTANCE_SECONDS',.1)
+    monkeypatch.setattr(studio,'INSTANCE_POLL_SECONDS',.005)
+    report=check_studio(Settings())
+    assert routes==['local_pc'] and len(attempts)>=2
+    assert report['state']=='no_instances' and report['tool_count']==30
+    assert report['local_mcp']=='memory' and report['selected_valid'] is False
+    assert report['instances']==[] and not fake.history and not fake.scripts
+
+
 def test_selection_requires_fresh_same_route_discovery_and_resets_permissions(monkeypatch):
     calls=[]
     async def discover(**kwargs):calls.append(kwargs);return evidence()
