@@ -175,9 +175,10 @@ title carries a deny-listed place id is not even asked the question.
 **Edits are recorded.** Every edit goes through `GuardedStudio`: a script edit stores the script's earlier text; a
 Luau edit is wrapped so that it is one undo step in Studio (`ChangeHistoryService`), and what it added is tagged
 and listed. At the end of a turn the answer gets a block written by code: what was created or edited, and how to
-undo it. STAR can itself remove what it added and restore scripts it edited; changes to properties of existing
-instances and deletions are undone with Ctrl+Z in Studio, one step per STAR edit. STAR never saves or publishes
-from Studio.
+undo it. Within the same session STAR can itself remove what it added and restore scripts it edited
+(`GuardedStudio.undo`, used by the live check). The journal is not kept after the turn, so later the way back is
+Studio's own undo (Ctrl+Z): a Luau edit is one undo step; whether a script edit made through the connector is
+one undo step in Studio has not been checked in a real session. STAR never saves or publishes from Studio.
 
 ### The live check
 

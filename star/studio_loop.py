@@ -281,7 +281,10 @@ class ChangeJournal:
         steps = sum(1 for entry in self.entries if entry["kind"] in ("script", "luau"))
         return {"changes": changes, "edits": steps,
                 "undo": {"available": steps > 0,
-                         "how": "Ask STAR to undo, or press Ctrl+Z in Studio once per edit." if steps else ""}}
+                         # Only what exists: the journal lives for this session, so a later turn
+                         # cannot take these edits back by itself; Studio's own undo can.
+                         "how": "Press Ctrl+Z in Studio to step back through these edits (a Luau edit is "
+                                "one undo step)." if steps else ""}}
 
     def text(self) -> str:
         report = self.report()
