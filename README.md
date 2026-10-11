@@ -10,6 +10,14 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Shipping status:** The source version is v0.9.0, but the latest public binary is currently **STAR Genesis v0.8.1** on the [GitHub Releases page](https://github.com/oncoursemail/Star-AI/releases/latest), with Windows Setup, a portable ZIP, and SHA-256 checksums. The latest GitHub Release is the only authoritative public binary: a source commit, an unmerged pull request, or a passing PR build is not evidence that a new installer has been released, and work in unmerged pull requests is **not** included in the public installer. A published Release is also not proof of hands-on Windows/GPU/Roblox acceptance. Native Windows model/GPU, credentials, Roblox Studio, and upgrade acceptance still require device testing; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md) and the [Windows QA gate](docs/STAR_V08_RELEASE_GATE.md).
 
+### Public release transparency and website handoff
+
+[Latest published Windows release](https://github.com/oncoursemail/Star-AI/releases/latest) is the only authoritative download. **v0.9.0 is a source candidate**, separate from the **currently downloadable v0.8.1 binary**. **PRs, CI artifacts and passing tests** do not prove that a feature is in the public Windows release, that GitHub Pages has deployed, or that real GPU/Roblox acceptance passed.
+
+The public repository currently has **no licence file**; visibility alone does not grant an open-source licence. Evaluation baselines are **18 / 34 (52.9%)** Roblox automated, **11 / 23 (47.8%)** creation, **29 / 57 (50.9%)** combined; **16 Roblox v2 tasks** require separate Studio/manual evaluation. These are **not a game-quality score** or proof of live gameplay completion.
+
+See the [Website and release handoff checklist](docs/WEBSITE_RELEASE_CHECKLIST.md) before publishing or promoting the v0.9 candidate.
+
 ## Download / Updates
 
 **[⬇ STAR Windows Setup — latest release](https://github.com/oncoursemail/Star-AI/releases/latest)** · [All releases](https://github.com/oncoursemail/Star-AI/releases) · [Report a problem](https://github.com/oncoursemail/Star-AI/issues)
