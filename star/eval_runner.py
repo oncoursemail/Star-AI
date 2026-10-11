@@ -49,6 +49,11 @@ _PRIVATE_IP = re.compile(r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\
 _KEEP_EVENTS = {"route_selected", "knowledge_finished", "luau_check_finished", "skill_packs"}
 
 
+def _lf(data):
+    """Line endings as LF, for text or bytes: a CRLF checkout and a git archive must read the same."""
+    return data.replace(b"\r\n", b"\n") if isinstance(data, bytes) else data.replace("\r\n", "\n")
+
+
 class RunAborted(RuntimeError):
     """The run stopped on purpose (lock held too long, interrupted). The checkpoint is saved."""
 
@@ -73,9 +78,7 @@ class Suite:
         unit = (task.get("auto") or {}).get("unit_test")
         if not unit:
             return ""
-        return (self.directory / unit["file"]).read_text(encoding="utf-8").replace("
-", "
-")
+        return (self.directory / unit["file"]).read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
 def load_suite(path: Path) -> Suite:
@@ -85,16 +88,12 @@ def load_suite(path: Path) -> Suite:
     load_catalog(path)                                     # the existing loader's rules (ids, modes, fields)
     tasks = json.loads(raw.decode("utf-8"))
     prelude_file = path.parent / "prelude.luau"
-    prelude = prelude_file.read_text(encoding="utf-8").replace("
-", "
-") if prelude_file.is_file() else ""
+    prelude = prelude_file.read_text(encoding="utf-8").replace("\r\n", "\n") if prelude_file.is_file() else ""
     problems = validate_tasks(tasks, path.parent)
     if problems:
         raise ValueError("suite is invalid: " + "; ".join(problems[:8]))
     # Hash with normalised line endings: a Windows checkout (CRLF) and a git archive (LF) must agree.
-    return Suite(path, hashlib.sha256(raw.replace(b"
-", b"
-")).hexdigest(), tasks, prelude)
+    return Suite(path, hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest(), tasks, prelude)
 
 
 def validate_tasks(tasks: list[dict], directory: Path) -> list[str]:
