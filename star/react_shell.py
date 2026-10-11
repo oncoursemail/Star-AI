@@ -676,11 +676,11 @@ def launch():
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt, studio_configuration_home=self.settings_file.parent,
+                    owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
-            if provider_kind(settings)=='lan':
+            if provider_kind(settings)=='lan' and not instant_used:
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
             try:
