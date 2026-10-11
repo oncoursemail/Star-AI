@@ -211,6 +211,7 @@ _FOLIAGE = '''-- STAR opt-in, client-only skinned-mesh foliage sway template.
 -- Tag static tree Models STAR_WindTree; their skinned mesh bones need
 -- a numeric WindWeight attribute (0..1). No weighted bones = no sway.
 -- Keep these bones free from concurrently played Animator tracks.
+-- Set this LocalScript's ReduceMotion attribute to true for a still-foliage mode.
 local RunService = game:GetService("RunService")
 local CollectionService = game:GetService("CollectionService")
 local TAG = "STAR_WindTree"
@@ -276,14 +277,17 @@ RunService.Heartbeat:Connect(function(dt)
     for tree, state in pairs(trees) do
         if not tree.Parent then
             remove(tree)
-        elseif strength < .001 or (state.position - cameraPosition).Magnitude > MAX_DISTANCE then
+        elseif script:GetAttribute("ReduceMotion") == true or strength < .001
+            or (state.position - cameraPosition).Magnitude > MAX_DISTANCE then
             reset(state)
         else
             local phase = elapsed * 1.4 + state.phase
             local gust = math.sin(phase) + .35 * math.sin(phase * 2.23)
             for _, data in ipairs(state.bones) do
                 local angle = gust * strength * data.weight
-                data.bone.Transform = CFrame.Angles(direction.Z * angle, 0, -direction.X * angle)
+                if data.bone.Parent then
+                    data.bone.Transform = CFrame.Angles(direction.Z * angle, 0, -direction.X * angle)
+                end
             end
             state.active = true
         end
