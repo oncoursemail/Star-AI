@@ -47,6 +47,7 @@ DEFAULT_KEY_FILE = Path.home() / ".star" / "server_api_key"
 LOCK_POLL_SECONDS = 20
 LOCK_WATCH_SECONDS = 15        # how often a running request checks whether someone asked for quiet
 MAX_INTERRUPTIONS = 12
+SERVER_TIMEOUT_SECONDS = 1800   # the largest value the app allows
 MAX_TRUNCATION_RETRIES = 2     # an answer that stops inside a code block is asked for again
 # run_task errors that are STAR's own answer to the prompt (the user would see them): a failed task, not an infrastructure error.
 PRODUCT_FAILURES = ("Model-call limit exceeded", "streamed no visible answer", "gave no text or tool calls")
@@ -404,7 +405,10 @@ def build_real(args, log=print):
     server = (args.server or os.environ.get("STAR_EVAL_SERVER", "")).rstrip("/")
     if not server:
         raise SystemExit("Give the STAR Server URL with --server or STAR_EVAL_SERVER")
-    settings = Settings(provider="star_server", server_endpoint=server, model=args.model, project="STAR-eval")
+    # A non-streamed answer of 1600 tokens takes 3 to 10 minutes on a busy CPU server; the app's default of 600 s
+    # of silence would turn a slow server into a "timeout", which says nothing about the answer.
+    settings = Settings(provider="star_server", server_endpoint=server, model=args.model, project="STAR-eval",
+                        server_timeout=SERVER_TIMEOUT_SECONDS)
     settings.validate()
     knowledge = client_for(settings)
     if knowledge is None:
@@ -442,7 +446,7 @@ def build_real(args, log=print):
         **git_state(),
         "runner": "star.eval_runner/" + str(SCHEMA),
         "provider": "star_server", "model": args.model, "models_served": served, "mode": args.mode,
-        "skill_packs": args.packs, "knowledge": "on", "temperature": 0,
+        "skill_packs": args.packs, "knowledge": "on", "temperature": 0, "server_timeout_s": SERVER_TIMEOUT_SECONDS,
         "server": "<private-address>", "sandbox": "lxc container as user star (prlimit + timeout)" if sandbox else "none",
         "platform": sys.platform,
         "fingerprint": hashlib.sha256(json.dumps(fingerprint_source, sort_keys=True).encode()).hexdigest()[:12],
