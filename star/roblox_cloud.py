@@ -836,7 +836,8 @@ def public_action(action: dict, *, full: bool = False) -> dict:
     if isinstance(script, str):
         detail["script_chars"] = len(script)
         detail["script_sha256"] = hashlib.sha256(script.encode()).hexdigest()
-        detail["script_preview"] = script[:1500 if full else 300]
+        # The owner approves what they can read: the interface gets the script itself.
+        detail["script_preview"] = script[:8000 if full else 300]
     shown = {k: action.get(k) for k in ("id", "kind", "status", "summary", "target", "created", "expires",
                                          "decided", "finished") if action.get(k) is not None}
     shown["detail"] = detail

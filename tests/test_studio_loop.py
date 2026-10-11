@@ -282,3 +282,96 @@ def test_stars_fixed_snippets_are_fixed_text():
     assert sl.console_errors("Shop ready\nWorkspace.A:3: attempt to call a nil value\nInfinite yield possible on x") == [
         "Workspace.A:3: attempt to call a nil value", "Infinite yield possible on x"]
     assert json.loads(json.dumps(sl.judge(None, opted_in=True).public()))["editable"] is False
+
+
+# ------------------------------------------------------------------ a model drives the loop through the agent
+
+class ScriptedModel:
+    """Answers with the next prepared tool call, then with text; keeps what it was sent."""
+
+    def __init__(self, steps):
+        self.steps, self.requests = list(steps), []
+
+    async def create(self, **kwargs):
+        from types import SimpleNamespace
+        self.requests.append(kwargs)
+        step = self.steps.pop(0)
+        if isinstance(step, str):
+            message = SimpleNamespace(content=step, tool_calls=None)
+        else:
+            name, arguments = step
+            message = SimpleNamespace(content=None, tool_calls=[SimpleNamespace(
+                id=f"call{len(self.requests)}", function=SimpleNamespace(name=name, arguments=json.dumps(arguments)))])
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+
+
+LOOP_STEPS = [
+    ("search_game_tree", {"studio_id": SID, "datamodel_type": "Edit"}),
+    ("screen_capture", {"studio_id": SID, "capture_id": "ScreenCapture_1"}),
+    ("multi_edit", {"studio_id": SID, "datamodel_type": "Edit", "file_path": "ServerScriptService.Door", "className": "Script",
+                    "edits": [{"old_string": "", "new_string": "print('door ready')"}]}),
+    ("execute_luau", {"studio_id": SID, "datamodel_type": "Edit", "code": "local p = Instance.new('Part') p.Name = 'Door' p.Parent = workspace"}),
+    ("start_stop_play", {"studio_id": SID, "is_start": True}),
+    ("get_console_output", {"studio_id": SID}),
+    ("start_stop_play", {"studio_id": SID, "is_start": False}),
+    ("insert_asset", {"studio_id": SID, "assetId": "123"}),            # a tool STAR never offers
+    "The door is built and the playtest printed 'door ready'.",
+]
+
+
+def drive(fake, *, luau=True, **settings):
+    """One agent turn with a scripted model, wired the way star/desktop_core.py wires a Studio turn."""
+    from types import SimpleNamespace
+    from star.agent import execute
+    settings.setdefault("opted_in", True)
+
+    async def turn():
+        discovered = await list_tools(fake)
+        studio = await sl.open_guarded(fake, discovered, studio_id=SID, **settings)
+        model = ScriptedModel(LOOP_STEPS)
+        events = []
+        outcome = await execute(
+            client=SimpleNamespace(chat=SimpleNamespace(completions=model)), model="local", image_paths=[],
+            prompt="Build a door in Studio and playtest it", studio=studio, discovered=discovered, studio_id=SID,
+            may_edit=studio.verdict.editable, allow_luau=studio.verdict.editable and luau,
+            on_event=events.append, max_calls=12)
+        return sl.with_report(outcome, studio), studio, model, events
+    return run(turn())
+
+
+def test_a_model_runs_the_whole_loop_in_a_blank_place_and_the_answer_lists_the_changes():
+    fake = FakeStudio()
+    fake.luau_effects = lambda code: [("Part", "Workspace.Door")]
+    fake.on_play = lambda studio: studio.console.append("door ready")
+    (answer, _messages, _archive), studio, model, events = drive(fake)
+    offered = {tool["function"]["name"] for tool in model.requests[0]["tools"]}
+    assert {"multi_edit", "execute_luau", "start_stop_play", "screen_capture", "get_console_output"} <= offered
+    assert not offered & policy.BLOCKED_TOOLS
+    assert fake.scripts["ServerScriptService.Door"]["source"] == "print('door ready')"
+    assert "Workspace.Door" in fake.instances and fake.playing is False and fake.console == ["door ready"]
+    assert [event["tool"] for event in events if event["event"] == "tool_rejected"] == ["insert_asset"]
+    assert "insert_asset" not in fake.names()
+    assert answer.startswith("The door is built and the playtest printed 'door ready'.\n\nStudio changes in this turn (2):")
+    assert "- created script ServerScriptService.Door" in answer and "Part Workspace.Door" in answer and "Undo:" in answer
+    assert run(studio.undo())["left"] == [] and fake.scripts == {} and "Workspace.Door" not in fake.instances
+
+
+def test_the_same_model_can_only_read_a_published_place():
+    fake = FakeStudio(name="A live game", place_id=4321, game_id=432, creator_id=9)
+    (answer, _messages, _archive), studio, model, events = drive(fake)
+    offered = {tool["function"]["name"] for tool in model.requests[0]["tools"]}
+    assert offered == policy.READ_TOOLS
+    rejected = [event["tool"] for event in events if event["event"] == "tool_rejected"]
+    assert rejected == ["multi_edit", "execute_luau", "start_stop_play", "start_stop_play", "insert_asset"]
+    assert fake.scripts == {} and fake.playing is False and "Workspace.Door" not in fake.instances
+    assert fake.names().count("execute_luau") == 1 and "Studio changes" not in answer      # only STAR's own question ran
+
+
+def test_without_the_luau_switch_a_model_edits_scripts_but_cannot_run_code():
+    fake = FakeStudio()
+    (answer, _messages, _archive), studio, model, events = drive(fake, luau=False)
+    offered = {tool["function"]["name"] for tool in model.requests[0]["tools"]}
+    assert "multi_edit" in offered and "execute_luau" not in offered
+    assert "execute_luau" in [event["tool"] for event in events if event["event"] == "tool_rejected"]
+    assert "ServerScriptService.Door" in fake.scripts and "Workspace.Door" not in fake.instances
+    assert "Studio changes in this turn (1):" in answer

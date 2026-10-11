@@ -177,13 +177,22 @@ async def main(args):
                     checkpoint=checkpoint, max_calls=int(os.environ.get("STAR_MAX_MODEL_CALLS", "12")),
                     context_chars=int(os.environ.get("STAR_CONTEXT_CHARS", "25000")), on_event=event)
             else:
-                async with connect() as studio:
-                    answer, messages, archive = await execute(client=client, model=model, prompt=args.prompt,
+                async with connect() as session:
+                    # --edit is a request, not a permission: the open place must pass the sandbox
+                    # rule (star/studio_loop.py: a blank, unsaved place) or the run only reads.
+                    from . import studio_loop
+                    discovered = await list_tools(session)
+                    studio = await studio_loop.open_guarded(session, discovered, studio_id=args.studio_id,
+                                                            opted_in=args.edit)
+                    event({"event": "studio_place", **studio.verdict.public()})
+                    answer, messages, archive = studio_loop.with_report(await execute(
+                        client=client, model=model, prompt=args.prompt,
                         image_paths=[Path(p).expanduser() for p in args.image], studio=studio,
-                        discovered=await list_tools(studio), studio_id=args.studio_id, may_edit=args.edit, allow_luau=args.unsafe_luau,
+                        discovered=discovered, studio_id=args.studio_id, may_edit=studio.verdict.editable,
+                        allow_luau=studio.verdict.editable and args.unsafe_luau,
                         project_memory=db.get(project) + "\nAPPROVED PROJECT KNOWLEDGE:\n" + trusted_notes, checkpoint=checkpoint,
                         max_calls=int(os.environ.get("STAR_MAX_MODEL_CALLS", "12")),
-                        context_chars=int(os.environ.get("STAR_CONTEXT_CHARS", "25000")), on_event=event)
+                        context_chars=int(os.environ.get("STAR_CONTEXT_CHARS", "25000")), on_event=event), studio)
         raw_path.write_text(json.dumps({"messages":messages, "archive":archive}, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
         (target / "answer.md").write_text(answer, encoding="utf-8")
         # The checkpoint is a factual record of the task; never claim any untested action succeeded.
