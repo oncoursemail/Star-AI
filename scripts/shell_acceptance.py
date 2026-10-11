@@ -22,6 +22,9 @@ Phases (default: all, in this order)
     upgrade    first start on a profile left by the released v0.8 app (old settings,
                old message table, on-device provider): nothing is lost or rewritten
     testclose  the window is closed while "Test actual response" is still waiting
+    media      Settings shows where STAR generates (servers or this PC) with the host's notes;
+               Create image makes a real picture with ComfyUI on this PC when it is running,
+               and shows the host's plain explanation when it is not (no model server needed)
 
 Safety
     * APPDATA is a fresh folder made by this script; a phase refuses to start
@@ -57,13 +60,14 @@ import subprocess
 import sys
 import tempfile
 import threading
+import re
 import time
 import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = '.star-shell-acceptance-profile'
-PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade', 'testclose')
+PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade', 'testclose', 'media')
 CONSOLE_PROBE = 'shell-acceptance console probe'
 ENV_KEY = 'STAR_SERVER_API_KEY'
 ENV_SERVER = 'STAR_ACCEPTANCE_SERVER'
@@ -73,6 +77,11 @@ WRONG_KEY = 'acceptance-wrong-key-not-a-secret'
 PROMPT_FAST = 'Reply with one short sentence: what is 2+2?'
 PROMPT_LONG = 'Write a detailed 400 word essay about the history of the Roman Empire.'
 PROMPT_FAIL = 'Say hello in three words.'
+PROMPT_IMAGE = 'A small lighthouse on a rocky island at sunset, clean low-poly game art'
+PROMPT_VIDEO_LINK = 'Summarise what happens in this video in two sentences: https://www.youtube.com/watch?v=star0accept1'
+NOT_WATCHED = re.compile(r"(?:haven't|have not|didn't|did not|can't|cannot|can not|unable to|not able to|no way to)\s+"
+                         r"(?:actually\s+)?(?:watch|view|see|open|access|play)|only (?:have|see|got) (?:the|a) (?:link|title|url)|"
+                         r"attach(?:ing)? the (?:video )?file", re.I)
 # "tool" makes the read-only Agent Skills tools available; nothing here asks for Studio or a workspace.
 PROMPT_AGENT = ('Call the star_skill_catalog tool once, then tell me in one short sentence '
                 'how many Agent Skills it returned.')
@@ -652,7 +661,9 @@ def step_boot(d: Driver, expect_history: bool = False) -> None:
             # Nothing has talked to the server yet unless the app checked it by itself during start.
             checked = any(e.get('kind') == 'result' and 'steps' in (e.get('data') or {}) for e in d.events)
             s.fact('server_checked_during_start', checked)
-            s.check(status.get('state') == ('Ready' if checked else 'Not checked'),
+            # The app now checks the server by itself at start (warm-up). Its light can turn "Ready" a moment
+            # before the warm-up's result event arrives (priming is still running), so both are truthful then.
+            s.check(status.get('state') == 'Ready' if checked else status.get('state') in ('Not checked', 'Ready'),
                     'status is truthful at start: "Not checked" until a real check or reply', status.get('state'))
         else:
             s.check(status.get('state') == 'Offline', 'status says the model on this PC is not running', status.get('state'))
@@ -1252,7 +1263,7 @@ def step_close_during_test(d: Driver) -> None:
 
 def run_phase(d: Driver) -> None:
     phase = d.phase
-    step_boot(d, expect_history=phase != 'first')
+    step_boot(d, expect_history=bool(read_messages(d.profile)) if phase == 'media' else phase != 'first')
     if phase == 'first':
         step_model_page(d)
         step_fast_send(d)
@@ -1275,6 +1286,102 @@ def run_phase(d: Driver) -> None:
         step_upgrade(d)
     elif phase == 'testclose':
         step_close_during_test(d)
+    elif phase == 'media':
+        step_media(d)
+
+
+def step_media(d: Driver) -> None:
+    """Where STAR generates, and one real picture from the chat (ComfyUI on this PC, 127.0.0.1)."""
+    section = 'section[aria-label="Where STAR generates"]'
+    ready = False
+    with d.step('media-settings') as s:
+        d.open_page('Settings', 'Settings')
+        d.wait_for(f"!!document.querySelector({json.dumps(section)})", 15, 'the "Where STAR generates" section')
+        # The choices and notes come from the host (mediaStatus), which also asks ComfyUI for its state.
+        d.wait_for(f"(__acc.text({json.dumps(section)})||'').includes('Image engine on this PC')", 40,
+                   'the media status from the host')
+        d.pump(0.5)
+        text = d.js(f"__acc.text({json.dumps(section)})") or ''
+        s.fact('text', text[:5000])
+        s.check(all(title in text for title in ('Images', 'Voice', 'Video understanding')), 'three capabilities are listed')
+        s.check(text.count('STAR Brains (servers)') >= 3 and text.count('This PC (your GPU)') >= 3,
+                'each capability offers the servers and this PC')
+        s.check('Measured on this PC' in text, 'the note for images on this PC is a measurement')
+        s.check('(unavailable)' in text and 'no graphics card' in text,
+                'the server option for images is shown as unavailable, with the reason')
+        blocked = d.js("(()=>{const r=[...document.querySelectorAll('input[name=\"media-images\"]')];"
+                       "return r.length===2&&r[0].disabled&&!r[1].disabled&&r[1].checked})()")
+        s.check(bool(blocked), 'the unavailable place cannot be chosen and This PC is selected for images')
+        ready = 'Ready: FLUX.2 klein' in text
+        s.fact('image_engine_ready', ready)
+        s.check(ready or 'not running on this PC' in text or 'model files are missing' in text,
+                'the state of the image engine is stated', text[-600:])
+        s.check(not d.key_in_page(), 'the server key is not in the page')
+        d.box(section)
+        d.pump(0.4)
+        s.shots.append(d.shot('media-settings'))
+    with d.step('media-image') as s:
+        d.open_chat()
+        d.click('button[aria-label="Add files and tools"]')
+        d.click('.cmp-menu [role^="menuitem"]', 'Create image')
+        d.wait_for("!!document.querySelector('select.cmp-size')", 10, 'the image size control')
+        s.check(not d.js("!!__acc.find('.cmp-link', 'Set up image creation')"),
+                'no workflow file has to be set up first')
+        d.click('#star-prompt')
+        d.select_all_and_type(PROMPT_IMAGE)
+        folder = d.profile / 'STAR' / 'generated-images'
+        before = set(folder.glob('*.png')) if folder.is_dir() else set()
+        mark = len(d.events)
+        sent = time.time()
+        d.press(d.Qt.Key.Key_Return)
+        d.wait_for("!!document.querySelector('.cmp.is-busy')", 10, 'the image turn to start')
+        d.wait_for("!document.querySelector('.cmp.is-busy')", 240, 'the image turn to finish')
+        s.fact('seconds', round(time.time() - sent, 1))
+        outcome = [e for e in d.events[mark:] if e.get('kind') in ('result', 'error')]
+        s.fact('outcome', [{'kind': e.get('kind'), 'data': str(e.get('data'))[:300] if e.get('kind') == 'error'
+                            else {k: (v if k != 'image' else f'<{len(str(v))} chars>')
+                                  for k, v in (e.get('data') or {}).items()}} for e in outcome][-1:])
+        made = sorted(set(folder.glob('*.png')) - before) if folder.is_dir() else []
+        if ready:
+            s.check(bool(d.js("!!document.querySelector('.generated-image-button img')")),
+                    'the generated picture is shown in the conversation')
+            s.check(len(made) == 1 and made[0].with_suffix('.json').is_file(),
+                    'the original and its note are saved under the profile\'s STAR/generated-images', [p.name for p in made])
+            page = d.js("__acc.text('[role=\"log\"]')") or ''
+            s.check('on this PC' in page and 'FLUX.2 klein' in page, 'the answer says where and with what it was made',
+                    page[-300:])
+        else:
+            page = d.js("__acc.text('[role=\"log\"]')") or ''
+            s.check('ComfyUI' in page and ('not running on this PC' in page or 'model file' in page),
+                    'the chat shows the host\'s plain explanation instead of a picture', page[-400:])
+            s.check(not made, 'nothing was saved or shown as if it had worked')
+        s.shots.append(d.shot('media-image'))
+        if d.js("!!__acc.find('.composer-image-chip')"):
+            d.click('.composer-image-chip')         # back to ordinary messages
+    # Every chat message now passes through star/chat_media.prepare_turn: a plain one must be unchanged.
+    step_fast_send(d, name='media-plain-chat')
+    # A link is not a video: the answer must say it was not watched (the model's words are recorded).
+    step_fast_send(d, name='media-video-link', prompt=PROMPT_VIDEO_LINK)
+    with d.step('media-video-link-honesty') as s:
+        rows = read_messages(d.profile)
+        answer = next((row['body'] for row in reversed(rows) if row['role'] == 'assistant'), '')
+        s.fact('answer', answer[:700])
+        s.check(bool(NOT_WATCHED.search(answer)), 'STAR says it has not watched the linked video', answer[:300])
+        s.check('Based on' not in answer or 'sampled frame' not in answer,
+                'no "based on sampled frames" line is added when no video file was given')
+    with d.step('media-references') as s:
+        d.open_page('Projects', 'Your workspaces')
+        panel = 'section[aria-label="Visual references"]'
+        d.wait_for(f"!!document.querySelector({json.dumps(panel)})", 15, 'the visual references panel')
+        d.pump(0.5)
+        shown = d.js(f"__acc.text({json.dumps(panel)})") or ''
+        s.fact('text', shown[:1200])
+        s.check('Visual references for' in shown and 'Pin an image' in shown, 'the panel explains itself and offers Pin an image')
+        s.check('No references yet for this project' in shown and '0 of 12 pinned' in shown,
+                'a new project has no references and says so')
+        d.box(panel)
+        d.pump(0.4)
+        s.shots.append(d.shot('media-references'))
 
 
 # ---------------------------------------------------------------------- child
