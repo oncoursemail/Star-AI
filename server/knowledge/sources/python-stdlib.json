@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "python-stdlib",
+  "title": "Python standard library documentation",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/python/cpython.git",
+    "revision": "3.14",
+    "content_root": "Doc/library/",
+    "public_base": "https://docs.python.org/3/library/"
+  },
+  "licence": {
+    "text": {
+      "id": "PSF-2.0",
+      "url": "https://docs.python.org/3/license.html",
+      "redistribution_allowed": true,
+      "attribution": "Preserve the Python Software Foundation copyright notice and licence; identify modified content and summarize changes.",
+      "conditions": "Documentation is under PSF License v2, apart from separately credited third-party content.",
+      "evidence_url": "https://github.com/python/cpython/blob/main/Doc/license.rst",
+      "evidence_quote": "Python software and documentation are licensed under the Python Software Foundation License Version 2."
+    },
+    "code_samples": {
+      "id": "PSF-2.0-OR-0BSD",
+      "url": "https://docs.python.org/3/license.html",
+      "redistribution_allowed": true,
+      "attribution": "Code examples since Python 3.8.6 are dual-licensed PSF-2.0/0BSD; 0BSD requires no attribution, but retain page/source credit for traceability.",
+      "conditions": "Exclude separately licensed incorporated software and example downloads.",
+      "evidence_url": "https://github.com/python/cpython/blob/main/Doc/license.rst",
+      "evidence_quote": "dual licensed under the PSF License Version 2"
+    }
+  },
+  "include": [
+    "Doc/library/ standard library modules",
+    "Doc/library/ standard data types, exceptions and built-ins",
+    "Doc/library/ concurrency, networking, files and system services"
+  ],
+  "exclude": [
+    "Doc/tutorial/ and Doc/howto/ (outside the standard-library scope)",
+    "Doc/c-api/ and internal implementation docs",
+    "Doc/license.rst and third-party license material",
+    "Examples from separately licensed third-party programs",
+    "Translations, generated binaries and images"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 200,
+    "max": 3500,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "per-release",
+    "note": "Review per Python feature/security release; pin a supported CPython branch and recheck third-party notices."
+  },
+  "citation": {
+    "format": "Python Standard Library: {title} — {url} (Python Software Foundation, PSF-2.0)",
+    "example": "Python Standard Library: pathlib — https://docs.python.org/3/library/pathlib.html (PSF-2.0)"
+  }
+}
