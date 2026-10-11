@@ -215,6 +215,57 @@ connector's MCP over standard input and output, for example
 place open there is asked what it is before anything is edited. The variable is read from the process environment
 only, so a model cannot set it.
 
+### The STAR Studio server (a Studio on Linux, signed in as STAR's own account)
+
+STAR has its own Roblox Studio on a second machine: Studio under Wine (Vinegar) in a container, started by a
+service on a virtual display, opened on **STAR Test Place** (experience 10770312935, place 128074805767678,
+private). STAR reaches it as an MCP stdio command over SSH with the existing key; no network service is opened.
+
+    python -m star.studio_remote --home <STAR data folder> --set-target server --set-command '["ssh", "-o", "BatchMode=yes", "<host>", "<launcher>"]'
+    python -m star.studio_remote --home <STAR data folder> --test          # reads only: tools, instance, place, rule
+
+- **Setting.** `star/studio_remote.py` keeps the target (`pc` = "Studio: this PC", `server` = "Studio: STAR Studio
+  server") and the command in `<STAR data folder>/studio/remote.json`. The process environment
+  (`STAR_STUDIO_MCP_COMMAND`) wins over the file. What the interface is given (`public`) never contains the
+  command, only that one is stored and the name of its program. `test()` is the backend of a Test button; a
+  failure reports its kind, never the command.
+- **Narrower rule on the server.** `PinnedSession` sits under `GuardedStudio` and lets STAR change exactly one
+  published place there, STAR Test Place, checked by both ids and never by name, or a blank unsaved place.
+  Every Luau call carries the check on its first line, inside the same engine call, so it cannot run in a place
+  that was opened a moment earlier. A script edit and a playtest start ask the place first and are refused on any
+  other answer, on an error and on no answer. Reads and stopping a playtest pass. The general rule still applies
+  on top: the place must belong to the account of the connected key.
+- **Waiting for Studio.** A connector that has just started answers its tool list at once from a cache but lists
+  no Studio for about two seconds, until Studio attaches. `wait_for_studio` waits (20 s at most) instead of
+  reporting "no Studio". Every tool of the real connector needs `studio_id`.
+- **The loop, run for real on 2026-10-11** (`scripts/studio_remote_loop.py`, through `star/studio.py`,
+  `PinnedSession` and `GuardedStudio`): read the tree (21 instances); build a lobby (16 anchored parts with a
+  spawn, two lights and a sign), a shop panel made of native layout objects (UIListLayout, UIPadding, UICorner,
+  UIStroke, UISizeConstraint, automatic size), two RemoteEvents, a server script that validates purchase requests
+  and a local script that sends them; playtest; read the output (one purchase accepted, three refused: unknown
+  item, bad quantity, not enough coins; no errors); judge true captures of the display; fix what the first capture
+  showed (the panel's lower third was empty, the walls were blown out, the camera did not show the spawn); undo
+  through STAR's journal (the tree was back at 21 instances); build again; publish from Studio (a key press in
+  the Studio window by the operator: STAR's code has no publish step); verify from outside
+  with `scripts/studio_remote_verify.py`: the place's update time moved, a server-side Luau task ran in version 3
+  instead of 2 and counted the 16 anchored parts, the spawn, both RemoteEvents, the panel and both scripts. The
+  experience is still private.
+- **Three things the real connector taught** (the stand-in did not): a script is created by `multi_edit` with a
+  `game.`-prefixed path and a class name; Studio's output can still hold an earlier playtest's lines, word for
+  word the same, so each playtest gets a run mark that the server script prints and only what follows it is
+  judged; the journal is per session, so a later session removes earlier work by name (`--remove`), not by undo.
+- **What a Luau task answers** (not on the documentation pages): `output` is `{"results": ["<returned value>"]}`.
+
+**Why the connector must run inside Studio's own sandbox.** Vinegar is a flatpak app. A connector started with a
+second `flatpak run` has its own process-id namespace but still reaches Studio's Wine server through the `/tmp`
+that instances of one app share. The Wine server uses the process ids its clients report in its own namespace,
+where the connector's id belongs to Vinegar: the first launch kills Vinegar, the second one takes the Wine server
+down and Studio hangs for good ("Hang In Progress ... MainThreadHangs"). The launcher therefore enters the running
+Studio's sandbox (`nsenter` into its user, mount and process-id namespaces, with Studio's own environment and Wine
+build). Fifty launches since, no hang. The official MCP switch is the key `"mcp-server": {"enabled": true}` in
+Studio's `AssistantSettings/<user id>.json`. A display without any window manager does not work either: Wine
+leaves Studio's loading box on top and ignores a resize, so the service runs one window manager and no desktop.
+
 ## 7. What is not here
 
 - Nothing is ever made public, bought or spent; there is no code path for it.
