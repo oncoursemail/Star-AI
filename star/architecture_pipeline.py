@@ -21,8 +21,24 @@ PALETTES = {
     "industrial": {"wall": "#a36e59", "trim": "#514740", "roof": "#535357", "glass": "#83a3b1", "door": "#595d60"},
     "modern": {"wall": "#c8c9c4", "trim": "#373f43", "roof": "#6a7073", "glass": "#87b2c0", "door": "#50575c"},
     "spaceport": {"wall": "#aebbc2", "trim": "#384957", "roof": "#394652", "glass": "#82c5c4", "door": "#476574"},
+    "gothic": {"wall": "#9a9b98", "trim": "#41444a", "roof": "#485465", "glass": "#7a9eae", "door": "#4b3b35"},
+    "brutalist": {"wall": "#9fa19f", "trim": "#666b6b", "roof": "#777a7a", "glass": "#7c9fa7", "door": "#454c51"},
+    "coastal": {"wall": "#e7e2d6", "trim": "#446376", "roof": "#718d97", "glass": "#a2c8d2", "door": "#9f7859"},
+    "anime_city": {"wall": "#e5d9ca", "trim": "#533d60", "roof": "#b85d6b", "glass": "#93bdc9", "door": "#625077"},
 }
-_ROOF = {"storybook": "gable", "industrial": "flat", "modern": "flat", "spaceport": "flat"}
+_ROOF = {"storybook": "gable", "industrial": "flat", "modern": "flat",
+         "spaceport": "flat", "gothic": "gable", "brutalist": "flat",
+         "coastal": "gable", "anime_city": "gable"}
+STYLE_GRAMMARS = {
+    "storybook": "gable roof, exposed timber framing and repeated story-scale facade rhythm",
+    "industrial": "flat roof, robust loading-bay piers and protected front entrance",
+    "modern": "flat roof, clean facade rhythm and restrained sunshade geometry",
+    "spaceport": "flat roof, modular service fins and a deep equipment-safe entry canopy",
+    "gothic": "steep gables, slender exterior ribs and pointed ornamental window crowns",
+    "brutalist": "flat concrete massing, strong vertical piers and deep entrance overhang",
+    "coastal": "pitched roof, sheltered porch, slender structural porch posts",
+    "anime_city": "pitched roof, colorful eaves and a visible frontage sign panel",
+}
 _NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,47}\Z")
 _REQUIRED = {"name", "style", "width_studs", "depth_studs", "floors", "bays"}
 _OPTIONAL = {"story_height_studs"}
@@ -122,6 +138,65 @@ def make_plan(brief: BuildingBrief) -> dict:
         for side, y in (("front", -d / 2 - 0.25), ("back", d / 2 + 0.25)):
             box(f"belt_{side}_{floor}", "trim", (0, y, z0 + h - 0.35), (w + 0.2, 0.45, 0.35))
 
+    # Deterministic design grammars: structural-looking facade detail serves a style,
+    # rather than scattering random visual decoration. These are first-pass silhouettes.
+    style = brief.style
+    if style in {"storybook", "industrial", "brutalist", "gothic", "spaceport"}:
+        for side, y in (("front", -d / 2 - 0.55), ("back", d / 2 + 0.55)):
+            for index in range(bays + 1):
+                x = -w / 2 + index * bw
+                thickness = 0.42 if style in {"storybook", "gothic"} else 0.95
+                depth = 0.55 if style in {"storybook", "gothic"} else 0.85
+                box(f"pier_{side}_{index}", "trim", (x, y, floors * h / 2),
+                    (thickness, depth, floors * h))
+    if style in {"industrial", "modern", "spaceport", "brutalist"}:
+        entry_bay = (bays - 1) // 2
+        entry_x = -w / 2 + (entry_bay + 0.5) * bw
+        canopy_depth = 4.0 if style in {"industrial", "modern"} else 6.0
+        box("entry_canopy", "roof", (entry_x, -d / 2 - canopy_depth / 2, 8.65),
+            (min(bw + 3.0, w - 2), canopy_depth, 0.45 if style != "brutalist" else 1.0))
+    if style == "storybook":
+        for side, y in (("front", -d / 2 - 0.56), ("back", d / 2 + 0.56)):
+            for floor in range(floors):
+                box(f"storybook_rail_{side}_{floor}", "trim",
+                    (0, y, floor * h + h * 0.6), (w, 0.28, 0.32))
+    if style == "gothic":
+        for side, y in (("front", -d / 2 - 0.61), ("back", d / 2 + 0.61)):
+            for floor in range(floors):
+                for index in range(bays):
+                    x = -w / 2 + (index + 0.5) * bw
+                    z = floor * h + 9.3
+                    span = opening * 0.57
+                    parts.append({
+                        "name": f"crown_{side}_f{floor}_b{index}",
+                        "kind": "triangle_prism", "material": "trim",
+                        "vertices": [[x - span / 2, y - 0.14, z],
+                                     [x + span / 2, y - 0.14, z],
+                                     [x, y - 0.14, z + 1.6],
+                                     [x - span / 2, y + 0.14, z],
+                                     [x + span / 2, y + 0.14, z],
+                                     [x, y + 0.14, z + 1.6]],
+                    })
+    if style == "coastal":
+        entry_x = -w / 2 + ((bays - 1) // 2 + 0.5) * bw
+        box("coastal_porch_roof", "roof", (entry_x, -d / 2 - 2.6, 9.0),
+            (min(bw + 3.0, w - 2), 5.0, 0.5))
+        for sign, label in ((-1, "left"), (1, "right")):
+            box(f"coastal_porch_post_{label}", "trim",
+                (entry_x + sign * min(bw / 2 + 0.75, (w - 2) / 2), -d / 2 - 4.6, 4.5),
+                (0.55, 0.55, 9))
+    if style == "anime_city":
+        for side, y in (("front", -d / 2 - 0.65), ("back", d / 2 + 0.65)):
+            box(f"anime_facade_eave_{side}", "roof",
+                (0, y, floors * h - 0.35), (w + 1.8, 1.0, 0.35))
+        box("anime_shop_sign", "trim",
+            (0, -d / 2 - 0.8, h - 1.1), (min(w - 3, 18), 0.6, 2.2))
+    if style == "modern":
+        for side, y in (("front", -d / 2 - 0.9), ("back", d / 2 + 0.9)):
+            for floor in range(floors):
+                box(f"modern_sunshade_{side}_{floor}", "roof",
+                    (0, y, floor * h + 9.2), (w - 1, 1.4, 0.25))
+
     top = floors * h
     if _ROOF[brief.style] == "flat":
         box("flat_roof", "roof", (0, 0, top + 0.35), (w + 1.4, d + 1.4, 0.7))
@@ -130,7 +205,7 @@ def make_plan(brief: BuildingBrief) -> dict:
     else:
         from math import atan2, degrees, hypot
         half = w / 2 + 0.8
-        rise = min(w * 0.20, 12)
+        rise = min(w * (0.32 if style == "gothic" else 0.20), 16 if style == "gothic" else 12)
         span = hypot(half, rise)
         slope = degrees(atan2(rise, half))
         for sign, label in ((-1, "left"), (1, "right")):
@@ -145,7 +220,7 @@ def make_plan(brief: BuildingBrief) -> dict:
 
     estimate = 12 * sum(p["kind"] == "box" for p in parts) + 8 * sum(p["kind"] == "triangle_prism" for p in parts)
     return {"schema_version": 1, "brief": asdict(brief), "unit": "studs (verify orientation and scale in Studio)",
-            "palette": PALETTES[brief.style], "parts": parts,
+            "palette": PALETTES[brief.style], "style_grammar": STYLE_GRAMMARS[brief.style], "parts": parts,
             "metrics": {"parts_before_material_batch": len(parts), "estimated_triangles": estimate,
                         "material_groups": len(PALETTES[brief.style])},
             "review_required": ["reference fidelity and architectural plausibility", "door gameplay and collision",
