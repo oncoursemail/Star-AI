@@ -73,7 +73,9 @@ class Suite:
         unit = (task.get("auto") or {}).get("unit_test")
         if not unit:
             return ""
-        return (self.directory / unit["file"]).read_text(encoding="utf-8")
+        return (self.directory / unit["file"]).read_text(encoding="utf-8").replace("
+", "
+")
 
 
 def load_suite(path: Path) -> Suite:
@@ -83,11 +85,16 @@ def load_suite(path: Path) -> Suite:
     load_catalog(path)                                     # the existing loader's rules (ids, modes, fields)
     tasks = json.loads(raw.decode("utf-8"))
     prelude_file = path.parent / "prelude.luau"
-    prelude = prelude_file.read_text(encoding="utf-8") if prelude_file.is_file() else ""
+    prelude = prelude_file.read_text(encoding="utf-8").replace("
+", "
+") if prelude_file.is_file() else ""
     problems = validate_tasks(tasks, path.parent)
     if problems:
         raise ValueError("suite is invalid: " + "; ".join(problems[:8]))
-    return Suite(path, hashlib.sha256(raw).hexdigest(), tasks, prelude)
+    # Hash with normalised line endings: a Windows checkout (CRLF) and a git archive (LF) must agree.
+    return Suite(path, hashlib.sha256(raw.replace(b"
+", b"
+")).hexdigest(), tasks, prelude)
 
 
 def validate_tasks(tasks: list[dict], directory: Path) -> list[str]:
