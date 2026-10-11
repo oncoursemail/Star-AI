@@ -95,7 +95,7 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:test-?first|TDD|tests? first|unit tests?|write (?:the )?tests?|red-?green|failing tests?|regression tests?|"
         r"asserts?)\b", re.IGNORECASE),
     "eng-verify-before-done": re.compile(
-        r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|what you (?:checked|tested)|"
+        r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
 }
 
