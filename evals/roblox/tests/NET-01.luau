@@ -1,6 +1,8 @@
 local remote = { OnServerEvent = Signal.new() }
 local grants = {}
+local observed = false
 local function giveItem(player, itemId)
+	observed = true
 	local k = player.Name .. "|" .. tostring(itemId)
 	grants[k] = (grants[k] or 0) + 1
 end
@@ -16,11 +18,16 @@ local function fire(player, ...)
 	local args = table.pack(...)
 	return pcall(function() remote.OnServerEvent:Fire(player, table.unpack(args, 1, args.n)) end)
 end
-local function owned(player, id) return grants[player.Name .. "|" .. tostring(id)] or 0 end
+-- An answer that defines its own giveItem is not observable through the stub: judge the grant by the charge
+-- (the catalog price of a sword is 100), which the task ties to the grant.
+local function owned(player, id, start)
+	if observed then return grants[player.Name .. "|" .. tostring(id)] or 0 end
+	return math.floor(((start or 0) - player.leaderstats.Coins.Value) / 100)
+end
 
 local p = fresh(100)
 fire(p, "sword", -1e9)
-check("a client price of -1e9 is ignored (balance 0, sword granted once)", p.leaderstats.Coins.Value == 0 and owned(p, "sword") == 1)
+check("a client price of -1e9 is ignored (balance 0, sword granted once)", p.leaderstats.Coins.Value == 0 and owned(p, "sword", 100) == 1)
 
 local priceOk = true
 for _, price in { -1e9, 0, 0 / 0, "free" } do
@@ -39,7 +46,7 @@ local idOk = true
 for _, id in { 5, {}, "gold", string.rep("x", 10000) } do
 	local r = fresh(1000)
 	local ok = fire(r, id, 100)
-	if not ok or r.leaderstats.Coins.Value ~= 1000 or owned(r, id) ~= 0 then idOk = false end
+	if not ok or r.leaderstats.Coins.Value ~= 1000 or owned(r, id, 1000) ~= 0 then idOk = false end
 end
 local r = fresh(1000)
 local okNil = fire(r, nil, 100)
@@ -49,12 +56,12 @@ check("invalid or unknown itemId: no charge, no grant, no error", idOk)
 local poor, rich = fresh(99), fresh(100)
 fire(poor, "sword", 100)
 fire(rich, "sword", 100)
-check("99 coins cannot buy a sword", poor.leaderstats.Coins.Value == 99 and owned(poor, "sword") == 0)
-check("100 coins buys it: balance 0, granted once", rich.leaderstats.Coins.Value == 0 and owned(rich, "sword") == 1)
+check("99 coins cannot buy a sword", poor.leaderstats.Coins.Value == 99 and owned(poor, "sword", 99) == 0)
+check("100 coins buys it: balance 0, granted once", rich.leaderstats.Coins.Value == 0 and owned(rich, "sword", 100) == 1)
 
 local spammer = fresh(1000)
 for _ = 1, 50 do fire(spammer, "sword", 100) end
-check("50 rapid valid calls grant once and charge once", owned(spammer, "sword") == 1 and spammer.leaderstats.Coins.Value == 900)
+check("50 rapid valid calls grant once and charge once", owned(spammer, "sword", 1000) == 1 and spammer.leaderstats.Coins.Value == 900)
 
 local rnd = lcg(1234)
 local pool = { "sword", "shield", 5, "gold", {}, false }

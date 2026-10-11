@@ -1,6 +1,9 @@
 local clones = 0
 local function makePart()
-	return { ClassName = "Part", Parent = nil, Velocity = { 1, 2, 3 }, Anchored = false }
+	local part = { ClassName = "Part", Parent = nil, Velocity = { 1, 2, 3 }, Anchored = false }
+	function part:IsA(className) return className == "Part" or className == "BasePart" or className == "PVInstance" or className == "Instance" end
+	function part:Destroy() end
+	return part
 end
 local template = makePart()
 function template:Clone()

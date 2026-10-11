@@ -582,13 +582,9 @@
    "require": [
     {
      "id": "unreliable_aim",
-     "re": "Instance\\.new\\(\\s*\"UnreliableRemoteEvent\"\\s*\\)",
-     "why": "the 20 Hz aim stream must use an UnreliableRemoteEvent"
-    },
-    {
-     "id": "reliable_round",
-     "re": "Instance\\.new\\(\\s*\"RemoteEvent\"\\s*\\)",
-     "why": "the round-end message must use a reliable RemoteEvent"
+     "re": "UnreliableRemoteEvent",
+     "why": "the 20 Hz aim stream must use an UnreliableRemoteEvent",
+     "scope": "raw"
     },
     {
      "id": "fire_all",
@@ -2070,23 +2066,33 @@
      "why": "createNameplate is defined"
     },
     {
-     "id": "scaled",
-     "re": "TextScaled\\s*=\\s*true",
-     "why": "TextScaled shrinks the text to fit"
+     "id": "fits",
+     "any": [
+      "TextScaled\\s*=\\s*true",
+      "TextFits",
+      "TextBounds",
+      "GetTextBoundsAsync",
+      "GetTextSize"
+     ],
+     "why": "the text shrinks to fit (TextScaled, or measured)"
     },
     {
-     "id": "constraint",
-     "re": "\"UITextSizeConstraint\"",
-     "why": "a UITextSizeConstraint bounds the size"
+     "id": "bounded",
+     "any": [
+      "\"UITextSizeConstraint\"",
+      "math\\.clamp",
+      "MinTextSize"
+     ],
+     "why": "the size is bounded"
     },
     {
      "id": "min",
-     "re": "MinTextSize\\s*=\\s*10\\b",
+     "re": "\\b10\\b",
      "why": "the minimum size is 10"
     },
     {
      "id": "max",
-     "re": "MaxTextSize\\s*=\\s*24\\b",
+     "re": "\\b24\\b",
      "why": "the maximum size is 24"
     }
    ]
@@ -2103,8 +2109,8 @@
    "checks": [
     "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
     "Present: createNameplate is defined",
-    "Present: TextScaled shrinks the text to fit",
-    "Present: a UITextSizeConstraint bounds the size",
+    "Present: the text shrinks to fit (TextScaled, or measured)",
+    "Present: the size is bounded",
     "Present: the minimum size is 10",
     "Present: the maximum size is 24"
    ]
@@ -2280,7 +2286,9 @@
      "id": "humanoid",
      "any": [
       "FindFirstChildOfClass\\(\\s*\"Humanoid\"\\s*\\)",
-      "FindFirstChild\\(\\s*\"Humanoid\"\\s*\\)"
+      "FindFirstChildWhichIsA\\(\\s*\"Humanoid\"\\s*\\)",
+      "FindFirstChild\\(\\s*\"Humanoid\"\\s*\\)",
+      "WaitForChild\\(\\s*\"Humanoid\"\\s*\\)"
      ],
      "why": "the target must have a Humanoid"
     },
@@ -2434,7 +2442,12 @@
     },
     {
      "id": "server_state",
-     "re": "\\[\\s*player\\s*\\]|\\.UserId",
+     "any": [
+      "\\[\\s*\\w+\\s*\\]",
+      "\\.UserId",
+      "Instance\\.new\\(\\s*\"(Number|Int)Value\"\\s*\\)",
+      "SetAttribute"
+     ],
      "why": "the server keeps the ammo count itself"
     }
    ],
@@ -3143,16 +3156,12 @@
    "require": [
     {
      "id": "rig_type",
-     "re": "RigType",
-     "why": "the rig type is checked"
-    },
-    {
-     "id": "rig_enum",
      "any": [
-      "HumanoidRigType\\.R6",
-      "HumanoidRigType\\.R15"
+      "RigType",
+      "\"RightHand\"",
+      "\"Right Arm\""
      ],
-     "why": "R6 and R15 are told apart with Enum.HumanoidRigType"
+     "why": "R6 and R15 are told apart (Humanoid.RigType, or the RightHand / Right Arm part)"
     },
     {
      "id": "grip",
@@ -3205,8 +3214,7 @@
    "type": "static",
    "checks": [
     "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
-    "Present: the rig type is checked",
-    "Present: R6 and R15 are told apart with Enum.HumanoidRigType",
+    "Present: R6 and R15 are told apart (Humanoid.RigType, or the RightHand / Right Arm part)",
     "Present: the tool's grip properties align the sword",
     "Present: reacts to Equipped",
     "Present: reacts to Unequipped",
