@@ -126,36 +126,63 @@ def test_restart_reuses_checkpoint_and_next_move_summarizes_only_new_prefix(dial
     assert cm.read_checkpoint(store_path(store), 'P', chat) == advanced.checkpoint
 
 
-def test_failed_or_cancelled_prior_user_is_retained_with_outcome(dialogue):
+@pytest.mark.parametrize('scenario', [
+    'stopped_then_failed_image',
+    'cancelled',
+    'failed',
+    'interrupted',
+    'orphan_between',
+    'event_between',
+    'image_event',
+])
+def test_history_shaping_excludes_bad_turns_and_keeps_pairs(dialogue, scenario):
     store, chat = dialogue
-    user = store.add('P', 'user', 'EVIDENCE_KEEP_FAILED_REQUIREMENT', chat_id=chat)
-    event = store.add_terminal('P', chat, user, 'cancelled', 'Owner stopped the turn.')
+    store.add('P', 'user', 'Stable question', chat_id=chat)
+    store.add('P', 'assistant', 'Stable answer', chat_id=chat)
+    if scenario == 'stopped_then_failed_image':
+        stopped = store.add('P', 'user', 'stopped request', chat_id=chat)
+        store.add_terminal('P', chat, stopped, 'cancelled', 'Stopped by owner')
+        image = store.add('P', 'user', 'generate image', chat_id=chat)
+        store.add_terminal('P', chat, image, 'failed', 'Image generation failed')
+    elif scenario in ('cancelled', 'failed'):
+        owner = store.add('P', 'user', 'bad request', chat_id=chat)
+        store.add_terminal('P', chat, owner, scenario, 'failed')
+    elif scenario in ('interrupted', 'orphan_between'):
+        store.add('P', 'user', 'orphan request', chat_id=chat)
+    elif scenario == 'event_between':
+        store.add('P', 'event', 'UI notification', chat_id=chat)
+    else:
+        store.add('P', 'user', 'image generation request', chat_id=chat)
+        store.add('P', 'event', 'image generation complete', chat_id=chat)
+        store.add('P', 'assistant', 'image completed', chat_id=chat)
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 10000, current_text='what is 2+2?')
+    assert window.messages == [{'role': 'user', 'content': 'Stable question'},
+                               {'role': 'assistant', 'content': 'Stable answer'}]
+    assert len(window.messages) % 2 == 0
+    assert window.through_id == 0
+
+
+def test_filtered_rows_cannot_enter_recaps_and_checkpoint_prefix_is_stable(dialogue):
+    store, chat = dialogue
     for index in range(4):
         add_exchange(store, chat, index)
+    owner = store.add('P', 'user', 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK', chat_id=chat)
+    store.add_terminal('P', chat, owner, 'cancelled', 'EVIDENCE_EVENT_SHOULD_NOT_LEAK')
+    store.add('P', 'user', 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK', chat_id=chat)
+    add_exchange(store, chat, 5)
     models = Models()
-    result = prepare(store, chat, models)
-    transcript = json.loads(models.requests[0]['messages'][1]['content'].split('NEW TRANSCRIPT (redacted source):\n', 1)[1])
-    assert next(record for record in transcript if record['record_id'] == event)['status'] == 'cancelled'
-    assert 'EVIDENCE_KEEP_FAILED_REQUIREMENT' in result.checkpoint.summary
-
-
-@pytest.mark.parametrize('status', ['failed', 'cancelled'])
-def test_last_historic_failure_is_not_mistaken_for_the_active_question(dialogue, status):
-    store, chat = dialogue
-    user = store.add('P', 'user', 'Continue.', chat_id=chat)
-    event = store.add_terminal('P', chat, user, status, 'Historic outcome.')
-    records = store.raw_history_records('P', chat)
-    window = cm.select_window(records, 1000, current_text='Continue.')
-    assert window.messages[0]['content'] == 'Continue.'
-    assert [record['id'] for record in window.exchanges[0]] == [user, event]
-
-
-def test_similar_new_question_does_not_remove_an_unrelated_unanswered_record(dialogue):
-    store, chat = dialogue
-    user = store.add('P', 'user', 'Please', chat_id=chat)
-    window = cm.select_window(store.raw_history_records('P', chat), 1000, current_text='Please continue.')
-    assert window.messages[0]['content'] == 'Please'
-    assert window.exchanges[0][0]['id'] == user
+    candidate = prepare(store, chat, models)
+    assert candidate.changed
+    source = json.loads(models.requests[0]['messages'][1]['content'].split(
+        'NEW TRANSCRIPT (redacted source):\\n', 1)[1])
+    serialized = json.dumps(source)
+    assert 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK' not in serialized
+    assert 'EVIDENCE_EVENT_SHOULD_NOT_LEAK' not in serialized
+    assert 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK' not in serialized
+    cm.commit(store_path(store), candidate)
+    assert cm.read_checkpoint(store_path(store), 'P', chat) == candidate.checkpoint
 
 
 def test_legacy_checkpoint_matches_actual_writes_and_never_includes_other_chats(dialogue):
