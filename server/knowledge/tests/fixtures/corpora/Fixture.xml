@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<class name="AuthoredFixture" inherits="Node">
+    <description>Authored raw API fixture. Do not invent a renderer or execute it.</description>
+    <methods>
+        <method name="cancel_previous">
+            <return type="void" />
+            <description>Cancel and release the previous animation before replacement.</description>
+        </method>
+    </methods>
+</class>
