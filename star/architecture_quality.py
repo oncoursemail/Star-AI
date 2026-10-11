@@ -52,7 +52,8 @@ def _diagnostics(plan: object) -> tuple[list[str], list[str], dict]:
             errors.append(f"Duplicate part name: {name}")
         else:
             seen.add(name)
-        if part.get("material") not in palette:
+        material = part.get("material")
+        if type(material) is not str or material not in palette:
             errors.append(f"Part {index} uses an unknown material")
         kind = part.get("kind")
         if kind == "box":
@@ -132,7 +133,8 @@ def inspect_glb(path: Path, *, expected_material_roles=()) -> dict:
         scene = json.loads(data.decode("utf-8").rstrip(" \t\r\n\x00"))
     except (ValueError, UnicodeError) as exc:
         raise ValueError("Malformed GLB JSON scene") from exc
-    if not isinstance(scene, dict) or scene.get("asset", {}).get("version") != "2.0":
+    if not isinstance(scene, dict) or not isinstance(scene.get("asset"), dict) \
+            or scene["asset"].get("version") != "2.0":
         raise ValueError("Missing glTF 2.0 asset metadata")
     meshes, nodes = scene.get("meshes"), scene.get("nodes")
     if not isinstance(meshes, list) or not 1 <= len(meshes) <= 12:
