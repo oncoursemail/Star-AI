@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "unity-scripting-api",
+  "title": "Unity Scripting API",
+  "mode": "link-only",
+  "source": {
+    "kind": "website",
+    "url": "https://docs.unity3d.com/ScriptReference/index.html",
+    "revision": "current Unity 6 documentation",
+    "content_root": "ScriptReference/",
+    "public_base": "https://docs.unity3d.com/ScriptReference/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-NC-ND-4.0",
+      "url": "https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode",
+      "redistribution_allowed": false,
+      "attribution": "Credit Unity Technologies with a page link and licence link; only noncommercial, unmodified sharing is covered.",
+      "conditions": "The general STAR ingestion/quotation pipeline lacks unrestricted rights. Unity's separate AI permission is limited to assistance with Unity offerings; keep this corpus link-only.",
+      "evidence_url": "https://unity.com/legal/docs-terms",
+      "evidence_quote": "CC BY-NC-ND 4.0"
+    },
+    "code_samples": {
+      "id": "Unity-Companion-License-1.4",
+      "url": "https://unity.com/legal/licenses/unity-companion-license",
+      "redistribution_allowed": false,
+      "attribution": "Only Unity-dependent projects may exercise the Companion License; substantial copies retain its licence and copyright notice.",
+      "conditions": "STAR's general documentation corpus is not a Unity-dependent project. The Scripting API landing page grants broader rights to examples, but the documentation terms specify Companion License; do not store samples.",
+      "evidence_url": "https://unity.com/legal/docs-terms",
+      "evidence_quote": "Unity Companion License for Unity-dependent projects"
+    }
+  },
+  "include": [
+    "UnityEngine namespace API pages",
+    "UnityEditor namespace API pages",
+    "Classes, structs and enums",
+    "Methods, properties, events and signatures"
+  ],
+  "exclude": [
+    "Manual (separate manifest)",
+    "Undocumented internal or package-specific APIs",
+    "Third-party packages and linked sites",
+    "Images and downloadable binaries"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 3000,
+    "max": 60000,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "per-release",
+    "note": "Review alongside Unity API releases and check for changed examples/terms; do not fetch automatically."
+  },
+  "citation": {
+    "format": "Unity Scripting API: {title} — {url} (Unity Technologies, version shown on page)",
+    "example": "Unity Scripting API: GameObject — https://docs.unity3d.com/ScriptReference/GameObject.html (Unity Technologies)"
+  }
+}
