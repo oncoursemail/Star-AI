@@ -97,6 +97,26 @@ describe('Settings > Voice', () => {
     expect(desktop.sent('voiceListVoices')).toHaveLength(1)
   })
 
+  it('marks Heart on a profile that never chose a voice, and says so when the saved voice is a custom recipe', async () => {
+    // A new profile has the default recipe name and no catalog id yet (star/voice/settings.py).
+    voiceHost({selected: {voiceId: '', voice: 'heart'}})
+    await openSettings()
+    let section = await voiceSection()
+    const warm = await within(section).findByRole('group', {name: 'Warm and caring'})
+    expect(within(warm).getByText('Selected')).toBeTruthy()
+    expect(within(warm).getByRole('button', {name: 'Use Heart'})).toHaveProperty('disabled', true)
+    expect(within(section).getByText(/Current voice:/).textContent).toContain('Heart · Warm and caring')
+    cleanup()
+    desktop.reset()
+    voiceHost({selected: {voiceId: '', voice: 'af_heart:0.7+af_nicole:0.3'}})
+    await openSettings()
+    section = await voiceSection()
+    await within(section).findByRole('group', {name: 'Warm and caring'})
+    expect(within(section).getByText(/Current voice:/).textContent).toContain('af_heart:0.7+af_nicole:0.3 · a custom recipe that is not in this list')
+    expect(within(section).queryByText('Selected')).toBeNull()
+    expect(within(section).getByRole('button', {name: 'Use Heart'})).toHaveProperty('disabled', false)
+  })
+
   it('offers the commanding style as an opt-in: its voices appear only after the owner switches them on', async () => {
     voiceHost()
     const user = await openSettings()
@@ -128,6 +148,11 @@ describe('Settings > Voice', () => {
     voiceHost()
     const user = await openSettings()
     const warm = await within(await voiceSection()).findByRole('group', {name: 'Warm and caring'})
+    // They are kept out of the way of the voices that can be chosen, under their own heading.
+    const more = within(warm).getByText('1 more voice that is not usable in live calls yet')
+    expect(more.closest('details')!.contains(within(warm).getByText('Designed warm'))).toBe(true)
+    expect(more.closest('details')!.contains(within(warm).getByText('Heart'))).toBe(false)
+    await user.click(more)
     expect(within(warm).getByText('Not usable in live calls yet')).toBeTruthy()
     expect(within(warm).getByText(NOT_IN_CALLS)).toBeTruthy()
     const preview = within(warm).getByRole('button', {name: 'Preview Designed warm'})

@@ -164,9 +164,9 @@ export function RobloxPanel({status,draft,onChange,invoke,disabled=false}:{statu
    <div className="integrated-notes"><strong>Roblox Studio</strong>
      <p className="integrated-help">STAR only reads the place that is open in Studio, unless you switch edits on AND the place is a blank, unsaved Baseplate. It never edits another published place, never saves and never publishes. Press Save settings below after changing these.</p>
      <label className="integrated-field">Studio instance ID (from Tools, Discover Studio instances)<input value={draft.studio_id} disabled={disabled} onChange={e=>onChange({...draft,studio_id:e.target.value})}/></label>
-     <label className="toggle-line"><input type="checkbox" checked={draft.studio_edit} disabled={disabled} onChange={e=>onChange({...draft,studio_edit:e.target.checked})}/> <span>Studio edits in a blank, unsaved place</span></label>
-     <label className="toggle-line"><input type="checkbox" checked={!!draft.studio_own_places} disabled={disabled||!draft.studio_edit} onChange={e=>onChange({...draft,studio_own_places:e.target.checked})}/> <span>Also places of STAR's own account (the account of the tested key)</span></label>
-     <label className="toggle-line"><input type="checkbox" checked={!!draft.studio_luau} disabled={disabled||!draft.studio_edit} onChange={e=>onChange({...draft,studio_luau:e.target.checked})}/> <span>Let STAR run Luau in the sandbox (needed to create parts and UI)</span></label>
+     <label className="toggle-line"><span>Studio edits in a blank, unsaved place</span><input type="checkbox" checked={draft.studio_edit} disabled={disabled} onChange={e=>onChange({...draft,studio_edit:e.target.checked})}/></label>
+     <label className="toggle-line"><span>Also places of STAR's own account (the account of the tested key)</span><input type="checkbox" checked={!!draft.studio_own_places} disabled={disabled||!draft.studio_edit} onChange={e=>onChange({...draft,studio_own_places:e.target.checked})}/></label>
+     <label className="toggle-line"><span>Let STAR run Luau in the sandbox (needed to create parts and UI)</span><input type="checkbox" checked={!!draft.studio_luau} disabled={disabled||!draft.studio_edit} onChange={e=>onChange({...draft,studio_luau:e.target.checked})}/></label>
    </div>
  </section>
 }

@@ -30,8 +30,10 @@ const PREVIEW_LIMIT_MS=60_000
 const RECOMMENDED:Record<string,string>={live:'Best for live calls',quality:'Best quality'}
 
 /** The host prefixes a refusal with its Python error class; the owner only needs the sentence. */
-export const plainError=(error:unknown,fallback:string)=>
-  (typeof error==='string'?error:'').replace(/^[A-Z][A-Za-z]*(?:Error|Exception|Unavailable):\s*/,'').trim()||fallback
+export const plainError=(error:unknown,fallback:string)=>{
+  const text=(typeof error==='string'?error:'').replace(/^[A-Z][A-Za-z]*(?:Error|Exception|Unavailable):\s*/,'').trim()
+  return text?(/[.!?…]$/.test(text)?text:text+'.'):fallback
+}
 
 const firstSound=(voice:VoiceEntry)=>{
   const seconds=voice.latency?.first_audio_seconds
@@ -104,7 +106,9 @@ export function VoiceSettings({disabled=false}:{disabled?:boolean}){
   }
 
   const engineMissing=!!engine&&!engine.available
-  const selected=catalog?.voices.find(voice=>voice.id===catalog.selected.voiceId)
+  // A profile that never chose a voice has no catalog id yet: its default recipe name is the catalog voice of that name.
+  const selectedId=catalog?(catalog.selected.voiceId||(catalog.voices.some(voice=>voice.id===catalog.selected.voice)?catalog.selected.voice:'')):''
+  const selected=catalog?.voices.find(voice=>voice.id===selectedId)
   const selectedStyle=catalog?.styles.find(style=>style.id===(selected?.style||catalog.selected.style))
   return <section className="learn" aria-label="Star's voice">
     <div className="learn-head"><Volume2 size={20}/><div className="learn-title"><h2>Star's voice</h2>
@@ -122,7 +126,35 @@ export function VoiceSettings({disabled=false}:{disabled?:boolean}){
     {catalog?.styles.map(style=>{
       const voices=catalog.voices.filter(voice=>voice.style===style.id)
       const optIn=style.id===OPT_IN_STYLE
-      const usable=voices.filter(voice=>voice.callable).length
+      const usable=voices.filter(voice=>voice.callable)
+      const others=voices.filter(voice=>!voice.callable)
+      const row=(voice:VoiceEntry)=>{
+        const chosen=selectedId===voice.id
+        const playing=previewing===voice.id
+        const speed=firstSound(voice)
+        return <li key={voice.id} className={'voice-row'+(chosen?' is-chosen':'')+(voice.callable?'':' is-unavailable')}>
+          <div className="voice-text">
+            <strong>{voice.name}</strong>
+            <span className="voice-tags">
+              {chosen&&<span className="voice-tag is-chosen"><Check size={12} aria-hidden="true"/> Selected</span>}
+              {voice.recommended_for.map(use=>RECOMMENDED[use]&&<span key={use} className="voice-tag">{RECOMMENDED[use]}</span>)}
+              {!voice.callable&&<span className="voice-tag is-off">Not usable in live calls yet</span>}
+            </span>
+            {voice.notes&&<small>{voice.notes}</small>}
+            {!voice.callable&&voice.reason&&<small className="media-unavailable">{voice.reason}</small>}
+            {speed&&<small>{speed}</small>}
+            {failed?.id===voice.id&&<small role="alert" className="media-unavailable">Preview or choice failed: {failed.message}</small>}
+          </div>
+          <div className="voice-actions">
+            <button type="button" className="learn-button" aria-label={`Preview ${voice.name}`}
+              disabled={disabled||!voice.callable||engineMissing||!!engine?.inCall||!!previewing||!!saving} onClick={()=>void play(voice)}>
+              {playing?<><LoaderCircle size={14} className="spin" aria-hidden="true"/> Playing…</>:<><Play size={14} aria-hidden="true"/> Preview</>}</button>
+            <button type="button" className="learn-button is-primary" aria-label={`Use ${voice.name}`}
+              disabled={disabled||!voice.callable||chosen||!!saving||!!previewing} onClick={()=>void choose(voice)}>
+              {saving===voice.id?'Saving…':chosen?'In use':'Use this voice'}</button>
+          </div>
+        </li>
+      }
       return <div key={style.id} className="media-capability" role="group" aria-label={style.name}>
         <h3 className="voice-style">{style.name}
           {style.id===DEFAULT_STYLE&&<span className="voice-tag">Default</span>}
@@ -132,36 +164,13 @@ export function VoiceSettings({disabled=false}:{disabled?:boolean}){
           <small>Off until you switch it on, and never the default. It is a manner of speaking only: mature, calm and firm. In this style Star is told to stay a mentor: nothing romantic, no role-play.</small></span>
           <input type="checkbox" checked={offerCommanding} disabled={disabled} onChange={event=>setOfferCommanding(event.target.checked)}/></label>}
         {(!optIn||offerCommanding)&&<>
-          <p className="voice-count">{voices.length} voices, {usable} usable in live calls today. Sample line: “{style.preview_line}”</p>
-          <ul className="voice-list">
-            {voices.map(voice=>{
-              const chosen=catalog.selected.voiceId===voice.id
-              const playing=previewing===voice.id
-              const speed=firstSound(voice)
-              return <li key={voice.id} className={'voice-row'+(chosen?' is-chosen':'')+(voice.callable?'':' is-unavailable')}>
-                <div className="voice-text">
-                  <strong>{voice.name}</strong>
-                  <span className="voice-tags">
-                    {chosen&&<span className="voice-tag is-chosen"><Check size={12} aria-hidden="true"/> Selected</span>}
-                    {voice.recommended_for.map(use=>RECOMMENDED[use]&&<span key={use} className="voice-tag">{RECOMMENDED[use]}</span>)}
-                    {!voice.callable&&<span className="voice-tag is-off">Not usable in live calls yet</span>}
-                  </span>
-                  {voice.notes&&<small>{voice.notes}</small>}
-                  {!voice.callable&&voice.reason&&<small className="media-unavailable">{voice.reason}</small>}
-                  {speed&&<small>{speed}</small>}
-                  {failed?.id===voice.id&&<small role="alert" className="media-unavailable">Preview or choice failed: {failed.message}</small>}
-                </div>
-                <div className="voice-actions">
-                  <button type="button" className="learn-button" aria-label={`Preview ${voice.name}`}
-                    disabled={disabled||!voice.callable||engineMissing||!!engine?.inCall||!!previewing||!!saving} onClick={()=>void play(voice)}>
-                    {playing?<><LoaderCircle size={14} className="spin" aria-hidden="true"/> Playing…</>:<><Play size={14} aria-hidden="true"/> Preview</>}</button>
-                  <button type="button" className="learn-button is-primary" aria-label={`Use ${voice.name}`}
-                    disabled={disabled||!voice.callable||chosen||!!saving||!!previewing} onClick={()=>void choose(voice)}>
-                    {saving===voice.id?'Saving…':chosen?'In use':'Use this voice'}</button>
-                </div>
-              </li>
-            })}
-          </ul>
+          <p className="voice-count">{voices.length} voices, {usable.length} usable in live calls today. Sample line: “{style.preview_line}”</p>
+          {usable.length>0&&<ul className="voice-list">{usable.map(row)}</ul>}
+          {others.length>0&&<details className="voice-more">
+            <summary>{others.length} more {others.length===1?'voice that is':'voices that are'} not usable in live calls yet</summary>
+            <p className="voice-count">Their voice engines are not built into calls yet, so they cannot be played or chosen here. They are listed so you know they exist.</p>
+            <ul className="voice-list">{others.map(row)}</ul>
+          </details>}
         </>}
       </div>
     })}

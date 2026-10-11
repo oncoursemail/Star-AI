@@ -143,6 +143,18 @@
   color: var(--star-text);
   font-weight: 650;
 }
+.shell .voice-more {
+  margin-top: var(--star-3);
+}
+.shell .voice-more > summary {
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+  cursor: pointer;
+}
+.shell .voice-more > summary:hover {
+  color: var(--star-text);
+}
 @media (max-width: 860px) {
   .shell .voice-list {
     grid-template-columns: minmax(0, 1fr);
