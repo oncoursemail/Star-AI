@@ -159,6 +159,32 @@ def compare(baseline: dict, candidate: dict, *, allow_partial: bool = False) -> 
             return Verdict(UNUSABLE, notes=[f"suite {key} differs: not a like-for-like comparison"])
     if not base_legacy and not cand_legacy and baseline["suite"]["identity_sha256"] != candidate["suite"]["identity_sha256"]:
         return Verdict(UNUSABLE, notes=["suite identity differs (including grader materials)"])
+    for key in ("model", "mode"):
+        if baseline["run"][key] != candidate["run"][key]:
+            return Verdict(UNUSABLE, notes=[f"{key} differs: not a like-for-like comparison"])
+    if not base_legacy and not cand_legacy and baseline["run"]["grader_sha256"] != candidate["run"]["grader_sha256"]:
+        return Verdict(UNUSABLE, notes=["grader revision differs: re-score with matching graders first"])
+    scored = [tid for tid in baseline["tasks"] if _status(baseline, tid) in _SCORED]
+    if not scored:
+        return Verdict(UNUSABLE, notes=["the baseline has no scored tasks"])
+    verdict = Verdict(ALLOWED, notes=base_legacy + cand_legacy)
+    for tid in scored:
+        before, after = _status(baseline, tid), _status(candidate, tid)
+        if after in _SCORED:
+            verdict.compared += 1
+            verdict.baseline_pass += before == "pass"
+            verdict.candidate_pass += after == "pass"
+            if before == "pass" and after == "fail":
+                verdict.regressions.append(tid)
+            elif before == "fail" and after == "pass":
+                verdict.improvements.append(tid)
+        elif after == "missing":
+            verdict.not_covered.append(tid)
+        else:
+            verdict.incomplete.append(tid)
+    if not verdict.compared:
+        return Verdict(UNUSABLE, incomplete=verdict.incomplete, not_covered=verdict.not_covered,
+                       notes=["the candidate run scored none of the baseline's tasks"])
     if verdict.not_covered and allow_partial:
         verdict.notes.append(f"targeted run: {len(verdict.not_covered)} baseline tasks were not run by the candidate")
     if verdict.regressions or verdict.candidate_pass < verdict.baseline_pass:
