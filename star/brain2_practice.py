@@ -292,8 +292,8 @@ def practice_once(cloud: RobloxCloud, plan: PracticePlan, ledger: PracticeLedger
                                              zip(("universe_id", "place_id"), plan.target)):
         raise PracticeRefused("Roblox did not confirm the operator-selected target")
     cycle_id = ledger.reserve(plan)
-    prior = ledger.previous_failure(plan, cycle_id)
     try:
+        prior = ledger.previous_failure(plan, cycle_id)
         report = pipeline(pinned, plan.source, publish_and_test=True,
                           builder=plan.builder, home=ledger.path.parent)
         status, sha, version, summary = _verified_result(report, plan)
@@ -308,20 +308,24 @@ def practice_once(cloud: RobloxCloud, plan: PracticePlan, ledger: PracticeLedger
               "failed": (summary or {}).get("failed", 0),
               "learning_candidates": 0}
     if status == "passed" and prior and prior["sha256"] != sha and lessons is not None:
-        previously_failed = {case["name"] for case in prior["cases"] if case.get("ok") is False}
-        now_passing = {case["name"] for case in summary["cases"] if case["ok"] is True}
-        for case_name in sorted(previously_failed & now_passing)[:5]:
-            # Verified *change of outcome*, not a claim that a patch caused the fix.
-            text = ("Regression case " + _clean_name(case_name) +
-                    " passed after a previous failure on another source revision; "
-                    "inspect the code diff before extracting a reusable repair.")
-            evidence = f"prior sha={prior['sha256'][:12]} new sha={sha[:12]} saved version={version}"
-            recorded = lessons.capture_inferred(project=plan.project, kind="pitfall", text=text,
-                                                source_type="verified-fix",
-                                                source=f"brain2-practice:{cycle_id}:{hashlib.sha256(case_name.encode()).hexdigest()[:12]}",
-                                                evidence=evidence)
-            if recorded.status == "candidate":
-                result["learning_candidates"] += 1
+        try:
+            previously_failed = {case["name"] for case in prior["cases"] if case.get("ok") is False}
+            now_passing = {case["name"] for case in summary["cases"] if case["ok"] is True}
+            for case_name in sorted(previously_failed & now_passing)[:5]:
+                # Verified *change of outcome*, not a claim that a patch caused the fix.
+                text = ("Regression case " + _clean_name(case_name) +
+                        " passed after a previous failure on another source revision; "
+                        "inspect the code diff before extracting a reusable repair.")
+                evidence = f"prior sha={prior['sha256'][:12]} new sha={sha[:12]} saved version={version}"
+                recorded = lessons.capture_inferred(project=plan.project, kind="pitfall", text=text,
+                                                    source_type="verified-fix",
+                                                    source=f"brain2-practice:{cycle_id}:{hashlib.sha256(case_name.encode()).hexdigest()[:12]}",
+                                                    evidence=evidence)
+                if recorded.status == "candidate":
+                    result["learning_candidates"] += 1
+        except Exception as exc:
+            # A lesson-db problem cannot turn a verified test into an unknown test.
+            result["learning_error"] = type(exc).__name__
     return result
 
 
