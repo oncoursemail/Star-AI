@@ -213,6 +213,10 @@ class ResearchTeam:
             return {"id": task.id, "role": task.role, "status": "completed",
                     "analysis": content[:2600],
                     "sources": [e["source"] for e in chunks],
+                    "web_urls": [
+                        record["url"] for entry in chunks if entry["source"] == "web"
+                        for record in entry.get("records", [])
+                    ][:3],
                     "notice": "Specialist analysis is model-generated and needs verification."}
 
         while len(reports) < len(tasks):
