@@ -115,7 +115,9 @@ async def run_plan(
     async def execute_one(task: Task, snapshot: Mapping[str, TaskResult]):
         began = monotonic()
         try:
-            raw = await asyncio.wait_for(worker(task, snapshot), timeout=seconds[task.id])
+            # A later synthesis can use a rate learned from earlier specialists.
+            budget = task_timeout(task) if callable(task_timeout) else seconds[task.id]
+            raw = await asyncio.wait_for(worker(task, snapshot), timeout=budget)
             if isinstance(raw, str):
                 answer, evidence = raw, ()
             elif isinstance(raw, dict):
