@@ -750,7 +750,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
              cancel_event=None, github_enabled: bool = False, chat_id: str | None = None,
              owner_text: str | None = None, documents: list[Path] | None = None,
-             studio_configuration_home: Path | None = None) -> str:
+             studio_configuration_home: Path | None = None, attachment_count: int = 0) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in.
 
     `owner_text` is what the owner typed, when `prompt` also carries text STAR added (an
@@ -945,13 +945,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             eligible = dict(prompt=prompt, mode=mode, provider=kind,
                             enabled=settings.instant_route_enabled is not False,
                             installed=bool(settings.gguf_model or settings.router_models_dir),
-                            attachments=len(images) + len(documents or ()),
+                            attachments=len(images) + len(documents or ()) + max(0, attachment_count),
                             tools=use_tools or document_tools is not None or bool(github_enabled),
                             research=research, documentation=route.grounding.retrieve != 'none',
                             deep=wants_deep, followup=referential or roblox_context
                             or bool(owner_text is not None and owner_text != prompt))
             if decide_instant_route(**eligible, loaded_model='resident').use_local:
-                local_model = await loaded_local_model(settings.endpoint)
+                try:
+                    local_model = await loaded_local_model(settings.endpoint)
+                except Exception:
+                    local_model = ''
                 if decide_instant_route(**eligible, loaded_model=local_model).use_local:
                     try:
                         instant_answer = await answer_on_pc(settings.endpoint, local_model, prompt)
