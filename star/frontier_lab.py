@@ -17,6 +17,9 @@ import re
 COMMIT_SHA = re.compile(r"^[a-fA-F0-9]{40}$")
 VALID_SPLITS = {"development", "holdout"}
 VALID_VERDICTS = {"pass", "fail", "blocked"}
+# The evaluation gate's floor for "better": the same unchanged build flips about one task in six
+# between runs, so fewer net task wins than this is noise, not evidence. It can be raised, never lowered.
+MIN_NET_TASK_WINS = 5
 
 
 @dataclass(frozen=True)
@@ -71,17 +74,28 @@ def load_trials(path: Path) -> list[Trial]:
 
 def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
                      minimum_holdout_tasks: int = 5, repeats: int = 2,
-                     max_slowdown: float = 2.0) -> dict:
+                     max_slowdown: float = 2.0, min_net_wins: int = MIN_NET_TASK_WINS) -> dict:
     """Produce an honest provisional decision, not a Studio QA certification.
 
-    Acceptance requires identical holdout case/repeat keys, a positive success
-    rate difference, no hard-failure trials, no blocked trials, and no large
-    latency increase. Development-split results are ignored for promotion.
+    Acceptance requires identical holdout case/repeat keys, no hard-failure trials, no blocked
+    trials, no large latency increase, and the evaluation gate's rule, applied per holdout task:
+
+    * a task the baseline passed must not fail now, even if other tasks improved. A failure counts
+      once its repeats confirm it (the gate's "re-run a regression once"): failing every repeat is a
+      regression and vetoes; failing some repeats is reported as flaky and counts against the net;
+    * a task counts as improved only when the baseline failed every repeat and the candidate passed
+      every repeat;
+    * improved tasks minus worse tasks must reach `min_net_wins` (5 or more). A higher pass rate
+      alone is not enough: one flipped task used to pass this check.
+
+    Development-split results are ignored for promotion.
     """
     if baseline == candidate:
         raise ValueError("Candidate and baseline must differ")
     if minimum_holdout_tasks < 1 or repeats < 1 or max_slowdown <= 0:
         raise ValueError("Invalid policy")
+    if not isinstance(min_net_wins, int) or isinstance(min_net_wins, bool) or min_net_wins < MIN_NET_TASK_WINS:
+        raise ValueError(f"min_net_wins cannot be lower than the evaluation gate's floor of {MIN_NET_TASK_WINS}")
     by_candidate = defaultdict(dict)
     for t in trials:
         if t.split == "holdout" and t.candidate in {baseline, candidate}:
@@ -114,6 +128,25 @@ def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
     b_time = sum(b[k].seconds for k in common_keys)
     if b_rate <= a_rate:
         problems.append("No measured improvement in holdout pass rate")
+    by_task = defaultdict(list)
+    for key in common_keys:
+        by_task[key[0]].append(key)
+    improved, regressed, flaky = [], [], []
+    for task in sorted(by_task):
+        keys = by_task[task]
+        before = sum(a[k].verdict == "pass" for k in keys)
+        after = sum(b[k].verdict == "pass" for k in keys)
+        if before == 0 and after == len(keys):
+            improved.append(task)
+        elif after < before:
+            (regressed if after == 0 else flaky).append(task)
+    net_wins = len(improved) - len(regressed) - len(flaky)
+    if regressed:
+        problems.append(f"{len(regressed)} holdout task(s) the baseline passed now fail on every repeat; "
+                        "a regression vetoes even when other tasks improved")
+    if net_wins < min_net_wins:
+        problems.append(f"Net task wins {net_wins} ({len(improved)} improved on every repeat, "
+                        f"{len(regressed) + len(flaky)} worse); the evaluation gate requires at least {min_net_wins}")
     if b_time > max(a_time, 0.001) * max_slowdown:
         problems.append(f"Candidate elapsed time exceeds {max_slowdown}x baseline")
     return {
@@ -125,6 +158,11 @@ def candidate_report(trials: list[Trial], *, baseline: str, candidate: str,
         "candidate_pass_rate": round(b_rate, 4),
         "baseline_total_seconds": round(a_time, 2),
         "candidate_total_seconds": round(b_time, 2),
+        "improved_tasks": improved,
+        "regressed_tasks": regressed,
+        "flaky_tasks": flaky,
+        "net_task_wins": net_wins,
+        "required_net_task_wins": min_net_wins,
         "decision": "candidate_for_independent_review" if not problems else "do_not_promote",
         "reasons": problems,
         "limitations": "Compares supplied results only. Does not verify that the evaluator ran, that artifacts correspond to commits, or that trial fixtures stayed hidden. An independent trusted runner must attest to these before any promotion."
@@ -139,9 +177,12 @@ def main() -> None:
     parser.add_argument("--candidate", required=True)
     parser.add_argument("--min-tasks", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=2)
+    parser.add_argument("--min-net-wins", type=int, default=MIN_NET_TASK_WINS,
+                        help=f"improved tasks minus worse tasks needed (default and floor {MIN_NET_TASK_WINS})")
     args = parser.parse_args()
     result = candidate_report(load_trials(args.file), baseline=args.baseline, candidate=args.candidate,
-                              minimum_holdout_tasks=args.min_tasks, repeats=args.repeats)
+                              minimum_holdout_tasks=args.min_tasks, repeats=args.repeats,
+                              min_net_wins=args.min_net_wins)
     print(json.dumps(result, indent=2))
 
 
