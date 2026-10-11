@@ -971,8 +971,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                                          audited_event, mode=mode)
                 def slot_fields(model):
                     # llama.cpp cache fields; {} for cloud providers.
-                    return lambda tools: llama_request_fields(
-                        settings, conversation=memory_scope, tools=tools, model=model)
+                    def fields(tools):
+                        extras = llama_request_fields(
+                            settings, conversation=memory_scope, tools=tools, model=model)
+                        audited_event({'event': 'model_slot', 'model': model,
+                                       'slot': extras.get('id_slot')})
+                        return extras
+                    return fields
                 learned['grounding'] = docs
                 if docs.block:
                     # First in the list: when room runs out earlier sections win, and these passages
