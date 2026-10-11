@@ -89,13 +89,15 @@ async def run_research_team(
     if not model.strip():
         raise ValueError("Start and select STAR Brain before running Agents")
     limits = call_limits(settings)
+    # Preserve existing HTTP read budgets; only agent stage deadlines adapt.
+    request_seconds = limits.request_timeout if kind == "lan" else 110.0
     if kind == "lan":
         parallel = limits.parallel if parallel is None else min(parallel, limits.parallel)
     else:
         parallel = 2 if parallel is None else parallel
     plan = specialist_plan(prompt, parallel=parallel)
-    policy = DeadlinePolicy(min_seconds=settings.team_timeout_min,
-                            max_seconds=settings.team_timeout_max)
+    policy = DeadlinePolicy(min_seconds=getattr(settings, "team_timeout_min", 30),
+                            max_seconds=getattr(settings, "team_timeout_max", 900))
     speeds = speeds if speeds is not None else SPEEDS
     address = settings.server_endpoint if kind == "lan" else settings.endpoint
     speed_key = (kind, address, model)
@@ -109,7 +111,7 @@ async def run_research_team(
     created_client = client is None
 
     if created_client:
-        client = open_client(settings, request_timeout=limits.request_timeout)
+        client = open_client(settings, request_timeout=request_seconds)
 
     async def model_worker(task: Task, previous):
         system = TEAM_RULES
