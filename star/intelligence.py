@@ -11,6 +11,7 @@ import re
 
 from jsonschema import Draft202012Validator
 
+from .asset_forge import PolyHavenCatalog, plan_building, preview_terrain
 from .agent_skills import SkillLibrary, install_starters
 from .skill_packs import PACKS_DIR
 from .brain_router import is_roblox_dev_prompt
@@ -46,6 +47,26 @@ SKILL_TOOLS = (
     _tool("star_skill_reference", "Read a small text file under a named skill's references/ or assets/ directory.",
           {"name": _s(64), "path": _s(300)}, ("name", "path")),
 )
+ASSET_TOOLS = (
+    _tool("star_asset_search", "Search official Poly Haven CC0 models, textures and HDRIs with source and license links. Metadata only; no downloads.", {"query": _s(100), "kind": {"type": "string", "enum": ["models", "textures", "hdris"], "default": "models"}, "limit": _limit(6, 4)}, ("query",)),
+    _tool("star_building_plan", "Plan a modular Roblox building: floor slabs, window and door wall bays, stairs and roof. Specification only, not geometry or Studio output.", {
+        "width_bays": {"type": "integer", "minimum": 3, "maximum": 6, "default": 4},
+        "depth_bays": {"type": "integer", "minimum": 3, "maximum": 6, "default": 4},
+        "floors": {"type": "integer", "minimum": 1, "maximum": 3, "default": 2},
+        "style": {"type": "string", "enum": ["classic-studs", "stylized-fantasy", "grounded-realism", "anime-toon"], "default": "stylized-fantasy"},
+        "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647, "default": 1},
+    }),
+    _tool("star_terrain_preview", "Sample seamless seeded heightmap previews for Roblox worlds. Numeric preview only: does not write Studio terrain.", {
+        "seed": {"type": "integer", "minimum": 0, "maximum": 2147483647, "default": 1},
+        "biome": {"type": "string", "enum": ["temperate", "desert", "alpine", "alien"], "default": "temperate"},
+        "size": {"type": "integer", "minimum": 4, "maximum": 16, "default": 8},
+        "origin_x": {"type": "integer", "minimum": -100000, "maximum": 100000, "default": 0},
+        "origin_z": {"type": "integer", "minimum": -100000, "maximum": 100000, "default": 0},
+        "step": {"type": "integer", "minimum": 4, "maximum": 64, "default": 16},
+    }),
+)
+_ASSET_TOOL_NAMES = frozenset(tool["name"] for tool in ASSET_TOOLS)
+
 OBSIDIAN_TOOLS = (
     _tool("star_obsidian_search", "Find Markdown notes in the user-enabled Obsidian vault. Returns short excerpts and relative note paths.", {"query": _s(180), "limit": _limit(20, 10)}, ("query",)),
     _tool("star_obsidian_read", "Read a bounded page of numbered Markdown lines from a selected note. Start with line 1; request later pages only if needed. Never write notes.",
@@ -101,9 +122,10 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *ASSET_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 
+_ASSET_TRIGGER = re.compile(r"\b(assets?|meshes?|textures?|pbr|blender|terrain|worlds?|biomes?|modular|architecture|poly.?haven)\b", re.I)
 _SKILL_TRIGGER = re.compile(r"\b(skill|expert|workflow|tool|roblox|luau|ui|design|debug|build|fix|test|code|studio|script)\b", re.I)
 _VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan)\b", re.I)
 _GRAPH_TRIGGER = re.compile(r"\b(graphify|graph|architecture|codebase|dependenc\w*|relationships?|connections?|module|function|imports?|calls?|trace|impact|bug|scripts?)\b", re.I)
@@ -158,6 +180,9 @@ class LocalIntelligence:
     def definitions(self, prompt: str) -> list[dict]:
         """Conserve small-model context and plain-chat streaming where possible."""
         result = []
+        if _ASSET_TRIGGER.search(prompt) and (_ROBLOX_TRIGGER.search(prompt) or
+                is_roblox_dev_prompt(prompt) or re.search(r"\b(blender|3d|procedural|poly.?haven|game\s?dev)\b", prompt, re.I)):
+            result.extend(ASSET_TOOLS)
         if self.skills and _SKILL_TRIGGER.search(prompt):
             result.extend(SKILL_TOOLS)
         if self.vault and _VAULT_TRIGGER.search(prompt):
@@ -191,6 +216,13 @@ class LocalIntelligence:
         if name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
             raise PermissionError("Intelligence tool is not enabled for this task")
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
+        if name in _ASSET_TOOL_NAMES:
+            if name == "star_asset_search":
+                with PolyHavenCatalog() as catalog:
+                    return catalog.search(args["query"], kind=args.get("kind", "models"), limit=args.get("limit", 4))
+            if name == "star_building_plan":
+                return plan_building(**args)
+            return preview_terrain(**args)
         if name in _DOC_TOOL_NAMES:
             if self.docs is None:
                 raise PermissionError("STAR Knowledge is not configured")
