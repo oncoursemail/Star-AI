@@ -24,6 +24,7 @@ export const backendSettings = {
   max_calls: 12, context_chars: 26000, reduced_motion: true, obsidian_vault: '', obsidian_enabled: false,
   skills_enabled: true, graphify_enabled: true, comfy_workflow: '', comfy_prompt_node: '6', comfy_port: 8188,
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
+  blender_enabled: false, blender_edit: false, blender_executable: '',
   roblox_research_enabled: true, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
 }
 
