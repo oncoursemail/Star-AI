@@ -449,8 +449,13 @@ class Promoter:
                    AND a.expires_at IS NOT NULL AND a.expires_at<=?
                    ORDER BY a.promotion_id DESC""", (stamp,)).fetchall()
             for row in rows:
-                if self._undo_locked(int(row[0]), stamp, "expired"):
-                    expired.append(int(row[0]))
+                try:
+                    if self._undo_locked(int(row[0]), stamp, "expired"):
+                        expired.append(int(row[0]))
+                except PromotionConflict:
+                    # A changed lesson belongs to its current owner state. Never
+                    # overwrite it or abort unrelated turn-start expiry checks.
+                    continue
             self.db.commit()
             return expired
         except BaseException:
