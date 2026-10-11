@@ -784,6 +784,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         image_part(Path(image))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
+    from .promoter import expire_due
+    expire_due(home)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
@@ -877,7 +879,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         route = select_route(server_roles.effective(settings),prompt,mode=mode,image_count=len(images),
                              research=research,project_tools=project_tools,
                              roblox_context=roblox_context,
-                             deep_model=server_roles.deep_model(settings) if wants_deep else '')
+                             deep_model=server_roles.deep_model(settings) if wants_deep else '',home=home)
         if document_tools is not None:
             # Allow read/recalculate/answer even in Fast mode. Retain the selected
             # model and ordinary tool permissions; attachment access grants no
@@ -979,7 +981,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 # >>> Skill packs (star/skill_packs): short Roblox guidance, only for prompts that match, and
                 # never in quick chat mode. It rides in the per-turn sections, after the documentation.
-                packs = [] if quick else skill_packs.select(prompt)
+                packs = [] if quick else skill_packs.select(prompt,home=home)
                 pack_block = skill_packs.render(packs)
                 if pack_block:
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))

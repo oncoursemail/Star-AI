@@ -132,12 +132,16 @@ def available() -> tuple[Pack, ...]:
     return tuple(found)
 
 
-def enabled_names(environ=None) -> frozenset[str]:
+def enabled_names(environ=None, *, home=None) -> frozenset[str]:
     """Pack names that may be used now: STAR_SKILL_PACKS, else DEFAULT_ENABLED."""
     raw = (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower()
     known = {p.name for p in available()}
     if not raw:
-        return frozenset(known & set(DEFAULT_ENABLED))
+        defaults = frozenset(known & set(DEFAULT_ENABLED))
+        if home is not None:
+            from ..promoter import enabled_skill_packs
+            return enabled_skill_packs(home, defaults)
+        return defaults
     if raw in {"off", "none", "no", "false", "0"}:
         return frozenset()
     if raw in {"all", "on", "true", "1"}:
@@ -145,11 +149,11 @@ def enabled_names(environ=None) -> frozenset[str]:
     return frozenset(known & {part.strip() for part in raw.split(",")})
 
 
-def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN) -> list[Pack]:
+def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
     """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
-    allowed = enabled_names() if enabled is None else frozenset(enabled)
+    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
     if not allowed or not _ROBLOX_CONTEXT.search(prompt):
         return []
     scored = []
