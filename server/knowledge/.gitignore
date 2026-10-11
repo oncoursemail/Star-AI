@@ -1,0 +1,7 @@
+# local server address for deploy.sh (never committed)
+.env
+# evaluation output, indexes, fetched corpora: data, not source
+eval/results/
+data/
+sources/
+*.sqlite3*
