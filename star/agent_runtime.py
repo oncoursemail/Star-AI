@@ -165,7 +165,8 @@ async def run_plan(
             while block_dependents():
                 pass
             successful = {tid for tid, entry in results.items() if entry.status == "completed"}
-            ready = plan.ready(successful, set(running))
+            # Terminal non-successes must not occupy ready() slots repeatedly.
+            ready = plan.ready(successful, set(running), finished=set(results))
             for item in ready:
                 if item.id in results:
                     continue
