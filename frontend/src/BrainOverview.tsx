@@ -5,6 +5,7 @@ import './BrainOverview.css'
 export type BrainSnapshot = {
  provider: string
  models: string[]
+ configured_models?: string[]
  roles: Array<{role:string;label:string;model:string;source:string}>
  knowledge: Array<{name:string;connected:boolean}>
  skills: {enabled:boolean;count:number;names:string[]}
@@ -29,12 +30,13 @@ export function BrainOverview({snapshot,load=true}:{snapshot?:BrainSnapshot;load
  const connected=data.knowledge.filter(x=>x.connected)
  const lessons=data.lessons.candidate+data.lessons.accepted+data.lessons.retired
  const roles=data.roles.filter(x=>x.model)
+ const configured=data.configured_models||[]
  const skillCount=data.skills.enabled?data.skills.count:0
  return <section className="brain-overview" aria-label="STAR Brain overview">
   <header><h2>Inside STAR</h2><p>Current configuration and local records · read only</p></header>
   {error&&<p role="alert">{error}</p>}
   <div className="brain-overview-grid">
-   <Card title="Thinking" count={data.models.length||null} facts={[data.provider?`Provider: ${data.provider}`:'',...roles.slice(0,2).map(r=>`${r.label}: ${r.model}`)]}/>
+   <Card title="Thinking" count={data.models.length||configured.length||null} facts={[data.provider?`Provider: ${data.provider}`:'',data.models.length?`${data.models.length} discovered`:(configured.length?`${configured.length} configured (not verified)`:''),...roles.slice(0,1).map(r=>`${r.label}: ${r.model}`)]}/>
    <Card title="Knowledge" count={data.knowledge.length?connected.length:null} facts={connected.map(x=>x.name)}/>
    <Card title="Skills" count={data.skills.enabled?skillCount:null} facts={[data.skills.enabled?'Enabled':'Off',...data.skills.names.slice(0,2)]}/>
    <div className="brain-overview-center"><span>STAR</span><small>Local-first assistant</small></div>
