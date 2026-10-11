@@ -35,7 +35,7 @@ _DIAGNOSTIC_REASONS = {
     "initialization": frozenset({"failed", "timeout", "invalid_response"}),
     "capability": frozenset({"tools_not_declared"}),
     "tool_discovery": frozenset({"failed", "timeout", "invalid_catalog", "duplicate_names", "limit_exceeded",
-                                 "invalid_schema", "unsupported_schema_reference", "empty_catalog",
+                                 "invalid_schema", "unsupported_schema_reference", "unsupported_schema_regex", "empty_catalog",
                                  "invalid_cursor", "repeated_cursor"}),
     "instance_discovery": frozenset({"failed", "timeout", "invalid_response", "limit_exceeded",
                                      "representations_disagree", "no_instances", "tool_unavailable"}),
@@ -392,11 +392,43 @@ def _schema_bounds(schema):
             stack.extend((value, depth + 1) for value in item)
 
 
+def _schema_regex_keywords(schema):
+    """Reject executable regex keywords, not property names or annotation data.
+
+    The whole JSON tree has already passed the existing node/depth bound. Only
+    recognized subschema positions are followed here, across supported drafts.
+    """
+    stack = [schema]
+    maps = ("properties", "$defs", "definitions", "dependentSchemas", "dependencies")
+    children = ("additionalProperties", "unevaluatedProperties", "propertyNames", "contains",
+                "additionalItems", "unevaluatedItems", "not", "if", "then", "else", "contentSchema")
+    sequences = ("allOf", "anyOf", "oneOf", "prefixItems", "items", "extends", "type", "disallow")
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):  # Boolean schemas have no regex keywords.
+            continue
+        if "pattern" in node or "patternProperties" in node:
+            raise StudioTransportError("Studio MCP regex schema keywords are unsupported; no regex evaluation is allowed.",
+                                       stage="tool_discovery", reason="unsupported_schema_regex")
+        for key in maps:
+            value = node.get(key)
+            if isinstance(value, dict):
+                stack.extend(child for child in value.values() if isinstance(child, dict))
+        stack.extend(node[key] for key in children if isinstance(node.get(key), dict))
+        for key in sequences:
+            value = node.get(key)
+            if isinstance(value, dict):
+                stack.append(value)
+            elif isinstance(value, list):
+                stack.extend(child for child in value if isinstance(child, dict))
+
+
 def validate_tool_schema(schema, *, input_schema=True):
     """Validate a bounded self-contained Studio schema without resolving resources.
 
-    Host bridges use this same check before registering tools, even when their
-    catalog did not pass through transport discovery. No schema is executed here.
+    Host bridges use this same check before registering and calling tools, even
+    when their catalog did not pass through transport discovery. Schema regex
+    keywords are unsupported because synchronous matching has no elapsed bound.
     """
     from jsonschema import Draft202012Validator
     from jsonschema.validators import validator_for
@@ -407,6 +439,7 @@ def validate_tool_schema(schema, *, input_schema=True):
     try:
         if _json_bytes(schema) > MAX_TOOL_BYTES:
             raise StudioTransportError("Studio MCP tool schema exceeds its size bound.", stage="tool_discovery", reason="limit_exceeded")
+        _schema_regex_keywords(schema)
         validator_for(schema, default=Draft202012Validator).check_schema(schema)
     except StudioTransportError:
         raise

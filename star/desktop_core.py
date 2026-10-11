@@ -87,6 +87,8 @@ class Settings:
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
     specialist_parallelism: int = 1
+    team_timeout_min: int = 30      # bounded specialist request deadline, seconds
+    team_timeout_max: int = 900     # allows slow on-device and STAR Server inference
     mcp_graphify_docs: bool = False
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
@@ -144,6 +146,9 @@ class Settings:
             raise ValueError('Choose an existing workspace directory')
         if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1,2):
             raise ValueError('Limit specialists to 1 or 2 concurrent model calls')
+        if (type(self.team_timeout_min) is not int or type(self.team_timeout_max) is not int
+                or not 1 <= self.team_timeout_min <= self.team_timeout_max <= 1800):
+            raise ValueError('Team timeout minimum/maximum must be 1 to 1800 seconds')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
         if self.studio_edit and not self.studio_id.strip():
@@ -779,6 +784,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         image_part(Path(image))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
+    from .promoter import expire_due
+    expire_due(home)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
@@ -872,7 +879,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         route = select_route(server_roles.effective(settings),prompt,mode=mode,image_count=len(images),
                              research=research,project_tools=project_tools,
                              roblox_context=roblox_context,
-                             deep_model=server_roles.deep_model(settings) if wants_deep else '')
+                             deep_model=server_roles.deep_model(settings) if wants_deep else '',home=home)
         if document_tools is not None:
             # Allow read/recalculate/answer even in Fast mode. Retain the selected
             # model and ordinary tool permissions; attachment access grants no
@@ -949,7 +956,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 specialists = (ResearchTeam(
                     client=helper,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
-                    parallelism=settings.specialist_parallelism,on_event=audited_event
+                    parallelism=settings.specialist_parallelism,on_event=audited_event,
+                    speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
+                               else settings.endpoint, route.subagent_model),
+                    timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
@@ -971,7 +981,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 # >>> Skill packs (star/skill_packs): short Roblox guidance, only for prompts that match, and
                 # never in quick chat mode. It rides in the per-turn sections, after the documentation.
-                packs = [] if quick else skill_packs.select(prompt)
+                packs = [] if quick else skill_packs.select(prompt,home=home)
                 pack_block = skill_packs.render(packs)
                 if pack_block:
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))

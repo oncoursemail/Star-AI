@@ -39,6 +39,15 @@ def classify(discovered: list[dict]) -> dict[str, list[str]]:
     return {group: sorted(names) for group, names in groups.items()}
 
 
+def _validate_schema(schema) -> None:
+    """Apply the transport's bounded, reference-free schema check at every boundary."""
+    from .studio import StudioTransportError, validate_tool_schema
+    try:
+        validate_tool_schema(schema)
+    except StudioTransportError:
+        raise ValueError("Unsafe or invalid MCP tool schema") from None
+
+
 def allowed_registry(discovered: list[dict], may_edit: bool, allow_luau: bool = False) -> dict[str, dict]:
     if allow_luau and not may_edit:
         raise ValueError("Arbitrary Luau execution requires sandbox edit mode")
@@ -48,10 +57,7 @@ def allowed_registry(discovered: list[dict], may_edit: bool, allow_luau: bool = 
     for tool in discovered:
         name = tool.get("name", "")
         if name in acceptable and isinstance(tool.get("inputSchema"), dict):
-            # Do not fetch untrusted remote schema references.
-            if '"$ref"' in __import__("json").dumps(tool["inputSchema"]):
-                raise ValueError("External or complex tool $ref schemas are not enabled in STAR v0.1")
-            Draft202012Validator.check_schema(tool["inputSchema"])
+            _validate_schema(tool["inputSchema"])
             if name in registry:
                 raise ValueError("Duplicate tool name")
             registry[name] = tool
@@ -61,7 +67,6 @@ def allowed_registry(discovered: list[dict], may_edit: bool, allow_luau: bool = 
 def enforce(name: str, arguments: Any, registry: dict, studio_id: str, may_edit: bool, allow_luau: bool = False) -> None:
     if name not in registry or not isinstance(arguments, dict):
         raise ValueError("Unapproved or malformed MCP tool call")
-    Draft202012Validator(registry[name]["inputSchema"]).validate(arguments)
     if name != "list_roblox_studios" and (not studio_id or arguments.get("studio_id") != studio_id):
         raise ValueError("Target does not match STAR_STUDIO_ID")
     if name in WRITE_TOOLS and not may_edit:
@@ -74,3 +79,8 @@ def enforce(name: str, arguments: Any, registry: dict, studio_id: str, may_edit:
         # The connector requires capture_id (a label for the picture); moving the camera is an edit.
         if set(arguments) - {"studio_id", "datamodel_type", "capture_id"}:
             raise ValueError("Camera changes require edit mode")
+    # Registries can be supplied directly or changed after discovery. Check again
+    # before argument validation can resolve any untrusted schema reference.
+    schema = registry[name].get("inputSchema") if isinstance(registry[name], dict) else None
+    _validate_schema(schema)
+    Draft202012Validator(schema).validate(arguments)
