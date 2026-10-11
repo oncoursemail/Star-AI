@@ -41,6 +41,13 @@ The new star/evolution_research.py source watcher:
 7. Exposes on-demand checks, status, and source excerpts in the desktop
    Tools -> Research Watch panel. No website-preview requests or silent
    background polling are made.
+8. Provides an explicit Send candidate to Learning review action: it takes
+   the inspected source revision and creates a project-scoped, unreviewed
+   fact candidate through STAR's existing LessonStore, where safety checks
+   reject permission/secret-like instructions. Only the owner's separate
+   Projects -> Learning approval can make it trusted.
+9. Uses Roblox's official agent-readable Markdown documentation where
+   available and the canonical Luau /types/ URL to avoid redirects.
 
 The candidate research ledger lives at
 %APPDATA%/STAR/research-watch.sqlite3 on Windows.
