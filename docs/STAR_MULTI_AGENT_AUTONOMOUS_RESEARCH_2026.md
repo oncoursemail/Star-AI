@@ -188,3 +188,79 @@ Current candidate only establishes *bounded workflow mechanics* under offline
 tests. Live search quality, public article correctness, Windows provider keys,
 real concurrent local-model performance, Blender, Roblox Studio, and release
 packaging require separate acceptance evidence.
+
+
+## 9. Further code delivered in this draft PR (October 11)
+
+The initially scoped parallel-search PR now also includes three **functional,
+permission-gated workflows**. The code is a candidate until review and merge.
+
+### 9.1 Autonomous Team + Research
+
+The existing React composer **Team** and **Research** switches now compose
+together. The native bridge validates a literal boolean; ordinary Team mode
+remains local-only and uses no web search. With both selected:
+
+1. The trusted Python application uses the owner-configured Brave/Tavily
+   provider to retrieve three bounded query angles, up to two in parallel.
+2. Three local/LAN specialist model calls analyze supplied **untrusted snippets**
+   and reviewed project context. No worker receives tools or credentials.
+3. The critic may propose exactly **one** relevance-checked follow-up search;
+   the parent alone validates and executes it through the fixed search adapter.
+4. Synthesis uses the observed source evidence. The app appends URLs actually
+   returned by the provider, explicitly labeled **search snippets, not opened
+   or verified pages**.
+5. `star/autonomous_research.py` stores an opt-in run receipt in private
+   `research-runs.sqlite3`: project, hashed objective, counts, status and timing.
+   It never stores raw user prompts, source excerpts, web API keys or model
+   output in that ledger. Failed/cancelled attempts are distinguished.
+
+This is **not** full arbitrary-web browsing, an unattended recurring job, a
+guarantee of factual correctness, or fine-tuning. Each turn is bounded.
+
+### 9.2 MCP registry discovery from Agent + Research
+
+When Agent mode has **Research enabled** and the user asks for MCP/tools/
+connectors, STAR can invoke `star_mcp_registry_search`. The host performs a
+GET against only `https://registry.modelcontextprotocol.io/v0.1/servers`
+with a bounded name substring and result count. It rejects redirects,
+non-HTTPS routes, malformed entries and oversized responses, and does not
+deserialize launch commands into executable actions. Results are explicitly
+**unapproved and not installed**, require independent publisher/dependency/
+permissions review, and have no authority over STAR's MCP gateway.
+
+A model cannot turn the list into unrestricted `mcp.call` access.
+Installation, connection setup, scope grants and runtime tool execution are
+not part of the registry discovery tool.
+
+### 9.3 Concurrent coding proposals from Agent mode
+
+For requests such as "Use parallel coding agents to review these files", with
+an existing selected local workspace, `star_candidate_code_team` accepts up
+to three explicitly named supported source files. The existing Workspace
+sandbox blocks path traversal, credential files, links escaping the workspace
+and disallowed extensions. Two first-stage model calls (architecture and
+implementation) may overlap. Review waits for both; integration waits for
+review. The host enforces the DAG using `star/agent_runtime.py`.
+
+These agents are real, independent inference calls, but their output is
+a **candidate**. No generated code is applied, imported, executed, deployed,
+merged, or declared verified. The next write-capable increment must add a
+separate owner-controlled approve/apply flow in an isolated worktree and run
+the existing security/evaluation gates; it must not use a model judgment as
+the approval. Existing reviewed Tool Workshop recipes remain available for
+creation and reuse without introducing self-approved script execution.
+
+### Developer checks
+
+`python -m pytest -q` runs the offline tests (mock web, local inference
+and workspace). The full GitHub workflow also compiles Python and checks the
+React frontend. Additional native acceptance: configured Brave/Tavily key,
+real local or LAN model slots, Windows cancellation, actual MCP Registry
+availability, and Roblox Studio gameplay quality.
+
+Relevant sources:
+
+- [Official MCP Registry API](https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/api/official-registry-api.md)
+- [Registry security model](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/about.mdx)
+- [MCP server trust boundaries](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/docs/2026-07-28/tutorials/security/local-server-security.mdx)
