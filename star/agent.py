@@ -233,7 +233,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   workspace=None, workspace_edit=False, stream_tokens=False,
                   response_tokens=1600, web_search_enabled=False,
                   subagents_enabled=False, subagent_parallelism=1,
-                  github_enabled=False, intelligence=None, mcp_gateway=None,
+                  github_enabled=False, intelligence=None, mcp_gateway=None, blender=None,
                   subagent_model=None, tool_workshop=None, specialists=None,
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
@@ -311,6 +311,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         "name": tool["name"], "description": tool["description"],
         "parameters": tool["inputSchema"]}} for tool in mcp_definitions)
     enabled_mcp = {tool["name"] for tool in mcp_definitions}
+    blender_definitions = selected(blender)
+    definitions.extend({"type": "function", "function": {
+        "name": tool["name"], "description": tool["description"],
+        "parameters": tool["inputSchema"]}} for tool in blender_definitions)
+    enabled_blender = {tool["name"] for tool in blender_definitions}
     workshop_definitions = selected(tool_workshop)
     definitions.extend({"type":"function","function":{"name":t["name"],
                        "description":t["description"],"parameters":t["inputSchema"]}}
@@ -554,6 +559,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     elif mcp_gateway is not None and mcp_gateway.owns(name):
                         if name not in enabled_mcp:
                             raise PermissionError("MCP tool not authorized for this task")
+                    elif blender is not None and blender.owns(name):
+                        if name not in enabled_blender:
+                            raise PermissionError("Blender MCP tool not authorized for this task")
                     elif tool_workshop is not None and tool_workshop.owns(name):
                         if name not in enabled_workshop:
                             raise PermissionError('Custom tool not authorized for this task')
@@ -640,6 +648,12 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         # Keep SQLite-backed document access on the caller's thread.
                         # Only the prompt-selected/attached capability set is allowed.
                         data = document_tools.call(name, args, enabled=enabled_documents)
+                    elif blender is not None and blender.owns(name):
+                        try:
+                            data = await blender.call(name, args)
+                        except Exception as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Blender MCP tool unavailable: {type(exc).__name__}"}]}
                     elif mcp_gateway is not None and mcp_gateway.owns(name):
                         try:
                             local_output = await mcp_gateway.call(name, args)
