@@ -3,8 +3,6 @@
 No message-content intent, self-bot account, autonomous actions, or background
 recording is used. The gateway is strictly opt-in and owner-scoped.
 """
-from __future__ import annotations
-
 from dataclasses import dataclass
 import io
 import logging
