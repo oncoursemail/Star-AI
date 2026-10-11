@@ -17,7 +17,6 @@ def test_real_shell_shutdown_paths(monkeypatch, tmp_path, mode):
     QtCore = pytest.importorskip("PySide6.QtCore")
     import star.react_shell as shell_module
     from star.desktop_core import Conversations
-    from star.single_instance import bypass_single_instance
 
     index = tmp_path / "index.html"
     index.write_text("<html></html>", encoding="utf-8")
@@ -86,14 +85,11 @@ def test_real_shell_shutdown_paths(monkeypatch, tmp_path, mode):
                 message_id = chats.add("default", "user", "A long fake turn", chat_id=chat_id)
             finally:
                 chats.close()
-            shell_module.TurnRef
             bridge.turn = shell_module.TurnRef("default", chat_id, message_id)
             bridge.active_task = True
         if mode == "session":
             # Qt's session callback closes this same window; exercise the real
             # connection made by launch without depending on a desktop session manager.
-            app.commitDataRequest.disconnect()
-            app.commitDataRequest.connect(lambda manager: window.close())
             window.close()
         else:
             window.close()
