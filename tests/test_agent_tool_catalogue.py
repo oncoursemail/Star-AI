@@ -252,7 +252,7 @@ def test_calculator_runs_through_real_agent_loop(desk):
         reply("The result is 1/2."),
     ])
     assert result.answer == "The result is 1/2."
-    assert offered(result.requests[0]) == ALWAYS + CALCULATOR + SKILLS
+    assert offered(result.requests[0]) == CALCULATOR + ALWAYS + SKILLS
     assert {"event": "tool_started", "tool": "star_calculate"} in desk.events
     assert {"event": "tool_finished", "tool": "star_calculate", "is_error": False} in desk.events
     sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
