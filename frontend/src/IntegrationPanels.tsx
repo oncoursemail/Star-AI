@@ -87,7 +87,7 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
  const {testing,report,run}=useServerTest(invoke,disabled)
  useEffect(()=>{
    if(!report?.ok||draft.provider==='star_server')return
-   const next={...draft,provider:'star_server'}
+   const next:AppSettings={...draft,provider:'star_server'}
    void invoke('saveSettings',{settings:next}).then(saved=>{
      if(saved){onChange(next);setNote('Connected to STAR Server.')}
      else setNote('Server responded, but settings could not be saved.')
