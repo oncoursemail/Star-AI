@@ -294,6 +294,13 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         definitions.append({"type": "function", "function": {
             "name": REGISTRY_TOOL["name"], "description": REGISTRY_TOOL["description"],
             "parameters": REGISTRY_TOOL["inputSchema"]}})
+    from .candidate_code_team import definitions as code_team_definitions
+    code_team_tools = code_team_definitions(
+        prompt, enabled=bool(subagents_enabled and workspace is not None))
+    definitions.extend({"type": "function", "function": {
+        "name": tool["name"], "description": tool["description"],
+        "parameters": tool["inputSchema"]}} for tool in code_team_tools)
+    code_team_enabled = bool(code_team_tools)
     if workspace is not None:
         definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
     def selected(source) -> list[dict]:
@@ -554,6 +561,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         if (not registry_enabled or not isinstance(args,dict)
                                 or not {'query'} <= set(args) <= {'query','limit'}):
                             raise PermissionError('Registry discovery is not authorized')
+                    elif name == 'star_candidate_code_team':
+                        if not code_team_enabled or not isinstance(args,dict):
+                            raise PermissionError('Code specialist team is not authorized')
                     elif intelligence is not None and intelligence.owns(name):
                         if name not in enabled_intelligence:
                             raise PermissionError("Intelligence tool not authorized for this task")
@@ -620,6 +630,20 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         except Exception as exc:
                             data = {"isError": True, "content": [{"type": "text",
                                     "text": f"Registry discovery failed: {type(exc).__name__}"}]}
+                    elif name == 'star_candidate_code_team':
+                        try:
+                            from .candidate_code_team import run_candidate_code_team
+                            found = await run_candidate_code_team(
+                                client=helper, model=subagent_model or model,
+                                project=workspace.root.name, workspace=workspace,
+                                goal=args['goal'], paths=args['paths'],
+                                parallel=subagent_parallelism, on_event=event)
+                            data = {"isError": not found['status'] == 'candidate',
+                                    "content": [{"type": "text",
+                                                "text": json.dumps(found, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Candidate coding team failed: {type(exc).__name__}"}]}
                     elif intelligence is not None and intelligence.owns(name):
                         try:
                             local_output = intelligence.call(name, args, enabled=enabled_intelligence)
