@@ -47,6 +47,7 @@ DEFAULT_KEY_FILE = Path.home() / ".star" / "server_api_key"
 LOCK_POLL_SECONDS = 20
 LOCK_WATCH_SECONDS = 15        # how often a running request checks whether someone asked for quiet
 MAX_INTERRUPTIONS = 12
+MAX_TRUNCATION_RETRIES = 2     # an answer that stops inside a code block is asked for again
 LOCK_LIMIT_SECONDS = 3 * 3600
 _PRIVATE_IP = re.compile(r"\b(?:10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2})\b")
 _KEEP_EVENTS = {"route_selected", "knowledge_finished", "luau_check_finished", "skill_packs"}
@@ -297,7 +298,8 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
     try:
         for number, task in enumerate(todo, 1):
             asked, score, error = None, None, ""
-            for interruption in range(MAX_INTERRUPTIONS + 1):
+            truncations = 0
+            for interruption in range(MAX_INTERRUPTIONS + MAX_TRUNCATION_RETRIES + 1):
                 if lock_probe is not None:
                     waited += wait_for_lock(lock_probe, sleep=sleep, now=now, log=log)
                 cancel = threading.Event()
@@ -305,6 +307,10 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
                 try:
                     with watcher:
                         asked = ask(task, cancel)
+                    if checks.looks_truncated(asked.answer) and truncations < MAX_TRUNCATION_RETRIES:
+                        truncations += 1
+                        log(f"{task['id']}: the answer stops inside a code block; asking again ({truncations}/{MAX_TRUNCATION_RETRIES})")
+                        continue
                     score = scorer(task, asked.answer)
                 except checks.InfraError as exc:
                     error = str(exc)
@@ -319,6 +325,10 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
                 error = f"stopped {MAX_INTERRUPTIONS} times by the server lock"
             result["tasks"][task["id"]] = record_for(task, asked, score, error)
             record = result["tasks"][task["id"]]
+            if truncations:
+                record["truncation_retries"] = truncations
+                if asked is not None and checks.looks_truncated(asked.answer):
+                    record["truncated"] = True
             result["summary"] = summarize(result["tasks"])
             result["run"]["waited_for_lock_s"] = round(waited, 1)
             write_result(out, result, secrets)

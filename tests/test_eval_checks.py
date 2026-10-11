@@ -30,9 +30,26 @@ def test_split_answer_removes_what_star_appended():
     assert ec.split_answer("plain") == ("plain", "")
 
 
+def test_looks_truncated_when_the_text_stops_inside_a_code_block():
+    assert ec.looks_truncated("Here:\n" + FENCE + "luau\nlocal a = 1\n")
+    assert not ec.looks_truncated("Here:\n" + block("local a = 1") + "\nDone.")
+    assert not ec.looks_truncated("")
+    assert not ec.looks_truncated("no code at all")
+    cut = "Here:\n" + FENCE + "luau\nlocal a = 1\n\n---\n**Sources retrieved by STAR** (x)\n1. y"
+    assert ec.looks_truncated(cut)
+
+
 def test_extract_luau_blocks_only_lua_fences_with_code():
     text = block("local a = 1") + "\n" + block("x = 1", "python") + "\n" + block("   ") + "\n" + block("local b = 2", "lua")
     assert [b.strip() for b in ec.extract_luau_blocks(text)] == ["local a = 1", "local b = 2"]
+
+
+def test_unlabelled_fences_count_only_when_no_labelled_block_exists_and_they_read_as_luau():
+    bare = FENCE + "\nlocal a = 1\nreturn a\n" + FENCE
+    assert [b.strip() for b in ec.extract_luau_blocks("Here:\n" + bare)] == ["local a = 1\nreturn a"]
+    assert ec.extract_luau_blocks("Output:\n" + FENCE + "\nhello world\n" + FENCE) == []
+    mixed = bare + "\n" + block("local b = 2")
+    assert [b.strip() for b in ec.extract_luau_blocks(mixed)] == ["local b = 2"]
 
 
 def test_strip_luau_comments_and_strings():

@@ -152,6 +152,24 @@ def test_a_lock_that_never_clears_stops_the_run_with_progress_saved(tmp_path):
     assert not result["complete"] and "lock" in result["run"]["stopped"] and ask.log == []
 
 
+def test_a_truncated_answer_is_asked_for_again_then_recorded_as_truncated(tmp_path):
+    cut = "Here:\n" + "`" * 3 + "luau\nlocal a ="
+    answers = iter([cut, "complete answer"])
+
+    def ask(task, cancel=None):
+        return er.Asked(next(answers), [], 1.0)
+
+    result = er.run_suite(mini_suite(tmp_path, [mini_task("A-1")]), out=tmp_path / "r.json", ask=ask,
+                          scorer=scorer_for({"A-1"}), run_info=dict(RUN_INFO), log=lambda m: None)
+    record = result["tasks"]["A-1"]
+    assert record["status"] == "pass" and record["truncation_retries"] == 1 and "truncated" not in record
+    always_cut = er.run_suite(mini_suite(tmp_path, [mini_task("A-1")]), out=tmp_path / "r2.json",
+                              ask=lambda task, cancel=None: er.Asked(cut, [], 1.0), scorer=scorer_for(set()),
+                              run_info=dict(RUN_INFO), log=lambda m: None)
+    stuck = always_cut["tasks"]["A-1"]
+    assert stuck["status"] == "fail" and stuck["truncated"] and stuck["truncation_retries"] == er.MAX_TRUNCATION_RETRIES
+
+
 def test_a_request_is_stopped_and_repeated_when_the_lock_appears_during_it(tmp_path):
     import threading
     import time as _time

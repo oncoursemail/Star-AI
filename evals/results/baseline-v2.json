@@ -1,0 +1,562 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "4034d9c52a577276ec15a307b605b085ec92251af7575897ef71f83b7bc9865b",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "LUA-01",
+   "LUA-02",
+   "LUA-03",
+   "LUA-04",
+   "LUA-05",
+   "NET-01",
+   "NET-03",
+   "NET-04",
+   "NET-05",
+   "SYS-01",
+   "SYS-03",
+   "UI-09",
+   "UI-10",
+   "UI-11",
+   "UI-12",
+   "UI-13",
+   "UI-14",
+   "UI-16",
+   "NET-06",
+   "NET-07",
+   "NET-08",
+   "NET-09",
+   "NET-10",
+   "NET-11",
+   "NET-12",
+   "NET-13",
+   "NET-14",
+   "NET-15",
+   "ANI-03",
+   "ANI-04",
+   "ANI-05",
+   "PERF-01",
+   "PERF-02",
+   "PERF-03"
+  ]
+ },
+ "run": {
+  "app_commit": "26c0c18acb6c93648f02a09915eac3bef5e5bf37",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "off",
+  "knowledge": "on",
+  "temperature": 0,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "237a0cfcb9d5",
+  "started_at": "2026-10-11T01:26:21+00:00",
+  "waited_for_lock_s": 849.0
+ },
+ "complete": false,
+ "tasks": {
+  "UI-01": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-02": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-03": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-04": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-05": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-06": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-07": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-08": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "SYS-02": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "SYS-04": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "STU-01": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "STU-02": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "ANI-01": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "ANI-02": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "UI-15": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "ANI-06": {
+   "status": "skipped",
+   "reasons": [
+    "needs Roblox Studio or a human"
+   ]
+  },
+  "LUA-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "4fa9f7bdceec5dd2",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_cast_any",
+     "ok": true
+    }
+   ],
+   "seconds": 73.2,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.48
+   },
+   "blocks": 1,
+   "answer_chars": 3229,
+   "answer_sha256": "6bb36a83ba66e0d2304b983c65dbeccaf6946119f815c2dee4859820192153f2",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 530
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `Inventory` ModuleScript in `--!strict` mode, adhering to the specified requirements and type definitions.\n\n```luau\n--!strict\n\n-- [1] An introduction to Luau > Type checking\n-- Defines the type structure for the inventory.\ntype Inventory = { [string]: number }\n\nlocal Inventory = {}\n\n--- Creates a new empty Inventory.\n--- @return Inventory\nfunction Inventory.new(): Inventory\n\treturn {} :: Inventory\nend\n\n--- Adds items to the inventory.\n--- Raises an error if count is not a positive integer.\n--- @param inv Inventory\n--- @param itemId string\n--- @param count number\nfunction Inventory.add(inv: Inventory, itemId: string, count: number): ()\n\tif not (count > 0 and math.floor(count) == count) then\n\t\terror(\"count must be a positive integer\", 2)\n\tend\n\n\tinv[itemId] = (inv[itemId] or 0) + count\nend\n\n--- Removes items from the inventory.\n--- Returns false and changes nothing if the inventory holds fewer than count.\n--- Removes the key when the count reaches 0.\n--- @param inv Inventory\n--- @param itemId string\n--- @param count number\n--- @return boolean\nfunction Inventory.remove(inv: Inventory, itemId: string, count: number): boolean\n\tif not (count > 0 and math.floor(count) == count) then\n\t\terror(\"count must be a positive integer\", 2)\n\tend\n\n\tlocal current = inv[itemId] or 0\n\n\tif current < count then\n\t\treturn false\n\tend\n\n\tlocal newCount = current - count\n\n\tif newCount == 0 then\n\t\tinv[itemId] = nil\n\telse\n\t\tinv[itemId] = newCount\n\tend\n\n\treturn true\nend\n\n--- Gets the count of a specific item.\n--- @param inv Inventory\n--- @param itemId string\n--- @return number\nfunction Inventory.count(inv: Inventory, itemId: string): number\n\treturn inv[itemId] or 0\nend\n\nreturn Inventory\n```\n\n### Notes on Implementation\n\n1.  **Type Safety**: The script uses `--!strict` as requested. The `Inventory` type is defined as a dictionary mapping strings to numbers.\n2.  **Validation**: `Inventory.add` and `Inventory.remove` validate that `count` is a positive integer. This is checked using `count > 0` and `math.floor(count) == count` to ensure it is an integer and not a float or negative number.\n3.  **State Management**:\n    *   `Inventory.add` initializes the item count to 0 if the key does not exist.\n    *   `Inventory.remove` checks if the current count is sufficient. If not, it returns `false` without modifying the table. If sufficient, it subtracts the count. If the resulting count is 0, the key is removed from the table to keep the inventory clean.\n4.  **Return Types**: All functions return the specified types (`()`, `boolean`, `number`).\n\n### References\n\n[1] An introduction to Luau > Type checking\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; retrieved 2026-10-11)\n\n1. [An introduction to Luau > Type checking](https://luau.org/getting-started#type-checking) · cited\n2. [An introduction to Luau > Creating a script](https://luau.org/getting-started#creating-a-script) · retrieved, not cited\n3. [An introduction to Luau types > Type inference modes](https://luau.org/types#type-inference-modes) · retrieved, not cited\n"
+  },
+  "LUA-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "e0e3c92c26ca6988",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "require:alias_kept",
+     "ok": true
+    },
+    {
+     "id": "require:signature_kept",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_any",
+     "ok": true
+    }
+   ],
+   "seconds": 41.0,
+   "timings": {
+    "luau_check_s": 0.11,
+    "unit_s": 0.5
+   },
+   "blocks": 1,
+   "answer_chars": 2202,
+   "answer_sha256": "c7109c635b86696647c5b79f479d82be298de2f196275ddcab12b353ca08214a",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 16
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "To fix the code, we need to address two issues:\n1.  **Runtime Crash**: The function attempts to access `p.name` and `p.level` without checking if `p` is `nil`. If `p` is `nil`, this throws a runtime error.\n2.  **Type Safety**: The expression `p.level + 1` fails strict type checking because `p.level` is `number?` (which includes `nil`). You cannot add `nil` to a number in strict mode.\n\nHere is the corrected code:\n\n```lua\n--!strict\ntype Profile = { name: string, level: number? }\n\nlocal function describe(p: Profile?): string\n\tif p == nil then\n\t\treturn \"unknown\"\n\tend\n\t\n\t-- p.level is number?, so we must handle the nil case for arithmetic\n\tlocal level = p.level or 0\n\t\n\treturn p.name .. \" (level \" .. (level + 1) .. \")\"\nend\n\nreturn describe\n```\n\n### Explanation of Changes:\n1.  **Nil Profile Check**: Added `if p == nil then return \"unknown\" end` to handle the requirement that a nil profile returns \"unknown\" and to prevent accessing properties on a nil object [1].\n2.  **Nil Level Handling**: Used `local level = p.level or 0`. This ensures that if `p.level` is `nil`, it defaults to `0`. This satisfies the requirement that a nil level counts as 0 and resolves the strict type error where `nil + 1` is invalid [1].\n3.  **Strict Compliance**: The code remains `--!strict`, uses no `any` types, and correctly handles the optional `?` type annotation for `level` [1].\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Type checking > Types](https://create.roblox.com/docs/luau/type-checking#types) · cited\n2. [Roblox globals > typeof](https://create.roblox.com/docs/reference/engine/globals/RobloxGlobals#typeof) · retrieved, not cited\n3. [Data store versioning, listing, and caching > Serialization](https://create.roblox.com/docs/cloud-services/data-stores/versioning-listing-and-caching#serialization) · retrieved, not cited\n4. [Type checking > Type exports](https://create.roblox.com/docs/luau/type-checking#type-exports) · retrieved, not cited\n"
+  },
+  "LUA-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "1ea58a9a4d5435de",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "typecheck_probe",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_any",
+     "ok": true
+    }
+   ],
+   "seconds": 103.0,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.52
+   },
+   "blocks": 1,
+   "answer_chars": 2793,
+   "answer_sha256": "7562e97ffd11a63365acfe8e3e6c0131c123c22b400594b1c8e597fac2db268b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 2562
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a `--!strict` ModuleScript named `ListUtil` containing the three requested functions. It uses only pure functional operations (iteration without mutation) to ensure the input list is never modified.\n\n```lua\n--!strict\n\n--! @class ListUtil\n--! @service\n\nlocal ListUtil = {}\n\n--- Applies a function to every element in the list and returns a new list with the results.\n--! @generic T, U\n--! @param list {T}\n--! @param fn (T) -> U\n--! @return {U}\nfunction ListUtil.map<T, U>(list: {T}, fn: (T) -> U): {U}\n\tlocal result: {U} = {}\n\tfor index, value in ipairs(list) do\n\t\tresult[index] = fn(value)\n\tend\n\treturn result\nend\n\n--- Returns a new list containing only elements that satisfy the predicate.\n--! @generic T\n--! @param list {T}\n--! @param pred (T) -> boolean\n--! @return {T}\nfunction ListUtil.filter<T>(list: {T}, pred: (T) -> boolean): {T}\n\tlocal result: {T} = {}\n\tfor _, value in ipairs(list) do\n\t\tif pred(value) then\n\t\t\ttable.insert(result, value)\n\t\tend\n\tend\n\treturn result\nend\n\n--- Returns the first element in the list that satisfies the predicate, or nil if none do.\n--! @generic T\n--! @param list {T}\n--! @param pred (T) -> boolean\n--! @return T?\nfunction ListUtil.find<T>(list: {T}, pred: (T) -> boolean): T?\n\tfor _, value in ipairs(list) do\n\t\tif pred(value) then\n\t\t\treturn value\n\t\tend\n\tend\n\treturn nil\nend\n\nreturn ListUtil\n```\n\n### Implementation Notes\n*   **Immutability**: All three functions use `ipairs` to read from the input `list` and create a fresh `result` table. They never use `table.remove`, `table.sort`, or direct index assignment on the input `list` [3].\n*   **Type Safety**: The `--!strict` pragma is used, and generic types `<T>` and `<U>` are applied to the function signatures to ensure type-checking across the module [3].\n*   **Performance**: `map` pre-allocates indices to maintain order and avoid `table.insert` overhead, while `filter` uses `table.insert` as indices are not guaranteed to be contiguous in the result.\n\n### References\n[1] Get started creating on Roblox\n[2] User interface > Layout and design\n[3] Reuse code > Anatomy of a module script\n[4] Scripting\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Get started creating on Roblox](https://create.roblox.com/docs/get-started/creating) · cited\n2. [User interface > Layout and design](https://create.roblox.com/docs/ui#layout-and-design) · cited\n3. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · cited\n4. [Scripting](https://create.roblox.com/docs/scripting) · cited\n"
+  },
+  "LUA-04": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "e79e1dab658bca93",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_goto",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_label",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_shift",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_bitor",
+     "ok": true
+    }
+   ],
+   "seconds": 161.4,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.55
+   },
+   "blocks": 1,
+   "answer_chars": 3374,
+   "answer_sha256": "0f8e5f141eee07871fd727b7287967a5e3c1df2bf01a06dfff92054bf22fb6e8",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 3389
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The provided Lua 5.4 code uses bitwise operators (`|`, `<<`, `>>`) and integer division (`//`) which are supported in Luau. However, the original code relies on `goto` labels, which are valid in Luau but can be simplified for clarity and robustness. More importantly, the original code assumes `flags` is a list (array) where indices start at 1.\n\nHere is the ported function in robust `--!strict` Luau. It maintains the exact same logic: iterating through the `flags` table, setting bits based on truthy values, and returning the packed integer, the integer divided by 4, and the integer right-shifted by 1.\n\n```lua\n--!strict\n\nlocal function pack(flags: {boolean?}): (number, number, number)\n\tlocal out: number = 0\n\t\n\t-- Iterate through the flags table. \n\t-- Note: ipairs is used to safely iterate over the array part of the table.\n\t-- If flags is not a table or is empty, the loop will not execute.\n\tfor i: number, flag: boolean? in ipairs(flags) do\n\t\tif flag then\n\t\t\t-- Set the (i-1)-th bit. \n\t\t\t-- 1 << (i - 1) creates a number with only the (i-1)-th bit set.\n\t\t\t-- | (bitwise OR) combines it with the current out value.\n\t\t\tout = bit32.bor(out, bit32.lshift(1, i - 1))\n\t\tend\n\tend\n\t\n\t-- Return the three values as specified:\n\t-- 1. out: The packed integer.\n\t-- 2. out // 4: Integer division by 4 (equivalent to right shift by 2 bits).\n\t-- 3. out >> 1: Right shift by 1 bit.\n\treturn out, math.floor(out / 4), bit32.rshift(out, 1)\nend\n\nreturn pack\n```\n\n### Key Changes & Notes:\n1.  **Type Safety**: Added `--!strict` and explicit type annotations for parameters and return values.\n2.  **Iteration**: Replaced the `for i = 1, #flags` loop with `ipairs(flags)`. This is safer in Luau because `#flags` can be unreliable if the table has \"holes\" (nil values in the middle), whereas `ipairs` stops at the first nil. The original Lua 5.4 code using `#` would also stop at the first nil if the table was sparse, so `ipairs` is functionally equivalent for typical boolean arrays.\n3.  **Bitwise Operators**: Luau supports `|`, `<<`, `>>`, and `//` natively, so no external libraries are needed.\n4.  **Removed `goto`**: The `goto continue` was unnecessary since the `if not flags[i] then goto continue end` pattern is equivalent to `if flags[i] then ... end`. The refactored version is cleaner.\n5.  **Return Values**: The three return values are preserved exactly as in the original: `out`, `out // 4`, and `out >> 1`.\n\nThis function will run correctly in Roblox Studio and in-game.\n\n**Luau check by STAR:** The code block first failed the static Luau check (Expected identifier when parsing expression, got '|', line 14). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Luau globals](https://create.roblox.com/docs/reference/engine/globals/LuaGlobals) · retrieved, not cited\n2. [Luau globals > unpack](https://create.roblox.com/docs/reference/engine/globals/LuaGlobals#unpack) · retrieved, not cited\n3. [Scripting > Luau](https://create.roblox.com/docs/scripting#luau) · retrieved, not cited\n4. [Roblox for Unity developers > Scripting > Luau code sample](https://create.roblox.com/docs/unity#luau-code-sample) · retrieved, not cited\n"
+  },
+  "LUA-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "8688a704ea8b1782",
+   "reasons": [
+    "unit_tests: 2/4 passed; failed: hp/name/empty example; segments without = or with an empty key are ignored",
+    "require:strict_header: the answer's first line must be --!strict"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "2/4 passed; failed: hp/name/empty example; segments without = or with an empty key are ignored"
+    },
+    {
+     "id": "require:strict_header",
+     "ok": false,
+     "detail": "the answer's first line must be --!strict"
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    }
+   ],
+   "seconds": 95.2,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.52
+   },
+   "blocks": 1,
+   "answer_chars": 2708,
+   "answer_sha256": "dd9218c7f308ce45ba1a7894fb4cf308e072d78c5fbdbc9f71ec12046361e87b",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 2265
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "```luau\n---!strict\n\n--- Parses a key-value string into a dictionary.\n--- Segments are separated by `;`.\n--- Keys and values are trimmed of whitespace.\n--- Segments without `=` or with empty keys are ignored.\n--- Last value wins for duplicate keys.\n--- @param s string\n--- @return { [string]: string }\nlocal function parseKV(s: string): { [string]: string }\n\tlocal result: { [string]: string } = {}\n\n\t-- Split by semicolon. Note: string.split is available in Luau.\n\t-- If the environment is older or strictness requires manual splitting, \n\t-- we would use string.find, but the reference data [3] confirms string.split exists.\n\tlocal segments: { string } = string.split(s, \";\")\n\n\tfor _, segment in ipairs(segments) do\n\t\t-- Find the first '=' to separate key and value\n\t\tlocal eqIndex: number? = string.find(segment, \"=\")\n\n\t\tif eqIndex == nil then\n\t\t\t-- No '=' found, ignore segment\n\t\t\tcontinue\n\t\tend\n\n\t\t-- Extract key and value parts\n\t\tlocal keyPart: string = string.sub(segment, 1, eqIndex - 1)\n\t\tlocal valuePart: string = string.sub(segment, eqIndex + 1)\n\n\t\t-- Trim whitespace from key\n\t\t-- Manual trim using string.find for robustness without regex\n\t\tlocal keyStart: number? = string.find(keyPart, \"%S\")\n\t\tlocal keyEnd: number? = string.find(keyPart, \"%S\", #keyPart, true) -- true for plain search\n\n\t\tif keyStart == nil then\n\t\t\t-- Key is empty or only whitespace\n\t\t\tcontinue\n\t\tend\n\n\t\tlocal key: string = string.sub(keyPart, keyStart, keyEnd)\n\n\t\t-- Trim whitespace from value\n\t\tlocal valueStart: number? = string.find(valuePart, \"%S\")\n\t\tlocal valueEnd: number? = string.find(valuePart, \"%S\", #valuePart, true)\n\n\t\tlocal value: string\n\t\tif valueStart == nil then\n\t\t\t-- Value is empty or only whitespace\n\t\t\tvalue = \"\"\n\t\telse\n\t\t\tvalue = string.sub(valuePart, valueStart, valueEnd)\n\t\tend\n\n\t\t-- Assign to result (last value wins)\n\t\tresult[key] = value\n\tend\n\n\treturn result\nend\n\nreturn parseKV\n```\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Luau syntax by example > String interpolation](https://luau.org/syntax#string-interpolation) · retrieved, not cited\n2. [Luau syntax by example > String interpolation > Restrictions and limitations](https://luau.org/syntax#restrictions-and-limitations) · retrieved, not cited\n3. [string > split](https://create.roblox.com/docs/reference/engine/libraries/string#split) · retrieved, not cited\n4. [Standard Library > string library](https://luau.org/library#string-library) · retrieved, not cited\n"
+  },
+  "NET-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "4c1b3edf60786690",
+   "reasons": [
+    "unit_tests: 3/4 passed; failed: PlayerRemoving drops trackedCount by one"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "3/4 passed; failed: PlayerRemoving drops trackedCount by one"
+    },
+    {
+     "id": "require:server_clock",
+     "ok": true
+    },
+    {
+     "id": "require:player_removing",
+     "ok": true
+    }
+   ],
+   "seconds": 220.1,
+   "timings": {
+    "luau_check_s": 0.14,
+    "unit_s": 0.53
+   },
+   "blocks": 2,
+   "answer_chars": 5294,
+   "answer_sha256": "32ed8f5c3dd2af41b84eb6cecbea98a711a9594549f7204c62c28d75e2b08260",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 281
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 2
+    }
+   ],
+   "answer": "Here is a robust, server-side `AbilityGate` ModuleScript that enforces a 2-second cooldown per player using the server clock (`tick()`), ignores client-provided timestamps, and exposes the requested interface.\n\n### `ServerScriptService.AbilityGate` (ModuleScript)\n\n```lua\n--!strict\n\nlocal Players = game:GetService(\"Players\")\n\n-- Configuration\nlocal COOLDOWN_SECONDS: number = 2\n\n-- Internal state: maps Player instance to the server timestamp of their last use\nlocal lastUseTime: table = {}\n\nlocal AbilityGate = {}\n\n--- Attempts to use an ability for the given player.\n--- Returns true if the ability was allowed, false if on cooldown.\n--- Client arguments are ignored for timing purposes.\nfunction AbilityGate.tryUse(player: Player): boolean\n\tassert(player, \"tryUse requires a Player instance\")\n\t\n\tlocal now: number = tick()\n\t\n\t-- If the player hasn't used an ability yet, allow it immediately\n\tif lastUseTime[player] == nil then\n\t\tlastUseTime[player] = now\n\t\treturn true\n\tend\n\t\n\t-- Check if enough time has passed since the last use\n\tif now - lastUseTime[player] >= COOLDOWN_SECONDS then\n\t\tlastUseTime[player] = now\n\t\treturn true\n\tend\n\t\n\t-- Cooldown is still active\n\treturn false\nend\n\n--- Resets the cooldown state for a specific player.\n--- Typically connected to Players.PlayerRemoving to clean up memory.\nfunction AbilityGate.forget(player: Player): nil\n\tassert(player, \"forget requires a Player instance\")\n\tlastUseTime[player] = nil\n\treturn nil\nend\n\n--- Returns the number of players currently being tracked.\n--- Useful for unit tests or debugging.\nfunction AbilityGate.trackedCount(): number\n\treturn #lastUseTime\nend\n\n-- Automatically connect cleanup when players leave\nPlayers.PlayerRemoving:Connect(AbilityGate.forget)\n\nreturn AbilityGate\n```\n\n### How to use it\n\n**1. In `ServerScriptService` (Main Script):**\nConnect the `UseAbility` RemoteEvent to the gate.\n\n```lua\n--!strict\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal AbilityGate = require(script.Parent.AbilityGate) -- Adjust path as needed\n\n-- Listen for the client firing UseAbility\nReplicatedStorage.UseAbility.OnServerEvent:Connect(function(player: Player, ...)\n\t-- ... arguments are ignored for timing, but you can use them for ability type, etc.\n\t\n\tif AbilityGate.tryUse(player) then\n\t\t-- Ability allowed: execute logic, fire other events, etc.\n\t\tprint(player.Name .. \" used an ability!\")\n\telse\n\t\t-- Ability on cooldown: optionally notify client or ignore\n\t\twarn(player.Name .. \" is on cooldown.\")\n\tend\nend)\n```\n\n### Key Design Points\n\n1.  **Server Clock (`tick()`):** The cooldown is measured using `tick()`, which is the server's monotonic clock. This prevents clients from manipulating `os.time()` or sending fake timestamps via `FireServer` to bypass the cooldown.\n2.  **Per-Player State:** The `lastUseTime` dictionary keys by the `Player` instance, ensuring each player has their own independent 2-second window.\n3.  **Memory Management:** `forget(player)` removes the player from the `lastUseTime` table. It is automatically connected to `Players.PlayerRemoving` to prevent memory leaks when players leave the game.\n4.  **Testability:** `trackedCount()` allows external scripts (like a test suite) to verify how many players are currently tracked in the cooldown system.\n5.  **Strict Typing:** The module uses `--!strict` and explicit type annotations for better tooling support and error prevention.\n\n### References\n*   [1] Remote events and callbacks > Remote events > Server → client: Explains how `OnServerEvent` receives the `Player` as the first argument and how additional arguments are passed.\n*   [3] RemoteEvent: Notes that `RemoteEvents` are subject to rate limits and are one-way, making them suitable for ability triggers where the server decides the outcome.\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Not all codepaths in this function return 'nil'., line 42). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 12: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n- line 15: Operator '..' could not be applied to operands of types unknown and string; there is no corresponding overload for __concat (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Remote events > Server&nbsp;→ client](https://create.roblox.com/docs/scripting/events/remote#servernbsp-client) · cited\n2. [Remote events and callbacks > Remote events > Server&nbsp;→ all clients](https://create.roblox.com/docs/scripting/events/remote#servernbsp-all-clients) · retrieved, not cited\n3. [RemoteEvent](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent) · cited\n4. [Custom abilities > Ability registration](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-registration) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 4,
+  "fail": 3,
+  "error": 0,
+  "scored": 7,
+  "pass_rate": 0.5714,
+  "median_seconds": 95.2
+ }
+}

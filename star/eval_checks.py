@@ -79,8 +79,32 @@ def split_answer(answer: str) -> tuple[str, str]:
     return answer[:cut], answer[cut:]
 
 
+PLAIN_FENCE = re.compile(r"```[ \t]*\n(.*?)```", re.S)
+_LOOKS_LIKE_LUAU = re.compile(r"\b(?:local|function|end|then|return)\b")
+
+
 def extract_luau_blocks(body: str) -> list[str]:
-    return [m.group(1) for m in LUAU_FENCE.finditer(body) if m.group(1).strip()]
+    """Fenced Luau code. Blocks labelled lua/luau win; if there are none, unlabelled fences that read as Luau count.
+
+    A model that forgets the language tag has still written the code; the task is scored on the code, not the tag.
+    """
+    labelled = [m.group(1) for m in LUAU_FENCE.finditer(body) if m.group(1).strip()]
+    if labelled:
+        return labelled
+    return [m.group(1) for m in PLAIN_FENCE.finditer(body) if _LOOKS_LIKE_LUAU.search(m.group(1))]
+
+
+_FENCE_LINE = re.compile(r"^[ \t]*```", re.M)
+
+
+def looks_truncated(answer: str) -> bool:
+    """True when the model's text stops inside a code block (an odd number of fence lines).
+
+    The model server can cut a stream short (a restart, a dropped connection) without any error reaching
+    the client, and a model can also run into its token limit. Either way the answer is incomplete.
+    """
+    body, _ = split_answer(answer or "")
+    return len(_FENCE_LINE.findall(body)) % 2 == 1
 
 
 def prose_of(body: str) -> str:
