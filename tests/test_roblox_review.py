@@ -327,3 +327,22 @@ def test_an_action_cut_off_while_running_becomes_unknown(fake, tmp_path):
     assert seen["status"] == "unknown" and "not known" in seen["result"]["error"]
     with pytest.raises(CloudError, match="already unknown"):
         cloud.decide(action["id"], approved=True, human_approved=True)
+
+
+# ------------------------------------------------------------------ 9. built files are not kept forever
+
+def test_built_place_files_do_not_pile_up(fake, tmp_path):
+    import os
+    cloud = ready(fake, tmp_path)
+    for number in range(3):                                    # requests that were refused, decided or expired
+        cloud.store_build(f"<roblox>{number}</roblox>".encode())
+    waiting = cloud.store_build(b"<roblox>waiting</roblox>")
+    folder = tmp_path / "roblox" / "builds"
+    (folder / "rojo-out.rbxlx").write_bytes(b"<roblox/>")
+    for stored in folder.iterdir():
+        os.utime(stored, (1, 1))                               # all of them are old
+    fresh = cloud.store_build(b"<roblox>stored a moment ago, its action is not saved yet</roblox>")
+    cloud.request_action("publish", "Publish the shop", {"sha256": waiting})
+    assert sorted(stored.stem for stored in folder.iterdir()) == sorted([waiting, fresh, "rojo-out"])
+    done = cloud.decide(cloud.actions()[-1]["id"], approved=True, human_approved=True)
+    assert done["status"] == "done" and fake.published[0]["bytes"] == b"<roblox>waiting</roblox>"

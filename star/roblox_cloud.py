@@ -818,7 +818,19 @@ class RobloxCloud:
         return items
 
     def _save_actions(self, items: list[dict]) -> None:
-        _write_json(self.dir / "actions.json", {"actions": items[-KEEP_ACTIONS:]})
+        kept = items[-KEEP_ACTIONS:]
+        _write_json(self.dir / "actions.json", {"actions": kept})
+        # A built place file is needed only while an action that names it can still be approved or
+        # is being carried out. Older ones are removed, so requests cannot fill the disk over time.
+        wanted = {str((item.get("detail") or {}).get("sha256")) for item in kept
+                  if item.get("status") in ("pending", "running")}
+        for stored in (self.dir / "builds").glob("*.rbxlx"):
+            try:
+                if (re.fullmatch(r"[0-9a-f]{64}", stored.stem) and stored.stem not in wanted
+                        and stored.stat().st_mtime < time.time() - 2 * ACTION_TTL):
+                    stored.unlink()
+            except OSError:
+                pass
 
     def request_action(self, kind: str, summary: str, detail: dict) -> dict:
         """Called for the model: record what it wants to do. Nothing is sent to Roblox."""
