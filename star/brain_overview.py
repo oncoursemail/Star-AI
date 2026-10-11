@@ -7,7 +7,7 @@ from pathlib import Path
 from .desktop_core import Settings
 from .intelligence import ALL_TOOLS, for_settings
 from .lessons import learning_status
-from .server_roles import role_report
+from .server_roles import role_report, _FLEETS
 
 
 def brain_snapshot(settings_file: Path, home: Path) -> dict:
@@ -35,9 +35,12 @@ def brain_snapshot(settings_file: Path, home: Path) -> dict:
     configured = [name for name in (
         settings.model, settings.fast_model, settings.reasoning_model,
         settings.roblox_model, settings.vision_model) if name]
+    fleet = _FLEETS.get(str(settings.server_endpoint).rstrip("/"), {}) if settings.provider == "star_server" else {}
+    offered = list(dict.fromkeys(fleet.get("ids", {}).values()))
     return {
         "provider": settings.provider,
-        "models": list(dict.fromkeys(configured)),
+        "models": offered,
+        "configured_models": list(dict.fromkeys(configured)),
         "roles": role_report(settings),
         "knowledge": sources,
         "skills": {"enabled": skills["enabled"], "count": skills["count"],
