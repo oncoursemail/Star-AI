@@ -134,7 +134,8 @@ def audit(instances: list[dict], scripts: list[dict] | None = None, *, target: s
         node = by_path[path]
         kind, prop, complete = node["class"], node["properties"], node["complete"]
         parent = by_path.get(path.rpartition(".")[0])
-        if kind == "ScreenGui" and str(prop.get("ScreenInsets")) in {"None", "Enum.ScreenInsets.None"}:
+        if kind == "ScreenGui" and prop.get("ScreenInsets") is not None \
+                and str(prop["ScreenInsets"]) in {"None", "Enum.ScreenInsets.None"}:
             add("ui-unsafe-insets", "ui", "warning", path, "ScreenInsets is explicitly None.",
                 "Use safe insets unless the visual and control layout were verified on notched screens.",
                 doc="accessibility")
