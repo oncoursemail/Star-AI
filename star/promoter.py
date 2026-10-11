@@ -119,6 +119,10 @@ def expire_due(home, now=None) -> list[int]:
         return store.expire(stamp)
 
 
+class PromotionConflict(RuntimeError):
+    """A newer or owner-edited target cannot safely be restored by an expiry."""
+
+
 class Promoter:
     """One writer of audited, reversible promotion state.
 
