@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sys
 from pathlib import Path
 
+from .quiet import wait_while_locked
 from .store import connect
 
 FOCUS = ("content/en-us/ui/", "content/en-us/luau/", "content/en-us/scripting/", "src/content/docs/")
@@ -28,16 +30,19 @@ def write_subset(db_path: Path, out: Path, size: int = 2000, questions: Path | N
     chosen: dict[str, str] = {}
     counts = {"focus": 0, "expected_pages": 0, "distractors": 0}
     for _, sha, path in rows:
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         if path.startswith(FOCUS) and sha not in chosen:
             chosen[sha] = "focus"
             counts["focus"] += 1
     for _, sha, path in rows:
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         if path in expected and sha not in chosen:
             chosen[sha] = "expected"
             counts["expected_pages"] += 1
     rest = sorted((hashlib.sha256(("subset-v1:" + sha).encode()).hexdigest(), sha)
                   for _, sha, _ in rows if sha not in chosen)
     for _, sha in rest:
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         if len(chosen) >= size:
             break
         if sha not in chosen:

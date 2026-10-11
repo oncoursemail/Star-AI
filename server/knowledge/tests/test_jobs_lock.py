@@ -6,12 +6,13 @@ from pathlib import Path
 import json
 import os
 import sys
+from types import ModuleType, SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from starkb import corpus_plan, coverage, embed, quiet, refresh, store, study  # noqa: E402
+from starkb import corpus_plan, coverage, embed, evaluate, quiet, refresh, store, study, subset  # noqa: E402
 from starkb.chunking import Chunk, Doc  # noqa: E402
 from corpus_fixture import snapshot  # noqa: E402
 
@@ -323,6 +324,74 @@ def test_document_walkers_pause_between_source_files(fake_clock, tmp_path, monke
         return document
 
     monkeypatch.setattr(store, "chunk_markdown", parse)
+    if walker == "creator":
+        # This fixture has no YAML files; only the optional import must be satisfied.
+        monkeypatch.setitem(sys.modules, "yaml", ModuleType("yaml"))
     make_docs = store._creator_docs if walker == "creator" else store._luau_site
     assert len(list(make_docs(root, "https://example.invalid"))) == 2
     assert len(parsed) == 2 and fake_clock.sleeps == [5, 5]
+
+
+def test_evaluation_waits_between_queries(fake_clock, tmp_path, monkeypatch):
+    questions = tmp_path / "questions.jsonl"
+    questions.write_text("".join(json.dumps({"id": str(i), "question": f"Query {i}?",
+                         "expected": ["guide.md"]}) + "\\n" for i in range(2)),
+                         encoding="utf-8")
+
+    class DB:
+        def execute(self, sql):
+            if "SELECT path FROM docs" in sql:
+                return [("guide.md",)]
+            if "SELECT COUNT(*) FROM chunks" in sql:
+                return [(1,)]
+            raise AssertionError("unexpected SQL query")
+
+    starts = []
+
+    class Searcher:
+        def __init__(self, *_args, **_kwargs):
+            self.db = DB()
+            self._scope = None
+            self.sources = {}
+            self.question_scale = 0.85
+
+        def search(self, *_args, **_kwargs):
+            starts.append(fake_clock.now)
+            if len(starts) == 1:
+                fake_clock.arm()
+            passage = SimpleNamespace(rank=1, path="guide.md", heading="Guide")
+            return [passage], {"total_ms": 1.0}
+
+        def embedded_count(self):
+            return 0
+
+        def question_count(self):
+            return 0
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(evaluate, "Searcher", Searcher)
+    result = evaluate.run_eval(tmp_path / "unused.sqlite3", questions, ["bm25"], details=False)
+    assert result["summary"]["bm25"]["n"] == 2
+    assert starts[1] - starts[0] == 10
+    assert fake_clock.sleeps == [5, 5]
+
+
+def test_subset_generation_waits_between_rows(fake_clock, tmp_path, monkeypatch):
+    index = tmp_path / "index.sqlite3"
+    minimal_index(index)
+    calls = []
+    original = quiet.wait_while_locked
+
+    def gate(*args, **kwargs):
+        waited = original(*args, **kwargs)
+        calls.append(fake_clock.now)
+        if len(calls) == 1:
+            fake_clock.arm()
+        return waited
+
+    monkeypatch.setattr(subset, "wait_while_locked", gate)
+    result = subset.write_subset(index, tmp_path / "subset.txt", size=2)
+    assert result["size"] == 2
+    assert fake_clock.sleeps == [5, 5]
