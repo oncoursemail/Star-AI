@@ -1,6 +1,7 @@
 """Offline, deterministic validations: no Blender, GPU, network or keyring required."""
 import json
 import subprocess
+import struct
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +12,17 @@ from star.architecture_pipeline import create_package, make_plan, validate_brief
 
 BASE = {"name": "Harbor Warehouse", "style": "industrial", "width_studs": 48,
         "depth_studs": 32, "floors": 2, "bays": 4}
+
+
+def _glb_for_roles(roles):
+    data = json.dumps({
+        "asset": {"version": "2.0"},
+        "meshes": [{"name": f"STAR_{role}_mesh", "primitives": [{"attributes": {"POSITION": 0}}]}
+                   for role in roles],
+        "nodes": [{"mesh": i} for i in range(len(roles))],
+    }).encode()
+    data += b" " * ((4 - len(data) % 4) % 4)
+    return struct.pack("<4sII", b"glTF", 2, 20 + len(data)) + struct.pack("<I4s", len(data), b"JSON") + data
 
 
 def test_plan_is_repeatable_and_has_real_openings_and_articulated_roof():
@@ -53,6 +65,11 @@ def test_plan_only_never_launches_a_process_and_never_overwrites(tmp_path):
     assert path.read_text(encoding="utf-8").startswith("{\n")
     assert json.loads(path.read_text())["brief"]["name"] == "Harbor Warehouse"
     assert calls == []
+    manifest = json.loads((tmp_path / "kit" / "asset-manifest.json").read_text())
+    assert manifest["status"] == "plan_only" and manifest["studio_imported"] is False
+    assert manifest["visual_quality_verified"] is False
+    assert (tmp_path / "kit" / "architecture-audit.json").is_file()
+    assert "World Up to Top" in (tmp_path / "kit" / "studio-import-guide.md").read_text()
     with pytest.raises(FileExistsError):
         create_package(BASE, tmp_path / "kit", run=forbidden)
 
@@ -65,7 +82,8 @@ def test_explicit_blender_path_fixed_script_argv_and_output_proof(tmp_path):
         observed["argv"] = argv
         observed["kwargs"] = kwargs
         output = Path(argv[-1])
-        output.write_bytes(b"glb")
+        palette = json.loads(Path(argv[-2]).read_text())["palette"]
+        output.write_bytes(_glb_for_roles(palette))
         output.with_suffix(".blend").write_bytes(b"blend")
         return SimpleNamespace(returncode=0)
     create_package(BASE, tmp_path / "kit", blender=exe, run=fake_run)
@@ -75,6 +93,10 @@ def test_explicit_blender_path_fixed_script_argv_and_output_proof(tmp_path):
     assert argv[argv.index("--python") + 1].endswith("scripts/blender_building.py")
     assert observed["kwargs"]["timeout"] == 180 and observed["kwargs"]["check"] is True
     assert "shell" not in observed["kwargs"]
+    manifest = json.loads((tmp_path / "kit" / "asset-manifest.json").read_text())
+    assert manifest["status"] == "exported_needs_studio_review"
+    assert manifest["blender_export"]["mesh_count"] == 5
+    assert manifest["studio_imported"] is False
 
 
 def test_export_failure_and_missing_outputs_are_not_success(tmp_path):
@@ -90,3 +112,16 @@ def test_export_failure_and_missing_outputs_are_not_success(tmp_path):
     with pytest.raises(ValueError):
         create_package(BASE, tmp_path / "notstarted", blender=tmp_path / "powershell.exe")
     assert not (tmp_path / "notstarted").exists()
+
+
+def test_blender_fake_cannot_claim_success_with_fake_glb(tmp_path):
+    exe = tmp_path / "blender.exe"
+    exe.write_bytes(b"fake")
+    def wrong_glb(argv, **kwargs):
+        output = Path(argv[-1])
+        output.write_bytes(b"not a real glb")
+        output.with_suffix(".blend").write_bytes(b"fake")
+        return SimpleNamespace(returncode=0)
+    with pytest.raises(RuntimeError, match="not validated"):
+        create_package(BASE, tmp_path / "invalid-glb", blender=exe, run=wrong_glb)
+    assert not (tmp_path / "invalid-glb" / "asset-manifest.json").exists()
