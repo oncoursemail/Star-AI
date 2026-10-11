@@ -43,12 +43,15 @@ def _text(value: object, size: int) -> str:
 def _repository_url(value: object) -> str:
     if not isinstance(value, str) or len(value) > 350:
         return ""
-    parsed = urlsplit(value)
-    if (parsed.scheme != "https" or parsed.hostname not in
-            {"github.com", "gitlab.com", "codeberg.org"} or
-            parsed.username or parsed.password or parsed.port not in (None, 443)):
+    try:
+        parsed = urlsplit(value)
+        allowed = (parsed.scheme == "https" and
+                   parsed.hostname in {"github.com", "gitlab.com", "codeberg.org"} and
+                   not parsed.username and not parsed.password and
+                   parsed.port in (None, 443))
+    except ValueError:
         return ""
-    return value
+    return value if allowed else ""
 
 
 def summarize_registry(raw: object, query: str, *, limit: int = 5) -> list[dict]:
