@@ -7,6 +7,8 @@ Mode names: a base (`bm25`, `vector`, `hybrid`) plus optional flags joined with 
   `+q`         use the generated questions (study.py) in both generators
   `+fallback`  vector mode on a partly embedded index: embed BM25's top unembedded chunks at query time
   `+rerank`    hybrid only: rerank the head of the list with the reranker model (seconds per query)
+  `+f`         long queries are also searched sentence by sentence (search.split_facets); `+frrf`
+               merges the sentence rankings by rank instead of by best cosine
 A mode without `+q` ignores generated questions even when the index has them.
 """
 from __future__ import annotations
@@ -39,10 +41,13 @@ def load_questions(path: Path) -> list[dict]:
 
 def parse_mode(mode: str) -> tuple[str, dict]:
     base, *flags = mode.split("+")
-    unknown = set(flags) - {"q", "fallback", "rerank"}
+    unknown = set(flags) - {"q", "fallback", "rerank", "f", "frrf"}
     if unknown:
         raise ValueError(f"unknown mode flag in {mode!r}: {sorted(unknown)}")
-    return base + ("+rerank" if "rerank" in flags else ""), {"fallback": "fallback" in flags, "questions": "q" in flags}
+    options = {"fallback": "fallback" in flags, "questions": "q" in flags, "facets": "f" in flags or "frrf" in flags}
+    if "frrf" in flags:
+        options["facet_merge"] = "rrf"
+    return base + ("+rerank" if "rerank" in flags else ""), options
 
 
 def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_embedded: bool = False,

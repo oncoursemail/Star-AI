@@ -21,7 +21,7 @@ import time
 import numpy as np
 
 from .chunking import split_camel
-from .client import Brain, EMBED_MODEL
+from .client import Brain, EMBED_MODEL, QUERY_PREFIX
 from .store import connect, connect_readonly, embed_input, now
 
 MODES = ("bm25", "vector", "hybrid", "hybrid+rerank")
@@ -36,6 +36,44 @@ BASE_COLUMNS = "{title heading idents text}"   # FTS5 column filter: match outsi
 # higher than query-to-passage cosine. The question score is scaled before it competes with the
 # passage score; the value was chosen on the 30 development questions (see docs/agents/knowledge-study.md).
 QUESTION_SCALE = float(os.environ.get("STAR_KB_QUESTION_SCALE", "0.85"))
+# Long task prompts ("write a script that does A, B and C") ask for several things at once and one
+# query vector cannot be near all of them. With facets on, a query of FACET_MIN_CHARS or more is
+# also searched sentence by sentence and the rankings are merged (see Searcher.search).
+FACET_MIN_CHARS = 160
+FACET_MIN_PART = 25
+FACET_MAX = 6
+USE_FACETS = os.environ.get("STAR_KB_FACETS", "0") == "1"
+_SENTENCE = re.compile(r"(?<=[.!?;:])\s+|\n+")
+
+
+def split_facets(query: str) -> list[str]:
+    """The sentences of a long prompt, or [] when the query is short or is one sentence."""
+    if len(query) < FACET_MIN_CHARS:
+        return []
+    parts = [p.strip() for p in _SENTENCE.split(query)]
+    parts = [p for p in parts if len(p) >= FACET_MIN_PART]
+    return parts[:FACET_MAX] if len(parts) > 1 else []
+
+
+def merge_facets(whole: list[tuple[int, float]], parts: list[list[tuple[int, float]]], how: str) -> list[tuple[int, float]]:
+    """Merge the ranking for the whole prompt with the rankings for its sentences.
+    "max": a chunk scores its best cosine over all of them (scores of one embedding model are
+    comparable). "rrf": reciprocal-rank fusion with the whole prompt counted twice (for BM25,
+    whose scores are not comparable between queries)."""
+    if how == "max":
+        best: dict[int, float] = {}
+        for ranking in [whole, *parts]:
+            for chunk_id, score in ranking:
+                if score > best.get(chunk_id, -2.0):
+                    best[chunk_id] = score
+        return sorted(best.items(), key=lambda item: -item[1])
+    fused: dict[int, float] = {}
+    for weight, ranking in [(2.0, whole), *[(1.0, r) for r in parts]]:
+        for rank, (chunk_id, _) in enumerate(ranking, 1):
+            fused[chunk_id] = fused.get(chunk_id, 0.0) + weight / (RRF_K + rank)
+    return sorted(fused.items(), key=lambda item: -item[1])
+
+
 # Off unless STAR_KB_QUESTIONS=1 (set in the unit file once the measured effect justified it); `questions=` overrides per call.
 USE_QUESTIONS = os.environ.get("STAR_KB_QUESTIONS", "0") == "1"
 RERANK_DOC_CHARS = 1000         # the reranker shares the 512-token physical batch limit (query + document + template)
@@ -297,7 +335,8 @@ class Searcher:
 
     def search(self, query: str, *, mode: str = "hybrid+rerank", top: int = 5, per_doc: int = 2,
                candidates: int = 50, rerank_n: int = 15, fallback: bool = False,
-               degrade: bool = False, questions: bool | None = None) -> tuple[list[Passage], dict]:
+               degrade: bool = False, questions: bool | None = None, facets: bool | None = None,
+               facet_merge: str = "max") -> tuple[list[Passage], dict]:
         """fallback=True (the service default): in `vector` mode on a partly embedded index, the
         chunks without an embedding that BM25 ranks in its top FALLBACK_DEPTH over the whole corpus
         are embedded at query time (at most FALLBACK_EMBED) and ranked by cosine with the rest.
@@ -307,7 +346,10 @@ class Searcher:
             raise ValueError("mode must be one of " + ", ".join(MODES))
         if questions is None:
             questions = USE_QUESTIONS
+        parts = split_facets(query) if (USE_FACETS if facets is None else facets) else []
         timing: dict[str, float] = {}
+        if parts:
+            timing["facets"] = float(len(parts))
         t0 = time.perf_counter()
         ranked: list[tuple[int, float]]
         lexical: list[tuple[int, float]] = []
@@ -318,11 +360,7 @@ class Searcher:
             partial = fallback and self._scope is None and len(self._ids) < self.chunk_count()
             t = time.perf_counter()
             try:
-                qvec = self._query_vectors.get(query) if self._query_vectors is not None else None
-                if qvec is None:
-                    qvec = np.asarray(self.brain.embed_query(query), dtype=np.float32)
-                    if self._query_vectors is not None:
-                        self._query_vectors[query] = qvec
+                qvec, *part_vectors = self._embed_queries([query, *parts])
             except RuntimeError:
                 if not degrade:
                     raise
@@ -332,10 +370,15 @@ class Searcher:
                 timing["embed_query_ms"] = (time.perf_counter() - t) * 1000
                 t = time.perf_counter()
                 dense = self.vector(query, candidates, qvec=qvec, questions=questions)
+                if parts:
+                    dense = merge_facets(dense, [self.vector(p, candidates, qvec=v, questions=questions)
+                                                 for p, v in zip(parts, part_vectors)], facet_merge)
                 timing["vector_ms"] = (time.perf_counter() - t) * 1000
         if mode != "vector" or partial:
             t = time.perf_counter()
             lexical = self.bm25(query, candidates, questions=questions)
+            if parts and mode != "vector":
+                lexical = merge_facets(lexical, [self.bm25(p, candidates, questions=questions) for p in parts], "rrf")
             timing["bm25_ms"] = (time.perf_counter() - t) * 1000
         if mode == "bm25":
             ranked = lexical
@@ -396,6 +439,18 @@ class Searcher:
                 commit=src["commit_sha"], licence=src["licence"], retrieved_at=stamp, text=row["text"]))
         timing["total_ms"] = (time.perf_counter() - t0) * 1000
         return passages, {k: round(v, 1) for k, v in timing.items()}
+
+    def _embed_queries(self, texts: list[str]) -> list[np.ndarray]:
+        """Query vectors for the texts, in one embedding request for all that are not known yet."""
+        known = self._query_vectors if self._query_vectors is not None else {}
+        missing = [t for t in dict.fromkeys(texts) if t not in known]
+        fresh: dict[str, np.ndarray] = {}
+        if missing:
+            vectors, _ = self.brain.embed([QUERY_PREFIX + t for t in missing])
+            fresh = {t: np.asarray(v, dtype=np.float32) for t, v in zip(missing, vectors)}
+            if self._query_vectors is not None:
+                self._query_vectors.update(fresh)
+        return [fresh[t] if t in fresh else known[t] for t in texts]
 
     def _rows(self, ids: list[int]) -> dict[int, dict]:
         if not ids:

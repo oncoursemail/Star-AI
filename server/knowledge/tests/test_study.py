@@ -190,8 +190,45 @@ def test_a_rebuild_that_fails_or_shrinks_keeps_the_working_index(tmp_path, monke
 
 
 def test_mode_names():
-    assert parse_mode("vector") == ("vector", {"fallback": False, "questions": False})
-    assert parse_mode("vector+q+fallback") == ("vector", {"fallback": True, "questions": True})
-    assert parse_mode("hybrid+rerank") == ("hybrid+rerank", {"fallback": False, "questions": False})
+    assert parse_mode("vector") == ("vector", {"fallback": False, "questions": False, "facets": False})
+    assert parse_mode("vector+q+fallback") == ("vector", {"fallback": True, "questions": True, "facets": False})
+    assert parse_mode("hybrid+rerank") == ("hybrid+rerank", {"fallback": False, "questions": False, "facets": False})
+    assert parse_mode("vector+f")[1]["facets"] is True and parse_mode("bm25+frrf")[1]["facet_merge"] == "rrf"
     with pytest.raises(ValueError):
         parse_mode("bm25+magic")
+
+
+def test_long_prompts_are_also_searched_sentence_by_sentence(tmp_path):
+    short = "How do I tween a part?"
+    long = ("Write a server script that saves coins with a data store when the player leaves. "
+            "Also tween the door open over two seconds; and fire a remote event to every client afterwards.")
+    assert search.split_facets(short) == []
+    assert search.split_facets("x" * 400) == []                      # one sentence: nothing to split
+    parts = search.split_facets(long)
+    assert len(parts) == 3 and parts[1].startswith("Also tween the door")
+    assert search.merge_facets([(1, 0.5), (2, 0.4)], [[(3, 0.9), (1, 0.2)]], "max") == [(3, 0.9), (1, 0.5), (2, 0.4)]
+    fused = search.merge_facets([(1, 9.0), (2, 8.0)], [[(2, 1.0)], [(3, 1.0)]], "rrf")
+    assert [cid for cid, _ in fused] == [2, 1, 3]                    # 2 is in two lists; the whole prompt counts twice
+
+    index = tmp_path / "kb.sqlite3"
+    build_index(index)
+
+    class Brain:
+        requests = []
+
+        def embed(self, texts):
+            self.requests.append(list(texts))
+            # the whole prompt points at nothing indexed; the "tween" sentence points at chunk 1
+            return [[1.0, 0.0, 0.0, 0.0] if "tween the door" in t and not t.endswith("afterwards.") else [0.0, 0.0, 0.0, 1.0]
+                    for t in texts], 0
+
+    brain = Brain()
+    searcher = search.Searcher(index, brain=brain)
+    plain, _ = searcher.search(long, mode="vector", top=1, facets=False)
+    faceted, timing = searcher.search(long, mode="vector", top=1, facets=True)
+    assert plain[0].score == 0.0
+    assert faceted[0].heading == "TweenService > Create" and faceted[0].score == 1.0 and timing["facets"] == 3.0
+    assert len(brain.requests[-1]) == 4 and all(t.startswith(search.QUERY_PREFIX) for t in brain.requests[-1])   # one request
+    lexical, _ = searcher.search(long, mode="bm25", top=3, facets=True)
+    assert lexical and searcher.search(short, mode="bm25", top=1, facets=True)[1].get("facets") is None
+    searcher.close()
