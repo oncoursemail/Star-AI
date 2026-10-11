@@ -1,7 +1,8 @@
 """GitHub App installation authentication and developer-branch publishing.
 
 Requires one-time creation/installation by GitHub account owner. NEVER commits key.
-No direct main-branch changes, no PR merges, no workflow edits.
+No direct main-branch changes, no PR merges, no workflow edits. Branches are cut from, and draft pull
+requests point at, the configured work branch (STAR_GITHUB_BASE_BRANCH); never the default branch.
 """
 import os
 import re
@@ -16,6 +17,8 @@ from .version import REPO
 
 BRANCH = re.compile(r"^star/[a-z0-9][a-z0-9._-]{0,49}$")
 SAFE_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+NO_MAIN = ("STAR opens pull requests only against a star/<name> work branch, never main or the repository's "
+           "default branch. Set STAR_GITHUB_BASE_BRANCH to the work branch.")
 
 
 def valid_upload_path(path: str) -> bool:
@@ -39,14 +42,17 @@ def valid_upload_path(path: str) -> bool:
 
 
 class GitHubApp:
-    def __init__(self, app_id: str, installation_id: str, key_file: Path, repo: str):
+    def __init__(self, app_id: str, installation_id: str, key_file: Path, repo: str, base_branch: str = ""):
         if not (app_id.isdigit() and installation_id.isdigit() and SAFE_REPO.fullmatch(repo)):
             raise ValueError("GitHub App config requires numeric IDs and owner/repo")
+        if base_branch and not BRANCH.fullmatch(base_branch):
+            raise ValueError(NO_MAIN)
         if not key_file.is_file():
             raise ValueError("GitHub App private key is missing")
         if key_file.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
             raise ValueError("GitHub App private key must be outside the project repository")
         self.repo = repo
+        self.base_branch = base_branch
         self.app_id = app_id
         self.installation_id = installation_id
         self.key_file = key_file
@@ -94,10 +100,24 @@ class GitHubApp:
         if not BRANCH.fullmatch(name):
             raise ValueError("Only names star/<safe-name> are permitted")
         repo = quote(self.repo, safe="/")
-        info = await self.request("GET", f"/repos/{repo}")
-        base = info["default_branch"]
-        ref = await self.request("GET", f"/repos/{repo}/git/ref/heads/{quote(base, safe='')}")
+        base = await self.work_base(name)
+        ref = await self.request("GET", f"/repos/{repo}/git/ref/heads/{quote(base, safe='/')}")
         await self.request("POST", f"/repos/{repo}/git/refs", json={"ref": "refs/heads/" + name, "sha": ref["object"]["sha"]})
+        return base
+
+    async def work_base(self, head: str) -> str:
+        """The branch STAR's new branches are cut from and its pull requests point at.
+
+        Always the configured `star/<name>` work branch. Never the repository's default branch
+        (`main` publishes a release when something is merged into it), whatever that branch is called,
+        and never the branch being proposed. Nothing is created when this refuses.
+        """
+        base = self.base_branch
+        if not base or not BRANCH.fullmatch(base) or base == head:
+            raise PermissionError(NO_MAIN)
+        info = await self.request("GET", f"/repos/{quote(self.repo, safe='/')}")
+        if not isinstance(info, dict) or not info.get("default_branch") or base == info["default_branch"]:
+            raise PermissionError(NO_MAIN)
         return base
 
     async def write_branch_file(self, branch: str, path: str, raw: bytes, message: str):
@@ -105,6 +125,8 @@ class GitHubApp:
             raise PermissionError('STAR GitHub App cannot upload source to a non-STAR repository')
         if not BRANCH.fullmatch(branch) or not valid_upload_path(path):
             raise ValueError("Branch or file outside STAR's allowed write scope")
+        if branch == self.base_branch:
+            raise PermissionError("STAR writes to its own proposal branch, not straight into the work branch")
         if len(raw) > 300_000:
             raise ValueError("Text file is too large for this starter")
         import base64
@@ -127,6 +149,8 @@ class GitHubApp:
             raise PermissionError('STAR GitHub App cannot open development PRs outside the STAR source repository')
         if not BRANCH.fullmatch(head):
             raise ValueError("Not a STAR work branch")
+        if not isinstance(base, str) or not BRANCH.fullmatch(base) or base != await self.work_base(head):
+            raise PermissionError(NO_MAIN)
         return await self.request("POST", f"/repos/{quote(self.repo, safe='/')}/pulls",
                                   json={"title": title[:200], "body": body[:10000], "base": base, "head": head, "draft": True})
 
@@ -137,4 +161,5 @@ def from_env() -> GitHubApp:
         raise ValueError("Configure STAR_GITHUB_PRIVATE_KEY_FILE outside the repository")
     return GitHubApp(os.environ.get("STAR_GITHUB_APP_ID", ""),
                      os.environ.get("STAR_GITHUB_INSTALLATION_ID", ""), Path(key).expanduser(),
-                     os.environ.get("STAR_GITHUB_REPO", ""))
+                     os.environ.get("STAR_GITHUB_REPO", ""),
+                     base_branch=os.environ.get("STAR_GITHUB_BASE_BRANCH", "").strip())

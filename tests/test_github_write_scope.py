@@ -80,3 +80,116 @@ def test_write_branch_file_still_writes_a_skill_module(tmp_path):
         ("GET", f"/repos/{REPO}/contents/star/skills/tween_helpers.py"),
         ("PUT", f"/repos/{REPO}/contents/star/skills/tween_helpers.py")]
     assert app.calls[1][2]["branch"] == "star/demo"
+
+
+# ---- where STAR's own pull requests point: a work branch, never main ----
+
+WORK = "star/work-branch"
+REPO_INFO = ("GET", f"/repos/{REPO}")
+WORK_REF = ("GET", f"/repos/{REPO}/git/ref/heads/{WORK}")
+
+
+def answers(default_branch="main"):
+    return {REPO_INFO: {"default_branch": default_branch}, WORK_REF: {"object": {"sha": "b" * 40}},
+            ("POST", f"/repos/{REPO}/pulls"): {"html_url": "https://example.invalid/pull/1"}}
+
+
+def writes(app):
+    return [(m, p, j) for m, p, j in app.calls if m != "GET"]
+
+
+def test_new_branch_is_cut_from_the_work_branch_not_from_main(tmp_path):
+    app = Recorder(tmp_path, answers=answers(), base_branch=WORK)
+    assert asyncio.run(app.create_branch("star/skill-1")) == WORK
+    assert [(m, p) for m, p, _ in app.calls] == [REPO_INFO, WORK_REF, ("POST", f"/repos/{REPO}/git/refs")]
+    assert app.calls[-1][2] == {"ref": "refs/heads/star/skill-1", "sha": "b" * 40}
+    assert not any("heads/main" in p for _, p, _ in app.calls)
+
+
+def test_pull_request_points_at_the_work_branch_and_is_a_draft(tmp_path):
+    app = Recorder(tmp_path, answers=answers(), base_branch=WORK)
+    asyncio.run(app.open_pr(WORK, "star/skill-1", "title", "body"))
+    assert writes(app) == [("POST", f"/repos/{REPO}/pulls",
+                            {"title": "title", "body": "body", "base": WORK, "head": "star/skill-1", "draft": True})]
+
+
+@pytest.mark.parametrize("base", ["main", "master", "release", "develop", "", None, "refs/heads/main",
+                                  "star/Other", "star/another-branch", "star/skill-1"])
+def test_pull_request_against_main_or_any_other_branch_is_refused(tmp_path, base):
+    app = Recorder(tmp_path, answers=answers(), base_branch=WORK)
+    with pytest.raises(PermissionError):
+        asyncio.run(app.open_pr(base, "star/skill-1", "title", "body"))
+    assert writes(app) == []
+
+
+def test_without_a_configured_work_branch_nothing_is_created(tmp_path):
+    app = Recorder(tmp_path, answers=answers())
+    with pytest.raises(PermissionError):
+        asyncio.run(app.create_branch("star/skill-1"))
+    with pytest.raises(PermissionError):
+        asyncio.run(app.open_pr("main", "star/skill-1", "title", "body"))
+    with pytest.raises(PermissionError):
+        asyncio.run(app.open_pr(WORK, "star/skill-1", "title", "body"))
+    assert app.calls == []
+
+
+@pytest.mark.parametrize("default_branch", [WORK, "", None])
+def test_work_branch_that_is_the_default_branch_is_refused(tmp_path, default_branch):
+    app = Recorder(tmp_path, answers=answers(default_branch), base_branch=WORK)
+    with pytest.raises(PermissionError):
+        asyncio.run(app.create_branch("star/skill-1"))
+    with pytest.raises(PermissionError):
+        asyncio.run(app.open_pr(WORK, "star/skill-1", "title", "body"))
+    assert writes(app) == []
+
+
+@pytest.mark.parametrize("base", ["main", "master", "release/1.0", "Star/work", "star/", "star/UPPER", "feature/x"])
+def test_only_a_star_work_branch_can_be_configured(tmp_path, base):
+    with pytest.raises(ValueError):
+        Recorder(tmp_path, base_branch=base)
+
+
+def test_work_branch_comes_from_the_environment(tmp_path, monkeypatch):
+    from star import github_app
+    key = tmp_path / "fixture.pem"
+    key.write_text("not a key: test fixture", encoding="utf-8")
+    for name, value in (("STAR_GITHUB_PRIVATE_KEY_FILE", str(key)), ("STAR_GITHUB_APP_ID", "123"),
+                        ("STAR_GITHUB_INSTALLATION_ID", "456"), ("STAR_GITHUB_REPO", REPO)):
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("STAR_GITHUB_BASE_BRANCH", raising=False)
+    assert github_app.from_env().base_branch == ""
+    monkeypatch.setenv("STAR_GITHUB_BASE_BRANCH", f" {WORK} ")
+    assert github_app.from_env().base_branch == WORK
+    monkeypatch.setenv("STAR_GITHUB_BASE_BRANCH", "main")
+    with pytest.raises(ValueError):
+        github_app.from_env()
+
+
+def test_files_are_not_written_straight_into_the_work_branch(tmp_path):
+    app = Recorder(tmp_path, answers=answers(), base_branch=WORK)
+    with pytest.raises(PermissionError):
+        asyncio.run(app.write_branch_file(WORK, "star/skills/tween_helpers.py", b"x = 1\n", "test"))
+    assert app.calls == []
+
+
+def test_self_build_refuses_before_any_model_call_when_the_pull_request_would_target_main(tmp_path):
+    import subprocess
+    from star.selfbuild import develop
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git = ["git", "-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid"]
+    subprocess.run([*git, "init", "-q"], cwd=repo, check=True)
+    (repo / "note.txt").write_text("fixture\n", encoding="utf-8")
+    subprocess.run([*git, "add", "note.txt"], cwd=repo, check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "fixture"], cwd=repo, check=True)
+
+    class NoModel:
+        def __getattr__(self, name):
+            raise AssertionError("the model must not be asked")
+
+    app = Recorder(tmp_path, answers=answers())          # no work branch configured
+    with pytest.raises(PermissionError):
+        asyncio.run(develop(client=NoModel(), model="fixture", repository=repo, task="improve a skill", github=app))
+    branches = subprocess.run(["git", "branch", "--list", "star/*"], cwd=repo, capture_output=True, text=True, check=True)
+    assert branches.stdout.strip() == "" and app.calls == []
