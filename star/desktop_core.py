@@ -9,7 +9,7 @@ import re
 import sqlite3
 import time
 from .analytics import AnalyticsStore
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from typing import Callable
 
 from .agent import execute
@@ -21,9 +21,11 @@ from .intelligence import for_settings
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
-from .providers import (ALL_PROVIDERS, call_limits, connection_for, llama_request_fields, open_client,
+from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
+                        model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
-from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
+from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
+from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding
 
@@ -528,7 +530,7 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
 
-def model_context_char_budget(settings: Settings) -> int:
+def model_context_char_budget(settings: Settings, model: str | None = None) -> int:
     """Conservative CHAR proxy, not an exact tokenizer, for managed local router.
 
     The router's ctx-size is in tokens; complex Luau/MCP schemas can have many
@@ -542,22 +544,46 @@ def model_context_char_budget(settings: Settings) -> int:
     if kind == 'lan':
         # Each llama-server slot has its own context. Use the owner's value or
         # the size the server itself reported; unknown keeps the saved budget.
-        tokens = server_context_tokens(settings)
+        # `model` is the model the request is routed to (the quick model has a
+        # smaller context than the main one).
+        tokens = server_context_tokens(settings, model) or server_context_tokens(settings)
         if tokens:
             return min(settings.context_chars, max(3000, 2 * (tokens - 1024)))
     return settings.context_chars
 
 
+# Characters of earlier turns replayed on STAR Server (see `history_char_budget`).
+SERVER_HISTORY_CHARS = 12000
+
+
 def history_char_budget(settings: Settings) -> int:
     """Characters of earlier turns to replay.
 
-    On the owner's own hardware cached history costs nothing per turn, but the
-    first message after a start (or after the window moves) is read in full by a
-    slow CPU server, so the window stays near what STAR replayed before. A hosted
-    provider reads quickly and gets twice as much.
+    Cached history costs nothing per turn; what costs is the first message
+    after a start and each time the window moves, when the server reads what is
+    in the window again (see context_layout.conversation_window: the window
+    moves by half of this budget at a time, and one replayed message is at most
+    a quarter of it).
+
+      cloud        12000: a hosted provider reads fast.
+      STAR Server  12000: measured on the owner's server (docs/agents/model-routing.md).
+                   The old 6000 cut every replayed message at 1500 characters, less than
+                   one Fast-mode answer, and kept one to three exchanges. 12000 keeps a
+                   whole Fast-mode answer (3000 characters) and three to seven exchanges.
+                   A window move re-reads about 6000 characters; the post-answer warm-up
+                   does that while the owner reads the answer.
+      on this PC   6000: small GPU models with small contexts; unchanged.
+
+    One budget for every model of a server: the window is then the same request
+    start whichever model answers.
     """
     allowed = model_context_char_budget(settings)
-    return min(12000, allowed // 2) if provider_kind(settings) == 'cloud' else min(6000, max(1500, allowed // 4))
+    kind = provider_kind(settings)
+    if kind == 'cloud':
+        return min(12000, allowed // 2)
+    if kind == 'lan':
+        return min(SERVER_HISTORY_CHARS, max(1500, allowed // 2))
+    return min(6000, max(1500, allowed // 4))
 
 
 def stable_memory(settings: Settings, checkpoint: str) -> str:
@@ -642,11 +668,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
         roblox_context = bool(project_tools and referential
                               and any(is_roblox_task(turn) for turn in recent_users[-3:]))
-        route = select_route(settings,prompt,mode=mode,image_count=len(images),
+        # STAR Server may offer several models: blank role fields are filled from what the
+        # server listed (never saved, never over a role the owner set; other providers untouched).
+        kind = provider_kind(settings)
+        wants_deep, prompt = deep_request(prompt)     # "/deep ..." asks for the slow best-quality model
+        route = select_route(server_roles.effective(settings),prompt,mode=mode,image_count=len(images),
                              research=research,project_tools=project_tools,
-                             roblox_context=roblox_context)
+                             roblox_context=roblox_context,
+                             deep_model=server_roles.deep_model(settings) if wants_deep else '')
         audited_event({'event':'route_selected','profile':route.profile,
-                       'description':route.description})
+                       'description':route.description,'model':route.model})
         quick = route.quick
         reviewed = knowledge.find_contextual(settings.project, prompt, limit=4 if quick else 8)
         notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
@@ -660,7 +691,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # final user turn, after the user's words. A new retrieval source appends one pair.
         turn_sections = [('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
         use_tools = route.use_tools
-        allowed_context_chars = model_context_char_budget(settings)
+        allowed_context_chars = model_context_char_budget(settings, route.model)
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
         if use_tools and settings.tool_workshop_enabled:
@@ -671,6 +702,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         mcp_gateway = MCPGateway(settings) if use_tools else None
         connection_for(settings)  # fail early (missing key, bad address) before any work
         limits = call_limits(settings)
+        # Own hardware only: the conversation's tool list stays put from turn to turn (STAR
+        # Server), and the shape of this request is kept for the post-answer warm-up.
+        tools_kept = (turn_memory.for_conversation(memory_scope, sticky=kind == 'lan')
+                      if kind != 'cloud' else None)
+        answered_by = ''
+        tools_ran = False
+        inner_event = audited_event
+        def audited_event(event):
+            nonlocal answered_by, tools_ran
+            if event.get('event') == 'model_answered':
+                answered_by = str(event.get('model') or '')
+            elif event.get('event') == 'tool_started':
+                tools_ran = True
+            inner_event(event)
         async def run():
             from .web_search import search_web, source_context
             if research:
@@ -680,8 +725,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
+                # Summaries, sub-agents, specialists and code repair are not the conversation:
+                # on STAR Server they use the slot next to it (providers.llama_request_fields).
+                helper = background_client(client, settings, conversation=memory_scope)
                 specialists = (ResearchTeam(
-                    client=client,model=route.subagent_model,project=settings.project,
+                    client=helper,model=route.subagent_model,project=settings.project,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
                     parallelism=settings.specialist_parallelism,on_event=audited_event
                 ) if use_tools and settings.specialists_enabled else None)
@@ -693,6 +741,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # questions, added as delimited UNTRUSTED reference data. Never raises; '' when unused.
                 docs = await doc_grounding.prepare_async(settings, route, prompt, recent_users,
                                                          audited_event, mode=mode)
+                def slot_fields(model):
+                    # llama.cpp cache fields; {} for cloud providers.
+                    return lambda tools: llama_request_fields(
+                        settings, conversation=memory_scope, tools=tools, model=model)
                 if docs.block:
                     # First in the list: when room runs out earlier sections win, and these passages
                     # are the ones chosen for this exact question. The block carries its own markers.
@@ -707,9 +759,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
-                              # llama.cpp cache fields; {} for cloud providers.
-                              request_extras=lambda tools: llama_request_fields(
-                                  settings, conversation=memory_scope, tools=tools),
+                              request_extras=slot_fields(route.model),
+                              tool_memory=tools_kept, helper_client=helper,
                               max_calls=route.max_calls,
                               context_chars=allowed_context_chars,
                               checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,
@@ -723,15 +774,33 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
                               tool_workshop=workshop, specialists=specialists)
                 audited_event({'event': 'model_started'})
-                if allow_studio:
-                    async with connect() as session:
-                        result = await execute(**kwargs, studio=session,
-                            discovered=await list_tools(session), studio_id=settings.studio_id,
-                            may_edit=settings.studio_edit)
-                else:
-                    result = await execute(**kwargs)
+                async def answer_with(model):
+                    kwargs.update(model=model, request_extras=slot_fields(model))
+                    if allow_studio:
+                        async with connect() as session:
+                            return await execute(**kwargs, studio=session,
+                                discovered=await list_tools(session), studio_id=settings.studio_id,
+                                may_edit=settings.studio_edit)
+                    return await execute(**kwargs)
+                used = route
+                try:
+                    result = await answer_with(route.model)
+                except Exception as exc:
+                    # A role's model that is missing or will not load: answer with the single
+                    # configured model instead, once, and only if nothing was shown or run yet.
+                    if (kind != 'lan' or route.model == settings.model or first_visible_token
+                            or tools_ran or not model_unavailable(exc)):
+                        raise
+                    server_roles.mark_failed(settings, route.model)
+                    used = replace(route, model=settings.model, subagent_model=(
+                        settings.model if route.subagent_model == route.model else route.subagent_model))
+                    if specialists is not None:
+                        specialists.model = used.subagent_model
+                    kwargs.update(subagent_model=used.subagent_model)
+                    audited_event({'event': 'route_fallback', 'model': settings.model})
+                    result = await answer_with(settings.model)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
-                return await doc_grounding.finalize(docs, route, result, model_client=client, prompt=prompt,
+                return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
                                                     started=started, on_event=audited_event)
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
@@ -763,7 +832,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
-        (runs / 'transcript.json').write_text(json.dumps(redact_for_logs({'messages': msgs, 'archive': archive}), ensure_ascii=False, default=str), encoding='utf-8')
+        (runs / 'transcript.json').write_text(json.dumps(redact_for_logs({
+            'messages': msgs, 'archive': archive,
+            # Which model was asked and which one the server said answered.
+            'route': {'profile': route.profile, 'requested_model': route.model,
+                      'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(answer, encoding='utf-8')
         memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
         audited_event({'event': 'saved', 'run_id': stamp})

@@ -24,6 +24,19 @@ describe('activity timeline is driven only by backend events', () => {
     expect(isRich(run)).toBe(false)
   })
 
+  it('records the model a message was sent to and then the one the server says answered', () => {
+    const sent = replay('chat', [{phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast', model: 'star-quick'}}])
+    expect(sent.model).toBe('star-quick')
+    const answered = applyProgress(sent, {phase: 'Finishing the answer', activity: {type: 'model', model: 'star-voice'}}, 9000)
+    expect(answered.model).toBe('star-voice')
+    // A fall-back says so and names the model that takes over; an event without a name changes nothing.
+    const fallback = applyProgress(sent, {phase: 'x', activity: {type: 'route', fallback: true, model: 'star-fast'}}, 9000)
+    expect(fallback.model).toBe('star-fast')
+    expect(fallback.phase).toContain('not available')
+    expect(applyProgress(answered, {phase: 'x', activity: {type: 'model'}}, 9500).model).toBe('star-voice')
+    expect(settleRun(answered, 'done', 10000).model).toBe('star-voice')
+  })
+
   it('keeps a plain answer to one status line, not a timeline', () => {
     const run = replay('chat', [
       {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast'}},
@@ -147,7 +160,7 @@ describe('preview fixtures use the real event contract', () => {
 
 describe('connection status and failures are stated truthfully', () => {
   const local = {provider: 'local', model: 'qwen', endpoint: 'http://127.0.0.1:8080/v1'}
-  const lan = {provider: 'star_server', model: 'qwen-large', endpoint: '', server_endpoint: 'http://10.17.0.146:8080/v1'}
+  const lan = {provider: 'star_server', model: 'qwen-large', endpoint: '', server_endpoint: 'http://192.168.1.20:8080/v1'}
   /** Build the inputs the way Desktop.tsx does, from the app-wide `brainStatus` helper. */
   const status = (state: {settings: typeof local | typeof lan | {provider: string; model: string; endpoint: string}; brain_running?: boolean; server?: ServerStatus; credentials?: Record<string, boolean>; preview?: boolean; last?: LastOutcome}) =>
     describeConnection({
@@ -176,7 +189,7 @@ describe('connection status and failures are stated truthfully', () => {
     expect(unchecked.tone).toBe('unverified')
     expect(unchecked.state).toBe('Not checked')
     expect(unchecked.label).toBe('STAR Server · qwen-large')
-    expect(unchecked.endpoint).toBe('10.17.0.146:8080')
+    expect(unchecked.endpoint).toBe('192.168.1.20:8080')
     expect(status({settings: lan, server: server(true)}).tone).toBe('ready')
     expect(status({settings: lan, server: server(false)}).state).toBe('Needs attention')
     expect(status({settings: lan, server: server(null, false)}).state).toBe('No server address')
@@ -184,10 +197,22 @@ describe('connection status and failures are stated truthfully', () => {
     expect(status({settings: lan, brain_running: true, server: server(null)}).tone).toBe('unverified')
   })
 
+  it('names the model that answered when it is not the selected one', () => {
+    const target = connectionTarget(lan)
+    const routed = status({settings: lan, server: server(true), last: {ok: true, at: 0, target, model: 'star-voice'}})
+    expect(routed.answeredBy).toBe('star-voice')
+    expect(routed.note).toContain('star-voice answered at')
+    expect(routed.model).toBe('qwen-large')
+    // The selected model itself answering needs no extra line, and an answer for another target is ignored.
+    expect(status({settings: lan, server: server(true), last: {ok: true, at: 0, target, model: 'qwen-large'}}).answeredBy).toBeUndefined()
+    expect(status({settings: {...lan, model: 'other'}, server: server(true), last: {ok: true, at: 0, target, model: 'star-voice'}}).answeredBy).toBeUndefined()
+    expect(status({settings: lan, server: server(true), last: {ok: false, at: 0, kind: 'other', target, model: 'star-voice'}}).answeredBy).toBeUndefined()
+  })
+
   it('does not carry an answer or a failure over to another address, model or provider', () => {
     const answered: LastOutcome = {ok: true, at: 0, target: connectionTarget(lan)}
     expect(status({settings: lan, server: server(null), last: answered}).state).toBe('Connected')
-    const moved = {...lan, server_endpoint: 'http://192.168.1.20:8080/v1'}
+    const moved = {...lan, server_endpoint: 'http://192.168.1.30:8080/v1'}
     expect(status({settings: moved, server: server(null), last: answered})).toMatchObject({state: 'Not checked', tone: 'unverified'})
     expect(status({settings: {...lan, model: 'another-model'}, server: server(null), last: answered}).state).toBe('Not checked')
     expect(status({settings: local, brain_running: false, last: answered}).state).toBe('Offline')

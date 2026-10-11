@@ -39,6 +39,8 @@ export type ActivityRun = {
   streaming: boolean
   modelCalls?: number
   toolCalls?: number
+  /** The model this run was sent to; replaced by the name the server reported on the answer. */
+  model?: string
 }
 
 /** The sanitized `activity` object from the backend. All fields are enumerated or bounded there. */
@@ -50,6 +52,10 @@ export type ActivityPayload = {
   state?: string
   tool?: string
   profile?: string
+  /** A model id (route: the one asked; model: the one that answered). Validated by the host. */
+  model?: string
+  /** Route only: the chosen model was unavailable and the main model answers instead. */
+  fallback?: boolean
   step?: number
   max_steps?: number
   elapsed_ms?: number
@@ -172,7 +178,12 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
   switch (activity.type) {
     case 'route':
       if (activity.profile && ROUTES[activity.profile]) next.label = ROUTES[activity.profile]
-      next.phase = 'Choosing how to answer'
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      next.phase = activity.fallback ? 'That model is not available. Using your main model' : 'Choosing how to answer'
+      break
+    case 'model':
+      // The name the server itself put on the answer.
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
       break
     case 'search': {
       const found = steps.findIndex(step => step.id === 'search')

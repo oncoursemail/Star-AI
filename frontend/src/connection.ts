@@ -17,9 +17,11 @@ export type Connection = {
   model: string
   endpoint: string
   note: string
+  /** The model that answered the last message, when it is not the selected one (a server with several models). */
+  answeredBy?: string
 }
 /** What happened to the last real request. `target` is what it talked to (see `connectionTarget`). */
-export type LastOutcome = {ok: boolean; at: number; kind?: FailureKind; target?: string} | null
+export type LastOutcome = {ok: boolean; at: number; kind?: FailureKind; target?: string; model?: string} | null
 
 const PROVIDERS: Record<string, string> = {
   local: 'This PC',
@@ -67,7 +69,9 @@ export function describeConnection(input: {
   const local = settings.provider === 'local'
   const lan = settings.provider === 'star_server'
   const endpoint = local ? hostOf(settings.endpoint) : lan ? hostOf(settings.server_endpoint) : ''
-  const base = {provider, model, endpoint}
+  // Reported by the server on the last answer; only worth a line when it differs from the selected model.
+  const answeredBy = last?.ok && last.model && last.model !== model ? last.model : undefined
+  const base = {provider, model, endpoint, ...(answeredBy ? {answeredBy} : {})}
   const label = model ? `${provider} · ${model}` : provider
   if (preview) {
     return {...base, tone: 'preview', label: 'Preview', state: 'No model', note: 'This browser preview is not connected to a model. Open STAR Desktop to chat.'}
@@ -91,7 +95,7 @@ export function describeConnection(input: {
     }
   }
   if (last?.ok) {
-    return {...base, tone: 'ready', label, state: 'Connected', note: `Answered at ${clock(last.at)}.`}
+    return {...base, tone: 'ready', label, state: 'Connected', note: answeredBy ? `${answeredBy} answered at ${clock(last.at)}.` : `Answered at ${clock(last.at)}.`}
   }
   if (ownHardware && brain.online) {
     return {...base, tone: 'ready', label, state: 'Ready', note: brain.label + '.'}

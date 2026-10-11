@@ -2,7 +2,7 @@ import {useEffect,useRef,useState} from 'react'
 import type {ReactNode} from 'react'
 import {BookOpen,Check,ChevronDown,Globe,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
-import type {AppSettings,McpStatus,ServerReport,ServerStatus} from './types'
+import type {AppSettings,McpStatus,ServerReport,ServerRole,ServerStatus} from './types'
 import './integrated-tools.css'
 
 type Invoke=(action:string,params?:Record<string,unknown>)=>Promise<unknown|null>
@@ -158,12 +158,19 @@ export function ServerBrainPanel({settings,status,invoke,disabled=false,openSett
      <span>{settings.model?`${settings.model} runs on your own server.`:'Choose a server model in Settings to start chatting.'} Nothing needs to be downloaded to this PC.</span>
    </div></div>
    <p className="integrated-help">Address: {settings.server_endpoint||'not set yet'} · Key: {status?.key_present?'saved':'not saved yet'} · Status: {ready===true?'ready':ready===false?'needs attention':'not checked yet'}</p>
+   <ServerRoles roles={report?.roles?.length?report.roles:status?.roles}/>
    <div className="integrated-actions">
      <button type="button" className="secondary-button" disabled={disabled||testing||!settings.server_endpoint} onClick={()=>void run()}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
      <button type="button" className="secondary-button" onClick={openSettings}><Settings2 size={14}/> Server settings</button>
    </div>
    {report&&<ServerReportView report={report}/>}
  </section>
+}
+
+/** Which server model does which job. Only shown once it says something: a role the server or the owner chose. */
+export function ServerRoles({roles}:{roles?:ServerRole[]}){
+ if(!roles?.some(role=>role.source!=='default'))return null
+ return <p className="integrated-help" data-testid="server-roles">Models by job: {roles.map(role=>`${role.label}: ${role.model||'none'}${role.source==='manual'?' (set by you)':''}`).join(' · ')}. Start a message with /deep to ask the slow best-quality model, when the server offers one.</p>
 }
 
 /** With STAR Server selected the on-device brain is only a backup: keep it available, folded away, never a prompt. */

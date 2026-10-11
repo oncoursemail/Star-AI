@@ -111,7 +111,8 @@ class VoiceBridge:
             wanted += ["smart-turn-v3.2-cpu.onnx"] if settings.endpointer == "smart-turn" else []
             models_missing = [name for name in wanted if not (models_dir() / name).is_file()]
         call = self._call
-        server = bool(os.environ.get("STAR_SERVER_URL", "").strip() and os.environ.get("STAR_SERVER_API_KEY", "").strip())
+        from .brain import server_configured
+        server = server_configured()      # Settings + keyring, or the environment override; no network
         return {
             "available": not missing and not models_missing,
             "missingPackages": missing,

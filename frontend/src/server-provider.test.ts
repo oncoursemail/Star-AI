@@ -1,6 +1,8 @@
 import {readFileSync} from 'node:fs'
 import {describe,expect,it} from 'vitest'
-import {brainStatus,formatStepTime,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
+import {createElement} from 'react'
+import {renderToStaticMarkup} from 'react-dom/server'
+import {ServerRoles,brainStatus,formatStepTime,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import type {AppSettings,ServerReport,ServerStatus} from './types'
 
 const source=(name:string)=>readFileSync(new URL(name,import.meta.url),'utf8')
@@ -23,6 +25,18 @@ describe('STAR Server provider helpers',()=>{
   // Not checked yet is neutral: it is neither "offline" nor a prompt to download a model.
   expect(brainStatus({settings:{provider:'star_server'},brain_running:false,server:status(null)})).toEqual({online:false,label:'STAR Server selected'})
   expect(brainStatus({settings:{provider:'star_server'},brain_running:true}).label).toBe('STAR Server selected')
+ })
+ it('lists the models by job only once the server or the owner chose one',()=>{
+  const html=(roles?:ServerStatus['roles'])=>renderToStaticMarkup(createElement(ServerRoles,{roles}))
+  expect(html(undefined)).toBe('')
+  expect(html([{role:'quick',label:'Quick chat',model:'star-fast',source:'default'}])).toBe('')
+  const shown=html([
+   {role:'quick',label:'Quick chat',model:'my-quick',source:'manual'},
+   {role:'code',label:'Roblox, code and tools',model:'star-fast',source:'server'},
+   {role:'deep',label:'Best quality (slow, on request)',model:'star-deep',source:'server'}])
+  expect(shown).toContain('Quick chat: my-quick (set by you)')
+  expect(shown).toContain('Roblox, code and tools: star-fast ·')
+  expect(shown).toContain('/deep')
  })
  it('formats step timings for people',()=>{
   expect(formatStepTime(6)).toBe('6 ms')

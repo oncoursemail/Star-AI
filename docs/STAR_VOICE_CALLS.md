@@ -82,7 +82,7 @@ Environment variables:
 
 | Variable | Meaning |
 |---|---|
-| `STAR_SERVER_URL` | Brain address, for example `http://10.17.0.146:8080/v1`. Must be an IP on your own network ending in `/v1` |
+| `STAR_SERVER_URL` | Brain address, for example `http://192.168.1.20:8080/v1`. Must be an IP on your own network ending in `/v1` |
 | `STAR_SERVER_API_KEY` | Brain key. Only ever sent in the Authorization header; never logged or printed |
 | `STAR_VOICE_MODEL` | Model name on the server (default `star-fast`) |
 | `STAR_VOICE_MODELS` | Folder with the voice model files (default `%LOCALAPPDATA%\STAR\voice-models`) |

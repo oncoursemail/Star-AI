@@ -24,13 +24,13 @@ def sse(*pieces, reasoning=None):
 
 
 def brain_with(handler, **kwargs):
-    brain = ServerBrain("http://10.17.0.146:8080/v1", KEY, **kwargs)
+    brain = ServerBrain("http://192.168.1.20:8080/v1", KEY, **kwargs)
     brain._client = httpx.Client(transport=httpx.MockTransport(handler), trust_env=False)
     return brain
 
 
 def test_only_private_or_loopback_ip_addresses_ending_in_v1_are_accepted():
-    for good in ("http://10.17.0.146:8080/v1", "http://127.0.0.1:8080/v1/", "https://192.168.1.20/v1",
+    for good in ("http://192.168.1.20:8080/v1", "http://127.0.0.1:8080/v1/", "https://192.168.1.20/v1",
                  "http://localhost:8080/v1"):
         assert validate_server_url(good).endswith("/v1")
     for bad in ("http://8.8.8.8:8080/v1", "http://example.com/v1", "ftp://10.0.0.1/v1", "http://10.0.0.1:8080/",
@@ -79,11 +79,11 @@ def test_from_env_needs_both_variables_and_reads_them(monkeypatch):
     monkeypatch.delenv("STAR_SERVER_API_KEY", raising=False)
     with pytest.raises(BrainError, match="STAR_SERVER_URL"):
         ServerBrain.from_env()
-    monkeypatch.setenv("STAR_SERVER_URL", "http://10.17.0.146:8080/v1")
+    monkeypatch.setenv("STAR_SERVER_URL", "http://192.168.1.20:8080/v1")
     monkeypatch.setenv("STAR_SERVER_API_KEY", KEY)
     monkeypatch.setenv("STAR_VOICE_MODEL", "star-other")
     brain = ServerBrain.from_env()
-    assert brain.base_url == "http://10.17.0.146:8080/v1" and brain.model == "star-other"
+    assert brain.base_url == "http://192.168.1.20:8080/v1" and brain.model == "star-other"
     assert KEY not in repr(vars(brain).get("base_url")) and KEY not in repr(brain)
 
 

@@ -129,7 +129,7 @@ def text_size(messages: list[dict]) -> int:
     return visit(messages)
 
 
-async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call_'):
+async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call_', seen: dict | None = None):
     """Collect one streamed model turn.
 
     Visible text is forwarded as `assistant_delta` events while it arrives
@@ -143,6 +143,9 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
     when the first chunk arrives (the prompt has been read, writing has begun)
     and `tool_requested` when the model starts to write a tool call. Neither
     carries a name or arguments: nothing has been authorized or run yet.
+
+    `seen`, when given, receives `seen['model']`: the model name the server put
+    on its chunks, which is the model that really answered.
     """
     chunks: list[str] = []
     calls: list[dict] = []
@@ -151,6 +154,8 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
     last_flush = monotonic()
     responding = False
     async for chunk in stream:
+        if seen is not None and isinstance(getattr(chunk, 'model', None), str) and chunk.model:
+            seen['model'] = chunk.model
         if not getattr(chunk, 'choices', None):
             continue
         if not responding:
@@ -217,7 +222,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   github_enabled=False, intelligence=None, mcp_gateway=None,
                   subagent_model=None, tool_workshop=None, specialists=None,
                   history=None, turn_sections=None, mode="", guidance="",
-                  turn_context_chars=10000, request_extras=None, today=None):
+                  turn_context_chars=10000, request_extras=None, today=None,
+                  tool_memory=None, helper_client=None):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -226,6 +232,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     and the other per-turn facts appended by `volatile_context`.
     `request_extras` are provider-specific body fields from
     `providers.llama_request_fields`; they are empty for cloud providers.
+    `tool_memory` (star/turn_memory.py) keeps the prompt-selected tools of a
+    conversation attached, in a fixed order, so the tool list at the start of
+    the prompt stays byte-identical from turn to turn. `helper_client` is the
+    client for calls that are not this conversation (summaries, sub-agents);
+    on a llama.cpp server it is pinned to the slot next to the conversation's.
     """
     if not prompt.strip():
         raise ValueError("Prompt is empty")
@@ -268,22 +279,29 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         }})
     if workspace is not None:
         definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
-    intelligence_definitions = intelligence.definitions(prompt) if intelligence is not None else []
+    def selected(source) -> list[dict]:
+        # The prompt-gated sources. With a tool memory, what earlier prompts of this
+        # conversation selected stays selected (re-checked against today's settings).
+        if source is None:
+            return []
+        return source.definitions(prompt) if tool_memory is None else tool_memory.choose(source.definitions, prompt)
+
+    intelligence_definitions = selected(intelligence)
     definitions.extend({"type": "function", "function": {"name": tool["name"],
                        "description": tool["description"], "parameters": tool["inputSchema"]}}
                        for tool in intelligence_definitions)
     enabled_intelligence = {tool["name"] for tool in intelligence_definitions}
-    mcp_definitions = mcp_gateway.definitions(prompt) if mcp_gateway is not None else []
+    mcp_definitions = selected(mcp_gateway)
     definitions.extend({"type": "function", "function": {
         "name": tool["name"], "description": tool["description"],
         "parameters": tool["inputSchema"]}} for tool in mcp_definitions)
     enabled_mcp = {tool["name"] for tool in mcp_definitions}
-    workshop_definitions = tool_workshop.definitions(prompt) if tool_workshop is not None else []
+    workshop_definitions = selected(tool_workshop)
     definitions.extend({"type":"function","function":{"name":t["name"],
                        "description":t["description"],"parameters":t["inputSchema"]}}
                        for t in workshop_definitions)
     enabled_workshop = {t["name"] for t in workshop_definitions}
-    specialist_definitions = specialists.definitions(prompt) if specialists is not None else []
+    specialist_definitions = selected(specialists)
     definitions.extend({"type":"function","function":{"name":t["name"],
                        "description":t["description"],"parameters":t["inputSchema"]}}
                        for t in specialist_definitions)
@@ -291,8 +309,12 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     # Qwen templates render the tool list before the system text. Tools that are attached on
     # every turn stay first and the Studio tools (present only for a Studio request) go last,
     # so a change at the end of the list leaves the start of the request cached.
+    if tool_memory is not None:
+        definitions = tool_memory.arrange(definitions, prompt)   # first-attachment order, new tools last
     definitions = sorted(definitions, key=lambda item: item["function"]["name"] in registry)
     tools_attached = bool(definitions)
+    if tool_memory is not None:
+        tool_memory.remember_request(model=model, tools=definitions, guidance=guidance)
     # Per-turn context is appended to the user's own words, never to the system message.
     today = datetime.now().astimezone().strftime("%Y-%m-%d") if today is None else today
 
@@ -314,6 +336,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     extras = dict(request_extras) if request_extras else None
     shown_text = False
     event = on_event or (lambda _: None)
+    helper = helper_client or client
+    answered: dict = {}
     for step in range(max_calls):
         if text_size(messages) > context_chars:
             # Cheapest first: forget the oldest earlier turns in whole blocks. The system
@@ -328,7 +352,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             # out of the system message, and then leave the request. Otherwise a full block
             # stays next to the summary and the task is back at its limit a step or two later.
             lean = turn_context(())
-            summary = await compact(client, model, "current project",
+            summary = await compact(helper, model, "current project",
                                     project_memory if lean == context else project_memory + "\n\n" + context,
                                     messages[anchor + 1:])
             checkpoint(summary)
@@ -385,7 +409,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             else:
                 if hasattr(stream, '__aiter__'):
                     answer_text, tool_calls, shown = await read_stream(
-                        stream, event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_')
+                        stream, event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_',
+                        seen=answered)
                     shown_text = shown_text or shown
                     streamed = True
                 else:
@@ -397,6 +422,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 response = await request()
             msg = response.choices[0].message
             answer_text, tool_calls = msg.content or "", list(msg.tool_calls or [])
+            if isinstance(getattr(response, 'model', None), str) and response.model:
+                answered['model'] = response.model
         if tool_calls:
             messages.append({"role": "assistant", "content": answer_text or "", "tool_calls": [
                 {"id": t.id, "type": "function", "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in tool_calls]})
@@ -463,7 +490,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             if delegations >= 2:
                                 raise RuntimeError('Subagent delegation limit reached')
                             from .subagents import delegate
-                            pieces = await delegate(client,subagent_model or model,args['tasks'],parallelism=subagent_parallelism)
+                            pieces = await delegate(helper,subagent_model or model,args['tasks'],parallelism=subagent_parallelism)
                             delegations += 1
                             data = {"isError":False,"content":[{"type":"text","text":json.dumps(
                                 {"status":"unverified drafts; review before use","results":pieces},ensure_ascii=False)}]}
@@ -548,6 +575,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                                    else "Local model gave no text or tool calls")
             if streamed:
                 messages.append({'role': 'assistant', 'content': answer})
+            # The name the server reported, else the one that was asked for.
+            event({"event": "model_answered", "model": str(answered.get('model') or model)[:180],
+                   "requested": str(model)[:180]})
             event({"event": "finished", "model_calls": step + 1, "tool_calls": calls_count})
             return answer, messages, archive
     raise RuntimeError("Model-call limit exceeded; results are not considered complete")

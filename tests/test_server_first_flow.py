@@ -282,8 +282,13 @@ def test_bootstrap_state_describes_the_server_without_secrets(tmp_path, monkeypa
     state = _get_state(settings_file, FakeRuntime())
     assert state["settings"]["provider"] == "star_server" and state["settings"]["server_endpoint"] == LAN
     assert state["credentials"]["star_server"] is True
+    roles = state["server"].pop("roles")
     assert state["server"] == {"selected": True, "configured": True, "key_present": True,
                                "model_selected": True, "ok": None, "code": "", "checked_at": ""}
+    # Before the server has been asked what it offers, every job uses the one configured model.
+    assert {entry["role"] for entry in roles} == {"quick", "code", "vision"}
+    assert {entry["source"] for entry in roles} == {"default"}
+    assert {entry["model"] for entry in roles} == {state["settings"]["model"]}
     # No local brain is installed or running, and the state says so without blocking the server.
     assert state["brain_installed"] is False and state["brain_running"] is False
     assert SECRET not in json.dumps(state, default=str)

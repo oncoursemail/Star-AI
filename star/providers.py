@@ -219,27 +219,78 @@ def open_client(settings, *, request_timeout: float | None = None):
 # Context size and slot count last reported by a server's own /props endpoint.
 # Process memory only: nothing here is a secret and nothing is written to disk.
 _SERVER_LIMITS: dict[tuple[str, str], tuple[int, int]] = {}
+# Other names the server answers to for the same loaded model (`star-vision` is
+# `star-fast`): they share one set of slots, so they share one entry here.
+_MODEL_NAMES: dict[tuple[str, str], str] = {}
+
+def remember_model_names(endpoint: str, model: str, aliases=()) -> None:
+    """`aliases` are further names of `model` on this server (from its /v1/models list)."""
+    for alias in aliases:
+        if isinstance(alias, str) and alias and alias != model:
+            _MODEL_NAMES[(endpoint.rstrip("/"), alias)] = model
+
+def _instance(settings, model: str | None = None) -> tuple[str, str]:
+    """(server address, the server's own id for `model`): the key of everything per-model."""
+    endpoint = str(getattr(settings, "server_endpoint", "")).rstrip("/")
+    name = str(model or getattr(settings, "model", ""))
+    return endpoint, _MODEL_NAMES.get((endpoint, name), name)
 
 def remember_server_limits(endpoint: str, model: str, context_tokens: int, slots: int) -> None:
     if type(context_tokens) is int and context_tokens > 0:
-        _SERVER_LIMITS[(endpoint, model)] = (context_tokens, slots if type(slots) is int and slots > 0 else 1)
+        endpoint = endpoint.rstrip("/")
+        _SERVER_LIMITS[(endpoint, _MODEL_NAMES.get((endpoint, model), model))] = (
+            context_tokens, slots if type(slots) is int and slots > 0 else 1)
 
-def server_context_tokens(settings) -> int:
-    """Per-request context of the LAN model: the owner's value, else what /props last said, else 0."""
+def server_context_tokens(settings, model: str | None = None) -> int:
+    """Per-request context of a LAN model: the owner's value, else what /props last said, else 0.
+
+    `model` is the model a request is routed to; the primary model when omitted.
+    """
     chosen = getattr(settings, "server_context_tokens", 0)
+    known = _SERVER_LIMITS.get(_instance(settings, model))
     if type(chosen) is int and chosen > 0:
-        return chosen
-    known = _SERVER_LIMITS.get((str(getattr(settings, "server_endpoint", "")).rstrip("/"),
-                                str(getattr(settings, "model", ""))))
+        # The owner's value is a ceiling they chose; a smaller model still has its own limit.
+        return min(chosen, known[0]) if known and model else chosen
     return known[0] if known else 0
 
-def server_slots(settings) -> int:
-    """Parallel slots the LAN model last reported through /props; 0 while unknown."""
-    known = _SERVER_LIMITS.get((str(getattr(settings, "server_endpoint", "")).rstrip("/"),
-                                str(getattr(settings, "model", ""))))
+def server_slots(settings, model: str | None = None) -> int:
+    """Parallel slots a LAN model last reported through /props; 0 while unknown."""
+    known = _SERVER_LIMITS.get(_instance(settings, model))
     return known[1] if known else 0
 
-def llama_request_fields(settings, *, conversation: str = "", tools: bool = False) -> dict:
+# Which slot each conversation uses, per (server, model). Process memory only. The
+# start is a hash of the conversation, so a chat finds its slot (and the prompt the
+# server still holds there) again after STAR restarts.
+_SLOT_TABLE: dict[tuple[str, str], dict] = {}
+_SLOT_TABLE_CHATS = 64
+
+def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, background: bool,
+                       prime: bool) -> int:
+    import zlib
+    table = _SLOT_TABLE.setdefault(key, {"active": None, "slot": {}})
+    held: dict = table["slot"]
+    home = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
+    active = table["active"]
+    if background:
+        # Summaries, sub-agents and repairs have prompts of their own. They go to the slot
+        # next to the one the open chat uses, never into it.
+        keep = held.get(active) if active is not None else None
+        return ((held.get(conversation, home) if keep is None else keep) + 1) % slots
+    slot = held.get(conversation)
+    if slot is None or slot >= slots:
+        slot = home
+        if active is not None and active != conversation and held.get(active) == slot:
+            slot = (slot + 1) % slots   # another chat is open there: leave its prompt alone
+        if len(held) >= _SLOT_TABLE_CHATS:
+            for name in [name for name in held if name != active][:len(held) - _SLOT_TABLE_CHATS + 1]:
+                del held[name]
+        held[conversation] = slot
+    if not prime:
+        table["active"] = conversation   # a real turn: this is the chat the owner is in
+    return slot
+
+def llama_request_fields(settings, *, conversation: str = "", tools: bool = False, model: str = "",
+                         background: bool = False, prime: bool = False) -> dict:
     """Extra request-body fields that make a llama.cpp server reuse its prompt cache.
 
     Only for the kinds `local` and `lan`, which are llama.cpp servers the owner
@@ -252,11 +303,23 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
                           render earlier answers exactly as they were generated
                           (Qwen templates otherwise re-render them differently, which
                           makes the server read every previous answer again)
-      id_slot             one conversation stays on one slot. A request with tools
-                          starts with the tool list, a plain chat request with the
-                          rules, so the two never share a prefix: each gets its own
-                          slot and neither evicts the other. Sent only when the
-                          server has reported two or more slots.
+      id_slot             one conversation stays on one slot of each model. Sent only
+                          when that model has reported two or more slots.
+
+    Slot rules (measured in docs/research/server-inference.md 2.4):
+
+      * `model` is the model this request goes to; slots belong to a model, so
+        the same chat has one slot on the quick model and one on the main model.
+      * A chat keeps its slot. A chat that is opened while another one is in use
+        takes a different slot, so switching back finds the first one cached.
+      * `background=True` (summaries, sub-agents, code repairs: prompts of their
+        own) always goes to the slot next to the open chat's, never into it.
+      * `prime=True` is the cache warm-up: it takes the chat's slot without
+        declaring that chat the one in use.
+      * `tools` no longer moves a request to the other slot. The tool prompt and
+        the plain prompt of one chat share its slot; the server's RAM prompt
+        cache brings back whichever was replaced (1.3-1.6 s, measured), and the
+        second slot stays free for background work.
 
     Verified against llama.cpp build 11541 (router mode) on the owner's server.
     """
@@ -264,11 +327,61 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
     if kind == "cloud":
         return {}
     fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
-    slots = server_slots(settings) if kind == "lan" else 0
+    slots = server_slots(settings, model or None) if kind == "lan" else 0
     if slots >= 2:
-        import zlib
-        fields["id_slot"] = (zlib.crc32(str(conversation).encode("utf-8", "replace")) + (1 if tools else 0)) % slots
+        fields["id_slot"] = _conversation_slot(_instance(settings, model or None), str(conversation), slots,
+                                               background=background, prime=prime)
     return fields
+
+def model_unavailable(exc: BaseException) -> bool:
+    """Did a request fail because the server could not serve that model at all?
+
+    True for "model not found" (llama.cpp router: HTTP 400), 404, and the 5xx a
+    router returns when a model fails to load. Nothing was generated in any of
+    these cases, so the same message can be sent to another model.
+    """
+    status = getattr(exc, "status_code", None)
+    if status in (404, 500, 502, 503):
+        return True
+    return status == 400 and "not found" in str(getattr(exc, "message", "") or exc).lower()
+
+class _PinnedClient:
+    """`client.chat.completions.create(...)` with extra llama.cpp body fields chosen per model.
+
+    Lets the helpers that make their own model calls (summaries, sub-agents,
+    specialists, code repair) stay unaware of slots: they are handed this
+    instead of the plain client.
+    """
+
+    def __init__(self, client, fields_for):
+        self._client, self._fields_for = client, fields_for
+        self.chat = self.completions = self
+
+    async def create(self, **kwargs):
+        send = self._client.chat.completions.create
+        extras = None if "extra_body" in kwargs else self._fields_for(str(kwargs.get("model", "")))
+        if not extras:
+            return await send(**kwargs)
+        try:
+            return await send(**kwargs, extra_body=extras)
+        except Exception as exc:
+            # A server that is not llama.cpp may refuse the fields; nothing was generated.
+            if getattr(exc, "status_code", None) not in (400, 422):
+                raise
+            return await send(**kwargs)
+
+def background_client(client, settings, *, conversation: str = ""):
+    """The client for model calls that are not the conversation itself.
+
+    On STAR Server every such call carries `llama_request_fields(...,
+    background=True)`: the slot next to the open chat's, so a summary or a
+    sub-agent never replaces the chat's cached prompt. For a cloud provider and
+    the on-PC brain (no slot count known) this is the plain client.
+    """
+    if provider_kind(settings) != "lan":
+        return client
+    return _PinnedClient(client, lambda model: llama_request_fields(
+        settings, conversation=conversation, model=model, background=True))
 
 def provider_catalog() -> list[dict]:
     statuses = credential_status()
