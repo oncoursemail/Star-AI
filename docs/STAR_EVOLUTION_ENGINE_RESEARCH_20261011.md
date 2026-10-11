@@ -48,9 +48,19 @@ The new star/evolution_research.py source watcher:
    Projects -> Learning approval can make it trusted.
 9. Uses Roblox's official agent-readable Markdown documentation where
    available and the canonical Luau /types/ URL to avoid redirects.
+10. Offers opt-in daily automatic checks inside STAR Desktop Tools. A
+    persistent research_auto_check setting defaults off. A Qt timer checks
+    the local research ledger at startup and hourly, fetching an approved
+    source only if its last check was at least 24 hours ago (including
+    failed checks). It does nothing when STAR is closed, the checkbox
+    is disabled or a chat task is active. Source change observations
+    remain candidates, never trusted instructions or published code.
 
 The candidate research ledger lives at
 %APPDATA%/STAR/research-watch.sqlite3 on Windows.
+Automatic checks need an explicit owner opt-in in the local desktop;
+no remote servers, hidden background daemon or scheduled publishing
+is created.
 
 ### Commands
 
