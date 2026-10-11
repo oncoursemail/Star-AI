@@ -121,6 +121,17 @@ def test_wikilink_graph_cites_lines_and_never_guesses_ambiguous_targets(tmp_path
         obsidian.links("../Private.md")
     with pytest.raises(ValueError):
         obsidian.links("Review.md", limit=True)
+    # A non-hidden symlink cannot be used to reach excluded vault settings.
+    alias = vault / "Friendly"
+    try:
+        alias.symlink_to(vault / ".obsidian", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pass  # Windows environments may disallow creating test symlinks.
+    else:
+        with pytest.raises(PermissionError):
+            obsidian.read("Friendly/Private.md")
+        with pytest.raises(PermissionError):
+            obsidian.links("Friendly/Private.md")
 
 
 def test_wikilink_graph_marks_preview_truncation_as_incomplete(tmp_path):
