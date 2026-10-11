@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 
-from .architecture_quality import audit_plan, inspect_glb
+from .architecture_quality import audit_plan, collision_hints, inspect_glb
 
 
 PALETTES = {
@@ -254,6 +254,8 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
     plan.write_text(text, encoding="utf-8")
     (output_dir / "architecture-audit.json").write_text(
         json.dumps(review, indent=2) + "\n", encoding="utf-8")
+    (output_dir / "collision-hints.json").write_text(
+        json.dumps(collision_hints(plan_data), indent=2) + "\n", encoding="utf-8")
     export = None
     if blender is not None:
         script = Path(__file__).resolve().parents[1] / "scripts" / "blender_building.py"
@@ -288,10 +290,11 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         "name": brief.name, "style": brief.style,
         "brief_sha256": hashlib.sha256(json.dumps(asdict(brief), sort_keys=True).encode("utf-8")).hexdigest(),
         "plan_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "files": ["building-plan.json", "architecture-audit.json", "studio-import-guide.md",
+        "files": ["building-plan.json", "architecture-audit.json", "collision-hints.json", "studio-import-guide.md",
                   "asset-manifest.json"] + (["building.blend", "building.glb"] if export else []) + (
                       ["building-preview.png"] if preview else []),
         "blender_export": export,
+        "collisions_built_in_studio": False,
         "preview_rendered": bool(preview),
         "studio_imported": False, "visual_quality_verified": False,
         "review_required": plan_data["review_required"],
@@ -305,9 +308,11 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         "2. Preview the mesh. Set World Forward to Front, World Up to Top and Scale Unit to Stud.\n"
         "3. Verify proportions with real R6/R15 avatars, lighting, face normals and imported materials.\n"
         "4. Doors and glass are static visual placeholders. Configure collisions and working doors in Studio.\n"
-        "5. For upper floors, implement and test stairs/landings before claiming accessibility.\n"
-        "6. Inspect memory, rendering, streaming and draw calls on target devices.\n"
-        "7. Preserve the STAR_<role> mesh names for reimport; obtain owner approval before uploads.\n\n"
+        "5. collision-hints.json contains only *candidate* Blender-Z-up box locations; do not\n"
+        "   apply these until the import coordinate mapping and position have been verified.\n"
+        "6. For upper floors, implement and test stairs/landings before claiming accessibility.\n"
+        "7. Inspect memory, rendering, streaming and draw calls on target devices.\n"
+        "8. Preserve the STAR_<role> mesh names for reimport; obtain owner approval before uploads.\n\n"
         "Reference: https://create.roblox.com/docs/art/blender\n",
         encoding="utf-8")
     return plan
