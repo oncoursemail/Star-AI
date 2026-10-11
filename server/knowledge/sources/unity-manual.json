@@ -4,11 +4,11 @@
   "title": "Unity Editor Manual",
   "mode": "link-only",
   "source": {
-    "kind": "website",
-    "url": "https://docs.unity3d.com/Manual/index.html",
-    "revision": "current Unity 6 documentation",
-    "content_root": "Manual/",
-    "public_base": "https://docs.unity3d.com/Manual/"
+    "kind": "zip",
+    "url": "https://cloudmedia-docs.unity3d.com/docscloudstorage/en/6000.5/UnityDocumentation.zip",
+    "revision": "6000.5",
+    "content_root": "Documentation/Manual/",
+    "public_base": "https://docs.unity.com/en-us/engine/6000.5/manual/"
   },
   "licence": {
     "text": {
@@ -16,9 +16,9 @@
       "url": "https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode",
       "redistribution_allowed": false,
       "attribution": "Credit Unity Technologies with a page link and licence link; only noncommercial, unmodified sharing is covered.",
-      "conditions": "The general STAR ingestion/quotation pipeline lacks unrestricted rights. Unity's separate AI permission is limited to assistance with Unity offerings; keep this corpus link-only.",
-      "evidence_url": "https://unity.com/legal/docs-terms",
-      "evidence_quote": "CC BY-NC-ND 4.0"
+      "conditions": "CC BY-NC-ND permits sharing unmodified text for noncommercial uses with credit, a licence link and no additional restrictions; it does not grant unrestricted commercial or derivative corpus ingestion. STAR remains link-only.",
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/manual/terms-of-use",
+      "evidence_quote": "Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International"
     },
     "code_samples": {
       "id": "Unity-Companion-License-1.4",
@@ -26,8 +26,8 @@
       "redistribution_allowed": false,
       "attribution": "Only Unity-dependent projects may exercise the Companion License; substantial copies retain its licence and copyright notice.",
       "conditions": "STAR's general documentation corpus is not a Unity-dependent project. The Scripting API landing page grants broader rights to examples, but the documentation terms specify Companion License; do not store samples.",
-      "evidence_url": "https://unity.com/legal/docs-terms",
-      "evidence_quote": "Unity Companion License for Unity-dependent projects"
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/manual/terms-of-use",
+      "evidence_quote": "licensed under the Unity Companion License for Unity-dependent projects"
     }
   },
   "include": [
@@ -46,7 +46,7 @@
     "unit": "documents",
     "min": 1000,
     "max": 30000,
-    "note": "Planning estimate only; no corpus has been fetched or measured."
+    "note": "Planning estimate only; Unity's official combined Manual + API offline ZIP is about 300 MB, neither half measured."
   },
   "update_cadence": {
     "frequency": "per-release",
@@ -54,6 +54,6 @@
   },
   "citation": {
     "format": "Unity Manual: {title} — {url} (Unity Technologies, version shown on page)",
-    "example": "Unity Manual: Prefabs — https://docs.unity3d.com/Manual/Prefabs.html (Unity Technologies)"
+    "example": "Unity Manual: Prefabs — https://docs.unity.com/en-us/engine/6000.5/manual/prefabs (Unity Technologies)"
   }
 }
