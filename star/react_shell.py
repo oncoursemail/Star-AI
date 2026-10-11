@@ -64,6 +64,7 @@ PERMITTED_SETTINGS = frozenset({
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
+    'knowledge_endpoint',
 })
 
 
@@ -196,6 +197,30 @@ def sanitize_event(event: dict) -> dict:
         started = kind == 'search_started'
         return {'phase':'Searching the web' if started else 'Web search finished',
                 'activity':{'type':'search','state':'running' if started else 'done'}}
+    if kind in {'knowledge_started','knowledge_finished'}:
+        # Official documentation lookup on STAR Server. Only a state and two bounded numbers
+        # leave the host; the query and the passages never do.
+        state=str(event.get('state',''))
+        activity={'type':'docs','state':'running' if kind == 'knowledge_started'
+                  else 'done' if state in {'ok','empty'} else 'failed'}
+        for key,top in (('passages',10),('elapsed_ms',600_000)):
+            count=_bounded_int(event.get(key), top)
+            if kind == 'knowledge_finished' and count is not None:
+                activity[key]=count
+        return {'phase':'Reading the official documentation' if kind == 'knowledge_started'
+                else 'Documentation ready' if activity['state'] == 'done' else 'Documentation unavailable',
+                'activity':activity}
+    if kind in {'luau_check_started','luau_repair_started','luau_check_finished'}:
+        state=str(event.get('state',''))
+        result=state if state in {'passed','failed','repaired','unavailable'} else ''
+        activity={'type':'luau_check','state':'running' if kind != 'luau_check_finished'
+                  else 'failed' if result in {'failed','unavailable'} else 'done'}
+        if kind == 'luau_check_finished' and result:
+            activity['result']=result
+        if kind == 'luau_repair_started':
+            activity['repair']=True
+        return {'phase':'Fixing the Luau code' if kind == 'luau_repair_started' else 'Checking the Luau code'
+                if kind == 'luau_check_started' else 'Luau check finished','activity':activity}
     if kind == 'model_turn':
         activity={'type':'turn'}
         for key in ('step','max_steps'):

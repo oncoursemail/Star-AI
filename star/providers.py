@@ -68,43 +68,48 @@ _LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
 ))
 _LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
 
-def validate_lan_endpoint(value) -> str:
+def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server") -> str:
     """Return the canonical private `scheme://ip:port/v1` URL, or raise ValueError.
 
     Fail closed: an IP literal only (no hostnames, so DNS cannot redirect the
     key), a private/loopback/link-local address, an explicit unprivileged port,
     the exact path /v1, and no credentials, query or fragment.
+
+    `path` and `label` let another owner-entered LAN service (STAR Knowledge,
+    served from the root) reuse this one rule with its own fixed path and name.
     """
+    hint = _LAN_HINT if path == "/v1" else _LAN_HINT.replace(":8080/v1", ":8091")
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("Enter your STAR Server address. " + _LAN_HINT)
+        raise ValueError(f"Enter your {label} address. " + hint)
     if len(value) > 200 or any(ch.isspace() or ord(ch) < 33 or ord(ch) == 127 for ch in value):
-        raise ValueError("STAR Server address contains spaces or control characters")
+        raise ValueError(f"{label} address contains spaces or control characters")
     if any(ch in value for ch in "@?#%\\"):
-        raise ValueError("STAR Server address must not contain credentials, a query, a fragment or % escapes")
+        raise ValueError(f"{label} address must not contain credentials, a query, a fragment or % escapes")
     try:
         url = urlsplit(value)
         port = url.port
     except ValueError as exc:
-        raise ValueError("STAR Server address is not a valid URL. " + _LAN_HINT) from exc
+        raise ValueError(f"{label} address is not a valid URL. " + hint) from exc
     if url.scheme not in ("http", "https"):
-        raise ValueError("STAR Server address must start with http:// or https://")
+        raise ValueError(f"{label} address must start with http:// or https://")
     if url.username is not None or url.password is not None or url.query or url.fragment:
-        raise ValueError("STAR Server address must not contain credentials, a query or a fragment")
+        raise ValueError(f"{label} address must not contain credentials, a query or a fragment")
     try:
         address = ipaddress.ip_address(url.hostname or "")
     except ValueError as exc:
-        raise ValueError("STAR Server address must use an IP address, not a host name. " + _LAN_HINT) from exc
+        raise ValueError(f"{label} address must use an IP address, not a host name. " + hint) from exc
     if not any(address in network for network in _LAN_NETWORKS):
-        raise ValueError("STAR Server must be on your private network (10.x, 172.16-31.x, 192.168.x, "
+        raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
                          "127.x or link-local). Public addresses are refused.")
     if port is None or not 1024 <= port <= 65535:
-        raise ValueError("STAR Server address needs a port from 1024 to 65535, for example :8080")
+        raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
+                         + ("8080" if path == "/v1" else "8091"))
     host = f"[{address.compressed}]" if address.version == 6 else address.compressed
-    canonical = f"{url.scheme}://{host}:{port}/v1"
+    canonical = f"{url.scheme}://{host}:{port}{path}"
     # What was validated must be exactly what is used: no odd encodings, extra
     # path segments, leading zeros or anything urlsplit silently normalised.
     if value not in (canonical, canonical + "/"):
-        raise ValueError(f"STAR Server address must look exactly like {canonical}")
+        raise ValueError(f"{label} address must look exactly like {canonical}")
     return canonical
 
 def provider_spec(name) -> Provider:

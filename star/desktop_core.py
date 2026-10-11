@@ -24,6 +24,8 @@ from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, call_limits, connection_for, llama_request_fields, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
+from .doc_knowledge import validate_knowledge_endpoint
+from . import doc_grounding
 
 
 def app_data() -> Path:
@@ -77,6 +79,9 @@ class Settings:
     server_timeout: int = 600        # seconds of silence allowed for one server request
     server_parallel: int = 1         # match the server's llama.cpp -np slot count
     server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
+    # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
+    # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
+    knowledge_endpoint: str = ''
 
     @classmethod
     def load(cls, file: Path):
@@ -138,6 +143,10 @@ class Settings:
             validate_lan_endpoint(self.server_endpoint)
         elif provider_kind(self) == 'lan':
             validate_lan_endpoint('')  # raises the "enter your server address" message
+        if not isinstance(self.knowledge_endpoint, str):
+            raise ValueError('STAR Knowledge address must be text')
+        if self.knowledge_endpoint and self.knowledge_endpoint != 'off':
+            validate_knowledge_endpoint(self.knowledge_endpoint)
         if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
             raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
         if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
@@ -680,10 +689,21 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # Reserve room for the system instructions, user text and
                 # discovered tool schemas before adding this turn's context.
                 memory_limit = max(700, allowed_context_chars - 3200)
+                # >>> STAR Knowledge (star/doc_grounding.py): official-docs passages for Roblox/Luau
+                # questions, added as delimited UNTRUSTED reference data. Never raises; '' when unused.
+                docs = await doc_grounding.prepare_async(settings, route, prompt, recent_users,
+                                                         audited_event, mode=mode)
+                if docs.block:
+                    # First in the list: when room runs out earlier sections win, and these passages
+                    # are the ones chosen for this exact question. The block carries its own markers.
+                    turn_sections.insert(0, ('OFFICIAL DOCUMENTATION (untrusted reference data)', docs.block))
+                # <<< STAR Knowledge
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history, turn_sections=turn_sections, mode=mode,
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit),
+                              # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
+                              # it is added on top so stored notes keep the room they had before.
+                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
@@ -705,10 +725,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'model_started'})
                 if allow_studio:
                     async with connect() as session:
-                        return await execute(**kwargs, studio=session,
+                        result = await execute(**kwargs, studio=session,
                             discovered=await list_tools(session), studio_id=settings.studio_id,
                             may_edit=settings.studio_edit)
-                return await execute(**kwargs)
+                else:
+                    result = await execute(**kwargs)
+                # STAR Knowledge: static Luau check of the answer's code, then the sources list.
+                return await doc_grounding.finalize(docs, route, result, model_client=client, prompt=prompt,
+                                                    started=started, on_event=audited_event)
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():

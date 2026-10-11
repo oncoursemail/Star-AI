@@ -56,6 +56,11 @@ export type ActivityPayload = {
   model_calls?: number
   tool_calls?: number
   steps?: Array<{id?: string; role?: string; needs?: string[]}>
+  /** Documentation lookup: how many passages came back. */
+  passages?: number
+  /** Luau check: passed | failed | repaired | unavailable. */
+  result?: string
+  repair?: boolean
 }
 export type ProgressPayload = {phase?: string; delta?: string; activity?: ActivityPayload}
 
@@ -111,6 +116,9 @@ export function toolLabel(name?: string): string {
   if (name.startsWith('star_skill_')) return 'Loading an Agent Skill'
   if (name.startsWith('star_obsidian_')) return 'Reading your Obsidian notes'
   if (name.startsWith('star_graphify_')) return 'Querying the code graph'
+  if (name === 'star_docs_search') return 'Searching the official documentation'
+  if (name === 'star_api_lookup') return 'Checking Roblox API names'
+  if (name === 'star_luau_check') return 'Checking Luau code'
   if (name.startsWith('star_roblox_docs')) return 'Reading Roblox documentation'
   if (name.startsWith('star_roblox_forum_')) return 'Searching the Roblox Developer Forum'
   if (name.startsWith('star_roblox_youtube_')) return 'Looking up video metadata'
@@ -174,6 +182,51 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
         steps = steps.map((step, index) => (index === found ? close(step, 'done', now) : step))
       }
       next.phase = activity.state === 'running' ? 'Searching the web' : 'Reading the search results'
+      break
+    }
+    case 'docs': {
+      // Official documentation fetched from STAR Server before the model is asked.
+      const found = steps.findIndex(step => step.id === 'docs')
+      if (activity.state === 'running' && found < 0) {
+        steps = [...steps, {id: 'docs', kind: 'search', state: 'running', title: 'Reading the official documentation', startedAt: now}]
+        next.phase = 'Reading the official documentation'
+      } else if (found >= 0 && isOpen(steps[found].state)) {
+        const failed = activity.state === 'failed'
+        const count = typeof activity.passages === 'number' ? activity.passages : 0
+        const detail = failed
+          ? 'The documentation service did not answer. STAR answers without it.'
+          : count
+            ? `${count} passage${count === 1 ? '' : 's'} from the official documentation`
+            : 'Nothing in the indexed documentation matched.'
+        steps = steps.map((step, index) =>
+          index === found ? {...close(step, failed ? 'failed' : 'done', now, typeof activity.elapsed_ms === 'number' ? activity.elapsed_ms : undefined), detail} : step,
+        )
+        next.phase = failed ? 'Documentation unavailable' : 'Documentation ready'
+      }
+      break
+    }
+    case 'luau_check': {
+      // A static check of the Luau in the answer. The code is never run.
+      const found = steps.findIndex(step => step.id === 'luau-check')
+      if (activity.state === 'running') {
+        steps = closeThinking(steps, now)
+        if (found < 0) steps = [...steps, {id: 'luau-check', kind: 'tool', state: 'running', title: 'Checking the Luau code', startedAt: now}]
+        else if (activity.repair) steps = steps.map((step, index) => (index === found ? {...step, title: 'Fixing the Luau code'} : step))
+        next.phase = activity.repair ? 'Fixing the Luau code' : 'Checking the Luau code'
+      } else if (found >= 0 && isOpen(steps[found].state)) {
+        const detail =
+          activity.result === 'passed'
+            ? 'Compiles and passes type analysis. Not run.'
+            : activity.result === 'repaired'
+              ? 'A problem was found and corrected. The corrected code passes.'
+              : activity.result === 'failed'
+                ? 'Problems were found. They are listed under the answer.'
+                : 'The check could not run. Nothing is claimed about the code.'
+        steps = steps.map((step, index) =>
+          index === found ? {...close(step, activity.state === 'failed' ? 'failed' : 'done', now), title: 'Checking the Luau code', detail} : step,
+        )
+        next.phase = 'Luau check finished'
+      }
       break
     }
     case 'turn': {
