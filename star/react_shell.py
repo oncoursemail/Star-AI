@@ -1158,6 +1158,9 @@ def launch():
                 return
             self._closing = True
             self.cancel_chat.set()
+            if self.turn is not None:
+                _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
+                record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor
             # workers are non-daemon. In the packaged Windows app only, enforce
             # Restart Manager's shutdown deadline as a last resort. The timer is
@@ -1166,9 +1169,6 @@ def launch():
                 deadline = threading.Timer(1.8, lambda: os._exit(0))
                 deadline.daemon = True
                 deadline.start()
-            if self.turn is not None:
-                _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
-                record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             self.voice.close()
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
             self.warmer.cancel()
