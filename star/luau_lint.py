@@ -174,7 +174,9 @@ def lint(code: str) -> list[Finding]:
                     "Yield with task.wait() or an event Wait().", "error")
         elif word == "repeat":
             end = block_end(i)
-            if end < len(v) and not yields(v[i + 1:end]):
+            # A finite repeat/until loop needs no yield; diagnose only the
+            # syntactically infinite form where the condition is literally false.
+            if end < len(v) and v[end + 1:end + 2] == ["false"] and not yields(v[i + 1:end]):
                 add("loop-without-yield", i, "Repeat loop has no visible yield.",
                     "Yield or ensure the loop cannot spin.", "warning")
         if word == "Connect" and i and v[i - 1] in (".", ":") and v[i + 1:i + 2] == ["("]:
