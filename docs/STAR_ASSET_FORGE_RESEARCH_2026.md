@@ -45,8 +45,18 @@ Never execute a downloaded Blender project/script, Roblox model script or instal
 | Hunyuan3D-2.1 — https://github.com/Tencent-Hunyuan/Hunyuan3D-2.1 | Alternative PBR candidate | Restrictive Tencent community license, geographic and use conditions; NOT enabled by default. |
 | Meshy — https://docs.meshy.ai/en/api/pricing | Optional hosted provider | Paid API; not a free unlimited source; explicit budget/consent required. |
 
+## Optional real mesh export (human-triggered CLI only)
+
+A second, non-network module star/world_mesh.py converts bounded terrain heightfield previews into a real Wavefront OBJ triangle surface with UV coordinates. It guarantees seam-height consistency between same-seed adjacent chunks because vertices use shared world coordinates, and it emits upward-facing triangles. This is geometry-only output, not Blender rendering, terrain voxel authoring, authored meshes with architectural openings, or proof of Roblox usability.
+
+Operator command from the repository root:
+
+    python -m star.world_mesh --output terrain.obj --seed 42 --biome temperate --size 16 --step 16
+
+Only an explicitly invoked CLI writes the selected .obj path. Agent-exposed tools stay read-only. OBJ exports have no textures or collisions and are intended for Blender inspection and a later importer validation step. The 16-by-16 preview yields 256 vertices and 450 triangles. Edge continuity and face winding are covered by new offline tests in tests/test_world_mesh.py.
+
 ## Delivery roadmap and acceptance gates
-**Phase A — this draft PR:** safe attributed Poly Haven asset research; seeded and style-specific architecture manifests with walls, door/window apertures, roof and stairwell; seam-stable sampled terrain. Unit tests with offline mocked HTTP. Stage fields report metadata/planning, never completed mesh or Studio work.
+**Phase A — this draft PR:** safe attributed Poly Haven asset research; seeded and style-specific architecture manifests with walls, door/window apertures, roof and stairwell; seam-stable sampled terrain; and an optional manually invoked, untextured OBJ surface exporter for heightfields. Unit tests with offline mocked HTTP. Stage fields report metadata/planning and geometry prototypes, never Blender-rendered environments or Studio deployment.
 
 **Phase B — geometry engine:** fixed Blender job definitions, native mesh export, real UVs, valid joins, GLB/FBX artifacts, asset hashing, GPU and wall-clock telemetry, no executing remote asset scripts.
 
