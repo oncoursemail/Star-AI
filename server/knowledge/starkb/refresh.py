@@ -32,14 +32,14 @@ def _git(repo: Path, *args: str, timeout: float = 600) -> str:
     return done.stdout.strip()
 
 
-def wait_for_quiet(max_wait: float, stop, log, sleep=time.sleep) -> bool:
+def wait_for_quiet(max_wait: float, stop, log) -> bool:
     waited = 0.0
     while lock_held():
         if stop() or waited >= max_wait:
             return False
         if not waited:
             log("refresh: server lock present, waiting")
-        sleep(15)
+        time.sleep(15)
         waited += 15
     return True
 
