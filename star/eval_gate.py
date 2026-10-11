@@ -119,7 +119,7 @@ def _validate(result: dict, label: str) -> list[str]:
             problems.append(f"{label}: invalid task row {tid!r}")
             continue
         status = record.get("status")
-        if status not in _VALID_STATUS:
+        if not isinstance(status, str) or status not in _VALID_STATUS:
             problems.append(f"{label}: {tid}: invalid status {status!r}")
         if "passed" in record and (not isinstance(record["passed"], bool)
                                     or (status == "pass" and not record["passed"])
@@ -201,7 +201,7 @@ def evaluate_change(baseline, candidate, *, allow_partial: bool = False) -> Verd
     try:
         base = baseline if isinstance(baseline, dict) else load_result(baseline)
         cand = candidate if isinstance(candidate, dict) else load_result(candidate)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, TypeError) as exc:
         return Verdict(UNUSABLE, notes=[f"cannot read results: {exc}"])
     return compare(base, cand, allow_partial=allow_partial)
 
@@ -220,7 +220,10 @@ def gate_change(baseline, run_candidate, *, rerun=None, allow_partial: bool = Fa
         return Verdict(UNUSABLE, notes=[f"unusable input: {exc}"])
     verdict = compare(base, candidate, allow_partial=allow_partial)
     if verdict.regressions and rerun is not None:
-        again = rerun(list(verdict.regressions))
+        try:
+            again = rerun(list(verdict.regressions))
+        except (OSError, ValueError, TypeError) as exc:
+            return Verdict(UNUSABLE, notes=[f"cannot read rerun: {exc}"])
         errors, legacy = _errors(again, "rerun")
         if errors or legacy:
             return Verdict(UNUSABLE, notes=errors + legacy)
