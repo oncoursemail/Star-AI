@@ -67,11 +67,13 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
        likely has the same shape. After an Agent turn this is the tool prompt, so
        the warm-up extends that cached prompt instead of replacing it. Before the
        first turn (app start) this is plain chat on the quick model.
-    2. Plain chat on each other chat model of the server (the quick model, and the
-       main model that answers Roblox and coding questions), when the chat has
-       earlier turns to read. Each model keeps its own copy of the conversation,
-       so without this the first question that goes to the other model reads the
-       whole window (measured: 37 s on the main model for a full window).
+    2. Each other chat model of the server (the quick model, and the main model
+       that answers Roblox and coding questions), when the chat has earlier turns
+       to read: with the shape this chat last sent to that model (so a tool
+       prompt it holds is extended, not replaced), else plain chat. Each model
+       keeps its own copy of the conversation, so without this the first
+       question that goes to the other model reads the whole window (measured:
+       37 s on the main model for a full window).
 
     Never two requests for the same model: its slot holds one prompt, and a
     second request would replace the first. So on a single-model server there is
@@ -97,9 +99,13 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
     else:
         targets = [build(quick, None, '')]
     endpoint = str(getattr(settings, 'server_endpoint', ''))
+    sent = turn_memory.model_shapes(scope)
     for model in (quick, main):
-        if history and not any(server_roles.same_model(endpoint, model, target['model']) for target in targets):
-            targets.append(build(model, None, ''))
+        if not history or any(server_roles.same_model(endpoint, model, target['model']) for target in targets):
+            continue
+        last = next((known for known in sent if server_roles.same_model(endpoint, model, known['model'])), None)
+        targets.append(build(last['model'], last.get('tools'), str(last.get('guidance') or '')) if last
+                       else build(model, None, ''))
     return targets
 
 

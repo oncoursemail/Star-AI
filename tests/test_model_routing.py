@@ -604,13 +604,24 @@ def test_the_warm_up_primes_the_shape_of_the_last_request(desk):
     # ... and plain chat on the quick model second: another model, so it cannot replace the tool prompt.
     assert [(request["model"], request["tools"]) for request in after_agent[1:]] == [("star-voice", None)]
     # After a quick answer: the quick model first, then the main model reads the new exchange too,
-    # so a Roblox or coding question later does not start by reading the whole conversation.
+    # so a Roblox or coding question later does not start by reading the whole conversation. The
+    # main model last held this chat's tool prompt, so that is what is extended, not replaced.
     desk.turn("thanks!", [reply("Any time.", model="star-voice")])
     after_quick = prefix_requests(desk.settings, desk.home, desk.chat)
-    assert [(request["model"], request["tools"]) for request in after_quick] == [
-        ("star-voice", None), ("star-fast", None)]
-    assert after_quick[0]["messages"] == after_quick[1]["messages"]        # the same plain-chat request
+    assert [request["model"] for request in after_quick] == ["star-voice", "star-fast"]
+    assert after_quick[0]["tools"] is None
+    assert json.dumps(after_quick[1]["tools"]) == json.dumps(sent["tools"])
+    assert after_quick[1]["messages"][0] == sent["messages"][0]
     assert turn_memory.last_shape(scope)["model"] == "star-voice"
+    # A chat that only ever had plain turns is primed with plain chat on both models.
+    other = desk.chats.new_chat("STAR")
+    desk.chats.add("STAR", "user", "hello there", chat_id=other)
+    desk.models.responses.append(reply("Hi!", model="star-voice"))
+    desk.chats.add("STAR", "assistant", run_task(desk.settings, "hello there", chat_id=other, mode="fast"),
+                   chat_id=other)
+    plain = prefix_requests(desk.settings, desk.home, other)
+    assert [(request["model"], request["tools"]) for request in plain] == [("star-voice", None), ("star-fast", None)]
+    assert plain[0]["messages"] == plain[1]["messages"]                    # the same plain-chat request
     # After a restart (nothing remembered) a chat with earlier turns is primed on both models,
     # an empty chat on the quick model only (see the start of this test).
     turn_memory.forget()

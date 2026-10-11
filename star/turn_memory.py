@@ -20,10 +20,10 @@ a secret, and a restart simply starts again):
    under the settings of that moment. A source the owner switched off, a
    revoked recipe or a removed vault therefore drops out at once.
 
-2. The shape of the last request (model, tool list, guidance). The post-answer
-   warm-up uses it to prime the request the next message will most likely send,
-   instead of always priming plain chat (which, on one slot, would replace a
-   cached tool prompt).
+2. The shape of the last request (model, tool list, guidance), overall and per
+   model. The post-answer warm-up uses it to prime the request the next message
+   will most likely send, instead of always priming plain chat (which, on one
+   slot, would replace a cached tool prompt).
 """
 from __future__ import annotations
 
@@ -41,6 +41,7 @@ class TurnMemory:
         self.prompts: list[str] = []     # earlier prompts that brought a tool in
         self.order: list[str] = []       # tool names, in the order they were first attached
         self.shape: dict | None = None   # the last request: {'model', 'tools', 'guidance'}
+        self.shapes: dict[str, dict] = {}  # the last request sent to each model
 
     def choose(self, select, prompt: str) -> list[dict]:
         """This turn's tools from one source: what `prompt` selects plus what earlier prompts did.
@@ -73,6 +74,7 @@ class TurnMemory:
 
     def remember_request(self, *, model: str, tools: list[dict] | None, guidance: str = "") -> None:
         self.shape = {"model": model, "tools": list(tools) if tools else None, "guidance": guidance}
+        self.shapes[model] = self.shape
 
 
 def for_conversation(scope: str, *, sticky: bool = False) -> TurnMemory:
@@ -89,6 +91,12 @@ def last_shape(scope: str) -> dict | None:
     """The last request of a conversation in this process, or None. Never creates an entry."""
     memory = _CONVERSATIONS.get(scope)
     return memory.shape if memory else None
+
+
+def model_shapes(scope: str) -> list[dict]:
+    """The last request this conversation sent to each model, newest model last. Never creates an entry."""
+    memory = _CONVERSATIONS.get(scope)
+    return list(memory.shapes.values()) if memory else []
 
 
 def forget(scope: str = "") -> None:
