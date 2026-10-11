@@ -10,18 +10,22 @@ from star.agent_skills import SkillLibrary
 from star.desktop_core import Settings, run_task
 
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
-         "roblox-animation-tools", "roblox-performance-streaming"]
+         "roblox-animation-tools", "roblox-performance-streaming",
+         "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
+         "eng-debugging", "eng-test-first", "eng-verify-before-done"]
+ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
 
 
-def test_all_five_packs_ship_in_the_existing_skill_format():
+def test_all_packs_ship_in_the_existing_skill_format():
     packs = skill_packs.available()
     assert [p.name for p in packs] == NAMES
     for pack in packs:
         assert pack.file.parent.name == pack.name and 1 <= len(pack.description) <= 1024
         assert pack.body.startswith("# ")
-        assert (pack.file.parent / "references" / "sources.md").is_file()
+        grounding = "ATTRIBUTION.md" if pack.name in ENGINEERING else "sources.md"
+        assert (pack.file.parent / "references" / grounding).is_file(), pack.name
 
 
 def test_each_pack_is_short_enough_not_to_slow_the_first_token():
@@ -33,6 +37,8 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 
 def test_every_pack_cites_official_documentation_and_lists_the_api_names_it_checked():
     for pack in skill_packs.available():
+        if pack.name in ENGINEERING:
+            continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
         assert "verified with the knowledge service /api-lookup" in sources, pack.name
@@ -156,3 +162,31 @@ def test_quick_chat_mode_never_gets_a_pack(monkeypatch, tmp_path):
     monkeypatch.setenv(skill_packs.ENV_VAR, "all")
     _, text, events = run_turn(monkeypatch, tmp_path, UI_PROMPT, mode="fast")
     assert skill_packs.BLOCK_HEADING not in text and not any(e["event"] == "skill_packs" for e in events)
+
+
+def test_engineering_packs_keep_the_attribution_and_licence_of_the_two_mit_collections():
+    notices = (skill_packs.PACKS_DIR / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    assert "Copyright (c) 2025 Addy Osmani" in notices and "Copyright (c) 2025 Jesse Vincent" in notices
+    assert notices.count("Permission is hereby granted, free of charge") == 2
+    for name in ENGINEERING:
+        text = (skill_packs.PACKS_DIR / name / "references" / "ATTRIBUTION.md").read_text(encoding="utf-8")
+        assert "MIT" in text and "github.com/addyosmani/agent-skills" in text and "github.com/obra/superpowers" in text, name
+        assert "THIRD_PARTY_NOTICES.md" in text
+
+
+def test_the_creation_packs_are_chosen_for_their_own_topic():
+    assert skill_packs.matching_names("In my Roblox game: write easing functions with anticipation and follow-through for a sword combo.",
+                                      enabled=NAMES) == ["roblox-animation-craft"]
+    assert skill_packs.matching_names("In my Roblox game: spawn a ParticleEmitter burst with a Beam and a Trail on hit.",
+                                      enabled=NAMES) == ["roblox-vfx"]
+    assert skill_packs.matching_names("In my Roblox game: snap the modular kit walls to a grid and place the model with PivotTo.",
+                                      enabled=NAMES) == ["roblox-building-layout"]
+    assert skill_packs.matching_names("In my Roblox game: debug this script, it errors and crashes with attempt to index nil.",
+                                      enabled=NAMES) == ["eng-debugging"]
+    assert skill_packs.matching_names("In my Roblox game: fix this and tell me how you verified it works.",
+                                      enabled=NAMES) == ["eng-verify-before-done"]
+
+
+def test_the_new_packs_are_off_until_the_gate_has_passed_them():
+    assert "roblox-vfx" in skill_packs.enabled_names({skill_packs.ENV_VAR: "all"})
+    assert skill_packs.enabled_names({}) == frozenset(skill_packs.DEFAULT_ENABLED) & frozenset(NAMES)

@@ -1,0 +1,10 @@
+local ret, env = load_answer()
+local tryUse = resolve(ret, env, "tryUse")
+local state = { last = {} }
+check("the first use of dash is allowed", tryUse(state, "dash", 100) == true)
+check("a use 1 s later is refused", tryUse(state, "dash", 101) == false)
+check("a use exactly 3 s later is allowed", tryUse(state, "dash", 103) == true)
+check("an unknown ability is refused without an error", tryUse(state, "teleport", 200) == false)
+check("a refused use does not change state.last", state.last.dash == 103 and state.last.teleport == nil)
+check("abilities are tracked separately", tryUse(state, "fireball", 104) == true and tryUse(state, "dash", 105) == false)
+check("a refused use leaves the time of the last allowed use", tryUse(state, "fireball", 111) == false and state.last.fireball == 104 and tryUse(state, "fireball", 112) == true)

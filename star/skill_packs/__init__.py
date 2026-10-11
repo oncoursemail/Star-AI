@@ -70,6 +70,33 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-performance-streaming": re.compile(
         r"\b(?:performance|optimi[sz]\w*|lag\w*|frame ?rate|FPS|MicroProfiler|StreamingEnabled|streaming|RenderStepped|"
         r"Heartbeat|polling|every frame|object pool\w*|pooling|Debris|garbage|ModelStreamingMode)\b", re.IGNORECASE),
+    # Creation packs (animation craft, effects, building, UI looks).
+    "roblox-animation-craft": re.compile(
+        r"\b(?:anticipation|follow-?through|easing|eased?|wind-?up|frame data|startup|recovery|cancel ?window|combo|move-?set|"
+        r"IKControl|inverse kinematics|damped|damping|spring|secondary motion|procedural|AdjustWeight|AdjustSpeed|cross-?fade|"
+        r"blend\w*|GetMarkerReachedSignal|animation events?|markers?|hit window|AnimationPriority|keyframes?|overshoot\w*|"
+        r"interpolat\w*)\b", re.IGNORECASE),
+    "roblox-vfx": re.compile(
+        r"\b(?:ParticleEmitter|particles?|Beam|Trail|Attachment[01]|Emit|LightEmission|NumberSequence|ColorSequence|VFX|"
+        r"visual effects?|particle effects?|emitters?|sparks?|burst|shockwave|embers?|smoke|muzzle flash|explosion|laser)\b",
+        re.IGNORECASE),
+    "roblox-building-layout": re.compile(
+        r"\b(?:grid|snap\w*|studs?|modular|level design|level layout|doorway|Atmosphere|ClockTime|Lighting|OutdoorAmbient|"
+        r"BloomEffect|ColorCorrectionEffect|SunRaysEffect|PivotTo|Terrain|walls?|floors?|rooms?|ceilings?|corridors?|obby|"
+        r"lobby)\b", re.IGNORECASE),
+    "roblox-ui-styles": re.compile(
+        r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
+        r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
+    # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
+    "eng-debugging": re.compile(
+        r"\b(?:debug\w*|bugs?|root cause|fix(?:es)?|stack trace|errors?|crash\w*|broken|fails|failing|attempt to \w+|regression)\b",
+        re.IGNORECASE),
+    "eng-test-first": re.compile(
+        r"\b(?:test-?first|TDD|tests? first|unit tests?|write (?:the )?tests?|red-?green|failing tests?|regression tests?|"
+        r"asserts?)\b", re.IGNORECASE),
+    "eng-verify-before-done": re.compile(
+        r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|what you (?:checked|tested)|"
+        r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
 }
 
 
