@@ -97,6 +97,24 @@ PERMITTED_SETTINGS = frozenset({
 })
 
 
+def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
+    """Stage an official verified Setup and record it before asking Qt to exit."""
+    from .updates import stage_installer, get_latest
+    result = get_latest()
+    if not result.available:
+        raise RuntimeError('No newer update is available')
+    bridge._emit(request_id, 'progress', {'phase': 'Downloading and verifying STAR Setup',
+                                           'downloaded': 0, 'total': 0})
+    candidate = stage_installer(result, home, progress=lambda done, total:
+        bridge._emit(request_id, 'progress', {'phase': 'Downloading verified update',
+                                               'downloaded': done, 'total': total}))
+    if not candidate.checksum_verified or not candidate.expected_sha256:
+        raise PermissionError('Automatic restart requires a checksum-verified installer')
+    bridge.pending_update = candidate
+    bridge.shutdownRequested.emit()
+    return {'status': 'pending_restart', 'version': candidate.version}
+
+
 def finish_desktop_update(shell, instance) -> None:
     """Close desktop resources and release the single-instance lock before Setup.
 
@@ -1138,25 +1156,10 @@ def launch():
                     from .updates import get_latest
                     self._run(rid,action,lambda:asdict(get_latest()))
                 elif action=='installUpdate':
-                    from .updates import stage_installer, get_latest
                     if self.active_update:
                         raise RuntimeError('STAR is already installing an update')
                     self.active_update = True
-                    def worker():
-                        result=get_latest()
-                        if not result.available:raise RuntimeError('No newer update is available')
-                        self._emit(rid,'progress',{'phase':'Downloading and verifying STAR Setup','downloaded':0,'total':0})
-                        candidate=stage_installer(result,app_data(),progress=lambda done,total:
-                            self._emit(rid,'progress',{'phase':'Downloading verified update',
-                                                      'downloaded':done,'total':total}))
-                        self._emit(rid,'progress',{'phase':'SHA-256 verified — starting Windows Setup',
-                                                  'downloaded':1,'total':1})
-                        # Only checksum-verified GitHub assets may run unattended.
-                        # Setup replaces the application and relaunches STAR; user data is outside {app}.
-                        self.pending_update = candidate
-                        self.shutdownRequested.emit()
-                        return {'status':'pending_restart','version':candidate.version}
-                    self._run(rid,action,worker)
+                    self._run(rid,action,lambda:prepare_desktop_update(self,rid,app_data()))
                 elif action=='transcribe':
                     path=file_allowed(Path(str(body.get('file',''))),self.allowed_files)
                     from .media_features import transcribe_audio
