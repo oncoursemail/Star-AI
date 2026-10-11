@@ -11,7 +11,7 @@ def result(statuses: dict, *, sha="s1", model="star-fast", mode="auto") -> dict:
     return {"schema": 1, "suite": {"sha256": sha, "file": "suite.json", "tasks_total": 4,
             "automated": 3, "selected": ["A", "B", "C"], "identity_sha256": "identity"},
             "run": {"model": model, "mode": mode, "app_commit": "commit", "grader_sha256": "grader"},
-            "tasks": {tid: {"status": s, **({"passed": s == "pass"} if s in ("pass", "fail") else {})}
+            "tasks": {tid: {"status": s, **({"passed": s == "pass", "checks": [], "reasons": []} if s in ("pass", "fail") else {})}
                       for tid, s in statuses.items()}}
 
 
@@ -165,3 +165,21 @@ def test_in_memory_paired_trial_summaries_do_not_make_untrusted_files_valid(tmp_
     assert gate.evaluate_change(stored, stored).code == gate.UNUSABLE
     malformed = {"suite": {"sha256": "paired"}, "tasks": {"A": {"status": ["pass"]}}}
     assert gate.compare(malformed, malformed).code == gate.UNUSABLE
+
+def test_scored_rows_need_evidence_and_match_suite_selection():
+    for missing in ("passed", "checks", "reasons"):
+        broken = result({"A": "pass"})
+        broken["tasks"]["A"].pop(missing)
+        assert gate.compare(BASE, broken).code == gate.UNUSABLE
+    extra = result({"A": "pass", "X": "pass"})
+    assert gate.compare(BASE, extra).code == gate.UNUSABLE
+
+
+def test_other_files_with_legacy_baseline_names_cannot_bypass_validation(tmp_path):
+    source = Path(__file__).resolve().parents[1] / "evals" / "results" / "baseline-v2.json"
+    spoofed_dir = tmp_path / "evals" / "results"
+    spoofed_dir.mkdir(parents=True)
+    copy = spoofed_dir / "baseline-v2.json"
+    copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+    assert not gate.load_result(copy)["_legacy"]
+    assert gate.evaluate_change(copy, copy).code == gate.UNUSABLE
