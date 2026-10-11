@@ -88,9 +88,8 @@ def test_real_shell_shutdown_paths(monkeypatch, tmp_path, mode):
             bridge.turn = shell_module.TurnRef("default", chat_id, message_id)
             bridge.active_task = True
         if mode == "session":
-            # Qt's session callback closes this same window; exercise the real
-            # connection made by launch without depending on a desktop session manager.
-            window.close()
+            # Simulate Qt session callback with the same handler launch wires.
+            shell_module.close_for_session(window, object())
         else:
             window.close()
         bridge.close()  # aboutToQuit path is intentionally idempotent
