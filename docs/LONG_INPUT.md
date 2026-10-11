@@ -37,7 +37,7 @@ When tool work needs compaction, STAR summarizes all bounded prior evidence in c
 
 Compaction is bounded to one million source characters, 96 model calls, eight layers and a 6,000-character final checkpoint. Each summary request is capped at 18,000 text characters and 1,300 output tokens. These are work limits, not unlimited memory or proof of semantic fidelity. Large inputs can require several sequential calls.
 
-Ordinary conversation replay still uses the existing bounded sliding history window. Earlier turns remain in the conversation database, but this change does not automatically summarize that omitted chat prefix. Layered compaction covers the prior checkpoint and tool-work transcript supplied to it. A separate conversation-retention change must address earlier chat constraints; this feature does not establish unlimited recall.
+Ordinary conversation replay uses bounded segments of complete exchanges. When a segment moves, STAR summarizes the newly omitted original records into a separate, scoped conversation checkpoint. Short chats and unchanged boundaries add no summary calls. The checkpoint carries a deterministic source cursor and digest; it advances only after a successful answer and atomic source validation. Tool-schema pressure can trigger up to four preparation retries before the first answer dispatch. Pressure after model or tool work stops visibly without replaying actions. History over 10,000 records or one million stored-body UTF-8 bytes is refused before loading bodies or contacting a provider. Original dialogue remains intact; the lossy recap does not establish unlimited recall or verified facts. See [Conversation memory](CONVERSATION_MEMORY.md) for scope, failure behavior and validation.
 
 ## Resource limits
 

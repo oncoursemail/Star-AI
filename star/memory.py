@@ -157,13 +157,16 @@ def _source_fragments(text: str, budget: int):
         start = end
 
 
-async def compact(client, model: str, project: str, prior: str, messages: list[dict]) -> str:
+async def compact(client, model: str, project: str, prior: str, messages: list[dict], *,
+                  summary_chars: int = COMPACTION_SUMMARY_CHARS) -> str:
     """Cover all redacted input with bounded leaf/reduction calls, or fail safely.
 
     Only returns after every source fragment has been covered. This function
     does not persist, alter or truncate caller history; callers keep raw archives.
     Cancellation/provider errors propagate before a checkpoint can be committed.
     """
+    if type(summary_chars) is not int or not 256 <= summary_chars <= COMPACTION_SUMMARY_CHARS:
+        raise _compaction_error(f'final checkpoint budget must be 256 to {COMPACTION_SUMMARY_CHARS:,} characters')
     safe_messages = _redacted_compaction_source(messages)
     safe_prior = _redacted_compaction_source(prior)
     safe_project = _redacted_compaction_source(project)
@@ -179,7 +182,9 @@ async def compact(client, model: str, project: str, prior: str, messages: list[d
     if len(ids) > COMPACTION_ID_CHARS:
         raise _compaction_error(f"verbatim source identifier ledger exceeds {COMPACTION_ID_CHARS:,} characters")
     footer = f"\nSOURCE IDS (verbatim metadata, trace only):\n{ids}" if ids else ""
-    result_budget = COMPACTION_SUMMARY_CHARS - len(_CHECKPOINT_NOTICE) - len(footer)
+    result_budget = summary_chars - len(_CHECKPOINT_NOTICE) - len(footer)
+    if result_budget < 128:
+        raise _compaction_error('source identifiers leave too little room for a meaningful checkpoint')
     calls = 0
 
     for layer in range(COMPACTION_MAX_LAYERS):
