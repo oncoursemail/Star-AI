@@ -83,7 +83,7 @@
   "category": "luau-typing",
   "difficulty": 1,
   "goal": "Fix strict-mode nil errors with type refinement instead of casts",
-  "prompt": "This module fails strict type checking and crashes at runtime when p or p.level is nil. Fix it. A nil profile must return \"unknown\"; a nil level counts as 0. Do not use `any` and do not relax the checking mode.\n\n--!strict\ntype Profile = { name: string, level: number? }\nlocal function describe(p: Profile?): string\n\treturn p.name .. \" (level \" .. p.level + 1 .. \")\"\nend\nreturn describe",
+  "prompt": "In my Roblox game: This module fails strict type checking and crashes at runtime when p or p.level is nil. Fix it. A nil profile must return \"unknown\"; a nil level counts as 0. Do not use `any` and do not relax the checking mode.\n\n--!strict\ntype Profile = { name: string, level: number? }\nlocal function describe(p: Profile?): string\n\treturn p.name .. \" (level \" .. p.level + 1 .. \")\"\nend\nreturn describe",
   "run_mode": "automated",
   "fixtures": [
    "tests/LUA-02.luau"
@@ -165,6 +165,7 @@
    ]
   },
   "helps": [],
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -172,7 +173,7 @@
   "category": "luau-typing",
   "difficulty": 2,
   "goal": "Implement generic list utilities whose generics are really checked",
-  "prompt": "Write a --!strict ModuleScript ListUtil with `map<T, U>(list: {T}, fn: (T) -> U): {U}`, `filter<T>(list: {T}, pred: (T) -> boolean): {T}` and `find<T>(list: {T}, pred: (T) -> boolean): T?`. None of them may modify the input list.",
+  "prompt": "In my Roblox game: Write a --!strict ModuleScript ListUtil with `map<T, U>(list: {T}, fn: (T) -> U): {U}`, `filter<T>(list: {T}, pred: (T) -> boolean): {T}` and `find<T>(list: {T}, pred: (T) -> boolean): T?`. None of them may modify the input list.",
   "run_mode": "automated",
   "fixtures": [
    "tests/LUA-03.luau"
@@ -246,6 +247,7 @@
    ]
   },
   "helps": [],
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -402,7 +404,7 @@
   "category": "remote-security",
   "difficulty": 2,
   "goal": "Make a purchase RemoteEvent handler server-authoritative",
-  "prompt": "This server script lets exploiters buy anything for free. Rewrite the handler so the server decides the price and validates everything the client sends. Prices live in the server table `Catalog = { sword = 100, shield = 250 }`. Each player may own each item once.\n\nBuyItem.OnServerEvent:Connect(function(player, itemId, price)\n\tlocal coins = player.leaderstats.Coins\n\tcoins.Value -= price\n\tgiveItem(player, itemId)\nend)",
+  "prompt": "In my Roblox game: This server script lets exploiters buy anything for free. Rewrite the handler so the server decides the price and validates everything the client sends. Prices live in the server table `Catalog = { sword = 100, shield = 250 }`. Each player may own each item once.\n\nBuyItem.OnServerEvent:Connect(function(player, itemId, price)\n\tlocal coins = player.leaderstats.Coins\n\tcoins.Value -= price\n\tgiveItem(player, itemId)\nend)",
   "run_mode": "automated",
   "fixtures": [
    "tests/NET-01.luau"
@@ -458,6 +460,7 @@
   "helps": [
    "roblox-secure-remotes"
   ],
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -465,7 +468,7 @@
   "category": "remote-security",
   "difficulty": 2,
   "goal": "Add a server-side per-player cooldown to an ability remote without leaking memory",
-  "prompt": "Players fire the RemoteEvent UseAbility. Write a server ModuleScript AbilityGate with `tryUse(player: Player): boolean` that allows one use every 2 seconds per player measured with the server clock, a `forget(player: Player)` that is connected to Players.PlayerRemoving, and `trackedCount(): number` for tests. Client arguments must not influence the timing.",
+  "prompt": "In my Roblox game: Players fire the RemoteEvent UseAbility. Write a server ModuleScript AbilityGate with `tryUse(player: Player): boolean` that allows one use every 2 seconds per player measured with the server clock, a `forget(player: Player)` that is connected to Players.PlayerRemoving, and `trackedCount(): number` for tests. Client arguments must not influence the timing.",
   "run_mode": "automated",
   "fixtures": [
    "tests/NET-03.luau"
@@ -530,6 +533,7 @@
   "helps": [
    "roblox-secure-remotes"
   ],
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -537,7 +541,7 @@
   "category": "remote-security",
   "difficulty": 2,
   "goal": "Choose the right remote type for continuous versus critical messages",
-  "prompt": "I need two messages. (1) Each client sends its aim direction to the server about 20 times per second; losing some updates is fine. (2) The server tells every client once that the round ended; this must arrive. Create the remotes in ReplicatedStorage and write the client and server code for both. Validate what the client sends.",
+  "prompt": "In my Roblox game: I need two messages. (1) Each client sends its aim direction to the server about 20 times per second; losing some updates is fine. (2) The server tells every client once that the round ended; this must arrive. Create the remotes in ReplicatedStorage and write the client and server code for both. Validate what the client sends.",
   "run_mode": "automated",
   "fixtures": [],
   "fixture_status": "implemented",
@@ -627,6 +631,7 @@
   "helps": [
    "roblox-secure-remotes"
   ],
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -634,7 +639,7 @@
   "category": "datastore-safety",
   "difficulty": 3,
   "goal": "Save player data safely with UpdateAsync, retries and a shutdown flush",
-  "prompt": "Write a server ModuleScript PlayerData that keeps each player's data table in memory, saves it with DataStoreService under the key \"Player_\" .. UserId, retries failed writes up to 3 times with growing delays, saves on PlayerRemoving and flushes every loaded player in game:BindToClose. Several servers may write the same key, so do not overwrite blindly. Never yield inside the update callback. The module connects Players.PlayerAdded and Players.PlayerRemoving itself when it is required, and exposes `PlayerData.get(player: Player): { [string]: any }?` for the in-memory table.",
+  "prompt": "In my Roblox game: Write a server ModuleScript PlayerData that keeps each player's data table in memory, saves it with DataStoreService under the key \"Player_\" .. UserId, retries failed writes up to 3 times with growing delays, saves on PlayerRemoving and flushes every loaded player in game:BindToClose. Several servers may write the same key, so do not overwrite blindly. Never yield inside the update callback. The module connects Players.PlayerAdded and Players.PlayerRemoving itself when it is required, and exposes `PlayerData.get(player: Player): { [string]: any }?` for the in-memory table.",
   "run_mode": "automated",
   "fixtures": [
    "tests/NET-05.luau"
@@ -720,7 +725,7 @@
   "helps": [
    "roblox-datastore-safety"
   ],
-  "v2_amendment": "Prompt extended so the unit tests can drive the module through Players events without guessing its API.",
+  "v2_amendment": "Prompt extended so the unit tests can drive the module through Players events without guessing its API. Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -1145,7 +1150,7 @@
   "category": "server-authoritative-inventory",
   "difficulty": 3,
   "goal": "Server-side inventory move/stack/swap that cannot duplicate or lose items",
-  "prompt": "Write a server ModuleScript InventoryService for 20-slot inventories kept on the server. Each slot is nil or { itemId: string, count: number } with a maximum stack of 99. Implement `MoveItem(player: Player, fromSlot: any, toSlot: any): (boolean, string?)`: validate that both are integers from 1 to 20 and different, and that the source slot is not empty; if the target holds the same itemId, stack up to 99 and leave the remainder in the source; if it holds a different item, swap; if empty, move. Invalid requests return false and a reason and change nothing. Also implement `GetSnapshot(player): { [number]: { itemId: string, count: number } }`. Also implement `Give(player: Player, itemId: string, count: number): boolean`, which the server uses to put items into the inventory (it fills existing stacks of the same item first, then empty slots, and returns false if everything did not fit).",
+  "prompt": "In my Roblox game: Write a server ModuleScript InventoryService for 20-slot inventories kept on the server. Each slot is nil or { itemId: string, count: number } with a maximum stack of 99. Implement `MoveItem(player: Player, fromSlot: any, toSlot: any): (boolean, string?)`: validate that both are integers from 1 to 20 and different, and that the source slot is not empty; if the target holds the same itemId, stack up to 99 and leave the remainder in the source; if it holds a different item, swap; if empty, move. Invalid requests return false and a reason and change nothing. Also implement `GetSnapshot(player): { [number]: { itemId: string, count: number } }`. Also implement `Give(player: Player, itemId: string, count: number): boolean`, which the server uses to put items into the inventory (it fills existing stacks of the same item first, then empty slots, and returns false if everything did not fit).",
   "run_mode": "automated",
   "fixtures": [
    "tests/SYS-01.luau"
@@ -1204,7 +1209,7 @@
   "helps": [
    "roblox-secure-remotes"
   ],
-  "v2_amendment": "Prompt extended with Give(...) so the unit tests can seed an inventory through a specified API.",
+  "v2_amendment": "Prompt extended with Give(...) so the unit tests can seed an inventory through a specified API. Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -1581,7 +1586,7 @@
   "category": "ui-layout",
   "difficulty": 2,
   "goal": "Native responsive inventory HUD built in code (ScreenGui, grid layout, constraints)",
-  "prompt": "Write a LocalScript (for StarterPlayerScripts) that builds a native inventory HUD in code: a ScreenGui named InventoryHud in the player's PlayerGui containing a centered Frame (about 60% of the screen width) with a title label, a close button and a 4-column grid of 12 square item slots. It must work on a 1920x1080 PC window and on a 390x844 phone: use Scale-based sizes, a layout object to arrange the slots (do not position them by hand) and a constraint that keeps the slots square. Do not use pictures of UI.",
+  "prompt": "In my Roblox game: Write a LocalScript (for StarterPlayerScripts) that builds a native inventory HUD in code: a ScreenGui named InventoryHud in the player's PlayerGui containing a centered Frame (about 60% of the screen width) with a title label, a close button and a 4-column grid of 12 square item slots. It must work on a 1920x1080 PC window and on a 390x844 phone: use Scale-based sizes, a layout object to arrange the slots (do not position them by hand) and a constraint that keeps the slots square. Do not use pictures of UI.",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -1670,6 +1675,7 @@
     "Absent: UI must be real objects, not pictures"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -1677,7 +1683,7 @@
   "category": "ui-layout",
   "difficulty": 2,
   "goal": "Scrolling shop list that grows without manual canvas maths",
-  "prompt": "Write a LocalScript that builds a scrolling shop list inside the existing ScreenGui named ShopGui (find it in the player's PlayerGui): 30 rows, each a Frame with an item-name label on the left and a price label on the right. A layout object must arrange the rows, the list must scroll vertically, and the scrollable area must grow with the number of rows without you computing the canvas height. Add padding so text does not touch the edges.",
+  "prompt": "In my Roblox game: Write a LocalScript that builds a scrolling shop list inside the existing ScreenGui named ShopGui (find it in the player's PlayerGui): 30 rows, each a Frame with an item-name label on the left and a price label on the right. A layout object must arrange the rows, the list must scroll vertically, and the scrollable area must grow with the number of rows without you computing the canvas height. Add padding so text does not touch the edges.",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -1755,6 +1761,7 @@
     "Absent: the canvas height must not be computed by hand"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -1762,7 +1769,7 @@
   "category": "ui-layout",
   "difficulty": 2,
   "goal": "Keep a HUD label out of the phone notch without device-specific offsets",
-  "prompt": "On phones with a camera cut-out the score label of this HUD is hidden in the top-right corner. Fix the script without hard-coding device-specific pixel offsets, and keep it correct on PC.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.ScreenInsets = Enum.ScreenInsets.None\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui",
+  "prompt": "In my Roblox game: On phones with a camera cut-out the score label of this HUD is hidden in the top-right corner. Fix the script without hard-coding device-specific pixel offsets, and keep it correct on PC.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.ScreenInsets = Enum.ScreenInsets.None\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -1825,6 +1832,7 @@
     "Absent: ScreenInsets.None is what hides the label under the notch"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -1832,7 +1840,7 @@
   "category": "ui-layout",
   "difficulty": 3,
   "goal": "Scale a fixed-pixel panel for phone and 4K with UIScale from the viewport",
-  "prompt": "This LocalScript builds a 500x300 pixel settings panel that is too big on phones and tiny on a 4K monitor. Rewrite it so the panel keeps its proportions and scales with the screen: use a UIScale driven by the camera's ViewportSize (reference design 1280x720, scale clamped between 0.6 and 2), update it whenever the viewport changes, and make the buttons at least 44 pixels tall on touch devices.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal panel = Instance.new(\"Frame\")\npanel.Size = UDim2.fromOffset(500, 300)\npanel.AnchorPoint = Vector2.new(0.5, 0.5)\npanel.Position = UDim2.fromScale(0.5, 0.5)\npanel.Parent = gui\nlocal button = Instance.new(\"TextButton\")\nbutton.Size = UDim2.fromOffset(120, 28)\nbutton.Text = \"Close\"\nbutton.Parent = panel",
+  "prompt": "In my Roblox game: This LocalScript builds a 500x300 pixel settings panel that is too big on phones and tiny on a 4K monitor. Rewrite it so the panel keeps its proportions and scales with the screen: use a UIScale driven by the camera's ViewportSize (reference design 1280x720, scale clamped between 0.6 and 2), update it whenever the viewport changes, and make the buttons at least 44 pixels tall on touch devices.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal panel = Instance.new(\"Frame\")\npanel.Size = UDim2.fromOffset(500, 300)\npanel.AnchorPoint = Vector2.new(0.5, 0.5)\npanel.Position = UDim2.fromScale(0.5, 0.5)\npanel.Parent = gui\nlocal button = Instance.new(\"TextButton\")\nbutton.Size = UDim2.fromOffset(120, 28)\nbutton.Text = \"Close\"\nbutton.Parent = panel",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -1921,6 +1929,7 @@
     "Absent: no polling loop: react to the viewport signal"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -1928,7 +1937,7 @@
   "category": "ui-interaction",
   "difficulty": 3,
   "goal": "Hover and press feedback that works with mouse, touch and gamepad and cleans up",
-  "prompt": "Write a LocalScript that gives the existing TextButton PlayButton (PlayerGui.MainMenu.PlayButton) hover and press feedback: on hover it grows to 1.05x with a 0.15 second Quad tween and returns when the pointer leaves; on press it dips to 0.95x. It must also react when a gamepad selects the button, cancel a running tween before starting the next, and disconnect its connections when the button is destroyed.",
+  "prompt": "In my Roblox game: Write a LocalScript that gives the existing TextButton PlayButton (PlayerGui.MainMenu.PlayButton) hover and press feedback: on hover it grows to 1.05x with a 0.15 second Quad tween and returns when the pointer leaves; on press it dips to 0.95x. It must also react when a gamepad selects the button, cancel a running tween before starting the next, and disconnect its connections when the button is destroyed.",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -2023,6 +2032,7 @@
     "Absent: the global wait() is deprecated; use task.wait"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -2030,7 +2040,7 @@
   "category": "ui-text",
   "difficulty": 2,
   "goal": "Nameplate text that always fits on one line",
-  "prompt": "Players with very long display names overflow our 200x40 nameplate. Write `createNameplate(parent: Instance, displayName: string): TextLabel` that creates the label and keeps the whole name visible on one line at any length: the text must shrink to fit but never go below size 10 or above size 24, and must not spill outside the label.",
+  "prompt": "In my Roblox game: Players with very long display names overflow our 200x40 nameplate. Write `createNameplate(parent: Instance, displayName: string): TextLabel` that creates the label and keeps the whole name visible on one line at any length: the text must shrink to fit but never go below size 10 or above size 24, and must not spill outside the label.",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -2099,6 +2109,7 @@
     "Present: the maximum size is 24"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2226,7 +2237,7 @@
   "category": "remote-security",
   "difficulty": 3,
   "goal": "Server-authoritative melee hit handler",
-  "prompt": "Players swing a sword and fire the RemoteEvent `Hit` with the target the client thinks it hit: Hit:FireServer(targetModel). Write the complete server-side handler (a Script in ServerScriptService). The server alone decides the damage (10). It must verify everything the client claims: the argument is a Model containing a living Humanoid, it is not the attacker's own character, the target's root part is within 12 studs of the attacker's root part, and the attacker may swing at most once every 0.6 seconds measured with the server clock. Never accept damage, distance, position or time from the client.",
+  "prompt": "In my Roblox game: Players swing a sword and fire the RemoteEvent `Hit` with the target the client thinks it hit: Hit:FireServer(targetModel). Write the complete server-side handler (a Script in ServerScriptService). The server alone decides the damage (10). It must verify everything the client claims: the argument is a Model containing a living Humanoid, it is not the attacker's own character, the target's root part is within 12 studs of the attacker's root part, and the attacker may swing at most once every 0.6 seconds measured with the server clock. Never accept damage, distance, position or time from the client.",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes"
@@ -2326,6 +2337,7 @@
     "Absent: the handler must take only (player, target): no client-supplied damage, time or position"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -2333,7 +2345,7 @@
   "category": "remote-security",
   "difficulty": 2,
   "goal": "A reusable argument validator that never throws",
-  "prompt": "Write a server ModuleScript `Validate` for checking RemoteEvent arguments. `Validate.integer(x: any, min: number, max: number): number?` returns x if it is a number with no fractional part (not NaN, not infinite) inside [min, max], else nil. `Validate.number(x: any, min: number, max: number): number?` is the same for any finite number. `Validate.string(x: any, maxLength: number): string?` returns x if it is a string of 1 to maxLength bytes containing no control characters (bytes below 32 or 127), else nil. `Validate.oneOf(x: any, allowed: { [string]: boolean }): string?` returns x only if it is a string and allowed[x] is true. None of them may ever throw, whatever x is.",
+  "prompt": "In my Roblox game: Write a server ModuleScript `Validate` for checking RemoteEvent arguments. `Validate.integer(x: any, min: number, max: number): number?` returns x if it is a number with no fractional part (not NaN, not infinite) inside [min, max], else nil. `Validate.number(x: any, min: number, max: number): number?` is the same for any finite number. `Validate.string(x: any, maxLength: number): string?` returns x if it is a string of 1 to maxLength bytes containing no control characters (bytes below 32 or 127), else nil. `Validate.oneOf(x: any, allowed: { [string]: boolean }): string?` returns x only if it is a string and allowed[x] is true. None of them may ever throw, whatever x is.",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes"
@@ -2378,6 +2390,7 @@
     "8 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2385,7 +2398,7 @@
   "category": "remote-security",
   "difficulty": 3,
   "goal": "Remove a server InvokeClient call that trusts and can hang on the client",
-  "prompt": "This server code asks each client how much ammo it has and trusts the answer, and a client that never replies can hang the server thread. Rewrite the design so the server owns the ammo count and never waits for or trusts a client reply. The client may only ask the server to reload through a RemoteEvent called Reload.\n\nlocal GetAmmo = ReplicatedStorage.GetAmmo -- RemoteFunction\nPlayers.PlayerAdded:Connect(function(player)\n\tlocal ammo = GetAmmo:InvokeClient(player)\n\tgiveAmmoBonus(player, ammo)\nend)",
+  "prompt": "In my Roblox game: This server code asks each client how much ammo it has and trusts the answer, and a client that never replies can hang the server thread. Rewrite the design so the server owns the ammo count and never waits for or trusts a client reply. The client may only ask the server to reload through a RemoteEvent called Reload.\n\nlocal GetAmmo = ReplicatedStorage.GetAmmo -- RemoteFunction\nPlayers.PlayerAdded:Connect(function(player)\n\tlocal ammo = GetAmmo:InvokeClient(player)\n\tgiveAmmoBonus(player, ammo)\nend)",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes"
@@ -2450,6 +2463,7 @@
     "Absent: the server must never call InvokeClient"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -2457,7 +2471,7 @@
   "category": "remote-security",
   "difficulty": 3,
   "goal": "Developer product purchases that are granted exactly once",
-  "prompt": "Write the server Script that processes Developer Product purchases: product 1111 gives 100 coins, product 2222 gives 500 coins. Handle MarketplaceService.ProcessReceipt correctly: a purchase must be granted exactly once even if the callback runs twice or the server shuts down in the middle, record the PurchaseId in a DataStore, return the right Enum.ProductPurchaseDecision value in every case, and never take the product or amount from a client message.",
+  "prompt": "In my Roblox game: Write the server Script that processes Developer Product purchases: product 1111 gives 100 coins, product 2222 gives 500 coins. Handle MarketplaceService.ProcessReceipt correctly: a purchase must be granted exactly once even if the callback runs twice or the server shuts down in the middle, record the PurchaseId in a DataStore, return the right Enum.ProductPurchaseDecision value in every case, and never take the product or amount from a client message.",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes",
@@ -2552,6 +2566,7 @@
     "Absent: no client message decides the grant"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2559,7 +2574,7 @@
   "category": "remote-security",
   "difficulty": 3,
   "goal": "Fix an exploitable walk-speed remote",
-  "prompt": "Fix this exploitable server handler.\n\nSpeedMode.OnServerEvent:Connect(function(player, speed)\n\tplayer.Character.Humanoid.WalkSpeed = speed\nend)\n\nThe client now sends only a mode string that must be exactly \"walk\" or \"sprint\". The server alone decides the speed: walk sets WalkSpeed to 16; sprint sets 24 but only while the player's attribute `Stamina` is greater than 0 (otherwise the speed is 16). Any other value, a missing character or Humanoid, or a dead Humanoid changes nothing and must not throw. Allow at most 5 requests per second per player, measured with the server clock.",
+  "prompt": "In my Roblox game: Fix this exploitable server handler.\n\nSpeedMode.OnServerEvent:Connect(function(player, speed)\n\tplayer.Character.Humanoid.WalkSpeed = speed\nend)\n\nThe client now sends only a mode string that must be exactly \"walk\" or \"sprint\". The server alone decides the speed: walk sets WalkSpeed to 16; sprint sets 24 but only while the player's attribute `Stamina` is greater than 0 (otherwise the speed is 16). Any other value, a missing character or Humanoid, or a dead Humanoid changes nothing and must not throw. Allow at most 5 requests per second per player, measured with the server clock.",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes"
@@ -2603,6 +2618,7 @@
     "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -2610,7 +2626,7 @@
   "category": "remote-docs-question",
   "difficulty": 1,
   "goal": "Documentation question: what a server must assume about RemoteEvent arguments (citation required)",
-  "prompt": "Is it safe for a server script to trust the arguments a client sends through a RemoteEvent, and what exactly should the server check? Answer from the documentation and cite the pages you use.",
+  "prompt": "In my Roblox game: Is it safe for a server script to trust the arguments a client sends through a RemoteEvent, and what exactly should the server check? Answer from the documentation and cite the pages you use.",
   "run_mode": "automated",
   "helps": [
    "roblox-secure-remotes"
@@ -2673,6 +2689,7 @@
     "The answer cites a retrieved documentation page (STAR's sources list shows it as cited)"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2680,7 +2697,7 @@
   "category": "datastore-safety",
   "difficulty": 2,
   "goal": "A retry helper with exponential backoff and an injectable wait",
-  "prompt": "Write a ModuleScript `Retry` with `Retry.run(fn: () -> any, attempts: number, baseDelay: number, wait: (number) -> ()): (boolean, any)`. It calls fn inside pcall. On success it returns true and fn's first return value. On an error it calls the injected `wait` with baseDelay * 2^(k-1) seconds after the k-th failure and tries again; after `attempts` failed calls it returns false and the last error message, with no wait after the final failure. attempts must be a positive integer, otherwise it throws. fn is never called more than `attempts` times.",
+  "prompt": "In my Roblox game: Write a ModuleScript `Retry` with `Retry.run(fn: () -> any, attempts: number, baseDelay: number, wait: (number) -> ()): (boolean, any)`. It calls fn inside pcall. On success it returns true and fn's first return value. On an error it calls the injected `wait` with baseDelay * 2^(k-1) seconds after the k-th failure and tries again; after `attempts` failed calls it returns false and the last error message, with no wait after the final failure. attempts must be a positive integer, otherwise it throws. fn is never called more than `attempts` times.",
   "run_mode": "automated",
   "helps": [
    "roblox-datastore-safety"
@@ -2725,6 +2742,7 @@
     "7 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2732,7 +2750,7 @@
   "category": "datastore-safety",
   "difficulty": 3,
   "goal": "Atomic currency update with UpdateAsync that cancels invalid changes",
-  "prompt": "Write a ModuleScript `Wallet` with `Wallet.add(store: DataStore, key: string, delta: number): (boolean, number?)`. It must call store:UpdateAsync exactly once per call, inside pcall. The update callback receives the old value (nil for a new key; treat it as 0) and must return old + delta, or return nil to cancel when the result would be negative or when delta is not a finite integer. The callback must not yield. Return true and the new balance on success; return false and nil when the update was cancelled or UpdateAsync threw.",
+  "prompt": "In my Roblox game: Write a ModuleScript `Wallet` with `Wallet.add(store: DataStore, key: string, delta: number): (boolean, number?)`. It must call store:UpdateAsync exactly once per call, inside pcall. The update callback receives the old value (nil for a new key; treat it as 0) and must return old + delta, or return nil to cancel when the result would be negative or when delta is not a finite integer. The callback must not yield. Return true and the new balance on success; return false and nil when the update was cancelled or UpdateAsync threw.",
   "run_mode": "automated",
   "helps": [
    "roblox-datastore-safety"
@@ -2799,6 +2817,7 @@
     "Absent: no blind SetAsync"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -2806,7 +2825,7 @@
   "category": "datastore-safety",
   "difficulty": 3,
   "goal": "Autosave and shutdown flush that respects DataStore limits",
-  "prompt": "Write the server Script part that persists player data safely. Every 60 seconds each player's cached data table is saved with UpdateAsync, spread out so all players are not written in the same instant; there is no save on every stat change; there is a final save on PlayerRemoving; and in game:BindToClose all remaining players are saved in parallel (task.spawn) while the handler waits until they finish or 25 seconds have passed. Wrap every DataStore call in pcall.",
+  "prompt": "In my Roblox game: Write the server Script part that persists player data safely. Every 60 seconds each player's cached data table is saved with UpdateAsync, spread out so all players are not written in the same instant; there is no save on every stat change; there is a final save on PlayerRemoving; and in game:BindToClose all remaining players are saved in parallel (task.spawn) while the handler waits until they finish or 25 seconds have passed. Wrap every DataStore call in pcall.",
   "run_mode": "automated",
   "helps": [
    "roblox-datastore-safety"
@@ -2913,6 +2932,7 @@
     "Absent: the global wait() is deprecated; use task.wait"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -2991,7 +3011,7 @@
   "category": "animation",
   "difficulty": 2,
   "goal": "Play idle and attack animations with the modern Animator API",
-  "prompt": "Write a LocalScript (for StarterCharacterScripts) that loads and plays a looping idle animation (rbxassetid://180435571) and a one-shot attack animation (rbxassetid://180435792) on the character's Animator when the player presses the F key. Use the modern API (not the deprecated Humanoid:LoadAnimation), give the attack the Action priority, stop the idle track while the attack plays and resume it afterwards, and clean up when the character is removed.",
+  "prompt": "In my Roblox game: Write a LocalScript (for StarterCharacterScripts) that loads and plays a looping idle animation (rbxassetid://180435571) and a one-shot attack animation (rbxassetid://180435792) on the character's Animator when the player presses the F key. Use the modern API (not the deprecated Humanoid:LoadAnimation), give the attack the Action priority, stop the idle track while the attack plays and resume it afterwards, and clean up when the character is removed.",
   "run_mode": "automated",
   "helps": [
    "roblox-animation-tools"
@@ -3088,6 +3108,7 @@
     "Absent: Humanoid:LoadAnimation is deprecated; use the Animator"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -3201,7 +3222,7 @@
   "category": "animation",
   "difficulty": 3,
   "goal": "Fire the hit on an animation marker, not on a guessed delay",
-  "prompt": "An attack animation has a marker named Hit. Write the LocalScript that loads the animation rbxassetid://180435792 on the character's Animator, plays it when the equipped tool is activated, and sends exactly one FireServer() on the remote `AttackHit` when the marker Hit is reached. Disconnect the connection when the track stops, never fire if the track was stopped early, and do not use wait or task.wait to guess the timing.",
+  "prompt": "In my Roblox game: An attack animation has a marker named Hit. Write the LocalScript that loads the animation rbxassetid://180435792 on the character's Animator, plays it when the equipped tool is activated, and sends exactly one FireServer() on the remote `AttackHit` when the marker Hit is reached. Disconnect the connection when the track stops, never fire if the track was stopped early, and do not use wait or task.wait to guess the timing.",
   "run_mode": "automated",
   "helps": [
    "roblox-animation-tools"
@@ -3288,6 +3309,7 @@
     "Absent: no timing by waiting"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -3337,7 +3359,7 @@
   "category": "performance",
   "difficulty": 2,
   "goal": "Replace a per-frame polling loop with an event or a throttled query",
-  "prompt": "This server script wastes time polling every frame. Rewrite it for performance without changing the behaviour (the door turns half transparent while a player is within 10 studs, and opaque otherwise). Prefer an event-driven or throttled approach and explain the choice in one sentence.\n\nwhile true do\n\twait()\n\tfor _, plr in game.Players:GetPlayers() do\n\t\tlocal c = plr.Character\n\t\tif c and (c.PrimaryPart.Position - door.Position).Magnitude < 10 then\n\t\t\tdoor.Transparency = 0.5\n\t\telse\n\t\t\tdoor.Transparency = 0\n\t\tend\n\tend\nend",
+  "prompt": "In my Roblox game: This server script wastes time polling every frame. Rewrite it for performance without changing the behaviour (the door turns half transparent while a player is within 10 studs, and opaque otherwise). Prefer an event-driven or throttled approach and explain the choice in one sentence.\n\nwhile true do\n\twait()\n\tfor _, plr in game.Players:GetPlayers() do\n\t\tlocal c = plr.Character\n\t\tif c and (c.PrimaryPart.Position - door.Position).Magnitude < 10 then\n\t\t\tdoor.Transparency = 0.5\n\t\telse\n\t\t\tdoor.Transparency = 0\n\t\tend\n\tend\nend",
   "run_mode": "automated",
   "helps": [
    "roblox-performance-streaming"
@@ -3412,6 +3434,7 @@
     "Absent: RenderStepped is for the client's camera work"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  },
  {
@@ -3419,7 +3442,7 @@
   "category": "performance-streaming",
   "difficulty": 3,
   "goal": "Make client code safe for StreamingEnabled",
-  "prompt": "StreamingEnabled is on in our place. This LocalScript errors because parts are not streamed in yet. Rewrite it so it is safe with instance streaming: wait for objects with a timeout, react when they stream in or out, and mark what the boss model needs as always present.\n\nlocal door = workspace.Map.Building.Door\ndoor.Touched:Connect(function() print(\"touched\") end)\nlocal boss = workspace.Map.Boss\nprint(boss.Humanoid.Health)",
+  "prompt": "In my Roblox game: StreamingEnabled is on in our place. This LocalScript errors because parts are not streamed in yet. Rewrite it so it is safe with instance streaming: wait for objects with a timeout, react when they stream in or out, and mark what the boss model needs as always present.\n\nlocal door = workspace.Map.Building.Door\ndoor.Touched:Connect(function() print(\"touched\") end)\nlocal boss = workspace.Map.Boss\nprint(boss.Humanoid.Health)",
   "run_mode": "automated",
   "helps": [
    "roblox-performance-streaming"
@@ -3497,6 +3520,7 @@
     "Absent: long direct paths break when parts are not streamed in"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "holdout"
  },
  {
@@ -3504,7 +3528,7 @@
   "category": "performance",
   "difficulty": 3,
   "goal": "A fixed-size bullet pool instead of creating and destroying parts",
-  "prompt": "A gun fires 20 bullets per second and creates a new Part for each one, which causes garbage-collection spikes. Write a server ModuleScript `BulletPool` with `BulletPool.new(size: number, template: BasePart)` that clones the template exactly `size` times up front, and the methods `pool:get(): BasePart?` (returns an idle part parented to workspace, or nil when none is idle), `pool:release(part: BasePart)` (parks the part, with Parent set to nil, and ignores a part that is already idle) and `pool:idleCount(): number`. It must never create more than `size` parts.",
+  "prompt": "In my Roblox game: A gun fires 20 bullets per second and creates a new Part for each one, which causes garbage-collection spikes. Write a server ModuleScript `BulletPool` with `BulletPool.new(size: number, template: BasePart)` that clones the template exactly `size` times up front, and the methods `pool:get(): BasePart?` (returns an idle part parented to workspace, or nil when none is idle), `pool:release(part: BasePart)` (parks the part, with Parent set to nil, and ignores a part that is already idle) and `pool:idleCount(): number`. It must never create more than `size` parts.",
   "run_mode": "automated",
   "helps": [
    "roblox-performance-streaming"
@@ -3548,6 +3572,7 @@
     "6 unit assertions run in the standalone Luau VM on the server (user star, time and memory limits)"
    ]
   },
+  "v2_amendment": "Prompt starts with a Roblox mention so that STAR routes it to its Roblox profile (without one, STAR treats a Roblox API question as a quick 650-token chat answer).",
   "split": "development"
  }
 ]
