@@ -223,3 +223,43 @@ def test_prompt_injection_is_refused_as_project_lesson(tmp_path):
         result = watcher.nominate(record["observation_id"], home=home, project="STAR")
         assert result["status"] == "refused"
         assert result["automatically_trusted"] is False
+
+
+
+def test_daily_source_schedule_is_opt_in_and_monotonic_per_check(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    moment = datetime(2026, 10, 11, 16, 0, tzinfo=timezone.utc)
+    with ResearchWatcher(tmp_path / "db.sqlite") as watcher:
+        assert set(watcher.due_sources(now_at=moment)) == set(SOURCES)
+        with _client(lambda request: _page(
+            "The official docs cover Lua annotations and checked local tooling."
+        )) as client:
+            assert watcher.check("luau-typechecking", client=client)["outcome"] == "baseline"
+        # Even an error should not be hammered each hour by the scheduler.
+        with _client(lambda request: httpx.Response(503)) as client:
+            assert watcher.check("roblox-studio-mcp", client=client)["outcome"] == "error"
+        assert "luau-typechecking" not in watcher.due_sources(
+            now_at=datetime.now(timezone.utc)
+        )
+        assert "roblox-studio-mcp" not in watcher.due_sources(
+            now_at=datetime.now(timezone.utc)
+        )
+        future = datetime.now(timezone.utc) + timedelta(days=2)
+        assert set(watcher.due_sources(now_at=future)) == set(SOURCES)
+        with pytest.raises(ValueError):
+            watcher.due_sources(interval_seconds=300)
+        with pytest.raises(ValueError):
+            watcher.due_sources(interval_seconds=True)
+        with pytest.raises(ValueError):
+            watcher.due_sources(now_at=datetime(2026, 10, 11, 16, 0))
+
+
+def test_daily_research_requires_boolean_owner_setting():
+    from star.desktop_core import Settings
+
+    assert Settings().research_auto_check is False
+    enabled = Settings(research_auto_check=True)
+    enabled.validate()
+    with pytest.raises(ValueError, match="true or false"):
+        Settings(research_auto_check="enabled").validate()
