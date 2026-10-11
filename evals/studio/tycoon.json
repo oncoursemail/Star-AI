@@ -1,0 +1,25 @@
+{
+  "game": "tycoon",
+  "milestones": [
+    {
+      "id": "tycoon.plots",
+      "description": "Workspace.TycoonPlots contains at least one plot Model with an OwnerUserId IntValue and PurchaseButtons Folder.",
+      "check": "local folder = workspace:FindFirstChild(\"TycoonPlots\")\nif not folder or not folder:IsA(\"Folder\") then\n    return false, \"Workspace.TycoonPlots folder is missing\"\nend\nlocal count = 0\nfor _, plot in ipairs(folder:GetChildren()) do\n    if not plot:IsA(\"Model\") then\n        return false, \"TycoonPlots contains a non-Model child\"\n    end\n    local owner = plot:FindFirstChild(\"OwnerUserId\")\n    local buttons = plot:FindFirstChild(\"PurchaseButtons\")\n    if not owner or not owner:IsA(\"IntValue\") then\n        return false, \"Plot needs OwnerUserId IntValue: \" .. plot.Name\n    end\n    if not buttons or not buttons:IsA(\"Folder\") then\n        return false, \"Plot needs PurchaseButtons Folder: \" .. plot.Name\n    end\n    count = count + 1\nend\nif count == 0 then\n    return false, \"Need at least one tycoon plot\"\nend\nreturn true, \"Found \" .. tostring(count) .. \" structurally complete plot models\""
+    },
+    {
+      "id": "tycoon.purchase_server",
+      "description": "ReplicatedStorage.TycoonRemotes.Purchase is a RemoteEvent, and ServerScriptService.PurchaseHandler has server OnServerEvent, OwnerUserId and Cash source signatures.",
+      "check": "local remotes = game:GetService(\"ReplicatedStorage\"):FindFirstChild(\"TycoonRemotes\")\nif not remotes or not remotes:IsA(\"Folder\") then\n    return false, \"TycoonRemotes folder is missing\"\nend\nlocal remote = remotes:FindFirstChild(\"Purchase\")\nif not remote or not remote:IsA(\"RemoteEvent\") then\n    return false, \"Purchase RemoteEvent is missing\"\nend\nlocal handler = game:GetService(\"ServerScriptService\"):FindFirstChild(\"PurchaseHandler\")\nif not handler or not handler:IsA(\"Script\") then\n    return false, \"Server PurchaseHandler Script is missing\"\nend\nif not handler.Enabled or handler.RunContext == Enum.RunContext.Client then\n    return false, \"PurchaseHandler must run on the server\"\nend\nlocal source = handler.Source\nif not source:find(\"OnServerEvent:Connect\", 1, true) then\n    return false, \"PurchaseHandler lacks OnServerEvent source signature\"\nend\nif not source:find(\"OwnerUserId\", 1, true) or not source:find(\"Cash\", 1, true) then\n    return false, \"PurchaseHandler lacks owner and currency source signatures\"\nend\nreturn true, \"Purchase remote and server authority source signatures are present\""
+    },
+    {
+      "id": "tycoon.buy_buttons",
+      "description": "Every Buy-prefixed TextButton in StarterGui.TycoonGui has a PurchaseClient LocalScript that calls FireServer and has no direct Cash.Value assignment signature; at least one button exists.",
+      "check": "local gui = game:GetService(\"StarterGui\"):FindFirstChild(\"TycoonGui\")\nif not gui or not gui:IsA(\"ScreenGui\") then\n    return false, \"StarterGui.TycoonGui is missing\"\nend\nlocal count = 0\nfor _, button in ipairs(gui:GetDescendants()) do\n    if button:IsA(\"TextButton\") and button.Name:sub(1, 3) == \"Buy\" then\n        local client = button:FindFirstChild(\"PurchaseClient\")\n        if not client or not client:IsA(\"LocalScript\") then\n            return false, \"Buy button lacks PurchaseClient LocalScript: \" .. button.Name\n        end\n        local source = client.Source\n        if not source:find(\"FireServer(\", 1, true) then\n            return false, \"Buy button does not call the server: \" .. button.Name\n        end\n        if source:match(\"Cash%.Value%s*=\") or source:match(\"leaderstats%.Cash%.Value%s*=\") then\n            return false, \"Buy button source writes Cash.Value: \" .. button.Name\n        end\n        count = count + 1\n    end\nend\nif count == 0 then\n    return false, \"Need at least one Buy-prefixed TextButton\"\nend\nreturn true, \"Found \" .. tostring(count) .. \" server-calling buy buttons without direct Cash.Value assignments\""
+    },
+    {
+      "id": "tycoon.upgrade_assets",
+      "description": "ServerStorage.TycoonUpgrades contains at least two Model assets held on the server rather than in a client GUI.",
+      "check": "local upgrades = game:GetService(\"ServerStorage\"):FindFirstChild(\"TycoonUpgrades\")\nif not upgrades or not upgrades:IsA(\"Folder\") then\n    return false, \"ServerStorage.TycoonUpgrades folder is missing\"\nend\nlocal count = 0\nfor _, child in ipairs(upgrades:GetChildren()) do\n    if child:IsA(\"Model\") then\n        count = count + 1\n    end\nend\nif count < 2 then\n    return false, \"Need two or more upgrade Model assets\"\nend\nreturn true, \"Found \" .. tostring(count) .. \" server-stored upgrade models\""
+    }
+  ]
+}
