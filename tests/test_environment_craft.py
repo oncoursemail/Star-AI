@@ -90,6 +90,7 @@ def test_foliage_script_uses_bone_weights_culling_cleanup_and_is_client_only():
     assert "workspace.GlobalWind" in high
     assert 'GetInstanceRemovedSignal(TAG):Connect(remove)' in high
     assert "Heartbeat" in high and "CFrame.identity" in high
+    assert 'script:GetAttribute("ReduceMotion")' in high
     assert "ServerScriptService" not in high and "RemoteEvent" not in high
     with pytest.raises(ValueError, match="Unknown"):
         foliage_script("unbounded")
