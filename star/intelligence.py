@@ -246,7 +246,21 @@ class LocalIntelligence:
         if name == "star_graphify_explain":
             return self.graph.explain(args["concept"])
         if name == "star_graphify_path":
-            return self.graph.path_between(args["start"], args["end"])
+            route = self.graph.path_between(args["start"], args["end"])
+            if not route.get("found"):
+                return route
+            returned_hops = max(0, len(route["path"]) - 1)
+            truncated = returned_hops < route["hops"]
+            return {
+                **route,
+                "returned_hops": returned_hops,
+                "truncated": truncated,
+                "notice": (
+                    "Only the first 30 path nodes are shown; the destination and "
+                    "remaining relationships are omitted. Do not cite this as "
+                    "a complete dependency path. " if truncated else ""
+                ) + route["notice"],
+            }
         if name == "star_graphify_stats":
             return self.graph.stats()
         raise PermissionError("Unknown intelligence tool")
