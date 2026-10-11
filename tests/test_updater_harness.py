@@ -137,6 +137,7 @@ def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path,
     with _feed(_release("0.9.1", payload), payload, requests) as client:
         original_get_latest = updates.get_latest
         monkeypatch.setattr(updates, "get_latest", lambda: original_get_latest(client))
+        original_stage = updates.stage_installer
         monkeypatch.setattr(
             updates, "stage_installer",
             lambda result, home, progress: original_stage(result, home, client, progress),
@@ -151,7 +152,6 @@ def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path,
                 assert self.pending_update is not None
                 assert self.pending_update.checksum_verified
                 events.append(("shutdown",))
-        original_stage = updates.stage_installer
         bridge = Bridge()
         outcome = prepare_desktop_update(bridge, "test-request", tmp_path)
     assert outcome == {"status": "pending_restart", "version": "0.9.1"}
