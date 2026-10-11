@@ -4,13 +4,14 @@ import {AnimatePresence, motion} from 'motion/react'
 import {ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, File as FileIcon, Globe, ImagePlus, Mic, Paperclip, Plus, Square, Users, X} from 'lucide-react'
 import type {Connection} from './connection'
 import {menuIn} from './motion'
+import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
 
 export type ChatMode = 'fast' | 'auto' | 'agent'
 /** A capability that is either usable now or says exactly why it is not. */
 export type Availability = {ok: boolean; reason?: string}
 
 const MODES: Array<{id: ChatMode; label: string; hint: string}> = [
-  {id: 'fast', label: 'Fast', hint: 'Quick answer. No tools.'},
+  {id: 'fast', label: 'Fast', hint: 'Quick answer. Can read and calculate attached files.'},
   {id: 'auto', label: 'Auto', hint: 'STAR picks the route from your request.'},
   {id: 'agent', label: 'Agent', hint: 'Plans, uses permitted tools, then checks its work. Slower.'},
 ]
@@ -142,6 +143,8 @@ export const IMAGE_SIZES = [
 
 /** The one place a message is written: text, attachments, how STAR should work, and what it will talk to. */
 export function Composer(props: ComposerProps) {
+  const reducedMotion = useStarReducedMotion()
+  const menuVariants = useMotionVariants(menuIn)
   const {inputRef, value, onChange, onSend, onStop, busy, stopping, files, mode, imageMode, teamMode, research, githubSource, connection} = props
   const [composerMenu, setComposerMenu] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
@@ -236,8 +239,8 @@ export function Composer(props: ComposerProps) {
             </button>
             <AnimatePresence>
               {composerMenu && (
-                <motion.div className="composer-menu cmp-menu" data-side={side} role="menu" aria-label="Add to this message" variants={menuIn} initial="hidden" animate="shown" exit="exit" onKeyDown={onMenuKey}>
-                  <MenuItem icon={<Paperclip size={16} />} label="Attach files" hint="Images, video, audio" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
+                <motion.div className="composer-menu cmp-menu" data-side={side} role="menu" aria-label="Add to this message" variants={menuVariants} initial={reducedMotion?false:'hidden'} animate="shown" exit="exit" onKeyDown={onMenuKey}>
+                  <MenuItem icon={<Paperclip size={16} />} label="Attach files" hint="Media, documents and data" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
                   <MenuItem icon={<Mic size={16} />} label="Transcribe audio" hint="Adds the transcript" onSelect={() => pick(props.onTranscribe)} />
                   <MenuItem icon={<ImagePlus size={16} />} label="Create image" hint="On this PC" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
                   <div className="cmp-menu-rule" role="separator" />
@@ -299,7 +302,7 @@ export function Composer(props: ComposerProps) {
             </button>
             <AnimatePresence>
               {statusOpen && (
-                <motion.div className="cmp-status-pop" data-side={side} role="dialog" aria-label="Model connection" variants={menuIn} initial="hidden" animate="shown" exit="exit">
+                <motion.div className="cmp-status-pop" data-side={side} role="dialog" aria-label="Model connection" variants={menuVariants} initial={reducedMotion?false:'hidden'} animate="shown" exit="exit">
                   <p className={'cmp-status-head is-' + connection.tone}>
                     <span className="cmp-dot" aria-hidden="true" />
                     {connection.state}

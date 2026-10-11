@@ -783,3 +783,14 @@ def test_live_speech_recogniser_loads_where_the_switch_says(tmp_path):
     # Given pure silence Whisper may still write a stray word, which is why video pieces below
     # QUIET_LEVEL are not sent to it; here only loading and running on the chosen device is checked.
     assert asr.device in ('cuda', 'cpu') and isinstance(asr.transcribe(b'\x00\x00' * 16000, 16000), str)
+
+
+def test_documents_go_to_the_document_tools_not_to_the_picture_model(tmp_path):
+    notes = tmp_path / 'design.md'
+    notes.write_text('# Shop\nGold buttons.', encoding='utf-8')
+    sheet = tmp_path / 'prices.csv'
+    sheet.write_text('item,price\nsword,10\n', encoding='utf-8')
+    shot = picture(tmp_path / 'shot.png')
+    turn = chat_media.prepare_turn(server_settings(), tmp_path, 'Check the prices against the design', [notes, shot, sheet],
+                                   tmp_path / 'w')
+    assert turn.documents == [notes, sheet] and turn.pictures == [shot] and turn.extras == []

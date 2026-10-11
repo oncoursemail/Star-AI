@@ -309,6 +309,10 @@ def sanitize_event(event: dict) -> dict:
     if kind == 'model_started':
         # Routing and context are ready; the request goes out next (after Studio connects, if it is used).
         return {'phase':'Contacting the model'}
+    if kind == 'documents_started':
+        return {'phase': 'Reading attached documents'}
+    if kind == 'documents_ready':
+        return {'phase': 'Attached documents ready'}
     # An event without wording of its own still reads as a sentence, never as an internal name.
     return {'phase':'STAR is working'}
 
@@ -608,6 +612,7 @@ def launch():
                                    cancelled=self.cancel_chat.is_set)
                 pics=media.pictures
                 full_prompt=media.prompt(prompt)
+                documents=media.documents
                 learned={}
                 def relay(e):
                     # What the turn taught is reported with the result, not as a progress step.
@@ -618,7 +623,7 @@ def launch():
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt)
+                    owner_text=prompt, **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
             if provider_kind(settings)=='lan':
@@ -737,7 +742,7 @@ def launch():
                     elif kind=='image':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Choose images','','Images (*.png *.jpg *.jpeg *.webp)')
                     else:
-                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','Media (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
                     picked=[]
                     for name in names[:8]:
                         path=Path(name).resolve(strict=True)

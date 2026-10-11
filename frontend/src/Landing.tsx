@@ -77,6 +77,7 @@ export function Landing(){
    <section className="sw-hero" aria-labelledby="sw-hero-title">
     <div className="sw-wrap sw-hero-grid">
      <div className="sw-hero-copy">
+      <p className="sw-kicker sw-enter" style={delay(0)}>STAR INTELLIGENCE / LOCAL-FIRST AI</p>
       <h1 id="sw-hero-title" className="sw-enter" style={delay(0)}>Make the things you&nbsp;imagine.</h1>
       <p className="sw-lede sw-enter" style={delay(90)}>
        STAR is a local-first AI workspace for Windows. It runs a model on your own hardware, works inside
@@ -86,6 +87,9 @@ export function Landing(){
        <a className="sw-btn sw-btn-primary" href="#download"><ArrowDown size={18} aria-hidden="true"/> Download for Windows</a>
        <a className="sw-btn sw-btn-quiet" href="#product">See STAR in action</a>
       </div>
+      <ul className="sw-hero-facts sw-enter" style={delay(220)} aria-label="Local workspace essentials">
+       <li>Windows workspace</li><li>Local model option</li><li>Your project context</li>
+      </ul>
      </div>
      <div className="sw-hero-side">
      <StarConstruction/>

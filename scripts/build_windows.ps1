@@ -19,7 +19,7 @@ try {
 } finally { Pop-Location }
 & $python -m pytest -q
 if ($LASTEXITCODE -ne 0) { throw 'Tests failed; aborting build.' }
-& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR --icon assets/star.ico --add-data "frontend/dist;frontend/dist" --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel --hidden-import mcp.client.session --hidden-import mcp.client.stdio --hidden-import mcp.types --collect-all faster_whisper --collect-all ctranslate2 --collect-all av --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules cryptography star_desktop.py
+& $python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR --icon assets/star.ico --add-data "frontend/dist;frontend/dist" --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel --hidden-import mcp.client.session --hidden-import mcp.client.stdio --hidden-import mcp.types --collect-all faster_whisper --collect-all ctranslate2 --collect-all av --collect-all pypdf --collect-all docx --collect-all pptx --collect-all openpyxl --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules cryptography star_desktop.py
 if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
 $exe = (Resolve-Path '.\dist\STAR\STAR.exe').Path
 $doctor = Start-Process -FilePath $exe -ArgumentList '--doctor' -Wait -PassThru
