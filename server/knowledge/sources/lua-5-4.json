@@ -18,7 +18,7 @@
       "attribution": "Preserve the Lua.org/PUC-Rio copyright and MIT licence notice in substantial copies; credit reference manual authors and original page URL.",
       "conditions": "The Lua reference manuals are explicitly made available under the Lua licence.",
       "evidence_url": "https://www.lua.org/manual/5.4/manual.html",
-      "evidence_quote": "Freely available under the terms of the"
+      "evidence_quote": "Freely available under the terms of the Lua license."
     },
     "code_samples": {
       "id": "MIT",
