@@ -21,7 +21,7 @@ import re
 import secrets
 
 from .policy import BLOCKED_TOOLS, WRITE_TOOLS, classify
-from .roblox_cloud import DENIED_PLACE_IDS
+from .roblox_cloud import DENIED_PLACE_IDS, DENIED_UNIVERSE_IDS
 
 PLACE_MARK, EDIT_MARK = "STAR_PLACE ", "STAR_EDIT "
 SANDBOX_ATTRIBUTE = "StarSandbox"
@@ -210,8 +210,9 @@ def studios(result) -> list[dict]:
 
 
 def name_is_denied(name: str) -> bool:
-    """A deny-listed place id in the instance's display name: no question is asked of that place."""
-    return any(int(number) in DENIED_PLACE_IDS for number in re.findall(r"\d{6,19}", str(name)))
+    """A deny-listed place or experience id in the instance's display name: no question is asked of that place."""
+    denied = DENIED_PLACE_IDS | DENIED_UNIVERSE_IDS
+    return any(int(number) in denied for number in re.findall(r"\d{6,19}", str(name)))
 
 
 async def identify(session, studio_id: str, *, tools: set[str], studio_name: str = "") -> PlaceIdentity | None:
@@ -234,7 +235,8 @@ async def identify(session, studio_id: str, *, tools: set[str], studio_name: str
 def judge(identity: PlaceIdentity | None, *, opted_in: bool, own_places: bool = False,
           own_account_id: int | None = None, studio_name: str = "") -> Verdict:
     """The sandbox rule. Pure: the same facts always give the same answer."""
-    if name_is_denied(studio_name) or (identity and (identity.place_id in DENIED_PLACE_IDS)):
+    if name_is_denied(studio_name) or (identity and (identity.place_id in DENIED_PLACE_IDS
+                                                     or identity.game_id in DENIED_UNIVERSE_IDS)):
         return Verdict(False, "denied", "This place is on STAR's deny-list. STAR never edits it. Open a new "
                                          "Baseplate for STAR to build in.", identity)
     if identity is None:

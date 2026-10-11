@@ -140,7 +140,7 @@ def test_the_start_up_summary_never_calls_roblox_and_never_holds_the_key(tmp_pat
     assert roblox_state(tmp_path) == {
         "key_present": False, "source": "", "state": "no_key", "message": "No Roblox API key is connected.",
         "last_check": None, "test_experience": None, "pending_actions": 0,
-        "denied_place_ids": sorted(rc.DENIED_PLACE_IDS)}
+        "denied_place_ids": sorted(rc.DENIED_PLACE_IDS), "denied_universe_ids": sorted(rc.DENIED_UNIVERSE_IDS)}
     monkeypatch.setenv("ROBLOX_OPEN_CLOUD_API_KEY", KEY)
     shown = roblox_state(tmp_path)                                         # no client was given: a call would fail
     assert shown["key_present"] and shown["source"] == "environment" and KEY not in json.dumps(shown)

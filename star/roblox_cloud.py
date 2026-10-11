@@ -35,6 +35,9 @@ ENV_NAMES = ("ROBLOX_OPEN_CLOUD_API_KEY", "ROBLOX_API_KEY", "STAR_ROBLOX_READ_AP
 KEY_FILE_ENV = "STAR_ROBLOX_KEY_FILE"      # tests and servers point this at their own file
 # Standing rule: the owner's main game is never a target, whatever else is configured.
 DENIED_PLACE_IDS = frozenset({129870808752914})
+# The experience (universe) that place belongs to, from Roblox's public place-to-universe lookup on
+# 2026-10-11. No place of that experience is a target, whichever one is its start place.
+DENIED_UNIVERSE_IDS = frozenset({10767753099})
 
 MAX_RESPONSE = 2_000_000
 MAX_PLACE_BYTES = 8_000_000
@@ -442,6 +445,7 @@ class RobloxCloud:
             "test_experience": saved.get("test_experience"),
             "pending_actions": sum(1 for item in self.actions() if item["status"] == "pending"),
             "denied_place_ids": sorted(DENIED_PLACE_IDS),
+            "denied_universe_ids": sorted(DENIED_UNIVERSE_IDS),
         }
 
     def _fingerprint(self) -> str:
@@ -594,7 +598,8 @@ class RobloxCloud:
     def check_experience(self, universe_id, place_id, *, account: int | None = None) -> dict:
         """Read both from Roblox and refuse anything that is not STAR's own private test place."""
         universe_id, place_id = positive_id(universe_id, "universe_id"), positive_id(place_id, "place_id")
-        if place_id in DENIED_PLACE_IDS:
+        if place_id in DENIED_PLACE_IDS or universe_id in DENIED_UNIVERSE_IDS:
+            # Decided from the two numbers alone: nothing is asked of Roblox about a denied place.
             raise CloudError("That place is on STAR's deny-list and can never be a target")
         account = account or self._account_id()
         reply = self._cloud().call("universe", universe=universe_id)

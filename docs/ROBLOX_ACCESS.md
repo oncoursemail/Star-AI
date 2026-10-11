@@ -59,7 +59,8 @@ Open Cloud can update an existing place; it cannot create an experience. The own
 
 STAR accepts it only when Roblox confirms, at that moment and again before every write, that the experience is
 owned by the account the key belongs to (not a group, not another user), is private, and is not on the
-deny-list. The deny-list is in code (`DENIED_PLACE_IDS`) and wins over every setting.
+deny-list. The deny-list is in code (`DENIED_PLACE_IDS`, and `DENIED_UNIVERSE_IDS` for the experience that
+place belongs to, so no other place of it can be chosen either) and wins over every setting.
 
 ## 3. What the model can do
 
@@ -169,8 +170,9 @@ only when **Studio edits** is on and the place is
   **Also places of STAR's own account** switched on.
 
 Everything else is read-only whatever the settings say: any other published place, an unsaved place that already
-has scripts STAR did not make, a place STAR could not identify, and always the deny-list. A place whose Studio
-title carries a deny-listed place id is not even asked the question.
+has scripts STAR did not make, a place STAR could not identify, and always the deny-list (by place id and by
+the id of its experience, `game.GameId`). A place whose Studio title carries a deny-listed id is not even asked
+the question.
 
 **Edits are recorded.** Every edit goes through `GuardedStudio`: a script edit stores the script's earlier text; a
 Luau edit is wrapped so that it is one undo step in Studio (`ChangeHistoryService`), and what it added is tagged

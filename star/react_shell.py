@@ -375,7 +375,8 @@ def roblox_state(home: Path) -> dict:
         return RobloxCloud(home=home).status()
     except Exception:
         return {'key_present': False, 'source': '', 'state': 'no_key', 'message': '', 'last_check': None,
-                'test_experience': None, 'pending_actions': 0, 'denied_place_ids': []}
+                'test_experience': None, 'pending_actions': 0, 'denied_place_ids': [],
+                'denied_universe_ids': []}
 
 
 def file_allowed(path: Path, approved: set[Path]) -> Path:
