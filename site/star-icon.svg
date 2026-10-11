@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="STAR">
-<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFE69A"/><stop offset="1" stop-color="#FFC147"/></linearGradient></defs>
-<rect width="64" height="64" rx="16" fill="#181C25"/>
-<path d="M32 9 37.6 26.4 55 32 37.6 37.6 32 55 26.4 37.6 9 32 26.4 26.4Z" fill="url(#g)"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#090B0E"/><g transform="translate(7 7) scale(.78125)"><path fill="#E8BF76" d="M28 3h8l5 20 20 5v8l-20 5-5 20h-8l-5-20-20-5v-8l20-5Z"/><path fill="#B99559" d="M32 32V3h4l5 20ZM32 32l9-9 20 5v4ZM32 32l9 9-5 20h-4ZM32 32l-9 9-20-5v-4Z"/></g></svg>

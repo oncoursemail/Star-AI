@@ -1,42 +1,58 @@
 """GitHub App installation authentication and developer-branch publishing.
 
 Requires one-time creation/installation by GitHub account owner. NEVER commits key.
-No direct main-branch changes, no PR merges, no workflow edits.
+No direct main-branch changes, no PR merges, no workflow edits. Branches are cut from, and draft pull
+requests point at, the configured work branch (STAR_GITHUB_BASE_BRANCH); never the default branch.
 """
 import os
 import re
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 import httpx
 import jwt
 
-from .version import PUBLIC_REPO
+from .version import REPO
 
 BRANCH = re.compile(r"^star/[a-z0-9][a-z0-9._-]{0,49}$")
 SAFE_REPO = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+NO_MAIN = ("STAR opens pull requests only against a star/<name> work branch, never main or the repository's "
+           "default branch. Set STAR_GITHUB_BASE_BRANCH to the work branch.")
 
 
 def valid_upload_path(path: str) -> bool:
-    """Source-only allowlist. Excludes local memory, secrets and CI policies."""
-    if path.startswith(("star/", "docs/", "tests/")) or path in {"README.md", "requirements.txt", "pyproject.toml"}:
-        suffix = path.rsplit("/", 1)[-1]
-        if ".." in path.split("/") or suffix.startswith(".") or "\\" in path:
-            return False
-        return suffix.endswith((".py", ".md", ".toml", ".txt"))
-    return False
+    """The only files STAR's own GitHub App may write to a branch: skill modules and their pages.
+
+    Exactly the self-builder's rule (`star.selfbuild.skill_path`; a test keeps the two equal):
+    `star/skills/*.py` except the package `__init__.py`, and `docs/skills/*.md`. Everything STAR is
+    judged or limited by stays out of its reach: tests, evaluation tasks and results, the gate, the
+    policy, this file, the build and dependency files, workflows and the rest of `star/` and `docs/`.
+    """
+    if not isinstance(path, str) or not path or len(path) > 170 or "\\" in path:
+        return False
+    parts = PurePosixPath(path)
+    if (path != parts.as_posix() or parts.is_absolute() or ".." in parts.parts
+            or any(part.startswith(".") for part in parts.parts)):
+        return False
+    if path == "star/skills/__init__.py":
+        return False  # what gets imported automatically stays under human control
+    return ((path.startswith("star/skills/") and path.endswith(".py")) or
+            (path.startswith("docs/skills/") and path.endswith(".md")))
 
 
 class GitHubApp:
-    def __init__(self, app_id: str, installation_id: str, key_file: Path, repo: str):
+    def __init__(self, app_id: str, installation_id: str, key_file: Path, repo: str, base_branch: str = ""):
         if not (app_id.isdigit() and installation_id.isdigit() and SAFE_REPO.fullmatch(repo)):
             raise ValueError("GitHub App config requires numeric IDs and owner/repo")
+        if base_branch and not BRANCH.fullmatch(base_branch):
+            raise ValueError(NO_MAIN)
         if not key_file.is_file():
             raise ValueError("GitHub App private key is missing")
         if key_file.resolve().is_relative_to(Path(__file__).resolve().parents[1]):
             raise ValueError("GitHub App private key must be outside the project repository")
         self.repo = repo
+        self.base_branch = base_branch
         self.app_id = app_id
         self.installation_id = installation_id
         self.key_file = key_file
@@ -79,22 +95,38 @@ class GitHubApp:
         return await self.request("GET", "/installation/repositories?per_page=100")
 
     async def create_branch(self, name: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('Public distribution is controlled by tested GitHub Actions, not agent work branches')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App can modify only the canonical public STAR source repository')
         if not BRANCH.fullmatch(name):
             raise ValueError("Only names star/<safe-name> are permitted")
         repo = quote(self.repo, safe="/")
-        info = await self.request("GET", f"/repos/{repo}")
-        base = info["default_branch"]
-        ref = await self.request("GET", f"/repos/{repo}/git/ref/heads/{quote(base, safe='')}")
+        base = await self.work_base(name)
+        ref = await self.request("GET", f"/repos/{repo}/git/ref/heads/{quote(base, safe='/')}")
         await self.request("POST", f"/repos/{repo}/git/refs", json={"ref": "refs/heads/" + name, "sha": ref["object"]["sha"]})
         return base
 
+    async def work_base(self, head: str) -> str:
+        """The branch STAR's new branches are cut from and its pull requests point at.
+
+        Always the configured `star/<name>` work branch. Never the repository's default branch
+        (`main` publishes a release when something is merged into it), whatever that branch is called,
+        and never the branch being proposed. Nothing is created when this refuses.
+        """
+        base = self.base_branch
+        if not base or not BRANCH.fullmatch(base) or base == head:
+            raise PermissionError(NO_MAIN)
+        info = await self.request("GET", f"/repos/{quote(self.repo, safe='/')}")
+        if not isinstance(info, dict) or not info.get("default_branch") or base == info["default_branch"]:
+            raise PermissionError(NO_MAIN)
+        return base
+
     async def write_branch_file(self, branch: str, path: str, raw: bytes, message: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('The agent cannot upload development source to public STAR downloads')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App cannot upload source to a non-STAR repository')
         if not BRANCH.fullmatch(branch) or not valid_upload_path(path):
             raise ValueError("Branch or file outside STAR's allowed write scope")
+        if branch == self.base_branch:
+            raise PermissionError("STAR writes to its own proposal branch, not straight into the work branch")
         if len(raw) > 300_000:
             raise ValueError("Text file is too large for this starter")
         import base64
@@ -113,10 +145,12 @@ class GitHubApp:
         return await self.request("PUT", endpoint, json=payload)
 
     async def open_pr(self, base: str, head: str, title: str, body: str):
-        if self.repo == PUBLIC_REPO:
-            raise PermissionError('Public release PRs must use the reviewed publisher workflow')
+        if self.repo != REPO:
+            raise PermissionError('STAR GitHub App cannot open development PRs outside the STAR source repository')
         if not BRANCH.fullmatch(head):
             raise ValueError("Not a STAR work branch")
+        if not isinstance(base, str) or not BRANCH.fullmatch(base) or base != await self.work_base(head):
+            raise PermissionError(NO_MAIN)
         return await self.request("POST", f"/repos/{quote(self.repo, safe='/')}/pulls",
                                   json={"title": title[:200], "body": body[:10000], "base": base, "head": head, "draft": True})
 
@@ -127,4 +161,5 @@ def from_env() -> GitHubApp:
         raise ValueError("Configure STAR_GITHUB_PRIVATE_KEY_FILE outside the repository")
     return GitHubApp(os.environ.get("STAR_GITHUB_APP_ID", ""),
                      os.environ.get("STAR_GITHUB_INSTALLATION_ID", ""), Path(key).expanduser(),
-                     os.environ.get("STAR_GITHUB_REPO", ""))
+                     os.environ.get("STAR_GITHUB_REPO", ""),
+                     base_branch=os.environ.get("STAR_GITHUB_BASE_BRANCH", "").strip())

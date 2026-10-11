@@ -1,0 +1,118 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "UI-11"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-ui-layout",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "c6cf1a8387d5",
+  "started_at": "2026-10-11T10:06:21+00:00",
+  "waited_for_lock_s": 0.4,
+  "finished_at": "2026-10-11T10:07:44+00:00",
+  "rescored_at": "2026-10-11T10:38:10+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "UI-11": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "6a5c0f3b0019b058",
+   "reasons": [
+    "forbid:hack_offset: the hard-coded -150 pixel offset must go (found: '-150')"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:safe_area",
+     "ok": true
+    },
+    {
+     "id": "forbid:hack_offset",
+     "ok": false,
+     "detail": "the hard-coded -150 pixel offset must go (found: '-150')"
+    },
+    {
+     "id": "forbid:insets_none",
+     "ok": true
+    }
+   ],
+   "seconds": 82.0,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 2827,
+   "answer_sha256": "3997e215405c1bd05ddacf2a952087c29e43faa41e2ecca1f60f39979c618b6f",
+   "packs": [
+    "roblox-ui-layout"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 391
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-ui-layout"
+     ],
+     "chars": 1064
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The issue is that `ScreenInsets` is set to `Enum.ScreenInsets.None`, which ignores safe areas (camera notches, top status bars, Roblox UI). On phones with cutouts, this causes UI in the top-right to be hidden.\n\nThe fix is to use `Enum.ScreenInsets.DeviceSafeInsets` (or the default `CoreUISafeInsets`) so the `ScreenGui`'s coordinate space respects safe areas. Since the label is positioned using `UDim2.new(1, -150, 0, 0)` with `AnchorPoint = Vector2.new(1, 0)`, it's already positioned relative to the container's bounds — which are inset when safe areas are enabled. No hard-coded pixel offsets needed.\n\nHere's the corrected script:\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.ScreenInsets = Enum.ScreenInsets.DeviceSafeInsets  -- Respect safe areas (notches, top bar)\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui\n```\n\n**Why this works:**\n- `DeviceSafeInsets` makes the `ScreenGui`'s coordinate space shrink to avoid device cutouts and the Roblox top bar [1].\n- The label's position (`UDim2.new(1, -150, 0, 0)`) is already relative to the container's right edge (scale `1`), so it automatically stays within the safe area on all devices [2].\n- On PC (no cutouts), `DeviceSafeInsets` has no visible effect, so the label appears at the same location as before [4].\n\n**Citations:**\n- [1] Create HUD meters > Create a screen container > Utilize safe areas — explains `ScreenInsets` and `DeviceSafeInsets`.\n- [2] Create HUD meters > Construct the health meter > Position the frame — explains `UDim2` scale-based positioning.\n- [4] Cross-platform development > User interface — confirms scale-based positioning works across platforms.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create HUD meters > Create a screen container > Utilize safe areas](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#utilize-safe-areas) · cited\n2. [Create HUD meters > Construct the health meter > Position the frame](https://create.roblox.com/docs/tutorials/use-case-tutorials/ui/create-hud-meters#position-the-frame) · cited\n3. [Mobile input > Device orientation](https://create.roblox.com/docs/input/mobile#device-orientation) · retrieved, not cited\n4. [Cross-platform development > User interface](https://create.roblox.com/docs/projects/cross-platform#user-interface) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 0,
+  "fail": 1,
+  "error": 0,
+  "scored": 1,
+  "pass_rate": 0.0,
+  "median_seconds": 82.0
+ }
+}

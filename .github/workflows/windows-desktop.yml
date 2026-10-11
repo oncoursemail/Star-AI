@@ -38,6 +38,22 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      - name: Stamp exact source provenance for app diagnostics
+        shell: pwsh
+        env:
+          STAR_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $source = (git rev-parse HEAD).Trim()
+          $head = $env:STAR_PR_HEAD_SHA
+          if (-not $head) { $head = $source }
+          $payload = @{
+            schema = 1
+            source_commit = $source
+            head_commit = $head
+            build_event = $env:GITHUB_EVENT_NAME
+            run_id = [string]$env:GITHUB_RUN_ID
+          } | ConvertTo-Json -Compress
+          [System.IO.File]::WriteAllText('star/build-info.json', $payload, (New-Object System.Text.UTF8Encoding $false))
       - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
@@ -89,12 +105,12 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
-            --add-data 'frontend/dist;frontend/dist' `
+            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' --add-data 'star/skill_packs;star/skill_packs' `
             --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
             --collect-all ctranslate2 --collect-all av `
-            --collect-submodules pyttsx3 --collect-submodules jwt `
+            --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules keyring `
             --collect-submodules cryptography star_desktop.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
       - name: Smoke test actual packaged EXE
@@ -109,6 +125,16 @@ jobs:
           $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
           $ui = Start-Process -FilePath $exe -ArgumentList '--ui-doctor' -PassThru -Wait
           if ($null -eq $ui.ExitCode -or $ui.ExitCode -ne 0) { throw "STAR React UI bundle missing: $($ui.ExitCode)" }
+      - name: Verify binary source attribution matches pull request
+        shell: pwsh
+        env:
+          STAR_EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $exe = (Resolve-Path 'dist/STAR/STAR.exe').Path
+          $build = Start-Process -FilePath $exe -ArgumentList '--build-doctor' -Wait -PassThru
+          if ($null -eq $build.ExitCode -or $build.ExitCode -ne 0) {
+            throw "STAR packaged build SHA mismatch or missing metadata: $($build.ExitCode)"
+          }
       - name: Zip portable build
         shell: pwsh
         run: |
@@ -124,13 +150,48 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'STAR installer build failed' }
           $setup = "dist/STAR-Setup-v$version.exe"
           if (-not (Test-Path $setup)) { throw "Missing $setup" }
+      - name: Create standalone SHA-256 file for manual preview downloads
+        shell: pwsh
+        run: |
+          $version = (python -c "from star.version import __version__;print(__version__)").Trim()
+          $setup = "dist/STAR-Setup-v$version.exe"
+          $portable = 'STAR-Genesis-Windows-x64.zip'
+          if (-not (Test-Path $setup) -or -not (Test-Path $portable)) { throw 'Preview build files are missing' }
+          $setupHash = (Get-FileHash -Path $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          $zipHash = (Get-FileHash -Path $portable -Algorithm SHA256).Hash.ToLowerInvariant()
+          @("$setupHash  STAR-Setup-v$version.exe", "$zipHash  STAR-Genesis-Windows-x64.zip") |
+            Set-Content -Encoding utf8 'STAR-PREVIEW-SHA256SUMS.txt'
       - name: Upload testable executables
         uses: actions/upload-artifact@v7
         with:
-          name: STAR-Windows-vNext
+          name: ${{ github.event_name == 'pull_request' && 'STAR-Fast-Brain-Preview' || 'STAR-Windows-vNext' }}
           path: |
             STAR-Genesis-Windows-x64.zip
             dist/STAR-Setup-v*.exe
+            STAR-PREVIEW-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+      # Review artifacts are intentionally separate so each compressed file
+      # stays below connector/download size limits and is easy to verify.
+      # Stable releases keep using STAR-Windows-vNext above unchanged.
+      - name: Upload Ultimate preview Windows installer
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: STAR-Ultimate-Windows-Setup
+          path: |
+            dist/STAR-Setup-v*.exe
+            STAR-PREVIEW-SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload Ultimate preview portable ZIP
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v7
+        with:
+          name: STAR-Ultimate-Windows-Portable
+          path: |
+            STAR-Genesis-Windows-x64.zip
+            STAR-PREVIEW-SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -185,60 +246,3 @@ jobs:
           gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
             --repo "$STAR_REPO" --target "$STAR_COMMIT" --title "STAR Intelligence $TAG" --generate-notes
 
-
-  publish-public:
-    # One-time owner setup: create separate public repository, configure an
-    # expiring fine-grained PAT on *that repo only*, set Actions secret + var.
-    # Never publish the private source repository to the public download repo.
-    needs: [publish-release]
-    if: ${{ github.ref == 'refs/heads/main' && vars.STAR_PUBLIC_REPO != '' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.11'
-      - uses: actions/download-artifact@v8
-        with:
-          name: STAR-Windows-vNext
-          path: release-assets
-      - name: Publish compiled binaries and website only
-        env:
-          GH_TOKEN: ${{ secrets.STAR_PUBLIC_RELEASE_TOKEN }}
-          PUBLIC_REPO: ${{ vars.STAR_PUBLIC_REPO }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo '::notice::STAR_PUBLIC_RELEASE_TOKEN not configured; skipping public publishing.'
-            exit 0
-          fi
-          if [[ "$PUBLIC_REPO" != 'oncoursemail/Star-Intelligence-Downloads' ]]; then
-            echo '::error::Public repo does not match the approved destination.'
-            exit 1
-          fi
-          gh repo view "$PUBLIC_REPO" --json name,isPrivate >/dev/null
-          if [[ "$(gh repo view "$PUBLIC_REPO" --json isPrivate --jq .isPrivate)" != 'false' ]]; then
-            echo '::error::STAR public downloads repository must be PUBLIC.'
-            exit 1
-          fi
-          VERSION="$(python -c 'from star.version import __version__;print(__version__)')"
-          TAG="v$VERSION"
-          SETUP="$(find release-assets -type f -name "STAR-Setup-$TAG.exe" -print -quit)"
-          PORTABLE="$(find release-assets -type f -name 'STAR-Genesis-Windows-x64.zip' -print -quit)"
-          test -n "$SETUP" && test -f "$SETUP"
-          test -n "$PORTABLE" && test -f "$PORTABLE"
-          mkdir -p release-ready
-          cp "$SETUP" "release-ready/STAR-Setup-$TAG.exe"
-          cp "$PORTABLE" release-ready/STAR-Genesis-Windows-x64.zip
-          ( cd release-ready && sha256sum "STAR-Setup-$TAG.exe" STAR-Genesis-Windows-x64.zip ) > release-ready/SHA256SUMS.txt
-          if gh release view "$TAG" --repo "$PUBLIC_REPO" >/dev/null 2>&1; then
-            echo "Public release $TAG already exists; keeping original verified files."
-          else
-            gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
-              --repo "$PUBLIC_REPO" --target main --title "STAR Intelligence $TAG" \
-              --notes "STAR Windows build; SHA-256 verified. Source lives in a separate private repository."
-          fi
-          python scripts/publish_public_site.py --repo "$PUBLIC_REPO" --site site

@@ -131,6 +131,37 @@ def test_graphify_local_relationships_and_provenance(tmp_path):
     assert not graph.path_between("non-existent concept", "Inventory UI")["found"]
 
 
+def test_graphify_prefers_the_symbol_over_a_sentence_that_mentions_it(tmp_path):
+    """Real Graphify output labels a function "name()" and also emits docstring nodes.
+
+    Asking about run_task must resolve to the function, not to a test docstring that mentions it.
+    """
+    graph_dir = tmp_path / "graphify-out"
+    graph_dir.mkdir()
+    data = {
+        "directed": False,
+        "nodes": [
+            {"id": "doc1", "label": "A private app-data folder and a fake model client behind run_task.",
+             "source_file": "tests/test_first_token.py"},
+            {"id": "fn1", "label": "run_task()", "source_file": "star/desktop_core.py"},
+            {"id": "m1", "label": ".connection_for()", "source_file": "star/providers.py"},
+        ],
+        "links": [
+            {"source": "fn1", "target": "m1", "relation": "calls", "confidence": "EXTRACTED",
+             "source_file": "star/desktop_core.py"},
+            {"source": "doc1", "target": "fn1", "relation": "rationale_for", "confidence": "EXTRACTED",
+             "source_file": "tests/test_first_token.py"},
+        ],
+    }
+    (graph_dir / "graph.json").write_text(json.dumps(data))
+    graph = GraphifyGraph(tmp_path)
+    assert graph.explain("run_task")["node"]["label"] == "run_task()"
+    assert graph.explain("run_task()")["node"]["label"] == "run_task()"
+    assert graph.explain("connection_for")["node"]["label"] == ".connection_for()"
+    route = graph.path_between("run_task", "connection_for")
+    assert route["found"] and route["hops"] == 1
+
+
 def test_graphify_missing_invalid_and_escape(tmp_path):
     graph = GraphifyGraph(tmp_path)
     assert not graph.available()

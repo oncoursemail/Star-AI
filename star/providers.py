@@ -1,0 +1,396 @@
+"""Strict provider routing and OS-backed credentials for STAR Intelligence.
+
+Never accept a model-supplied base URL or store API tokens in settings/SQLite.
+The desktop may use a named hosted model only after the owner configures a key.
+
+Every provider has a typed kind, and callers branch on the kind, never on the id:
+
+  local  the managed llama.cpp brain on this PC's loopback interface (no key)
+  lan    STAR Server: an owner-entered private address on the local network,
+         OpenAI-compatible, always with an API key
+  cloud  a fixed HTTPS vendor with the owner's own key
+
+The LAN address is typed by the owner in Settings. It is validated here, at the
+one place every model call passes through, so the server key can only ever be
+sent only to a validated private address with no DNS lookup.
+"""
+from __future__ import annotations
+from dataclasses import dataclass
+import ipaddress
+import os
+from typing import Literal
+from urllib.parse import urlsplit
+
+SERVICE = "STAR Intelligence"
+ProviderKind = Literal["local", "lan", "cloud"]
+
+@dataclass(frozen=True)
+class Provider:
+    label: str
+    base_url: str
+    env_var: str
+    suggested_model: str
+    kind: ProviderKind = "cloud"
+    base_url_from_settings: bool = False  # the owner's Settings hold the address
+    requires_key: bool = True
+    default_timeout: float = 55.0         # seconds of silence before one request is dropped
+    allow_parallel: bool = True           # may STAR issue two model calls at once?
+
+PROVIDERS: dict[str, Provider] = {
+    "groq": Provider("GroqCloud", "https://api.groq.com/openai/v1", "GROQ_API_KEY", "openai/gpt-oss-20b"),
+    "openrouter": Provider("OpenRouter", "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY", "openrouter/free"),
+    "gemini": Provider("Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai/", "GEMINI_API_KEY", "gemini-2.5-flash-lite"),
+    "cerebras": Provider("Cerebras", "https://api.cerebras.ai/v1", "CEREBRAS_API_KEY", "gpt-oss-120b"),
+}
+LOCAL = "local"
+STAR_SERVER = "star_server"
+# Private providers use owner-entered endpoints. The LAN endpoint is checked
+# before STAR reads the server credential.
+PRIVATE_PROVIDERS: dict[str, Provider] = {
+    LOCAL: Provider("On-device (private)", "", "", "", kind="local",
+                    base_url_from_settings=True, requires_key=False,
+                    default_timeout=95.0, allow_parallel=False),
+    STAR_SERVER: Provider("STAR Server (LAN)", "", "STAR_SERVER_API_KEY", "", kind="lan",
+                          base_url_from_settings=True, requires_key=True,
+                          default_timeout=600.0, allow_parallel=True),
+}
+ALL_PROVIDERS: dict[str, Provider] = {**PRIVATE_PROVIDERS, **PROVIDERS}
+SEARCH_KEYS = {"brave": "BRAVE_SEARCH_API_KEY", "tavily": "TAVILY_API_KEY"}
+KEY_ENV = {**{name: provider.env_var for name, provider in ALL_PROVIDERS.items()
+              if provider.requires_key}, **SEARCH_KEYS}
+
+# Use explicit ranges: ipaddress.is_private also includes non-LAN addresses.
+# Left out on purpose: link-local (169.254.0.0/16, fe80::/10), where cloud metadata services
+# answer, and carrier-grade NAT (100.64.0.0/10), which is shared with a provider's other
+# customers and holds one cloud's metadata service (100.100.100.200).
+_LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",  # RFC 1918
+    "127.0.0.0/8",                                    # loopback
+    "::1/128", "fc00::/7",                            # IPv6 loopback, ULA
+))
+# A metadata service that sits inside an allowed range (the IPv6 unique local block).
+_METADATA_ADDRESSES = frozenset({ipaddress.ip_address("fd00:ec2::254")})
+_LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
+
+
+def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server") -> str:
+    """Return a canonical local-network URL or raise ValueError.
+
+    Allow only explicitly listed private IP ranges; hostnames are refused until
+    connection-level DNS pinning prevents credential exfiltration via rebinding.
+    """
+    hint = _LAN_HINT if path == "/v1" else _LAN_HINT.replace(":8080/v1", ":8091")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Enter your {label} address. " + hint)
+    if len(value) > 200 or any(ch.isspace() or ord(ch) < 33 or ord(ch) == 127 for ch in value):
+        raise ValueError(f"{label} address contains spaces or control characters")
+    if any(ch in value for ch in "@?#%\\"):
+        raise ValueError(f"{label} address must not contain credentials, a query, a fragment or % escapes")
+    try:
+        url = urlsplit(value)
+        port = url.port
+    except ValueError as exc:
+        raise ValueError(f"{label} address is not a valid URL. " + hint) from exc
+    if url.scheme not in ("http", "https"):
+        raise ValueError(f"{label} address must start with http:// or https://")
+    if url.username is not None or url.password is not None or url.query or url.fragment:
+        raise ValueError(f"{label} address must not contain credentials, a query or a fragment")
+    try:
+        address = ipaddress.ip_address(url.hostname or "")
+    except ValueError as exc:
+        raise ValueError(f"{label} must use a private IP literal, not a hostname. " + hint) from exc
+    # One spelling per destination: an IPv4-mapped IPv6 literal (::ffff:a.b.c.d) is in none of
+    # the ranges above and is refused, never unwrapped to its IPv4 address.
+    if address in _METADATA_ADDRESSES or not any(address in network for network in _LAN_NETWORKS):
+        raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
+                         "127.x or an IPv6 unique local address). Public, link-local, shared "
+                         "(100.64.x) and cloud metadata addresses are refused.")
+    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
+    if port is None or not 1024 <= port <= 65535:
+        raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
+                         + ("8080" if path == "/v1" else "8091"))
+    canonical = f"{url.scheme}://{host}:{port}{path}"
+    # Check what will actually be used, not a silently normalised URL.
+    if value not in (canonical, canonical + "/"):
+        raise ValueError(f"{label} address must look exactly like {canonical}")
+    return canonical
+
+def provider_spec(name) -> Provider:
+    """Typed metadata for a provider id. Unknown ids fail closed."""
+    spec = ALL_PROVIDERS.get(name) if isinstance(name, str) else None
+    if spec is None:
+        raise ValueError("Unrecognized model provider")
+    return spec
+
+def provider_kind(settings) -> ProviderKind:
+    """`local`, `lan` or `cloud` for the selected provider. Compare this, not the id."""
+    return provider_spec(getattr(settings, "provider", LOCAL)).kind
+
+def uses_star_server(settings) -> bool:
+    """True when STAR Server (LAN) is the selected provider. Never raises, even
+    for a hand-edited settings file with an unknown provider id."""
+    try:
+        return provider_kind(settings) == "lan"
+    except ValueError:
+        return False
+
+@dataclass(frozen=True)
+class CallLimits:
+    request_timeout: float   # seconds without a byte before one model request is dropped
+    connect_timeout: float
+    parallel: int            # simultaneous model calls STAR may issue (1 or 2)
+    trust_env: bool          # False: private traffic never goes through a system proxy
+
+def call_limits(settings) -> CallLimits:
+    """Per-provider HTTP budget. The LAN server is a slow CPU box: be generous."""
+    spec = provider_spec(getattr(settings, "provider", LOCAL))
+    if spec.kind == "lan":
+        slots = getattr(settings, "server_parallel", 1)
+        return CallLimits(float(getattr(settings, "server_timeout", spec.default_timeout)), 5.0,
+                          max(1, min(2, slots if type(slots) is int else 1)), False)
+    return CallLimits(spec.default_timeout, 8.0, 2 if spec.allow_parallel else 1, True)
+
+def _check_name(name: str) -> None:
+    if name not in KEY_ENV:
+        raise ValueError("Unknown credential provider")
+
+def get_api_key(name: str) -> str | None:
+    """Environment variables take precedence; keyring is optional for CLI tests."""
+    _check_name(name)
+    value = os.environ.get(KEY_ENV[name], "").strip()
+    if value:
+        return value
+    try:
+        import keyring
+        return (keyring.get_password(SERVICE, name) or "").strip() or None
+    except Exception:
+        return None
+
+def save_api_key(name: str, token: str) -> None:
+    _check_name(name)
+    if not isinstance(token, str) or not 8 <= len(token) <= 2048 or any(c.isspace() for c in token):
+        raise ValueError("Paste a valid API key (8–2048 characters, no spaces)")
+    try:
+        import keyring
+        keyring.set_password(SERVICE, name, token)
+    except Exception as exc:
+        raise RuntimeError("Secure Windows credential storage unavailable; configure the environment variable instead") from exc
+
+def clear_api_key(name: str) -> None:
+    _check_name(name)
+    try:
+        import keyring
+        keyring.delete_password(SERVICE, name)
+    except Exception:
+        pass
+
+def credential_status() -> dict[str, bool]:
+    """Never return key bytes to the browser or model."""
+    return {name: bool(get_api_key(name)) for name in KEY_ENV}
+
+def connection_for(settings) -> tuple[str, str]:
+    """The single place that decides which address and bearer a model call uses."""
+    spec = provider_spec(getattr(settings, "provider", None))
+    if spec.kind == "local":
+        return settings.endpoint, "local-only"
+    if spec.kind == "lan":
+        endpoint = validate_lan_endpoint(getattr(settings, "server_endpoint", ""))
+        key = get_api_key(STAR_SERVER)
+        if not key:
+            raise ValueError("STAR Server needs its API key. Add it in Settings → STAR Server.")
+        return endpoint, key
+    key = get_api_key(settings.provider)
+    if not key:
+        raise ValueError(f"{spec.label} needs an API key. Add it in Settings → AI providers.")
+    return spec.base_url, key
+
+def open_client(settings, *, request_timeout: float | None = None):
+    """Build the AsyncOpenAI client for the selected provider with its own limits.
+
+    A private LAN server gets an explicit httpx client with `trust_env=False`,
+    so a Windows system proxy can never see the prompt or the server key.
+    """
+    from openai import AsyncOpenAI
+    import httpx
+    endpoint, key = connection_for(settings)
+    limits = call_limits(settings)
+    timeout = httpx.Timeout(request_timeout or limits.request_timeout, connect=limits.connect_timeout)
+    extra = {} if limits.trust_env else {
+        "http_client": httpx.AsyncClient(trust_env=False, timeout=timeout)}
+    return AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0, **extra)
+
+# Context size and slot count last reported by a server's own /props endpoint.
+# Process memory only: nothing here is a secret and nothing is written to disk.
+_SERVER_LIMITS: dict[tuple[str, str], tuple[int, int]] = {}
+# Other names the server answers to for the same loaded model (`star-vision` is
+# `star-fast`): they share one set of slots, so they share one entry here.
+_MODEL_NAMES: dict[tuple[str, str], str] = {}
+
+def remember_model_names(endpoint: str, model: str, aliases=()) -> None:
+    """`aliases` are further names of `model` on this server (from its /v1/models list)."""
+    for alias in aliases:
+        if isinstance(alias, str) and alias and alias != model:
+            _MODEL_NAMES[(endpoint.rstrip("/"), alias)] = model
+
+def _instance(settings, model: str | None = None) -> tuple[str, str]:
+    """(server address, the server's own id for `model`): the key of everything per-model."""
+    endpoint = str(getattr(settings, "server_endpoint", "")).rstrip("/")
+    name = str(model or getattr(settings, "model", ""))
+    return endpoint, _MODEL_NAMES.get((endpoint, name), name)
+
+def remember_server_limits(endpoint: str, model: str, context_tokens: int, slots: int) -> None:
+    if type(context_tokens) is int and context_tokens > 0:
+        endpoint = endpoint.rstrip("/")
+        _SERVER_LIMITS[(endpoint, _MODEL_NAMES.get((endpoint, model), model))] = (
+            context_tokens, slots if type(slots) is int and slots > 0 else 1)
+
+def server_context_tokens(settings, model: str | None = None) -> int:
+    """Per-request context of a LAN model: the owner's value, else what /props last said, else 0.
+
+    `model` is the model a request is routed to; the primary model when omitted.
+    """
+    chosen = getattr(settings, "server_context_tokens", 0)
+    known = _SERVER_LIMITS.get(_instance(settings, model))
+    if type(chosen) is int and chosen > 0:
+        # The owner's value is a ceiling they chose; a smaller model still has its own limit.
+        return min(chosen, known[0]) if known and model else chosen
+    return known[0] if known else 0
+
+def server_slots(settings, model: str | None = None) -> int:
+    """Parallel slots a LAN model last reported through /props; 0 while unknown."""
+    known = _SERVER_LIMITS.get(_instance(settings, model))
+    return known[1] if known else 0
+
+# Which slot each conversation uses, per (server, model). Process memory only. The
+# start is a hash of the conversation, so a chat finds its slot (and the prompt the
+# server still holds there) again after STAR restarts.
+_SLOT_TABLE: dict[tuple[str, str], dict] = {}
+_SLOT_TABLE_CHATS = 64
+
+def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, background: bool,
+                       prime: bool) -> int:
+    import zlib
+    table = _SLOT_TABLE.setdefault(key, {"active": None, "slot": {}})
+    held: dict = table["slot"]
+    home = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
+    active = table["active"]
+    if background:
+        # Summaries, sub-agents and repairs have prompts of their own. They go to the slot
+        # next to the one the open chat uses, never into it.
+        keep = held.get(active) if active is not None else None
+        return ((held.get(conversation, home) if keep is None else keep) + 1) % slots
+    slot = held.get(conversation)
+    if slot is None or slot >= slots:
+        slot = home
+        if active is not None and active != conversation and held.get(active) == slot:
+            slot = (slot + 1) % slots   # another chat is open there: leave its prompt alone
+        if len(held) >= _SLOT_TABLE_CHATS:
+            for name in [name for name in held if name != active][:len(held) - _SLOT_TABLE_CHATS + 1]:
+                del held[name]
+        held[conversation] = slot
+    if not prime:
+        table["active"] = conversation   # a real turn: this is the chat the owner is in
+    return slot
+
+def llama_request_fields(settings, *, conversation: str = "", tools: bool = False, model: str = "",
+                         background: bool = False, prime: bool = False) -> dict:
+    """Extra request-body fields that make a llama.cpp server reuse its prompt cache.
+
+    Only for the kinds `local` and `lan`, which are llama.cpp servers the owner
+    runs. Cloud providers get {}: these are not OpenAI fields and are never
+    sent to a vendor.
+
+      cache_prompt        keep the tokens of this prompt in the slot and reuse the
+                          common start on the next request
+      chat_template_kwargs.preserve_thinking
+                          render earlier answers exactly as they were generated
+                          (Qwen templates otherwise re-render them differently, which
+                          makes the server read every previous answer again)
+      id_slot             one conversation stays on one slot of each model. Sent only
+                          when that model has reported two or more slots.
+
+    Slot rules (measured in docs/research/server-inference.md 2.4):
+
+      * `model` is the model this request goes to; slots belong to a model, so
+        the same chat has one slot on the quick model and one on the main model.
+      * A chat keeps its slot. A chat that is opened while another one is in use
+        takes a different slot, so switching back finds the first one cached.
+      * `background=True` (summaries, sub-agents, code repairs: prompts of their
+        own) always goes to the slot next to the open chat's, never into it.
+      * `prime=True` is the cache warm-up: it takes the chat's slot without
+        declaring that chat the one in use.
+      * `tools` no longer moves a request to the other slot. The tool prompt and
+        the plain prompt of one chat share its slot; the server's RAM prompt
+        cache brings back whichever was replaced (1.3-1.6 s, measured), and the
+        second slot stays free for background work.
+
+    Verified against llama.cpp build 11541 (router mode) on the owner's server.
+    """
+    kind = provider_kind(settings)
+    if kind == "cloud":
+        return {}
+    fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
+    slots = server_slots(settings, model or None) if kind == "lan" else 0
+    if slots >= 2:
+        fields["id_slot"] = _conversation_slot(_instance(settings, model or None), str(conversation), slots,
+                                               background=background, prime=prime)
+    return fields
+
+def model_unavailable(exc: BaseException) -> bool:
+    """Did a request fail because the server could not serve that model at all?
+
+    True for "model not found" (llama.cpp router: HTTP 400), 404, and the 5xx a
+    router returns when a model fails to load. Nothing was generated in any of
+    these cases, so the same message can be sent to another model.
+    """
+    status = getattr(exc, "status_code", None)
+    if status in (404, 500, 502, 503):
+        return True
+    return status == 400 and "not found" in str(getattr(exc, "message", "") or exc).lower()
+
+class _PinnedClient:
+    """`client.chat.completions.create(...)` with extra llama.cpp body fields chosen per model.
+
+    Lets the helpers that make their own model calls (summaries, sub-agents,
+    specialists, code repair) stay unaware of slots: they are handed this
+    instead of the plain client.
+    """
+
+    def __init__(self, client, fields_for):
+        self._client, self._fields_for = client, fields_for
+        self.chat = self.completions = self
+
+    async def create(self, **kwargs):
+        send = self._client.chat.completions.create
+        extras = None if "extra_body" in kwargs else self._fields_for(str(kwargs.get("model", "")))
+        if not extras:
+            return await send(**kwargs)
+        try:
+            return await send(**kwargs, extra_body=extras)
+        except Exception as exc:
+            # A server that is not llama.cpp may refuse the fields; nothing was generated.
+            if getattr(exc, "status_code", None) not in (400, 422):
+                raise
+            return await send(**kwargs)
+
+def background_client(client, settings, *, conversation: str = ""):
+    """The client for model calls that are not the conversation itself.
+
+    On STAR Server every such call carries `llama_request_fields(...,
+    background=True)`: the slot next to the open chat's, so a summary or a
+    sub-agent never replaces the chat's cached prompt. For a cloud provider and
+    the on-PC brain (no slot count known) this is the plain client.
+    """
+    if provider_kind(settings) != "lan":
+        return client
+    return _PinnedClient(client, lambda model: llama_request_fields(
+        settings, conversation=conversation, model=model, background=True))
+
+def provider_catalog() -> list[dict]:
+    statuses = credential_status()
+    return [{"id": LOCAL, "label": PRIVATE_PROVIDERS[LOCAL].label, "model": "", "connected": True, "kind": "local"},
+            {"id": STAR_SERVER, "label": PRIVATE_PROVIDERS[STAR_SERVER].label, "model": "",
+             "connected": statuses[STAR_SERVER], "kind": "lan"}] + [
+        {"id": name, "label": p.label, "model": p.suggested_model, "connected": statuses[name], "kind": p.kind}
+        for name, p in PROVIDERS.items()
+    ]

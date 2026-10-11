@@ -63,9 +63,10 @@ def test_memory_scope_and_persistence():
 
 
 def test_github_paths():
-    for p in ("star/agent.py","docs/readme.md","tests/test_star.py","README.md"):
+    for p in ("star/skills/tween_helpers.py","docs/skills/tween_helpers.md"):
         assert valid_upload_path(p)
-    for p in (".env", "runs/secret.txt", "star/../../secrets.py", ".github/workflows/tests.yml", "private.pem", "star/script.exe", "star/secret.key"):
+    for p in ("star/agent.py","docs/readme.md","tests/test_star.py","README.md",
+              ".env", "runs/secret.txt", "star/../../secrets.py", ".github/workflows/tests.yml", "private.pem", "star/script.exe", "star/secret.key"):
         assert not valid_upload_path(p)
 
 
@@ -158,20 +159,30 @@ def test_qwen_compaction_never_adds_second_system(monkeypatch):
         return "Verified task checkpoint after inspecting a Studio script"
     monkeypatch.setattr(agent,"compact",pretend_compact)
     async def run():
+        class LongScriptStudio(FakeStudio):
+            async def call_tool(self, name, arguments):
+                return SimpleNamespace(model_dump=lambda **kwargs: {
+                    "content": [{"type": "text", "text": "observed script\n" * 800}], "isError": False})
         model=FakeModels([
             reply(calls=[call("script_read",{"studio_id":"sandbox"})]),
             reply("Finished inspection"),
         ])
         client=SimpleNamespace(chat=SimpleNamespace(completions=model))
         answer,messages,archive=await execute(client=client,model="qwen-local",
-            prompt="inspect script",image_paths=[],studio=FakeStudio(),
+            prompt="inspect script",image_paths=[],studio=LongScriptStudio(),
             studio_id="sandbox",discovered=[schema_tool("script_read")],
-            context_chars=100,checkpoint=lambda summary:updates.append(summary))
+            context_chars=6000,checkpoint=lambda summary:updates.append(summary))
         assert answer=="Finished inspection"
         assert updates and archive
-        assert "checkpoint" in messages[0]["content"].lower()
         for request in model.requests:
             assert [i for i,m in enumerate(request["messages"]) if m["role"]=="system"]==[0]
+        # The checkpoint travels in a later user turn; the one system message is not
+        # rewritten, so the server's cached start of the request survives compaction.
+        before,after=(request["messages"] for request in model.requests)
+        assert after[0]==before[0] and after[1]==before[1]
+        assert "Verified task checkpoint" not in after[0]["content"]
+        assert after[-1]["role"]=="user" and "Verified task checkpoint" in after[-1]["content"]
+        assert messages[0]==before[0]
     asyncio.run(run())
 
 

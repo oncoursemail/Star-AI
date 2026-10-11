@@ -1,0 +1,5 @@
+local ret, env = load_answer()
+local describe = resolve(ret, env, "describe")
+check("describe(nil) is unknown", describe(nil) == "unknown")
+check("missing level counts as 0", describe({ name = "A" }) == "A (level 1)")
+check("level 4 gives level 5", describe({ name = "A", level = 4 }) == "A (level 5)")

@@ -3,60 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#08090b">
-<meta name="description" content="STAR Intelligence: your local-first creative AI workspace for coding, Roblox Studio, vision and research. Built to grow with you.">
-<title>STAR Intelligence — Think bigger. Build brighter.</title>
+<meta name="theme-color" content="#090B0E">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="STAR Intelligence is a local-first AI workspace for Windows. It runs a model on your own hardware, works inside Roblox Studio with your permission, and keeps your projects on your disk.">
+<title>STAR Intelligence: a local-first AI workspace for Windows</title>
 <link rel="icon" type="image/svg+xml" href="./star-icon.svg">
 <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+<!-- Static fallback page with no build step. The full website is the React site built from frontend/. -->
 <a href="#content" class="skip-link">Skip to content</a>
-<div class="backdrop" aria-hidden="true"></div>
 <header class="site-header">
-  <a class="brand" href="#home" aria-label="STAR home"><img src="./star-icon.svg" width="30" height="38" alt=""><span>STAR<span class="brand-dot">.</span></span></a>
-  <nav id="nav" class="nav" aria-label="Main navigation">
-    <a href="#features">Explore</a><a href="#how">How it works</a><a href="#roadmap">Roadmap</a>
-    <a href="#roadmap" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+  <a class="brand" href="#content" aria-label="STAR Intelligence">
+    <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><path fill="#F6DDA9" d="M32 32 24 24 29.4 2H32ZM32 32H6v-2.6L24 24Z"/><path fill="#E8BF76" d="M32 32 40 24 58 29.4V32ZM32 32v30h-2.6L24 40Z"/><path fill="#C9A261" d="M32 32V2h2.6L40 24ZM32 32 24 40 6 34.6V32Z"/><path fill="#A98549" d="M32 32h26v2.6L40 40ZM32 32 40 40 34.6 62H32Z"/></svg>
+    <span>STAR Intelligence</span>
+  </a>
+  <nav id="nav" class="nav" aria-label="Main">
+    <a href="#download">Download</a>
+    <a href="#facts">What it is</a>
+    <a href="https://oncoursemail.github.io/Star-AI/">Full website</a>
+    <a href="https://github.com/oncoursemail/Star-AI" rel="noopener noreferrer">GitHub</a>
   </nav>
-  <a class="header-cta" href="https://github.com/oncoursemail/Star-AI/releases/latest" target="_blank" rel="noopener noreferrer">Get STAR <span aria-hidden="true">↗</span></a>
   <button class="mobile-toggle" type="button" aria-expanded="false" aria-controls="nav" aria-label="Toggle menu"><span></span><span></span><span></span></button>
 </header>
 <main id="content">
-<section class="hero section" id="home">
- <div class="hero-copy">
-   <div class="eyebrow"><span class="status-pip"></span> STAR GENESIS <span class="eyebrow-separator">/</span> LOCAL-FIRST INTELLIGENCE</div>
-   <h1>Create beyond limits.<br><span class="headline-gradient">Build with confidence.</span></h1>
-   <p class="lead">Your creative intelligence workspace. Chat, understand images, prototype Roblox experiences, and take control of your projects — starting on your own PC.</p>
-   <div class="hero-actions">
-     <a class="btn primary" href="https://github.com/oncoursemail/Star-AI/releases/latest" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4M4 17v4h16v-4"/></svg> Download for Windows</a>
-     <a class="btn secondary" href="#how">How STAR works <span aria-hidden="true">↗</span></a>
-   </div>
-   <div class="hero-foot"><span>✦ Your own model</span><span>✦ Local-first</span><span>✦ Built for creators</span></div>
- </div>
- <div class="product-preview" aria-label="STAR Desktop interface preview, illustrative design">
-  <div class="preview-heading"><span class="preview-spark">✦</span><span>STAR / WORKSPACE</span><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
-  <div class="preview-body">
-   <aside class="preview-sidebar"><div class="preview-side-logo">✦ <b>STAR</b></div><div class="preview-nav selected">◈ &nbsp; Chat</div><div class="preview-nav">▥ &nbsp; Analytics</div><div class="preview-nav">⌘ &nbsp; Tools</div><div class="preview-nav">✧ &nbsp; Image Lab</div><div class="preview-nav">◇ &nbsp; STAR Brain</div><div class="preview-version">GENESIS • v<span data-star-version>0.6.1</span></div></aside>
-   <div class="preview-chat"><div class="preview-top"><b>STAR Intelligence</b><span><i class="status-pip"></i> Local Brain</span></div><div class="preview-prompt">STAR, help me build a beautiful Roblox interface from this screenshot.</div><div class="preview-answer"><div class="ai-identity">✦ &nbsp; STAR</div><p>I’ll inspect the reference, preserve the visual structure, and propose a native UI implementation.</p><div class="fake-tasks"><span>✓ &nbsp; Interpret reference</span><span>✓ &nbsp; Plan UI hierarchy</span><span class="working">◌ &nbsp; Prepare editable components</span></div></div><div class="preview-entry"><span>Ask STAR anything…</span><span class="send-mark">↑</span></div></div>
-  </div>
-  <div class="preview-caption">Interface concept · Actual features evolve with each release</div>
- </div>
-</section>
-<section class="metric-strip"><div class="metric"><strong>LOCAL</strong><span>AI inference</span></div><div class="metric"><strong>VISION</strong><span>Image-aware workflows</span></div><div class="metric"><strong>ROBLOX</strong><span>Studio MCP integration</span></div><div class="metric"><strong>EVOLVING</strong><span>Verified improvements</span></div></section>
-<section class="section features-section" id="features"><div class="section-intro"><p class="kicker">MEET YOUR CREATIVE PARTNER</p><h2>All your ideas.<br><span class="muted-heading">One workspace.</span></h2><p>STAR brings useful development tools together without asking you to become an AI infrastructure engineer first.</p></div>
-<div class="feature-grid">
- <article class="feature-card"><div class="feature-icon violet" aria-hidden="true">✦</div><h3>STAR Brain</h3><p>One guided setup to install a local model and start chatting. No paid model API key required.</p><span class="feature-foot">Local intelligence →</span></article>
- <article class="feature-card"><div class="feature-icon aqua" aria-hidden="true">▤</div><h3>See the details</h3><p>Share image references and ask STAR to analyze layouts, visible structure, and design intent.</p><span class="feature-foot">Vision inputs →</span></article>
- <article class="feature-card"><div class="feature-icon sky" aria-hidden="true">⌘</div><h3>Build with Roblox</h3><p>Discover Studio instances and use scoped MCP tools to inspect, create and test game content.</p><span class="feature-foot">Creator tools →</span></article>
- <article class="feature-card"><div class="feature-icon pink" aria-hidden="true">◈</div><h3>Remember the project</h3><p>Keep conversations and checkpoints on your PC while preserving references and task history.</p><span class="feature-foot">Persistent projects →</span></article>
- <article class="feature-card"><div class="feature-icon aqua" aria-hidden="true">↺</div><h3>Keep improving</h3><p>New releases, reproducible tests and GitHub change history. Improvements have to earn trust.</p><span class="feature-foot">Measured progress →</span></article>
- <article class="feature-card"><div class="feature-icon violet" aria-hidden="true">◇</div><h3>Your workspace, your rules</h3><p>Work in selected directories and Studio sandboxes. You choose what STAR can modify.</p><span class="feature-foot">Scoped access →</span></article>
-</div></section>
-<section class="section how-section" id="how"><div class="how-copy"><p class="kicker">GET MOVING</p><h2>From download<br>to first idea.</h2><p>We’re redesigning the setup so getting started feels like launching an app, not configuring a server.</p><div class="step"><span>01</span><div><h3>Install STAR</h3><p>Download the Windows Setup executable. New installers replace older app versions while keeping your local projects.</p></div></div><div class="step"><span>02</span><div><h3>Download STAR Brain</h3><p>Choose the one-click local model setup inside the app. Model weights download once and run on your PC.</p></div></div><div class="step"><span>03</span><div><h3>Start creating</h3><p>Chat, attach references, or connect an unpublished Roblox Studio sandbox.</p></div></div></div><div class="how-art" aria-hidden="true"><div class="orbital-track t1"></div><div class="orbital-track t2"></div><div class="core-star">✦</div><span class="orbit-label label-one">CODE</span><span class="orbit-label label-two">VISION</span><span class="orbit-label label-three">BUILD</span></div></section>
-<section class="section roadmap-section" id="roadmap"><div class="section-intro"><p class="kicker">THE JOURNEY</p><h2>Built to evolve.</h2><p>STAR isn’t finished. Each milestone makes the workflow more useful, capable, and reliable.</p></div><div class="roadmap-grid"><div class="phase"><span class="phase-label">GENESIS · NOW</span><h3>Desktop + local brain</h3><p>A usable application, model installation, chat, images, memory and GitHub releases.</p></div><div class="phase"><span class="phase-label">PHASE 2 · NEXT</span><h3>Roblox execution lab</h3><p>Automatic Studio tests, verified UI output, advanced coding and iterative visual QA.</p></div><div class="phase"><span class="phase-label">PHASE 3 · PLANNED</span><h3>Specialist agents</h3><p>Animation, 3D creation, research and coding agents coordinated against shared project goals.</p></div><div class="phase"><span class="phase-label">PHASE 4 · RESEARCH</span><h3>Learning systems</h3><p>Benchmarks, validated experience, and selective model fine-tuning when improvements are proven.</p></div></div></section>
-<section class="cta-section section"><div class="cta-panel"><img src="./star-icon.svg" alt="" width="58" height="58"><p class="kicker">A NEW CHAPTER FOR CREATORS</p><h2>Your next idea<br>starts with a spark.</h2><a class="btn primary" href="https://github.com/oncoursemail/Star-AI/releases/latest" target="_blank" rel="noopener noreferrer">Get STAR for Windows <span aria-hidden="true">↗</span></a><small>Windows 11 · Local model downloads require internet · Early development build</small></div></section>
+  <section class="hero">
+    <h1>Make the things you imagine.</h1>
+    <p class="lead">STAR is a local-first AI workspace for Windows. It runs a model on your own hardware, works inside Roblox Studio with your permission, and keeps your chats and projects on your disk.</p>
+    <div class="actions" id="download">
+      <a class="btn primary" href="https://github.com/oncoursemail/Star-AI/releases/latest" rel="noopener noreferrer">Download for Windows</a>
+      <a class="btn" href="https://oncoursemail.github.io/Star-AI/">See the full website</a>
+    </div>
+    <p class="note">The button opens the latest published release on GitHub, with the Setup file, a portable ZIP and SHA-256 checksums. Builds are not code-signed yet, so compare the checksum before you run one.</p>
+  </section>
+  <section class="facts" id="facts" aria-label="What STAR is">
+    <dl>
+      <div><dt>Runs locally</dt><dd>STAR Brain installs a verified engine and model, about 3.5 GB, and talks to it over loopback on your PC.</dd></div>
+      <div><dt>Roblox Studio, on your terms</dt><dd>It connects to the official Studio MCP server. Reading a test place is on by default; editing is a switch you turn on.</dd></div>
+      <div><dt>Your data stays yours</dt><dd>Chats, models and settings live in %APPDATA%\STAR. There is no account, and updates leave that folder alone.</dd></div>
+      <div><dt>Early software</dt><dd>Windows 11, 64-bit. Real-device testing is still open, and a small local model makes mistakes.</dd></div>
+    </dl>
+  </section>
 </main>
-<footer><a href="#home" class="footer-brand">✦ STAR</a><p>Built to evolve, one verified improvement at a time.</p><span>© 2026 STAR Intelligence · <span data-star-version>0.6.1</span></span><a href="https://github.com/oncoursemail/Star-AI/releases" target="_blank" rel="noopener noreferrer">Releases ↗</a></footer>
+<footer>
+  <span>© 2026 STAR Intelligence</span>
+  <span>Page built from source v<span data-star-version>0.9.0</span>. The download is whatever GitHub lists as the latest release.</span>
+  <a href="https://github.com/oncoursemail/Star-AI/releases" rel="noopener noreferrer">All releases</a>
+</footer>
 <script src="./site.js" defer></script>
 </body>
 </html>

@@ -84,6 +84,8 @@ async def develop(*, client, model: str, repository: Path, task: str,
     branch = "star/skill-" + datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S%f")
     if not BRANCH.fullmatch(branch):
         raise RuntimeError("Bad auto-generated branch")
+    if github is not None:
+        await github.work_base(branch)  # refuse now, before any model call, if the pull request would target main
     folder = Path(tempfile.mkdtemp(prefix="star-builder-"))
     active = False
     try:
@@ -133,7 +135,8 @@ async def develop(*, client, model: str, repository: Path, task: str,
         payload={"branch":branch, "commit":commit, "files":paths,"model_notes":notes,"github_pr":None,
                  "verification":"Python syntax validated on written files; generated behavior has NOT been executed or verified"}
         if github is not None:
-            # Publishing via installation token does not merge anything or update main.
+            # Publishing via installation token does not merge anything or update main: the branch is cut
+            # from the configured work branch and the draft pull request points at that work branch.
             base=await github.create_branch(branch)
             for path in paths:
                 await github.write_branch_file(branch,path,(folder/path).read_bytes(),"STAR: propose " + path)

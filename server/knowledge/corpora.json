@@ -1,0 +1,23 @@
+{
+  "_comment": "Corpora indexed by the STAR knowledge prototype. Licences were read from each repository's licence files on 2026-10-10 (see docs/research/intelligence-architecture.md section 2). Only Git repositories with a licence that permits copying are listed.",
+  "sources": [
+    {
+      "name": "creator-docs",
+      "repo": "https://github.com/Roblox/creator-docs.git",
+      "branch": "main",
+      "licence": "CC-BY-4.0 (prose), MIT (code samples)",
+      "attribution": "Roblox Creator Documentation, (c) Roblox Corporation, https://github.com/Roblox/creator-docs",
+      "content_root": "content/en-us",
+      "public_base": "https://create.roblox.com/docs"
+    },
+    {
+      "name": "luau-site",
+      "repo": "https://github.com/luau-lang/site.git",
+      "branch": "master",
+      "licence": "MIT",
+      "attribution": "Luau documentation, (c) 2019-2026 Roblox Corporation, (c) 1994-2019 Lua.org, PUC-Rio, https://github.com/luau-lang/site",
+      "content_root": "src/content",
+      "public_base": "https://luau.org"
+    }
+  ]
+}

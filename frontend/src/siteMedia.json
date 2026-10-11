@@ -1,0 +1,146 @@
+{
+ "capturedAt": "2026-10-11T05:41:27.099Z",
+ "sourceVersion": "0.9.0",
+ "images": {
+  "chat": [
+   {
+    "file": "chat-1280.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 23944
+   },
+   {
+    "file": "chat-2560.webp",
+    "width": 2560,
+    "height": 1600,
+    "bytes": 60606
+   }
+  ],
+  "chat-narrow": [
+   {
+    "file": "chat-narrow-860.webp",
+    "width": 860,
+    "height": 1240,
+    "bytes": 37540
+   }
+  ],
+  "brain": [
+   {
+    "file": "brain-1280.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 27004
+   },
+   {
+    "file": "brain-2560.webp",
+    "width": 2560,
+    "height": 1600,
+    "bytes": 73214
+   }
+  ],
+  "brain-narrow": [
+   {
+    "file": "brain-narrow-860.webp",
+    "width": 860,
+    "height": 1240,
+    "bytes": 43900
+   }
+  ],
+  "tools": [
+   {
+    "file": "tools-1280.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 40296
+   },
+   {
+    "file": "tools-2560.webp",
+    "width": 2560,
+    "height": 1600,
+    "bytes": 97244
+   }
+  ],
+  "tools-narrow": [
+   {
+    "file": "tools-narrow-860.webp",
+    "width": 860,
+    "height": 1240,
+    "bytes": 35108
+   }
+  ],
+  "projects": [
+   {
+    "file": "projects-1280.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 30020
+   },
+   {
+    "file": "projects-2560.webp",
+    "width": 2560,
+    "height": 1600,
+    "bytes": 72616
+   }
+  ],
+  "projects-narrow": [
+   {
+    "file": "projects-narrow-860.webp",
+    "width": 860,
+    "height": 1240,
+    "bytes": 36760
+   }
+  ],
+  "analytics": [
+   {
+    "file": "analytics-1280.webp",
+    "width": 1280,
+    "height": 800,
+    "bytes": 24598
+   },
+   {
+    "file": "analytics-2560.webp",
+    "width": 2560,
+    "height": 1600,
+    "bytes": 60566
+   }
+  ],
+  "analytics-narrow": [
+   {
+    "file": "analytics-narrow-860.webp",
+    "width": 860,
+    "height": 1240,
+    "bytes": 23188
+   }
+  ],
+  "studio-narrow": [
+   {
+    "file": "studio-narrow-796.webp",
+    "width": 796,
+    "height": 998,
+    "bytes": 21998
+   }
+  ],
+  "setup": [
+   {
+    "file": "setup-700.webp",
+    "width": 700,
+    "height": 151,
+    "bytes": 4856
+   },
+   {
+    "file": "setup-1400.webp",
+    "width": 1400,
+    "height": 302,
+    "bytes": 12536
+   }
+  ],
+  "setup-narrow": [
+   {
+    "file": "setup-narrow-796.webp",
+    "width": 796,
+    "height": 310,
+    "bytes": 12122
+   }
+  ]
+ }
+}

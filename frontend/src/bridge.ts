@@ -62,6 +62,13 @@ export function initializeBridge():Promise<boolean>{
 }
 
 export type BackendReply<T> = {ok:boolean;data?:T; pending?:boolean;requestId?:string;error?:string}
+
+/** Native file dialogs wait on the user, not the model. Do not falsely report a
+ *  broken desktop connection if choosing a file takes over 30 seconds. */
+export function requestTimeoutMs(action:string):number {
+  return action==='pickFiles'||action==='selectFolder'||action==='exportReviewBundle'||action==='exportLessons'
+    ? 10*60*1000 : 30*1000
+}
 export function request<T=unknown>(action:string, payload:Record<string,unknown>={}, providedId?:string):Promise<BackendReply<T>> {
   if(!bridge)return Promise.resolve({ok:false,error:'Open STAR Desktop to use your local AI. This website is only a preview.'})
   return new Promise(resolve=>{
@@ -73,7 +80,7 @@ export function request<T=unknown>(action:string, payload:Record<string,unknown>
       window.clearTimeout(timeout)
       resolve(response)
     }
-    const timeout=window.setTimeout(()=>finish({ok:false,error:'STAR local bridge did not respond. Restart the desktop app and try again.'}),30000)
+    const timeout=window.setTimeout(()=>finish({ok:false,error:'STAR local bridge did not respond. Restart the desktop app and try again.'}),requestTimeoutMs(action))
     try{
       bridge!.invoke(JSON.stringify({requestId,action,...payload}),raw=>{
         try{finish(JSON.parse(raw) as BackendReply<T>)}

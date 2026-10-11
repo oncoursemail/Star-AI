@@ -1,0 +1,256 @@
+"""Turn-taking logic for voice calls: speech probabilities in, turn events out.
+
+Each 32 ms microphone frame comes with a speech probability from the voice-activity detector. This
+module decides when the user started talking, when they paused, when their turn is over, and when
+speech during the assistant's reply is a real interruption (barge-in) rather than a cough or the
+loudspeaker's own echo.
+
+End of turn uses two layers, the way current voice agents do:
+1. a short pause (pause_ms) triggers an optional end-of-turn model that listens to *how* the sentence
+   ended (falling pitch, finished phrase); if it says "finished", the turn ends as soon as the silence
+   reaches min_end_silence_ms, unless the speaker carries on first;
+2. while the model says "not finished" it is asked again every recheck_ms as the silence grows, and
+   the bar it has to clear drops steadily: the longer nobody speaks, the less proof is needed;
+3. plain silence ends the turn anyway: end_silence_ms without a model, max_silence_ms with one.
+
+Pure Python and deterministic (time comes from the caller), so the unit tests need no audio stack.
+"""
+from __future__ import annotations
+
+from collections import deque
+from dataclasses import dataclass
+from typing import Protocol
+
+from .pcm import FRAME_MS
+
+
+@dataclass
+class TurnConfig:
+    start_threshold: float = 0.5       # speech probability that counts as "talking"
+    end_threshold: float = 0.35        # below this the frame counts as silence (hysteresis)
+    min_speech_ms: int = 96            # voiced time needed to open a turn
+    pre_roll_ms: int = 320             # audio kept from before the turn opened, so first words are not clipped
+    pause_ms: int = 256                # silence that counts as a pause: speculative transcript + end-of-turn model
+    end_silence_ms: int = 640          # silence that ends the turn when there is no end-of-turn model
+    min_end_silence_ms: int = 608      # wait at least this long even when the model is sure: people pause
+                                       # about this long between two sentences, and a turn ended too early
+                                       # costs a wasted request to the brain
+    max_silence_ms: int = 2000         # silence that ends the turn even if the model says "not finished"
+    complete_threshold: float = 0.5    # end-of-turn model probability that ends the turn at the pause
+    late_threshold: float = 0.25       # ...relaxed to this by the time max_silence_ms is reached
+    recheck_ms: int = 192              # while the model says "not finished", ask it again this often
+    resume_ms: int = 64                # voiced time that turns a pause back into speech
+    barge_in_ms: int = 288             # voiced time needed to interrupt the assistant
+    barge_in_threshold: float = 0.6    # stricter probability while the assistant is audible
+    min_turn_ms: int = 160             # turns with less voiced audio than this are dropped as noise
+    max_turn_ms: int = 30000           # safety cap on one user turn
+
+
+class Endpointer(Protocol):
+    """Optional end-of-turn model: probability (0..1) that the speaker has finished their turn."""
+
+    def complete_probability(self, pcm: bytes) -> float: ...
+
+
+@dataclass
+class TurnEvent:
+    kind: str                  # speech_start | pause | resume | turn_end | discard
+    at: float                  # caller's clock when the event fired
+    audio: bytes = b""         # pause / turn_end: the user's audio so far (PCM16, 16 kHz, mono)
+    barge_in: bool = False     # speech_start: the assistant was audible when the user began
+    speech_end: float = 0.0    # pause / turn_end: clock time of the last voiced frame
+    complete_probability: float | None = None   # what the end-of-turn model said, if one ran
+    reason: str = ""           # turn_end: model | silence | max_silence | max_turn
+
+
+class TurnDetector:
+    IDLE, SPEECH, PAUSE = "idle", "speech", "pause"
+
+    def __init__(self, config: TurnConfig | None = None, endpointer: Endpointer | None = None) -> None:
+        self.config = config or TurnConfig()
+        self.endpointer = endpointer
+        self.state = self.IDLE
+        self._pre_roll: deque[bytes] = deque(maxlen=max(1, self.config.pre_roll_ms // FRAME_MS))
+        self._frames: list[bytes] = []
+        self._run_ms = 0           # voiced run while idle / paused
+        self._silence_ms = 0
+        self._voiced_ms = 0
+        self._turn_ms = 0
+        self._last_voiced = 0.0
+        self._model_says_open = False
+        self._model_done: float | None = None   # the model said "finished"; waiting out min_end_silence_ms
+        self._checked_ms = 0       # silence length at the last end-of-turn model call
+
+    # -- public API -------------------------------------------------------------------------
+    def process(self, frame: bytes, probability: float, now: float, *, assistant_active: bool = False,
+                gate_open: bool = True) -> list[TurnEvent]:
+        """Feed one frame. gate_open=False vetoes barge-in (e.g. the echo gate says "that is our own audio")."""
+        if self.state == self.IDLE:
+            return self._idle(frame, probability, now, assistant_active, gate_open)
+        if self.state == self.SPEECH:
+            return self._speech(frame, probability, now)
+        return self._pause(frame, probability, now)
+
+    def reset(self) -> None:
+        self.state = self.IDLE
+        self._pre_roll.clear()
+        self._frames = []
+        self._run_ms = self._silence_ms = self._voiced_ms = self._turn_ms = self._checked_ms = 0
+        self._model_says_open = False
+        self._model_done = None
+
+    @property
+    def audio(self) -> bytes:
+        """The current turn's audio so far (empty while idle)."""
+        return b"".join(self._frames)
+
+    # -- states -----------------------------------------------------------------------------
+    def _idle(self, frame, probability, now, assistant_active, gate_open) -> list[TurnEvent]:
+        cfg = self.config
+        self._pre_roll.append(frame)
+        threshold = cfg.barge_in_threshold if assistant_active else cfg.start_threshold
+        voiced = probability >= threshold and (gate_open or not assistant_active)
+        # A missed frame costs one frame of credit instead of resetting, so natural gaps
+        # inside a word do not stop a real interruption from being recognised.
+        self._run_ms = self._run_ms + FRAME_MS if voiced else max(0, self._run_ms - FRAME_MS)
+        needed = cfg.barge_in_ms if assistant_active else cfg.min_speech_ms
+        if self._run_ms < needed:
+            return []
+        self.state = self.SPEECH
+        self._frames = list(self._pre_roll)
+        self._pre_roll.clear()
+        self._voiced_ms = self._run_ms
+        self._turn_ms = len(self._frames) * FRAME_MS
+        self._run_ms = self._silence_ms = 0
+        self._last_voiced = now
+        self._model_says_open = False
+        return [TurnEvent("speech_start", now, barge_in=assistant_active)]
+
+    def _speech(self, frame, probability, now) -> list[TurnEvent]:
+        cfg = self.config
+        self._frames.append(frame)
+        self._turn_ms += FRAME_MS
+        if probability >= cfg.end_threshold:
+            self._silence_ms = 0
+            self._voiced_ms += FRAME_MS
+            self._last_voiced = now
+        else:
+            self._silence_ms += FRAME_MS
+        if self._turn_ms >= cfg.max_turn_ms:
+            return [self._end(now, "max_turn", None)]
+        if self._silence_ms < cfg.pause_ms:
+            return []
+        self.state = self.PAUSE
+        self._run_ms = 0
+        events = [TurnEvent("pause", now, audio=self.audio, speech_end=self._last_voiced)]
+        probability_complete = self._ask_model()
+        events[0].complete_probability = probability_complete
+        self._model_done = None
+        if probability_complete is None:
+            self._model_says_open = False
+        elif probability_complete >= cfg.complete_threshold:
+            self._model_says_open = False
+            if self._silence_ms >= cfg.min_end_silence_ms:
+                events.append(self._end(now, "model", probability_complete))
+            else:
+                self._model_done = probability_complete
+        else:
+            self._model_says_open = True
+        return events
+
+    def _ask_model(self) -> float | None:
+        self._checked_ms = self._silence_ms
+        if self.endpointer is None:
+            return None
+        try:
+            return float(self.endpointer.complete_probability(self.audio))
+        except Exception:
+            return None                # a broken model must never block the call: fall back to silence
+
+    def _threshold_now(self) -> float:
+        """The bar the end-of-turn model has to clear, falling as the silence grows."""
+        cfg = self.config
+        span = max(1, cfg.max_silence_ms - cfg.pause_ms)
+        progress = min(1.0, max(0.0, (self._silence_ms - cfg.pause_ms) / span))
+        return cfg.complete_threshold + (cfg.late_threshold - cfg.complete_threshold) * progress
+
+    def _pause(self, frame, probability, now) -> list[TurnEvent]:
+        cfg = self.config
+        self._frames.append(frame)
+        self._turn_ms += FRAME_MS
+        if probability >= cfg.start_threshold:
+            self._run_ms += FRAME_MS
+            if self._run_ms >= cfg.resume_ms:
+                self.state = self.SPEECH
+                self._voiced_ms += self._run_ms
+                self._silence_ms = self._run_ms = 0
+                self._last_voiced = now
+                self._model_done = None
+                return [TurnEvent("resume", now)]
+            return []
+        self._run_ms = 0
+        self._silence_ms += FRAME_MS
+        if self._model_done is not None:
+            if self._silence_ms >= cfg.min_end_silence_ms:
+                return [self._end(now, "model", self._model_done)]
+            return []
+        limit = cfg.max_silence_ms if self._model_says_open else cfg.end_silence_ms
+        if self._silence_ms >= limit:
+            return [self._end(now, "max_silence" if self._model_says_open else "silence", None)]
+        if self._model_says_open and self._silence_ms - self._checked_ms >= cfg.recheck_ms:
+            probability_complete = self._ask_model()
+            if probability_complete is None:
+                self._model_says_open = False          # the model broke: plain silence takes over
+            elif probability_complete >= self._threshold_now():
+                if self._silence_ms >= cfg.min_end_silence_ms:
+                    return [self._end(now, "model", probability_complete)]
+                self._model_done, self._model_says_open = probability_complete, False
+        return []
+
+    def _end(self, now: float, reason: str, probability_complete: float | None) -> TurnEvent:
+        audio, voiced, last = self.audio, self._voiced_ms, self._last_voiced
+        self.reset()
+        if voiced < self.config.min_turn_ms:
+            return TurnEvent("discard", now, speech_end=last, reason="too_short")
+        return TurnEvent("turn_end", now, audio=audio, speech_end=last,
+                         complete_probability=probability_complete, reason=reason)
+
+
+class EchoGate:
+    """Tells the user's voice apart from the loudspeaker's echo by loudness, for calls without headphones.
+
+    While the assistant is audible the microphone also hears the assistant. The caller passes two levels
+    per frame: the microphone level, and the loudest level the speaker played in the last few hundred
+    milliseconds (peak-held, so it does not matter exactly how late the echo arrives). The gate learns the
+    largest echo-to-playback ratio it sees (the coupling) and only lets barge-in through when the microphone
+    is clearly louder than the loudest echo could be.
+
+    This is an energy gate, not echo cancellation: it keeps the assistant from interrupting itself, and the
+    user has to speak clearly louder than the echo. Tested in simulation only, never in a real room.
+    """
+
+    def __init__(self, margin_db: float = 4.0, floor: float = 0.006, warmup_frames: int = 12) -> None:
+        self.margin = 10 ** (margin_db / 20.0)
+        self.floor = floor
+        self.warmup_frames = warmup_frames
+        self.coupling: float | None = None
+        self._warm: list[float] = []
+
+    def allows(self, mic_level: float, speaker_level: float) -> bool:
+        if speaker_level <= 1e-4:                      # nothing is playing: nothing to confuse it with
+            return mic_level >= self.floor
+        ratio = mic_level / speaker_level
+        if self.coupling is None:
+            self._warm.append(ratio)
+            if len(self._warm) >= self.warmup_frames:
+                self.coupling = max(self._warm)        # the loudest echo seen while learning
+                self._warm = []
+            return False                               # no barge-in until the echo level is known
+        allowed = mic_level >= max(self.floor, self.coupling * speaker_level * self.margin)
+        if not allowed:
+            # Still just echo. Follow it upwards at once (a louder echo than any seen so far) and forget
+            # slowly downwards (the volume was turned down). Frames that pass the gate are taken to be
+            # the user and never teach the gate that the echo is that loud.
+            rate = 0.5 if ratio > self.coupling else 0.005
+            self.coupling += rate * (ratio - self.coupling)
+        return allowed

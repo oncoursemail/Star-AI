@@ -76,6 +76,11 @@ def _load(path: str, modified: int, size: int):
     }
 
 
+def _symbol_name(label: str) -> str:
+    """'connection_for()' and '.connection_for()' -> 'connection_for' (lower-case input)."""
+    return re.sub(r"\(\)$", "", label.strip()).lstrip(".")
+
+
 class GraphifyGraph:
     def __init__(self, workspace: Path):
         self.workspace = workspace.expanduser().resolve(strict=True)
@@ -111,15 +116,20 @@ class GraphifyGraph:
         if not words:
             words = [query.strip().lower()]
         query_low = query.strip().lower()
+        # Graphify labels a function "name()" and a method ".name()". A symbol whose own name is
+        # exactly the query must outrank a docstring sentence that merely mentions it.
+        query_name = _symbol_name(query_low)
         ranked = []
         for ident, node in nodes.items():
             label = node["label"].lower()
             source = node["source_file"].lower()
-            score = (12 if label == query_low else 6 if query_low in label else 0)
+            score = (20 if _symbol_name(label) == query_name else 12 if label == query_low
+                     else 6 if query_low in label else 0)
             score += sum((4 if word in label else 0) + (1 if word in source else 0) for word in words)
             if score:
                 ranked.append((score, ident))
-        ranked.sort(key=lambda item: (-item[0], nodes[item[1]]["label"].lower()))
+        # Ties: the shorter label first (a symbol name before a sentence), then alphabetical.
+        ranked.sort(key=lambda item: (-item[0], len(nodes[item[1]]["label"]), nodes[item[1]]["label"].lower()))
         return [ident for _, ident in ranked]
 
     @staticmethod

@@ -1,0 +1,86 @@
+"""Safe generated-image chat previews. Full-size images stay in STAR user data."""
+from __future__ import annotations
+import base64
+import io
+from functools import lru_cache
+from pathlib import Path
+import re
+from PIL import Image, ImageOps
+
+PREFIX = "STAR_GENERATED_IMAGE:"
+NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,190}$")
+
+def preview_image(path: Path) -> str:
+    """Return a small thumbnail for Qt WebChannel, cached across chat refreshes."""
+    path = path.resolve(strict=True)
+    stat = path.stat()
+    if stat.st_size > 25_000_000:
+        raise ValueError("Generated image is too large for a chat preview")
+    return _cached_preview(str(path), stat.st_mtime_ns, stat.st_size)
+
+@lru_cache(maxsize=24)
+def _cached_preview(filename: str, modified_ns: int, file_size: int) -> str:
+    # Cache only encoded thumbnails; key includes mtime/size for invalidation.
+    with Image.open(filename) as opened:
+        if opened.width * opened.height > 55_000_000:
+            raise ValueError("Generated image dimensions exceed safety limit")
+        im = ImageOps.exif_transpose(opened)
+        im.thumbnail((960, 960), Image.Resampling.LANCZOS)
+        out = io.BytesIO()
+        im.convert("RGB").save(out, format="WEBP", quality=76, method=4)
+    return "data:image/webp;base64," + base64.b64encode(out.getvalue()).decode("ascii")
+
+def chat_image(home: Path, body: str) -> dict | None:
+    if not body.startswith(PREFIX):
+        return None
+    name = body[len(PREFIX):]
+    if not NAME.fullmatch(name) or name in (".", ".."):
+        return {"text": "Generated image unavailable (invalid reference)."}
+    directory = (home / "generated-images").resolve()
+    path = (directory / name).resolve()
+    if not path.is_relative_to(directory) or not path.is_file():
+        return {"text": "Generated image unavailable (file missing)."}
+    try:
+        return {"text": _saved_answer(path), "image": preview_image(path)}
+    except (OSError, ValueError):
+        return {"text": "Generated image saved; preview unavailable. Open STAR data folder to view."}
+
+def _saved_answer(path: Path) -> str:
+    """The line written when the picture was made (time, model, size, seed), kept beside it."""
+    import json
+    try:
+        note = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        answer = note.get("answer")
+        if isinstance(answer, str) and 0 < len(answer) <= 600:
+            return answer
+    except (OSError, ValueError, AttributeError):
+        pass
+    return "Image generated locally · original saved in STAR/generated-images"
+
+def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None, *, size: str = "square",
+                        source: Path | None = None, mask: Path | None = None) -> dict:
+    """Make or edit a picture for the chat, on the place chosen in Settings.
+
+    The built-in path is ComfyUI on this PC with FLUX.2 klein 4B (star/image_gen.py): text to
+    image, edit an attached picture, or change only a masked area. An owner who configured
+    their own API-format workflow keeps it for text to image; it never downloads custom nodes.
+    """
+    if not 1 <= len(prompt.strip()) <= 1500:
+        raise ValueError("Image prompt must be 1–1500 characters")
+    if source is not None or not settings.comfy_workflow.strip():
+        from .image_gen import generate as generate_built_in
+        made = generate_built_in(settings, prompt, home, size=size, source=source, mask=mask,
+                                 cancel_event=cancel_event)
+        return {"answer": made["answer"], "image": made["image"], "message": made["message"]}
+    from . import media_places
+    media_places.require(settings, "images", home)
+    from .comfy import generate
+    output = home / "generated-images"
+    images = generate(Path(settings.comfy_workflow), prompt=prompt,
+                      node_id=settings.comfy_prompt_node, output=output,
+                      port=settings.comfy_port, timeout_seconds=240, cancel_event=cancel_event)
+    first = images[0]
+    if not NAME.fullmatch(first.name):
+        raise RuntimeError("Unexpected generated image filename")
+    return {"answer": "Image generated locally · original saved in STAR/generated-images",
+            "image": preview_image(first), "message": PREFIX + first.name}

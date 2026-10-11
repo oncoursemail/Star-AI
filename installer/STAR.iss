@@ -1,5 +1,5 @@
 #ifndef StarVersion
-  #define StarVersion "0.8.1"
+  #define StarVersion "0.9.0"
 #endif
 #define STARName "STAR Intelligence"
 #define STARExe "STAR.exe"
@@ -47,5 +47,5 @@ Name: "{autodesktop}\STAR Intelligence"; Filename: "{app}\{#STARExe}"; Tasks: de
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Run]
-Filename: "{app}\{#STARExe}"; Description: "Launch STAR Intelligence"; Flags: nowait postinstall skipifsilent
-Filename: "{app}\{#STARExe}"; Flags: nowait skipifnotsilent
+Filename: "{app}\{#STARExe}"; Description: "Launch STAR Intelligence"; Flags: nowait postinstall skipifsilent runasoriginaluser
+Filename: "{app}\{#STARExe}"; Flags: nowait skipifnotsilent runasoriginaluser

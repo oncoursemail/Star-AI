@@ -3,16 +3,42 @@
 The --doctor command is supported in headless Windows CI to check the packaged app.
 """
 import sys
+import os
 
 
 def main():
+    if '--build-doctor' in sys.argv:
+        from star.build_info import read_build_info
+        result = read_build_info()
+        expected = os.environ.get("STAR_EXPECTED_HEAD_SHA", "").strip()
+        if not result["stamped"]:
+            raise RuntimeError("Packaged source provenance is missing or malformed")
+        if expected and result["head_commit"] != expected:
+            raise RuntimeError("Packaged source does not match the expected GitHub review commit")
+        print("STAR exact build:", result["head_commit"], result["run_url"])
+        return 0
     if '--doctor' in sys.argv:
         from star.desktop_core import Settings, app_data
         from star.media import image_part
         from star.version import __version__
+        from star.build_info import read_build_info
         print(f'STAR v{__version__} packaged backend OK')
+        build=read_build_info()
+        print('Build source:',build['head_commit'][:12] if build['stamped'] else 'local source / unstamped')
         print('Local data:', app_data())
         Settings().validate()
+        # Packaged Windows binaries must include the OS-backed credential
+        # provider; discovery can otherwise appear to work but key saving fails.
+        if sys.platform == 'win32':
+            from keyring.backends.Windows import WinVaultKeyring
+            if WinVaultKeyring is None:
+                raise RuntimeError('Windows credential vault backend missing')
+        from star.document_doctor import check_document_bundle
+        print('Packaged document readers OK:', ', '.join(check_document_bundle()))
+        return 0
+    if '--document-doctor' in sys.argv:
+        from star.document_doctor import check_document_bundle
+        print('Packaged document readers OK:', ', '.join(check_document_bundle()))
         return 0
     if '--ui-doctor' in sys.argv:
         from star.react_shell import react_index

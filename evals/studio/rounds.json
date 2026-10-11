@@ -1,0 +1,25 @@
+{
+  "game": "rounds",
+  "milestones": [
+    {
+      "id": "rounds.state",
+      "description": "ReplicatedStorage.RoundState is a StringValue with a valid Intermission, Playing or Ended phase.",
+      "check": "local state = game:GetService(\"ReplicatedStorage\"):FindFirstChild(\"RoundState\")\nif not state or not state:IsA(\"StringValue\") then\n    return false, \"ReplicatedStorage.RoundState StringValue is missing\"\nend\nif state.Value ~= \"Intermission\" and state.Value ~= \"Playing\" and state.Value ~= \"Ended\" then\n    return false, \"RoundState must use Intermission, Playing or Ended\"\nend\nreturn true, \"Current RoundState is \" .. state.Value"
+    },
+    {
+      "id": "rounds.phase_controller",
+      "description": "ServerScriptService.RoundController is enabled and server-run, with source references to RoundState, ordered Intermission then Playing then Ended phases and state assignment. Static source order does not prove a live cycle.",
+      "check": "local controller = game:GetService(\"ServerScriptService\"):FindFirstChild(\"RoundController\")\nif not controller or not controller:IsA(\"Script\") then\n    return false, \"Server RoundController Script is missing\"\nend\nif not controller.Enabled or controller.RunContext == Enum.RunContext.Client then\n    return false, \"RoundController must run on the server\"\nend\nlocal source = controller.Source\nlocal intermission = source:find(\"Intermission\", 1, true)\nlocal playing = source:find(\"Playing\", 1, true)\nlocal ended = source:find(\"Ended\", 1, true)\nif not intermission or not playing or not ended then\n    return false, \"RoundController lacks all three phase source signatures\"\nend\nif intermission >= playing or playing >= ended then\n    return false, \"RoundController phase source signatures are not ordered\"\nend\nif not source:find(\"RoundState\", 1, true) or not source:find(\".Value =\", 1, true) then\n    return false, \"RoundController lacks RoundState assignment source signature\"\nend\nreturn true, \"RoundController contains ordered phase transition source signatures\""
+    },
+    {
+      "id": "rounds.spawns",
+      "description": "Workspace contains LobbySpawn plus two or more SpawnLocations in Workspace.ArenaSpawns for players entering rounds.",
+      "check": "local lobby = workspace:FindFirstChild(\"LobbySpawn\")\nif not lobby or not lobby:IsA(\"SpawnLocation\") then\n    return false, \"Workspace.LobbySpawn SpawnLocation is missing\"\nend\nlocal arena = workspace:FindFirstChild(\"ArenaSpawns\")\nif not arena or not arena:IsA(\"Folder\") then\n    return false, \"Workspace.ArenaSpawns folder is missing\"\nend\nlocal count = 0\nfor _, child in ipairs(arena:GetChildren()) do\n    if child:IsA(\"SpawnLocation\") then\n        count = count + 1\n    end\nend\nif count < 2 then\n    return false, \"Need at least two arena SpawnLocations\"\nend\nreturn true, \"Lobby and \" .. tostring(count) .. \" arena spawn points are present\""
+    },
+    {
+      "id": "rounds.timer",
+      "description": "ReplicatedStorage.RoundTime is a nonnegative IntValue and server RoundController source mentions RoundTime.Value and task.wait.",
+      "check": "local time = game:GetService(\"ReplicatedStorage\"):FindFirstChild(\"RoundTime\")\nif not time or not time:IsA(\"IntValue\") then\n    return false, \"ReplicatedStorage.RoundTime IntValue is missing\"\nend\nif time.Value < 0 then\n    return false, \"RoundTime must be nonnegative\"\nend\nlocal controller = game:GetService(\"ServerScriptService\"):FindFirstChild(\"RoundController\")\nif not controller or not controller:IsA(\"Script\") then\n    return false, \"Server RoundController Script is missing\"\nend\nif not controller.Source:find(\"RoundTime.Value\", 1, true) or not controller.Source:find(\"task.wait(\", 1, true) then\n    return false, \"RoundController lacks timer update source signatures\"\nend\nreturn true, \"Round timer state and server update source signatures are present\""
+    }
+  ]
+}

@@ -58,6 +58,8 @@ Create two unrelated sample Roblox projects with conflicting approved colors, ch
 * A candidate result has a hard failure
 * A trial was blocked or never executed
 * The measured pass rate is not above baseline
+* A holdout task the baseline passed fails on every repeat for the candidate (a regression vetoes even when other tasks improved; a failure that passes on its repeat is reported as flaky and counts against the net). This verdict is not a copy: the module hands the holdout trials to the evaluation gate itself (`star/eval_gate.py`, `gate_change`; the recorded repeats are the gate's confirming re-run) and reports its answer under `gate`. When the gate gives no verdict (a blocked trial, nothing paired) the candidate is not promoted either
+* Fewer than 5 net task wins: tasks the baseline failed on every repeat and the candidate passed on every repeat, minus tasks that got worse. The gate only says "no worse"; this floor is the module's own rule on top of it, because a higher pass rate alone (one flipped task) is not evidence. The floor of 5 can be raised with `--min-net-wins`, never lowered
 * The candidate is much slower than baseline under the configured threshold
 
 To run the module on a **real** dataset (after writing the trusted runner):

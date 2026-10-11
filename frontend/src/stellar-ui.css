@@ -1,0 +1,1058 @@
+/* STAR desktop shell — the chrome around the work: sidebar rail, top bar,
+ * floating layers, and the skin of the secondary pages.
+ *
+ * Every colour, radius, space and duration comes from tokens.css.
+ * The conversation itself lives in chat.css.
+ */
+.shell {
+  color: var(--star-body);
+  background: var(--star-bg);
+  font-family: var(--star-font);
+  font-size: var(--star-fs-ui);
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
+}
+/* One focus treatment everywhere, and it stays visible during transitions. */
+.shell :is(button, input, textarea, select, summary, a, [tabindex]):focus-visible,
+.star-layer :is(button, a):focus-visible {
+  outline: 2px solid var(--star-gold);
+  outline-offset: 2px;
+}
+.shell :is(button, input, textarea) {
+  accent-color: var(--star-gold);
+}
+.shell ::selection {
+  background: var(--star-gold-wash-strong);
+  color: var(--star-text);
+}
+.shell button:disabled {
+  opacity: 0.45;
+}
+.shell .star-mark {
+  flex: 0 0 auto;
+  color: var(--star-gold);
+}
+
+/* ---------- Sidebar rail: navigation recedes so the work can lead ---------- */
+.shell .rail {
+  z-index: 11;
+  display: flex;
+  flex: 0 0 var(--star-sidebar-w);
+  flex-direction: column;
+  width: var(--star-sidebar-w);
+  overflow: hidden;
+  background: var(--star-sidebar);
+  border-right: 1px solid var(--star-stroke-soft);
+  transition:
+    flex-basis var(--star-dur-page) var(--star-ease),
+    width var(--star-dur-page) var(--star-ease),
+    opacity var(--star-dur-hover) linear,
+    visibility 0s linear 0s;
+}
+/* Children keep their width so labels do not reflow while the rail slides shut. */
+.shell .rail > * {
+  flex-shrink: 0;
+  width: var(--star-sidebar-w);
+}
+.shell.shell-sidebar-collapsed .rail {
+  flex-basis: 0;
+  width: 0;
+  visibility: hidden;
+  opacity: 0;
+  border-right-color: transparent;
+  transition:
+    flex-basis var(--star-dur-page) var(--star-ease),
+    width var(--star-dur-page) var(--star-ease),
+    opacity var(--star-dur-hover) linear,
+    visibility 0s linear var(--star-dur-page);
+}
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--star-topbar-h);
+  padding: 0 var(--star-2) 0 var(--star-3);
+}
+.rail-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  height: 32px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: none;
+  color: var(--star-text);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+.rail-icon,
+.bar-action {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-faint);
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.rail-icon:not(:disabled):hover,
+.bar-action:not(:disabled):hover,
+.bar-action[aria-pressed='true'] {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.rail-icon:not(:disabled):active,
+.bar-action:not(:disabled):active {
+  background: var(--star-surface-3);
+  transition-duration: var(--star-dur-press);
+}
+.rail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: var(--star-4);
+  padding: 0 var(--star-2);
+}
+.rail-label,
+.rail-sublabel {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 var(--star-2);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  font-weight: 500;
+}
+.rail-sublabel {
+  min-height: 24px;
+  margin-top: var(--star-2);
+}
+.rail-item {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  text-align: left;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.rail-item > svg {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+  transition: color var(--star-dur-hover) var(--star-ease);
+}
+.rail-item > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-item > small {
+  flex: 0 1 auto;
+  max-width: 88px;
+  overflow: hidden;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rail-item:not(:disabled):hover {
+  background: var(--star-surface-1);
+  color: var(--star-text);
+}
+.rail-item:not(:disabled):hover > svg,
+.rail-item.is-current > svg {
+  color: var(--star-muted);
+}
+.rail-item:not(:disabled):active {
+  background: var(--star-surface-2);
+  transition-duration: var(--star-dur-press);
+}
+.rail-item.is-current {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.rail-new,
+.rail-new > svg {
+  color: var(--star-text);
+}
+.rail-search {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  margin: var(--star-1) 0 0;
+  padding: 0 var(--star-1) 0 var(--star-2);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+}
+.rail-search:focus-within {
+  border-color: var(--star-stroke-strong);
+}
+.shell .rail-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+}
+.rail-search input::placeholder {
+  color: var(--star-faint);
+}
+.rail-search button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--star-faint);
+}
+.rail-search button:hover {
+  color: var(--star-text);
+}
+.rail-chats {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  padding: 0 var(--star-2) var(--star-2);
+  overflow-y: auto;
+  scrollbar-color: var(--star-stroke) transparent;
+  scrollbar-width: thin;
+}
+.shell .rail > .rail-chats {
+  flex-shrink: 1;
+}
+.rail-empty {
+  margin: 0;
+  padding: var(--star-1) var(--star-2);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.5;
+}
+.rail-foot {
+  padding: var(--star-2);
+  border-top: 1px solid var(--star-stroke-soft);
+}
+
+/* ---------- Top bar: where you are, and the two or three things you can do here ---------- */
+.shell .shell-main {
+  min-width: 0;
+  background: var(--star-bg);
+}
+.bar {
+  display: flex;
+  flex: 0 0 var(--star-topbar-h);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--star-3);
+  height: var(--star-topbar-h);
+  padding: 0 var(--star-3) 0 var(--star-4);
+}
+.bar-left {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+}
+.bar-right {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--star-1);
+}
+.bar-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--star-2);
+  min-width: 0;
+  font-size: 14px;
+}
+.bar-title h1 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--star-text);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-crumb,
+.bar-back {
+  flex: 0 0 auto;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--star-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-back {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  transition: color var(--star-dur-hover) var(--star-ease);
+}
+.bar-back:hover {
+  color: var(--star-text);
+}
+.bar-sep {
+  color: var(--star-stroke-strong);
+}
+/* Shown only when the rail is out of sight, so there is never a duplicate control. */
+.bar-reveal {
+  display: none;
+}
+.shell-sidebar-collapsed .bar-reveal {
+  display: inline-grid;
+}
+.shell .bar-find {
+  width: clamp(140px, 22vw, 260px);
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  outline: 0;
+  background: var(--star-surface-1);
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+}
+.shell .bar-find:focus {
+  border-color: var(--star-stroke-strong);
+}
+.preview-ribbon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--star-2);
+  min-height: 28px;
+  padding: var(--star-1) var(--star-4);
+  background: var(--star-surface-1);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.4;
+}
+.preview-ribbon svg {
+  flex: 0 0 auto;
+  color: var(--star-faint);
+}
+.shell .page-stage {
+  background: var(--star-bg);
+}
+.shell .toast {
+  position: static;
+  flex: 0 0 auto;
+  margin: var(--star-2) var(--star-4);
+  bottom: auto;
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+}
+.shell .toast svg {
+  flex: 0 0 auto;
+  color: var(--star-muted);
+}
+.shell .toast button {
+  background: none;
+  color: var(--star-muted);
+}
+
+/* ---------- Image lightbox (portalled outside the shell; uses .star-layer tokens) ---------- */
+.star-image-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--star-scrim);
+  animation: star-fade var(--star-dur-menu) var(--star-ease) both;
+}
+.star-image-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--star-3);
+  width: min(94vw, 1200px);
+  max-height: 94vh;
+  padding: var(--star-4);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-lg);
+  background: var(--star-surface-1);
+  box-shadow: var(--star-shadow-float);
+  color: var(--star-muted);
+  font-family: var(--star-font);
+  transform: translate(-50%, -50%);
+}
+.star-image-dialog img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(94vh - 88px);
+  border-radius: var(--star-r-sm);
+  object-fit: contain;
+}
+.star-image-dialog p {
+  margin: 0;
+  font-size: var(--star-fs-meta);
+}
+.star-image-close {
+  position: absolute;
+  top: var(--star-2);
+  right: var(--star-2);
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+@keyframes star-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-image-overlay {
+    animation: none;
+  }
+}
+
+/* ---------- Secondary pages: one quiet skin on the shared tokens ---------- */
+.shell .page-wrap {
+  max-width: 960px;
+  padding: var(--star-8) var(--star-10) var(--star-16);
+}
+.shell .page-intro {
+  margin-bottom: var(--star-6);
+}
+.shell .page-intro h1 {
+  margin: var(--star-2) 0;
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: var(--star-fs-h1);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.shell .page-intro p {
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.shell .eyebrow {
+  color: var(--star-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.shell .panel {
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  box-shadow: none;
+}
+.shell .settings-section {
+  margin-bottom: var(--star-3);
+  padding: var(--star-6);
+}
+.shell .settings-section h2 {
+  color: var(--star-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.shell .settings-section p {
+  color: var(--star-muted);
+  line-height: 1.6;
+}
+.shell .settings-section > .secondary-button + .secondary-button {
+  margin-left: var(--star-2);
+}
+/* Gold is for the primary action, not for section ornaments. */
+.shell .section-heading > svg,
+.shell .settings-section > svg.gold {
+  color: var(--star-faint);
+}
+.shell .settings-section small {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.shell :is(.field-grid input, .settings-section input:not([type='checkbox']), .project-create input) {
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-bg);
+  color: var(--star-text);
+}
+.shell .primary-button {
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-gold);
+  box-shadow: none;
+  color: var(--star-on-gold);
+  font-size: var(--star-fs-nav);
+}
+.shell .primary-button:not(:disabled):hover {
+  background: var(--star-gold-hover);
+}
+.shell .secondary-button {
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  box-shadow: none;
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+}
+.shell .secondary-button:not(:disabled):hover {
+  border-color: var(--star-stroke-strong);
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.shell .project-card {
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  box-shadow: none;
+}
+.shell .project-card:hover {
+  border-color: var(--star-stroke-strong);
+  background: var(--star-surface-2);
+}
+.shell .tool-icon {
+  border: 0;
+  background: var(--star-surface-3);
+  color: var(--star-gold-soft);
+}
+.shell .tag {
+  border-color: var(--star-stroke);
+  background: var(--star-surface-2);
+  color: var(--star-muted);
+}
+.shell .tag-green {
+  border-color: transparent;
+  background: var(--star-success-wash);
+  color: var(--star-success);
+}
+.shell .tag-gold {
+  border-color: transparent;
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+}
+.shell .tag-red {
+  border-color: transparent;
+  background: var(--star-danger-wash);
+  color: var(--star-danger);
+}
+.settings-page {
+  max-width: 880px;
+}
+.settings-expander,
+.settings-advanced {
+  margin-bottom: var(--star-3);
+  overflow: hidden;
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+}
+.settings-expander > summary,
+.settings-advanced > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--star-3);
+  padding: var(--star-4) var(--star-6);
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.settings-expander > summary::-webkit-details-marker,
+.settings-advanced > summary::-webkit-details-marker {
+  display: none;
+}
+.settings-expander > summary:hover,
+.settings-advanced > summary:hover {
+  background: var(--star-surface-2);
+}
+.settings-expander > summary > span:nth-child(2),
+.brain-details > summary > span:first-child {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--star-1);
+  min-width: 0;
+}
+.settings-expander > summary small {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.settings-expander > summary > svg:last-child,
+.settings-advanced > summary > svg:last-child {
+  margin-left: auto;
+  color: var(--star-faint);
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.settings-expander[open] > summary > svg:last-child,
+.settings-advanced[open] > summary > svg:last-child {
+  transform: rotate(180deg);
+}
+.settings-expander-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-3);
+  color: var(--star-gold-soft);
+}
+.settings-expander-body {
+  padding: 0 var(--star-6) var(--star-6);
+  color: var(--star-muted);
+}
+.settings-expander-body p {
+  margin: 0 0 var(--star-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.6;
+}
+.settings-expander-body small {
+  display: block;
+  margin-top: var(--star-3);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.6;
+}
+.image-workflow-label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-2);
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+}
+.shell .workflow-picker {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  width: 100%;
+  padding: 10px var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+  text-align: left;
+}
+.shell .workflow-picker span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell .workflow-picker:hover {
+  border-color: var(--star-stroke-strong);
+  background: var(--star-surface-3);
+}
+.shell .image-options {
+  margin-top: var(--star-4);
+}
+.settings-advanced-body {
+  padding: 0 var(--star-3) var(--star-3);
+}
+.settings-advanced-body > .panel {
+  margin: 0;
+  padding: var(--star-5) var(--star-3);
+  border: 0;
+  border-bottom: 1px solid var(--star-stroke-soft);
+  border-radius: 0;
+  background: none;
+}
+.settings-advanced-body > .panel:last-child {
+  border-bottom: 0;
+}
+.shell .updater-panel {
+  margin-top: var(--star-3);
+  border-color: var(--star-stroke-soft);
+  background: var(--star-surface-1);
+}
+/* Tools page: the knowledge cards, their heading, the vault folder row and the model test result.
+ * Their layout rules lived in desktop-v2.css, which is no longer part of the app; without them the
+ * three cards stack at full width with the status tag under the icon and the result line has no shape. */
+.shell .intelligence-heading {
+  margin: var(--star-8) 0 var(--star-4);
+}
+.shell .intelligence-heading .eyebrow {
+  display: block;
+  margin-bottom: var(--star-2);
+}
+.shell .intelligence-heading h2 {
+  margin: 0 0 var(--star-2);
+  color: var(--star-text);
+  font-size: var(--star-fs-h3);
+}
+.shell .intelligence-heading p {
+  max-width: 68ch;
+  margin: 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.6;
+}
+.shell .intelligence-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--star-4);
+  margin: 0 0 var(--star-4);
+}
+.shell .intelligence-grid .panel {
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+}
+.shell .integration-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-3);
+  min-width: 0;
+  padding: var(--star-5);
+}
+.shell .integration-panel p {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.shell .integration-panel code {
+  overflow-wrap: anywhere;
+}
+.shell .integration-panel .secondary-button {
+  align-self: flex-start;
+}
+.shell .integration-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--star-3);
+}
+.shell .integration-head .tag {
+  max-width: 70%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.shell .intelligence-folder-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--star-3);
+  margin: var(--star-4) 0 var(--star-3);
+}
+.shell .intelligence-folder-row label {
+  flex: 1;
+  min-width: 0;
+}
+.shell .intelligence-folder-row button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.shell .health-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-2);
+  margin-top: var(--star-3);
+  padding: var(--star-3) var(--star-4);
+  border-radius: var(--star-r-sm);
+  background: var(--star-success-wash);
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.shell .health-result svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-success);
+}
+@media (max-width: 1120px) {
+  .shell .intelligence-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 710px) {
+  .shell .intelligence-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .shell .intelligence-folder-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Provider, server and connector panels (IntegrationPanels) take the same tokens as every other page. */
+.shell .integrated-panel {
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  color: var(--star-body);
+}
+.shell .integrated-heading > svg {
+  color: var(--star-gold-soft);
+}
+.shell .integrated-heading strong,
+.shell .integrated-connector strong,
+.shell .integrated-notes > strong {
+  color: var(--star-text);
+}
+.shell .integrated-heading span,
+.shell .integrated-help,
+.shell .integrated-actions,
+.shell .integrated-connector small,
+.shell .integrated-note {
+  color: var(--star-muted);
+}
+.shell .integrated-field {
+  color: var(--star-body);
+}
+.shell .integrated-field :is(select, input, textarea) {
+  border-color: var(--star-stroke);
+  background: var(--star-bg);
+  color: var(--star-text);
+}
+.shell :is(.integrated-connectors, .integrated-connector, .integrated-notes, .integrated-note) {
+  border-color: var(--star-stroke-soft);
+}
+.shell .integrated-error {
+  color: var(--star-danger);
+}
+.shell :is(.integrated-confirm, .integrated-connected, .integrated-connector small.integrated-connected) {
+  color: var(--star-success);
+}
+
+/* Model & connection: one status card, facts in a row, one primary action. */
+.brain-page {
+  max-width: 800px;
+}
+.shell .conn-card {
+  padding: var(--star-6);
+}
+.conn-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-3);
+}
+.conn-dot {
+  flex: 0 0 auto;
+  width: 10px;
+  height: 10px;
+  margin-top: 7px;
+  border: 2px solid var(--star-faint);
+  border-radius: 50%;
+}
+.conn-dot.is-ready {
+  border-color: var(--star-success);
+  background: var(--star-success);
+}
+.conn-dot.is-offline {
+  border-color: var(--star-danger);
+  background: var(--star-danger);
+}
+.conn-dot.is-attention {
+  border-color: var(--star-gold);
+}
+.conn-copy {
+  flex: 1;
+  min-width: 0;
+}
+.conn-copy h2 {
+  margin: 0 0 var(--star-1);
+  overflow-wrap: anywhere;
+  color: var(--star-text);
+  font-size: var(--star-fs-h3);
+  font-weight: 600;
+}
+.shell .conn-copy p {
+  margin: 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.conn-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-3) var(--star-10);
+  margin: var(--star-5) 0;
+  padding: var(--star-4) 0;
+  border-top: 1px solid var(--star-stroke-soft);
+  border-bottom: 1px solid var(--star-stroke-soft);
+}
+.conn-facts dt {
+  margin-bottom: 2px;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.conn-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+}
+.conn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+}
+.shell .conn-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 36px;
+  margin: 0;
+  padding: 0 var(--star-4);
+}
+.shell .conn-local {
+  margin-top: var(--star-3);
+}
+.conn-local h2 {
+  margin: 0 0 var(--star-1);
+  color: var(--star-text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.shell .conn-local p {
+  margin: 0 0 var(--star-4);
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+}
+.shell .conn-local > .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 36px;
+  padding: 0 var(--star-4);
+}
+.brain-details .conn-local {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.brain-details {
+  margin-top: var(--star-3);
+}
+.brain-details .settings-expander-body > .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-height: 36px;
+}
+.brain-progress {
+  padding-top: var(--star-4);
+}
+.brain-progress .progress-track {
+  margin-top: var(--star-2);
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1150px) {
+  .shell {
+    --star-sidebar-w: 232px;
+  }
+  .shell .page-wrap {
+    padding: var(--star-6) var(--star-6) var(--star-16);
+  }
+}
+@media (max-width: 850px) {
+  /* The rail becomes an overlay drawer; "collapsed" no longer applies. */
+  .shell .rail,
+  .shell.shell-sidebar-collapsed .rail {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    flex-basis: auto;
+    width: 264px;
+    opacity: 1;
+    border-right: 1px solid var(--star-stroke);
+    box-shadow: var(--star-shadow-float);
+    transform: translateX(-100%);
+    /* Hidden from keyboard and screen readers while it is off-canvas. */
+    visibility: hidden;
+    transition:
+      transform var(--star-dur-page) var(--star-ease),
+      visibility 0s linear var(--star-dur-page);
+  }
+  .shell .rail > * {
+    width: 264px;
+  }
+  .shell.shell-open .rail {
+    visibility: visible;
+    transform: translateX(0);
+    transition:
+      transform var(--star-dur-page) var(--star-ease),
+      visibility 0s linear 0s;
+  }
+  .bar-reveal {
+    display: inline-grid;
+  }
+  .bar {
+    padding: 0 var(--star-2);
+  }
+  .bar-crumb,
+  .bar-crumb + .bar-sep {
+    display: none;
+  }
+}
+@media (max-width: 600px) {
+  .shell .page-wrap {
+    padding: var(--star-5) var(--star-4) var(--star-12);
+  }
+  .shell .settings-section,
+  .shell .conn-card {
+    padding: var(--star-4);
+  }
+  .settings-expander > summary {
+    padding: var(--star-4);
+  }
+  .settings-expander-body {
+    padding: 0 var(--star-4) var(--star-4);
+  }
+  .shell .bar-find {
+    width: 132px;
+  }
+  .star-image-dialog {
+    padding: var(--star-3);
+  }
+}

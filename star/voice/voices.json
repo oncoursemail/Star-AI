@@ -1,0 +1,1302 @@
+{
+ "version": 1,
+ "generated_by": "voice-lab/make_catalog.py",
+ "voices": [
+  {
+   "id": "heart",
+   "name": "Heart",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_heart",
+      1.0
+     ]
+    ],
+    "speed": 0.92,
+    "lang": "en-us",
+    "sentence_gap_ms": 0,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro/heart",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.41,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.41,
+    "realtime_factor": 0.068,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 195.1,
+    "words_per_minute": 207.1,
+    "pitch_range_st": 8.4,
+    "pause_share": 0.245,
+    "final_fall_st": -2.0,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 195.1,
+     "words_per_minute": 207.1,
+     "pitch_range_st": 8.4,
+     "heard_back_wer_percent": 0.0
+    }
+   },
+   "recommended_for": [],
+   "notes": "The default voice (speed 0.92). Warm and light."
+  },
+  {
+   "id": "heart-calm",
+   "name": "Heart, calm",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_heart",
+      1.0
+     ]
+    ],
+    "speed": 0.78,
+    "lang": "en-us",
+    "sentence_gap_ms": 0,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-calm/heart-calm",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.41,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.41,
+    "realtime_factor": 0.065,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 195.1,
+    "words_per_minute": 165.4,
+    "pitch_range_st": 8.1,
+    "pause_share": 0.25,
+    "final_fall_st": -3.5,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 195.1,
+     "words_per_minute": 165.4,
+     "pitch_range_st": 8.1,
+     "heard_back_wer_percent": 0.0
+    }
+   },
+   "recommended_for": [],
+   "notes": "Heart at speed 0.78: a calmer, slower pace."
+  },
+  {
+   "id": "nicole",
+   "name": "Nicole",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      1.0
+     ]
+    ],
+    "speed": 0.92,
+    "lang": "en-us",
+    "sentence_gap_ms": 0,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro/nicole",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.57,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.57,
+    "realtime_factor": 0.065,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 158.4,
+    "words_per_minute": 130.1,
+    "pitch_range_st": 7.2,
+    "pause_share": 0.473,
+    "final_fall_st": 0.1,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 158.4,
+     "words_per_minute": 130.1,
+     "pitch_range_st": 7.2,
+     "heard_back_wer_percent": 0.0
+    }
+   },
+   "recommended_for": [],
+   "notes": "The owner's pick: low, breathy and slow by nature (158 Hz, 130 wpm at the default speed)."
+  },
+  {
+   "id": "nicole-asmr",
+   "name": "Nicole, soft and whispery",
+   "style": "warm-caring",
+   "archetype": "whisper",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      1.0
+     ]
+    ],
+    "speed": 0.8,
+    "lang": "en-us",
+    "sentence_gap_ms": 250,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-asmr",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.31,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.31,
+    "realtime_factor": 0.092,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2278
+   },
+   "measured": {
+    "pitch_hz": 155.3,
+    "words_per_minute": 114.7,
+    "pitch_range_st": 6.3,
+    "pause_share": 0.465,
+    "final_fall_st": 1.8,
+    "heard_back_wer_percent": 0.5,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 155.3,
+     "words_per_minute": 114.7,
+     "pitch_range_st": 6.3,
+     "heard_back_wer_percent": 0.5
+    },
+    "style_fit": 99.1
+   },
+   "recommended_for": [],
+   "notes": "Pure Nicole, speed 0.80, short pauses. A soft, quiet, slow delivery (made from the owner's feedback)."
+  },
+  {
+   "id": "nicole-sarah-asmr",
+   "name": "Nicole and Sarah, soft",
+   "style": "warm-caring",
+   "archetype": "whisper",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      0.75
+     ],
+     [
+      "af_sarah",
+      0.25
+     ]
+    ],
+    "speed": 0.82,
+    "lang": "en-us",
+    "sentence_gap_ms": 250,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-sarah-asmr",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.36,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.36,
+    "realtime_factor": 0.097,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2201
+   },
+   "measured": {
+    "pitch_hz": 164.9,
+    "words_per_minute": 135.2,
+    "pitch_range_st": 6.9,
+    "pause_share": 0.413,
+    "final_fall_st": -1.7,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 164.9,
+     "words_per_minute": 135.2,
+     "pitch_range_st": 6.9,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 100.0
+   },
+   "recommended_for": [],
+   "notes": "75% Nicole, 25% Sarah: keeps the whispery quality with a little more clarity."
+  },
+  {
+   "id": "warm-soft-storyteller",
+   "name": "Soft storyteller (Qwen3-TTS)",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "A kind, nurturing woman of about fifty with a low, mellow, velvety voice. She speaks unhurriedly with gentle falling intonation, patient and steady like a favourite teacher reading a bedtime story. Soft-spoken and warm. Neutral English accent.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "",
+   "audition": "qwen3-tts-design/design-soft-storyteller",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.615,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.44,
+    "realtime_factor": 0.727,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 213.3,
+    "words_per_minute": 157.8,
+    "pitch_range_st": 7.8,
+    "pause_share": 0.389,
+    "final_fall_st": -2.6,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 213.3,
+     "words_per_minute": 157.8,
+     "pitch_range_st": 7.8,
+     "heard_back_wer_percent": 0.0
+    }
+   },
+   "recommended_for": [],
+   "notes": "Designed from a written description; the best warm-quality voice, but description-only voices can vary between lines."
+  },
+  {
+   "id": "warm-mum-locked",
+   "name": "Warm mum, locked (Qwen3-TTS)",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-warm-mum.wav",
+   "audition": "qwen3-tts-locked/warm-mum-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.79,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.8,
+    "realtime_factor": 0.711,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 197.5,
+    "words_per_minute": 192.2,
+    "pitch_range_st": 9.1,
+    "pause_share": 0.276,
+    "final_fall_st": -3.3,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the six comparison lines",
+    "six_lines": {
+     "pitch_hz": 197.5,
+     "words_per_minute": 192.2,
+     "pitch_range_st": 9.1,
+     "heard_back_wer_percent": 0.0
+    }
+   },
+   "recommended_for": [],
+   "notes": "Same voice in every sentence."
+  },
+  {
+   "id": "cmd-nicole-aoede",
+   "name": "Nicole and Aoede",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      0.6
+     ],
+     [
+      "af_aoede",
+      0.4
+     ]
+    ],
+    "speed": 0.88,
+    "lang": "en-us",
+    "sentence_gap_ms": 350,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-aoede",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.27,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.27,
+    "realtime_factor": 0.111,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2300
+   },
+   "measured": {
+    "pitch_hz": 172.0,
+    "words_per_minute": 139.8,
+    "pitch_range_st": 7.4,
+    "pause_share": 0.418,
+    "final_fall_st": -5.6,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 163.3,
+     "words_per_minute": 155.9,
+     "pitch_range_st": 6.9,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 99.8
+   },
+   "recommended_for": [
+    "live"
+   ],
+   "notes": "Best voice for live calls in this style: Nicole's dark, slow, breathy timbre with Aoede's firmer falling endings. Runs in calls today."
+  },
+  {
+   "id": "cmd-nicole-kore",
+   "name": "Nicole and Kore",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      0.6
+     ],
+     [
+      "af_kore",
+      0.4
+     ]
+    ],
+    "speed": 0.88,
+    "lang": "en-us",
+    "sentence_gap_ms": 350,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-kore",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.26,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.26,
+    "realtime_factor": 0.091,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2190
+   },
+   "measured": {
+    "pitch_hz": 156.9,
+    "words_per_minute": 138.9,
+    "pitch_range_st": 6.9,
+    "pause_share": 0.425,
+    "final_fall_st": -1.4,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 150.9,
+     "words_per_minute": 153.9,
+     "pitch_range_st": 7.2,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 99.6
+   },
+   "recommended_for": [],
+   "notes": "Nicole with Kore: lower and firmer."
+  },
+  {
+   "id": "cmd-nicole-slow",
+   "name": "Nicole, slow",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      1.0
+     ]
+    ],
+    "speed": 0.85,
+    "lang": "en-us",
+    "sentence_gap_ms": 400,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-85",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.29,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.29,
+    "realtime_factor": 0.077,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2189
+   },
+   "measured": {
+    "pitch_hz": 155.3,
+    "words_per_minute": 108.4,
+    "pitch_range_st": 6.6,
+    "pause_share": 0.51,
+    "final_fall_st": -0.4,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 155.3,
+     "words_per_minute": 121.2,
+     "pitch_range_st": 6.7,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 95.4
+   },
+   "recommended_for": [],
+   "notes": "Pure Nicole at speed 0.85 with 400 ms pauses. The owner's own pick; her endings do not fall."
+  },
+  {
+   "id": "cmd-aoede-steady",
+   "name": "Aoede, steady",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_aoede",
+      1.0
+     ]
+    ],
+    "speed": 0.76,
+    "lang": "en-us",
+    "sentence_gap_ms": 300,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/aoede-steady",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.36,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.36,
+    "realtime_factor": 0.092,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2233
+   },
+   "measured": {
+    "pitch_hz": 186.0,
+    "words_per_minute": 140.5,
+    "pitch_range_st": 9.1,
+    "pause_share": 0.361,
+    "final_fall_st": -3.0,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 177.8,
+     "words_per_minute": 155.1,
+     "pitch_range_st": 8.7,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 95.2
+   },
+   "recommended_for": [],
+   "notes": "A clean, dark non-Nicole alternative."
+  },
+  {
+   "id": "cmd-nicole-kore-firm-locked",
+   "name": "Nicole and Kore, locked (Qwen3-TTS)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "post": {
+     "tempo": 0.8
+    },
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/kokoro-nicole-kore-firm.wav",
+   "audition": "qwen3-tts-styles-locked/nicole-kore-firm-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.59,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.37,
+    "realtime_factor": 0.436,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6088
+   },
+   "measured": {
+    "pitch_hz": 172.0,
+    "words_per_minute": 132.4,
+    "pitch_range_st": 9.0,
+    "pause_share": 0.384,
+    "final_fall_st": -2.6,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 155.3,
+     "words_per_minute": 138.8,
+     "pitch_range_st": 9.0,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 99.8
+   },
+   "recommended_for": [
+    "quality"
+   ],
+   "notes": "Best quality: a synthetic Nicole+Kore clip reused by the Qwen Base model so every sentence has the same voice; slowed to tempo 0.8."
+  },
+  {
+   "id": "cmd-nicole-firm-locked",
+   "name": "Nicole, locked (Qwen3-TTS)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "post": {
+     "tempo": 0.78
+    },
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/kokoro-nicole-firm.wav",
+   "audition": "qwen3-tts-styles-locked/nicole-firm-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.64,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.38,
+    "realtime_factor": 0.432,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6159
+   },
+   "measured": {
+    "pitch_hz": 150.9,
+    "words_per_minute": 132.0,
+    "pitch_range_st": 5.5,
+    "pause_share": 0.361,
+    "final_fall_st": -1.1,
+    "heard_back_wer_percent": 4.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 158.4,
+     "words_per_minute": 143.9,
+     "pitch_range_st": 6.7,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 92.3
+   },
+   "recommended_for": [],
+   "notes": "Pure Nicole timbre in Qwen Base, tempo 0.78."
+  },
+  {
+   "id": "cmd-cool-mentor-locked",
+   "name": "Cool mentor, locked (Qwen3-TTS)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "post": {
+     "tempo": 0.8
+    },
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-cmd-cool-mentor-low.wav",
+   "audition": "qwen3-tts-styles-locked/cmd-cool-mentor-low-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.636,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.5,
+    "realtime_factor": 0.459,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6141
+   },
+   "measured": {
+    "pitch_hz": 152.4,
+    "words_per_minute": 141.5,
+    "pitch_range_st": 9.8,
+    "pause_share": 0.336,
+    "final_fall_st": -3.3,
+    "heard_back_wer_percent": 4.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 156.9,
+     "words_per_minute": 146.8,
+     "pitch_range_st": 8.6,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 87.5
+   },
+   "recommended_for": [],
+   "notes": "The Cool Mentor description locked on a reference that was lowered 2.5 semitones and slowed once, tempo 0.8."
+  },
+  {
+   "id": "cmd-chest-fall-locked",
+   "name": "Deep chest voice, locked (Qwen3-TTS)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "post": {
+     "tempo": 0.87
+    },
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-cmd-chest-fall.wav",
+   "audition": "qwen3-tts-styles-locked/cmd-chest-fall-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.707,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.69,
+    "realtime_factor": 0.507,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6718
+   },
+   "measured": {
+    "pitch_hz": 146.8,
+    "words_per_minute": 143.1,
+    "pitch_range_st": 6.2,
+    "pause_share": 0.411,
+    "final_fall_st": -2.9,
+    "heard_back_wer_percent": 4.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 156.9,
+     "words_per_minute": 167.0,
+     "pitch_range_st": 8.2,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 91.9
+   },
+   "recommended_for": [],
+   "notes": "A designed deep voice locked, tempo 0.87."
+  },
+  {
+   "id": "cmd-nicole-kore-chatterbox",
+   "name": "Nicole and Kore (Chatterbox)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "chatterbox",
+   "engine_settings": {
+    "exaggeration": 0.5,
+    "cfg_weight": 0.4,
+    "temperature": 0.7
+   },
+   "reference_clip": "voice-lab/refs/kokoro-nicole-kore-firm.wav",
+   "audition": "chatterbox-styles/cb-nicole-kore-firm",
+   "licence": "Chatterbox: MIT (Resemble AI); output carries an inaudible Perth watermark. Conditioned on a synthetic reference clip designed from text. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 4.27,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 4.27,
+    "realtime_factor": 1.308,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 4968
+   },
+   "measured": {
+    "pitch_hz": 152.4,
+    "words_per_minute": 148.0,
+    "pitch_range_st": 6.3,
+    "pause_share": 0.431,
+    "final_fall_st": -1.8,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 155.3,
+     "words_per_minute": 165.9,
+     "pitch_range_st": 7.4,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 96.3
+   },
+   "recommended_for": [],
+   "notes": "Chatterbox on the synthetic Nicole+Kore clip, exaggeration 0.5, cfg 0.4. Steady voice; not streaming."
+  },
+  {
+   "id": "cmd-chest-chatterbox",
+   "name": "Deep chest voice (Chatterbox)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "chatterbox",
+   "engine_settings": {
+    "exaggeration": 0.35,
+    "cfg_weight": 0.3,
+    "temperature": 0.6
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-cmd-chest.wav",
+   "audition": "chatterbox-styles/cb-cmd-chest-calm",
+   "licence": "Chatterbox: MIT (Resemble AI); output carries an inaudible Perth watermark. Conditioned on a synthetic reference clip designed from text. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 5.9,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 5.9,
+    "realtime_factor": 1.366,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 4992
+   },
+   "measured": {
+    "pitch_hz": 163.3,
+    "words_per_minute": 123.6,
+    "pitch_range_st": 9.1,
+    "pause_share": 0.466,
+    "final_fall_st": -3.7,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 163.3,
+     "words_per_minute": 133.2,
+     "pitch_range_st": 8.8,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 92.8
+   },
+   "recommended_for": [],
+   "notes": "Lowest line-to-line pitch drift of the commanding voices made from a description; not streaming."
+  },
+  {
+   "id": "cmd-chest",
+   "name": "Deep chest voice (description only)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "Female, 40 years old, deep chest voice, very low pitch, slow measured pace, firm downward intonation at the end of each sentence, long pauses, calm authority with a dry smile in the voice. American English.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-cmd-chest.wav",
+   "audition": "qwen3-tts-styles/cmd-chest",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.815,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.34,
+    "realtime_factor": 0.586,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 5538
+   },
+   "measured": {
+    "pitch_hz": 163.3,
+    "words_per_minute": 135.0,
+    "pitch_range_st": 8.5,
+    "pause_share": 0.419,
+    "final_fall_st": -4.5,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 188.2,
+     "words_per_minute": 159.7,
+     "pitch_range_st": 11.3,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 98.2
+   },
+   "recommended_for": [],
+   "notes": "Best description-only voice. Can vary between lines."
+  },
+  {
+   "id": "cmd-cool-mentor",
+   "name": "Cool mentor (description only)",
+   "style": "confident-commanding",
+   "archetype": "commanding",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "An elegant woman in her mid-thirties with a cool, low, slightly husky voice. She sounds composed, teasing and a little smug, speaking in an unhurried drawl with precise emphasis on key words, like a strict but proud mentor. American English accent.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-cmd-cool-mentor.wav",
+   "audition": "qwen3-tts-styles/cmd-cool-mentor",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.534,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.17,
+    "realtime_factor": 0.553,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 5061
+   },
+   "measured": {
+    "pitch_hz": 189.4,
+    "words_per_minute": 137.8,
+    "pitch_range_st": 8.8,
+    "pause_share": 0.408,
+    "final_fall_st": -3.8,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 210.5,
+     "words_per_minute": 159.7,
+     "pitch_range_st": 10.7,
+     "heard_back_wer_percent": 0.5
+    },
+    "style_fit": 94.6
+   },
+   "recommended_for": [],
+   "notes": "The first-draft voice the owner heard; can vary between lines."
+  },
+  {
+   "id": "ani-bella-heart-up",
+   "name": "Bright and sunny",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_bella",
+      0.5
+     ],
+     [
+      "af_heart",
+      0.5
+     ]
+    ],
+    "speed": 0.88,
+    "lang": "en-us",
+    "sentence_gap_ms": 150,
+    "pitch_semitones": 3.5
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/bella-heart-up",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.31,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.31,
+    "realtime_factor": 0.12,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 1177
+   },
+   "measured": {
+    "pitch_hz": 242.4,
+    "words_per_minute": 167.2,
+    "pitch_range_st": 7.9,
+    "pause_share": 0.27,
+    "final_fall_st": -0.3,
+    "heard_back_wer_percent": 3.1,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 238.8,
+     "words_per_minute": 181.4,
+     "pitch_range_st": 7.3,
+     "heard_back_wer_percent": 0.5
+    },
+    "style_fit": 94.6
+   },
+   "recommended_for": [
+    "live"
+   ],
+   "notes": "Best voice for live calls in this style: Bella and Heart lifted 3.5 semitones, brisk. Runs in calls today."
+  },
+  {
+   "id": "ani-nicole-jf-alpha-soft",
+   "name": "Soft, Nicole and Japanese stock voice",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_nicole",
+      0.5
+     ],
+     [
+      "jf_alpha",
+      0.5
+     ]
+    ],
+    "speed": 0.85,
+    "lang": "en-us",
+    "sentence_gap_ms": 250,
+    "pitch_semitones": 1.5
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/nicole-jf-alpha-soft",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.33,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.33,
+    "realtime_factor": 0.114,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2247
+   },
+   "measured": {
+    "pitch_hz": 225.4,
+    "words_per_minute": 134.2,
+    "pitch_range_st": 7.2,
+    "pause_share": 0.326,
+    "final_fall_st": -3.1,
+    "heard_back_wer_percent": 3.1,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 225.4,
+     "words_per_minute": 144.5,
+     "pitch_range_st": 7.3,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 94.6
+   },
+   "recommended_for": [],
+   "notes": "Nicole 50% with Kokoro's Japanese jf_alpha 50% speaking English: soft, slightly breathy, light East-Asian accent (from the owner's feedback)."
+  },
+  {
+   "id": "ani-zf-xiaobei-soft",
+   "name": "Soft, Chinese stock voice",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "zf_xiaobei",
+      1.0
+     ]
+    ],
+    "speed": 0.85,
+    "lang": "en-us",
+    "sentence_gap_ms": 250,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "kokoro-styles/zf-xiaobei-soft",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). Stock voices and blends shipped with the model; no real person is cloned. Runs in STAR calls today.",
+   "latency": {
+    "first_audio_seconds": 0.34,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.34,
+    "realtime_factor": 0.107,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 2205
+   },
+   "measured": {
+    "pitch_hz": 246.2,
+    "words_per_minute": 145.0,
+    "pitch_range_st": 10.2,
+    "pause_share": 0.227,
+    "final_fall_st": -3.9,
+    "heard_back_wer_percent": 3.1,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 242.4,
+     "words_per_minute": 159.7,
+     "pitch_range_st": 9.7,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 91.2
+   },
+   "recommended_for": [],
+   "notes": "Kokoro's Mandarin stock voice zf_xiaobei speaking English: soft, accented (from the owner's feedback)."
+  },
+  {
+   "id": "ani-sohee-soft",
+   "name": "Soft, Sohee (Qwen3-TTS stock)",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "Speak in a soft, gentle, slightly breathy voice, calm and kind, slowly and quietly, like a sweet supporting character in an English-dubbed anime.",
+    "speaker": "Sohee",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice"
+   },
+   "reference_clip": "",
+   "audition": "qwen3-tts-styles-custom/cv-sohee-soft",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.576,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.17,
+    "realtime_factor": 0.554,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 5354
+   },
+   "measured": {
+    "pitch_hz": 219.2,
+    "words_per_minute": 128.5,
+    "pitch_range_st": 9.8,
+    "pause_share": 0.417,
+    "final_fall_st": -2.8,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 207.8,
+     "words_per_minute": 150.3,
+     "pitch_range_st": 8.6,
+     "heard_back_wer_percent": 1.6
+    },
+    "style_fit": 99.7
+   },
+   "recommended_for": [],
+   "notes": "Qwen3-TTS stock speaker Sohee with a soft style instruction; Korean-accented English (from the owner's feedback)."
+  },
+  {
+   "id": "ani-genki-wide-locked",
+   "name": "Energetic, locked (Qwen3-TTS)",
+   "style": "anime-bright",
+   "archetype": "genki",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-genki-wide.wav",
+   "audition": "qwen3-tts-styles-locked/ani-genki-wide-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.585,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.58,
+    "realtime_factor": 0.568,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6285
+   },
+   "measured": {
+    "pitch_hz": 271.2,
+    "words_per_minute": 159.1,
+    "pitch_range_st": 9.8,
+    "pause_share": 0.345,
+    "final_fall_st": 0.7,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 290.9,
+     "words_per_minute": 200.4,
+     "pitch_range_st": 10.2,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 89.9
+   },
+   "recommended_for": [
+    "quality"
+   ],
+   "notes": "Best quality: bright, bouncy, wide pitch swings; the same voice in every sentence."
+  },
+  {
+   "id": "ani-soft-kr-locked",
+   "name": "Soft Korean-accented, locked (Qwen3-TTS)",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-soft-kr.wav",
+   "audition": "qwen3-tts-styles-locked/ani-soft-kr-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.722,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.71,
+    "realtime_factor": 0.681,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 5680
+   },
+   "measured": {
+    "pitch_hz": 225.4,
+    "words_per_minute": 146.5,
+    "pitch_range_st": 11.5,
+    "pause_share": 0.415,
+    "final_fall_st": -4.0,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 235.3,
+     "words_per_minute": 197.4,
+     "pitch_range_st": 11.6,
+     "heard_back_wer_percent": 1.0
+    },
+    "style_fit": 98.1
+   },
+   "recommended_for": [],
+   "notes": "A designed soft voice with a light Korean accent, locked (from the owner's feedback)."
+  },
+  {
+   "id": "ani-tsun-sharp-locked",
+   "name": "Prickly, locked (Qwen3-TTS)",
+   "style": "anime-bright",
+   "archetype": "tsun",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-tsun-sharp.wav",
+   "audition": "qwen3-tts-styles-locked/ani-tsun-sharp-locked",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.773,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 2.0,
+    "realtime_factor": 0.725,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6432
+   },
+   "measured": {
+    "pitch_hz": 262.3,
+    "words_per_minute": 149.2,
+    "pitch_range_st": 10.2,
+    "pause_share": 0.421,
+    "final_fall_st": 0.1,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 290.9,
+     "words_per_minute": 189.4,
+     "pitch_range_st": 10.0,
+     "heard_back_wer_percent": 1.0
+    },
+    "style_fit": 85.8
+   },
+   "recommended_for": [],
+   "notes": "Sharp, clipped, emphatic (tsundere type), locked."
+  },
+  {
+   "id": "ani-soft-jp",
+   "name": "Soft Japanese-accented (description only)",
+   "style": "anime-bright",
+   "archetype": "soft",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "An adult woman in her early twenties with a soft, gentle, slightly breathy voice and a light Japanese accent in her English. Calm, kind and a little shy, speaking slowly and quietly at a medium pitch, with small happy rises at the ends of phrases. Warm and tender, never childish.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-soft-jp.wav",
+   "audition": "qwen3-tts-styles/ani-soft-jp",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.592,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.5,
+    "realtime_factor": 0.607,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 5335
+   },
+   "measured": {
+    "pitch_hz": 228.6,
+    "words_per_minute": 144.7,
+    "pitch_range_st": 12.4,
+    "pause_share": 0.389,
+    "final_fall_st": -2.2,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 242.4,
+     "words_per_minute": 170.7,
+     "pitch_range_st": 9.0,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 94.3
+   },
+   "recommended_for": [],
+   "notes": "Designed from a description; can vary between lines. The locked copy came out too high (320 Hz) and was dropped."
+  },
+  {
+   "id": "ani-cool",
+   "name": "Cool and deadpan (description only)",
+   "style": "anime-bright",
+   "archetype": "cool",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "An adult woman in her mid-twenties with a calm, clear, composed voice at a medium-high pitch, deadpan and dry, even pace, minimal pitch movement, precise diction and a hint of quiet humour, like a cool character in an English-dubbed anime. American English.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-cool.wav",
+   "audition": "qwen3-tts-styles/ani-cool",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.504,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.16,
+    "realtime_factor": 0.537,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6054
+   },
+   "measured": {
+    "pitch_hz": 188.2,
+    "words_per_minute": 153.0,
+    "pitch_range_st": 9.7,
+    "pause_share": 0.376,
+    "final_fall_st": -3.0,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 231.9,
+     "words_per_minute": 173.3,
+     "pitch_range_st": 9.7,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 83.6
+   },
+   "recommended_for": [],
+   "notes": "Calm, dry; can vary between lines."
+  },
+  {
+   "id": "ani-tease-low",
+   "name": "Teasing older sister (description only)",
+   "style": "anime-bright",
+   "archetype": "tease",
+   "engine": "qwen3-tts",
+   "engine_settings": {
+    "instruct": "An adult woman in her late twenties with a relaxed, low-to-medium pitch, smooth alto voice, playful and teasing with a smirk in the voice, unhurried pace, pitch falling at the end of each sentence, like a confident, affectionate older-sister character in an English-dubbed anime. American English.",
+    "stream_chunk_steps": 8,
+    "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign"
+   },
+   "reference_clip": "voice-lab/refs/qwen-design-ani-tease-low.wav",
+   "audition": "qwen3-tts-styles/ani-tease-low",
+   "licence": "Qwen3-TTS 1.7B (VoiceDesign, Base, CustomVoice): Apache-2.0 (Alibaba Qwen); faster-qwen3-tts runtime: MIT. The voice is invented from a written description; any reference clip is synthetic. Not wired into calls yet.",
+   "latency": {
+    "first_audio_seconds": 0.492,
+    "first_audio_kind": "streaming first packet",
+    "first_sentence_seconds": 1.67,
+    "realtime_factor": 0.531,
+    "device": "PC GPU (RTX 3060 Ti)",
+    "gpu_memory_mb": 6042
+   },
+   "measured": {
+    "pitch_hz": 173.9,
+    "words_per_minute": 145.6,
+    "pitch_range_st": 8.4,
+    "pause_share": 0.351,
+    "final_fall_st": -1.4,
+    "heard_back_wer_percent": 0.0,
+    "measured_on": "the three style lines",
+    "six_lines": {
+     "pitch_hz": 231.9,
+     "words_per_minute": 162.1,
+     "pitch_range_st": 12.2,
+     "heard_back_wer_percent": 0.0
+    },
+    "style_fit": 99.0
+   },
+   "recommended_for": [],
+   "notes": "Relaxed, low-to-medium pitch, falling endings; overlaps the commanding style. Can vary between lines."
+  }
+ ]
+}
