@@ -622,8 +622,10 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=(chats.recover_turn(settings.project,active_chat,retry_id,prompt) if retry_id is not None
-                         else chats.add(settings.project,'user',prompt,chat_id=active_chat))
+                if retry_id is not None:
+                    user_id=chats.recover_turn(settings.project,active_chat,retry_id,prompt)
+                else:
+                    user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
