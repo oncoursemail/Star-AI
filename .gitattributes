@@ -3,3 +3,6 @@
 
 # Node scripts imported by the vitest suite carry a shebang; with CRLF the shebang line fails to parse there.
 *.mjs text eol=lf
+
+# The independently frozen retrieval fixture must keep identical transport bytes.
+tests/fixtures/shared_brain_retrieval.json text eol=lf
