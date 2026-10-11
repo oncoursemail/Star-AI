@@ -1,12 +1,18 @@
 """The gate: compares a candidate run with the stored baseline (star/eval_gate.py)."""
 import json
+from pathlib import Path
+
+import pytest
 
 from star import eval_gate as gate
 
 
 def result(statuses: dict, *, sha="s1", model="star-fast", mode="auto") -> dict:
-    return {"schema": 1, "suite": {"sha256": sha}, "run": {"model": model, "mode": mode},
-            "tasks": {tid: {"status": s} for tid, s in statuses.items()}}
+    return {"schema": 1, "suite": {"sha256": sha, "file": "suite.json", "tasks_total": 4,
+            "automated": 3, "selected": ["A", "B", "C"], "identity_sha256": "identity"},
+            "run": {"model": model, "mode": mode, "app_commit": "commit", "grader_sha256": "grader"},
+            "tasks": {tid: {"status": s, **({"passed": s == "pass"} if s in ("pass", "fail") else {})}
+                      for tid, s in statuses.items()}}
 
 
 BASE = result({"A": "pass", "B": "pass", "C": "fail", "D": "skipped"})
@@ -54,9 +60,9 @@ def test_a_different_suite_or_nothing_to_compare_is_unusable():
     assert gate.compare(result({"A": "skipped"}), result({"A": "pass"})).code == gate.UNUSABLE
 
 
-def test_different_model_is_noted_not_hidden():
+def test_different_model_is_unusable():
     v = gate.compare(BASE, result({"A": "pass", "B": "pass", "C": "fail"}, model="other"))
-    assert v.allowed and any("model differs" in n for n in v.notes)
+    assert v.code == gate.UNUSABLE and any("model differs" in n for n in v.notes)
 
 
 def test_gate_change_confirms_regressions_with_a_rerun():
@@ -101,3 +107,52 @@ def test_python_dash_m_entry_dispatches_to_the_gate(tmp_path):
     base = tmp_path / "b.json"
     base.write_text(json.dumps(BASE), encoding="utf-8")
     assert evals.main(["gate", "--baseline", str(base), "--candidate", str(base)]) == 0
+
+@pytest.mark.parametrize("field,value", [
+    ("row", {"status": "maybe"}), ("row", "pass"),
+    ("row", {"status": "pass", "passed": False}),
+    ("row", {"status": "pass", "passed": True, "checks": [{"id": "c", "ok": "yes"}]}),
+])
+def test_invalid_task_rows_fail_closed(field, value):
+    broken = result({"A": "pass", "B": "pass", "C": "fail"})
+    broken["tasks"]["A"] = value
+    assert gate.compare(BASE, broken).code == gate.UNUSABLE
+
+
+@pytest.mark.parametrize("field", ["file", "identity_sha256", "tasks_total"])
+def test_suite_identity_fail_closed(field):
+    broken = result({"A": "pass"})
+    broken["suite"][field] = "other" if field != "tasks_total" else 5
+    assert gate.compare(BASE, broken).code == gate.UNUSABLE
+
+
+@pytest.mark.parametrize("field", ["model", "mode", "grader_sha256"])
+def test_incompatible_grading_configuration_fails_closed(field):
+    broken = result({"A": "pass"})
+    broken["run"][field] = "different"
+    assert gate.compare(BASE, broken).code == gate.UNUSABLE
+
+
+@pytest.mark.parametrize("field,section", [
+    ("model", "run"), ("mode", "run"), ("app_commit", "run"),
+    ("grader_sha256", "run"), ("identity_sha256", "suite"),
+])
+def test_incompatible_rerun_is_unusable(field, section):
+    candidate = result({"A": "pass", "B": "fail", "C": "fail"})
+    again = result({"B": "pass"})
+    again[section][field] = "other"
+    assert gate.gate_change(BASE, lambda: candidate, rerun=lambda ids: again).code == gate.UNUSABLE
+
+
+def test_only_two_named_legacy_baselines_are_exempt(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    for filename in ("baseline-v2.json", "baseline-creation-v1.json"):
+        original = root / "evals" / "results" / filename
+        legacy = gate.load_result(original)
+        assert legacy["_legacy"]
+        assert not gate._errors(legacy, "baseline")[0]
+        assert any("legacy result" in note for note in gate.compare(legacy, legacy).notes)
+        copied = tmp_path / filename
+        copied.write_text(original.read_text(encoding="utf-8"), encoding="utf-8")
+        assert not gate.load_result(copied)["_legacy"]
+        assert gate.evaluate_change(copied, copied).code == gate.UNUSABLE
