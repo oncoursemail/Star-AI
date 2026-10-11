@@ -198,3 +198,14 @@ def test_boolean_suite_counts_are_not_valid_evaluation_evidence(key, value):
     baseline["suite"][key] = value
     candidate["suite"][key] = value
     assert gate.compare(baseline, candidate).code == gate.UNUSABLE
+
+
+def test_in_memory_legacy_flag_cannot_bypass_evidence_validation():
+    fake = result({"A": "pass", "B": "fail"})
+    fake["suite"].pop("identity_sha256")
+    fake["run"].pop("grader_sha256")
+    fake["tasks"]["A"].pop("checks")
+    fake["_legacy"] = True
+    # Only load_result() can grant the shipped file exception, never JSON-like dicts.
+    assert gate.compare(fake, fake).code == gate.UNUSABLE
+    assert gate.evaluate_change(fake, fake).code == gate.UNUSABLE
