@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "lua-5-4",
+  "title": "Lua 5.4 Reference Manual",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "website",
+    "url": "https://www.lua.org/manual/5.4/manual.html",
+    "revision": "5.4",
+    "content_root": "/manual/5.4/",
+    "public_base": "https://www.lua.org/manual/5.4/"
+  },
+  "licence": {
+    "text": {
+      "id": "MIT",
+      "url": "https://www.lua.org/license.html",
+      "redistribution_allowed": true,
+      "attribution": "Retain Lua.org/PUC-Rio copyright and MIT licence notice in substantial copies.",
+      "conditions": "The Lua reference manuals are explicitly made available under the Lua licence.",
+      "evidence_url": "https://www.lua.org/manual/5.4/manual.html",
+      "evidence_quote": "Freely available under the terms of the Lua license."
+    },
+    "code_samples": {
+      "id": "MIT",
+      "url": "https://www.lua.org/license.html",
+      "redistribution_allowed": true,
+      "attribution": "Retain Lua.org/PUC-Rio copyright and MIT licence notice for substantial copies.",
+      "conditions": "Covers code in the reference manual; external examples and books are excluded.",
+      "evidence_url": "https://www.lua.org/license.html",
+      "evidence_quote": "Permission is hereby granted, free of charge"
+    }
+  },
+  "include": [
+    "Language syntax and semantics",
+    "Standard libraries and modules",
+    "C API and auxiliary library reference",
+    "Section anchors in the single HTML reference manual"
+  ],
+  "exclude": [
+    "Programming in Lua book",
+    "Lua 5.5 and legacy version manuals",
+    "External examples and third-party modules",
+    "PDF or other duplicate download formats"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 1,
+    "max": 50,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "per-release",
+    "note": "Review when Lua 5.4.x changes; use only the versioned manual URL."
+  },
+  "citation": {
+    "format": "Lua 5.4 Reference Manual: {title} — {url} (Lua.org, PUC-Rio; MIT)",
+    "example": "Lua 5.4 Reference Manual: 3.4.1 Arithmetic Operators — https://www.lua.org/manual/5.4/manual.html#3.4.1 (Lua.org)"
+  }
+}
