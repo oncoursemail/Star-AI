@@ -269,3 +269,32 @@ def test_cli_is_non_mutating_without_explicit_run_and_sanitized(tmp_path, monkey
     with pytest.raises(SystemExit):
         main(argv + ["--run", "--acknowledge", "1"])
 
+
+
+def test_full_existing_cloud_pipeline_runs_with_fake_roblox_not_network(tmp_path):
+    """Exercise the production pipeline against the repository's Open Cloud fake."""
+    from star.roblox_cloud import RobloxCloud
+    from tests.roblox_fakes import FakeRoblox, KEY, UNIVERSE, PLACE
+    example = Path(__file__).resolve().parents[1] / "examples" / "roblox-test-place"
+    fake = FakeRoblox()
+    cloud = RobloxCloud(home=tmp_path, key=KEY, source="in-memory-test",
+                        client=fake.client(), sleep=lambda _: None)
+    try:
+        cloud.set_test_experience(UNIVERSE, PLACE, human_approved=True)
+        ledger = PracticeLedger(tmp_path / "practice.sqlite3")
+        try:
+            scope = PracticePlan("pipeline-integration", example, UNIVERSE, PLACE,
+                                 interval_seconds=300, daily_limit=2)
+            actual = practice_once(cloud, scope, ledger)
+            assert actual["status"] == "passed"
+            assert actual["passed"] > 0 and actual["failed"] == 0
+            assert actual["saved_version"] == 4
+            assert fake.published
+            assert all(entry["version_type"] == "Saved" for entry in fake.published)
+            assert all(entry["universe"] == UNIVERSE and entry["place"] == PLACE
+                       for entry in fake.published)
+            assert fake.tasks and any("/versions/4/" in task for task in fake.tasks)
+        finally:
+            ledger.close()
+    finally:
+        cloud.close()
