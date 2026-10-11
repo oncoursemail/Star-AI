@@ -72,6 +72,22 @@ scripts\windows_acceptance.cmd doctor
 
 Expect `[PASS] W06a STAR.exe --doctor`, `W06b --ui-doctor` and `W06c --build-doctor`. `STAR.exe` is a windowed program, so its printed text may be empty; the exit code is the result. For an exact pull request build also pass the PR head commit: `scripts\windows_acceptance.cmd doctor --expect-sha <40-hex-commit>`; a mismatch fails W06c. Builds older than the source-stamping change (v0.8.x) carry no provenance, so W06c is **expected to fail** on them and is only meaningful for the candidate build.
 
+### Automated packaged chat smoke (after W06, optional)
+
+Run this on Windows with the *packaged* STAR.exe, a running STAR Server endpoint, and a **copy** of your STAR profile. This is additional automated evidence, not a replacement for W07–W10 or for manual GPU/UI acceptance. Do not point the helper at your actual %APPDATA%\STAR folder. The helper refuses that profile; always close STAR and copy the profile first.
+
+From the project root, in Command Prompt:
+
+```bat
+mkdir "%USERPROFILE%\STAR-smoke-profile\Roaming"
+robocopy "%APPDATA%\STAR" "%USERPROFILE%\STAR-smoke-profile\Roaming\STAR" /E
+python scripts\packaged_smoke.py --exe "%LOCALAPPDATA%\Programs\STAR\STAR.exe" --profile-root "%USERPROFILE%\STAR-smoke-profile" --endpoint "http://127.0.0.1:8000" --key-file "C:\path\to\server-key.txt" --shots "%USERPROFILE%\STAR-acceptance\shots"
+```
+
+Replace the endpoint, executable location and key-file path with the values for this acceptance machine. The key-file accepts either a bare key or one NAME=value line (the value may contain '='). Treat the key file as a secret: never commit it or attach it to evidence. The tool copies the key into the child process environment only, checks that it is not visible in the page, takes startup/reply screenshots, closes STAR, and queries the copy's conversations.sqlite3 messages table for exactly one user row containing ACCEPT-MARKER-0002. Attach the screenshots and redacted PASS/FAIL output; do not attach the profile database or key file. The helper requires a Windows GUI and packaged Qt WebEngine app. Offline Python unit tests instead emulate a loopback DevTools WebSocket server and do not launch STAR or need Qt.
+
+
+
 ### W07 Post-install snapshot [script]
 
 Close STAR, then:
