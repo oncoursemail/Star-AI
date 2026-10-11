@@ -171,7 +171,7 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
      </div>
    </details>
    <div className="integrated-actions">
-     <button type="button" className="secondary-button" disabled={disabled||testing||!draft.server_endpoint} onClick={()=>void run(draft)}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
+     <button type="button" className="secondary-button" disabled={disabled||testing||!draft.server_endpoint} onClick={()=>{testedSettings.current={...draft};void run(draft)}}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
      <span>Saves these settings, then checks the server, the key and a real reply.</span>
    </div>
    {note&&<p role="status" className="integrated-confirm">{note}</p>}
