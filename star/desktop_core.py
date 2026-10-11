@@ -73,6 +73,7 @@ class Settings:
     media_images: str = 'pc'
     media_voice: str = 'pc'
     media_video: str = 'servers'
+    media_chat_auto: bool = True          # route explicit image requests directly from normal chat
     media_use_references: bool = True     # give a project's pinned reference images to image and UI work
     comfy_home: str = ''                  # folder of the ComfyUI install STAR may start ('' = started by hand)
     ffmpeg_dir: str = ''                  # folder with ffmpeg and ffprobe ('' = look on PATH)
@@ -134,7 +135,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau')):
+                            'learning_digest_cloud', 'media_chat_auto', 'media_use_references', 'studio_own_places', 'studio_luau')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
