@@ -10,7 +10,8 @@ import {SiteChapters,SiteLimits} from './SiteChapters'
 import {SiteProgress} from './SiteProgress'
 import {SiteDownload} from './SiteDownload'
 import {LINKS,SOURCE_VERSION,formatBytes,formatDate,releaseFiles} from './siteContent'
-import {latestStable} from './githubPublic'
+import {fetchLatestStableRelease,latestStable} from './githubPublic'
+import type {ReleaseInfo} from './githubPublic'
 import {delay,staticMode,useActiveSection,useHeaderState,useProgress,useReveal} from './siteHooks'
 import './site.css'
 
@@ -28,7 +29,16 @@ export function Landing(){
  const menuButton=useRef<HTMLButtonElement>(null)
  const [menu,setMenu]=useState(false)
  const progress=useProgress()
- const latest=useMemo(()=>latestStable(progress.snapshot),[progress.snapshot])
+ const [liveRelease,setLiveRelease]=useState<ReleaseInfo|null>(null)
+ // The direct latest-release API can outpace the build-time progress snapshot.
+ // Until it succeeds, the prerendered snapshot and official Releases link still work.
+ useEffect(()=>{
+  if(staticMode())return
+  const controller=new AbortController()
+  fetchLatestStableRelease(controller.signal).then(release=>{if(release)setLiveRelease(release)}).catch(()=>undefined)
+  return ()=>controller.abort()
+ },[])
+ const latest=useMemo(()=>liveRelease||latestStable(progress.snapshot),[liveRelease,progress.snapshot])
  const files=useMemo(()=>releaseFiles(latest),[latest])
  const header=useHeaderState(menu)
  const active=useActiveSection(sectionIds)
@@ -80,15 +90,16 @@ export function Landing(){
       <p className="sw-kicker sw-enter" style={delay(0)}>STAR INTELLIGENCE / LOCAL-FIRST AI</p>
       <h1 id="sw-hero-title" className="sw-enter" style={delay(0)}>Make the things you&nbsp;imagine.</h1>
       <p className="sw-lede sw-enter" style={delay(90)}>
-       STAR is a local-first AI workspace for Windows. It runs a model on your own hardware, works inside
-       Roblox Studio with your permission, and keeps your chats and projects on your&nbsp;disk.
+       STAR is a local-first AI workspace for Windows. Run a model on this PC or your own STAR Server,
+       work with Roblox Studio by permission, and keep chats and project files on your&nbsp;disk.
+       Hosted model providers are optional, never an automatic fallback.
       </p>
       <div className="sw-cta sw-enter" style={delay(170)}>
        <a className="sw-btn sw-btn-primary" href="#download"><ArrowDown size={18} aria-hidden="true"/> Download for Windows</a>
        <a className="sw-btn sw-btn-quiet" href="#product">See STAR in action</a>
       </div>
       <ul className="sw-hero-facts sw-enter" style={delay(220)} aria-label="Local workspace essentials">
-       <li>Windows workspace</li><li>Local model option</li><li>Your project context</li>
+       <li>Windows workspace</li><li>Local or LAN model</li><li>Project-scoped context</li>
       </ul>
      </div>
      <div className="sw-hero-side">
@@ -98,7 +109,7 @@ export function Landing(){
       <div><dt>Published</dt><dd>{latest?formatDate(latest.publishedAt):'unavailable'}</dd></div>
       <div><dt>Platform</dt><dd>Windows 11 · x64</dd></div>
       <div><dt>Installer</dt><dd>{files.setup?formatBytes(files.setup.size):'on GitHub'}</dd></div>
-      <div><dt>Model</dt><dd>Runs locally</dd></div>
+      <div><dt>Model</dt><dd>Local, LAN or opt-in hosted</dd></div>
       <div><dt>Status</dt><dd>Early software</dd></div>
      </dl>
      </div>
@@ -110,7 +121,7 @@ export function Landing(){
    <Suspense><SiteChapters latest={latest} setupSize={files.setup?.size??null}/></Suspense>
    <Suspense><SiteProgress progress={progress}/></Suspense>
    <Suspense><SiteLimits/></Suspense>
-   <Suspense><SiteDownload latest={latest} files={files} status={progress.status} snapshotAt={progress.snapshot?.generatedAt??null}/></Suspense>
+   <Suspense><SiteDownload latest={latest} files={files} releaseLive={liveRelease!==null} snapshotAt={progress.snapshot?.generatedAt??null}/></Suspense>
   </main>
 
   <footer className="sw-footer">
