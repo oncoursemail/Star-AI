@@ -44,3 +44,12 @@ CORRECT_SCRIPTS = ["local Players = game:GetService(\"Players\")\nPlayers.Player
 @pytest.mark.parametrize("script", CORRECT_SCRIPTS)
 def test_ten_idiomatic_scripts_have_no_error_or_warning(script):
     assert not [f for f in lint(script) if f.severity in ("error", "warning")]
+
+
+def test_finite_repeat_does_not_need_yield():
+    assert "loop-without-yield" not in {finding.rule_id for finding in lint(
+        "repeat attempts += 1 until attempts >= 3")}
+    assert "loop-without-yield" not in {finding.rule_id for finding in lint(
+        "repeat print('once') until true")}
+    assert "loop-without-yield" in {finding.rule_id for finding in lint(
+        "repeat print('spin') until false")}
