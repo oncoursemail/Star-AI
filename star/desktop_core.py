@@ -903,6 +903,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         allow_studio = bool(use_tools and settings.studio_id and
                             needs_studio_connection(prompt,recent_users))
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        # Searchable public metadata only; no connector is installed or approved.
+        from .mcp_registry import RegistryDiscovery
+        mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
         connection_for(settings)  # fail early (missing key, bad address) before any work
         limits = call_limits(settings)
         # Own hardware only: the conversation's tool list stays put from turn to turn (STAR
@@ -990,6 +993,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              mcp_registry=mcp_registry,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
