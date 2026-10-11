@@ -107,7 +107,7 @@ export const capabilities=[
  {name:'Studio and Open Cloud',since:'0.9.0',doc:LINKS.robloxAccess,
   what:'Studio inspection is read-only first. Separate Open Cloud actions save versions to an owner-approved private test place or run Luau tests, each requiring approval.'},
  {name:'Skills and the evaluation gate',since:'0.9.0',doc:LINKS.evals,
-  what:'Twelve task-specific skill packs ship, five on by default. The gate checks for regressions using fixed automated tasks; it does not judge visual quality in Studio.'},
+  what:'Eighteen task-specific skill packs ship, five on by default; the six game-type packs stay off until the gate has measured them. The gate checks for regressions using fixed automated tasks; it does not judge visual quality in Studio.'},
  {name:'Project learning',since:'0.9.0',doc:LINKS.learning,
   what:'Source-linked local lessons are scoped to a project. Inferred lessons await review; the model is not retrained.'},
  {name:'Voice calls',since:'0.9.0',doc:LINKS.voice,

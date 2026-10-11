@@ -12,7 +12,7 @@
 
 **Studio and Open Cloud.** Connect your own private test experience using a scoped Open Cloud key or Studio's MCP connector. Reads are available; publication and Luau testing require approval, and Studio changes are guarded by place/session checks. [Roblox access](ROBLOX_ACCESS.md#L1-L83).
 
-**Skills and evaluation gate.** Twelve topic packs ship; five are enabled by default. Automated Roblox suites and a gate help compare changes, not certify game quality. [Evaluations](evals.md#L113-L123).
+**Skills and evaluation gate.** Eighteen topic packs ship; five are enabled by default (the six game-type packs are opt-in until the gate has measured them). Automated Roblox suites and a gate help compare changes, not certify game quality. [Evaluations](evals.md#L113-L123).
 
 **Learning.** Project-specific corrections and preferences can be reviewed, recalled and exported. Inferred lessons need approval; the model is not retrained. [Learning](STAR_LEARNING.md#L1-L6).
 
