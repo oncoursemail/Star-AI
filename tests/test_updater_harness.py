@@ -135,7 +135,8 @@ def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path,
     requests = []
     events = []
     with _feed(_release("0.9.1", payload), payload, requests) as client:
-        monkeypatch.setattr(updates, "get_latest", lambda: updates.get_latest(client))
+        original_get_latest = updates.get_latest
+        monkeypatch.setattr(updates, "get_latest", lambda: original_get_latest(client))
         monkeypatch.setattr(
             updates, "stage_installer",
             lambda result, home, progress: original_stage(result, home, client, progress),
@@ -161,7 +162,8 @@ def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path,
 def test_real_bridge_worker_does_not_quit_for_current_release(tmp_path, monkeypatch):
     requests = []
     with _feed(_release("0.9.0", _payload()), _payload(), requests) as client:
-        monkeypatch.setattr(updates, "get_latest", lambda: updates.get_latest(client))
+        original_get_latest = updates.get_latest
+        monkeypatch.setattr(updates, "get_latest", lambda: original_get_latest(client))
         bridge = SimpleNamespace(
             pending_update=None,
             shutdownRequested=SimpleNamespace(
