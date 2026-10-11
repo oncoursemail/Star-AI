@@ -14,7 +14,7 @@ STAR can retain document evidence for a conversation, retrieve relevant passages
 | XLSX | Sheets and cached cell values with row locations | Formulas are never executed. Missing cached values remain missing and are reported. Macros and external links do not run. |
 | JSON | Text and scalar tabular arrays with JSON locations | Duplicate keys and non-finite numeric values are rejected. Nested cells become text with a warning. |
 
-Install the repository requirements for all readers. PDF decoding requires `pypdf>=6.20` for its parsing limits. Windows packaging explicitly includes the parser packages and their resources.
+Install the repository requirements for all readers. PDF decoding requires `pypdf>=6.20` for its parsing limits. The local Windows build script explicitly collects parser resources. The packaged `--doctor` also exercises synthetic PDF/Office/text/table evidence and exact calculation in a disposable directory; missing parser resources fail the existing CI smoke check. `--document-doctor` runs that check alone. It uses no application profile, model, engine or network.
 
 ## Sources and follow-up questions
 
