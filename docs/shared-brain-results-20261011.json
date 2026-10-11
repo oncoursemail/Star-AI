@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "base_commit": "a0db19b1d1d784dc00e06559c4eb3f58c07cac75",
+  "development": {
+    "baseline": {
+      "correct": 13,
+      "cases": 19,
+      "median_latency_ms": 1.632,
+      "p95_latency_ms": 2.978,
+      "median_context_chars": 3493,
+      "max_context_chars": 5462,
+      "median_estimated_tokens": 874
+    },
+    "shared": {
+      "correct": 13,
+      "cases": 19,
+      "median_latency_ms": 46.182,
+      "p95_latency_ms": 68.742,
+      "median_context_chars": 2838,
+      "max_context_chars": 2967,
+      "median_estimated_tokens": 710
+    }
+  },
+  "holdout": {
+    "baseline": {
+      "correct": 1,
+      "cases": 5,
+      "median_latency_ms": 2.464,
+      "p95_latency_ms": 2.982,
+      "median_context_chars": 4474,
+      "max_context_chars": 5620,
+      "median_estimated_tokens": 1119
+    },
+    "shared": {
+      "correct": 1,
+      "cases": 5,
+      "median_latency_ms": 50.706,
+      "p95_latency_ms": 76.833,
+      "median_context_chars": 2846,
+      "max_context_chars": 2986,
+      "median_estimated_tokens": 712
+    }
+  },
+  "combined": {
+    "baseline": {
+      "correct": 14,
+      "cases": 24,
+      "median_context_chars": 3885.5,
+      "median_latency_ms": 1.83
+    },
+    "shared": {
+      "correct": 14,
+      "cases": 24,
+      "median_context_chars": 2842.0,
+      "median_latency_ms": 46.623
+    }
+  },
+  "suite_sha256": "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696",
+  "graph_sha256": "009c6c47af17795d5ee04909f9795ad4e56f26050562e6b864c0ee076637da4f",
+  "freeze_sha256": "75806d9bd41a474a4f481c68e12572ba1db9c1733c833a8e5801d8a5cc90c171",
+  "verification": {
+    "python_passed": 1092,
+    "python_skipped": 14,
+    "python_failed": 0,
+    "frontend_passed": 114,
+    "typescript": "passed",
+    "vite_build": "passed",
+    "compileall": "passed",
+    "independent_boundary_checks": {
+      "builder_coordination_protocol": "35 passed",
+      "controller_protocol": "56 passed, 1 Windows symlink privilege skip",
+      "transport_and_variants": "22 passed; 7 transport controls also pass without Graphify"
+    }
+  },
+  "build": {
+    "builds": [
+      {
+        "sources": 20,
+        "changed_sources": 5,
+        "reused_sources": 15,
+        "deleted_sources": 0,
+        "nodes": 489,
+        "edges": 990,
+        "duration_ms": 1852.818,
+        "graph_sha256": "009c6c47af17795d5ee04909f9795ad4e56f26050562e6b864c0ee076637da4f",
+        "input_tokens": 0,
+        "output_tokens": 0
+      },
+      {
+        "sources": 20,
+        "changed_sources": 0,
+        "reused_sources": 20,
+        "deleted_sources": 0,
+        "nodes": 489,
+        "edges": 990,
+        "duration_ms": 708.804,
+        "graph_sha256": "009c6c47af17795d5ee04909f9795ad4e56f26050562e6b864c0ee076637da4f",
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    ],
+    "sync": {
+      "project_id": "ea9dc1ad35ab8f1882d22e48b9b3b34eebb0702bc2dd31e71ba483c5eab075e9",
+      "generation": 3,
+      "changed": true,
+      "nodes": 422,
+      "edges": 810,
+      "skipped": 247,
+      "attestation": "verified",
+      "inserted": 257,
+      "updated": 11,
+      "deleted": 46,
+      "unchanged": 964
+    }
+  },
+  "interface_smoke": {
+    "query_matches": 2,
+    "query_chars": 1537,
+    "outcome_count": 3,
+    "outcomes_candidate_only": true,
+    "coordination_first_page": 1,
+    "next_page": 1,
+    "receipt_recorded": true,
+    "board_unchanged": true,
+    "scope": "One local host exercised CLI paths with actor labels; this does not claim Claude or STAR made a live request."
+  },
+  "conclusion": "Same source/symbol retrieval correctness in both arms; smaller capped shared context, with added freshness/audit latency. No ranking improvement or speed win demonstrated. Holdout is weak (1/5 each), so do not claim broad quality gains or activate an optimization from these results.",
+  "method": "Same graph and top8 count limit; shared envelope capped at 3000 Unicode characters, baseline has no character cap. Both arms prewarmed; execution order alternates across repeats. Shared includes freshness checks and query audit persistence; baseline has neither. Token estimate is characters/4, not a tokenizer measurement.",
+  "conditions": "Owned regression/build/dependency-copy jobs finished before final timing. Other work on this host was not controlled. Median across three alternating-order measurements per fixed case.",
+  "independence": "Separate fixture author; holdout first run after implementation/corpus/configuration/development report freeze. Shared filesystem means no cryptographic or independent human holdout custody. No retrieval/ranking/configuration tuning or holdout rerun after disclosure.",
+  "measurement_snapshot": "Metrics describe the original frozen Windows Python3.12 snapshot. Later Windows3.11 reparse validation and test-only Git transport fixes are separately verified, outside that measured snapshot; they do not constitute a new unseen-performance claim. No actual Python3.11 or Linux host execution was performed.",
+  "evidence_archive_sha256": "54f2903000e0159073a7386e44a4eb497bc431a97de7e31b04920dec40fede25",
+  "remaining": [
+    "Integrate the injectable tool adapter into the chosen STAR host after review.",
+    "Future ranking/corpus changes require new independently authored holdout fixtures.",
+    "Autonomous improvement setting, execution sandbox, generated-skill evaluation and model training remain separate work.",
+    "No live model/server/Roblox task evaluation or deployment ran."
+  ]
+}

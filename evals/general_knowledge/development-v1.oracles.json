@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "suite_id": "star-general-foundations-development-v1",
+  "status": "root_reviewed_development_oracles_no_model_measurement",
+  "visibility": "Evaluator sidecar. Never serialize this file, derivations, expected outputs or oracle hashes into model messages.",
+  "grading_policy": "Strict bounded JSON parsing, duplicate-key rejection, exact key sets and JSON types, followed by semantic equality to these independently reviewed expected objects. Reject booleans in integer fields, non-finite numbers and floats in exact integer fields. Object key order and whitespace do not affect correctness; array order is significant where requested.",
+  "cases": {
+    "GF-01": {
+      "expected": {"remaining_pencils": 79},
+      "derivation": "18*12-137=216-137=79."
+    },
+    "GF-02": {
+      "expected": {"seconds": 120},
+      "derivation": "960 MiB divided by 8 MiB/s is 120 s."
+    },
+    "GF-03": {
+      "expected": {"numerator": 1, "denominator": 5},
+      "derivation": "(3/6)*(2/5)=6/30=1/5. Require a positive denominator and a reduced fraction."
+    },
+    "GF-04": {
+      "expected": {"conclusion": "undetermined"},
+      "derivation": "A model with hollow metal objects outside the cogs satisfies both premises; a model with a hollow cog also satisfies both. Neither the conclusion nor its negation follows."
+    },
+    "GF-05": {
+      "expected": {"end_utc": "2026-02-01T00:05:00Z"},
+      "derivation": "23:20+02:00 is Jan 31 21:20 UTC; adding 2:45 crosses midnight to Feb 1 00:05 UTC."
+    },
+    "GF-06": {
+      "expected": {"order": ["B", "A", "C"]},
+      "derivation": "Only B,A,C has B immediately before A and A before C."
+    },
+    "GF-07": {
+      "expected": {"ids": ["P1", "P3"]},
+      "derivation": "P1 and P3 satisfy both conditions. P2 is unavailable; P4 exceeds the inclusive price bound."
+    },
+    "GF-08": {
+      "expected": {"delivery_date": "2026-03-14", "source_ids": ["R2", "R3"]},
+      "derivation": "R2 supersedes R1 with March 12; R3 adds two calendar days. R1 is not current evidence."
+    },
+    "GF-09": {
+      "expected": {"tickets": null, "status": "not_provided", "source_ids": []},
+      "derivation": "No record explicitly reports Chloe. An absent row does not establish a zero."
+    },
+    "GF-10": {
+      "expected": {"order": ["E4", "E2", "E3", "E1"]},
+      "derivation": "E4=09:50Z, E2=10:15Z, E3=10:15Z, E1=10:30Z; E2 precedes E3 in input order."
+    }
+  }
+}

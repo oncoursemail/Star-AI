@@ -98,3 +98,79 @@ def test_team_refuses_to_declare_success_when_one_peer_fails(tmp_path):
     with pytest.raises(RuntimeError,match="could not finish") as exc:
         asyncio.run(scenario())
     assert "api key" not in str(exc.value)
+
+
+
+def test_streaming_team_deadline_returns_explicit_incomplete_ledger(tmp_path):
+    from star.desktop_core import Settings
+
+    class StalledCompletions:
+        def __init__(self):
+            self.calls = 0
+
+        async def create(self, **kwargs):
+            self.calls += 1
+            assert kwargs["stream"] and kwargs["max_tokens"] == 850
+
+            async def chunks():
+                yield SimpleNamespace(choices=[
+                    SimpleNamespace(delta=SimpleNamespace(content="Unfinished specialist insight"))
+                ])
+                await asyncio.sleep(30)
+
+            return chunks()
+
+    async def scenario():
+        fake = StalledCompletions()
+        client = SimpleNamespace(chat=SimpleNamespace(completions=fake))
+        settings = Settings(model="slow-local-model", project="A",
+                            team_timeout_min=1, team_timeout_max=1)
+        answer, ledger = await run_research_team(
+            settings=settings, prompt="Design reliable Roblox inventory",
+            home=tmp_path, client=client, parallel=2)
+        assert fake.calls == 3  # blocked synthesis never makes a request
+        assert ledger.peak_concurrency == 2
+        assert not ledger.completed
+        assert ledger.for_id("synthesis").status == "blocked"
+        assert "STAR Teams INCOMPLETE" in answer
+        assert "Unfinished specialist insight" in answer
+        assert all(ledger.for_id(task).status == "incomplete"
+                   for task in ("evidence", "design", "critic"))
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("tokens_per_second", [5, 10, 60])
+def test_team_uses_measured_provider_rate_for_stage_budgets(tmp_path, monkeypatch,
+                                                            tokens_per_second):
+    from star.desktop_core import Settings
+    from star.team_deadlines import ProviderSpeeds
+    from star import team_service
+    from star.agent_runtime import run_plan
+
+    settings = Settings(model="speed-measured-model", project="A")
+    speeds = ProviderSpeeds()
+    key = ("local", settings.endpoint, settings.model)
+    speeds.observe(key, 100, 100 / tokens_per_second)
+    observed = []
+
+    async def capture(plan, worker, **kwargs):
+        deadlines = kwargs["task_timeout"]
+        observed.append((deadlines(plan.tasks["evidence"]),
+                         deadlines(plan.tasks["synthesis"]),
+                         kwargs["total_timeout"]))
+        return await run_plan(plan, worker, **kwargs)
+
+    monkeypatch.setattr(team_service, "run_plan", capture)
+
+    async def scenario():
+        client = SimpleNamespace(chat=SimpleNamespace(completions=Completions()))
+        return await run_research_team(
+            settings=settings, prompt="Plan Roblox inventory", home=tmp_path,
+            client=client, parallel=2, speeds=speeds)
+
+    answer, ledger = asyncio.run(scenario())
+    assert ledger.completed and "synthesis" in answer
+    spec, synth, total = observed[0]
+    assert spec == pytest.approx(20 + 850 / tokens_per_second * 1.5)
+    assert synth == pytest.approx(20 + 1400 / tokens_per_second * 1.5)
+    assert total == pytest.approx(2 * spec + synth + 30)
