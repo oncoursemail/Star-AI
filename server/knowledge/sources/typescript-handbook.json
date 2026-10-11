@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "name": "typescript-handbook",
+  "title": "TypeScript Handbook and reference",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/microsoft/TypeScript-Website.git",
+    "revision": "v2",
+    "content_root": "packages/documentation/copy/en/",
+    "public_base": "https://www.typescriptlang.org/docs/handbook/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-4.0",
+      "url": "https://github.com/microsoft/TypeScript-Website/blob/v2/LICENSE",
+      "redistribution_allowed": true,
+      "attribution": "Credit Microsoft and contributors and link the original handbook page and CC BY 4.0; identify modifications.",
+      "conditions": "Only documentation in the official website repository.",
+      "evidence_url": "https://github.com/microsoft/TypeScript-Website/blob/v2/README.md",
+      "evidence_quote": "Creative Commons Attribution 4.0 International Public License"
+    },
+    "code_samples": {
+      "id": "MIT",
+      "url": "https://github.com/microsoft/TypeScript-Website/blob/v2/LICENSE-CODE",
+      "redistribution_allowed": true,
+      "attribution": "Keep the MIT copyright and permission notice with substantial copies of repository code samples.",
+      "conditions": "Do not assume separate playground examples or external packages share the licence.",
+      "evidence_url": "https://github.com/microsoft/TypeScript-Website/blob/v2/README.md",
+      "evidence_quote": "under the MIT License"
+    }
+  },
+  "include": [
+    "packages/documentation/copy/en/handbook-v2/",
+    "packages/documentation/copy/en/reference/",
+    "Type-system, compiler options and language feature reference pages"
+  ],
+  "exclude": [
+    "Translations and non-English content",
+    "Website application and build tools",
+    "External playground projects and third-party dependencies",
+    "Icons, artwork and community tutorials"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 80,
+    "max": 1500,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "monthly",
+    "note": "Review upstream website documentation monthly and check licence files for changes."
+  },
+  "citation": {
+    "format": "TypeScript Handbook: {title} — {url} (Microsoft and contributors, CC BY 4.0)",
+    "example": "TypeScript Handbook: The Basics — https://www.typescriptlang.org/docs/handbook/2/basic-types.html (CC BY 4.0)"
+  }
+}
