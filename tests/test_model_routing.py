@@ -587,7 +587,7 @@ def test_agent_turns_through_run_task_send_the_same_tool_bytes(desk):
 
 def test_the_warm_up_primes_the_shape_of_the_last_request(desk):
     scope = "STAR::chat::" + desk.chat
-    # Before any message: plain chat on the quick model, nothing else.
+    # Before any message in an empty chat: plain chat on the quick model, nothing else.
     start = prefix_requests(desk.settings, desk.home, desk.chat)
     assert [(request["model"], request["tools"]) for request in start] == [("star-voice", None)]
     assert start[0]["messages"][0]["content"].startswith(FAST_RULES)
@@ -603,11 +603,19 @@ def test_the_warm_up_primes_the_shape_of_the_last_request(desk):
     assert [message["role"] for message in tools_first["messages"]] == ["system", "user", "assistant", "user"]
     # ... and plain chat on the quick model second: another model, so it cannot replace the tool prompt.
     assert [(request["model"], request["tools"]) for request in after_agent[1:]] == [("star-voice", None)]
-    # After a quick answer the quick model alone.
+    # After a quick answer: the quick model first, then the main model reads the new exchange too,
+    # so a Roblox or coding question later does not start by reading the whole conversation.
     desk.turn("thanks!", [reply("Any time.", model="star-voice")])
-    assert [(request["model"], request["tools"])
-            for request in prefix_requests(desk.settings, desk.home, desk.chat)] == [("star-voice", None)]
+    after_quick = prefix_requests(desk.settings, desk.home, desk.chat)
+    assert [(request["model"], request["tools"]) for request in after_quick] == [
+        ("star-voice", None), ("star-fast", None)]
+    assert after_quick[0]["messages"] == after_quick[1]["messages"]        # the same plain-chat request
     assert turn_memory.last_shape(scope)["model"] == "star-voice"
+    # After a restart (nothing remembered) a chat with earlier turns is primed on both models,
+    # an empty chat on the quick model only (see the start of this test).
+    turn_memory.forget()
+    assert [(request["model"], request["tools"]) for request in
+            prefix_requests(desk.settings, desk.home, desk.chat)] == [("star-voice", None), ("star-fast", None)]
 
 
 def test_on_a_single_model_server_the_warm_up_after_a_tool_turn_skips_plain_chat(desk):
@@ -615,6 +623,11 @@ def test_on_a_single_model_server_the_warm_up_after_a_tool_turn_skips_plain_chat
     sent = desk.turn("Use a skill and delegate research to a team of agents", "Done.", mode="agent")
     requests = prefix_requests(desk.settings, desk.home, desk.chat)
     assert len(requests) == 1 and json.dumps(requests[0]["tools"]) == json.dumps(sent["tools"])
+    # And never more than one request per model, whatever the last turn was.
+    desk.turn("thanks!", "Any time.")
+    turn_memory.forget()
+    assert [(request["model"], request["tools"]) for request in
+            prefix_requests(desk.settings, desk.home, desk.chat)] == [("star-fast", None)]
 
 
 # ------------------------------------------------------------------ history budget

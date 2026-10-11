@@ -35,6 +35,9 @@ from . import server_roles, turn_memory
 # The priming turn. It is the last message of the request, so nothing after the
 # cached start depends on it; the single generated token is thrown away.
 PRIME_TEXT = "."
+# A Fast-mode message that goes to the main model on a server with a fleet (and to
+# the one configured model everywhere else). Only used to ask the router which model.
+MAIN_MODEL_PROBE = "How do I write a Luau script in Roblox?"
 
 
 def _checkpoint(home: Path, scope: str) -> str:
@@ -62,12 +65,17 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
     1. The shape of this chat's last request in this process (its model and, after
        a tool-using turn, the very tool list it sent): the next message most
        likely has the same shape. After an Agent turn this is the tool prompt, so
-       the warm-up extends that cached prompt instead of replacing it.
-    2. Plain chat on the quick model, when that is a different model: it has its
-       own slots, so priming it cannot disturb the first. On a single-model
-       server after a tool turn there is no second request.
+       the warm-up extends that cached prompt instead of replacing it. Before the
+       first turn (app start) this is plain chat on the quick model.
+    2. Plain chat on each other chat model of the server (the quick model, and the
+       main model that answers Roblox and coding questions), when the chat has
+       earlier turns to read. Each model keeps its own copy of the conversation,
+       so without this the first question that goes to the other model reads the
+       whole window (measured: 37 s on the main model for a full window).
 
-    Before the first turn (app start) only the plain-chat request exists.
+    Never two requests for the same model: its slot holds one prompt, and a
+    second request would replace the first. So on a single-model server there is
+    one request, and after a tool turn it is the tool prompt, not plain chat.
     """
     history = chat_history(settings, home, chat_id)[0] if (home / 'conversations.sqlite3').is_file() else []
     scope = memory_scope_for(settings, chat_id)
@@ -80,13 +88,18 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
                 'extras': llama_request_fields(settings, conversation=scope, tools=bool(tools), model=model,
                                                prime=True)}
 
-    quick = select_route(server_roles.effective(settings), 'hello', mode='fast').model
+    routed = server_roles.effective(settings)
+    quick = select_route(routed, 'hello', mode='fast').model
+    main = select_route(routed, MAIN_MODEL_PROBE, mode='fast').model
     shape = turn_memory.last_shape(scope)
-    if not shape or not shape.get('model'):
-        return [build(quick, None, '')]
-    targets = [build(shape['model'], shape.get('tools'), str(shape.get('guidance') or ''))]
-    if not server_roles.same_model(str(getattr(settings, 'server_endpoint', '')), shape['model'], quick):
-        targets.append(build(quick, None, ''))
+    if shape and shape.get('model'):
+        targets = [build(shape['model'], shape.get('tools'), str(shape.get('guidance') or ''))]
+    else:
+        targets = [build(quick, None, '')]
+    endpoint = str(getattr(settings, 'server_endpoint', ''))
+    for model in (quick, main):
+        if history and not any(server_roles.same_model(endpoint, model, target['model']) for target in targets):
+            targets.append(build(model, None, ''))
     return targets
 
 

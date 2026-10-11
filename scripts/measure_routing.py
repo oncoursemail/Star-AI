@@ -9,7 +9,7 @@ tokens written and their speed). Nothing is changed in what is sent.
 
 Scenarios (each one fits in a ten-minute measuring slot on a shared server):
 
-  quick    a five-turn Fast-mode chat
+  quick    a five-turn Fast-mode chat, without and with the post-answer warm-up
   roblox   one Fast-mode Roblox question (grounded in the documentation service)
   agent    two Agent-mode messages in one chat, then the same with the
            post-answer warm-up in between
@@ -191,9 +191,18 @@ def stamp(text: str) -> str:
 
 
 def quick(bench: Bench) -> dict:
-    chat = bench.new_chat()
-    return {"turns": [bench.turn(chat, stamp(text) if number == 0 else text) for number, text in
-                      enumerate(QUICK_TURNS)]}
+    """Five turns twice: sent one right after the other, and with the post-answer warm-up the
+    desktop runs after every answer (what the owner gets when reading the answer first)."""
+    result = {}
+    for arm, warm in (("next message sent at once", False), ("post-answer warm-up after each answer", True)):
+        print(f" {arm}", flush=True)
+        chat, turns, warm_ups = bench.new_chat(), [], []
+        for number, text in enumerate(QUICK_TURNS):
+            turns.append(bench.turn(chat, stamp(text) if number == 0 else text))
+            if warm and number < len(QUICK_TURNS) - 1:
+                warm_ups.append(bench.warm(chat))
+        result[arm] = {"turns": turns, "warm_ups": warm_ups}
+    return result
 
 
 def roblox(bench: Bench) -> dict:
@@ -213,7 +222,10 @@ def agent(bench: Bench) -> dict:
     return result
 
 
-def history(bench: Bench, budgets: list[int], prompt_kind: str) -> dict:
+MARGIN = 40   # characters below the boundary; the crossing question alone is longer than this
+
+
+def history(bench: Bench, budgets: list[int], prompt_kind: str, start_warm_up: bool = True) -> dict:
     """Seed a chat to just under a window boundary, then cross it."""
     core, result = bench.core, {}
     crossing = ("Write a python function that adds two numbers. Code only." if prompt_kind == "code"
@@ -229,19 +241,19 @@ def history(bench: Bench, budgets: list[int], prompt_kind: str) -> dict:
             arm = f"budget {real}, {'with' if warm else 'without'} the post-answer warm-up"
             print(f" {arm}", flush=True)
             marker = uuid.uuid4().hex[:8]
-            # Exchanges of about 1,400 characters, ending 150 characters before the fourth half-window.
+            # Exchanges of about 1,400 characters, ending MARGIN characters before the fourth half-window.
             seed, total, number = [], 0, 0
-            while total < 4 * half - 150 - 1500:
+            while total < 4 * half - MARGIN - 1500:
                 number += 1
                 user = f"({marker}) Tell me part {number} of the story."
                 answer = (FILLER * 20)[:1400 - len(user)]
                 seed.append((user, answer))
                 total += len(user) + len(answer)
             last_user = f"({marker}) And the last part before we change the subject?"
-            seed.append((last_user, (FILLER * 20)[:max(60, 4 * half - 150 - total - len(last_user))]))
+            seed.append((last_user, (FILLER * 20)[:max(60, 4 * half - MARGIN - total - len(last_user))]))
             chat = bench.new_chat(seed)
             before = len(core.chat_history(bench.settings, bench.home, chat)[0])
-            primed = bench.warm(chat)                         # the app start: the window is read once
+            primed = bench.warm(chat) if start_warm_up else None    # the app start: the window is read once
             crossed = bench.turn(chat, crossing)              # this answer pushes the chat over the boundary
             moved = len(core.chat_history(bench.settings, bench.home, chat)[0])
             warmed = bench.warm(chat) if warm else None
@@ -264,6 +276,8 @@ def main() -> int:
     parser.add_argument("--budgets", default="6000,12000", help="history budgets for the history scenario")
     parser.add_argument("--history-prompt", default="chat", choices=["chat", "code"],
                         help="history scenario: a plain question (quick model) or a coding one (main model)")
+    parser.add_argument("--no-start-warm-up", action="store_true",
+                        help="history scenario: skip the app-start warm-up (it primes the quick model only)")
     parser.add_argument("--out", default="")
     args = parser.parse_args()
 
@@ -287,7 +301,7 @@ def main() -> int:
                 report[name] = (quick(bench) if name == "quick" else roblox(bench) if name == "roblox"
                                 else agent(bench) if name == "agent"
                                 else history(bench, [int(value) for value in args.budgets.split(",")],
-                                             args.history_prompt))
+                                             args.history_prompt, not args.no_start_warm_up))
         finally:
             bench.chats.close()
             report["finished_utc"] = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
