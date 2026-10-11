@@ -17,6 +17,7 @@ from .brain_router import is_roblox_dev_prompt
 from .doc_knowledge import client_for
 from .graphify_bridge import GraphifyGraph
 from .obsidian_bridge import ObsidianVault
+from .roblox_craft import audit as craft_audit, recipe as craft_recipe
 from .roblox_cloud import RobloxCloud
 from .roblox_research import RobloxResearch
 
@@ -80,6 +81,27 @@ DOC_KNOWLEDGE_TOOLS = (
     _tool("star_api_lookup", "Check exact Roblox engine API names such as TweenService:Create, Humanoid.WalkSpeed or Enum.EasingStyle: whether each exists, its signature, whether it is deprecated, and its documentation link. Use before relying on an API name.", {"symbols": {"type": "array", "items": _s(120), "minItems": 1, "maxItems": 8}}, ("symbols",)),
     _tool("star_luau_check", "Statically check a Luau snippet with the official Luau compiler and type checker on the STAR Server. The code is never run. Roblox API names and argument types are not verified.", {"code": {"type": "string", "minLength": 1, "maxLength": 20000}, "strict": {"type": "boolean", "default": False}}, ("code",)),
 )
+CRAFT_TOOLS = (
+    _tool("star_roblox_craft_audit",
+          "Review sampled Studio hierarchy/properties and Luau source, supplied from authorized search_game_tree, inspect_instance and script_read results. Read-only static findings with evidence and references; no gameplay, screenshot, type-checker or GPU test was run.",
+          {"instances": {"type": "array", "maxItems": 160, "items": {
+              "type": "object", "properties": {
+                  "path": _s(220), "class": _s(80),
+                  "properties": {"type": "object", "maxProperties": 80},
+                  "complete": {"type": "boolean"}},
+              "required": ["path", "class"], "additionalProperties": False}},
+           "scripts": {"type": "array", "maxItems": 12, "items": {
+               "type": "object", "properties": {
+                   "path": _s(220), "class": {"type": "string",
+                       "enum": ["Script", "LocalScript", "ModuleScript"]},
+                   "source": {"type": "string", "maxLength": 20000}},
+               "required": ["path", "class", "source"], "additionalProperties": False}},
+           "target": {"type": "string", "enum": ["mobile", "desktop"], "default": "mobile"}},
+          ("instances",)),
+    _tool("star_roblox_craft_recipe",
+          "Read a reviewed, native Luau starter for a responsive HUD, layered particle impact, or Animator marker synchronization. Returns editable source, constraints and suggested path; DOES NOT write, run or install anything.",
+          {"kind": {"type": "string", "enum": ["responsive-hud", "impact-vfx", "animation-marker"]}}, ("kind",)),
+)
 ROBLOX_VIDEO_TOOLS = (
     _tool("star_roblox_youtube_search", "Find Roblox-related public YouTube video metadata using a locally configured API key; otherwise return an explicit YouTube search link.", {"query": _s(140), "limit": _limit(10, 6)}, ("query",)),
     _tool("star_roblox_youtube_video", "Inspect one YouTube video's public metadata, thumbnail and statistics if available. This does NOT watch the footage or download captions.", {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}, ("video_id",)),
@@ -101,9 +123,11 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 
+_CRAFT_TRIGGER = re.compile(r"\b(ui|gui|hud|vfx|particles?|animations?|effects?|scripting|code|scripts?|"
+                            r"interfaces?|tweens?|rigs?|review|inspect|audit|build|create)\b", re.I)
 _SKILL_TRIGGER = re.compile(r"\b(skill|expert|workflow|tool|roblox|luau|ui|design|debug|build|fix|test|code|studio|script)\b", re.I)
 _VAULT_TRIGGER = re.compile(r"\b(obsidian|obsidion|vault|notes?|journal|remember|knowledge|documents?|docs|meeting|decision|research|plan)\b", re.I)
 _GRAPH_TRIGGER = re.compile(r"\b(graphify|graph|architecture|codebase|dependenc\w*|relationships?|connections?|module|function|imports?|calls?|trace|impact|bug|scripts?)\b", re.I)
@@ -166,6 +190,8 @@ class LocalIntelligence:
             result.extend(GRAPHIFY_TOOLS)
         if self.docs and (_ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)):
             result.extend(DOC_KNOWLEDGE_TOOLS)
+        if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)) and _CRAFT_TRIGGER.search(prompt):
+            result.extend(CRAFT_TOOLS)
         if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I)):
             if _GAME_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I):
                 result.extend(ROBLOX_GAME_TOOLS)
@@ -204,6 +230,12 @@ class LocalIntelligence:
             if name == "star_api_lookup":
                 return {"untrusted": True, "results": self.docs.api_lookup(args["symbols"])}
             return self.docs.luau_check(args["code"], strict=args.get("strict", False))
+        if name == "star_roblox_craft_audit" or name == "star_roblox_craft_recipe":
+            if self.roblox is None:
+                raise PermissionError("Roblox research is disabled")
+            if name == "star_roblox_craft_recipe":
+                return craft_recipe(args["kind"])
+            return craft_audit(args["instances"], args.get("scripts"), target=args.get("target", "mobile"))
         if name.startswith("star_roblox_cloud_") and name != "star_roblox_cloud_universe":
             return self._cloud_call(name, args)
         if name.startswith("star_roblox_"):
