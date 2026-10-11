@@ -294,8 +294,34 @@ def _client(messages: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _spec(messages: list[dict[str, Any]]) -> str:
+    lines = [
+        "-- Pure Luau specs: place alongside Validators and RateLimiter.",
+        "local Validators = require(script.Parent.Validators)",
+        "local RateLimiter = require(script.Parent.RateLimiter)",
+        "local limiter = RateLimiter.new()",
+        "local player = {} :: any",
+        'assert(limiter:allow(player, "Probe", 2, 0))',
+        'assert(limiter:allow(player, "Probe", 2, 0))',
+        'assert(not limiter:allow(player, "Probe", 2, 0))',
+        'assert(limiter:allow(player, "Probe", 2, 1))',
+        "limiter:remove(player)",
+        'assert(limiter:allow(player, "Probe", 2, 1))',
+    ]
+    for msg in messages:
+        args = msg["arguments"]
+        if args:
+            lines.append(f'assert(not Validators.{msg["name"]}('
+                         + ", ".join("nil" for _ in args) + "))")
+        else:
+            lines.append(f'assert(Validators.{msg["name"]}())')
+    lines.append("return true")
+    return "\n".join(lines) + "\n"
+
+
 def compile_remotes(schema: Any) -> dict[str, str]:
-    """Return four deterministic Luau files: Server, Client, Validators, RateLimiter."""
+    """Return generated modules and a pure-Luau validator/rate-limiter spec."""
     messages = validate_schema(schema)
     return {"Server.luau": _server(messages), "Client.luau": _client(messages),
-            "Validators.luau": _validators(messages), "RateLimiter.luau": _limiter()}
+            "Validators.luau": _validators(messages), "RateLimiter.luau": _limiter(),
+            "Remote.spec.luau": _spec(messages)}
