@@ -43,6 +43,8 @@ MAX_RESPONSE = 2_000_000
 MAX_PLACE_BYTES = 8_000_000
 MAX_SCRIPT_CHARS = 200_000
 ACTION_TTL = 15 * 60
+# Longer than any approved action can take (checks, a 120 s upload, or a 330 s test and its logs).
+RUN_LIMIT = 10 * 60
 MAX_PENDING = 5
 KEEP_ACTIONS = 40
 
@@ -808,6 +810,11 @@ class RobloxCloud:
         for item in items:
             if item.get("status") == "pending" and moment > item.get("expires_ts", 0):
                 item["status"] = "expired"
+            elif item.get("status") == "running" and moment > item.get("decided_ts", 0) + RUN_LIMIT:
+                # STAR was closed or cut off while carrying it out: say so instead of "running" for ever.
+                item["status"] = "unknown"
+                item.setdefault("result", {"error": "STAR stopped while this was being carried out, so it is "
+                                                    "not known whether Roblox finished it."})
         return items
 
     def _save_actions(self, items: list[dict]) -> None:
@@ -851,7 +858,7 @@ class RobloxCloud:
             if action["status"] != "pending":
                 raise CloudError(f"This action is already {action['status']}")
             action["status"] = "running" if approved else "rejected"
-            action["decided"] = _utc(self.now())
+            action["decided"], action["decided_ts"] = _utc(self.now()), self.now()
             self._save_actions(items)
         if not approved:
             return public_action(action, full=True)

@@ -305,3 +305,25 @@ def test_a_playtest_can_always_be_stopped():
     fake_studio.identity.update(placeId=777, gameId=77)        # whatever is open now, stopping is never refused
     assert not run(studio.call_tool("start_stop_play", {**PLAY, "is_start": False})).model_dump()["isError"]
     assert not fake_studio.playing
+
+
+# ------------------------------------------------------------------ 8. "running" is not forever
+
+def test_an_action_cut_off_while_running_becomes_unknown(fake, tmp_path):
+    moment = [1000.0]
+    cloud = RobloxCloud(home=tmp_path, key=KEY, client=fake.client(), now=lambda: moment[0], sleep=lambda _s: None)
+    cloud.set_test_experience(UNIVERSE, PLACE, human_approved=True)
+    action = cloud.request_action("run_test", "Run the shop tests", {"script": "return 1"})
+
+    def app_closed(*_arguments, **_more):
+        raise KeyboardInterrupt                                # STAR is closed in the middle of the run
+
+    cloud.run_luau = app_closed
+    with pytest.raises(KeyboardInterrupt):
+        cloud.decide(action["id"], approved=True, human_approved=True)
+    assert cloud.action(action["id"])["status"] == "running"
+    moment[0] += 3600                                          # an hour later nothing can still be running
+    seen = cloud.action(action["id"])
+    assert seen["status"] == "unknown" and "not known" in seen["result"]["error"]
+    with pytest.raises(CloudError, match="already unknown"):
+        cloud.decide(action["id"], approved=True, human_approved=True)
