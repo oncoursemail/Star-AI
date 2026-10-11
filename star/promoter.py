@@ -385,7 +385,7 @@ class Promoter:
                WHERE a.target=? AND c.state='applied'
                ORDER BY a.promotion_id DESC LIMIT 1""", (row["target"],)).fetchone()
         if latest[0] != promotion_id:
-            raise RuntimeError("A newer promotion must be undone first")
+            raise PromotionConflict("A newer promotion must be undone first")
         target = row["target"]
         if target.startswith("lesson:"):
             _, project, lesson_id = target.split(":", 2)
