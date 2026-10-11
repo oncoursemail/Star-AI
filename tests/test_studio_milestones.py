@@ -80,6 +80,7 @@ return true, "RoundState " .. state.Value
     'local localOnly = 1\nglobalValue = localOnly',
     'local x = 1\nworkspace.Name, x = "bad", 2',
     'local x = 1\nworkspace.Name,\n x = "bad", 2',
+    'local name = "Http" .. "Service"\nlocal spoof = \':GetService("ReplicatedStorage")\'\nlocal service = game:GetService(name)',
 ])
 def test_malicious_or_unapproved_luau_is_rejected(attack):
     with pytest.raises(ValueError):
@@ -90,6 +91,13 @@ def test_malicious_or_unapproved_luau_is_rejected(attack):
 def test_invalid_or_unbounded_snippets_are_rejected(invalid):
     with pytest.raises(ValueError):
         validate_check(invalid)
+
+
+def test_size_limit_is_in_bytes_not_only_unicode_codepoints():
+    source = 'local hint = "' + '✦' * 1500 + '"\nreturn false, "fail"\nreturn true, hint'
+    assert len(source) < MAX_CHECK_CHARS
+    with pytest.raises(ValueError, match="bounded"):
+        validate_check(source)
 
 
 @pytest.mark.parametrize("bad", [
@@ -139,3 +147,14 @@ def test_manifest_is_loaded_as_inert_data_without_studio_or_execution(tmp_path):
     checks = load_milestones("obby", directory=tmp_path)
     assert [m.id for m in checks] == ["obby.alpha", "obby.beta"]
     assert [m.check for m in checks] == [READ_ONLY_CHECK, READ_ONLY_CHECK]
+
+
+def test_get_service_matches_literal_arguments_not_text_inside_quoted_strings():
+    validate_check('''
+local hint = ':GetService("ReplicatedStorage")'
+local storage = game:GetService("ReplicatedStorage")
+if storage == nil then
+    return false, "missing"
+end
+return true, hint
+''')

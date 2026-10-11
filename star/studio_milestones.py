@@ -38,7 +38,8 @@ _ALLOWED_METHODS = frozenset({
 })
 _ALLOWED_FUNCTIONS = frozenset({"ipairs", "pairs", "tostring", "tonumber", "type", "typeof"})
 _ALLOWED_SERVICES = frozenset({"ReplicatedStorage", "ServerScriptService", "ServerStorage", "StarterGui"})
-_SERVICE_CALL = re.compile(r":\s*GetService\s*\(\s*['\"]([A-Za-z]+)['\"]\s*\)")
+_SERVICE_CALL = re.compile(r":\s*GetService\s*\(")
+_SERVICE_LITERAL = re.compile(r''':\s*GetService\s*\(\s*(["'])([A-Za-z]+)\1\s*\)''')
 _LOCAL = re.compile(rf"\blocal\s+({_IDENTIFIER})\s*=")
 _LOOP = re.compile(rf"\bfor\s+({_IDENTIFIER}(?:\s*,\s*{_IDENTIFIER})*)\s+in\b")
 _NUMERIC_LOOP = re.compile(rf"\bfor\s+({_IDENTIFIER})\s*=")
@@ -59,11 +60,13 @@ def validate_check(check: str) -> None:
     GetService arguments must be fixed, inspected service names. Do not run
     arbitrary user-supplied Luau based on this static check alone.
     """
-    if not isinstance(check, str) or not check.strip() or len(check) > MAX_CHECK_CHARS:
+    if not isinstance(check, str) or not check.strip() or len(check.encode("utf-8")) > MAX_CHECK_CHARS:
         raise ValueError("Studio check must be a nonempty, bounded Luau snippet")
     if any(char in check for char in ("\\", chr(96), "\x00")) or "--" in check:
         raise ValueError("Studio check contains unsupported quoting or comments")
-    code = _STRING.sub('STRING', check)
+    # Mask literals at their original offsets so strings cannot spoof a safe
+    # service call or an unapproved method invocation.
+    code = _STRING.sub(lambda match: ' ' * (match.end() - match.start()), check)
     if any(char in code for char in ('"', "'", "[", "]", ";")):
         raise ValueError("Studio check contains unsupported syntax or indirect indexing")
     if _DANGEROUS.search(code) or re.search(r"\bHttpService\b", check, re.IGNORECASE):
@@ -78,10 +81,10 @@ def validate_check(check: str) -> None:
         raise ValueError("Studio check uses an unapproved method")
     if set(_FREE_CALL.findall(code)) - _ALLOWED_FUNCTIONS:
         raise ValueError("Studio check uses an unapproved function")
-    calls = re.findall(r":\s*GetService\s*\(", code)
-    services = _SERVICE_CALL.findall(check)
-    if len(calls) != len(services) or set(services) - _ALLOWED_SERVICES:
-        raise ValueError("Studio check requires literal, approved GetService arguments")
+    for call in _SERVICE_CALL.finditer(code):
+        literal = _SERVICE_LITERAL.match(check, call.start())
+        if not literal or literal.group(2) not in _ALLOWED_SERVICES:
+            raise ValueError("Studio check requires literal, approved GetService arguments")
 
     # Assignments may only initialize or update local variables (or numeric loop
     # counters). In particular, assigning to global names is not permitted.
