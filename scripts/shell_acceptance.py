@@ -629,7 +629,9 @@ class Driver:
         stream = self.js('__acc.stream') or {}
         events = self.events[turn['mark']:]
         deltas = [e for e in events if e.get('delta_chars')]
-        ended = next((e for e in events if e.get('kind') in ('result', 'error')), None)
+        # Not the end of the turn: the result of the app's own warm-up, which can arrive while a turn runs.
+        ended = next((e for e in events if e.get('kind') == 'error'
+                      or (e.get('kind') == 'result' and 'primed' not in (e.get('data') or {}))), None)
         samples = stream.get('samples') or []
         sent_ms = turn['sent_at'] * 1000
         facts = {'bridge_delta_events': len(deltas), 'visible_updates': len(samples)}
@@ -696,7 +698,10 @@ def step_boot(d: Driver, expect_history: bool = False) -> None:
             s.fact('server_checked_during_start', checked)
             # The app now checks the server by itself at start (warm-up). Its light can turn "Ready" a moment
             # before the warm-up's result event arrives (priming is still running), so both are truthful then.
-            s.check(status.get('state') == 'Ready' if checked else status.get('state') in ('Not checked', 'Ready'),
+            # With a wrong key that same check fails, and the light then says "Needs attention": also the truth.
+            wrong_key = bool(d.real_key) and d.key != d.real_key
+            allowed = ('Not checked', 'Needs attention') if wrong_key else ('Not checked', 'Ready')
+            s.check(status.get('state') == 'Ready' if checked else status.get('state') in allowed,
                     'status is truthful at start: "Not checked" until a real check or reply', status.get('state'))
         else:
             s.check(status.get('state') == 'Offline', 'status says the model on this PC is not running', status.get('state'))
@@ -730,7 +735,13 @@ def step_model_page(d: Driver) -> None:
         s.check('STAR Server is your AI brain' in text, 'server card is shown')
         s.check(settings['server_endpoint'] in text, 'card shows the saved server address')
         s.check('Key: saved' in text, 'card says a key is present')
-        s.check('not checked yet' in text, 'card says the server has not been checked yet')
+        # The app checks the server by itself at start (warm-up). The card must agree with the status light:
+        # "not checked yet" before that check has answered, "ready" after it passed.
+        # (The light itself is on the chat page; its state at boot was recorded there.)
+        light = next((step.facts.get('status', {}).get('state') for step in d.steps if step.name == 'boot'), None)
+        s.fact('status_light_at_boot', light)
+        s.check('Status: ready' in text if light == 'Ready' else ('not checked yet' in text or 'Status: ready' in text),
+                'the card agrees with the status light about the server check', [light, text[-260:]])
         s.check(d.js("(document.querySelector('details.brain-details')||{}).open") is False,
                 'the local-model download is folded away as an optional backup')
         s.shots.append(d.shot('model'))
@@ -777,7 +788,8 @@ def step_fast_send(d: Driver, name: str = 'fast-send', prompt: str = PROMPT_FAST
         facts = d.stream_metrics(turn)
         s.facts.update(facts)
         events = d.events[turn['mark']:]
-        result = next((e for e in events if e.get('kind') == 'result'), None)
+        # The app's own warm-up can end during the turn; its result has no answer and is not this turn's.
+        result = next((e for e in events if e.get('kind') == 'result' and 'answer' in (e.get('data') or {})), None)
         answer = ((result or {}).get('data') or {}).get('answer', '')
         s.fact('answer', answer[:400])
         s.fact('activity', [e.get('phase') for e in events if e.get('phase') and not e.get('delta_chars')])
@@ -1729,7 +1741,7 @@ def step_followup(d: Driver) -> None:
     """Fast mode in a new chat: how long the first words take on the first message and on follow-ups."""
     with d.step('followup-new-chat') as s:
         d.open_chat()
-        d.click('button[aria-label="New chat"]')
+        d.click('.rail-new')
         d.wait_for("document.querySelectorAll('.thread-turns > .msg').length===0", 15, 'an empty new chat')
         s.check(not d.transcript(), 'a new chat is open and empty')
     names = ['followup-first', 'followup-second', 'followup-third']
