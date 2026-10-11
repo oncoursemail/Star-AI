@@ -8,7 +8,7 @@ read-only questions:
   luau_check  does this Luau snippet compile and pass static type analysis (it is never run)
 
 Rules this module enforces:
-  * the address is the owner's setting, validated as a local-network endpoint exactly like
+  * the address is the owner's setting, validated as a private IP address exactly like
     the STAR Server address; the model can never supply a host or a URL;
   * the key is the STAR Server key from the OS keyring or environment, and it is only ever
     sent to that validated private address, never through a system proxy, never on a redirect;
@@ -51,7 +51,7 @@ class KnowledgeUnavailable(OSError):
 
 
 def validate_knowledge_endpoint(value) -> str:
-    """Canonical local-network URL for STAR Knowledge; only the path differs."""
+    """Canonical private-IP URL for STAR Knowledge; only the path differs."""
     return validate_lan_endpoint(value, path="", label=_LABEL)
 
 
@@ -71,7 +71,7 @@ def knowledge_endpoint_for(settings) -> str:
     except ValueError:
         return ""
     url = urlsplit(server)
-    host = url.netloc.rsplit(":", 1)[0]  # already validated; works for DNS names and bracketed IPv6
+    host = url.netloc.rsplit(":", 1)[0]  # already validated; works for IPv4 and bracketed IPv6
     return f"{url.scheme}://{host}:{KNOWLEDGE_PORT}"
 
 
