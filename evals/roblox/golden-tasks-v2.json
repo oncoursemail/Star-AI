@@ -1762,7 +1762,7 @@
   "category": "ui-layout",
   "difficulty": 2,
   "goal": "Keep a HUD label out of the phone notch without device-specific offsets",
-  "prompt": "On phones with a camera cut-out the score label of this HUD is hidden in the top-right corner. Fix the script without hard-coding device-specific pixel offsets, and keep it correct on PC.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui",
+  "prompt": "On phones with a camera cut-out the score label of this HUD is hidden in the top-right corner. Fix the script without hard-coding device-specific pixel offsets, and keep it correct on PC.\n\nlocal Players = game:GetService(\"Players\")\nlocal gui = Instance.new(\"ScreenGui\")\ngui.Name = \"Hud\"\ngui.ScreenInsets = Enum.ScreenInsets.None\ngui.Parent = Players.LocalPlayer:WaitForChild(\"PlayerGui\")\nlocal label = Instance.new(\"TextLabel\")\nlabel.Size = UDim2.fromOffset(140, 36)\nlabel.AnchorPoint = Vector2.new(1, 0)\nlabel.Position = UDim2.new(1, -150, 0, 0)\nlabel.Text = \"Score: 0\"\nlabel.Parent = gui",
   "run_mode": "automated",
   "helps": [
    "roblox-ui-layout"
@@ -1789,12 +1789,11 @@
     {
      "id": "safe_area",
      "any": [
-      "ScreenInsets",
+      "ScreenInsets\\s*=\\s*Enum\\.ScreenInsets\\.(DeviceSafeInsets|CoreUISafeInsets|TopbarSafeInsets)",
       "SafeAreaCompatibility",
-      "ClipToDeviceSafeArea",
       "GetGuiInset"
      ],
-     "why": "the safe area must be handled by the engine's screen-inset setting"
+     "why": "the safe area must be restored through the engine's ScreenInsets setting"
     }
    ],
    "forbid": [
@@ -1802,6 +1801,11 @@
      "id": "hack_offset",
      "re": "-\\s*150\\b",
      "why": "the hard-coded -150 pixel offset must go"
+    },
+    {
+     "id": "insets_none",
+     "re": "ScreenInsets\\s*=\\s*Enum\\.ScreenInsets\\.None",
+     "why": "ScreenInsets.None is what hides the label under the notch"
     }
    ]
   },
@@ -1816,8 +1820,9 @@
    "type": "static",
    "checks": [
     "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
-    "Present: the safe area must be handled by the engine's screen-inset setting",
-    "Absent: the hard-coded -150 pixel offset must go"
+    "Present: the safe area must be restored through the engine's ScreenInsets setting",
+    "Absent: the hard-coded -150 pixel offset must go",
+    "Absent: ScreenInsets.None is what hides the label under the notch"
    ]
   },
   "split": "development"
