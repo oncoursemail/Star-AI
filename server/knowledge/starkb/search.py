@@ -36,7 +36,8 @@ BASE_COLUMNS = "{title heading idents text}"   # FTS5 column filter: match outsi
 # higher than query-to-passage cosine. The question score is scaled before it competes with the
 # passage score; the value was chosen on the 30 development questions (see docs/agents/knowledge-study.md).
 QUESTION_SCALE = float(os.environ.get("STAR_KB_QUESTION_SCALE", "0.85"))
-USE_QUESTIONS = os.environ.get("STAR_KB_QUESTIONS", "1") != "0"   # service default; `questions=` overrides per call
+# Off unless STAR_KB_QUESTIONS=1 (set in the unit file once the measured effect justified it); `questions=` overrides per call.
+USE_QUESTIONS = os.environ.get("STAR_KB_QUESTIONS", "0") == "1"
 RERANK_DOC_CHARS = 1000         # the reranker shares the 512-token physical batch limit (query + document + template)
 STOP = frozenset("""a an and are as at be but by can do does for from how i if in into is it its me my of on or
 so that the their then there these this to use using was what when where which who why will with you your

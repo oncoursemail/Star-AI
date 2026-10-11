@@ -2,7 +2,7 @@
 
 The documentation index STAR's Roblox tools use: search over the official Roblox Creator Docs and the Luau site,
 exact engine-API lookup, and a Luau compile + type check. It runs on the STAR server next to the model server
-(STAR Brain) and is reached by the desktop app through `star/knowledge_client.py`.
+(STAR Brain) and is reached by the desktop app through `star/doc_knowledge.py`.
 
 This folder is the source of truth. Nothing in it names a server: the address comes from the environment.
 
