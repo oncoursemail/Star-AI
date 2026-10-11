@@ -42,10 +42,10 @@ it('keeps a running turn in its original chat when another chat is viewed',async
   {id:'chat-2',title:'Other chat',created:'2026-10-11T12:00:00Z',updated:'2026-10-11T12:00:00Z'}
  ]
  bridge.host({chats})
- const original=bridge.snapshot().messages
+ bridge.onAction('bootstrap',()=>({ok:true,data:{...bridge.snapshot(),messages:bridge.snapshot().active_chat==='chat-1'?bridge.saved():[]}}))
  bridge.onAction('switchChat',call=>{
   const id=String(call.payload.chatId)
-  bridge.host({active_chat:id,messages:id==='chat-2'?[]:original})
+  bridge.host({active_chat:id,messages:id==='chat-2'?[]:bridge.saved()})
   return {ok:true,data:bridge.snapshot()}
  })
  const {user,id}=await start()
