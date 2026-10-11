@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "unity-manual",
+  "title": "Unity Editor Manual",
+  "mode": "link-only",
+  "source": {
+    "kind": "zip",
+    "url": "https://cloudmedia-docs.unity3d.com/docscloudstorage/en/6000.5/UnityDocumentation.zip",
+    "revision": "6000.5",
+    "content_root": "Documentation/Manual/",
+    "public_base": "https://docs.unity.com/en-us/engine/6000.5/manual/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-NC-ND-4.0",
+      "url": "https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode",
+      "redistribution_allowed": false,
+      "attribution": "Credit Unity Technologies with a page link and licence link; only noncommercial, unmodified sharing is covered.",
+      "conditions": "CC BY-NC-ND permits sharing unmodified text for noncommercial uses with credit, a licence link and no additional restrictions; it does not grant unrestricted commercial or derivative corpus ingestion. STAR remains link-only.",
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/manual/terms-of-use",
+      "evidence_quote": "Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International"
+    },
+    "code_samples": {
+      "id": "Unity-Companion-License-1.4",
+      "url": "https://unity.com/legal/licenses/unity-companion-license",
+      "redistribution_allowed": false,
+      "attribution": "Only Unity-dependent projects may exercise the Companion License; substantial copies retain its licence and copyright notice.",
+      "conditions": "STAR's general documentation corpus is not a Unity-dependent project. The Scripting API landing page grants broader rights to examples, but the documentation terms specify Companion License; do not store samples.",
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/manual/terms-of-use",
+      "evidence_quote": "licensed under the Unity Companion License for Unity-dependent projects"
+    }
+  },
+  "include": [
+    "Editor interface and workflows",
+    "Scenes, GameObjects, components and prefabs",
+    "Rendering, physics, animation and UI",
+    "Build settings and platform guidance"
+  ],
+  "exclude": [
+    "Scripting API (separate manifest)",
+    "Unity Learn/Academy courses and training content",
+    "Third-party packages and linked sites",
+    "Images, videos and other media"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 1000,
+    "max": 30000,
+    "note": "Planning estimate only; Unity's official combined Manual + API offline ZIP is about 300 MB, neither half measured."
+  },
+  "update_cadence": {
+    "frequency": "per-release",
+    "note": "Review on Unity releases and re-check the Documentation Terms; do not fetch automatically."
+  },
+  "citation": {
+    "format": "Unity Manual: {title} — {url} (Unity Technologies, version shown on page)",
+    "example": "Unity Manual: Prefabs — https://docs.unity.com/en-us/engine/6000.5/manual/prefabs (Unity Technologies)"
+  }
+}

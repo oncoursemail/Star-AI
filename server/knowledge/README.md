@@ -12,6 +12,7 @@ This folder is the source of truth. Nothing in it names a server: the address co
 |---|---|
 | `starkb/` | the package: `chunking`, `store` (SQLite + FTS5), `embed`, `search`, `serve` (HTTP), `luaucheck`, `study` (doc2query), `refresh` (nightly), `coverage`, `evaluate`, `quiet` (server lock + clean stop) |
 | `corpora.json` | the indexed repositories with licence and attribution |
+| `sources/` | nine future language-corpus manifests (licences and citations only; not ingested); see `sources/README.md` |
 | `fetch.sh` | first clone of the repositories (inside the container) |
 | `deploy.sh` | copy this folder to the server; `--install` also installs the units |
 | `install-service.sh` | runs as root in the container: Luau tools, systemd units |
