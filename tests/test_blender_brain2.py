@@ -248,3 +248,11 @@ def test_static_blender_worker_has_no_model_code_execution_or_asset_fetching():
     calls = [node.func.id for node in ast.walk(tree) if isinstance(node, ast.Call)
              and isinstance(node.func, ast.Name)]
     assert not ({"exec", "eval", "compile", "__import__"} & set(calls))
+
+
+
+def test_auto_route_uses_blender_without_touching_studio():
+    from star.desktop_core import needs_project_tools, needs_studio_connection
+    assert needs_project_tools("Use Blender to build a forest cottage 3D model")
+    assert not needs_studio_connection("Use Blender to build a Roblox-ready GLB asset")
+    assert needs_studio_connection("Use Blender to build a model and import it into Roblox Studio")
