@@ -105,7 +105,7 @@ def translate(source: pathlib.Path, template: pathlib.Path, text: str) -> str:
         rewritten = mapped_require(match.group(1), source, template, aliases)
         return rewritten if rewritten is not None else match.group(0)
 
-    return REQUIRE.sub(replace, text)
+    return re.sub(r"(?m)^local \\w+ = game:GetService\\([^\\n]+$", "-- CLI service alias", REQUIRE.sub(replace, text))
 
 
 def run(cli: str, root: pathlib.Path) -> int:
@@ -130,6 +130,25 @@ def run(cli: str, root: pathlib.Path) -> int:
                 raise ValueError(f"no template root for {source}")
             transformed = translate(source, template, source.read_text(encoding="utf-8"))
             destination.write_text(transformed, encoding="utf-8")
+
+        # A minimal in-memory Roblox instance tree for the two ArenaFactory cases.
+        engine_dir = stage / "roblox-templates/rounds/ServerScriptService"
+        (engine_dir / "__headless_engine.luau").write_text(ENGINE, encoding="utf-8")
+        for original in [
+            engine_dir / "ArenaFactory.luau",
+            engine_dir / "Tests/ArenaFactory.spec.luau",
+        ]:
+            prefix = "./" if original.parent == engine_dir else "../"
+            injection = (
+                f'local __engine = require("{prefix}__headless_engine")\\n'
+                "local workspace = __engine.workspace\\n"
+                "local Instance = __engine.Instance\\n"
+                "local Vector3 = __engine.Vector3\\n"
+                "local CFrame = __engine.CFrame\\n"
+                "local Color3 = __engine.Color3\\n"
+                "local Enum = __engine.Enum\\n"
+            )
+            original.write_text(injection + original.read_text(encoding="utf-8"), encoding="utf-8")
 
         for spec in specs:
             staged = stage / spec.relative_to(root)
