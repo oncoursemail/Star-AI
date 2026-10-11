@@ -31,6 +31,23 @@ Current official Roblox building blocks:
 - [STAR's existing Roblox guard and Cloud procedures](ROBLOX_ACCESS.md)
 - [STAR's existing lesson trust rules](STAR_LEARNING.md)
 
+## Next: Brain 2's broader account capability matrix
+
+The owner's existing Roblox account authorization should be presented to Brain 2 as a **verified capability inventory**, derived from key introspection or properly authorized OAuth—not as an imagined unrestricted account master key. Support the following separately reviewed capabilities as their exact scopes and owners permit:
+
+| Account surface | Valuable agent activity | Authorization boundary |
+|---|---|---|
+| Experience/places | Read metadata, enumerate specifically authorized targets, inspect versions, manage test access | Read broadly where granted; modifications must select the exact universe/place, and live publish is a distinct high-impact grant |
+| Assets API | Inspect assets/versions, upload meshes, models, images and audio created by a verified pipeline, attach metadata | Asset read can be routine; write/upload may consume quotas and must validate target creator, license, type and file size |
+| Analytics/experiments | Measure retention, game performance, conversion and controlled experiment results | Read-only reports with provenance; changing live experiment allocation requires a separately approved operation |
+| Data/memory stores | Understand schema and test persistence, exercise test inventories/economy | Isolate a test datastore; do not use live player profiles or economy balances as training material |
+| Live servers / messaging | Observe permitted server health and operational outcomes | Restart/announce/ban actions are production-changing operations, never implicit side effects of a test |
+| Developer knowledge | Official API dumps, Luau symbols, engine docs, annotated source revisions and unit test results | Reference code is data, not authority to expand permissions or run downloaded scripts |
+
+Roblox's official [Assets API](https://create.roblox.com/docs/cloud/reference/features/assets) includes asset creation, versions and metadata (some endpoints are beta). The [Universe endpoints](https://create.roblox.com/docs/cloud/reference/features/universes) expose updates, playtesters and live-server operations. The [Data Stores APIs](https://create.roblox.com/docs/cloud/reference/features/storage) can reach player profiles and inventories, so testing must use separate private test data. Roblox warns that Studio API Services access can affect **the same** data stores used by the live game: see [Studio Data Stores](https://create.roblox.com/docs/cloud-services/data-stores).
+
+An eventual Brain 2 account adapter should enumerate the actual scopes and resource selectors of its installed credentials, redact secrets and account details in model context, and expose tool schemas only for explicitly activated operations. Broad account access enables *more possibilities*; it must not make every account-mutating operation an automatic step of the code learning loop.
+
 ## Concrete feature included in this draft
 
 New module: star/brain2_practice.py
