@@ -118,10 +118,11 @@ def test_private_ip_literals_are_accepted(good, canonical):
     "http://8.8.8.8:8080/v1", "http://1.1.1.1:8080/v1", "http://172.32.0.1:8080/v1",
     "http://172.15.255.255:8080/v1", "http://192.169.0.1:8080/v1", "http://11.0.0.1:8080/v1",
     "http://169.254.10.20:8080/v1", "http://169.254.169.254:8080/v1",
-    "http://192.0.2.10:8080/v1", "http://203.0.113.5:8080/v1",
+    "http://100.64.0.1:8080/v1", "http://192.0.2.10:8080/v1", "http://203.0.113.5:8080/v1",
     "http://0.0.0.0:8080/v1", "http://255.255.255.255:8080/v1", "http://240.0.0.1:8080/v1",
     "http://224.0.0.1:8080/v1", "http://[2001:4860:4860::8888]:8080/v1",
-    "http://[::ffff:8.8.8.8]:8080/v1", "http://[::]:8080/v1", "http://[fe80::1]:8080/v1",
+    "http://[::ffff:8.8.8.8]:8080/v1", "http://[::ffff:10.0.0.1]:8080/v1", "http://[::]:8080/v1",  # star:allow placeholder
+    "http://[fe80::1]:8080/v1", "http://[fd00:ec2::254]:8080/v1",
     # DNS names may rebind and are not safe without connection-level IP pinning
     "http://localhost:8080/v1", "http://star-server:8080/v1", "http://server.local:8080/v1",
     "http://evil.example:8080/v1", "http://10.0.0.1.evil.example:8080/v1",

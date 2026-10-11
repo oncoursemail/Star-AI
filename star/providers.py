@@ -60,11 +60,16 @@ KEY_ENV = {**{name: provider.env_var for name, provider in ALL_PROVIDERS.items()
               if provider.requires_key}, **SEARCH_KEYS}
 
 # Use explicit ranges: ipaddress.is_private also includes non-LAN addresses.
+# Left out on purpose: link-local (169.254.0.0/16, fe80::/10), where cloud metadata services
+# answer, and carrier-grade NAT (100.64.0.0/10), which is shared with a provider's other
+# customers and holds one cloud's metadata service (100.100.100.200).
 _LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
     "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",  # RFC 1918
-    "100.64.0.0/10", "127.0.0.0/8",                  # CGNAT, loopback
-    "::1/128", "fc00::/7",                           # IPv6 loopback, ULA
+    "127.0.0.0/8",                                    # loopback
+    "::1/128", "fc00::/7",                            # IPv6 loopback, ULA
 ))
+# A metadata service that sits inside an allowed range (the IPv6 unique local block).
+_METADATA_ADDRESSES = frozenset({ipaddress.ip_address("fd00:ec2::254")})
 _LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
 
 
@@ -94,13 +99,12 @@ def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server
         address = ipaddress.ip_address(url.hostname or "")
     except ValueError as exc:
         raise ValueError(f"{label} must use a private IP literal, not a hostname. " + hint) from exc
-    # IPv4-mapped IPv6 must pass the same ranges as its underlying IPv4.
-    checked = address
-    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
-        checked = address.ipv4_mapped
-    if not any(checked in network for network in _LAN_NETWORKS):
-        raise ValueError(f"{label} must use a loopback, private LAN, CGNAT or IPv6 ULA address. "
-                         "Public, link-local and special-purpose addresses are refused.")
+    # One spelling per destination: an IPv4-mapped IPv6 literal (::ffff:a.b.c.d) is in none of
+    # the ranges above and is refused, never unwrapped to its IPv4 address.
+    if address in _METADATA_ADDRESSES or not any(address in network for network in _LAN_NETWORKS):
+        raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
+                         "127.x or an IPv6 unique local address). Public, link-local, shared "
+                         "(100.64.x) and cloud metadata addresses are refused.")
     host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     if port is None or not 1024 <= port <= 65535:
         raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
