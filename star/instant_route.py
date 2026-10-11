@@ -34,7 +34,12 @@ def decide_instant_route(
     """Fail closed to the existing route whenever an input is uncertain."""
     if provider != "star_server":
         return InstantDecision(False, "provider")
-    if not enabled or not installed or not loaded or not model:
+    if (any(type(value) is not bool for value in (enabled, installed, loaded, tools,
+                                                  research, documentation, deep))
+            or type(attachments) is not int or attachments < 0
+            or not isinstance(model, str) or not model.strip()):
+        return InstantDecision(False, "invalid-input")
+    if not enabled or not installed or not loaded:
         return InstantDecision(False, "not-ready")
     if mode not in ("fast", "auto"):
         return InstantDecision(False, "mode")
