@@ -33,7 +33,7 @@ ENV_VAR = "STAR_SKILL_PACKS"
 MAX_BODY_CHARS = 6400
 MAX_PACKS_PER_TURN = 1
 MAX_BLOCK_CHARS = 6500
-BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
+BLOCK_HEADING = "SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
 # Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
 # "Measured results"). The others stay shipped and can be switched on with STAR_SKILL_PACKS, but were either
@@ -52,8 +52,16 @@ _ROBLOX_CONTEXT = re.compile(
     r"StarterGui|StarterPlayer\w*|StarterCharacterScripts|PlayerGui|ScreenGui|Instance\.new|game:GetService|"
     r"Humanoid|RemoteEvent|RemoteFunction|DataStore\w*|OnServerEvent|BindToClose|R6|R15)\b", re.IGNORECASE)
 
+_GODOT_CONTEXT = re.compile(r"\b(?:godot(?:\s*4)?|gdscript|PackedScene|CharacterBody2D|Node2D|Control\s+node)\b", re.IGNORECASE)
+GODOT_PACKS = frozenset(("godot-scenes-and-nodes", "godot-gdscript-typing-and-signals",
+                         "godot-physics-and-input", "godot-ui-and-themes"))
+
 # ... and name the pack's topic.
 TRIGGERS: dict[str, re.Pattern] = {
+    "godot-scenes-and-nodes": re.compile(r"\b(?:PackedScene|instantiate|scene tree|node tree|add_child|owner|@onready|scenes|nodes)\b", re.IGNORECASE),
+    "godot-gdscript-typing-and-signals": re.compile(r"\b(?:gdscript|static typing|typed|signal|signals|@export|Callable|emit|connect)\b", re.IGNORECASE),
+    "godot-physics-and-input": re.compile(r"\b(?:CharacterBody2D|move_and_slide|physics|InputMap|input action|is_on_floor|velocity|_physics_process)\b", re.IGNORECASE),
+    "godot-ui-and-themes": re.compile(r"\b(?:Control|Theme|Button|Container|anchors|size_flags|UI|themes|layout)\b", re.IGNORECASE),
     "roblox-ui-layout": re.compile(
         r"\b(?:ScreenGui|SurfaceGui|BillboardGui|UDim2|UIListLayout|UIGridLayout|UIScale|UIPadding|UICorner|UIStroke|"
         r"UIAspectRatioConstraint|UISizeConstraint|UITextSizeConstraint|ScrollingFrame|TextButton|TextLabel|TextBox|"
@@ -154,11 +162,16 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
-    if not allowed or not _ROBLOX_CONTEXT.search(prompt):
+    if not allowed:
+        return []
+    roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
+    godot_context = bool(_GODOT_CONTEXT.search(prompt))
+    if not roblox_context and not godot_context:
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed:
+        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
+                                    (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):

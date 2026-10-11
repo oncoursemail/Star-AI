@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "engine": "Godot 4",
+  "scoring": "static positive regex checks; not execution or semantic correctness",
+  "tasks": [
+    {
+      "id": "scene-instance",
+      "prompt": "Instantiate child scene",
+      "reference": "extends Node2D\n@export var enemy_scene: PackedScene\nfunc spawn() -> void:\n    var enemy: Node2D = enemy_scene.instantiate()\n    add_child(enemy)",
+      "bad": "extends Node2D\nfunc spawn():\n    pass",
+      "required_patterns": [
+        "PackedScene",
+        "instantiate\\(",
+        "add_child\\("
+      ]
+    },
+    {
+      "id": "node-ready",
+      "prompt": "Bind child on ready",
+      "reference": "extends Node\n@onready var label: Label = $Label\nfunc _ready() -> void:\n    label.text = \"Ready\"",
+      "bad": "extends Node\nfunc _ready():\n    pass",
+      "required_patterns": [
+        "@onready",
+        "_ready\\(",
+        "Label"
+      ]
+    },
+    {
+      "id": "node-cleanup",
+      "prompt": "Free a node safely",
+      "reference": "extends Node\nfunc remove_target(target: Node) -> void:\n    if is_instance_valid(target):\n        target.queue_free()",
+      "bad": "extends Node\nfunc remove_target(target):\n    pass",
+      "required_patterns": [
+        "is_instance_valid\\(",
+        "queue_free\\("
+      ]
+    },
+    {
+      "id": "typed-function",
+      "prompt": "Type method argument and return",
+      "reference": "extends Node\nfunc multiply(value: float, factor: float) -> float:\n    return value * factor",
+      "bad": "extends Node\nfunc multiply(value, factor):\n    return value * factor",
+      "required_patterns": [
+        ": float",
+        "-> float"
+      ]
+    },
+    {
+      "id": "signal-emit",
+      "prompt": "Declare and emit a signal",
+      "reference": "extends Node\nsignal health_changed(value: int)\nfunc update_health(value: int) -> void:\n    health_changed.emit(value)",
+      "bad": "extends Node\nfunc update_health(value):\n    pass",
+      "required_patterns": [
+        "signal health_changed\\(",
+        "health_changed.emit\\("
+      ]
+    },
+    {
+      "id": "signal-connect",
+      "prompt": "Connect pressed signal",
+      "reference": "extends Control\n@onready var button: Button = $Button\nfunc _ready() -> void:\n    button.pressed.connect(_on_pressed)\nfunc _on_pressed() -> void:\n    pass",
+      "bad": "extends Control\nfunc _ready():\n    pass",
+      "required_patterns": [
+        "pressed.connect\\(",
+        "func _on_pressed\\("
+      ]
+    },
+    {
+      "id": "physics-motion",
+      "prompt": "Slide body in physics step",
+      "reference": "extends CharacterBody2D\nfunc _physics_process(delta: float) -> void:\n    velocity.y += 980.0 * delta\n    move_and_slide()",
+      "bad": "extends CharacterBody2D\nfunc _process(delta):\n    position.y += 10",
+      "required_patterns": [
+        "CharacterBody2D",
+        "_physics_process\\(",
+        "velocity.y",
+        "move_and_slide\\("
+      ]
+    },
+    {
+      "id": "physics-jump",
+      "prompt": "Grounded jump",
+      "reference": "extends CharacterBody2D\nfunc _physics_process(delta: float) -> void:\n    if is_on_floor() and Input.is_action_just_pressed(\"jump\"):\n        velocity.y = -400.0\n    move_and_slide()",
+      "bad": "extends CharacterBody2D\nfunc jump():\n    position.y -= 10",
+      "required_patterns": [
+        "is_on_floor\\(",
+        "is_action_just_pressed\\(",
+        "velocity.y",
+        "move_and_slide\\("
+      ]
+    },
+    {
+      "id": "input-axis",
+      "prompt": "Read horizontal input action",
+      "reference": "extends CharacterBody2D\nfunc _physics_process(delta: float) -> void:\n    var direction: float = Input.get_axis(\"move_left\", \"move_right\")\n    velocity.x = direction * 200.0\n    move_and_slide()",
+      "bad": "extends CharacterBody2D\nfunc _process(delta):\n    pass",
+      "required_patterns": [
+        "Input.get_axis\\(",
+        "velocity.x",
+        "move_and_slide\\("
+      ]
+    },
+    {
+      "id": "ui-container",
+      "prompt": "Use a VBoxContainer for layout",
+      "reference": "extends Control\n@onready var column: VBoxContainer = $VBoxContainer\nfunc _ready() -> void:\n    column.add_child(Label.new())",
+      "bad": "extends Control\nfunc _ready():\n    pass",
+      "required_patterns": [
+        "VBoxContainer",
+        "add_child\\("
+      ]
+    },
+    {
+      "id": "ui-theme",
+      "prompt": "Assign reusable Theme resource",
+      "reference": "extends Control\n@export var app_theme: Theme\nfunc _ready() -> void:\n    theme = app_theme",
+      "bad": "extends Control\nfunc _ready():\n    pass",
+      "required_patterns": [
+        "@export",
+        "Theme",
+        "theme = app_theme"
+      ]
+    },
+    {
+      "id": "ui-button",
+      "prompt": "Handle button signal",
+      "reference": "extends Control\n@onready var play_button: Button = $PlayButton\nfunc _ready() -> void:\n    play_button.pressed.connect(_on_play)\nfunc _on_play() -> void:\n    visible = false",
+      "bad": "extends Control\nfunc _ready():\n    pass",
+      "required_patterns": [
+        "Button",
+        "pressed.connect\\(",
+        "visible = false"
+      ]
+    }
+  ]
+}
