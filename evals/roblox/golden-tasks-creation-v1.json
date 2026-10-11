@@ -597,13 +597,18 @@
         },
         {
           "id": "lifetime",
-          "re": "\\.Lifetime\\s*=\\s*NumberRange\\.new",
-          "why": "Lifetime is a NumberRange"
+          "re": "\\bLifetime\\b",
+          "why": "Lifetime is set"
         },
         {
           "id": "speed",
-          "re": "\\.Speed\\s*=\\s*NumberRange\\.new",
-          "why": "Speed is a NumberRange"
+          "re": "\\bSpeed\\b",
+          "why": "Speed is set"
+        },
+        {
+          "id": "number_range",
+          "re": "NumberRange\\.new",
+          "why": "Lifetime and Speed are NumberRanges"
         },
         {
           "id": "spread",
@@ -617,17 +622,17 @@
         },
         {
           "id": "size_seq",
-          "re": "\\.Size\\s*=\\s*NumberSequence\\.new",
-          "why": "Size is a NumberSequence"
+          "re": "\\bSize\\b[\\s\\S]*NumberSequence\\.new|NumberSequence\\.new[\\s\\S]*\\bSize\\b",
+          "why": "Size is shaped with a NumberSequence"
         },
         {
           "id": "transp_seq",
-          "re": "\\.Transparency\\s*=\\s*NumberSequence\\.new",
-          "why": "Transparency is a NumberSequence"
+          "re": "NumberSequence\\.new[\\s\\S]*NumberSequence\\.new",
+          "why": "Size and Transparency each get a NumberSequence"
         },
         {
           "id": "color_seq",
-          "re": "\\.Color\\s*=\\s*ColorSequence\\.new",
+          "re": "ColorSequence\\.new",
           "why": "Color is a ColorSequence"
         },
         {
@@ -670,12 +675,13 @@
         "Present: particles are emitted with :Emit",
         "Present: a burst of 20 particles",
         "Present: Rate is 0 so nothing is emitted continuously",
-        "Present: Lifetime is a NumberRange",
-        "Present: Speed is a NumberRange",
+        "Present: Lifetime is set",
+        "Present: Speed is set",
+        "Present: Lifetime and Speed are NumberRanges",
         "Present: SpreadAngle is set",
         "Present: LightEmission makes the sparks glow",
-        "Present: Size is a NumberSequence",
-        "Present: Transparency is a NumberSequence",
+        "Present: Size is shaped with a NumberSequence",
+        "Present: Size and Transparency each get a NumberSequence",
         "Present: Color is a ColorSequence",
         "Present: the part is cleaned up",
         "Absent: not ParticleEmitter members",
@@ -1614,8 +1620,8 @@
         },
         {
           "id": "signature",
-          "re": "function\\s+addItem\\s*\\(\\s*stacks\\s*,\\s*name\\s*,\\s*amount\\s*,\\s*maxStack\\s*\\)",
-          "why": "the signature is unchanged"
+          "re": "function\\s+addItem\\s*\\(\\s*stacks\\b[^,)]*,\\s*name\\b[^,)]*,\\s*amount\\b[^,)]*,\\s*maxStack\\b[^)]*\\)",
+          "why": "the signature is unchanged (type annotations allowed)"
         }
       ]
     },
@@ -1632,7 +1638,7 @@
         "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
         "Unit tests run in the server's standalone Luau VM (see fixtures)",
         "Present: the root cause is stated",
-        "Present: the signature is unchanged"
+        "Present: the signature is unchanged (type annotations allowed)"
       ]
     },
     "split": "development"
@@ -1831,8 +1837,8 @@
       "require": [
         {
           "id": "signature",
-          "re": "function\\s+tryUse\\s*\\(\\s*state\\s*,\\s*ability\\s*,\\s*now\\s*\\)",
-          "why": "the signature is unchanged"
+          "re": "function\\s+tryUse\\s*\\(\\s*state\\b[^,)]*,\\s*ability\\b[^,)]*,\\s*now\\b[^)]*\\)",
+          "why": "the signature is unchanged (type annotations allowed)"
         },
         {
           "id": "cause",
@@ -1854,7 +1860,7 @@
       "checks": [
         "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
         "Unit tests run in the server's standalone Luau VM (see fixtures)",
-        "Present: the signature is unchanged",
+        "Present: the signature is unchanged (type annotations allowed)",
         "Present: names the nil as the cause"
       ]
     },

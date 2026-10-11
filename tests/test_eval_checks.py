@@ -165,6 +165,19 @@ def test_score_answer_fails_without_code_or_with_compile_errors():
     assert not ec.score_answer(task(), "", luau_check=ok_check).passed
 
 
+def test_unknown_globals_in_later_blocks_are_placeholders_but_the_first_block_is_checked_in_full():
+    def check(code, strict=False):
+        if "path.to" in code:
+            return {"ok": False, "errors": [{"line": 1, "message": "Unknown global 'path'; consider assigning to it first"}]}
+        if "oops" in code:
+            return {"ok": False, "errors": [{"line": 1, "message": "Unknown global 'oops'; consider assigning to it first"}]}
+        return {"ok": True, "errors": []}
+    usage = block("local m = require(path.to.Module)")
+    assert ec.score_answer(task(), block("return 1") + usage, luau_check=check).passed
+    assert not ec.score_answer(task(), block("oops()") + usage, luau_check=check).passed        # first block: a real defect
+    assert not ec.score_answer(task(), usage + block("return 1"), luau_check=check).passed      # first block is the example here
+
+
 def test_score_answer_docs_question_needs_no_code_but_a_citation():
     spec = task(code=False, compile=False, citation={"required": True})
     assert not ec.score_answer(spec, "An answer [1].", luau_check=ok_check).passed

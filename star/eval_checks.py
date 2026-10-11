@@ -385,6 +385,10 @@ def score_answer(task: dict, answer: str, *, luau_check, sandbox=None, prelude: 
             except (OSError, ValueError) as exc:
                 raise InfraError("Luau check unavailable: " + type(exc).__name__) from None
             errors = effective_errors(result, task.get("prompt", ""))
+            if index > 1:
+                # Later blocks are usually usage examples with placeholders (`require(path.to.Module)`): an unknown
+                # global there is the example's placeholder, not a defect. The first block is checked in full.
+                errors = [e for e in errors if not _UNKNOWN_GLOBAL.search(str(e.get("message")))]
             score.checks.append(Check(f"luau_check[{index}]", not errors, _first_errors(errors)))
     score.timings["luau_check_s"] = round(clock() - started, 2)
 
