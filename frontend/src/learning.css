@@ -1,0 +1,272 @@
+/* Lessons: what STAR has learned for a project, and the owner's review of it.
+ * Tokens only (tokens.css); same quiet surfaces, strokes and type steps as the chat. */
+.shell .learn {
+  margin-top: var(--star-6);
+  padding: var(--star-5);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  color: var(--star-body);
+  font-family: var(--star-font);
+}
+.shell .learn-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-3);
+}
+.shell .learn-head > svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--star-gold);
+}
+.shell .learn-title {
+  flex: 1;
+  min-width: 0;
+}
+.shell .learn-title h2 {
+  margin: 0 0 var(--star-1);
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  font-weight: 650;
+}
+.shell .learn-title p,
+.shell .learn-help {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.6;
+}
+.shell .learn-help {
+  margin-top: var(--star-4);
+  color: var(--star-faint);
+}
+.shell .learn-tabs {
+  display: flex;
+  gap: var(--star-1);
+  margin-top: var(--star-4);
+  border-bottom: 1px solid var(--star-stroke);
+}
+.shell .learn-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 var(--star-3);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  transition: color var(--star-dur-hover) var(--star-ease);
+}
+.shell .learn-tab:hover {
+  color: var(--star-text);
+}
+.shell .learn-tab.is-current {
+  border-bottom-color: var(--star-gold);
+  color: var(--star-text);
+}
+.shell .learn-tab span {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  font-variant-numeric: tabular-nums;
+}
+.shell .learn-empty {
+  margin: var(--star-4) 0 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-nav);
+  line-height: 1.6;
+}
+.shell .learn-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shell .lesson {
+  padding: var(--star-4) 0;
+  border-bottom: 1px solid var(--star-stroke-soft);
+}
+.shell .lesson-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--star-1) var(--star-2);
+}
+.shell .lesson-kind {
+  padding: 2px var(--star-2);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: 99px;
+  color: var(--star-body);
+  font-size: 11px;
+  font-weight: 600;
+}
+.shell .lesson-origin,
+.shell .lesson-state,
+.shell .lesson-confirm,
+.shell .learn-count {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.shell .lesson-text {
+  margin: var(--star-2) 0 0;
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.shell .lesson-state {
+  margin: var(--star-1) 0 0;
+}
+.shell .lesson-evidence {
+  margin-top: var(--star-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+.shell .lesson-evidence summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--star-muted);
+}
+.shell .lesson-evidence p {
+  margin: var(--star-2) 0 0;
+  padding: var(--star-2) var(--star-3);
+  border-left: 2px solid var(--star-stroke-strong);
+  color: var(--star-muted);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.shell .lesson-actions,
+.shell .learn-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2);
+  margin-top: var(--star-3);
+}
+.shell .learn-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-body);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    border-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.shell .learn-button:not(:disabled):hover {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.shell .learn-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.shell .learn-button.is-primary {
+  border-color: var(--star-gold-line);
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+}
+.shell .learn-button.is-primary:not(:disabled):hover {
+  background: var(--star-gold-wash-strong);
+  color: var(--star-gold-hover);
+}
+.shell .learn-button.is-danger {
+  border-color: var(--star-danger);
+  background: var(--star-danger-wash);
+  color: var(--star-danger);
+}
+.shell .lesson-edit,
+.shell .learn-teach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-2);
+  margin-top: var(--star-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+}
+.shell .learn-teach {
+  margin-top: var(--star-5);
+}
+.shell .lesson-edit textarea,
+.shell .learn-teach textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--star-2) var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  color: var(--star-text);
+  font: inherit;
+  font-size: var(--star-fs-ui);
+  font-weight: 400;
+  line-height: 1.5;
+  resize: vertical;
+}
+.shell .learn-notice {
+  margin: var(--star-3) 0 0;
+  color: var(--star-success);
+  font-size: var(--star-fs-meta);
+}
+.shell .learn-settings {
+  margin-top: var(--star-5);
+  border-top: 1px solid var(--star-stroke);
+}
+.shell .learn-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--star-5);
+  padding: var(--star-3) 0;
+  border-bottom: 1px solid var(--star-stroke-soft);
+  cursor: pointer;
+}
+.shell .learn-switch span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-1);
+  min-width: 0;
+}
+.shell .learn-switch strong {
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+}
+.shell .learn-switch small {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.5;
+}
+.shell .learn-switch input {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--star-gold);
+}
+/* Analytics: the learning counts sit in the same metric cards as the run counts. */
+.shell .learn-stats {
+  margin-top: var(--star-4);
+}
+.shell .learn-stats-note {
+  margin: 0 0 var(--star-4);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+@media (max-width: 620px) {
+  .shell .learn {
+    padding: var(--star-4);
+  }
+  .shell .learn-head {
+    flex-wrap: wrap;
+  }
+}

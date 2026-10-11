@@ -897,7 +897,8 @@ class MainWindow(QMainWindow):
                     pics=pics[:4]
                     extra.append('Only first 4 images/frames were supplied due to context limits.')
                 text=prompt+'\n\n'+ '\n'.join(extra) if extra else prompt
-                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev))
+                # owner_text: only what was typed can become a lesson, never the transcript added above.
+                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev),owner_text=prompt)
         self._job=Job(work)
         self.jobs.add(self._job)
         self._job.event.connect(self.worker_event)

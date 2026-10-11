@@ -751,6 +751,16 @@
   background: var(--star-surface-2);
   color: var(--star-text);
 }
+/* Thumbs on an answer: icon-only, and the chosen one stays lit (pressed state is also announced). */
+.msg-rate {
+  width: 28px;
+  justify-content: center;
+  padding: 0;
+}
+.msg-rate[aria-pressed='true'] {
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+}
 /* Sources row: the official documentation STAR retrieved for an answer. Quiet by default;
    a cited source gets the gold index. Wraps instead of scrolling at narrow widths. */
 .msg-sources {

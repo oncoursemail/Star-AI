@@ -35,6 +35,8 @@ from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
+from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
+from .lesson_digest import Digester, may_start_automatic
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -47,6 +49,9 @@ ALLOWED_ACTIONS = frozenset({
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
+# Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
+# background rewording of raw captures (star/lesson_digest.py).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -68,6 +73,7 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
+    'learning_auto_accept','learning_digest','learning_digest_cloud',
 })
 
 
@@ -383,6 +389,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dic
     for i, record in enumerate(recent):
         role, body, created = record['role'], record['body'], record['created']
         entry = {'id':f'saved-{i}', 'role':role,'text':body,'created':created}
+        if role == 'assistant':
+            # The stored row id lets the owner rate this answer; `feedback` is their current thumb.
+            entry['mid'] = record['id']
+            if record['feedback']:
+                entry['feedback'] = record['feedback']
         if record['status'] != 'complete':
             entry['status'] = record['status']  # 'failed' | 'cancelled' terminal record
         preview = chat_image(home, body) if role == 'assistant' else None
@@ -404,6 +415,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False) -> dic
         'model_router_running':runtime.router_running(),
         'tool_workshop':tool_workshop_status,
         'analytics':get_dashboard(home,settings.project),
+        'learning':learning_status(home,settings.project),
         'credentials':credential_status(),
         'server':server_status(settings),
         'intelligence':for_settings(settings,home).status(),
@@ -461,6 +473,7 @@ def launch():
             self.turn: TurnRef | None = None
             self.active_update = False
             self.warmer = Warmer()
+            self.digester = Digester()
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
 
@@ -475,16 +488,35 @@ def launch():
                 finally: chats.close()
             return settings,home,chat_id
 
-        def _warm(self, request_id: str = '', check: bool = True):
+        def _warm(self, request_id: str = '', check: bool = True, then=None):
             """Check the selected model server and prime its prompt cache, off the UI thread.
 
             It is not a turn: nothing is saved, `active_task` stays False, and any
             real request cancels it (see WARM_UP_STOPPERS). Cloud providers are skipped.
+            `then(report)` runs on the warm-up thread once it has finished.
             """
+            def finished(report):
+                if request_id:self._emit(request_id,'result',report)
+                if then is not None:then(report)
             self.warmer.start(
                 self._warm_target, check=check,
                 on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
-                on_done=(lambda report:self._emit(request_id,'result',report)) if request_id else None)
+                on_done=finished if (request_id or then is not None) else None)
+
+        def _digest_target(self):
+            settings=Settings.load(self.settings_file)
+            return settings,app_data(),settings.project
+
+        def _digest_when_idle(self, report=None):
+            """After a turn and its cache warm-up: let the fast model reword raw captures into
+            candidate lessons. Not a turn, never trusted output, and any real request stops it."""
+            if not may_start_automatic(report,turn_running=self.active_task,voice_call=self._in_voice_call()):
+                return
+            self.digester.start(self._digest_target)
+
+        def _in_voice_call(self):
+            try:return bool(self.voice.handle('voiceStatus',{}).get('inCall'))
+            except Exception:return False
 
         def _save_voice_turn(self, user_text: str, reply_text: str):
             # A call shows up in the active chat like typed messages do.
@@ -560,9 +592,17 @@ def launch():
                     pics=pics[:4]
                     extras.append('Only the first 4 visual attachments were sent to respect context limits.')
                 full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
-                answer=run_task(settings,full_prompt,pics,
-                    on_event=lambda e:self._emit(request_id,'progress',sanitize_event(e)),
-                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat)
+                learned={}
+                def relay(e):
+                    # What the turn taught is reported with the result, not as a progress step.
+                    if e.get('event')=='lessons_captured':
+                        learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
+                                       replaced=int(e.get('replaced',0)),not_kept=int(e.get('not_kept',0)))
+                        return
+                    self._emit(request_id,'progress',sanitize_event(e))
+                answer=run_task(settings,full_prompt,pics,on_event=relay,
+                    stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
+                    owner_text=prompt)
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -572,8 +612,9 @@ def launch():
                 chats.close()
             # While the owner reads the answer, let the server read it too: the next
             # message then starts from a fully cached conversation. Cancelled by any request.
-            self._warm(check=False)
-            return {'answer':answer}
+            # Once that is done the server is idle, which is when raw captures get reworded.
+            self._warm(check=False,then=self._digest_when_idle)
+            return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
         def _run_image(self, request_id, prompt):
             settings=Settings.load(self.settings_file)
@@ -646,6 +687,7 @@ def launch():
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
                 if action in WARM_UP_STOPPERS:self.warmer.cancel()
+                if action in WARM_UP_STOPPERS or action in VOICE_ACTIONS:self.digester.cancel()
                 if action=='warmUp':
                     if self.active_task:
                         return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
@@ -692,6 +734,29 @@ def launch():
                     finally: conversations.close()
                     self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                if action in LESSON_ACTIONS:
+                    # Review, export and feedback are explicit owner actions in the interface.
+                    settings=Settings.load(self.settings_file)
+                    data=handle_lesson_action(app_data(),settings.project,action,body)
+                    if action=='exportLessons':
+                        # The file goes where the owner chooses, like the review bundle.
+                        name=re.sub(r'[^A-Za-z0-9._-]+','-',settings.project).strip('-') or 'project'
+                        suggested=str(Path.home()/f"STAR-lessons-{name}-{time.strftime('%Y%m%d',time.gmtime())}.json")
+                        filename,_=QFileDialog.getSaveFileName(self.host,'Export lessons',suggested,'JSON (*.json)')
+                        if not filename:
+                            return json.dumps({'ok':True,'data':{'cancelled':True}})
+                        data=write_export(Path(filename),data)
+                    return json.dumps({'ok':True,'data':data},default=str)
+                if action=='digestLessons':
+                    # "Summarise now": the same background step, started by the owner for even one capture.
+                    if self.active_task:raise RuntimeError('Wait for the current answer before summarising captures')
+                    def digested(report):
+                        self._emit(rid,'result',report)
+                        # The chat's own model answered: prime its conversation cache again.
+                        if report.get('shared_model') and not self.active_task:self._warm(check=False)
+                    started=self.digester.start(self._digest_target,minimum=1,on_done=digested)
+                    if started is None:raise RuntimeError('STAR is already summarising captures')
+                    return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='rememberDecision':
                     from .learning import approve_learning
                     settings=Settings.load(self.settings_file)

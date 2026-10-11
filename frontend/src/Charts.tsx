@@ -1,7 +1,7 @@
 import {Area,AreaChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} from 'recharts'
 import type {Analytics} from './types'
 import type {CSSProperties} from 'react'
-import {Activity,CheckCircle2,Clock3,MessageSquareText,ShieldCheck,Terminal,TriangleAlert} from 'lucide-react'
+import {Activity,BookOpen,CheckCircle2,Clock3,MessageSquareText,ShieldCheck,Terminal,TriangleAlert} from 'lucide-react'
 import {Panel,EmptyState,Tag} from './components'
 
 const formatter=(value:number|null)=>value===null?'—':value<1000?`${value} ms`:`${(value/1000).toFixed(1)} s`
@@ -10,6 +10,8 @@ export function AnalyticsView({data}:{data:Analytics}) {
   const totalOutcomes=data.succeeded+data.failed
   const share=totalOutcomes?Math.round((data.succeeded/totalOutcomes)*100):0
   const points=data.trend||[]
+  // Counted learning events (star/analytics.py). Missing on an older host: shown as zero, never guessed.
+  const learning=data.learning||{captured:0,accepted:0,used:0}
   return <div className="scroll-region">
     <div className="page-wrap dashboard">
       <div className="page-intro"><div className="eyebrow">DEVELOPMENT INSIGHTS</div><h1>Analytics<span className="gold-dot">.</span></h1><p>Real activity from your local workspace. No cloud tracking, no made-up numbers.</p></div>
@@ -29,6 +31,17 @@ export function AnalyticsView({data}:{data:Analytics}) {
         <Panel className="detail-panel"><div className="section-heading"><div><span className="eyebrow">RELIABILITY</span><h2>Task outcomes</h2></div><ShieldCheck size={18}/></div><div className="outcome-chart"><div className="outcome-ring" style={{'--success':`${share}%`} as CSSProperties}><span>{totalOutcomes?`${share}%`:'—'}</span><small>success</small></div><div className="outcome-legend"><p><i className="green-bullet"/>Succeeded <strong>{data.succeeded}</strong></p><p><i className="red-bullet"/>Failed <strong>{data.failed}</strong></p><p><i className="yellow-bullet"/>Tool calls <strong>{data.tools}</strong></p></div></div></Panel>
         <Panel className="detail-panel"><div className="section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Recent activity</h2></div><Terminal size={18}/></div>{data.recent.length? <div className="event-list">{data.recent.slice(0,5).map((e,i)=><div key={`${e.at}-${i}`} className="event-row"><span className={e.type==='run_failed'?'event-mark failure':'event-mark'}>{e.type==='run_failed'?<TriangleAlert size={14}/>:<CheckCircle2 size={14}/>}</span><div><strong>{e.type.replaceAll('_',' ')}</strong><small>{new Date(e.at).toLocaleString()}</small></div></div>)}</div>:<EmptyState icon={<Terminal size={22}/>} heading="Nothing recorded yet" description="New runs will appear as they happen."/>}</Panel>
       </div>
+      <Panel className="detail-panel learn-stats"><div className="section-heading"><div><span className="eyebrow">LEARNING</span><h2>What STAR kept from your work</h2></div><BookOpen size={18}/></div>
+        <p className="learn-stats-note">Lessons are local notes for this project, not model training. Counted on this PC.</p>
+        <div className="stat-grid">
+          {[
+            {label:'Lessons captured',value:learning.captured,meta:'Last 14 days'},
+            {label:'Lessons accepted',value:learning.accepted,meta:'Last 14 days'},
+            {label:'Answers given with lessons',value:learning.used,meta:'Accepted lessons were in the prompt'},
+            {label:'Waiting for review',value:learning.pending??0,meta:'Right now, on the Projects page'},
+          ].map(item=><Panel key={item.label} className="metric-card"><div className="metric-top"><span>{item.label}</span></div><strong>{item.value}</strong><small>{item.meta}</small></Panel>)}
+        </div>
+      </Panel>
     </div>
   </div>
 }

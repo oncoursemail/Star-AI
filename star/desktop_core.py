@@ -84,6 +84,10 @@ class Settings:
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    # Learning (star/lessons.py). Lessons are local project notes, never weights.
+    learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
+    learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
+    learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
 
     @classmethod
     def load(cls, file: Path):
@@ -109,7 +113,8 @@ class Settings:
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
-                            'specialists_enabled')):
+                            'specialists_enabled', 'learning_auto_accept', 'learning_digest',
+                            'learning_digest_cloud')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -209,6 +214,12 @@ class Conversations:
         self.connection.execute(
             'CREATE INDEX IF NOT EXISTS idx_chat_messages '
             'ON messages(project,chat_id,id)'
+        )
+        # The owner's thumb on an answer (additive: a new table, nothing existing changes).
+        self.connection.execute(
+            'CREATE TABLE IF NOT EXISTS message_feedback '
+            '(message_id INTEGER PRIMARY KEY, project TEXT NOT NULL, chat_id TEXT NOT NULL, '
+            'value TEXT NOT NULL, updated TEXT NOT NULL)'
         )
         # A pre-upgrade conversation is preserved verbatim under one stable ID.
         self.connection.execute(
@@ -376,12 +387,82 @@ class Conversations:
         """Like recent(), with row ids and turn outcome, for the UI state payload."""
         scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
         rows = self.connection.execute(
-            'SELECT id,role,body,created,status,reply_to FROM messages '
+            'SELECT id,role,body,created,status,reply_to,'
+            '(SELECT value FROM message_feedback f WHERE f.message_id=messages.id) FROM messages '
             f'WHERE {scope} ORDER BY id DESC LIMIT ?', (*args, limit)
         ).fetchall()
         return [{'id': i, 'role': role, 'body': body, 'created': created,
-                 'status': status, 'reply_to': reply_to}
-                for i, role, body, created, status, reply_to in reversed(rows)]
+                 'status': status, 'reply_to': reply_to, 'feedback': feedback or ''}
+                for i, role, body, created, status, reply_to, feedback in reversed(rows)]
+
+    def set_feedback(self, project: str, message_id: int, value: str) -> dict:
+        """Store, change or clear ('') the owner's thumb on one answer of this project.
+
+        Returns the chat, the answer and the question it answered, for the lesson record.
+        """
+        if value not in ('up', 'down', ''):
+            raise ValueError('Feedback must be up, down or empty')
+        row = self.connection.execute(
+            "SELECT chat_id,body FROM messages WHERE id=? AND project=? AND role='assistant'",
+            (message_id, project)
+        ).fetchone()
+        if not row:
+            raise ValueError("Feedback must be about one of STAR's answers in this project")
+        chat_id, answer = row
+        asked = self.connection.execute(
+            "SELECT body FROM messages WHERE project=? AND chat_id=? AND role='user' AND id<? "
+            'ORDER BY id DESC LIMIT 1', (project, chat_id, message_id)
+        ).fetchone()
+        with self.connection:
+            if value:
+                self.connection.execute(
+                    'INSERT INTO message_feedback(message_id,project,chat_id,value,updated) VALUES (?,?,?,?,?) '
+                    'ON CONFLICT(message_id) DO UPDATE SET value=excluded.value,updated=excluded.updated',
+                    (message_id, project, chat_id, value, datetime.now(timezone.utc).isoformat())
+                )
+            else:
+                self.connection.execute('DELETE FROM message_feedback WHERE message_id=?', (message_id,))
+        return {'chat_id': chat_id, 'answer': answer, 'question': asked[0] if asked else ''}
+
+    def turn_context(self, project: str, chat_id: str | None, prompt: str = '') -> dict:
+        """The message being answered now and what happened to the turn before it.
+
+        For after-turn learning (star/lessons.py): a correction is linked to the answer it
+        follows, and a repeat of a failed message is a retry. Read-only. `message_id` is None
+        when the newest stored user message is not the one in `prompt` (a direct call that
+        saved nothing).
+        """
+        target = chat_id if chat_id is not None else 'legacy'
+        rows = self.connection.execute(
+            'SELECT id,role,body,status,reply_to FROM messages WHERE project=? AND chat_id=? '
+            'ORDER BY id DESC LIMIT 16', (project, target)
+        ).fetchall()
+        found = {'message_id': None, 'previous': None}
+        users = [index for index, row in enumerate(rows) if row[1] == 'user']
+        if not users:
+            return found
+        current = users[0]
+        earlier = rows[current + 1:]
+        if rows[current][2] and prompt.startswith(rows[current][2]) and not any(
+                row[1] == 'assistant' for row in rows[:current]):
+            found['message_id'] = rows[current][0]
+        else:
+            # The newest stored turn is already finished: it is the turn before this prompt.
+            earlier = rows
+        before = next((index for index, row in enumerate(earlier) if row[1] == 'user'), None)
+        if before is None:
+            return found
+        asked = earlier[before]
+        previous = {'message_id': asked[0], 'text': asked[2], 'outcome': 'none',
+                    'answer_id': None, 'answer': '', 'detail': ''}
+        for row in reversed(earlier[:before]):       # rows after that question, oldest first
+            if row[1] == 'assistant':
+                previous.update(outcome='answered', answer_id=row[0], answer=row[2])
+                break
+            if row[1] == 'event' and row[3] in TERMINAL_STATUSES and row[4] == asked[0]:
+                previous.update(outcome=row[3], detail=row[2])
+        found['previous'] = previous
+        return found
 
     def retry_state(self, project: str, chat_id: str, busy: bool = False) -> dict | None:
         """What happened to the newest user message in a chat, if it got no answer.
@@ -616,10 +697,17 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
-             cancel_event=None, github_enabled: bool = False, chat_id: str | None = None) -> str:
-    """User-controlled fast/automatic/agent routing; all hosted calls are opt-in."""
+             cancel_event=None, github_enabled: bool = False, chat_id: str | None = None,
+             owner_text: str | None = None) -> str:
+    """User-controlled fast/automatic/agent routing; all hosted calls are opt-in.
+
+    `owner_text` is what the owner typed, when `prompt` also carries text STAR added (an
+    audio transcript, a note about video frames). Only the owner's own words can become an
+    automatically accepted lesson.
+    """
     from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
+    from . import lessons as learning
     from .studio import connect, list_tools
     settings.validate()
     if mode not in {'auto', 'fast', 'agent'}:
@@ -652,6 +740,35 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     memory_scope = memory_scope_for(settings, chat_id)
     knowledge = KnowledgeStore(home / 'knowledge')
     workshop = None
+    lesson_store = learning.LessonStore(knowledge=knowledge, record=metrics.record)
+    recalled = []
+    learned = {'grounding': None, 'messages': None, 'done': False}
+
+    def learn_from_turn():
+        """After the turn (answered, failed or stopped): record what it taught. Regular
+        expressions and a few SQLite rows, no model call; a problem here never changes
+        the outcome of the turn."""
+        if learned['done']:
+            return
+        learned['done'] = True
+        try:
+            said = prompt if owner_text is None else owner_text
+            chats = Conversations(home / 'conversations.sqlite3')
+            try:
+                turn = chats.turn_context(settings.project, chat_id, said)
+            finally:
+                chats.close()
+            summary = learning.capture_turn(
+                lesson_store, project=settings.project, chat_id=chat_id, owner_text=said, turn=turn,
+                grounding=learned['grounding'], messages=learned['messages'],
+                auto_accept=settings.learning_auto_accept is True)
+            if on_event and (summary['accepted'] or summary['candidates'] or summary.get('not_kept')):
+                on_event({'event': 'lessons_captured', 'accepted': summary['accepted'],
+                          'candidates': summary['candidates'],
+                          **({'replaced': summary['replaced']} if summary['replaced'] else {}),
+                          **({'not_kept': summary['not_kept']} if summary.get('not_kept') else {})})
+        except Exception:
+            pass
     try:
         # Earlier turns are sent as real user/assistant messages, oldest first, and the
         # window over them only moves in whole blocks: the request starts with the same
@@ -680,7 +797,17 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                        'description':route.description,'model':route.model})
         quick = route.quick
         reviewed = knowledge.find_contextual(settings.project, prompt, limit=4 if quick else 8)
-        notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed)
+        # Lessons the owner stated or approved for THIS project come first: standing
+        # preferences and corrections even when the prompt shares no word with them. Ranked,
+        # without repeats, and within a small budget so the first token is not delayed.
+        try:
+            limit, budget = learning.RECALL_QUICK if quick else learning.RECALL_FULL
+            recalled = lesson_store.recall(settings.project, prompt, limit=limit, max_chars=budget)
+        except Exception:
+            recalled = []
+        shown = {lesson.id for lesson in recalled}
+        notes = '\n'.join(f'[{n.kind} revision={n.revision} source={n.source}] {n.text}' for n in reviewed
+                          if getattr(n, 'id', None) not in shown)
         for image in images:
             path = Path(image)
             media_type = 'image/jpeg' if path.suffix.lower() in ('.jpg', '.jpeg') else 'image/webp' if path.suffix.lower() == '.webp' else 'image/png'
@@ -689,7 +816,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         # Per-turn reference material as (heading, text) pairs. This list is the only way
         # retrieved text reaches the model: star.agent.volatile_context appends it to the
         # final user turn, after the user's words. A new retrieval source appends one pair.
-        turn_sections = [('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
+        turn_sections = [(learning.LESSONS_HEADING, learning.context_lines(recalled)),
+                         ('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
         use_tools = route.use_tools
         allowed_context_chars = model_context_char_budget(settings, route.model)
         intelligence = for_settings(settings, home) if use_tools else None
@@ -745,6 +873,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     # llama.cpp cache fields; {} for cloud providers.
                     return lambda tools: llama_request_fields(
                         settings, conversation=memory_scope, tools=tools, model=model)
+                learned['grounding'] = docs
                 if docs.block:
                     # First in the list: when room runs out earlier sections win, and these passages
                     # are the ones chosen for this exact question. The block carries its own markers.
@@ -752,7 +881,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
-                              history=history, turn_sections=turn_sections, mode=mode,
+                              history=history,
+                              # Only the lessons section may look like lessons (guard_sections).
+                              turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
                               turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block),
@@ -841,10 +972,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         memory.event(memory_scope, {'run_id': stamp, 'answer': answer[:10000]})
         audited_event({'event': 'saved', 'run_id': stamp})
         metrics.record(settings.project, 'run_succeeded',elapsed_ms=int((time.monotonic()-started)*1000))
+        # The answer exists: count the lessons that were in its context, then learn from the turn.
+        try:
+            lesson_store.mark_used(settings.project, recalled)
+        except Exception:
+            pass
+        learned['messages'] = msgs
+        learn_from_turn()
         return answer
     except Exception as exc:
         metrics.record(settings.project, 'run_failed', elapsed_ms=int((time.monotonic()-started)*1000),
                        detail=type(exc).__name__)
+        # A stated preference is still the owner's even when this turn failed or was stopped.
+        learn_from_turn()
         raise
     finally:
         if workshop is not None:

@@ -278,33 +278,3 @@ export function McpPanel({draft,onChange,status,invoke,disabled=false}:{draft:Ap
    <p className="integrated-help">Save Settings before testing connections. A successful test confirms read-only tool discovery—not that an answer was factually correct.</p>
  </section>
 }
-
-export function LearningPanel({project,invoke,disabled=false}:{project:string;invoke:Invoke;disabled?:boolean}){
- const [notes,setNotes]=useState<Array<{id:number;text:string;kind:string;created:string}>>([])
- const [text,setText]=useState('')
- const [replaces,setReplaces]=useState<number|null>(null)
- const [pending,setPending]=useState(false)
- const [notice,setNotice]=useState('')
- const load=async()=>{if(disabled)return;const d=await invoke('listLearning') as {notes?:typeof notes}|null;if(d?.notes)setNotes(d.notes)}
- useEffect(()=>{void load()},[project,disabled,invoke])
- const save=async()=>{
-   const entry=text.trim();if(disabled||pending||entry.length<3)return
-   setPending(true);setNotice('')
-   try{
-     const result=await invoke('rememberDecision',{text:entry,kind:'decision',replaces_note_id:replaces,approved:true})
-     if(result){setText('');setReplaces(null);setNotice('Your approved decision was saved for this project.');await load()}
-   }finally{setPending(false)}
- }
- return <section className="integrated-panel integrated-learning" aria-label="Verified learning">
-   <div className="integrated-heading"><BookOpen size={19}/><div><strong>Teach STAR what matters</strong><span>Only decisions you approve become trusted project memory.</span></div></div>
-   <p className="integrated-help">STAR learns your verified project requirements and corrections through local memory. It does not secretly retrain its foundation model or rewrite files.</p>
-   {replaces!==null&&<div className="integrated-confirm">Correcting note #{replaces}. <button type="button" onClick={()=>{setReplaces(null);setText('')}}>Cancel</button></div>}
-   <label className="integrated-field">Approved project decision
-     <textarea rows={3} maxLength={1200} disabled={disabled||pending} value={text} onChange={e=>setText(e.target.value)}
-       placeholder="Example: Use a clean OLED UI and preserve the approved Roblox avatar proportions."/>
-   </label>
-   <div className="integrated-actions"><span>{text.length}/1200</span><button className="primary-button" disabled={disabled||pending||text.trim().length<3} onClick={()=>void save()}>{pending?<LoaderCircle className="spin" size={15}/>:<Check size={15}/>} {replaces!==null?'Approve correction':'Approve & remember'}</button></div>
-   {notice&&<p className="integrated-confirm" role="status">{notice}</p>}
-   {notes.length>0&&<div className="integrated-notes"><strong>Reviewed decisions</strong>{notes.map(n=><div key={n.id} className="integrated-note"><span>{n.text}</span><button type="button" disabled={disabled||pending} onClick={()=>{setReplaces(n.id);setText(n.text)}}>Correct</button></div>)}</div>}
- </section>
-}
