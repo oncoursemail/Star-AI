@@ -335,7 +335,7 @@ def test_document_walkers_pause_between_source_files(fake_clock, tmp_path, monke
 def test_evaluation_waits_between_queries(fake_clock, tmp_path, monkeypatch):
     questions = tmp_path / "questions.jsonl"
     questions.write_text("".join(json.dumps({"id": str(i), "question": f"Query {i}?",
-                         "expected": ["guide.md"]}) + "\\n" for i in range(2)),
+                         "expected": ["guide.md"]}) + "\n" for i in range(2)),
                          encoding="utf-8")
 
     class DB:
