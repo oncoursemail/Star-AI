@@ -18,7 +18,7 @@
       "attribution": "Credit Juan Linietsky, Ariel Manzur and the Godot community; link the page and CC BY 3.0, and indicate alterations.",
       "conditions": "Applies outside classes/; preserve per-page exceptions and separate third-party asset licences.",
       "evidence_url": "https://github.com/godotengine/godot-docs/blob/master/README.md",
-      "evidence_quote": "Creative Commons Attribution 3.0 Unported license"
+      "evidence_quote": "With the exception of the `classes/` folder, all the content of this repository is licensed under the Creative Commons Attribution 3.0 Unported license"
     },
     "code_samples": {
       "id": "CC-BY-3.0-and-MIT",
