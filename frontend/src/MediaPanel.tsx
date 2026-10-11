@@ -27,7 +27,7 @@ function useLater(){
  const waiting=useRef(new Map<string,(kind:'result'|'error',data:unknown)=>void>())
  useEffect(()=>onBackendEvent(event=>{
    const done=waiting.current.get(event.requestId)
-   if(!done||event.kind==='progress')return
+   if(!done||event.kind==='progress'||event.kind==='voice')return
    waiting.current.delete(event.requestId)
    done(event.kind,event.data)
  }),[])

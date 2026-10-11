@@ -91,7 +91,7 @@ export function installFakeDesktop() {
   Element.prototype.scrollTo = Element.prototype.scrollTo || (() => {})
   Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {})
 
-  const emit = (requestId: string, kind: 'progress' | 'result' | 'error', data: unknown) =>
+  const emit = (requestId: string, kind: 'progress' | 'result' | 'error' | 'voice', data: unknown) =>
     act(() => { listener?.(JSON.stringify({requestId, kind, data})) })
   const requestOf = (action: string, index = -1) => {
     const found = calls.filter(c => c.action === action)

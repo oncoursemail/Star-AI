@@ -37,7 +37,8 @@ export type MediaCapability = { id: 'images'|'voice'|'video'; title: string; fie
 export type MediaStatus = { places: MediaCapability[]; images: { running: boolean; ready: boolean; missing: string[]; model: string; message: string; version?: string }; sizes: Array<{id: string; label: string}>; can_start: boolean; ffmpeg: { found: boolean; message: string }; measured_on: string; references: number }
 export type MediaReference = { id: string; label: string; note: string; width: number; height: number; added: string; preview: string }
 export type MediaComparison = { reference: {id: string; label: string}; image: string; saved: string; candidate: string; differences: string[]; measured: { lines: string[] }; model: string; seconds: number; model_error: string }
-export type BackendEvent = { requestId:string; kind:'result'|'progress'|'error'; data:unknown }
+/** `voice` events belong to a voice call or a voice preview; they are keyed by the request that started it. */
+export type BackendEvent = { requestId:string; kind:'result'|'progress'|'error'|'voice'; data:unknown }
 /** Roblox Open Cloud connection as the desktop host reports it. The API key itself is never part of any of these. */
 export type RobloxState = 'no_key'|'unchecked'|'valid'|'missing_permission'|'invalid'|'revoked'|'unreachable'
 export type RobloxAccount = { user_id:number|null; name:string }
@@ -50,4 +51,12 @@ export type RobloxStatus = { key_present:boolean; source:string; state:RobloxSta
 export type RobloxAction = { id:string; kind:'publish'|'run_test'; status:'pending'|'running'|'done'|'failed'|'unknown'|'rejected'|'expired'; summary:string; target:{universe_id:number;place_id:number;name:string}; created:string; expires:string; detail:Record<string,unknown>; result?:Record<string,unknown> }
 
 export type StudioTarget='local_pc'|'host_launcher'
-export type StudioConnectionStatus={target:StudioTarget;label:string;state:'not_checked'|'unconfigured'|'connected'|'no_instances'|'unavailable';checked_at:string;tool_count:number;instances:Array<{id:string;name:string}>;selected_id:string;selected_valid:boolean;reason_code:string;local_mcp:string;server_name:string}
+export type StudioConnectionStatus={target:StudioTarget;label:string;state:'not_checked'|'unconfigured'|'connected'|'no_instances'|'unavailable';checked_at:string;tool_count:number;instances:Array<{id:string;name:string}>;selected_id:string;selected_valid:boolean;reason_code:string;local_mcp:string;server_name:string;diagnostic?:{stage:string;reason:string}|null}
+/** Whether a STAR Studio server connection is stored, and where it comes from. The address and command are never sent to the page. */
+export type StudioHostStatus={configured:boolean;source:'environment'|'settings'|'none'|'invalid'}
+
+/** The voice catalog as the desktop host lists it (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md section 9). */
+export type VoiceStyle={id:string;name:string;summary:string;preview_line:string}
+export type VoiceEntry={id:string;name:string;style:string;archetype:string;engine:string;licence:string;notes:string;recommended_for:string[];callable:boolean;reason:string;latency?:{first_audio_seconds?:number|null;first_audio_kind?:string;device?:string}}
+export type VoiceCatalog={styles:VoiceStyle[];voices:VoiceEntry[];selected:{voiceId:string;voice:string;style:string;speed:number}}
+export type VoiceEngineStatus={available:boolean;missingPackages:string[];missingModels:string[];serverConfigured:boolean;inCall:boolean}

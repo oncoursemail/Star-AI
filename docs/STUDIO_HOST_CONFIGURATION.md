@@ -22,10 +22,39 @@ still tests the selected route, displays actually discovered instances, and
 requires the owner to select the exact instance before enabling edits and Luau.
 Changing the UI route still clears the selection and both permissions.
 
-Commands are host/operator configuration, not editable model or desktop Settings
-fields. The command is never included in the discovery/status DTO or model tool
-catalog. The environment override is preserved; a malformed nonempty environment
-value refuses the operation rather than falling back to a file or this PC.
+Commands are host/operator configuration and are never editable by a model. The
+command is never included in the discovery/status DTO or model tool catalog. The
+environment override is preserved; a malformed nonempty environment value refuses
+the operation rather than falling back to a file or this PC.
+
+## The owner's fields in Settings (star/studio_host.py)
+
+Settings > Roblox Studio lets the owner write that file in one narrow form, so the
+"STAR Studio server" choice can be set up without editing a file by hand. This is
+the only place where the desktop writes a command, and what it can write is bounded
+in code, not by convention:
+
+- The program is always `ssh` with `-o BatchMode=yes` (key login only; it cannot
+  prompt for a password). No other local program can be stored from the interface.
+- The address is `user@host` or a host name: letters, digits, dot, dash and
+  underscore, and it cannot begin with a dash, so it cannot be read as an option.
+- The command on the server is words of letters, digits and `_ . / : = @ % + , -`,
+  joined by single spaces into one argument; its first word cannot begin with a
+  dash. Quotes, `;`, `|`, `&`, `$`, backticks, brackets and redirections are refused.
+- Bridge actions: `studioHostStatus` (`{configured, source}` with source
+  `environment`, `settings`, `none` or `invalid`), `studioHostSave {address, command}`
+  and `studioHostClear`. None of them returns the stored text: the fields are
+  write-only, like a key field. Saving or clearing waits for a running task, drops
+  the cached test result and, when the configured host is the selected route, clears
+  the selected instance and both permissions (another server is another Studio).
+- The file's `target` field is kept as the operator scripts left it; the route is
+  still only `Settings.studio_target`. The environment override still wins, and the
+  page says so when it is set.
+
+"Test connection" in that section is the existing `discoverStudio` check of the
+selected route; instance selection and the edit and Luau permissions stay where
+they were (Tools). An operator can still write the file by hand with any argv; the
+bounds above apply to what the interface accepts, not to what the reader accepts.
 
 Each connection resolves argv once and passes an immutable tuple directly to the
 transport. It does not modify the process environment. Concurrent explicit data
