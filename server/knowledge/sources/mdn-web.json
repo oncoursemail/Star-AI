@@ -18,14 +18,14 @@
       "attribution": "Credit the individual page title and URL and Mozilla Contributors; retain licence link, share adaptations under CC BY-SA and note changes.",
       "conditions": "Page-specific alternative licences override the default; exclude those pages pending separate review.",
       "evidence_url": "https://github.com/mdn/content/blob/main/LICENSE.md",
-      "evidence_quote": "Creative Commons Attribution-ShareAlike 2.5"
+      "evidence_quote": "All prose content is available under"
     },
     "code_samples": {
       "id": "CC0-1.0-or-MIT",
       "url": "https://github.com/mdn/content/blob/main/LICENSE.md",
       "redistribution_allowed": true,
       "attribution": "Post-2010 CC0 snippets need no credit; pre-2010 MIT snippets require original author, revision year, copyright and licence notice.",
-      "conditions": "Legacy snippets have uncertain dates in the current site; do not assume CC0 when origin is not documented. Preserve page provenance and conservatively credit.",
+      "conditions": "CC0 applies to examples added on or after 2010-08-20; older examples are MIT with author and revision-year attribution. Dates are not consistently recoverable in current MDN. Do not ingest code automatically until per-snippet licence and notices can be established.",
       "evidence_url": "https://github.com/mdn/content/blob/main/LICENSE.md",
       "evidence_quote": "Code examples and snippets added on or after August 20, 2010 are in the public domain"
     }
