@@ -170,7 +170,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      running.current.delete(requestId)
      lastError.current=result.error||'STAR could not complete this action.'
      // A chat request that fails to start is explained inline, next to the message it belongs to.
-     if(!CHAT_ACTIONS.includes(action))setNotice(lastError.current)
+     if(!CHAT_ACTIONS.includes(action)&&action!=='warmUp')setNotice(lastError.current)
      return null
    }
    if(result.pending)return result
@@ -181,6 +181,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const handleEvent=useCallback((event:BackendEvent)=>{
    const action=running.current.get(event.requestId)
    if(!action)return
+   if(action==='warmUp'){
+     // The host's own background check: no notice, no chat row. Only the status light is re-read.
+     if(event.kind!=='progress')running.current.delete(event.requestId)
+     void refreshConnection()
+     return
+   }
    if(event.kind==='progress'){
      if(action==='installBrain'){
        const obj=(event.data||{}) as Record<string,unknown>
@@ -287,6 +293,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else void sync()
  },[sync,updateRun,refreshConnection])
  useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
+ // Once per provider, model and address: the host checks the selected model server in the background and
+ // lets it read the start of the conversation, so the status is truthful and the first message is not the slow one.
+ const warmTarget=connectionTarget(data.settings as AppSettings&Record<string,unknown>)
+ const warmedTarget=useRef('')
+ useEffect(()=>{
+   if(inactive||!data.settings.model||warmedTarget.current===warmTarget)return
+   warmedTarget.current=warmTarget
+   void act('warmUp')
+ },[inactive,act,warmTarget,data.settings.model])
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
    lastSent.current=value;lastFiles.current=attachments

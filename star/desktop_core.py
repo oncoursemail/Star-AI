@@ -13,6 +13,7 @@ from dataclasses import dataclass, asdict
 from typing import Callable
 
 from .agent import execute
+from .context_layout import conversation_window
 from .media import image_part
 from .memory import Memory
 from .workspace import Workspace
@@ -20,8 +21,8 @@ from .intelligence import for_settings
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
-from .providers import (ALL_PROVIDERS, call_limits, connection_for, open_client, provider_kind,
-                        server_context_tokens, validate_lan_endpoint)
+from .providers import (ALL_PROVIDERS, call_limits, connection_for, llama_request_fields, open_client,
+                        provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, ROBLOX_QUALITY_NOTES
 
 
@@ -347,6 +348,19 @@ class Conversations:
         ).fetchall()
         return list(reversed(rows))
 
+    def history_rows(self, project: str, chat_id: str | None = None, clip: int = 4000):
+        """Every user/assistant row of the chat as (role, text), oldest first, without events.
+
+        All rows, not the newest few: the model's history window is measured from the
+        first message of the chat so that it stays put from turn to turn (see
+        context_layout.conversation_window). Each text is cut to ``clip`` characters.
+        """
+        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
+        return self.connection.execute(
+            f"SELECT role,SUBSTR(body,1,?) FROM messages WHERE {scope} AND role IN ('user','assistant') ORDER BY id",
+            (clip, *args)
+        ).fetchall()
+
     def recent_records(self, project: str, limit: int = 70, chat_id: str | None = None) -> list[dict]:
         """Like recent(), with row ids and turn outcome, for the UI state payload."""
         scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
@@ -525,6 +539,45 @@ def model_context_char_budget(settings: Settings) -> int:
     return settings.context_chars
 
 
+def history_char_budget(settings: Settings) -> int:
+    """Characters of earlier turns to replay.
+
+    On the owner's own hardware cached history costs nothing per turn, but the
+    first message after a start (or after the window moves) is read in full by a
+    slow CPU server, so the window stays near what STAR replayed before. A hosted
+    provider reads quickly and gets twice as much.
+    """
+    allowed = model_context_char_budget(settings)
+    return min(12000, allowed // 2) if provider_kind(settings) == 'cloud' else min(6000, max(1500, allowed // 4))
+
+
+def stable_memory(settings: Settings, checkpoint: str) -> str:
+    """The part of the compacted checkpoint that goes into the system message."""
+    return checkpoint[-min(6000, max(700, model_context_char_budget(settings) - 3200)):]
+
+
+def memory_scope_for(settings: Settings, chat_id: str | None) -> str:
+    return settings.project if chat_id in (None, 'legacy') else settings.project + '::chat::' + chat_id
+
+
+def chat_history(settings: Settings, home: Path, chat_id: str | None):
+    """Earlier turns of a chat exactly as the next request will replay them.
+
+    Returns (history messages, newest stored rows). The same function feeds a
+    real turn and the cache warm-up, so both start with identical bytes. A
+    trailing user row is the message being answered now (already saved by the
+    UI) and is not history; an earlier message that never got a reply is kept,
+    marked as unanswered (see context_layout.exchanges).
+    """
+    budget = history_char_budget(settings)
+    dialogue = Conversations(home / 'conversations.sqlite3')
+    try:
+        rows = dialogue.history_rows(settings.project, chat_id, clip=budget)
+    finally:
+        dialogue.close()
+    return conversation_window(rows, budget_chars=budget), rows[-12:]
+
+
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
@@ -561,21 +614,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         if on_event:
             on_event(event)
     memory = Memory(home / 'checkpoints.sqlite3')
-    memory_scope = settings.project if chat_id in (None, 'legacy') else settings.project + '::chat::' + chat_id
+    memory_scope = memory_scope_for(settings, chat_id)
     knowledge = KnowledgeStore(home / 'knowledge')
     workshop = None
     try:
-        dialogue = Conversations(home / 'conversations.sqlite3')
-        try:
-            recent_all = dialogue.recent(settings.project, limit=12, chat_id=chat_id,
-                                         include_events=False)
-        finally:
-            dialogue.close()
+        # Earlier turns are sent as real user/assistant messages, oldest first, and the
+        # window over them only moves in whole blocks: the request starts with the same
+        # bytes turn after turn, which is what lets the model server reuse its cache.
+        history, recent_all = chat_history(settings, home, chat_id)
+        # The UI saved the message being answered before calling this; it is not a prior turn.
         route_history = (
             recent_all[:-1] if recent_all and recent_all[-1][0] == 'user'
-            and recent_all[-1][1] == prompt else recent_all
+            and recent_all[-1][1] and prompt.startswith(recent_all[-1][1]) else recent_all
         )
-        recent_users = [body for role,body,_ in route_history if role=='user']
+        recent_users = [body for role,body in route_history if role=='user']
         project_tools = needs_project_tools(prompt, recent_users)
         referential = len(prompt) <= 160 and bool(re.search(
             r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
@@ -594,9 +646,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             media_type = 'image/jpeg' if path.suffix.lower() in ('.jpg', '.jpeg') else 'image/webp' if path.suffix.lower() == '.webp' else 'image/png'
             knowledge.ingest_artifact(project=settings.project, path=path,
                 origin=f'desktop:{path.name}', media_type=media_type)
-        # Every chat turn is independently callable, so supply a bounded recent
-        # transcript from the persistent conversation DB as well as compacted memory.
-        prior_turns = recent_context(recent_all[-(6 if quick else 12):], prompt)
+        # Per-turn reference material as (heading, text) pairs. This list is the only way
+        # retrieved text reaches the model: star.agent.volatile_context appends it to the
+        # final user turn, after the user's words. A new retrieval source appends one pair.
+        turn_sections = [('REVIEWED KNOWLEDGE (stored notes; may be incomplete)', notes)]
         use_tools = route.use_tools
         allowed_context_chars = model_context_char_budget(settings)
         intelligence = for_settings(settings, home) if use_tools else None
@@ -611,11 +664,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         limits = call_limits(settings)
         async def run():
             from .web_search import search_web, source_context
-            snippets = ''
             if research:
                 audited_event({'event': 'search_started'})
                 found = await search_web(prompt[:600], limit=5)
-                snippets = '\n\n' + source_context(found)
+                turn_sections.append(('WEB SEARCH', source_context(found)))
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
@@ -624,16 +676,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     knowledge=knowledge,workspace=workspace,intelligence=intelligence,
                     parallelism=settings.specialist_parallelism,on_event=audited_event
                 ) if use_tools and settings.specialists_enabled else None)
-                memory_context = (memory.get(memory_scope) + '\nREVIEWED KNOWLEDGE:\n' + notes
-                    + '\nRECENT CONVERSATION (stored, may be incomplete):\n' + prior_turns)
+                # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
-                # discovered tool schemas before injecting recalled memory.
+                # discovered tool schemas before adding this turn's context.
                 memory_limit = max(700, allowed_context_chars - 3200)
-                memory_context = memory_context[-min(5000 if quick else 14000, memory_limit):]
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
-                              project_memory=memory_context + snippets +
-                                  (ROBLOX_QUALITY_NOTES if
-                                  (is_roblox_task(prompt) or roblox_context) else ''),
+                              project_memory=stable_memory(settings, memory.get(memory_scope)),
+                              history=history, turn_sections=turn_sections, mode=mode,
+                              turn_context_chars=min(3000 if quick else 10000, memory_limit),
+                              # Standing guidance for every tool-using turn (the short
+                              # plain-chat rules carry their own Roblox line).
+                              guidance=ROBLOX_QUALITY_NOTES,
+                              # llama.cpp cache fields; {} for cloud providers.
+                              request_extras=lambda tools: llama_request_fields(
+                                  settings, conversation=memory_scope, tools=tools),
                               max_calls=route.max_calls,
                               context_chars=allowed_context_chars,
                               checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,

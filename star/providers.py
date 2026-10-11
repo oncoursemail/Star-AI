@@ -228,6 +228,43 @@ def server_context_tokens(settings) -> int:
                                 str(getattr(settings, "model", ""))))
     return known[0] if known else 0
 
+def server_slots(settings) -> int:
+    """Parallel slots the LAN model last reported through /props; 0 while unknown."""
+    known = _SERVER_LIMITS.get((str(getattr(settings, "server_endpoint", "")).rstrip("/"),
+                                str(getattr(settings, "model", ""))))
+    return known[1] if known else 0
+
+def llama_request_fields(settings, *, conversation: str = "", tools: bool = False) -> dict:
+    """Extra request-body fields that make a llama.cpp server reuse its prompt cache.
+
+    Only for the kinds `local` and `lan`, which are llama.cpp servers the owner
+    runs. Cloud providers get {}: these are not OpenAI fields and are never
+    sent to a vendor.
+
+      cache_prompt        keep the tokens of this prompt in the slot and reuse the
+                          common start on the next request
+      chat_template_kwargs.preserve_thinking
+                          render earlier answers exactly as they were generated
+                          (Qwen templates otherwise re-render them differently, which
+                          makes the server read every previous answer again)
+      id_slot             one conversation stays on one slot. A request with tools
+                          starts with the tool list, a plain chat request with the
+                          rules, so the two never share a prefix: each gets its own
+                          slot and neither evicts the other. Sent only when the
+                          server has reported two or more slots.
+
+    Verified against llama.cpp build 11541 (router mode) on the owner's server.
+    """
+    kind = provider_kind(settings)
+    if kind == "cloud":
+        return {}
+    fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
+    slots = server_slots(settings) if kind == "lan" else 0
+    if slots >= 2:
+        import zlib
+        fields["id_slot"] = (zlib.crc32(str(conversation).encode("utf-8", "replace")) + (1 if tools else 0)) % slots
+    return fields
+
 def provider_catalog() -> list[dict]:
     statuses = credential_status()
     return [{"id": LOCAL, "label": PRIVATE_PROVIDERS[LOCAL].label, "model": "", "connected": True, "kind": "local"},

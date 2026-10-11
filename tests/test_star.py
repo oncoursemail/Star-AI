@@ -169,9 +169,15 @@ def test_qwen_compaction_never_adds_second_system(monkeypatch):
             context_chars=100,checkpoint=lambda summary:updates.append(summary))
         assert answer=="Finished inspection"
         assert updates and archive
-        assert "checkpoint" in messages[0]["content"].lower()
         for request in model.requests:
             assert [i for i,m in enumerate(request["messages"]) if m["role"]=="system"]==[0]
+        # The checkpoint travels in a later user turn; the one system message is not
+        # rewritten, so the server's cached start of the request survives compaction.
+        before,after=(request["messages"] for request in model.requests)
+        assert after[0]==before[0] and after[1]==before[1]
+        assert "Verified task checkpoint" not in after[0]["content"]
+        assert after[-1]["role"]=="user" and "Verified task checkpoint" in after[-1]["content"]
+        assert messages[0]==before[0]
     asyncio.run(run())
 
 

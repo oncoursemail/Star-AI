@@ -204,7 +204,7 @@ def server_status(settings) -> dict:
     }
 
 
-def probe_server(settings, *, transport=None) -> dict:
+def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
     """Check STAR Server in four timed steps and say exactly which one failed.
 
     health (is the box up) -> /v1/models with the key (is the key right, which
@@ -212,6 +212,8 @@ def probe_server(settings, *, transport=None) -> dict:
     chat completion. It uses the saved server address and the keyring key even
     when another provider is selected, so the owner can test before switching.
     A failed step is a normal result (`ok: False` plus a message), not an error.
+    `chat=False` stops after the limits step: the cheap check STAR runs at start,
+    which is followed by its own one-token request (see star/warmup.py).
     """
     import httpx
     from .brain_benchmark import parse_sse_data
@@ -319,6 +321,9 @@ def probe_server(settings, *, transport=None) -> dict:
             step('limits', 'ok', began, f'{context} context tokens per request, {slots} parallel slot(s)')
         else:
             step('limits', 'skipped', began, 'Server did not report its limits')
+
+        if not chat:
+            return finish('ok', f'STAR Server is reachable, the key works and it offers {model}.')
 
         # 4. One tiny real completion, streamed so the first-token delay is measured.
         began = perf_counter()
