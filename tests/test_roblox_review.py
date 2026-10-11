@@ -104,3 +104,19 @@ def test_studio_never_edits_another_place_of_the_denied_experience():
     assert named.names() == ["list_roblox_studios"]
 
 
+# ------------------------------------------------------------------ 2. an approval is for the place it named
+
+def test_an_approval_is_not_carried_over_to_another_test_experience(fake, tmp_path):
+    cloud = ready(fake, tmp_path)
+    digest = cloud.store_build(build_place(EXAMPLE).data)
+    publish = cloud.request_action("publish", "Publish the shop", {"sha256": digest})
+    test = cloud.request_action("run_test", "Run the shop tests", {"script": "return 1"})
+    assert publish["target"]["place_id"] == PLACE
+    own_private(fake, 7002, 9002)
+    cloud.set_test_experience(7002, 9002, human_approved=True)      # the owner chose another one meanwhile
+    for action in (publish, test):
+        done = cloud.decide(action["id"], approved=True, human_approved=True)
+        assert done["status"] == "failed" and "another test experience" in done["result"]["error"]
+    assert fake.writes() == [] and fake.published == [] and fake.tasks == {}
+
+

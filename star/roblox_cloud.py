@@ -646,9 +646,16 @@ class RobloxCloud:
             raise CloudError(NO_EXPERIENCE)
         return chosen
 
-    def guard_write(self) -> dict:
-        """Every write starts here: the saved choice is verified against Roblox again."""
+    def guard_write(self, only: tuple | None = None) -> dict:
+        """Every write starts here: the saved choice is verified against Roblox again.
+
+        `only` is the (universe, place) an approval named. The owner approved a write to that place;
+        when another test experience has been chosen since, the approval does not move with it.
+        """
         chosen = self.require_test_experience()
+        if only is not None and tuple(only) != (chosen["universe_id"], chosen["place_id"]):
+            raise CloudError("This action was requested for another test experience than the one chosen "
+                             "now. Nothing was sent to Roblox. Ask STAR to request it again.")
         account = self._account_id()
         if chosen.get("owner_user_id") != account:
             raise CloudError("The connected key belongs to another account than the test experience. "
@@ -656,12 +663,13 @@ class RobloxCloud:
         return self.check_experience(chosen["universe_id"], chosen["place_id"], account=account)
 
     # ---- writes (reached only through an approved action, or the owner's own command line)
-    def publish_place(self, data: bytes, *, xml: bool = True, version_type: str = "Saved") -> dict:
+    def publish_place(self, data: bytes, *, xml: bool = True, version_type: str = "Saved",
+                      only: tuple | None = None) -> dict:
         if version_type not in ("Saved", "Published"):
             raise CloudError("versionType must be Saved or Published")
         if not isinstance(data, bytes) or not 0 < len(data) <= MAX_PLACE_BYTES:
             raise CloudError("The place file is empty or larger than STAR publishes")
-        target = self.guard_write()
+        target = self.guard_write(only)
         if not scope_allows(self._scopes, "universe-places", "write", target["universe_id"]):
             raise CloudError("The key lacks universe-places:write for the test experience")
         reply = self._cloud().call(
@@ -677,11 +685,11 @@ class RobloxCloud:
                 "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
     def run_luau(self, script: str, *, version: int | None = None, wait_seconds: float = 330.0,
-                 poll_seconds: float = 2.0) -> dict:
+                 poll_seconds: float = 2.0, only: tuple | None = None) -> dict:
         """Create one Luau execution task in the test place, wait for it, and collect result and logs."""
         if not isinstance(script, str) or not script.strip() or len(script) > MAX_SCRIPT_CHARS:
             raise CloudError("The test script is empty or too long")
-        target = self.guard_write()
+        target = self.guard_write(only)
         if not scope_allows(self._scopes, "universe.place.luau-execution-session", "write", target["universe_id"]):
             raise CloudError("The key lacks universe.place.luau-execution-session:write for the test experience")
         ids = {"universe": target["universe_id"], "place": target["place_id"]}
@@ -803,15 +811,19 @@ class RobloxCloud:
             self._save_actions(items)
         if not approved:
             return public_action(action, full=True)
+        # The approval is for the place the action named when the owner saw it, and for no other.
+        named = action.get("target") if isinstance(action.get("target"), dict) else {}
+        only = (named.get("universe_id"), named.get("place_id"))
         try:
             if action["kind"] == "publish":
                 stored = self.dir / "builds" / (str(action["detail"].get("sha256")) + ".rbxlx")
                 data = stored.read_bytes()
                 if hashlib.sha256(data).hexdigest() != action["detail"].get("sha256"):
                     raise CloudError("The built place file changed after it was shown for approval")
-                result = self.publish_place(data, xml=True, version_type="Saved")
+                result = self.publish_place(data, xml=True, version_type="Saved", only=only)
             else:
-                result = self.run_luau(action["detail"]["script"], version=action["detail"].get("version"))
+                result = self.run_luau(action["detail"]["script"], version=action["detail"].get("version"),
+                                       only=only)
             failed = bool(result.get("error")) or result.get("state") in ("FAILED", "CANCELLED", "TIMED_OUT",
                                                                            "NOT_CREATED")
             outcome = ("failed" if failed else "done", result)

@@ -72,6 +72,8 @@ Write tools do not write. `star_roblox_cloud_request_publish` (build a place fro
 the built file's size, hash and file list, or the script. The owner approves or rejects each action under
 Settings > Roblox > Actions waiting for you. An approved action is carried out once; an action expires after 15
 minutes; at most five can wait. The model cannot approve: approval is an interface action, not a tool.
+An approval is for the place the action named: if another test experience is chosen before the owner decides,
+the action fails without sending anything.
 Publishing always creates a **saved** version (`versionType=Saved`), never a live one.
 
 ## 4. Headless pipeline (no Studio, runs on the PC or a Linux server)
