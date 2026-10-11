@@ -2,7 +2,12 @@
 
 `build()` re-creates docs/chunks/FTS from the checked-out sources (seconds). The `embeddings`
 table is keyed by the SHA-256 of the exact text sent to the embedding model, so a rebuild after a
-docs update only needs to embed chunks whose text changed (see embed.py).
+docs update only needs to embed chunks whose text changed (see embed.py). Generated questions
+(`chunk_questions`, study.py) are keyed the same way and survive a rebuild.
+
+The rebuild is ONE transaction: the service keeps answering from the previous index until the
+new one is committed, and any failure (a missing checkout, a parse error, far fewer chunks than
+before) rolls back to the previous index untouched.
 """
 from __future__ import annotations
 
@@ -37,9 +42,21 @@ CREATE TABLE IF NOT EXISTS embeddings(
   text_sha TEXT NOT NULL, model TEXT NOT NULL, dim INTEGER NOT NULL, vec BLOB NOT NULL,
   created_at TEXT NOT NULL, PRIMARY KEY(text_sha, model));
 CREATE TABLE IF NOT EXISTS meta(name TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS chunk_questions(
+  id INTEGER PRIMARY KEY, text_sha TEXT NOT NULL, ord INTEGER NOT NULL, question TEXT NOT NULL,
+  q_sha TEXT NOT NULL, model TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(text_sha, ord));
+CREATE INDEX IF NOT EXISTS idx_questions_sha ON chunk_questions(text_sha);
+CREATE TABLE IF NOT EXISTS study_log(
+  text_sha TEXT PRIMARY KEY, status TEXT NOT NULL, questions INTEGER NOT NULL, model TEXT NOT NULL,
+  seconds REAL NOT NULL, created_at TEXT NOT NULL);
 """
 FTS = """CREATE VIRTUAL TABLE chunks_fts USING fts5(
-  title, heading, idents, text, content='', tokenize="porter unicode61 remove_diacritics 2")"""
+  title, heading, idents, text, questions, content='', tokenize="porter unicode61 remove_diacritics 2")"""
+MIN_REBUILD_RATIO = 0.8   # a rebuild that yields fewer than this share of the previous chunks is refused
+
+
+class RebuildRefused(RuntimeError):
+    """The new index would be much smaller than the working one; the working one was kept."""
 
 
 def now() -> str:
@@ -64,6 +81,58 @@ def connect_readonly(path: Path) -> sqlite3.Connection:
     db.execute("PRAGMA busy_timeout=30000")
     db.execute("PRAGMA query_only=ON")
     return db
+
+
+def questions_text(db, text_sha: str) -> str:
+    """The generated questions of a chunk as one FTS field (one per line)."""
+    return "\n".join(r[0] for r in db.execute(
+        "SELECT question FROM chunk_questions WHERE text_sha=? ORDER BY ord", (text_sha,)))
+
+
+def fts_has_questions(db) -> bool:
+    row = db.execute("SELECT sql FROM sqlite_master WHERE name='chunks_fts'").fetchone()
+    return bool(row and "questions" in (row[0] or ""))
+
+
+def rebuild_fts(db) -> int:
+    """Re-create the FTS table from `chunks` (no sources needed), in one transaction. Used once
+    to add the questions column to an index built before the study job existed."""
+    if db.in_transaction:
+        db.commit()
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        db.execute("DROP TABLE IF EXISTS chunks_fts")
+        db.execute(FTS)
+        questions: dict[str, list[str]] = {}
+        for sha, question in db.execute("SELECT text_sha, question FROM chunk_questions ORDER BY text_sha, ord"):
+            questions.setdefault(sha, []).append(question)
+        n = 0
+        for row in db.execute("""SELECT c.id, d.title, c.heading, c.idents, c.text, c.text_sha
+                                 FROM chunks c JOIN docs d ON d.id=c.doc_id ORDER BY c.id""").fetchall():
+            db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
+                       (row[0], row[1], row[2], row[3], row[4], "\n".join(questions.get(row[5], ()))))
+            n += 1
+        db.commit()
+    except BaseException:
+        db.rollback()
+        raise
+    db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
+    db.commit()
+    return n
+
+
+def set_fts_questions(db, text_sha: str, old: str, new: str) -> int:
+    """Replace the questions field of every chunk with this text hash. A contentless FTS5 table
+    is updated by deleting the row with its exact old values and inserting it again. The caller
+    commits."""
+    rows = db.execute("""SELECT c.id, d.title, c.heading, c.idents, c.text FROM chunks c JOIN docs d ON d.id=c.doc_id
+                         WHERE c.text_sha=?""", (text_sha,)).fetchall()
+    for row in rows:
+        db.execute("INSERT INTO chunks_fts(chunks_fts,rowid,title,heading,idents,text,questions) VALUES('delete',?,?,?,?,?,?)",
+                   (row[0], row[1], row[2], row[3], row[4], old))
+        db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
+                   (row[0], row[1], row[2], row[3], row[4], new))
+    return len(rows)
 
 
 def embed_input(title: str, heading: str, text: str) -> str:
@@ -164,15 +233,46 @@ def _luau_site(root: Path, base: str):
 WALKERS = {"creator-docs": _creator_docs, "luau-site": _luau_site}
 
 
-def build(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
-    """Rebuild docs/chunks/FTS from the checked-out repositories. Embeddings are preserved."""
+def build(db_path: Path, sources_dir: Path, manifest: Path, *, force: bool = False) -> dict:
+    """Rebuild docs/chunks/FTS from the checked-out repositories, as one transaction (see the
+    module text). Embeddings and generated questions are preserved. Raises RebuildRefused, and
+    keeps the working index, when the result would have under MIN_REBUILD_RATIO of the chunks it
+    had before; force=True skips that check."""
     config = json.loads(manifest.read_text(encoding="utf-8"))
     db = connect(db_path)
+    before = db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    old_shas = {r[0] for r in db.execute("SELECT DISTINCT text_sha FROM chunks")}
+    db.execute("BEGIN IMMEDIATE")
+    try:
+        stats = _build_into(db, sources_dir, config)
+        after = stats["_all"]["chunks"]
+        if before and after < before * MIN_REBUILD_RATIO and not force:
+            raise RebuildRefused(f"the rebuild has {after} chunks, the working index has {before}; kept the working index")
+        new_shas = {r[0] for r in db.execute("SELECT DISTINCT text_sha FROM chunks")}
+        stats["_all"]["chunks_before"] = before
+        stats["_all"]["texts_added"] = len(new_shas - old_shas)
+        stats["_all"]["texts_removed"] = len(old_shas - new_shas)
+        db.execute("INSERT OR REPLACE INTO meta VALUES('built_at',?)", (now(),))
+        db.commit()
+    except BaseException:
+        db.rollback()
+        db.close()
+        raise
+    db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
+    db.commit()
+    db.close()
+    return stats
+
+
+def _build_into(db, sources_dir: Path, config: dict) -> dict:
     db.execute("DROP TABLE IF EXISTS chunks_fts")
     db.execute("DELETE FROM chunks")
     db.execute("DELETE FROM docs")
     db.execute("DELETE FROM sources")
     db.execute(FTS)
+    questions: dict[str, list[str]] = {}
+    for sha, question in db.execute("SELECT text_sha, question FROM chunk_questions ORDER BY text_sha, ord"):
+        questions.setdefault(sha, []).append(question)
     stats = {}
     for source in config["sources"]:
         name = source["name"]
@@ -195,16 +295,13 @@ def build(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
                 rowid = db.execute(
                     "INSERT INTO chunks(doc_id,ord,kind,heading,anchor,text,idents,text_sha) VALUES(?,?,?,?,?,?,?,?)",
                     (doc_id, ord_, chunk.kind, chunk.heading, chunk.anchor, chunk.text, chunk.idents, sha)).lastrowid
-                db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text) VALUES(?,?,?,?,?)",
-                           (rowid, doc.title, chunk.heading, chunk.idents, chunk.text))
+                db.execute("INSERT INTO chunks_fts(rowid,title,heading,idents,text,questions) VALUES(?,?,?,?,?,?)",
+                           (rowid, doc.title, chunk.heading, chunk.idents, chunk.text,
+                            "\n".join(questions.get(sha, ()))))
                 n_chunks += 1
                 n_chars += len(chunk.text)
         stats[name] = {"commit": commit, "commit_date": commit_date, "docs": n_docs,
                        "chunks": n_chunks, "chars": n_chars}
-    db.execute("INSERT OR REPLACE INTO meta VALUES('built_at',?)", (now(),))
-    db.commit()
-    db.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
-    db.commit()
     kinds = dict(db.execute("SELECT kind, COUNT(*) FROM chunks GROUP BY kind").fetchall())
     sizes = [r[0] for r in db.execute("SELECT length(text) FROM chunks ORDER BY 1")]
     stats["_all"] = {"chunks": len(sizes), "by_kind": kinds,
@@ -212,5 +309,4 @@ def build(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
                      "chars_p95": sizes[int(len(sizes) * 0.95)] if sizes else 0,
                      "chars_max": sizes[-1] if sizes else 0,
                      "distinct_embed_inputs": db.execute("SELECT COUNT(DISTINCT text_sha) FROM chunks").fetchone()[0]}
-    db.close()
     return stats

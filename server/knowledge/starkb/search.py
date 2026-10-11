@@ -1,13 +1,20 @@
 """BM25 (SQLite FTS5) + embedding (cosine, brute force) + RRF fusion + optional rerank.
 
+Generated questions (study.py, "doc2query"): a chunk may carry 2-3 short questions it answers.
+With `questions=True` they take part in both generators: BM25 reads them as a fifth FTS column,
+and the embedding search scores a chunk by the better of its own vector and its best question
+vector (scaled, see QUESTION_SCALE). With `questions=False` both generators ignore them.
+
 Every returned passage carries its provenance: source repository, file path, commit, public URL,
 a commit-pinned permalink, licence and the retrieval time.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, asdict
+import os
 from pathlib import Path
 import re
+import sqlite3
 import threading
 import time
 
@@ -23,6 +30,13 @@ FALLBACK_EMBED = 4              # ... and at most this many of them are embedded
 FALLBACK_CACHE = 4000           # on-the-fly vectors kept in memory (never written to the index)
 RRF_K = 60                          # Cormack et al. 2009 default
 BM25_WEIGHTS = (3.0, 2.0, 2.0, 1.0)  # title, heading, idents, text (fixed before evaluation, not tuned)
+BM25_QUESTION_WEIGHT = 2.0          # generated questions, weighted like a heading (fixed before evaluation, not tuned)
+BASE_COLUMNS = "{title heading idents text}"   # FTS5 column filter: match outside the questions column only
+# A query and a generated question are both embedded with the query prompt, so their cosine runs
+# higher than query-to-passage cosine. The question score is scaled before it competes with the
+# passage score; the value was chosen on the 30 development questions (see docs/agents/knowledge-study.md).
+QUESTION_SCALE = float(os.environ.get("STAR_KB_QUESTION_SCALE", "0.85"))
+USE_QUESTIONS = os.environ.get("STAR_KB_QUESTIONS", "1") != "0"   # service default; `questions=` overrides per call
 RERANK_DOC_CHARS = 1000         # the reranker shares the 512-token physical batch limit (query + document + template)
 STOP = frozenset("""a an and are as at be but by can do does for from how i if in into is it its me my of on or
 so that the their then there these this to use using was what when where which who why will with you your
@@ -66,16 +80,48 @@ def fts_query(query: str, limit: int = 32) -> str:
     return " OR ".join('"' + t + '"' for t in list(terms)[:limit])
 
 
-def load_vectors(db) -> tuple[np.ndarray, np.ndarray, set[int]]:
-    """(chunk ids, unit-vector matrix, id set) for every chunk that has an embedding."""
+class Vectors:
+    """Every stored embedding, loaded once: chunk vectors, and the vectors of generated questions
+    with the row (in `ids`) of the chunk each question belongs to."""
+
+    def __init__(self, ids, matrix, q_rows, q_matrix):
+        self.ids: np.ndarray = ids
+        self.matrix: np.ndarray = matrix
+        self.allowed: set[int] = set(int(i) for i in ids)
+        self.q_rows: np.ndarray = q_rows
+        self.q_matrix: np.ndarray = q_matrix
+
+    def __iter__(self):   # (ids, matrix, allowed): the shape older callers unpack
+        return iter((self.ids, self.matrix, self.allowed))
+
+
+def has_questions(db) -> bool:
+    try:
+        return db.execute("SELECT 1 FROM chunk_questions LIMIT 1").fetchone() is not None
+    except sqlite3.OperationalError:   # an index built before the study job existed
+        return False
+
+
+def load_vectors(db) -> Vectors:
     rows = db.execute(
         """SELECT c.id, e.vec FROM chunks c JOIN embeddings e
            ON e.text_sha=c.text_sha AND e.model=? ORDER BY c.id""", (EMBED_MODEL,)).fetchall()
+    empty_rows, empty_matrix = np.zeros(0, dtype=np.int64), np.zeros((0, 1), dtype=np.float32)
     if not rows:
-        return np.zeros(0, dtype=np.int64), np.zeros((0, 1), dtype=np.float32), set()
+        return Vectors(empty_rows, empty_matrix, empty_rows, empty_matrix)
     ids = np.fromiter((r[0] for r in rows), dtype=np.int64, count=len(rows))
     matrix = np.frombuffer(b"".join(r[1] for r in rows), dtype=np.float32).reshape(len(rows), -1)
-    return ids, matrix, set(int(i) for i in ids)
+    q_rows, q_matrix = empty_rows, empty_matrix
+    if has_questions(db):
+        row_of = {int(cid): i for i, cid in enumerate(ids)}
+        qrows = [r for r in db.execute(
+            """SELECT c.id, e.vec FROM chunk_questions q JOIN chunks c ON c.text_sha=q.text_sha
+               JOIN embeddings e ON e.text_sha=q.q_sha AND e.model=? ORDER BY c.id""", (EMBED_MODEL,))
+                 if int(r[0]) in row_of]
+        if qrows:
+            q_rows = np.fromiter((row_of[int(r[0])] for r in qrows), dtype=np.int64, count=len(qrows))
+            q_matrix = np.frombuffer(b"".join(r[1] for r in qrows), dtype=np.float32).reshape(len(qrows), -1)
+    return Vectors(ids, matrix, q_rows, q_matrix)
 
 
 class VectorCache:
@@ -88,14 +134,14 @@ class VectorCache:
     def __init__(self, recheck: float = 60.0):
         self.recheck = recheck
         self._lock = threading.Lock()
-        self._state: tuple[np.ndarray, np.ndarray, set[int]] | None = None
+        self._state: Vectors | None = None
         self._count = -1
         self._checked = 0.0
         self.chunks = 0
         self.loaded_at = ""
         self.extra: dict[str, np.ndarray] = {}   # text hash -> vector embedded at query time
 
-    def get(self, db) -> tuple[np.ndarray, np.ndarray, set[int]]:
+    def get(self, db) -> Vectors:
         with self._lock:
             stale = time.monotonic() - self._checked > self.recheck
             if self._state is None or stale:
@@ -111,17 +157,25 @@ class VectorCache:
 
 class Searcher:
     def __init__(self, db_path: Path, brain: Brain | None = None, *, scope_embedded: bool = False,
-                 vectors: VectorCache | None = None, readonly: bool = False):
+                 vectors: VectorCache | None = None, readonly: bool = False,
+                 scope_shas: set[str] | None = None, question_scale: float | None = None):
         """scope_embedded=True restricts *all* modes to chunks that have an embedding, so BM25 and
         hybrid are compared on exactly the same candidate set when only a subset is embedded.
+        scope_shas restricts all modes to the chunks with these text hashes (subset experiments).
         readonly=True (the service) opens the index without any write access."""
         self.db = connect_readonly(db_path) if readonly else connect(db_path)
         self.brain = brain or Brain()
         self.scope_embedded = scope_embedded
+        self.question_scale = QUESTION_SCALE if question_scale is None else question_scale
         self._cache = vectors
+        self._vectors: Vectors | None = None
         self._ids: np.ndarray | None = None
         self._matrix: np.ndarray | None = None
         self._allowed: set[int] | None = None
+        self._scope: set[int] | None = None
+        self._scope_mask: np.ndarray | None = None
+        if scope_shas is not None:
+            self._scope = {int(r[0]) for r in self.db.execute("SELECT id, text_sha FROM chunks") if r[1] in scope_shas}
         self._chunks: int | None = None
         self._extra: dict[str, np.ndarray] = {}
         self.sources = {r["name"]: dict(r) for r in self.db.execute("SELECT * FROM sources")}
@@ -131,10 +185,19 @@ class Searcher:
         if self._matrix is not None:
             return
         if self._cache is not None:
-            self._ids, self._matrix, self._allowed = self._cache.get(self.db)
+            self._vectors = self._cache.get(self.db)
             self._chunks = self._cache.chunks
-            return
-        self._ids, self._matrix, self._allowed = load_vectors(self.db)
+        else:
+            self._vectors = load_vectors(self.db)
+        self._ids, self._matrix, self._allowed = self._vectors
+        if self.scope_embedded:
+            self._scope = self._allowed if self._scope is None else (self._scope & self._allowed)
+        if self._scope is not None:
+            self._scope_mask = np.fromiter((int(i) in self._scope for i in self._ids), dtype=bool, count=len(self._ids))
+
+    def question_count(self) -> int:
+        self._load_vectors()
+        return int(len(self._vectors.q_rows))
 
     def chunk_count(self) -> int:
         if self._chunks is None:
@@ -145,27 +208,39 @@ class Searcher:
         self._load_vectors()
         return int(len(self._ids))
 
-    def bm25(self, query: str, k: int = 50) -> list[tuple[int, float]]:
+    def bm25(self, query: str, k: int = 50, questions: bool = False) -> list[tuple[int, float]]:
         match = fts_query(query)
         if not match:
             return []
         if self.scope_embedded:
             self._load_vectors()
-        fetch = k if not self.scope_embedded else -1
-        sql = ("SELECT rowid, bm25(chunks_fts, ?, ?, ?, ?) AS s FROM chunks_fts WHERE chunks_fts MATCH ? "
+        scoped = self._scope is not None
+        fetch = k if not scoped else -1
+        if not questions:   # the questions column must neither match nor score
+            match = f"{BASE_COLUMNS} : ({match})"
+        weights = (*BM25_WEIGHTS, BM25_QUESTION_WEIGHT if questions else 0.0)
+        sql = ("SELECT rowid, bm25(chunks_fts, ?, ?, ?, ?, ?) AS s FROM chunks_fts WHERE chunks_fts MATCH ? "
                "ORDER BY s LIMIT ?")
-        rows = self.db.execute(sql, (*BM25_WEIGHTS, match, fetch)).fetchall()
-        out = [(int(r[0]), -float(r[1])) for r in rows
-               if not self.scope_embedded or int(r[0]) in self._allowed]
+        rows = self.db.execute(sql, (*weights, match, fetch)).fetchall()
+        out = [(int(r[0]), -float(r[1])) for r in rows if not scoped or int(r[0]) in self._scope]
         return out[:k]
 
-    def vector(self, query: str, k: int = 50, qvec: np.ndarray | None = None) -> list[tuple[int, float]]:
+    def vector(self, query: str, k: int = 50, qvec: np.ndarray | None = None,
+               questions: bool = False) -> list[tuple[int, float]]:
         self._load_vectors()
         if not len(self._ids):
             return []
         if qvec is None:
             qvec = np.asarray(self.brain.embed_query(query), dtype=np.float32)
         scores = self._matrix @ qvec
+        if questions and len(self._vectors.q_rows):
+            # a chunk is as good as its best generated question (scaled), if that beats its own text
+            np.maximum.at(scores, self._vectors.q_rows, (self._vectors.q_matrix @ qvec) * self.question_scale)
+        if self._scope_mask is not None:
+            scores = np.where(self._scope_mask, scores, -2.0)
+            k = min(k, int(self._scope_mask.sum()))
+            if k <= 0:
+                return []
         k = min(k, len(scores))
         top = np.argpartition(-scores, k - 1)[:k]
         top = top[np.argsort(-scores[top])]
@@ -206,7 +281,7 @@ class Searcher:
 
     def search(self, query: str, *, mode: str = "hybrid+rerank", top: int = 5, per_doc: int = 2,
                candidates: int = 50, rerank_n: int = 15, fallback: bool = False,
-               degrade: bool = False) -> tuple[list[Passage], dict]:
+               degrade: bool = False, questions: bool | None = None) -> tuple[list[Passage], dict]:
         """fallback=True (the service default): in `vector` mode on a partly embedded index, the
         chunks without an embedding that BM25 ranks in its top FALLBACK_DEPTH over the whole corpus
         are embedded at query time (at most FALLBACK_EMBED) and ranked by cosine with the rest.
@@ -214,6 +289,8 @@ class Searcher:
         cannot be reached, answer with BM25 and report `timing["degraded"]` instead of failing."""
         if mode not in MODES:
             raise ValueError("mode must be one of " + ", ".join(MODES))
+        if questions is None:
+            questions = USE_QUESTIONS
         timing: dict[str, float] = {}
         t0 = time.perf_counter()
         ranked: list[tuple[int, float]]
@@ -222,7 +299,7 @@ class Searcher:
         partial = False
         if mode != "bm25":
             self._load_vectors()
-            partial = fallback and not self.scope_embedded and len(self._ids) < self.chunk_count()
+            partial = fallback and self._scope is None and len(self._ids) < self.chunk_count()
             t = time.perf_counter()
             try:
                 qvec = np.asarray(self.brain.embed_query(query), dtype=np.float32)
@@ -234,11 +311,11 @@ class Searcher:
             else:
                 timing["embed_query_ms"] = (time.perf_counter() - t) * 1000
                 t = time.perf_counter()
-                dense = self.vector(query, candidates, qvec=qvec)
+                dense = self.vector(query, candidates, qvec=qvec, questions=questions)
                 timing["vector_ms"] = (time.perf_counter() - t) * 1000
         if mode != "vector" or partial:
             t = time.perf_counter()
-            lexical = self.bm25(query, candidates)
+            lexical = self.bm25(query, candidates, questions=questions)
             timing["bm25_ms"] = (time.perf_counter() - t) * 1000
         if mode == "bm25":
             ranked = lexical

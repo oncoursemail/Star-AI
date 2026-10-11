@@ -13,15 +13,24 @@ Hardening:
     time and never logged;
   * routes are an exact-match table and no request field is ever used as a file path, so there
     is nothing to traverse;
-  * bodies need a Content-Length within a per-route limit; sockets time out; the embedding
-    request and each Luau tool have their own time limits; concurrency is capped per route;
+  * bodies need a Content-Length within a per-route limit; the embedding request and each Luau
+    tool have their own time limits; concurrency is capped per route;
+  * connections: at most MAX_CONNECTIONS sockets are served at once and at most MAX_PER_CLIENT
+    per client address; one more is answered 503 from the accept loop without starting a thread.
+    A connection has HEADER_DEADLINE seconds in total to deliver its request line and headers
+    and BODY_DEADLINE more for the body (absolute deadlines, not per-read timeouts), so idle or
+    trickling connections cannot hold the service;
+  * repeated searches are answered from a small in-memory cache that is keyed by the index
+    generation, so a refreshed index never serves old passages;
   * the access log has the route, status, duration and body size, never the query or the code
     (set STAR_KB_LOG_QUERIES=1 to add the first 80 characters of a query while debugging).
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import io
 import json
 import os
 from pathlib import Path
@@ -42,7 +51,16 @@ MAX_LUAU_BODY = 96 * 1024
 MAX_QUERY = 600
 MAX_TOP = 10
 MAX_SYMBOLS = 40
-SOCKET_TIMEOUT = 15.0
+SOCKET_TIMEOUT = 15.0           # one write may block this long
+MAX_CONNECTIONS = int(os.environ.get("STAR_KB_MAX_CONNECTIONS", "48"))   # sockets served at once (one thread each)
+MAX_PER_CLIENT = int(os.environ.get("STAR_KB_MAX_PER_CLIENT", "16"))     # ... of which one client address may hold
+HEADER_DEADLINE = 5.0           # seconds from accept until the request line and all headers have arrived
+BODY_DEADLINE = 10.0            # seconds from the end of the headers until the whole body has arrived
+CACHE_ENTRIES = 512             # search-result cache size
+CACHE_TTL = 900.0               # ... and the age (seconds) after which an entry is recomputed
+GENERATION_RECHECK = 20.0       # how often the index generation is re-read (seconds)
+_BUSY = (b"HTTP/1.1 503 Service Unavailable\r\nContent-Type: application/json\r\nContent-Length: 16\r\n"
+         b"Retry-After: 1\r\nConnection: close\r\n\r\n" + b'{"error":"busy"}')
 EMBED_TIMEOUT = 5.0             # below the desktop client's 8 s search timeout, so a busy brain degrades to BM25 in time
 MAX_INFLIGHT = 32
 DRAIN_LIMIT = 1024 * 1024       # an oversized body is read and dropped up to here, then refused
@@ -106,6 +124,63 @@ def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict
     return out
 
 
+class ResultCache:
+    """Small LRU for search replies. The key includes the index generation, so entries made on an
+    older index are never returned; they age out."""
+
+    def __init__(self, entries: int = CACHE_ENTRIES, ttl: float = CACHE_TTL, clock=time.monotonic):
+        self.entries, self.ttl, self.clock = entries, ttl, clock
+        self._items: OrderedDict = OrderedDict()
+        self._lock = threading.Lock()
+        self.hits = self.misses = 0
+
+    def get(self, key):
+        with self._lock:
+            item = self._items.get(key)
+            if item is None or self.clock() - item[0] > self.ttl:
+                self._items.pop(key, None)
+                self.misses += 1
+                return None
+            self._items.move_to_end(key)
+            self.hits += 1
+            return item[1]
+
+    def put(self, key, value) -> None:
+        with self._lock:
+            self._items[key] = (self.clock(), value)
+            self._items.move_to_end(key)
+            while len(self._items) > self.entries:
+                self._items.popitem(last=False)
+
+    def stats(self) -> dict:
+        with self._lock:
+            return {"entries": len(self._items), "max_entries": self.entries, "ttl_s": self.ttl,
+                    "hits": self.hits, "misses": self.misses}
+
+
+class DeadlineReader(io.RawIOBase):
+    """Socket reads against an ABSOLUTE deadline. A socket timeout alone restarts with every read,
+    so a client that sends one byte every few seconds would keep its thread for ever."""
+
+    def __init__(self, sock, seconds: float):
+        super().__init__()
+        self._sock = sock
+        self.deadline = time.monotonic() + seconds
+
+    def extend(self, seconds: float) -> None:
+        self.deadline = time.monotonic() + seconds
+
+    def readable(self) -> bool:
+        return True
+
+    def readinto(self, buffer) -> int:
+        left = self.deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError("request deadline passed")
+        self._sock.settimeout(left)
+        return self._sock.recv_into(buffer)
+
+
 def load_keys(key_file: str) -> list[bytes]:
     path = Path(key_file)
     if not path.is_file():
@@ -127,6 +202,28 @@ class Service:
         self.counters: dict[str, int] = {}
         self._count_lock = threading.Lock()
         self.log_queries = os.environ.get("STAR_KB_LOG_QUERIES") == "1"
+        self.cache = ResultCache()
+        self._generation: tuple = ()
+        self._generation_checked = 0.0
+        self.server: "Server | None" = None
+
+    def generation(self, db) -> tuple:
+        """What a cached reply depends on: the build stamp and how many vectors and generated
+        questions exist. Re-read at most every GENERATION_RECHECK seconds."""
+        with self._count_lock:
+            fresh = time.monotonic() - self._generation_checked < GENERATION_RECHECK and self._generation
+        if fresh:
+            return self._generation
+        built = db.execute("SELECT value FROM meta WHERE name='built_at'").fetchone()
+        vectors = db.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+        try:
+            questions = db.execute("SELECT COUNT(*) FROM chunk_questions").fetchone()[0]
+        except Exception:
+            questions = 0
+        generation = (built[0] if built else "", vectors, questions)
+        with self._count_lock:
+            self._generation, self._generation_checked = generation, time.monotonic()
+        return generation
 
     def count(self, name: str) -> None:
         with self._count_lock:
@@ -151,7 +248,8 @@ class Service:
                     "sources": [{"name": n, "commit": v["commit_sha"], "commit_date": v["commit_date"],
                                  "indexed_at": v["indexed_at"], "licence": v["licence"]}
                                 for n, v in s.sources.items()],
-                    "chunks": s.chunk_count(), "embedded": embedded, "modes": list(SERVICE_MODES), "default_mode": DEFAULT_MODE,
+                    "chunks": s.chunk_count(), "embedded": embedded, "generated_questions": s.question_count(),
+                    "modes": list(SERVICE_MODES), "default_mode": DEFAULT_MODE,
                     "luau_check": luaucheck.available()}
         finally:
             s.close()
@@ -170,13 +268,18 @@ class Service:
                 "chunks": db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0],
                 "chunks_by_kind": dict(db.execute("SELECT kind, COUNT(*) FROM chunks GROUP BY kind").fetchall()),
                 "embedded": s.embedded_count(),
+                "generated_questions": s.question_count(),
                 "vectors_loaded_at": self.vectors.loaded_at,
                 "modes": list(SERVICE_MODES), "default_mode": DEFAULT_MODE,
                 "luau": {"available": luaucheck.available(), "version": luaucheck.tool_version(),
                          "max_code_bytes": luaucheck.MAX_CODE_BYTES, "timeout_s": luaucheck.TIMEOUT_SECONDS,
                          "memory_bytes": luaucheck.MEMORY_BYTES},
                 "limits": {"max_body": MAX_BODY, "max_luau_body": MAX_LUAU_BODY, "max_query": MAX_QUERY,
-                           "max_top": MAX_TOP, "embed_timeout_s": EMBED_TIMEOUT},
+                           "max_top": MAX_TOP, "embed_timeout_s": EMBED_TIMEOUT,
+                           "max_connections": MAX_CONNECTIONS, "max_per_client": MAX_PER_CLIENT,
+                           "header_deadline_s": HEADER_DEADLINE, "body_deadline_s": BODY_DEADLINE},
+                "connections": self.server.connection_stats() if self.server is not None else {},
+                "search_cache": self.cache.stats(),
                 "uptime_s": int(time.time() - self.started),
                 "requests": counters,
             }
@@ -191,16 +294,26 @@ class Service:
             return 400, {"error": f"query must be 1..{MAX_QUERY} characters"}
         if mode not in SERVICE_MODES or type(top) is not int or not 1 <= top <= MAX_TOP:
             return 400, {"error": "mode must be one of " + ", ".join(SERVICE_MODES) + f" and top 1..{MAX_TOP}"}
+        query = " ".join(query.split())
+        started = time.perf_counter()
         s = self.searcher()
         try:
-            passages, timing = s.search(query.strip(), mode=mode, top=top, fallback=True, degrade=True)
+            key = (self.generation(s.db), mode, top, query)
+            hit = self.cache.get(key)
+            if hit is not None:
+                return 200, {**hit, "cached": True,
+                             "timing_ms": {"total_ms": round((time.perf_counter() - started) * 1000, 1)}}
+            passages, timing = s.search(query, mode=mode, top=top, fallback=True, degrade=True)
             degraded = bool(timing.pop("degraded", 0))
-            return 200, {
+            reply = {
                 "mode": mode, "mode_used": "bm25" if degraded else mode, "degraded": degraded,
-                "timing_ms": timing, "untrusted": True,
+                "timing_ms": timing, "untrusted": True, "cached": False,
                 "index": {"chunks": s.chunk_count(), "embedded": s.embedded_count()},
                 "attribution": {n: v["attribution"] for n, v in s.sources.items()},
                 "passages": [p.as_dict() for p in passages]}
+            if not degraded and not timing.get("fallback_failed"):   # only a full-quality reply is worth repeating
+                self.cache.put(key, reply)
+            return 200, reply
         finally:
             s.close()
 
@@ -254,11 +367,26 @@ def make_handler(service: Service):
         protocol_version = "HTTP/1.1"
         timeout = SOCKET_TIMEOUT
 
+        def setup(self):
+            super().setup()
+            try:
+                self.rfile.close()
+            except Exception:
+                pass
+            self._reader = DeadlineReader(self.connection, HEADER_DEADLINE)
+            self.rfile = io.BufferedReader(self._reader, 65536)
+
         def log_message(self, fmt, *args):  # the default access log would print the raw request line
             pass
 
+        def log_error(self, fmt, *args):    # the base class reports a request-line/header timeout here
+            if "timed out" in fmt:
+                service.count("other:408")
+                print(f"{now()} - other 408 header deadline", flush=True)
+
         def _send(self, status: int, body: dict) -> None:
             raw = json.dumps(body, ensure_ascii=False).encode("utf-8")
+            self.connection.settimeout(SOCKET_TIMEOUT)
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))
@@ -276,6 +404,7 @@ def make_handler(service: Service):
                 path = path[3:]
             route = ROUTES.get((method, path))
             name, status, size, extra = (route[0] if route else "other"), 500, 0, ""
+            self._reader.extend(BODY_DEADLINE)   # the headers arrived in time; the body gets its own deadline
             if not service.inflight.acquire(blocking=False):
                 self._send(503, {"error": "busy"})
                 return
@@ -318,8 +447,13 @@ def make_handler(service: Service):
                     status, reply = getattr(service, name)(body)
                     if name == "search" and service.log_queries and isinstance(body.get("query"), str):
                         extra = " q=" + json.dumps(body["query"][:80])
+                if reply.get("cached"):
+                    extra += " cache=hit"
                 self._send(status, reply)
-            except (BrokenPipeError, ConnectionError, TimeoutError):
+            except TimeoutError:                # the body did not arrive before its deadline
+                status = 408
+                self.close_connection = True
+            except (BrokenPipeError, ConnectionError):
                 status = 499
             except Exception as exc:  # never leak internals; the type name is enough to diagnose
                 status = 500
@@ -344,8 +478,65 @@ def make_handler(service: Service):
 
 
 class Server(ThreadingHTTPServer):
+    """One thread per connection, but never more than `max_connections` of them, and never more
+    than `max_per_client` for one client address. A connection over a limit gets a fixed 503 from
+    the accept loop (non-blocking) and is closed; no thread is started for it."""
     daemon_threads = True
     request_queue_size = 64
+
+    def __init__(self, address, handler, *, max_connections: int = MAX_CONNECTIONS,
+                 max_per_client: int = MAX_PER_CLIENT):
+        super().__init__(address, handler)
+        self.max_connections = max_connections
+        self.max_per_client = max_per_client
+        self._conn_lock = threading.Lock()
+        self._open = 0
+        self._per_client: dict[str, int] = {}
+        self.refused = 0
+        self.peak = 0
+
+    def connection_stats(self) -> dict:
+        with self._conn_lock:
+            return {"open": self._open, "peak": self.peak, "refused": self.refused}
+
+    def _release(self, host: str) -> None:
+        with self._conn_lock:
+            self._open -= 1
+            left = self._per_client.get(host, 1) - 1
+            if left > 0:
+                self._per_client[host] = left
+            else:
+                self._per_client.pop(host, None)
+
+    def process_request(self, request, client_address):
+        host = str(client_address[0])
+        with self._conn_lock:
+            ok = self._open < self.max_connections and self._per_client.get(host, 0) < self.max_per_client
+            if ok:
+                self._open += 1
+                self.peak = max(self.peak, self._open)
+                self._per_client[host] = self._per_client.get(host, 0) + 1
+            else:
+                self.refused += 1
+        if not ok:
+            try:
+                request.setblocking(False)   # the accept loop must never wait for a client
+                request.send(_BUSY)
+            except OSError:
+                pass
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, client_address)
+        except BaseException:
+            self._release(host)
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._release(str(client_address[0]))
 
 
 def serve(db_path: Path, host: str = "127.0.0.1", port: int = 8091, key_file: str = DEFAULT_KEY_FILE) -> None:
@@ -357,7 +548,9 @@ def serve(db_path: Path, host: str = "127.0.0.1", port: int = 8091, key_file: st
     service = Service(db_path, keys)
     service.health()   # load the vectors once before accepting requests; fails fast on a broken index
     server = Server((host, port), make_handler(service))
-    print(f"star-knowledge listening on http://{host}:{port} luau_check={luaucheck.available()}", flush=True)
+    service.server = server
+    print(f"star-knowledge listening on http://{host}:{port} luau_check={luaucheck.available()} "
+          f"max_connections={server.max_connections} per_client={server.max_per_client}", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

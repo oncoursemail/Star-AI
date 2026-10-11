@@ -11,7 +11,10 @@ import os
 from pathlib import Path
 import time
 
-import requests
+try:
+    import requests
+except ImportError:   # only the server needs it; the unit tests on the PC run without
+    requests = None
 
 DEFAULT_URL = os.environ.get("STAR_BRAIN_URL", "http://127.0.0.1:8080")
 DEFAULT_KEY_FILE = os.environ.get("STAR_BRAIN_KEY_FILE", "/opt/star/secrets/api_keys")
@@ -26,6 +29,8 @@ class Brain:
         self.url = url.rstrip("/")
         self.timeout = timeout
         self.retries = retries   # the service uses 1: a busy brain must not hold a search for long
+        if requests is None:
+            raise RuntimeError("the requests package is needed to talk to the STAR Brain")
         self.session = requests.Session()
         self.session.trust_env = False
         key = ""

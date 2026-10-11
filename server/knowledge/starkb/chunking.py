@@ -16,7 +16,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 
-import yaml
+try:
+    import yaml
+except ImportError:   # needed to build the index (on the server), not to search it
+    yaml = None
 
 TARGET_CHARS = 1000   # preferred chunk body size (about 230-330 tokens for prose)
 MAX_CHARS = 1500      # hard cap for a chunk body; star-embed accepts at most 512 tokens per input (physical batch size)
