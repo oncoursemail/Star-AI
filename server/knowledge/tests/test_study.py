@@ -3,7 +3,9 @@
 Run on the PC:  python -m pytest -q server/knowledge/tests
 """
 from pathlib import Path
+import os
 import sys
+import time
 
 import pytest
 
@@ -132,6 +134,10 @@ def test_jobs_wait_while_the_lock_exists_and_ignore_a_stale_one(tmp_path):
     assert quiet.lock_held(lock) is False
     lock.mkdir()
     (lock / "owner").write_text("someone 00:00")
+    assert quiet.lock_held(lock) is True
+    five_seconds_ago = time.time() - 5      # a file stamp can be a few ms ahead of time.time() on Windows: age it for real
+    os.utime(lock / "owner", (five_seconds_ago, five_seconds_ago))
+    os.utime(lock, (five_seconds_ago, five_seconds_ago))
     assert quiet.lock_held(lock) is True
     assert quiet.lock_held(lock, stale_seconds=0) is False          # older than the limit: left behind
     slept = []

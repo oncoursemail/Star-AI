@@ -6,3 +6,6 @@
 
 # The independently frozen retrieval fixture must keep identical transport bytes.
 tests/fixtures/shared_brain_retrieval.json text eol=lf
+
+# Shell scripts run under bash (Git Bash on Windows, Linux servers): a CR at the end of a line breaks them.
+*.sh text eol=lf

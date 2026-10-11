@@ -17,7 +17,10 @@ STAR_GITHUB_APP_ID=YOUR_NUMERIC_APP_ID
 STAR_GITHUB_INSTALLATION_ID=YOUR_NUMERIC_INSTALL_ID
 STAR_GITHUB_PRIVATE_KEY_FILE=C:\Users\YOU\Documents\star-keys\STAR.pem
 STAR_GITHUB_REPO=oncoursemail/Star-AI
+STAR_GITHUB_BASE_BRANCH=star/YOUR-WORK-BRANCH
 ```
+
+`STAR_GITHUB_BASE_BRANCH` is the existing `star/<name>` work branch that STAR cuts its own branches from and opens its draft pull requests against. It is required for publishing. `main` (the default branch, which publishes a release when something is merged into it) is refused, and so is any name that is not `star/<name>`. STAR's App can upload only `star/skills/*.py` (not the package `__init__.py`) and `docs/skills/*.md`; tests, evaluation files, build and dependency files, workflows and all other code are refused.
 
 Never paste your key, token, or `.env` here. Public downloads are available at [STAR Releases](https://github.com/oncoursemail/Star-AI/releases/latest).
 

@@ -63,6 +63,16 @@ class Settings:
     comfy_workflow: str = ''
     comfy_prompt_node: str = '6'
     comfy_port: int = 8188
+    # Where media runs (star/media_places.py): 'pc' = this PC's graphics card, 'servers' = the STAR Brains.
+    media_images: str = 'pc'
+    media_voice: str = 'pc'
+    media_video: str = 'servers'
+    media_use_references: bool = True     # give a project's pinned reference images to image and UI work
+    comfy_home: str = ''                  # folder of the ComfyUI install STAR may start ('' = started by hand)
+    ffmpeg_dir: str = ''                  # folder with ffmpeg and ffprobe ('' = look on PATH)
+    # Longest side, in pixels, of a picture as the STAR Server or the on-device brain reads it
+    # (0 = full size). The attached file itself is never changed. See star/media.py.
+    picture_max_side: int = 1280
     obsidian_vault: str = ''
     obsidian_enabled: bool = False
     skills_enabled: bool = True
@@ -114,7 +124,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud')):
+                            'learning_digest_cloud', 'media_use_references')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -130,6 +140,17 @@ class Settings:
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
             raise ValueError('Invalid local image generation configuration')
+        if any(getattr(self, key) not in ('pc', 'servers')
+               for key in ('media_images', 'media_voice', 'media_video')):
+            raise ValueError('Choose STAR Brains (servers) or This PC for each media capability')
+        for key, label in (('comfy_home', 'ComfyUI folder'), ('ffmpeg_dir', 'FFmpeg folder')):
+            value = getattr(self, key)
+            if (not isinstance(value, str) or len(value) > 1024 or '\x00' in value
+                    or value.lower().startswith(('http:', 'https:', 'file:', '\\\\'))):
+                raise ValueError(f'Choose a local folder for the {label}')
+        if type(self.picture_max_side) is not int or not (self.picture_max_side == 0
+                                                           or 512 <= self.picture_max_side <= 4096):
+            raise ValueError('Picture size for the brain must be 0 (full size) or 512 to 4096 pixels')
         if type(self.gpu_layers) is not int or not 0 <= self.gpu_layers <= 1000:
             raise ValueError('GPU layers must be between 0 and 1000')
         if type(self.router_context) is not int or not 512 <= self.router_context <= 32768:
@@ -710,6 +731,13 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     return conversation_memory.respect_checkpoint(window, checkpoint), rows
 
 
+def picture_limit(settings) -> int | None:
+    """Longest side of a picture as the model reads it: capped on our own hardware, untouched for hosted models."""
+    if provider_kind(settings) not in ('lan', 'local'):
+        return None
+    return int(getattr(settings, 'picture_max_side', 1280) or 0) or None
+
+
 def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              on_event: Callable[[dict], None] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
@@ -939,6 +967,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               guidance=ROBLOX_QUALITY_NOTES,
                               request_extras=slot_fields(route.model),
                               tool_memory=tools_kept, helper_client=helper,
+                              image_max_side=picture_limit(settings),
                               max_calls=route.max_calls,
                               context_chars=allowed_context_chars,
                               checkpoint=lambda s: memory.put(memory_scope, s), on_event=audited_event,

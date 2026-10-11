@@ -27,7 +27,7 @@ from star.shared_brain.store import SharedBrain, serialize
 SUITE_SHA256 = "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696"
 SUITE_PATH = Path(__file__).parent / "fixtures" / "shared_brain_retrieval.json"
 SOURCE_VALIDATION_PATH = Path(__file__).parent / "fixtures" / "shared_brain_runtime_source_validation.json"
-SOURCE_VALIDATION_SHA256 = "14beaa290256e84e2005323a6bd74eb6ea5e6eb5444b17f15a64f55d6d6fd320"
+SOURCE_VALIDATION_SHA256 = "14d4dd4c11c75d3f873d835048afcab91b9c85ee84afb13485ada8e37f7a124e"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -114,7 +114,8 @@ def current_validation_sources(frozen_suite):
     assert hashlib.sha256(canonical).hexdigest() == SOURCE_VALIDATION_SHA256
     assert validation["kind"] == "development_source_validation"
     assert validation["historical_fixture_sha256"] == SUITE_SHA256
-    assert set(validation["changed_sources"]) == {"star/agent.py", "star/lessons.py", "star/memory.py"}
+    assert set(validation["changed_sources"]) == {
+        "star/agent.py", "star/lessons.py", "star/memory.py", "star/selfbuild.py"}
     for relative, current in validation["changed_sources"].items():
         assert current["historical_crlf_sha256"] == pins[relative]
         assert current["source_revision_commit"] == validation["observed_source_tree_revision"]
@@ -176,7 +177,7 @@ def test_historical_pin_still_rejects_current_dependency_bytes(current_validatio
             frozen_source_bytes(raw + b"\n# unreviewed source drift\n", current["current_crlf_sha256"])
 
 
-@pytest.mark.parametrize("case_id", ["retrieval-05", "retrieval-08", "retrieval-15"])
+@pytest.mark.parametrize("case_id", ["retrieval-05", "retrieval-08", "retrieval-12", "retrieval-15"])
 def test_benchmark_refuses_historical_sources_before_query_or_store(frozen_suite, tmp_path, monkeypatch, case_id):
     cases, _ = frozen_suite
     # A development-only one-case guard probe must abort before any retrieval,

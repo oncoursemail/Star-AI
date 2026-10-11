@@ -1,0 +1,192 @@
+/* Media: where STAR generates (servers or this PC), the image engine, and a project's visual references.
+ * Tokens only (tokens.css); the panels reuse the quiet card, button and switch from learning.css. */
+.shell .media-capability {
+  margin-top: var(--star-5);
+  padding-top: var(--star-4);
+  border-top: 1px solid var(--star-stroke-soft);
+}
+.shell .media-capability h3 {
+  margin: 0 0 var(--star-2);
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 650;
+}
+.shell .media-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--star-3);
+}
+.shell .media-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--star-3);
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  cursor: pointer;
+}
+.shell .media-option.is-chosen {
+  border-color: var(--star-gold-line);
+  background: var(--star-gold-wash);
+}
+.shell .media-option.is-unavailable {
+  cursor: not-allowed;
+  opacity: 0.72;
+}
+.shell .media-option input {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: var(--star-gold);
+}
+.shell .media-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-1);
+  min-width: 0;
+}
+.shell .media-option-text strong {
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+}
+.shell .media-option-text small {
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+}
+.shell .media-unavailable {
+  color: var(--star-danger);
+}
+.shell .media-engine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--star-2) var(--star-3);
+  margin-top: var(--star-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+}
+.shell .media-engine-state {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.shell .media-engine-state.is-ready {
+  color: var(--star-success);
+}
+.shell .media-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--star-3);
+  margin-top: var(--star-4);
+}
+.shell .media-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-1);
+  min-width: 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+}
+.shell .media-field input,
+.shell .media-field select {
+  height: 32px;
+  padding: 0 var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+  color: var(--star-text);
+  font: inherit;
+  font-size: var(--star-fs-meta);
+  font-weight: 400;
+}
+.shell .media-field small {
+  color: var(--star-faint);
+  font-weight: 400;
+  line-height: 1.5;
+}
+.shell .media-warning {
+  margin: var(--star-3) 0 0;
+  color: var(--star-danger);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+}
+.shell .reference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--star-3);
+  margin: var(--star-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.shell .reference-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-2);
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-2);
+}
+.shell .reference-card img {
+  width: 100%;
+  height: 120px;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+  object-fit: contain;
+}
+.shell .reference-card strong {
+  overflow: hidden;
+  color: var(--star-text);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell .reference-card small {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.45;
+}
+.shell .reference-compare {
+  margin-top: var(--star-4);
+  padding-top: var(--star-4);
+  border-top: 1px solid var(--star-stroke-soft);
+}
+.shell .reference-compare img {
+  display: block;
+  max-width: 100%;
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+}
+.shell .reference-compare h3 {
+  margin: var(--star-3) 0 var(--star-1);
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 650;
+}
+.shell .reference-compare ul {
+  margin: 0;
+  padding-left: var(--star-5);
+  color: var(--star-body);
+  font-size: var(--star-fs-ui);
+  line-height: 1.6;
+}
+.shell .cmp-size {
+  height: 28px;
+  padding: 0 var(--star-2);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-body);
+  font: inherit;
+  font-size: var(--star-fs-meta);
+}
+@media (max-width: 760px) {
+  .shell .media-options,
+  .shell .media-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

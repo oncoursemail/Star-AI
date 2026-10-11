@@ -37,6 +37,10 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester, may_start_automatic
+from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher,
+                            handle as handle_media_action)
+from . import media_places
+from .chat_media import prepare_turn
 
 ALLOWED_ACTIONS = frozenset({
     'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
@@ -52,6 +56,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
+# Media: where images, voice and video run, the image engine on this PC, and a project's
+# visual references (star/media_actions.py, docs/STAR_MEDIA.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -74,6 +81,8 @@ PERMITTED_SETTINGS = frozenset({
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud',
+    'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
+    'picture_max_side',
 })
 
 
@@ -98,8 +107,20 @@ def server_settings_for(action: str, settings_file: Path) -> Settings | None:
         return None
 
 
+def media_failure(exc: Exception) -> str | None:
+    """Media errors are written for the owner already (what happened and the next step): show them whole."""
+    from .comfy import ComfyError
+    from .video_understanding import VideoError
+    if isinstance(exc, (ComfyError, media_places.PlaceUnavailable, VideoError)):
+        return str(exc)[:900]
+    return None
+
+
 def describe_failure(action: str, exc: Exception, settings_file: Path) -> str:
     """One short, secret-free line for the interface when a worker fails."""
+    media = media_failure(exc)
+    if media is not None:
+        return media
     model_error = (getattr(exc, 'status_code', None) is not None
                    or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
                    or 'System message must be at the beginning' in str(exc))
@@ -326,7 +347,7 @@ def failure_outcome(action: str, exc: Exception, *, cancelled: bool = False,
                  or type(exc).__name__ in {'APIConnectionError', 'APITimeoutError'}
                  or 'System message must be at the beginning' in str(exc))):
         return 'failed', explain_model_failure(exc)
-    return 'failed', f'{type(exc).__name__}: {str(exc)[:350]}'
+    return 'failed', media_failure(exc) or f'{type(exc).__name__}: {str(exc)[:350]}'
 
 
 def record_turn_failure(home: Path, turn: TurnRef, status: str, detail: str) -> bool:
@@ -478,6 +499,7 @@ def launch():
             self.active_update = False
             self.warmer = Warmer()
             self.digester = Digester()
+            self.comfy_launcher = ComfyLauncher()
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
 
@@ -580,25 +602,17 @@ def launch():
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
-            from .media_features import VIDEO_EXTENSIONS,AUDIO_EXTENSIONS,video_frames,transcribe_audio
-            from .documents import DOCUMENT_EXTENSIONS
-            pics=[];extras=[];documents=[]
             with tempfile.TemporaryDirectory(prefix='star-media-') as directory:
-                for path in selected:
-                    if path.suffix.lower() in VIDEO_EXTENSIONS:
-                        frames=video_frames(path,Path(directory)/('v_'+uuid.uuid4().hex),max_frames=4)
-                        pics.extend(frames)
-                        extras.append(f'Video source: {path.name}; {len(frames)} sampled frames (not full continuous understanding).')
-                    elif path.suffix.lower() in AUDIO_EXTENSIONS:
-                        extras.append(f'Audio transcript from {path.name}: {transcribe_audio(path)}')
-                    elif path.suffix.lower() in DOCUMENT_EXTENSIONS:
-                        documents.append(path)
-                    else:
-                        pics.append(path)
-                if len(pics)>4:
-                    pics=pics[:4]
-                    extras.append('Only the first 4 visual attachments were sent to respect context limits.')
-                full_prompt=prompt+('\n\n'+'\n'.join(extras) if extras else '')
+                # Pictures as they are; a video as sampled frames plus a transcript of its sound, sent
+                # only where Settings says video understanding runs; pinned references for a turn
+                # about looks; the "not watched" rule for a bare video link (star/chat_media.py).
+                if any(path.suffix.lower() in {'.mp4','.mov','.mkv','.webm','.avi'} for path in selected):
+                    self._emit(request_id,'progress',{'phase':'Sampling frames and transcribing the sound…'})
+                media=prepare_turn(settings,home,prompt,selected,Path(directory)/('m_'+uuid.uuid4().hex),
+                                   cancelled=self.cancel_chat.is_set)
+                pics=media.pictures
+                full_prompt=media.prompt(prompt)
+                documents=media.documents
                 learned={}
                 def relay(e):
                     # What the turn taught is reported with the result, not as a progress step.
@@ -610,6 +624,8 @@ def launch():
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
                     owner_text=prompt, **({'documents': documents} if documents else {}))
+                # STAR states what a video answer was based on, whatever the model wrote.
+                answer+=media.footer
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -623,10 +639,10 @@ def launch():
             self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
-        def _run_image(self, request_id, prompt):
+        def _run_image(self, request_id, prompt, files=(), size='square'):
             settings=Settings.load(self.settings_file)
             home=app_data()
-            self._emit(request_id,'progress',{'phase':'Generating image using local ComfyUI…'})
+            self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating the image on this PC…'})
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
@@ -635,7 +651,9 @@ def launch():
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
             chat_id = active_chat
-            result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat)
+            result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat,size=size,
+                                       source=files[0] if files else None,
+                                       mask=files[1] if len(files)>1 else None)
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 chats.add(settings.project,'assistant',result['message'],chat_id=chat_id)
@@ -701,13 +719,28 @@ def launch():
                     self._warm(rid)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action in VOICE_ACTIONS:
+                    if action in {'voiceStartCall','voicePreviewVoice'}:
+                        # Speech runs where Settings says; a place that does not exist is refused, not replaced.
+                        media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
+                if action in MEDIA_ACTIONS:
+                    def media_worker():
+                        return handle_media_action(
+                            action, body, settings=Settings.load(self.settings_file), home=app_data(),
+                            allowed_file=lambda path: file_allowed(path, self.allowed_files),
+                            launcher=self.comfy_launcher)
+                    if action in SLOW_MEDIA_ACTIONS:
+                        self._run(rid,action,media_worker)
+                        return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                    return json.dumps({'ok':True,'data':media_worker()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
                     if kind=='audio':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Select audio references','','Audio files (*.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
+                    elif kind=='image':
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Choose images','','Images (*.png *.jpg *.jpeg *.webp)')
                     else:
                         names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
                     picked=[]
@@ -892,10 +925,17 @@ def launch():
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
                     if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    # Optional: the picture to edit, then a mask (white = the part to change).
+                    files=body.get('files') or []
+                    if not isinstance(files,list) or len(files)>2:
+                        raise ValueError('Attach the picture to edit and, if you want, one mask')
+                    pictures=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
+                    size=body.get('size','square')
+                    if not isinstance(size,str):raise ValueError('Invalid image size')
                     self.active_task=True
                     self.cancel_chat = threading.Event()
                     try:
-                        self._run(rid,action,lambda:self._run_image(rid,prompt))
+                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size))
                     except Exception:
                         self.active_task=False
                         raise
@@ -1024,6 +1064,7 @@ def launch():
         def close(self):
             self.voice.close()
             self.cancel_chat.set()
+            self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
             self.warmer.cancel()
             self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)

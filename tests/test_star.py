@@ -63,9 +63,10 @@ def test_memory_scope_and_persistence():
 
 
 def test_github_paths():
-    for p in ("star/agent.py","docs/readme.md","tests/test_star.py","README.md"):
+    for p in ("star/skills/tween_helpers.py","docs/skills/tween_helpers.md"):
         assert valid_upload_path(p)
-    for p in (".env", "runs/secret.txt", "star/../../secrets.py", ".github/workflows/tests.yml", "private.pem", "star/script.exe", "star/secret.key"):
+    for p in ("star/agent.py","docs/readme.md","tests/test_star.py","README.md",
+              ".env", "runs/secret.txt", "star/../../secrets.py", ".github/workflows/tests.yml", "private.pem", "star/script.exe", "star/secret.key"):
         assert not valid_upload_path(p)
 
 
