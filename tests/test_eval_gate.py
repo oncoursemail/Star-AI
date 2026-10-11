@@ -183,3 +183,18 @@ def test_other_files_with_legacy_baseline_names_cannot_bypass_validation(tmp_pat
     copy.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
     assert not gate.load_result(copy)["_legacy"]
     assert gate.evaluate_change(copy, copy).code == gate.UNUSABLE
+
+
+@pytest.mark.parametrize(("key", "value"), [
+    ("tasks_total", True),
+    ("tasks_total", False),
+    ("automated", True),
+    ("automated", False),
+])
+def test_boolean_suite_counts_are_not_valid_evaluation_evidence(key, value):
+    baseline = result({"A": "pass", "B": "pass", "C": "fail"})
+    candidate = result({"A": "pass", "B": "pass", "C": "fail"})
+    # Both files lying identically must still be unusable.
+    baseline["suite"][key] = value
+    candidate["suite"][key] = value
+    assert gate.compare(baseline, candidate).code == gate.UNUSABLE
