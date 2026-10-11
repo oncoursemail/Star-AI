@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from pathlib import Path
 from .context_layout import assemble, clean_history, context_block, drop_oldest_turns, final_user_text
 from .media import image_part, mcp_images
+from .redact import redact_text
 from .policy import allowed_registry, enforce
 from .memory import compact
 from .workspace import TOOLS, TOOL_NAMES
@@ -49,7 +50,7 @@ def tool_payload(result):
     text = "\n".join(content)
     if len(text) > 30000:
         text = text[:30000] + "\n[TRUNCATED — narrow the next query]"
-    return json.dumps({"isError": bool(result.get("isError")), "output": text}, ensure_ascii=False)
+    return json.dumps({"isError": bool(result.get("isError")), "output": redact_text(text)}, ensure_ascii=False)
 
 
 # Ordinary chat carries no tools, so the tool-use rules above have nothing to act on.

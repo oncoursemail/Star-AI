@@ -332,7 +332,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    return mine
  },[updateRun])
 
- const send=useCallback(async(text=prompt,attachments=files)=>{
+ const send=useCallback(async(text=prompt,attachments=files,retryMessageId?:number)=>{
    // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
    const value=text.trim();if(busy||sending.current||!value)return
    if(inactive){setNotice('This preview is not connected to a model. Open STAR Desktop to chat.');return}
@@ -342,9 +342,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
    sending.current=true
    const mine=beginRun(value,selected,imageMode?'image':teamMode?'team':'chat')
-   setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
+   if(retryMessageId===undefined)setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource})
+   const res=await act(action,imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
@@ -544,7 +544,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const failedLast=!busy&&lastMessage?.role==='event'&&!!lastMessage.status
  // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
  const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
- const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[])
+ const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[],!retryText&&pending?pending.message_id:undefined)
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
@@ -730,7 +730,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
        </MotionSurface>
      </AnimatePresence>
-     {notice&&<div role="status" className="toast"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
+     {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
  </div></MotionPolicy>

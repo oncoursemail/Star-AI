@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "godot",
+  "title": "Godot Engine documentation",
+  "mode": "ingest-allowed",
+  "source": {
+    "kind": "git",
+    "url": "https://github.com/godotengine/godot-docs.git",
+    "revision": "master",
+    "content_root": "/",
+    "public_base": "https://docs.godotengine.org/en/latest/"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-3.0",
+      "url": "https://github.com/godotengine/godot-docs/blob/master/LICENSE.txt",
+      "redistribution_allowed": true,
+      "attribution": "Credit Juan Linietsky, Ariel Manzur and the Godot community; link the page and CC BY 3.0, and indicate alterations.",
+      "conditions": "Applies outside classes/; preserve per-page exceptions and separate third-party asset licences.",
+      "evidence_url": "https://github.com/godotengine/godot-docs/blob/master/README.md",
+      "evidence_quote": "With the exception of the `classes/` folder, all the content of this repository is licensed under the Creative Commons Attribution 3.0 Unported license"
+    },
+    "code_samples": {
+      "id": "CC-BY-3.0-and-MIT",
+      "url": "https://github.com/godotengine/godot-docs/blob/master/README.md",
+      "redistribution_allowed": true,
+      "attribution": "Code excerpts from tutorials follow CC BY 3.0 with attribution; classes/ content follows MIT and requires copyright and licence notice.",
+      "conditions": "Do not assume all snippets are MIT. For classes/, preserve separate MIT notices; outside classes/, follow documentation's CC BY terms.",
+      "evidence_url": "https://github.com/godotengine/godot-docs/blob/master/README.md",
+      "evidence_quote": "distributed under the MIT license"
+    }
+  },
+  "include": [
+    "getting_started/",
+    "tutorials/ for 2D, 3D, scripting, physics, UI and rendering",
+    "classes/ class reference (separately MIT-licensed)"
+  ],
+  "exclude": [
+    "Community and commercial asset links",
+    "about/ licence and governance pages",
+    "contributing/ contributor workflow",
+    "Images, fonts, video and third-party assets",
+    "Translations and release-nightly binaries"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 500,
+    "max": 30000,
+    "note": "Planning estimate only; no corpus has been fetched or measured."
+  },
+  "update_cadence": {
+    "frequency": "weekly",
+    "note": "Review upstream weekly; map master to latest and check CC BY/MIT split each refresh."
+  },
+  "citation": {
+    "format": "Godot documentation: {title} — {url} (Godot community; CC BY 3.0 or MIT for class reference)",
+    "example": "Godot documentation: Nodes and scenes — https://docs.godotengine.org/en/latest/getting_started/step_by_step/nodes_and_scenes.html (Godot community)"
+  }
+}

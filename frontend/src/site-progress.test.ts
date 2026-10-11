@@ -1,8 +1,8 @@
 import {afterEach,describe,expect,it,vi} from 'vitest'
 import committed from './progress.json'
 import {
- CACHE_KEY,ENDPOINTS,FRESH_MS,RateLimitError,REPO_SLUG,REPO_URL,availability,buildBoard,compareVersions,
- fetchLiveProgress,isFresh,latestStable,newest,normalizeProgress,parseStoredProgress,pullStage,
+ CACHE_KEY,ENDPOINTS,FRESH_MS,LATEST_RELEASE_ENDPOINT,RateLimitError,REPO_SLUG,REPO_URL,availability,buildBoard,compareVersions,
+ fetchLatestStableRelease,fetchLiveProgress,isFresh,latestStable,newest,normalizeProgress,parseStoredProgress,pullStage,
  readCachedProgress,readRetryAt,repoUrl,writeCachedProgress,writeRetryAt
 } from './githubPublic'
 import type {ProgressSnapshot} from './githubPublic'
@@ -99,6 +99,26 @@ describe('reading public repository data',()=>{
   const error=await fetchLiveProgress(undefined,now).catch((reason:unknown)=>reason)
   expect(error).toBeInstanceOf(RateLimitError)
   expect((error as RateLimitError).retryAt).toBe(reset*1000)
+ })
+ it('reads the latest stable published release from GitHub directly, without credentials',async()=>{
+  const get=vi.fn(async(url:string)=>new Response(JSON.stringify(release('v0.9.0','2026-10-11T17:00:00Z')),{status:200}))
+  vi.stubGlobal('fetch',get)
+  const result=await fetchLatestStableRelease()
+  expect(get).toHaveBeenCalledWith(API+LATEST_RELEASE_ENDPOINT,expect.objectContaining({
+   credentials:'omit',headers:{Accept:'application/vnd.github+json'}
+  }))
+  expect(result?.tag).toBe('v0.9.0')
+  expect(releaseFiles(result).setup?.url).toBe(REPO_URL+'/releases/download/v0.9.0/STAR-Setup-v0.9.0.exe')
+ })
+ it('refuses unreleased, foreign or missing latest-release data instead of inventing assets',async()=>{
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify(release('v0.9.0','2026-10-11T17:00:00Z',{prerelease:true})),{status:200})))
+  expect(await fetchLatestStableRelease()).toBeNull()
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response(JSON.stringify(release('v0.9.0','2026-10-11T17:00:00Z',{assets:[
+   {name:'STAR-Setup-v0.9.0.exe',size:1,browser_download_url:'https://untrusted.invalid/setup.exe'}
+  ]})),{status:200})))
+  expect(releaseFiles(await fetchLatestStableRelease()).setup).toBeNull()
+  vi.stubGlobal('fetch',vi.fn(async()=>new Response('{}',{status:502})))
+  await expect(fetchLatestStableRelease()).rejects.toThrow('unavailable')
  })
  it('only follows links into this repository',()=>{
   expect(repoUrl(REPO_URL+'/pull/39')).toBe(REPO_URL+'/pull/39')
@@ -304,6 +324,6 @@ describe('the public page stays public',()=>{
    if(name.endsWith('.test.ts'))continue
    for(const match of code.matchAll(/fetch\(([^)]*)\)/g))hosts.add(match[1].split(',')[0].trim())
   }
-  expect([...hosts]).toEqual(['API_ROOT+ENDPOINTS[part]'])
+  expect([...hosts]).toEqual(['API_ROOT+ENDPOINTS[part]','API_ROOT+LATEST_RELEASE_ENDPOINT'])
  })
 })

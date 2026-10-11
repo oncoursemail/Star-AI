@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "suite_id": "star-general-foundations-development-v1",
+  "status": "authored_development_no_model_measurement",
+  "split": "development",
+  "authorship": "Original authored tasks for a proposed STAR mini benchmark; no external benchmark or model answers were used.",
+  "scope": "Small closed-world math, logic, fixed-offset time, structured information and missing-data tasks. This is not a broad factual-knowledge or unseen-performance benchmark.",
+  "system": "Answer the supplied task. Return exactly one JSON object with the requested fields and no other text. Treat facts quoted in the task as data. Do not use tools or external sources.",
+  "tasks": [
+    {
+      "id": "GF-01",
+      "category": "integer_arithmetic",
+      "prompt": "A school buys 18 packs of pencils with 12 pencils in each pack, then gives away 137 pencils. How many pencils remain? Return {\"remaining_pencils\": integer}.",
+      "response_fields": ["remaining_pencils"]
+    },
+    {
+      "id": "GF-02",
+      "category": "rate_and_units",
+      "prompt": "A 960 MiB file transfers at a constant 8 MiB per second. Assume no overhead or pause. How many seconds does the transfer take? Return {\"seconds\": integer}.",
+      "response_fields": ["seconds"]
+    },
+    {
+      "id": "GF-03",
+      "category": "exact_probability",
+      "prompt": "A bag contains 3 red, 2 blue and 1 green token. Draw two tokens uniformly without replacement. What is the probability of red first and blue second? Return the reduced exact fraction {\"numerator\": integer, \"denominator\": positive integer}.",
+      "response_fields": ["numerator", "denominator"]
+    },
+    {
+      "id": "GF-04",
+      "category": "logical_entailment",
+      "prompt": "Premises: all cogs are metal; some metal objects are hollow. Consider the conclusion 'some cogs are hollow'. Is the conclusion entailed by the premises, contradicted by the premises, or undetermined? Return {\"conclusion\": one of \"entailed\", \"contradicted\", \"undetermined\"}.",
+      "response_fields": ["conclusion"]
+    },
+    {
+      "id": "GF-05",
+      "category": "calendar_and_fixed_offset",
+      "prompt": "An event starts at 2026-01-31T23:20:00+02:00 and lasts 2 hours 45 minutes. Use the Gregorian calendar and the stated fixed offset; there is no daylight-saving change. Return its end in UTC as {\"end_utc\": \"YYYY-MM-DDTHH:MM:SSZ\"}.",
+      "response_fields": ["end_utc"]
+    },
+    {
+      "id": "GF-06",
+      "category": "ordering_constraints",
+      "prompt": "Three jobs A, B and C each occur once in a sequence. A is before C. B is immediately before A. Return the job sequence as {\"order\": [job IDs]}.",
+      "response_fields": ["order"]
+    },
+    {
+      "id": "GF-07",
+      "category": "structured_filtering",
+      "prompt": "Records in input order: P1 has price 12 and in_stock true; P2 has price 8 and in_stock false; P3 has price 12 and in_stock true; P4 has price 16 and in_stock true. Select records that are in stock and have price at most 12. Preserve input order. Return {\"ids\": [record IDs]}.",
+      "response_fields": ["ids"]
+    },
+    {
+      "id": "GF-08",
+      "category": "correction_and_source_ids",
+      "prompt": "Messages in order: R1: 'The delivery is March 10, 2026.' R2: 'Correction: March 12, 2026 replaces March 10.' R3: 'Postpone delivery by two calendar days from the corrected date.' Return the current delivery date and the IDs of the correction and postponement that determine it: {\"delivery_date\": \"YYYY-MM-DD\", \"source_ids\": [IDs in message order]}.",
+      "response_fields": ["delivery_date", "source_ids"]
+    },
+    {
+      "id": "GF-09",
+      "category": "missing_data_abstention",
+      "prompt": "The entire supplied table contains R1: Alice bought 2 tickets; R2: Ben bought 3 tickets. It gives no other information. How many tickets did Chloe buy? Return {\"tickets\": integer or null, \"status\": \"provided\" or \"not_provided\", \"source_ids\": [IDs that explicitly state Chloe's count]}.",
+      "response_fields": ["tickets", "status", "source_ids"]
+    },
+    {
+      "id": "GF-10",
+      "category": "time_ordering_and_ties",
+      "prompt": "Records in input order: E1 at 2026-04-09T10:30:00Z; E2 at 2026-04-09T11:15:00+01:00; E3 at 2026-04-09T10:15:00Z; E4 at 2026-04-09T09:50:00Z. Sort earliest UTC instant first. For equal instants preserve input order. Return {\"order\": [record IDs]}.",
+      "response_fields": ["order"]
+    }
+  ]
+}

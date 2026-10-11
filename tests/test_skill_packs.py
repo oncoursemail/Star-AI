@@ -12,6 +12,8 @@ from star.desktop_core import Settings, run_task
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
+         "game-obby", "game-tycoon", "game-simulator", "game-rounds",
+         "game-inventory", "game-npc-quests",
          "eng-debugging", "eng-test-first", "eng-verify-before-done"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
@@ -190,3 +192,30 @@ def test_the_creation_packs_are_chosen_for_their_own_topic():
 def test_the_new_packs_are_off_until_the_gate_has_passed_them():
     assert "roblox-vfx" in skill_packs.enabled_names({skill_packs.ENV_VAR: "all"})
     assert skill_packs.enabled_names({}) == frozenset(skill_packs.DEFAULT_ENABLED) & frozenset(NAMES)
+
+GAME_PACKS = ("game-obby", "game-tycoon", "game-simulator",
+              "game-rounds", "game-inventory", "game-npc-quests")
+
+
+def test_new_game_packs_are_registered_but_switched_off_pending_evaluation():
+    # Keep each new pack available for opt-in testing, but never enable it by default
+    # until docs/evals.md's evaluation gate has passed it.
+    assert set(GAME_PACKS) <= {pack.name for pack in skill_packs.available()}
+    assert set(GAME_PACKS).isdisjoint(skill_packs.DEFAULT_ENABLED)
+    assert set(GAME_PACKS).isdisjoint(skill_packs.enabled_names({}))
+    assert set(GAME_PACKS) <= skill_packs.enabled_names({skill_packs.ENV_VAR: "all"})
+    for name in GAME_PACKS:
+        assert skill_packs.enabled_names({skill_packs.ENV_VAR: name}) == {name}
+
+
+@pytest.mark.parametrize(("name", "prompt"), (
+    ("game-obby", "Build a Roblox obby with checkpoints and kill bricks."),
+    ("game-tycoon", "Build a Roblox tycoon with droppers and collectors."),
+    ("game-simulator", "Build a Roblox simulator with rebirth and leaderstats."),
+    ("game-rounds", "Build a Roblox round-based game with intermission."),
+    ("game-inventory", "Build a Roblox inventory with equip and backpack."),
+    ("game-npc-quests", "Build Roblox NPC quests with quest dialogue."),
+))
+def test_new_game_pack_routing_requires_explicit_opt_in(name, prompt):
+    assert skill_packs.matching_names(prompt) == [] or name not in skill_packs.matching_names(prompt)
+    assert skill_packs.matching_names(prompt, enabled={name}) == [name]
