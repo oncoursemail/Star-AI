@@ -15,7 +15,7 @@ SCHEMA_VERSION = 1
 _MODES = {"ingest-allowed", "link-only"}
 _KINDS = {"git", "website"}
 _CADENCES = {"weekly", "monthly", "quarterly", "per-release", "as-published"}
-_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\\Z")
+_NAME = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 class ManifestError(ValueError):
@@ -40,8 +40,12 @@ def _text(value: object, where: str) -> str:
 
 def _url(value: object, where: str) -> str:
     text = _text(value, where)
-    parsed = urlsplit(text)
-    if (parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password
+    try:
+        parsed = urlsplit(text)
+        host = parsed.hostname
+    except ValueError as exc:
+        raise ManifestError(f"{where}: invalid URL") from exc
+    if (parsed.scheme != "https" or not host or parsed.username or parsed.password
             or any(ord(char) < 32 or ord(char) == 127 for char in text)):
         raise ManifestError(f"{where}: expected a public HTTPS URL without credentials")
     return text
@@ -60,11 +64,12 @@ def _sections(value: object, where: str) -> list[str]:
 
 
 def _rights(value: object, where: str) -> dict:
-    fields = {"id", "url", "redistribution_allowed", "attribution", "conditions", "evidence_quote"}
+    fields = {"id", "url", "redistribution_allowed", "attribution", "conditions", "evidence_url", "evidence_quote"}
     rights = _fields(value, fields, where)
     for key in ("id", "attribution", "conditions", "evidence_quote"):
         _text(rights[key], f"{where}.{key}")
     _url(rights["url"], f"{where}.url")
+    _url(rights["evidence_url"], f"{where}.evidence_url")
     if type(rights["redistribution_allowed"]) is not bool:
         raise ManifestError(f"{where}.redistribution_allowed: expected boolean")
     return rights
@@ -80,11 +85,11 @@ def validate_manifest(value: object) -> dict:
     if not _NAME.fullmatch(_text(doc["name"], "manifest.name")):
         raise ManifestError("manifest.name: expected a lowercase slug")
     _text(doc["title"], "manifest.title")
-    if doc["mode"] not in _MODES:
+    if not isinstance(doc["mode"], str) or doc["mode"] not in _MODES:
         raise ManifestError("manifest.mode: expected ingest-allowed or link-only")
 
     source = _fields(doc["source"], {"kind", "url", "revision", "content_root", "public_base"}, "source")
-    if source["kind"] not in _KINDS:
+    if not isinstance(source["kind"], str) or source["kind"] not in _KINDS:
         raise ManifestError("source.kind: expected git or website")
     _url(source["url"], "source.url")
     _text(source["revision"], "source.revision")
@@ -110,7 +115,7 @@ def validate_manifest(value: object) -> dict:
     _text(size["note"], "expected_size.note")
 
     cadence = _fields(doc["update_cadence"], {"frequency", "note"}, "update_cadence")
-    if cadence["frequency"] not in _CADENCES:
+    if not isinstance(cadence["frequency"], str) or cadence["frequency"] not in _CADENCES:
         raise ManifestError("update_cadence.frequency: invalid cadence")
     _text(cadence["note"], "update_cadence.note")
 
@@ -148,7 +153,13 @@ def load_manifests(directory: Path = SOURCES_DIR, *, for_ingestion: bool = False
     """Return a deterministic catalogue; never silently skip invalid or restricted sources."""
     found: list[dict] = []
     names: set[str] = set()
-    for path in sorted(Path(directory).glob("*.json")):
+    directory = Path(directory)
+    if not directory.is_dir():
+        raise ManifestError(f"{directory.name}: no manifest directory")
+    paths = sorted(directory.glob("*.json"))
+    if not paths:
+        raise ManifestError(f"{directory.name}: no corpus manifests")
+    for path in paths:
         doc = load_manifest(path, for_ingestion=for_ingestion, include_code_samples=include_code_samples)
         if doc["name"] != path.stem or doc["name"] in names:
             raise ManifestError(f"{path.name}: duplicate or mismatched corpus name")
