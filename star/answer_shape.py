@@ -20,13 +20,18 @@ import re
 
 SHAPE_HEADING = "ANSWER SHAPE (a rule from STAR)"
 SHAPE_RULES = (
-    "Your reply has a hard length limit, so spend it on the code. When the answer is code: give the complete, "
-    "working code first, one fenced luau block per script or module, with short comments only where they help "
-    "(no doc-comment header on every function, no repeated explanations inside the code). After the code add at "
-    "most five short bullet points: what it does, where it goes, and what you could not verify. Do not repeat "
-    "the code in prose, and add a usage example only if the request asks for one. Every block must run as "
-    "shown: define what it uses before using it."
+    "Your reply has a hard length limit and this request asks for code, so the code must be whole: give the "
+    "complete, working code first, one fenced luau block per script or module, with short comments only where "
+    "they help (no doc-comment header on every function). After the code add at most five short bullet points: "
+    "what it does, where it goes, and what you could not verify. Do not repeat the code in prose, and add a usage "
+    "example only if the request asks for one. Every block must run as shown: define what it uses before using "
+    "it. Shorter must not mean less: keep every check and every requirement the request lists."
 )
+# The rule is about code answers. A question that asks for an explanation gets none of it (measured: with the
+# rule on every Roblox turn, a documentation question was answered with a script instead of the explanation).
+_ASKS_FOR_CODE = re.compile(
+    r"\b(?:write|make|create|build|fix|refactor|convert|implement|script|code|add|generate|rewrite|debug)\b|```",
+    re.IGNORECASE)
 ENV_VAR = "STAR_ANSWER_SHAPE"      # "off" leaves the per-turn rule out (docs/evals.md: a prompt edit needs a switch)
 CONTINUATION_TOKENS = 900          # one extra request of at most this many tokens, twice at most
 MAX_CONTINUATIONS = 2
@@ -40,6 +45,11 @@ def rule_enabled(environ=None) -> bool:
     edit (it only runs after an answer was cut) and has no switch."""
     import os
     return (os.environ if environ is None else environ).get(ENV_VAR, "").strip().lower() != "off"
+
+
+def asks_for_code(prompt: str) -> bool:
+    """Does the request ask for code to be written or changed (the same words the router uses)?"""
+    return bool(_ASKS_FOR_CODE.search(prompt or ""))
 
 
 def stops_inside_code(answer: str) -> bool:

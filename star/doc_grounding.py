@@ -34,6 +34,7 @@ CHECK_MARKER = "**Luau check by STAR:**"
 MAX_CHECKED_BLOCKS = 3
 MAX_REPAIR_ROUNDS = 2       # per block; the second only after the first made the block better
 SECOND_ROUND_MAX_ERRORS = 2
+MAX_REPAIR_CALLS = 2        # per answer: each one writes a whole block again, which takes as long as writing it did
 # The whole task has one deadline (route.task_timeout) and an answer that is already written must
 # never be lost to it. The self-check gets what is left of the turn minus REVIEW_RESERVE, and a
 # repair call is stopped REPAIR_RESERVE before the deadline (time for the re-check and the save).
@@ -68,12 +69,16 @@ _REPAIR_SYSTEM = (
     "not remove features. The diagnostics come from the official Luau compiler and type checker and from the "
     "official Roblox API reference; each one shows the source line it is about.\n"
     "How such diagnostics are usually fixed:\n"
-    "- a value of unknown type: annotate the parameter (`x: any` when callers may pass anything), or check it with "
-    "`type(x) == \"number\"` and copy it into a typed local before use; cast with `value :: Type` when you know "
-    "the type;\n"
+    "- a value the checker does not accept although the code checks it with `type(x) == \"number\"`: cast it "
+    "where it is used (`math.floor(x :: number)`) or copy it into a typed local (`local n: number = x`); a "
+    "parameter that may be anything is annotated `x: any`;\n"
     "- engine classes are bare type names (`Player`, `BasePart`), and Luau has no `void`: a function that returns "
     "nothing has no return annotation;\n"
     "- an unknown global: define it in this block before it is used;\n"
+    "- a syntax error on a line that looks right in another language: Luau is not Lua 5.4 or TypeScript. It has no "
+    "`|`, `&`, `<<`, `>>` operators (use `bit32.bor`, `bit32.band`, `bit32.lshift`, `bit32.rshift`), no `!=` (write "
+    "`~=`) and no `goto`; a dictionary type is `{ [string]: any }` and an array type is `{ string }` (`{string, any}` "
+    "is not a type);\n"
     "- an API name that is not in the reference: use a member that exists, on the class that really has it."
 )
 
@@ -439,6 +444,7 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
 
     records: list[dict] = []
     replacements: list[tuple[int, int, str]] = []
+    repair_calls = 0
     for number, (start, end, code) in enumerate(examined, 1):
         record = {"block": number, "ran": False, "ok": False, "repaired": False, "errors": []}
         records.append(record)
@@ -455,6 +461,9 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt:
             continue
         current, current_state = code, state
         for round_number in range(1, MAX_REPAIR_ROUNDS + 1):
+            if repair_calls >= MAX_REPAIR_CALLS:
+                break
+            repair_calls += 1
             _emit(on_event, {"event": "luau_repair_started", "block": number, "round": round_number})
             try:
                 fixed = await repair(current, current_state["errors"])

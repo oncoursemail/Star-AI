@@ -17,6 +17,7 @@ REFERENCE = {
     "Players": CLASS.format(name="Players", props="LocalPlayer", methods="GetPlayers", events="PlayerAdded, PlayerRemoving")
                + "\nTags: Service",
     "DataModel": CLASS.format(name="DataModel", props="", methods="BindToClose, GetService", events=""),
+    "ReplicatedStorage": CLASS.format(name="ReplicatedStorage", props="", methods="", events="") + "\nTags: Service",
     "Workspace": CLASS.format(name="Workspace", props="CurrentCamera, Gravity", methods="Raycast", events=""),
     "Camera": CLASS.format(name="Camera", props="ViewportSize, CFrame", methods="", events=""),
     "UIScale": CLASS.format(name="UIScale", props="Scale", methods="", events=""),
@@ -158,6 +159,23 @@ def test_invented_enum_items_classes_and_library_functions_are_reported():
     assert kinds(findings) == [(UNKNOWN, 1), (UNKNOWN, 2), (UNKNOWN, 3)]
     assert "not a class" in findings[0]["message"] and "no such enum" in findings[1]["message"]
     assert "`math.isFinite`" in findings[2]["message"]
+
+
+def test_a_read_on_a_service_that_holds_no_instances_is_checked_and_a_read_on_a_container_is_not():
+    code = ('local GuiService = game:GetService("GuiService")\n'
+            'local ReplicatedStorage = game:GetService("ReplicatedStorage")\n'
+            'local inset = GuiService.TopbarInset\n'
+            'local camera = GuiService.CurrentCamera\n'          # no such member, and it cannot be a child
+            'local remotes = ReplicatedStorage.Remotes\n')       # a folder the game put there
+    findings, _ = diagnose(code, Reference())
+    assert kinds(findings) == [(UNKNOWN, 4)] and "`GuiService.CurrentCamera`" in findings[0]["message"]
+
+
+def test_a_class_string_that_is_really_a_childs_name_gets_a_hint_to_look_it_up_by_name():
+    code = 'local root = character:FindFirstChildWhichIsA("HumanoidRootPart")\n'
+    findings, _ = diagnose(code, Reference())
+    assert kinds(findings) == [(UNKNOWN, 1)] and "not a class" in findings[0]["message"]
+    assert 'FindFirstChild("HumanoidRootPart")' in findings[0]["hint"]
 
 
 def test_a_deprecated_member_is_an_advisory_that_names_the_replacement():

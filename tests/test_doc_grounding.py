@@ -515,6 +515,22 @@ def test_no_second_round_for_a_block_that_is_still_full_of_type_errors():
     assert "local attempt = 1" in answer and "STAR corrected part of it" in answer and len(records[0]["remaining"]) == 4
 
 
+def test_at_most_two_repair_calls_per_answer_however_many_blocks_fail():
+    three = "```luau\nlocal a: string = 1\n```\n```luau\nlocal b: string = 2\n```\n```luau\nlocal c: string = 3\n```"
+    knowledge = FakeKnowledge(reports=[failed(), passed(), failed(), passed(), failed()])
+    calls = []
+
+    async def repair(code, found):
+        calls.append(code)
+        return code.replace("= ", '= "') .rstrip("\n") + '"\n'
+
+    answer, records = review(three, knowledge, repair)
+    assert len(calls) == 2, "each call writes a whole block again: two is the budget of one answer"
+    assert [r["repaired"] for r in records] == [True, True, False] and not records[2]["ok"]
+    assert "Code block 3 did not pass the static Luau check and is shown unchanged." in answer
+    assert "did not pass either" not in answer, "no fix was tried on the third block, so none is claimed"
+
+
 def test_a_repair_that_is_no_better_or_throws_the_code_away_is_not_used():
     long_code = "local a = 1\n" * 30
     answer_text = "```luau\n" + long_code + "```"

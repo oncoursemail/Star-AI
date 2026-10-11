@@ -90,6 +90,18 @@ def test_the_shape_rule_is_short_and_puts_the_code_first():
     assert "complete" in answer_shape.SHAPE_RULES and "first" in answer_shape.SHAPE_RULES
 
 
+@pytest.mark.parametrize("prompt, expected", [
+    ("Write a server script that saves coins", True),
+    ("Fix this:\n```lua\nprint(1)\n```", True),
+    ("Can you add a cooldown to my remote?", True),
+    ("How does TweenService ease a value?", False),
+    ("What is the difference between Rate and Emit on a ParticleEmitter?", False),
+    ("Describe the scripting model", False),            # "scripting" is not the verb "script"
+])
+def test_the_rule_is_for_requests_that_ask_for_code(prompt, expected):
+    assert answer_shape.asks_for_code(prompt) is expected
+
+
 def test_the_rule_has_an_off_switch_and_is_on_by_default():
     assert answer_shape.rule_enabled({}) and answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": "on"})
     assert not answer_shape.rule_enabled({"STAR_ANSWER_SHAPE": " OFF "})
@@ -134,6 +146,8 @@ def test_run_task_adds_the_rule_to_a_full_roblox_answer_only(monkeypatch, tmp_pa
     assert answer_shape.SHAPE_HEADING in user_text(question) and "hard length limit" in user_text(question)
     assert answer_shape.SHAPE_HEADING not in user_text(question, mode="fast"), "a quick answer stays as it was"
     assert answer_shape.SHAPE_HEADING not in user_text("Plan a birthday party for ten children.")
+    # a Roblox question that asks for an explanation is not told to lead with code
+    assert answer_shape.SHAPE_HEADING not in user_text("How does a Roblox client decide which parts are streamed in?")
     monkeypatch.setenv("STAR_ANSWER_SHAPE", "off")
     assert answer_shape.SHAPE_HEADING not in user_text(question)
 

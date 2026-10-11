@@ -46,6 +46,13 @@ _GLOBAL_CLASSES = {"game": "DataModel", "workspace": "Workspace"}
 _COMMON_OWNERS = ("Workspace", "Camera", "Players", "Player", "Humanoid", "Animator", "AnimationTrack", "BasePart",
                   "Model", "Instance", "GuiObject", "GuiBase2d", "TextLabel", "ScreenGui", "UserInputService",
                   "RunService", "GuiService", "TweenService", "Tween", "Tool", "DataModel")
+# Services that hold no instances of the game's own: `RunService.Anything` can only be a member, never a child.
+_MEMBER_ONLY = frozenset({
+    "RunService", "GuiService", "UserInputService", "TweenService", "HttpService", "ContextActionService",
+    "MarketplaceService", "DataStoreService", "MemoryStoreService", "CollectionService", "PathfindingService",
+    "TeleportService", "MessagingService", "TextService", "Debris", "PhysicsService", "BadgeService",
+    "LocalizationService", "PolicyService", "VRService", "HapticService", "ProximityPromptService", "GroupService",
+    "InsertService", "AssetService", "SocialService", "AvatarEditorService"})
 _NAME = r"[A-Za-z_]\w*"
 _STRING = r"""["']([A-Za-z]\w*)["']"""
 
@@ -175,6 +182,9 @@ def references(code: str) -> list[dict]:
             add([f"{cls}.{m.group(1)}" for cls in ordered], m.start(), f"{name}.{m.group(1)}", ordered[0])
         for m in re.finditer(rf"{head}\s*:\s*GetPropertyChangedSignal\(\s*{_STRING}\s*\)", quoted):
             add([f"{cls}.{m.group(1)}" for cls in ordered], m.start(), f"{name}.{m.group(1)}", ordered[0])
+        if classes <= _MEMBER_ONLY:
+            for m in re.finditer(rf"{head}\.({_NAME})\b(?!\s*\()", bare):
+                add([f"{cls}.{m.group(1)}" for cls in ordered], m.start(), f"{name}.{m.group(1)}", ordered[0])
     return refs
 
 
@@ -249,6 +259,8 @@ def diagnose(code: str, lookup) -> tuple[list[dict], int]:
             hint = ""
             if ref["kind"] == "class":
                 message = f"`{ref['shown']}` is not a class in the official Roblox API reference."
+                hint = (f"If it is the name of an instance rather than a class, find it by name with "
+                        f"FindFirstChild(\"{ref['shown']}\"); Instance.new and IsA need a class name.")
             elif ref["kind"] == "enum":
                 message = f"`{ref['shown']}` is not in the official Roblox API reference (no such enum or enum item)."
             elif ref["kind"] == "function":
