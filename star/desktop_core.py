@@ -766,6 +766,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         image_part(Path(image))
     home = app_data()
     home.mkdir(parents=True, exist_ok=True)
+    from .promoter import expire_due
+    expire_due(home)
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
