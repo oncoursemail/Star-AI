@@ -3,3 +3,6 @@
 
 # Node scripts imported by the vitest suite carry a shebang; with CRLF the shebang line fails to parse there.
 *.mjs text eol=lf
+
+# Shell scripts run under bash (Git Bash on Windows, Linux servers): a CR at the end of a line breaks them.
+*.sh text eol=lf
