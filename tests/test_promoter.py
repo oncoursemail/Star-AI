@@ -11,11 +11,19 @@ from star.lessons import LessonStore
 
 
 def change_evidence(change, *, candidate_status="pass", include_gate=True, bind=True):
-    base = {"suite": {"sha256": "suite-1"}, "run": {"model": "local", "mode": "auto"},
-            "tasks": {"one": {"status": "pass"}, "two": {"status": "fail"}}}
-    candidate = {"suite": {"sha256": "suite-1"},
-                 "run": {"model": "local", "mode": "auto"},
-                 "tasks": {"one": {"status": candidate_status}, "two": {"status": "fail"}}}
+    # Supply the complete persisted-eval shape required by the hardened gate
+    # in PR #87; a legacy in-memory minimal status map is not evidence.
+    suite = {"sha256": "suite-1", "file": "test-suite.json", "tasks_total": 2,
+             "automated": 2, "selected": ["one", "two"], "identity_sha256": "test-identity"}
+    run = {"model": "local", "mode": "auto", "app_commit": "test-commit",
+           "grader_sha256": "test-grader"}
+    def row(status):
+        return {"status": status, "passed": status == "pass",
+                "reasons": [], "checks": []}
+    base = {"schema": 1, "suite": dict(suite), "run": dict(run),
+            "tasks": {"one": row("pass"), "two": row("fail")}}
+    candidate = {"schema": 1, "suite": dict(suite), "run": dict(run),
+                 "tasks": {"one": row(candidate_status), "two": row("fail")}}
     if bind:
         candidate["run"]["change_sha256"] = promoter.change_digest(change)
     evidence = {"reference": "eval-run-1"}
@@ -303,3 +311,36 @@ def test_undo_restores_even_a_previous_explicit_null_setting(tmp_path):
         assert store.db.execute(
             "SELECT value_json FROM promoter_settings WHERE key='routing_rule:roblox'"
         ).fetchone()[0] == "null"
+
+
+def test_expiry_never_overwrites_a_lesson_changed_after_promotion(tmp_path):
+    change = {"type": "lesson", "action": "add", "project": "STAR",
+              "kind": "fact", "text": "Prefer modular meshes to dozens of individual parts."}
+    other = {"type": "lesson", "action": "add", "project": "STAR",
+             "kind": "fact", "text": "Use custom LOD for very distant props."}
+    with promoter.Promoter(tmp_path) as store:
+        first = propose_allowed(store, change)
+        first_receipt = store.apply(first)
+        note_id = first_receipt["after"]["row"]["id"]
+        second = propose_allowed(store, other)
+        store.apply(second)
+        store.db.execute("UPDATE notes SET text=? WHERE id=?",
+                         ("Owner-edited lesson must be preserved", note_id))
+        store.db.commit()
+        due = datetime.fromisoformat(first_receipt["expires_at"])
+        # One conflicted expiry must not abort the other due expiry.
+        assert store.expire(due) == [second]
+        assert store.record(first)["state"] == "applied"
+        assert store.db.execute("SELECT text FROM notes WHERE id=?", (note_id,)).fetchone()[0] == "Owner-edited lesson must be preserved"
+    assert promoter.expire_due(tmp_path, due) == []
+
+
+def test_malformed_saved_routing_role_does_not_break_chat_selection(tmp_path):
+    with promoter.Promoter(tmp_path) as store:
+        store.db.execute(
+            "INSERT INTO promoter_settings(key,value_json) VALUES(?,?)",
+            ("routing_rule:roblox", "[]"))
+        store.db.commit()
+    assert promoter.routing_role(tmp_path, "roblox") is None
+    route = select_route(Settings(model="main", roblox_model="roblox"), "Build a Roblox UI", home=tmp_path)
+    assert route.model == "roblox"
