@@ -175,7 +175,7 @@ TURNS = """[...document.querySelectorAll('.thread-turns > .msg')].map(el => ({
 def read_key_file(path: Path) -> str:
     """Accept a bare key or a single NAME=value line, preserving '=' in the key."""
     value = path.read_text(encoding="utf-8").strip()
-    if re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", value):
+    if re.match(r"^[A-Z_][A-Z0-9_]*=", value):
         value = value.split("=", 1)[1].strip()
     return value
 
