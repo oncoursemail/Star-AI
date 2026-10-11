@@ -237,6 +237,14 @@ def sources_footer(passages: list[dict], answer: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _changed_lines(before: str, after: str, limit: int = 500) -> str:
+    """What a repair changed, as -/+ lines (bounded; this goes into the run record)."""
+    import difflib
+    lines = [line for line in difflib.unified_diff(before.splitlines(), after.splitlines(), lineterm="", n=0)
+             if line[:1] in "+-" and not line.startswith(("+++", "---")) and line[1:].strip()]
+    return "\n".join(lines)[:limit]
+
+
 def _describe(errors: list[dict], limit: int = 4) -> str:
     return "\n".join(f"- line {e['line']}: {e['message']} ({e['kind']})" for e in errors[:limit])
 
@@ -289,7 +297,8 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
             continue   # the repair attempt failed: the original block stays, with its diagnostics
         record["repair_attempted"] = True
         if isinstance(second, dict) and second.get("ran") is True and second.get("ok") is True:
-            record.update(repaired=True, ok=True)
+            # `fix` is the short list of changed lines, kept for the lesson this repair may become.
+            record.update(repaired=True, ok=True, fix=_changed_lines(code, fixed))
             replacements.append((start, end, fixed if fixed.endswith("\n") else fixed + "\n"))
     for start, end, fixed in reversed(replacements):
         answer = answer[:start] + fixed + answer[end:]

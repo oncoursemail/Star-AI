@@ -16,8 +16,25 @@ import sqlite3
 import tempfile
 from typing import Literal
 
-Kind = Literal["requirement", "reference", "decision", "fix", "observation", "unknown"]
-VALID_KINDS = frozenset({"requirement", "reference", "decision", "fix", "observation", "unknown"})
+Kind = Literal["requirement", "reference", "decision", "fix", "observation", "unknown",
+               "preference", "correction", "pitfall", "fact"]
+# The last four are lesson kinds (star/lessons.py). A lesson is an ordinary note whose
+# `status` column is set; `reviewed` stays the one flag that decides what is trusted.
+LESSON_KINDS = ("preference", "correction", "pitfall", "fact")
+VALID_KINDS = frozenset({"requirement", "reference", "decision", "fix", "observation", "unknown",
+                         *LESSON_KINDS})
+# Added to `notes` by ALTER TABLE on open (never dropped, never rewritten): the lesson lifecycle.
+#   status         NULL for a plain note; candidate | accepted | rejected | superseded | merged
+#   source_type    user | manual | chat-correction | feedback | retry | verified-fix | doc | summary
+#   updated        last status or text change (ISO time)
+#   supersedes_id  the older lesson this one replaced
+#   subject        normalised subject words, used to find the lesson a newer one replaces
+#   evidence       what the lesson was taken from (a redacted excerpt), shown at review
+#   merged_into    the summarised candidate a raw capture was folded into
+LESSON_COLUMNS = (("status", "TEXT"), ("source_type", "TEXT"), ("updated", "TEXT"),
+                  ("supersedes_id", "INTEGER"), ("subject", "TEXT"), ("evidence", "TEXT"),
+                  ("merged_into", "INTEGER"))
+APPROVED_DECISION_SOURCE = "user:explicit-approved-decision"
 MAX_ARTIFACT = 32 * 1024 * 1024
 PROJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ -]{0,95}$")
 
@@ -66,6 +83,7 @@ class KnowledgeStore:
             reviewed INTEGER NOT NULL DEFAULT 0, created TEXT NOT NULL
         )""")
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_notes_project ON notes(project,reviewed,created)")
+        self._add_lesson_columns()
         self.db.execute("""CREATE TABLE IF NOT EXISTS artifacts (
             digest TEXT PRIMARY KEY, size INTEGER NOT NULL, media_type TEXT NOT NULL,
             created TEXT NOT NULL
@@ -106,6 +124,34 @@ class KnowledgeStore:
         except sqlite3.OperationalError:
             self._fts = False
         self.db.commit()
+
+    def _add_lesson_columns(self) -> None:
+        """Additive migration: lesson columns on `notes`, per-lesson use counts, one backfill.
+
+        Existing rows keep every value they had. Decisions the owner approved before this
+        version are labelled as accepted (or superseded) lessons so the review page lists
+        them; nothing about what is trusted changes, because `reviewed` is left alone.
+        """
+        present = {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}
+        for name, kind in LESSON_COLUMNS:
+            if name not in present:
+                try:
+                    self.db.execute(f"ALTER TABLE notes ADD COLUMN {name} {kind}")
+                except sqlite3.OperationalError:
+                    # Another STAR thread opened the store at the same moment and added it.
+                    if name not in {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}:
+                        raise
+        self.db.execute("CREATE INDEX IF NOT EXISTS idx_notes_lessons ON notes(project,status,id)")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS lesson_use (
+            note_id INTEGER PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, last_used TEXT NOT NULL
+        )""")
+        self.db.execute("CREATE TABLE IF NOT EXISTS store_meta(name TEXT PRIMARY KEY, value TEXT)")
+        if not self.db.execute("SELECT 1 FROM store_meta WHERE name='lessons_v1'").fetchone():
+            self.db.execute(
+                "UPDATE notes SET status=CASE WHEN reviewed=1 THEN 'accepted' ELSE 'superseded' END, "
+                "source_type='manual', updated=created WHERE status IS NULL AND source=?",
+                (APPROVED_DECISION_SOURCE,))
+            self.db.execute("INSERT INTO store_meta(name,value) VALUES('lessons_v1','1')")
 
     def add_note(self, *, project: str, kind: str, text: str, source: str, revision: str = "unknown") -> int:
         project = _project(project)

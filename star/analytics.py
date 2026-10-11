@@ -11,7 +11,10 @@ from pathlib import Path
 import sqlite3
 import time
 
-VALID_EVENTS = frozenset({'run_started', 'run_succeeded', 'run_failed', 'tool_completed', 'tool_rejected', 'first_token'})
+VALID_EVENTS = frozenset({'run_started', 'run_succeeded', 'run_failed', 'tool_completed', 'tool_rejected', 'first_token',
+                          # Learning (star/lessons.py): one row per lesson stored, per lesson accepted,
+                          # and per answered turn that had accepted lessons in its context.
+                          'lesson_captured', 'lesson_accepted', 'lesson_used'})
 
 
 class AnalyticsStore:
@@ -64,6 +67,10 @@ class AnalyticsStore:
         durations = [elapsed for kind, _, elapsed, _ in rows
                      if kind == 'run_succeeded' and elapsed is not None]
         return {
+            # Counted events of the period, nothing estimated. `used` is the number of answered
+            # turns that had at least one accepted lesson in their context.
+            'learning': {'captured': counts['lesson_captured'], 'accepted': counts['lesson_accepted'],
+                         'used': counts['lesson_used']},
             'started': counts['run_started'],
             'succeeded': counts['run_succeeded'],
             'failed': counts['run_failed'],
@@ -94,4 +101,9 @@ def get_dashboard(app_home: Path, project: str, days: int = 14) -> dict:
         store.close()
     snapshot['messages'] = messages
     snapshot['project'] = project
+    # Current totals straight from the lesson records (all time, this project).
+    from .lessons import learning_status
+    totals = learning_status(home, project) if (home / 'knowledge' / 'knowledge.sqlite3').is_file() else {}
+    snapshot['learning'].update(pending=totals.get('pending', 0), accepted_now=totals.get('accepted', 0),
+                                uses_total=totals.get('uses', 0))
     return snapshot

@@ -45,6 +45,10 @@ def approve_learning(
         raise ValueError("Only decisions, requirements and verified fixes may be approved")
     if not isinstance(text, str) or not 3 <= len(text.strip()) <= 1200:
         raise ValueError("Approved note must contain 3–1,200 characters")
+    # The content rules every lesson follows: no keys or passwords, and nothing that reads
+    # as a grant of permissions. Imported here because star.lessons builds on this module.
+    from .lessons import check_lesson_text, subject_key
+    check_lesson_text(text, limit=1200)
     if replaces_note_id is not None and (
         isinstance(replaces_note_id, bool) or not isinstance(replaces_note_id, int)
         or replaces_note_id < 1
@@ -66,11 +70,15 @@ def approve_learning(
         stamp = now()
         try:
             db.execute("BEGIN IMMEDIATE")
+            # Also a lesson record (status, source_type, supersedes_id), so the review page
+            # lists it with everything else STAR has learned for this project.
             created = db.execute(
-                """INSERT INTO notes(project,kind,text,source,revision,reviewed,created)
-                   VALUES(?,?,?,?,?,?,?)""",
+                """INSERT INTO notes(project,kind,text,source,revision,reviewed,created,
+                                     status,source_type,updated,supersedes_id,subject)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (project, kind, text.strip(),
-                 "user:explicit-approved-decision", "user-reviewed", 1, stamp),
+                 "user:explicit-approved-decision", "user-reviewed", 1, stamp,
+                 "accepted", "manual", stamp, replaces_note_id, subject_key(text)),
             )
             note_id = int(created.lastrowid)
             db.execute(
@@ -82,8 +90,10 @@ def approve_learning(
             )
             if replaces_note_id is not None:
                 db.execute(
-                    "UPDATE notes SET reviewed=0 WHERE id=? AND project=?",
-                    (replaces_note_id, project),
+                    "UPDATE notes SET reviewed=0, updated=?, "
+                    "status=CASE WHEN status IS NULL THEN NULL ELSE 'superseded' END "
+                    "WHERE id=? AND project=?",
+                    (stamp, replaces_note_id, project),
                 )
             db.commit()
         except BaseException:
