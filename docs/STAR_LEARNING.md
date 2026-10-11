@@ -38,7 +38,11 @@ Each lesson stores: project, text, kind (`preference | correction | pitfall | fa
 1. **Your own words are accepted automatically** for the project they were said in. The text must
    literally appear in the chat message it was taken from (`LessonStore.capture_owner` refuses anything
    else). The setting "Accept my own corrections automatically" (`learning_auto_accept`, default on)
-   switches this to "review everything".
+   switches this to "review everything". Only a message short enough to be a typed instruction
+   counts: at most 4 sentences and 500 characters outside code fences and quoted lines
+   (`reads_as_typed`). In a longer message, which is usually pasted material with a question about
+   it, the same sentences are kept as candidates and wait for review. A short paste still looks
+   like your own words; "review everything" is the setting for that.
 2. **Everything else is a candidate**: anything inferred, summarised by a model, or taken from tool
    output, web pages, documentation or files. `LessonStore.capture_inferred` has no argument that makes a
    lesson trusted. A candidate is never placed in a prompt until you approve it.

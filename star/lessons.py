@@ -246,6 +246,22 @@ def own_words(message: str) -> str:
     return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith((">", "|")))
 
 
+# A statement is accepted on sight only when the whole message is short enough to be an
+# instruction the owner typed. A longer message is usually material with a question about it
+# (a pasted page, a forum post, a document, a transcript): what reads like a preference in
+# there was written by someone else, so it waits for review like any other candidate.
+TYPED_SENTENCES = 4
+TYPED_CHARS = 500
+
+
+def reads_as_typed(message: str) -> bool:
+    """True when a chat message is short enough for its statements to be trusted as typed.
+    Code fences and quoted lines do not count: "fix this" above a long script is still short."""
+    parts = [" ".join(part.split()) for part in re.split(r"(?<=[.!?])\s+|\n+", own_words(message))]
+    parts = [part for part in parts if part]
+    return len(parts) <= TYPED_SENTENCES and sum(len(part) for part in parts) <= TYPED_CHARS
+
+
 def owner_statements(message: str, *, after_answer: bool = False) -> list[Statement]:
     """Stated preferences and corrections in one chat message. Conservative on purpose:
     a missed statement costs nothing, a wrong one would follow the owner into later chats."""
@@ -722,11 +738,14 @@ def capture_turn(store: LessonStore, *, project: str, chat_id: str | None, owner
         context = (f"Follows STAR's answer (message {previous.get('answer_id')}): "
                    f"\"{str(previous.get('answer') or '')[:420]}\" Question before it: "
                    f"\"{str(previous.get('text') or '')[:200]}\"")
+    # Accepted on sight only in a message short enough to be a typed instruction; statements
+    # found in longer material are kept as the owner's words but wait for review.
+    typed = reads_as_typed(owner_text)
     for statement in owner_statements(owner_text, after_answer=answered):
         if statement.durable:
             note(store.capture_owner(project=project, kind=statement.kind, text=statement.text,
                                      message=owner_text, source=f"chat:{here}", evidence=context,
-                                     auto_accept=auto_accept))
+                                     auto_accept=auto_accept and typed))
         else:
             note(store.capture_inferred(project=project, kind=statement.kind, text=statement.text,
                                         source_type=CONTEXT, source=f"chat:{here}", evidence=context))
