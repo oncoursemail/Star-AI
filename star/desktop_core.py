@@ -922,11 +922,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         prepared_conversation = None
         async def run():
             nonlocal prepared_conversation
-            from .web_search import search_web, source_context
+            from .deep_research import research_web
+            from .web_search import source_context
             if research:
                 audited_event({'event': 'search_started'})
-                found = await search_web(prompt[:600], limit=5)
-                turn_sections.append(('WEB SEARCH', source_context(found)))
+                batch = await research_web(prompt)
+                evidence = source_context(list(batch.sources))
+                if batch.failed_queries:
+                    evidence += (f"\n\nResearch warning: {batch.failed_queries} of "
+                                 f"{batch.planned_queries} search angles returned no usable snippets.")
+                turn_sections.append(('WEB SEARCH', evidence))
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
