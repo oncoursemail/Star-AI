@@ -37,9 +37,9 @@ export function StarPet({state,visible=true,reducedMotion=false}:{state:PetState
   return ()=>clearInterval(timer)
  },[state,reducedMotion])
  const image=petImage(state,reducedMotion?false:alternate)
- const face='/mascot/faces/'+image.face+'.png'
- const pose='/mascot/poses/'+image.pose+'.png'
- useEffect(()=>{setFailed(false)},[face,pose])
+ const showPose=['streaming','thinking','sleepy','asleep','update'].includes(state)
+ const source=showPose?'/mascot/poses/'+image.pose+'.png':'/mascot/faces/'+image.face+'.png'
+ useEffect(()=>{setFailed(false)},[source])
  if(!visible||failed)return null
  return <div className={'star-pet star-pet--'+corner} data-testid="star-pet" data-state={state}>
   {bubble&&<div role="status" className="star-pet__bubble">{image.status}</div>}
@@ -51,8 +51,7 @@ export function StarPet({state,visible=true,reducedMotion=false}:{state:PetState
     try{localStorage.setItem('star.pet.corner',next)}catch{/* optional preference */}
    }else setBubble(v=>!v)
   }}>
-   <img className="star-pet__pose" src={pose} alt="" draggable={false} onError={()=>setFailed(true)}/>
-   <img className="star-pet__face" src={face} alt="" draggable={false} onError={()=>setFailed(true)}/>
+   <img className="star-pet__image" src={source} alt="" draggable={false} onError={()=>setFailed(true)}/>
   </button>
  </div>
 }
