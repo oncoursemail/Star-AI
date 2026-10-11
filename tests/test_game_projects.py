@@ -97,7 +97,10 @@ def test_discovery_skips_symlinks_generated_dirs_and_private_files(tmp_path):
     create_godot(tmp_path / 'Library' / 'ignored')
     (tmp_path / '.git').mkdir()
     create_godot(tmp_path / '.git' / 'private')
-    (tmp_path / 'alias').symlink_to(tmp_path / 'real', target_is_directory=True)
+    try:
+        (tmp_path / 'alias').symlink_to(tmp_path / 'real', target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pass  # a Windows account without the symlink privilege: the other exclusions are still checked
     projects = Workspace(tmp_path).call('workspace_game_discover', {})['projects']
     assert [x['path'] for x in projects] == ['real']
     with pytest.raises(PermissionError):
