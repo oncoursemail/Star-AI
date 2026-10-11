@@ -913,3 +913,52 @@ def test_the_background_runner_runs_one_digest_at_a_time_and_stops_on_request(tm
     assert runner.start(lambda: (lan(), tmp_path, "P")) is None and calls == [3]
     runner.start(lambda: (lan(), tmp_path, "P"), minimum=1).join(2)
     assert calls == [3, 1]
+
+
+# --- 9. findings of the independent review ----------------------------------------------------
+
+def old_knowledge_folder(root, decisions=40):
+    """A knowledge folder exactly as the version before lessons left it, with approved decisions."""
+    (root / "knowledge").mkdir(parents=True)
+    old = sqlite3.connect(root / "knowledge" / "knowledge.sqlite3")
+    old.execute("PRAGMA journal_mode=WAL")
+    old.executescript(OLD_KNOWLEDGE)
+    try:
+        old.executescript(OLD_KNOWLEDGE_FTS)
+    except sqlite3.OperationalError:
+        pass
+    old.executemany(
+        "INSERT INTO notes(project,kind,text,source,revision,reviewed,created) "
+        "VALUES('A','decision',?,'user:explicit-approved-decision','user-reviewed',1,'2026-10-01T00:00:00+00:00')",
+        [(f"Approved decision number {number}.",) for number in range(decisions)])
+    old.commit()
+    old.close()
+
+
+def test_the_first_open_after_an_upgrade_is_safe_from_several_threads_at_once(tmp_path):
+    """The interface, a turn and the background steps each open the store. On the first run of
+    a new version they can do so at the same moment, and every one of them must succeed."""
+    for attempt in range(6):
+        root = tmp_path / f"home{attempt}"
+        old_knowledge_folder(root)
+        gate, failures = threading.Barrier(8), []
+
+        def opener():
+            gate.wait()
+            try:
+                KnowledgeStore(root / "knowledge").close()
+            except Exception as exc:
+                failures.append(f"{type(exc).__name__}: {exc}")
+
+        threads = [threading.Thread(target=opener) for _ in range(8)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+        assert failures == []
+        store = KnowledgeStore(root / "knowledge")
+        try:
+            assert store.db.execute("SELECT status,COUNT(*) FROM notes GROUP BY status").fetchall()[0][:] == ("accepted", 40)
+            assert store.db.execute("SELECT COUNT(*) FROM store_meta WHERE name='lessons_v1'").fetchone()[0] == 1
+        finally:
+            store.close()

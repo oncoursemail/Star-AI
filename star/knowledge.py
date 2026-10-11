@@ -132,26 +132,44 @@ class KnowledgeStore:
         version are labelled as accepted (or superseded) lessons so the review page lists
         them; nothing about what is trusted changes, because `reviewed` is left alone.
         """
-        present = {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}
-        for name, kind in LESSON_COLUMNS:
-            if name not in present:
-                try:
+        if self._lessons_ready():
+            return   # the usual case: an open that writes nothing
+        # The interface, a turn and the background steps can all open the store at the same
+        # moment on the first run of a new version. One of them migrates inside a single
+        # write transaction; the others wait for it (busy_timeout) and then find it done.
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            present = {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}
+            for name, kind in LESSON_COLUMNS:
+                if name not in present:
                     self.db.execute(f"ALTER TABLE notes ADD COLUMN {name} {kind}")
-                except sqlite3.OperationalError:
-                    # Another STAR thread opened the store at the same moment and added it.
-                    if name not in {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}:
-                        raise
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_notes_lessons ON notes(project,status,id)")
-        self.db.execute("""CREATE TABLE IF NOT EXISTS lesson_use (
-            note_id INTEGER PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, last_used TEXT NOT NULL
-        )""")
-        self.db.execute("CREATE TABLE IF NOT EXISTS store_meta(name TEXT PRIMARY KEY, value TEXT)")
-        if not self.db.execute("SELECT 1 FROM store_meta WHERE name='lessons_v1'").fetchone():
-            self.db.execute(
-                "UPDATE notes SET status=CASE WHEN reviewed=1 THEN 'accepted' ELSE 'superseded' END, "
-                "source_type='manual', updated=created WHERE status IS NULL AND source=?",
-                (APPROVED_DECISION_SOURCE,))
-            self.db.execute("INSERT INTO store_meta(name,value) VALUES('lessons_v1','1')")
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_notes_lessons ON notes(project,status,id)")
+            self.db.execute("""CREATE TABLE IF NOT EXISTS lesson_use (
+                note_id INTEGER PRIMARY KEY, uses INTEGER NOT NULL DEFAULT 0, last_used TEXT NOT NULL
+            )""")
+            self.db.execute("CREATE TABLE IF NOT EXISTS store_meta(name TEXT PRIMARY KEY, value TEXT)")
+            if not self.db.execute("SELECT 1 FROM store_meta WHERE name='lessons_v1'").fetchone():
+                self.db.execute(
+                    "UPDATE notes SET status=CASE WHEN reviewed=1 THEN 'accepted' ELSE 'superseded' END, "
+                    "source_type='manual', updated=created WHERE status IS NULL AND source=?",
+                    (APPROVED_DECISION_SOURCE,))
+                self.db.execute("INSERT OR IGNORE INTO store_meta(name,value) VALUES('lessons_v1','1')")
+            self.db.execute("COMMIT")
+        except BaseException:
+            if self.db.in_transaction:
+                self.db.execute("ROLLBACK")
+            raise
+
+    def _lessons_ready(self) -> bool:
+        """True when this database already has everything the lesson migration adds."""
+        present = {row[1] for row in self.db.execute("PRAGMA table_info(notes)")}
+        if any(name not in present for name, _ in LESSON_COLUMNS):
+            return False
+        tables = {row[0] for row in self.db.execute(
+            "SELECT name FROM sqlite_master WHERE name IN ('lesson_use','store_meta','idx_notes_lessons')")}
+        if len(tables) != 3:
+            return False
+        return self.db.execute("SELECT 1 FROM store_meta WHERE name='lessons_v1'").fetchone() is not None
 
     def add_note(self, *, project: str, kind: str, text: str, source: str, revision: str = "unknown") -> int:
         project = _project(project)
