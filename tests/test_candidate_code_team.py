@@ -52,7 +52,7 @@ def test_candidate_team_runs_parallel_four_stages_with_no_tools_or_writes(tmp_pa
         assert all(not request.get("tools") for request in model.requests)
         assert all([line["role"] for line in r["messages"]] == ["system", "user"]
                    for r in model.requests)
-        assert "not" in result["verification"].lower()
+        assert "no code was changed" in result["verification"].lower()
         assert "never-mutated" not in result["proposal"]
         assert (tmp_path / "game/game.luau").read_text() == "local Round = {}\nreturn Round"
         assert sum(e["event"] == "agent_finished" for e in events) == 4
