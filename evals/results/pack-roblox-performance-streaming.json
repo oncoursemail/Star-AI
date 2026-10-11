@@ -1,0 +1,270 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "PERF-01",
+   "PERF-02",
+   "PERF-03"
+  ]
+ },
+ "run": {
+  "app_commit": "66bf9e45984747af16ca1077ca794c9c6ded24f1",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-performance-streaming",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "42e2e40f5ed8",
+  "started_at": "2026-10-11T06:07:40+00:00",
+  "waited_for_lock_s": 1.5,
+  "finished_at": "2026-10-11T06:15:23+00:00",
+  "rescored_at": "2026-10-11T06:34:19+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "PERF-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "38d7a6b82bfae04f",
+   "reasons": [
+    "require:event_or_throttle: event-driven, or a throttled query"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:event_or_throttle",
+     "ok": false,
+     "detail": "event-driven, or a throttled query"
+    },
+    {
+     "id": "forbid:frame_poll_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_task",
+     "ok": true
+    },
+    {
+     "id": "forbid:render_stepped",
+     "ok": true
+    }
+   ],
+   "seconds": 159.1,
+   "timings": {
+    "luau_check_s": 0.17
+   },
+   "blocks": 2,
+   "answer_chars": 6350,
+   "answer_sha256": "0fafaab6d9f2a4b636f8da647fbfde028fe94e3219026d0dbfcf68b49ec54cfe",
+   "packs": [
+    "roblox-performance-streaming"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-performance-streaming"
+     ],
+     "chars": 1050
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the rewritten, event-driven solution.\n\n### The Solution\n\nReplace the polling loop with a `CollectionService` signal that reacts only when a player enters or leaves the workspace.\n\n```lua\nlocal CollectionService = game:GetService(\"CollectionService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal door = script.Parent -- Assuming the script is inside the door\nlocal TAG_NAME = \"ProximityTarget\" -- Optional: Use tags to mark relevant parts if needed, \n                                   -- but we can also just listen to CharacterAdded.\n\n-- We will track the state locally to avoid flickering if multiple players are near\nlocal isPlayerNear = false\n\n-- Helper to check if ANY player is currently within 10 studs\nlocal function checkProximity()\n\tlocal isNear = false\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal character = player.Character\n\t\tif character and character:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\tlocal rootPart = character:FindFirstChild(\"HumanoidRootPart\")\n\t\t\tif (rootPart.Position - door.Position).Magnitude < 10 then\n\t\t\t\tisNear = true\n\t\t\t\tbreak -- Found one, no need to check others\n\t\t\tend\n\t\tend\n\tend\n\treturn isNear\nend\n\n-- Initial check\nisPlayerNear = checkProximity()\ndoor.Transparency = isPlayerNear and 0.5 or 0\n\n-- Listen for new players joining\nPlayers.PlayerAdded:Connect(function(player)\n\tplayer.CharacterAdded:Connect(function(character)\n\t\t-- Wait for the root part to exist\n\t\tlocal rootPart = character:WaitForChild(\"HumanoidRootPart\", 5)\n\t\tif rootPart then\n\t\t\t-- Check immediately in case they spawn close\n\t\t\tif checkProximity() then\n\t\t\t\tisPlayerNear = true\n\t\t\t\tdoor.Transparency = 0.5\n\t\t\tend\n\t\t\t\n\t\t\t-- Listen for movement (optional, but ensures accuracy if they walk in)\n\t\t\t-- Note: For strict \"always accurate\" without polling, we rely on \n\t\t\t-- the fact that PlayerAdded/CharacterAdded covers spawns. \n\t\t\t-- If you need to detect walking in after spawn, see the \"Hybrid\" note below.\n\t\tend\n\tend)\nend)\n\n-- Listen for players leaving\nPlayers.PlayerRemoving:Connect(function(player)\n\t-- If the player who left was the one making it transparent, check again\n\tif isPlayerNear then\n\t\tisPlayerNear = checkProximity()\n\t\tdoor.Transparency = isPlayerNear and 0.5 or 0\n\tend\nend)\n\n-- OPTIONAL: If you need to detect players WALKING into the zone after spawning,\n-- use a simple Heartbeat loop with a throttle, or a Region3/OverlapParams check \n-- triggered by proximity prompts. However, for most \"door\" mechanics, \n-- detecting spawn proximity and player removal is often sufficient. \n-- If you strictly need \"walking in\" detection without per-frame polling, \n-- consider using a ProximityPrompt on the door instead.\n```\n\n### Explanation of Choice\n\n**I chose an event-driven approach using `PlayerAdded` and `PlayerRemoving` because it eliminates the continuous CPU cost of per-frame distance calculations, only executing logic when the set of active players changes, which aligns with the Roblox documentation's recommendation to \"write event-driven code rather than per-frame calculations\" [4].**\n\n### Important Note on \"Walking In\" Detection\n\nThe code above handles players who **spawn** near the door or **leave** the game. It does **not** handle a player who spawns far away and then **walks** into the 10-stud radius, because that would require either:\n1.  **Polling** (which you wanted to avoid).\n2.  **ProximityPrompts** (if the door has a prompt).\n3.  **A throttled Heartbeat loop** (if you must detect walking).\n\nIf you **must** detect players walking into the zone, here is the **throttled** alternative using `RunService.Heartbeat` with a throttle, which is still more efficient than `wait()` in a `while true` loop because it uses the engine's frame timing and can be easily throttled:\n\n```lua\nlocal RunService = game:GetService(\"RunService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal door = script.Parent\nlocal lastCheckTime = 0\nlocal CHECK_INTERVAL = 0.25 -- Check every 0.25 seconds instead of every frame\n\nlocal function checkProximity()\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal character = player.Character\n\t\tif character and character:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\tlocal rootPart = character:FindFirstChild(\"HumanoidRootPart\")\n\t\t\tif (rootPart.Position - door.Position).Magnitude < 10 then\n\t\t\t\treturn true\n\t\t\tend\n\t\tend\n\tend\n\treturn false\nend\n\nRunService.Heartbeat:Connect(function(deltaTime)\n\tlocal currentTime = tick()\n\tif currentTime - lastCheckTime >= CHECK_INTERVAL then\n\t\tlastCheckTime = currentTime\n\t\tlocal isNear = checkProximity()\n\t\tdoor.Transparency = isNear and 0.5 or 0\n\tend\nend)\n```\n\n**Why this is better:**\n*   **Throttled:** It only calculates distances 4 times per second instead of 60 times per second, reducing CPU load by ~93% [4].\n*   **Accurate:** It detects players walking into the zone.\n*   **Event-Driven Hybrid:** It uses `Heartbeat` but with a throttle, which is a common pattern for spatial checks that can't be fully event-driven [4].\n\n### Recommendation\n\nIf you can use **ProximityPrompts**, that is the most performant and user-friendly solution. If not, the **throttled Heartbeat** approach is the best balance of performance and accuracy. The pure event-driven approach (first code block) is the most performant but has the limitation of not detecting walking.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Optimize your game > Cull nonessential content > Delete layered transparencies](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/optimize-your-experience#delete-layered-transparencies) · retrieved, not cited\n2. [Design for performance > Streaming and teleportation](https://create.roblox.com/docs/performance-optimization/design#streaming-and-teleportation) · retrieved, not cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n4. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · cited\n"
+  },
+  "PERF-02": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "aac1c5451ba098bf",
+   "reasons": [
+    "require:react: reacts to instances streaming in or out"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:wait_for_child",
+     "ok": true
+    },
+    {
+     "id": "require:timeout",
+     "ok": true
+    },
+    {
+     "id": "require:streaming_mode",
+     "ok": true
+    },
+    {
+     "id": "require:react",
+     "ok": false,
+     "detail": "reacts to instances streaming in or out"
+    },
+    {
+     "id": "forbid:long_path",
+     "ok": true
+    }
+   ],
+   "seconds": 162.2,
+   "timings": {
+    "luau_check_s": 0.17
+   },
+   "blocks": 2,
+   "answer_chars": 6420,
+   "answer_sha256": "0696d865c18fe34c7da051e176223f871c150670b852a3cd059f82619d5c6eec",
+   "packs": [
+    "roblox-performance-streaming"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-performance-streaming"
+     ],
+     "chars": 1050
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "To make this LocalScript safe for StreamingEnabled, we need to address three main issues:\n\n1.  **Long Path Indexing:** Directly indexing `workspace.Map.Building.Door` will error if any part of that hierarchy hasn't replicated to the client yet. We must use `WaitForChild` with timeouts for each step.\n2.  **Streaming State:** Even if the instance exists, it might not be \"streamed in\" (visible/active) yet. We should verify the instance is actually present in the workspace before connecting events or reading properties.\n3.  **Boss Persistence:** The Boss model should be marked as \"Persistent\" so it never streams out. This must be done from a **Server Script**, as LocalScripts cannot change streaming modes.\n\n### Step 1: Server Script (Mark Boss as Persistent)\n\nCreate a new **Script** (not LocalScript) in `ServerScriptService` to ensure the Boss is always loaded for all players.\n\n```lua\n-- ServerScriptService/MakeBossPersistent.lua\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal RunService = game:GetService(\"RunService\")\n\n-- Wait for the map to exist\nlocal workspace = game:GetService(\"Workspace\")\nlocal map = workspace:WaitForChild(\"Map\", 10)\n\n-- Wait for the Boss model\nlocal boss = map:WaitForChild(\"Boss\", 10)\n\n-- Set the model to Persistent so it never streams out\nif boss:IsA(\"Model\") then\n\tboss.ModelStreamingMode = Enum.ModelStreamingMode.Persistent\n\tprint(\"Boss model set to Persistent.\")\nelse\n\twarn(\"Boss is not a Model!\")\nend\n```\n\n### Step 2: Rewritten LocalScript (Safe Streaming)\n\nHere is the rewritten LocalScript. It uses `WaitForChild` with timeouts, checks if instances are actually streamed in, and handles the door touch safely.\n\n```lua\n-- StarterPlayerScripts/SafeStreamingDoorAndBoss.lua\nlocal Players = game:GetService(\"Players\")\nlocal RunService = game:GetService(\"RunService\")\n\nlocal player = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoidRootPart = character:WaitForChild(\"HumanoidRootPart\")\n\n-- Helper function to safely get a child with timeout\nlocal function safeWaitForChild(parent, name, timeout)\n\tlocal child = parent:WaitForChild(name, timeout)\n\tif not child then\n\t\twarn(string.format(\"Timeout waiting for %s in %s\", name, parent:GetFullName()))\n\t\treturn nil\n\tend\n\treturn child\nend\n\n-- Helper function to check if an instance is streamed in\nlocal function isStreamedIn(instance)\n\t-- Check if the instance exists in the workspace hierarchy\n\tif not instance:IsDescendantOf(workspace) then\n\t\treturn false\n\tend\n\t-- For parts, check if they are actually loaded\n\tif instance:IsA(\"BasePart\") then\n\t\treturn instance:IsA(\"BasePart\") and instance.Transparency < 1 or instance.CanCollide -- Simplified check; better to use IsStreamedIn if available\n\tend\n\treturn true\nend\n\n-- Wait for the Map structure\nlocal map = safeWaitForChild(workspace, \"Map\", 15)\nif not map then\n\twarn(\"Map not found. Exiting LocalScript.\")\n\treturn\nend\n\n-- Wait for the Building and Door\nlocal building = safeWaitForChild(map, \"Building\", 10)\nif not building then\n\twarn(\"Building not found.\")\n\treturn\nend\n\nlocal door = safeWaitForChild(building, \"Door\", 10)\nif not door then\n\twarn(\"Door not found.\")\n\treturn\nend\n\n-- Wait for the Boss model\nlocal boss = safeWaitForChild(map, \"Boss\", 10)\nif not boss then\n\twarn(\"Boss not found.\")\n\treturn\nend\n\n-- Verify Boss is streamed in (it should be Persistent, but double-check)\nlocal bossHumanoid = boss:WaitForChild(\"Humanoid\", 5)\nif bossHumanoid then\n\tprint(\"Boss Health:\", bossHumanoid.Health)\nelse\n\twarn(\"Boss Humanoid not found.\")\nend\n\n-- Connect to Door Touched event\n-- Note: Touched events only fire when the part is streamed in\ndoor.Touched:Connect(function(hit)\n\t-- Check if the hitter is a part of the player's character\n\tlocal character = hit.Parent\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif humanoid and humanoid.Parent == player.Character then\n\t\tprint(\"Door touched by player!\")\n\t\t-- Add your door interaction logic here\n\tend\nend)\n\n-- Optional: React to streaming changes\n-- If the door streams out, disconnect the event to prevent errors\ndoor:GetPropertyChangedSignal(\"Parent\"):Connect(function()\n\tif not door:IsDescendantOf(workspace) then\n\t\tprint(\"Door has streamed out.\")\n\t\t-- You might want to disconnect the Touched event here if you have a reference to it\n\tend\nend)\n```\n\n### Key Changes Explained\n\n1.  **`WaitForChild` with Timeouts:** Instead of `workspace.Map.Building.Door`, we use `safeWaitForChild` for each level (`Map`, `Building`, `Door`, `Boss`). This prevents errors if the client hasn't received the instance yet.\n2.  **Streaming Check:** The `isStreamedIn` helper (though simplified here) ensures we only interact with instances that are actually present in the workspace. For the Boss, we assume it's persistent, but we still wait for its `Humanoid`.\n3.  **Server-Side Persistence:** The Boss model is marked as `Persistent` in a Server Script, ensuring it never streams out. This is critical for game logic that relies on the Boss always being available.\n4.  **Event Safety:** The `Touched` event is connected only after the door is confirmed to exist. We also check if the hitter is the player's character to avoid false positives.\n5.  **Property Change Signal:** We listen to `Parent` changes on the door to detect if it streams out, allowing us to disconnect events if necessary.\n\n### References\n\n*   [1] Techniques and conversion > Script patterns > Instance property reads\n*   [4] Instance > WaitForChild\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Techniques and conversion > Script patterns > Instance property reads](https://create.roblox.com/docs/workspace/streaming/techniques#instance-property-reads) · cited\n2. [Studio > EnableStudioStreaming](https://create.roblox.com/docs/reference/engine/classes/Studio#EnableStudioStreaming) · retrieved, not cited\n3. [Instance streaming > Pause screen customization](https://create.roblox.com/docs/workspace/streaming#pause-screen-customization) · retrieved, not cited\n4. [Instance > WaitForChild](https://create.roblox.com/docs/reference/engine/classes/Instance#WaitForChild) · cited\n"
+  },
+  "PERF-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "ec2ed653ca8a6499",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    }
+   ],
+   "seconds": 139.5,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.59
+   },
+   "blocks": 2,
+   "answer_chars": 4918,
+   "answer_sha256": "2392bf4596be15f36e505cf1e56b1c3cdfb22035563f1c51703e5787ef9f31f5",
+   "packs": [
+    "roblox-performance-streaming"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 296
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-performance-streaming"
+     ],
+     "chars": 1050
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `BulletPool` ModuleScript. It uses a standard Lua table as a stack for $O(1)$ allocation and deallocation, keeping the pool size strictly bounded by the `size` argument.\n\n```lua\n-- // BulletPool\n-- // A fixed-size object pool for high-frequency bullets to prevent GC spikes.\n-- // Usage:\n-- //   local BulletPool = require(path.to.BulletPool)\n-- //   local pool = BulletPool.new(200, templatePart)\n-- //   local bullet = pool:get()\n-- //   if bullet then\n-- //       bullet.CFrame = CFrame.new(origin, target)\n-- //       bullet.Velocity = direction * speed\n-- //       task.delay(duration, function() pool:release(bullet) end)\n-- //   end\n\nlocal BulletPool = {}\nBulletPool.__index = BulletPool\n\nfunction BulletPool.new(size: number, template: BasePart)\n\tassert(type(size) == \"number\" and size > 0, \"size must be a positive number\")\n\tassert(template:IsA(\"BasePart\"), \"template must be a BasePart\")\n\n\tlocal self = setmetatable({\n\t\t_maxSize = size,\n\t\t_stack = {}, -- Acts as a stack; top of stack is the next available part\n\t}, BulletPool)\n\n\t-- Pre-instantiate the pool\n\tfor i = 1, size do\n\t\tlocal clone = template:Clone()\n\t\tclone.Parent = nil -- Parked in the pool, not in the workspace\n\t\ttable.insert(self._stack, clone)\n\tend\n\n\treturn self\nend\n\n-- // Retrieves an idle part from the pool.\n-- // Returns the part parented to Workspace, or nil if the pool is exhausted.\nfunction BulletPool:get(): BasePart?\n\tif #self._stack > 0 then\n\t\tlocal part = table.remove(self._stack)\n\t\tpart.Parent = workspace\n\t\treturn part\n\tend\n\t\n\treturn nil\nend\n\n-- // Returns a part to the pool.\n-- // Parks the part (Parent = nil) and makes it available for reuse.\n-- // Safely ignores parts that are already in the pool (already idle).\nfunction BulletPool:release(part: BasePart)\n\tif not part then return end\n\t\n\t-- Safety check: if the part is already parented to nil, it's already in the pool.\n\t-- We ignore it to prevent double-insertion and stack corruption.\n\tif part.Parent == nil then\n\t\treturn\n\tend\n\n\tpart.Parent = nil\n\ttable.insert(self._stack, part)\nend\n\n-- // Returns the number of currently idle parts available in the pool.\nfunction BulletPool:idleCount(): number\n\treturn #self._stack\nend\n\nreturn BulletPool\n```\n\n### Implementation Details\n\n1.  **Pre-allocation**: The `new` method clones the `template` exactly `size` times immediately. This ensures zero instance creation latency during the actual gameplay loop [1].\n2.  **Stack-based Allocation**: We use a Lua table as a stack (`table.insert` and `table.remove`). This provides $O(1)$ performance for both `get()` and `release()`, which is critical for a 20 bullets/second fire rate.\n3.  **State Management**:\n    *   **Idle**: `Parent` is `nil`.\n    *   **Active**: `Parent` is `workspace`.\n4.  **Safety**:\n    *   `get()` returns `nil` if the stack is empty, preventing the script from creating new parts and breaking the memory budget.\n    *   `release()` checks `part.Parent == nil` before inserting. If a part is released twice (or released while already pooled), it is ignored, preventing the pool size from exceeding `size` [1].\n\n### Usage Example\n\n```lua\n-- // Server Script\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal BulletPool = require(ReplicatedStorage.BulletPool)\n\n-- Create a template bullet (invisible, CanCollide = false, CustomPhysicalProperties)\nlocal template = Instance.new(\"Part\")\ntemplate.Size = Vector3.new(0.2, 0.2, 1)\ntemplate.Anchored = true\ntemplate.CanCollide = false\ntemplate.Material = Enum.Material.Neon\ntemplate.Color = Color3.new(1, 0, 0)\n\n-- Initialize pool with 100 bullets\nlocal pool = BulletPool.new(100, template)\n\n-- Fire function\nlocal function fireBullet(origin, direction)\n\tlocal bullet = pool:get()\n\tif bullet then\n\t\tbullet.CFrame = CFrame.new(origin, origin + direction) * CFrame.new(0, 0, -0.5)\n\t\tbullet.Velocity = direction * 200 -- Example velocity\n\t\t\n\t\t-- Auto-release after 2 seconds\n\t\ttask.delay(2, function()\n\t\t\tpool:release(bullet)\n\t\tend)\n\telse\n\t\twarn(\"Bullet pool exhausted! Consider increasing size.\")\n\tend\nend\n```\n\n### References\n[1] Reuse code > Anatomy of a module script\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Reuse code > Anatomy of a module script](https://create.roblox.com/docs/scripting/module#anatomy-of-a-module-script) · cited\n2. [Roblox for Unity developers > Scripting](https://create.roblox.com/docs/unity#scripting) · retrieved, not cited\n3. [Services](https://create.roblox.com/docs/scripting/services) · retrieved, not cited\n4. [Client-server runtime > Replication](https://create.roblox.com/docs/projects/client-server#replication) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 1,
+  "fail": 2,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 0.3333,
+  "median_seconds": 159.1
+ }
+}
