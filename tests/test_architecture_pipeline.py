@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from star.architecture_pipeline import create_package, make_plan, validate_brief
+from star.architecture_pipeline import PALETTES, STYLE_GRAMMARS, create_package, make_plan, validate_brief
+from star.architecture_quality import audit_plan
 
 
 BASE = {"name": "Harbor Warehouse", "style": "industrial", "width_studs": 48,
@@ -149,3 +150,21 @@ def test_preview_is_optional_and_requires_genuine_png_evidence(tmp_path):
     assert manifest["preview_rendered"] is True
     assert manifest["visual_quality_verified"] is False
     assert "building-preview.png" in manifest["files"]
+
+
+@pytest.mark.parametrize("style,signature", [
+    ("storybook", "storybook_rail_front_0"),
+    ("industrial", "entry_canopy"),
+    ("modern", "modern_sunshade_front_0"),
+    ("spaceport", "pier_front_0"),
+    ("gothic", "crown_front_f0_b0"),
+    ("brutalist", "entry_canopy"),
+    ("coastal", "coastal_porch_roof"),
+    ("anime_city", "anime_shop_sign"),
+])
+def test_each_eight_style_grammars_produce_distinct_valid_structural_detail(style, signature):
+    assert len(PALETTES) == len(STYLE_GRAMMARS) == 8
+    plan = make_plan(validate_brief({**BASE, "style": style}))
+    assert plan["style_grammar"] == STYLE_GRAMMARS[style]
+    assert signature in {p["name"] for p in plan["parts"]}
+    assert audit_plan(plan)["valid"] is True
