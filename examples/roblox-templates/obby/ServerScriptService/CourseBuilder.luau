@@ -14,7 +14,7 @@ local CourseBuilder = {}
 local PLATFORM_Y = 8
 local SPACING = 16
 
-local function makePart(parent: Model, name: string, position: Vector3, size: Vector3, color: Color3, material: EnumItem): Part
+local function makePart(parent: Model, name: string, position: Vector3, size: Vector3, color: Color3, material: Enum.Material): Part
 	local part = Instance.new("Part")
 	part.Name = name
 	part.Anchored = true
