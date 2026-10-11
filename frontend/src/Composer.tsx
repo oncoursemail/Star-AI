@@ -118,6 +118,8 @@ export type ComposerProps = {
   onImageMode: (on: boolean) => void
   imageReady: boolean
   onImageSetup: () => void
+  imageSize: string
+  onImageSize: (size: string) => void
   teamMode: boolean
   onTeamMode: (on: boolean) => void
   team: Availability
@@ -129,6 +131,14 @@ export type ComposerProps = {
   connection: Connection
   onOpenConnection: () => void
 }
+
+/** The sizes the host offers (star/image_gen.py SIZES). An attached picture keeps its own shape; Draft makes it small and fast. */
+export const IMAGE_SIZES = [
+  {id: 'square', label: 'Square 1024'},
+  {id: 'wide', label: 'Wide 1280 x 720'},
+  {id: 'tall', label: 'Tall 720 x 1280'},
+  {id: 'draft', label: 'Draft 512 (fastest)'},
+]
 
 /** The one place a message is written: text, attachments, how STAR should work, and what it will talk to. */
 export function Composer(props: ComposerProps) {
@@ -193,7 +203,7 @@ export function Composer(props: ComposerProps) {
         ref={inputRef}
         className="cmp-input"
         rows={1}
-        placeholder={imageMode ? 'Describe the image you want to create' : teamMode ? 'Give the team an objective' : 'Message STAR'}
+        placeholder={imageMode ? (files.length > 1 ? 'Describe what should appear in the masked area' : files.length === 1 ? 'Describe how to change the attached picture' : 'Describe the image you want to create') : teamMode ? 'Give the team an objective' : 'Message STAR'}
         value={value}
         onChange={event => onChange(event.target.value)}
         onKeyDown={event => {
@@ -229,7 +239,7 @@ export function Composer(props: ComposerProps) {
                 <motion.div className="composer-menu cmp-menu" data-side={side} role="menu" aria-label="Add to this message" variants={menuIn} initial="hidden" animate="shown" exit="exit" onKeyDown={onMenuKey}>
                   <MenuItem icon={<Paperclip size={16} />} label="Attach files" hint="Images, video, audio" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
                   <MenuItem icon={<Mic size={16} />} label="Transcribe audio" hint="Adds the transcript" onSelect={() => pick(props.onTranscribe)} />
-                  <MenuItem icon={<ImagePlus size={16} />} label="Create image" hint="Local ComfyUI" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
+                  <MenuItem icon={<ImagePlus size={16} />} label="Create image" hint="On this PC" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
                   <div className="cmp-menu-rule" role="separator" />
                   <MenuItem icon={<Globe size={16} />} label="Search the web" hint="Adds sources" checked={research} availability={special ? {ok: false, reason: 'Not in this mode'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
                   <MenuItem icon={<Users size={16} />} label="Use a team" hint="4 read-only stages" checked={teamMode} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.team} onSelect={() => pick(() => props.onTeamMode(!teamMode))} />
@@ -242,6 +252,16 @@ export function Composer(props: ComposerProps) {
           {imageMode && (
             <button type="button" className="composer-image-chip cmp-chip" aria-label="Stop creating an image" disabled={busy} onClick={() => props.onImageMode(false)}>
               <ImagePlus size={14} aria-hidden="true" /> Image <X size={13} aria-hidden="true" />
+            </button>
+          )}
+          {imageMode && (
+            <select className="cmp-size" aria-label="Image size" value={props.imageSize} disabled={busy} onChange={event => props.onImageSize(event.target.value)}>
+              {IMAGE_SIZES.map(size => <option key={size.id} value={size.id}>{size.label}</option>)}
+            </select>
+          )}
+          {imageMode && files.length < 2 && (
+            <button type="button" className="cmp-link" disabled={busy} onClick={props.onAttach}>
+              {files.length === 0 ? 'Attach a picture to edit it' : 'Add a mask (white = the part to change)'}
             </button>
           )}
           {imageMode && !props.imageReady && (
