@@ -34,8 +34,7 @@ from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
 from .studio_connections import connection_status, validate_target, select_instance
-from .studio_host import (CHANGING_ACTIONS as STUDIO_HOST_CHANGES, STUDIO_HOST_ACTIONS,
-                          handle as handle_studio_host)
+from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
@@ -68,8 +67,8 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
 # Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
 # the model asked for (star/roblox_cloud.py, docs/ROBLOX_ACCESS.md). Never a publish action itself.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
-# Settings > Roblox Studio: the STAR Studio server's address and command (star/studio_host.py).
-# Typed by the owner only; the stored command is never sent back to the page.
+# Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
+# (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
@@ -867,11 +866,6 @@ def launch():
                     old.save(self.settings_file)
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action in STUDIO_HOST_ACTIONS:
-                    if action in STUDIO_HOST_CHANGES:
-                        if self.active_task:
-                            raise RuntimeError('Wait for the current task before changing the Studio server connection')
-                        # An earlier test result belongs to the earlier connection.
-                        self.studio_status=None
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
                 if action=='saveProviderKey':
                     name=str(body.get('provider',''))

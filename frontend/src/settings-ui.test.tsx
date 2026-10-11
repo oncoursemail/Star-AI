@@ -4,8 +4,9 @@
  * Qt bridge.
  *
  * Contract under test: what the page sends to the desktop host (`voiceListVoices`, `voiceStatus`,
- * `voicePreviewVoice`, `voiceSelectVoice`, `saveSettings`, `studioHostStatus`, `studioHostSave`,
- * `studioHostClear`, `discoverStudio`), the events it accepts back, and the text the owner reads.
+ * `voicePreviewVoice`, `voiceSelectVoice`, `saveSettings`, `studioHostStatus`, `discoverStudio`; never
+ * `studioHostSave` or `studioHostClear`, which are not part of v0.9.0), the events it accepts back, and
+ * the text the owner reads.
  * Nothing here depends on class names or markup, so the sections can be restyled freely.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it} from 'vitest'
@@ -50,7 +51,7 @@ function voiceHost(over: {selected?: Record<string, unknown>; engine?: Record<st
 }
 /** Answer the Studio actions; `saveSettings` reports the new target like the real host and the next bootstrap agrees. */
 function studioHost(over: {target?: string; host?: Record<string, unknown>} = {}) {
-  let stored = {configured: false, source: 'none', ...over.host}
+  const stored = {configured: false, source: 'none', ...over.host}
   if (over.target) desktop.host({settings: {...backendSettings, studio_target: over.target}})
   desktop.onAction('saveSettings', call => {
     const next = {...backendSettings, ...(call.payload.settings as Record<string, unknown>)}
@@ -58,8 +59,6 @@ function studioHost(over: {target?: string; host?: Record<string, unknown>} = {}
     return {ok: true, data: next}
   })
   desktop.onAction('studioHostStatus', () => ({ok: true, data: stored}))
-  desktop.onAction('studioHostSave', () => { stored = {configured: true, source: 'settings'}; return {ok: true, data: stored} })
-  desktop.onAction('studioHostClear', () => { stored = {configured: false, source: 'none'}; return {ok: true, data: stored} })
   desktop.onAction('discoverStudio', () => ({ok: true, pending: true}))
 }
 async function openSettings() {
@@ -282,7 +281,7 @@ describe('Settings > Roblox Studio', () => {
     expect(screen.getByRole('region', {name: 'Star\'s voice'})).toBeTruthy()
   })
 
-  it('saves the STAR Studio server choice and then shows the address and command fields', async () => {
+  it('saves the STAR Studio server choice and then shows the state of the connection, with nothing to type', async () => {
     studioHost()
     const user = await openSettings()
     const section = await studioSection()
@@ -290,11 +289,17 @@ describe('Settings > Roblox Studio', () => {
     await waitFor(() => expect(desktop.sent('saveSettings')).toHaveLength(1))
     expect(desktop.sent('saveSettings')[0].payload).toEqual({settings: {studio_target: 'host_launcher'}})
     await waitFor(() => expect(within(section).getByRole('radio', {name: /^STAR Studio server/})).toHaveProperty('checked', true))
-    expect(within(section).getByLabelText('Server address')).toBeTruthy()
-    expect(within(section).getByLabelText('Command on the server')).toBeTruthy()
-    expect(await within(section).findByText('No server connection is stored yet.')).toBeTruthy()
+    expect(await within(section).findByText(/No server connection is set up on this PC yet\./)).toBeTruthy()
+    expect(section.textContent).toContain('set up by the operator')
     expect(section.textContent).toContain('never asks for or stores a password')
     expect(section.textContent).toContain('edit permissions were cleared')
+    // v0.9.0: the page cannot store or remove a connection. No field, no Save, no Forget.
+    const group = within(section).getByRole('group', {name: 'STAR Studio server connection'})
+    expect(group.querySelectorAll('input, textarea, select')).toHaveLength(0)
+    expect(within(section).queryByLabelText('Server address')).toBeNull()
+    expect(within(section).queryByLabelText('Command on the server')).toBeNull()
+    expect(within(section).queryByRole('button', {name: /save server connection/i})).toBeNull()
+    expect(within(section).queryByRole('button', {name: /forget/i})).toBeNull()
   })
 
   it('keeps the earlier choice when the host does not confirm the new one', async () => {
@@ -308,48 +313,36 @@ describe('Settings > Roblox Studio', () => {
     expect(within(section).queryByLabelText('Server address')).toBeNull()
   })
 
-  it('sends the typed address and command once, then empties the fields and never shows them again', async () => {
-    studioHost({target: 'host_launcher'})
+  it('says that a connection exists without showing it, and never asks the host to store or remove one', async () => {
+    studioHost({target: 'host_launcher', host: {configured: true, source: 'settings'}})
     const user = await openSettings()
     const section = await studioSection()
-    const save = await within(section).findByRole('button', {name: 'Save server connection'})
-    expect(save).toHaveProperty('disabled', true)                    // both values are needed
-    await user.type(within(section).getByLabelText('Server address'), 'star@studio.example.org')
-    await user.type(within(section).getByLabelText('Command on the server'), '/home/star/bin/studio-mcp.sh')
-    await user.click(save)
-    await waitFor(() => expect(desktop.sent('studioHostSave')).toHaveLength(1))
-    expect(desktop.sent('studioHostSave')[0].payload).toEqual({address: 'star@studio.example.org', command: '/home/star/bin/studio-mcp.sh'})
-    expect(await within(section).findByText(/A server connection is stored\. It is not shown again/)).toBeTruthy()
-    expect((within(section).getByLabelText('Server address') as HTMLInputElement).value).toBe('')
-    expect((within(section).getByLabelText('Command on the server') as HTMLInputElement).value).toBe('')
-    expect(document.body.textContent).not.toContain('studio.example.org')
-    // A stored connection can be forgotten.
-    await user.click(within(section).getByRole('button', {name: 'Forget it'}))
-    await waitFor(() => expect(desktop.sent('studioHostClear')).toHaveLength(1))
-    expect(await within(section).findByText('No server connection is stored yet.')).toBeTruthy()
+    expect(await within(section).findByText(/A server connection is set up on this PC\. Its address and command are not shown here\./)).toBeTruthy()
+    const group = within(section).getByRole('group', {name: 'STAR Studio server connection'})
+    expect(group.querySelectorAll('input, textarea, select, button')).toHaveLength(0)
+    // The only buttons in the section are the test and (after a good test) the link to Tools.
+    expect(within(section).getAllByRole('button').map(button => button.textContent?.trim())).toEqual(['Test connection'])
+    await user.click(within(section).getByRole('button', {name: 'Test connection'}))
+    await waitFor(() => expect(desktop.sent('discoverStudio')).toHaveLength(1))
+    expect(desktop.sent('studioHostSave')).toHaveLength(0)
+    expect(desktop.sent('studioHostClear')).toHaveLength(0)
+    expect(desktop.sent('studioHostStatus').every(call => Object.keys(call.payload ?? {}).length === 0)).toBe(true)
   })
 
-  it('shows the host\'s refusal of a command and keeps what was typed so it can be corrected', async () => {
-    studioHost({target: 'host_launcher'})
-    desktop.onAction('studioHostSave', () => ({ok: false, error: 'ValueError: The command may use letters, digits and _ . / : = @ % + , - only'}))
-    const user = await openSettings()
+  it('says when the connection file is damaged and leaves the repair to the operator', async () => {
+    studioHost({target: 'host_launcher', host: {configured: false, source: 'invalid'}})
+    await openSettings()
     const section = await studioSection()
-    await user.type(await within(section).findByLabelText('Server address'), 'star@studio.example.org')
-    await user.type(within(section).getByLabelText('Command on the server'), 'run.sh; id')
-    await user.click(within(section).getByRole('button', {name: 'Save server connection'}))
-    const alert = await within(section).findByRole('alert')
-    expect(alert.textContent).toContain('The command may use letters, digits')
-    expect(alert.textContent).not.toContain('ValueError')
-    expect((within(section).getByLabelText('Command on the server') as HTMLInputElement).value).toBe('run.sh; id')
-    expect(within(section).queryByText(/A server connection is stored/)).toBeNull()
+    expect(await within(section).findByText(/is damaged and is not used\. The operator has to set it up again\./)).toBeTruthy()
+    expect(within(section).queryByRole('button', {name: /forget|save/i})).toBeNull()
   })
 
-  it('says when the operator\'s own setting on this PC is used instead of the stored one', async () => {
+  it('says when the operator\'s own setting on this PC is the one in use', async () => {
     studioHost({target: 'host_launcher', host: {configured: true, source: 'environment'}})
     await openSettings()
     const section = await studioSection()
     expect(await within(section).findByText(/set by the operator on this PC/)).toBeTruthy()
-    expect(within(section).queryByRole('button', {name: 'Forget it'})).toBeNull()
+    expect(within(section).queryByRole('button', {name: /forget|save/i})).toBeNull()
   })
 
   it('tests the chosen Studio through the host and reports what answered', async () => {
@@ -393,7 +386,7 @@ describe('Settings > Roblox Studio', () => {
     await waitFor(() => expect(desktop.sent('discoverStudio')).toHaveLength(1))
     await desktop.emitRaw(desktop.requestOf('discoverStudio'), 'result', report('host_launcher', {
       state: 'unconfigured', instances: [], tool_count: 0, reason_code: 'host_launcher_unavailable', diagnostic: {stage: 'configuration', reason: 'not_configured'}}))
-    await waitFor(() => expect(within(section).getByRole('status').textContent).toContain('No server connection is stored, so nothing was started'))
+    await waitFor(() => expect(within(section).getByRole('status').textContent).toContain('No server connection is set up on this PC, so nothing was started'))
   })
 
   it('does not show an answer about the other Studio, or a host error, as a successful test', async () => {

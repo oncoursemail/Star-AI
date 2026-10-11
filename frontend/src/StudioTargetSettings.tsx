@@ -2,10 +2,11 @@
  * Settings > Roblox Studio: which Studio STAR works in.
  *
  * Two choices: Roblox Studio on this PC, or the STAR Studio server (a Studio on the owner's server).
- * The choice is the saved `studio_target` (`saveSettings`); the server's address and command are
- * stored by `studioHostSave` (star/studio_host.py) and are never sent back to this page, so the fields
- * are write-only like a key field. "Test connection" is the host's own check (`discoverStudio`): it
- * starts the connector, lists its tools and the open places, and changes nothing in Studio.
+ * The choice is the saved `studio_target` (`saveSettings`). The server connection itself is set up by
+ * the operator outside the app (docs/STUDIO_HOST_CONFIGURATION.md): this page only reads whether one
+ * exists (`studioHostStatus`, star/studio_host.py) and never receives or stores its address or command.
+ * "Test connection" is the host's own check (`discoverStudio`): it starts the connector, lists its
+ * tools and the open places, and changes nothing in Studio.
  *
  * The sandbox rule is stated here in words because it is the thing the owner must be able to rely on;
  * the rule itself is code (star/studio_loop.py) and no setting on this page can widen it.
@@ -24,7 +25,7 @@ import './settings-ui.css'
 const TEST_LIMIT_MS=80_000
 const CHOICES:Array<{id:StudioTarget;label:string;note:string}>=[
   {id:'local_pc',label:'This PC',note:'Roblox Studio that is open on this PC. In Studio, open Assistant, Manage MCP Servers, and switch Studio on as an MCP server.'},
-  {id:'host_launcher',label:'STAR Studio server',note:'A Roblox Studio that runs on your STAR server, signed in as STAR\'s own Roblox account. It needs the server connection below.'},
+  {id:'host_launcher',label:'STAR Studio server',note:'A Roblox Studio that runs on your STAR server, signed in as STAR\'s own Roblox account. It needs a server connection that the operator set up on this PC.'},
 ]
 const STAGES:Record<string,string>={
   configuration:'the stored connection could not be used',
@@ -39,16 +40,16 @@ const STAGES:Record<string,string>={
 }
 const stored=(host:StudioHostStatus|null)=>{
   if(!host)return ''
-  if(host.source==='environment')return 'A server connection is set by the operator on this PC (STAR_STUDIO_MCP_COMMAND). It is used first; what you save here is kept but not used while it is set.'
-  if(host.source==='settings')return 'A server connection is stored. It is not shown again: enter both values to replace it.'
-  if(host.source==='invalid')return 'The stored server connection is damaged and is not used. Enter both values and save again.'
-  return 'No server connection is stored yet.'
+  if(host.source==='environment')return 'A server connection is set by the operator on this PC (STAR_STUDIO_MCP_COMMAND).'
+  if(host.source==='settings')return 'A server connection is set up on this PC. Its address and command are not shown here.'
+  if(host.source==='invalid')return 'The server connection file on this PC is damaged and is not used. The operator has to set it up again.'
+  return 'No server connection is set up on this PC yet. It is set up by the operator, not from this page.'
 }
 const describe=(report:StudioConnectionStatus)=>{
   const places=report.instances.map(item=>item.name).join(', ')
   if(report.state==='connected')return `Connected. The Studio connector answered with ${report.tool_count} tools. Open in Studio: ${places}.`
   if(report.state==='no_instances')return 'The connector answered, but no Studio place is open on it. Open a place there and test again.'
-  if(report.state==='unconfigured')return 'No server connection is stored, so nothing was started. Enter the address and the command, then save.'
+  if(report.state==='unconfigured')return 'No server connection is set up on this PC, so nothing was started.'
   if(report.state==='unavailable'){
     const stage=report.diagnostic?.stage||''
     const why=report.diagnostic?.reason==='timeout'?'it took too long':report.diagnostic?.reason==='not_configured'?'no connection is stored':''
@@ -62,9 +63,7 @@ export function StudioTargetSettings({settings,disabled=false,onSaved,openTools}
 }){
   const [target,setTarget]=useState<StudioTarget>(settings.studio_target??'local_pc')
   const [host,setHost]=useState<StudioHostStatus|null>(null)
-  const [address,setAddress]=useState('')
-  const [command,setCommand]=useState('')
-  const [busy,setBusy]=useState<''|'target'|'save'|'clear'|'test'>('')
+  const [busy,setBusy]=useState<''|'target'|'test'>('')
   const [report,setReport]=useState<StudioConnectionStatus|null>(null)
   const [error,setError]=useState('')
   const [notice,setNotice]=useState('')
@@ -107,25 +106,6 @@ export function StudioTargetSettings({settings,disabled=false,onSaved,openTools}
     setNotice('Saved. The chosen place and its edit permissions were cleared, because they belong to the other Studio.')
     saved.current?.()
   }
-  const saveHost=async()=>{
-    if(locked)return
-    setBusy('save');setError('');setNotice('');setReport(null)
-    const reply=await request<StudioHostStatus>('studioHostSave',{address,command})
-    setBusy('')
-    if(!reply.ok||!reply.data){setError(plainError(reply.error,'The server connection could not be saved.'));return}
-    setHost(reply.data);setAddress('');setCommand('')
-    setNotice(reply.data.source==='settings'?'Server connection saved. Test it before starting a Studio task.':'Saved, but the operator\'s own setting on this PC is used first.')
-    saved.current?.()
-  }
-  const forgetHost=async()=>{
-    if(locked)return
-    setBusy('clear');setError('');setNotice('');setReport(null)
-    const reply=await request<StudioHostStatus>('studioHostClear')
-    setBusy('')
-    if(!reply.ok||!reply.data){setError(plainError(reply.error,'The server connection could not be removed.'));return}
-    setHost(reply.data);setNotice('The stored server connection was removed.')
-    saved.current?.()
-  }
   const runTest=async()=>{
     if(locked)return
     const requestId=crypto.randomUUID()
@@ -155,17 +135,9 @@ export function StudioTargetSettings({settings,disabled=false,onSaved,openTools}
     </div>
     {server&&<div className="media-capability" role="group" aria-label="STAR Studio server connection">
       <h3>Server connection</h3>
-      <p className="voice-summary">STAR starts <code>ssh</code> with the key this PC already has (it never asks for or stores a password) and runs one command on the server. Letters, digits and <code>_ . / : = @ % + , -</code> only.</p>
-      <div className="media-fields">
-        <label className="media-field">Server address
-          <input value={address} disabled={locked} autoComplete="off" spellCheck={false} placeholder="user@address" onChange={event=>setAddress(event.target.value)}/></label>
-        <label className="media-field">Command on the server
-          <input value={command} disabled={locked} autoComplete="off" spellCheck={false} placeholder="the command that starts the Studio connector" onChange={event=>setCommand(event.target.value)}/></label>
-      </div>
+      <p className="voice-summary">The connection to the STAR Studio server is set up by the operator on this PC, outside this page. STAR never asks for or stores a password for it.</p>
       <div className="media-engine">
-        <span className="media-engine-state">{stored(host)||'Reading the stored state…'}</span>
-        <button type="button" className="learn-button is-primary" disabled={locked||!address.trim()||!command.trim()} onClick={()=>void saveHost()}>{busy==='save'?'Saving…':'Save server connection'}</button>
-        {(host?.source==='settings'||host?.source==='invalid')&&<button type="button" className="learn-button" disabled={locked} onClick={()=>void forgetHost()}>{busy==='clear'?'Removing…':'Forget it'}</button>}
+        <span className="media-engine-state">{stored(host)||'Reading the state…'}</span>
       </div>
     </div>}
     <div className="media-engine">

@@ -186,18 +186,16 @@ def test_no_phase_can_reach_a_real_studio(tmp_path, monkeypatch):
     monkeypatch.setenv(tool.ENV_STUDIO_COMMAND, '["ssh", "operator@studio.example.org", "start.sh"]')
     env = tool.child_environment(tool.new_profile(tmp_path), SECRET, SECRET)
     assert tool.ENV_STUDIO_COMMAND not in env
-    # The address the settings phase stores is under the reserved name that never resolves, and it is
-    # one the app's own check accepts (so the phase tests the stored route, not a refusal).
-    from star import studio_host
-    assert tool.STUDIO_ADDRESS.endswith(".invalid")
-    assert studio_host.compose(tool.STUDIO_ADDRESS, tool.STUDIO_COMMAND)[:3] == ("ssh", "-o", "BatchMode=yes")
-    with pytest.raises(ValueError):
-        studio_host.compose(tool.STUDIO_ADDRESS, tool.STUDIO_REFUSED_COMMAND)
-    # This PC's own Studio is never tested: the only Test clicks are on the server choice.
+    # This PC's own Studio is never tested: the only Test click is on the server choice, and with no
+    # connection in the new profile and the operator's launcher removed, the host starts nothing.
     source = Path(tool.__file__).read_text(encoding="utf-8")
     body = source[source.index("def step_settings"):source.index("def step_followup")]
     assert body.index("'STAR Studio server'") < body.index("'Test connection'")
     assert body.rindex("'Test connection'") < body.index("'This PC')")
+    assert body.count("'Test connection'") == 1
+    # v0.9.0: the phase never types or stores a connection (the page has no such fields).
+    assert "select_all_and_type" not in body[body.index("'settings-studio-server'"):]
+    assert "wait_call('studioHostSave'" not in body and "wait_call('studioHostClear'" not in body
 
 
 def test_the_voice_preview_is_silent_unless_asked(tmp_path):

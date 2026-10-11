@@ -27,8 +27,8 @@ Phases (default: all, in this order)
                and shows the host's plain explanation when it is not (no model server needed)
     settings   Settings > Voice and Settings > Roblox Studio: both sections render from the real host,
                a voice preview and a voice choice reach the voice engine, the commanding voices appear
-               only after their switch, the STAR Studio server's address and command are stored and
-               refused by the real host, and "Test connection" answers through the host's own check
+               only after their switch, the STAR Studio server choice shows the state of the connection
+               with nothing to type or store, and "Test connection" answers through the host's own check
     followup   Fast mode in a new chat: the first message and two follow-up messages, with the time
                from Enter to the first visible words of each
 
@@ -108,10 +108,6 @@ NOT_WATCHED = re.compile(r"(?:haven't|have not|didn't|did not|can't|cannot|can n
 PROMPT_AGENT = ('Call the star_skill_catalog tool once, then tell me in one short sentence '
                 'how many Agent Skills it returned.')
 PROMPT_FOLLOW_UP = ('And what is 3+3? One short sentence.', 'Now add those two results. One short sentence.')
-# Placeholders only: `.invalid` is a reserved name that never resolves (RFC 2606).
-STUDIO_ADDRESS = 'star@studio-acceptance.invalid'
-STUDIO_COMMAND = '/home/star/bin/studio-mcp.sh'
-STUDIO_REFUSED_COMMAND = 'run.sh; id'
 ENV_EXTRA_PATH = 'STAR_ACCEPTANCE_EXTRA_PATH'
 ENV_STUDIO_COMMAND = 'STAR_STUDIO_MCP_COMMAND'
 TYPED_WHILE_STREAMING = 'typing while it streams'
@@ -1648,11 +1644,19 @@ def step_settings(d: Driver) -> None:
         before = len(calls('saveSettings'))
         d.click(studio + ' .media-option', 'STAR Studio server')
         saved = wait_call('saveSettings', before + 1)
-        d.wait_for(f"!!document.querySelector({q(studio + ' .media-field input')})", 10, 'the server address and command fields')
+        d.wait_for(f"(__acc.text({q(studio)})||'').includes('No server connection is set up on this PC yet.')", 10, 'the state of the connection')
         s.check(saved.get('ok') is True and d.settings_file().get('studio_target') == 'host_launcher',
                 'choosing the STAR Studio server is saved by the host (settings.json)', d.settings_file().get('studio_target'))
-        d.wait_for(f"(__acc.text({q(studio)})||'').includes('No server connection is stored yet.')", 10, 'the stored state')
         s.check(stored_command() is None, 'no server connection exists in a new profile')
+        # v0.9.0: the page shows the state and the test only. It has nothing to type a connection into
+        # and no way to store or remove one (the connection is operator configuration).
+        controls = d.js("(()=>{const g=document.querySelector(" + q(studio + ' [role=group][aria-label="STAR Studio server connection"]') + ");"
+                        "return g?{fields:g.querySelectorAll('input,textarea,select').length,buttons:g.querySelectorAll('button').length}:null})()")
+        s.fact('server_connection_controls', controls)
+        s.check(controls == {'fields': 0, 'buttons': 0}, 'the server connection block has no field and no button', controls)
+        labels = d.js("[...document.querySelectorAll(" + q(studio + ' button') + ")].map(b=>(b.innerText||'').trim())") or []
+        s.check(not any(word in label for label in labels for word in ('Save', 'Forget')),
+                'the section offers no Save and no Forget', labels)
         # 1. Nothing stored: the host answers "not configured" and starts nothing.
         mark = len(d.events)
         d.click(studio + ' button', 'Test connection')
@@ -1662,61 +1666,21 @@ def step_settings(d: Driver) -> None:
         s.check(first.get('ok') is True and (answer.get('data') or {}).get('state') == 'unconfigured',
                 'Test connection reached the host, which reported that no connection is stored', answer.get('data') or answer.get('text'))
         d.wait_for(f"(__acc.text({q(status)})||'').includes('nothing was started')", 10, 'the plain result of the test')
-        s.shots.append(d.shot('settings-studio-unconfigured'))
-        # 2. A command with a shell symbol is refused by the host and nothing is stored.
-        d.click(studio + ' input[placeholder="user@address"]')
-        d.select_all_and_type(STUDIO_ADDRESS)
-        d.click(studio + ' input[placeholder^="the command"]')
-        d.select_all_and_type(STUDIO_REFUSED_COMMAND)
-        d.click(studio + ' button', 'Save server connection')
-        refused = wait_call('studioHostSave', 1)
-        d.wait_for(f"!!document.querySelector({q(studio + ' [role=alert]')})", 10, 'the refusal')
-        alert = page_text(studio + ' [role=alert]')
-        s.fact('refusal', alert)
-        s.check(refused.get('ok') is False and 'shell symbols are refused' in alert and 'ValueError' not in alert,
-                'a command with a shell symbol is refused by the host, in plain words', [refused, alert])
-        s.check(stored_command() is None, 'the refused command was not stored')
-        s.shots.append(d.shot('settings-studio-refused'))
-        # 3. A valid address and command are stored, and never shown again.
-        d.click(studio + ' input[placeholder^="the command"]')
-        d.select_all_and_type(STUDIO_COMMAND)
-        d.click(studio + ' button', 'Save server connection')
-        stored = wait_call('studioHostSave', 2)
-        d.wait_for(f"(__acc.text({q(studio)})||'').includes('A server connection is stored.')", 10, 'the stored state after saving')
-        s.check(stored.get('ok') is True and stored_command() == ['ssh', '-o', 'BatchMode=yes', STUDIO_ADDRESS, STUDIO_COMMAND],
-                'the host stored ssh in key-only mode with the typed address and command', stored_command())
-        s.check(not d.js(f"document.documentElement.outerHTML.includes({q(STUDIO_ADDRESS)})"),
-                'the stored address is not in the page any more')
-        # 4. The stored command is what the host's own check starts: the reserved name cannot exist, so it fails.
-        mark = len(d.events)
-        began = time.time()
-        d.click(studio + ' button', 'Test connection')
-        wait_call('discoverStudio', 2)
-        answer = wait_event(mark, studio_result, 120, 'the second test result')
-        s.fact('test_with_placeholder', answer.get('data') or answer.get('text'))
-        s.fact('test_with_placeholder_seconds', round(time.time() - began, 1))
-        s.check((answer.get('data') or {}).get('state') == 'unavailable' and not (answer.get('data') or {}).get('instances'),
-                'with the placeholder address the host reports that it could not connect (and no Studio)',
-                answer.get('data') or answer.get('text'))
-        d.wait_for(f"(__acc.text({q(status)})||'').startsWith('Could not connect')", 10, 'the plain failure text')
         line = page_text(status)
-        s.fact('failure_text', line)
-        s.check('Nothing was changed' in line and 'Connected.' not in page_text(studio),
-                'the page says it could not connect and does not claim a connection', line)
+        s.fact('result_text', line)
+        s.check('Connected.' not in page_text(studio), 'the page does not claim a connection', line)
+        s.check(stored_command() is None and not calls('studioHostSave') and not calls('studioHostClear'),
+                'nothing was stored and the page never asked the host to store or remove a connection')
         d.box(studio + ' .learn-head')
         d.pump(0.4)
         s.shots.append(d.shot('settings-studio-server'))
-        # 5. Forget it, and go back to this PC (this PC's Studio is never tested by this tool).
-        d.click(studio + ' button', 'Forget it')
-        wait_call('studioHostClear', 1)
-        d.wait_for(f"(__acc.text({q(studio)})||'').includes('No server connection is stored yet.')", 10, 'the state after forgetting')
-        s.check(stored_command() == [], 'forgetting leaves an empty command in the profile')
+        # 2. Back to this PC (this PC's Studio is never tested by this tool).
         before = len(calls('saveSettings'))
         d.click(studio + ' .media-option', 'This PC')
         wait_call('saveSettings', before + 1)
         d.pump(0.6)
         s.check(d.settings_file().get('studio_target') == 'local_pc', 'this PC is the saved choice again')
-        s.check(len(calls('discoverStudio')) == 2, 'this PC\'s own Studio was never contacted', len(calls('discoverStudio')))
+        s.check(len(calls('discoverStudio')) == 1, 'this PC\'s own Studio was never contacted', len(calls('discoverStudio')))
         s.check(not d.key_in_page(), 'the server key is not in the page')
 
     with d.step('settings-small-window') as s:
