@@ -530,6 +530,14 @@ class Conversations:
                 'detail': 'No reply was recorded for this message. STAR may have been closed before it finished.',
                 'prompt': prompt, 'message_id': user_id, 'created': created}
 
+    def recover_turn(self, project: str, chat_id: str, message_id: int, prompt: str) -> int:
+        """Reuse an unanswered question after restart without inserting another user row."""
+        state = self.retry_state(project, chat_id)
+        if (state is None or type(message_id) is not int
+                or state['message_id'] != message_id or state['prompt'] != prompt):
+            raise ValueError('The question is no longer available for Retry')
+        return message_id
+
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
 
