@@ -145,3 +145,19 @@ def test_scan_directory_limit_is_reported(tmp_path, monkeypatch):
     result = Workspace(tmp_path).call('workspace_search', {'query': 'symbol', 'mode': 'symbols'})
     assert result['matches'] == []
     assert result['incomplete'] is True
+
+
+def test_text_search_reads_any_small_text_file_not_only_known_types(tmp_path):
+    names = ['main.c', 'lib.cc', 'app.rb', 'index.php', 'View.swift', 'Main.kt', 'level.tscn', 'water.shader',
+             'style.scss', 'App.vue', 'data.csv', 'notes.rst', 'Makefile', 'Dockerfile', 'run.bat', 'main.luau']
+    for name in names:
+        write(tmp_path, name, 'needle_in_file here')
+    (tmp_path / 'image.bin').write_bytes(b'needle_in_file' + bytes([0, 255, 254]))
+    write(tmp_path, '.hidden.txt', 'needle_in_file here')
+    write(tmp_path, 'node_modules/pkg/index.js', 'needle_in_file here')
+    workspace = Workspace(tmp_path)
+    found = {hit['file'] for hit in workspace.call('workspace_search', {'query': 'needle_in_file'})['matches']}
+    assert found == set(names)
+    # Symbol search still needs a language it can read declarations from.
+    write(tmp_path, 'tool.rb', 'def needle_symbol; end')
+    assert workspace.call('workspace_search', {'query': 'needle_symbol', 'mode': 'symbols'})['matches'] == []

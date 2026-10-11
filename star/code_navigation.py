@@ -13,10 +13,6 @@ import stat
 from pathlib import Path
 
 SOURCE_TYPES = frozenset({'.py', '.lua', '.luau', '.ts', '.tsx', '.js', '.jsx', '.gd', '.cs'})
-TEXT_TYPES = SOURCE_TYPES | frozenset({'.txt', '.md', '.json', '.yaml', '.yml', '.toml',
-                                      '.xml', '.html', '.css', '.sql', '.ini', '.cfg',
-                                      '.sh', '.ps1', '.rs', '.go', '.java', '.cpp',
-                                      '.hpp', '.h'})
 SKIP_DIRS = frozenset({'node_modules', '__pycache__', 'dist', 'build', '.git',
                        '.venv', 'venv', '.next', '.nuxt', 'target', 'coverage',
                        'site-packages', 'vendor', 'bin', 'obj'})
@@ -57,7 +53,7 @@ def _files(workspace, suffixes, scan):
                           and not (Path(parent) / name).is_symlink()), key=str.casefold)
         for name in sorted(files, key=str.casefold):
             if (name.startswith('.') or name.lower() in SENSITIVE_FILES
-                    or Path(name).suffix.lower() not in suffixes):
+                    or (suffixes is not None and Path(name).suffix.lower() not in suffixes)):
                 continue
             path = Path(parent) / name
             if path.is_symlink():
@@ -153,7 +149,9 @@ def search_workspace(workspace, query: str, mode: str = 'text') -> dict:
     results = []
     scanned = 0
     scan = {'limited': False}
-    extensions = SOURCE_TYPES if mode == 'symbols' else TEXT_TYPES
+    # Text search reads every small UTF-8 file, whatever its type (C, Ruby, a Godot scene, a Makefile):
+    # a list of known types would silently report "no match" for the rest. Symbols need a known language.
+    extensions = SOURCE_TYPES if mode == 'symbols' else None
     for path, relative in _files(workspace, extensions, scan):
         scanned += 1
         try:
