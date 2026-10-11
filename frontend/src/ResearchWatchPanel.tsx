@@ -33,7 +33,7 @@ const sourceTitle=(value:string)=>value.split('-').map(part=>part.toUpperCase()=
 const lastChecked=(value:string|null)=>value?new Date(value).toLocaleString():'Never checked'
 
 /** All network requests require an operator click. Nothing observed is made trusted. */
-export function ResearchWatchPanel({disabled=false}:{disabled?:boolean}) {
+export function ResearchWatchPanel({disabled=false,autoCheck=false,onAutoChange}:{disabled?:boolean;autoCheck?:boolean;onAutoChange?:(enabled:boolean)=>void}) {
   const [status,setStatus]=useState<ResearchStatus|null>(null)
   const [evidence,setEvidence]=useState<Evidence|null>(null)
   const [checking,setChecking]=useState(false)
@@ -106,6 +106,11 @@ export function ResearchWatchPanel({disabled=false}:{disabled?:boolean}) {
       <Tag kind="neutral">Candidate-only</Tag>
     </div>
     <h2>Research Watch</h2>
+    <label className="setting-switch">
+      <span><strong>Daily automatic research</strong><small>Opt in to at most one refresh per official source every 24 hours while STAR Desktop is open. Findings still require review.</small></span>
+      <input type="checkbox" aria-label="Daily automatic research" checked={autoCheck} disabled={disabled||!onAutoChange}
+        onChange={event=>onAutoChange?.(event.target.checked)}/>
+    </label>
     <p>Check approved Roblox, Luau and GitHub documentation for revisions. STAR retains source hashes and candidate evidence locally; this never edits code, approves lessons, or publishes releases.</p>
     <div className="conn-actions">
       <button className="secondary-button" type="button" disabled={disabled||checking} onClick={()=>void check()}>
