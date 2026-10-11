@@ -477,6 +477,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
     }
 
 
+def close_for_session(shell, manager=None):
+    """Close the real window on a Qt session-end / Restart Manager request."""
+    shell.close()
+
+
 def launch():
     try:
         from PySide6.QtCore import QObject, QUrl, Slot, Signal, Qt, QTimer
@@ -1219,7 +1224,7 @@ def launch():
         shell=Shell()
         # Windows Restart Manager asks Qt to end the session via commitDataRequest.
         # aboutToQuit also covers app.quit() without a close event.
-        app.commitDataRequest.connect(lambda manager: shell.close())
+        app.commitDataRequest.connect(lambda manager: close_for_session(shell, manager))
         app.aboutToQuit.connect(shell.bridge.close)
         shell.show()
         return app.exec()
