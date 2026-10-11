@@ -156,11 +156,18 @@ def test_graphify_path_longer_than_cap_is_labeled_incomplete(tmp_path):
     edges = [{"source": f"node{i}", "target": f"node{i+1}",
               "relation": "calls", "confidence": "EXTRACTED"} for i in range(35)]
     (location / "graph.json").write_text(json.dumps({"nodes": nodes, "links": edges}))
-    result = GraphifyGraph(tmp_path).path_between("Node 0", "Node 35")
+    hub = LocalIntelligence(home=tmp_path / "home", workspace=tmp_path,
+                            skills_enabled=False, roblox_research_enabled=False)
+    names = {item["name"] for item in hub.definitions("Trace this graph path")}
+    assert "star_graphify_path" in names
+    result = hub.call("star_graphify_path", {"start": "Node 0", "end": "Node 35"},
+                      enabled=names)
     assert result["found"] and result["hops"] == 35
     assert result["returned_hops"] == 29 and result["truncated"]
     assert len(result["path"]) == 30
     assert result["path"][-1]["node"]["label"] != "Node 35"
     assert "incomplete" in result["notice"] or "omitted" in result["notice"]
-    short = GraphifyGraph(tmp_path).path_between("Node 0", "Node 1")
+    short = hub.call("star_graphify_path", {"start": "Node 0", "end": "Node 1"},
+                     enabled=names)
     assert short["found"] and not short["truncated"] and short["returned_hops"] == 1
+    assert not GraphifyGraph(tmp_path).path_between("Missing", "Node 1")["found"]
