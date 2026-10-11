@@ -79,6 +79,19 @@ def load_result(path) -> dict:
     return data
 
 
+def _trial_summary(result: dict) -> bool:
+    """The frontier lab passes paired in-memory statuses, not persisted runner files."""
+    return (isinstance(result, dict) and set(result) == {"suite", "tasks"}
+            and isinstance(result["suite"], dict) and set(result["suite"]) == {"sha256"}
+            and isinstance(result["suite"]["sha256"], str)
+            and bool(result["suite"]["sha256"])
+            and isinstance(result["tasks"], dict)
+            and all(isinstance(tid, str) and bool(tid)
+                    and isinstance(row, dict) and set(row) == {"status"}
+                    and isinstance(row["status"], str) and row["status"] in _VALID_STATUS
+                    for tid, row in result["tasks"].items()))
+
+
 def _validate(result: dict, label: str) -> list[str]:
     if not isinstance(result, dict):
         return [f"{label}: expected a result object"]
@@ -150,19 +163,25 @@ def _status(result: dict, task_id: str) -> str:
 
 def compare(baseline: dict, candidate: dict, *, allow_partial: bool = False) -> Verdict:
     """Pure comparison of two result dicts."""
-    base_errors, base_legacy = _errors(baseline, "baseline")
-    cand_errors, cand_legacy = _errors(candidate, "candidate")
+    summary = _trial_summary(baseline) and _trial_summary(candidate)
+    if summary:
+        if baseline["suite"]["sha256"] != candidate["suite"]["sha256"]:
+            return Verdict(UNUSABLE, notes=["the paired trial suite differs"])
+        base_errors, base_legacy, cand_errors, cand_legacy = [], [], [], []
+    else:
+        base_errors, base_legacy = _errors(baseline, "baseline")
+        cand_errors, cand_legacy = _errors(candidate, "candidate")
     if base_errors or cand_errors:
         return Verdict(UNUSABLE, notes=base_errors + cand_errors)
-    for key in ("sha256", "file", "tasks_total", "automated"):
+    for key in (() if summary else ("sha256", "file", "tasks_total", "automated")):
         if baseline["suite"].get(key) != candidate["suite"].get(key):
             return Verdict(UNUSABLE, notes=[f"suite {key} differs: not a like-for-like comparison"])
-    if not base_legacy and not cand_legacy and baseline["suite"]["identity_sha256"] != candidate["suite"]["identity_sha256"]:
+    if not summary and not base_legacy and not cand_legacy and baseline["suite"]["identity_sha256"] != candidate["suite"]["identity_sha256"]:
         return Verdict(UNUSABLE, notes=["suite identity differs (including grader materials)"])
-    for key in ("model", "mode"):
+    for key in (() if summary else ("model", "mode")):
         if baseline["run"][key] != candidate["run"][key]:
             return Verdict(UNUSABLE, notes=[f"{key} differs: not a like-for-like comparison"])
-    if not base_legacy and not cand_legacy and baseline["run"]["grader_sha256"] != candidate["run"]["grader_sha256"]:
+    if not summary and not base_legacy and not cand_legacy and baseline["run"]["grader_sha256"] != candidate["run"]["grader_sha256"]:
         return Verdict(UNUSABLE, notes=["grader revision differs: re-score with matching graders first"])
     scored = [tid for tid in baseline["tasks"] if _status(baseline, tid) in _SCORED]
     if not scored:
@@ -224,13 +243,14 @@ def gate_change(baseline, run_candidate, *, rerun=None, allow_partial: bool = Fa
             again = rerun(list(verdict.regressions))
         except (OSError, ValueError, TypeError) as exc:
             return Verdict(UNUSABLE, notes=[f"cannot read rerun: {exc}"])
-        errors, legacy = _errors(again, "rerun")
+        summary = _trial_summary(candidate) and _trial_summary(again)
+        errors, legacy = ([], []) if summary else _errors(again, "rerun")
         if errors or legacy:
             return Verdict(UNUSABLE, notes=errors + legacy)
-        for key in ("sha256", "file", "tasks_total", "automated", "identity_sha256"):
+        for key in (("sha256",) if summary else ("sha256", "file", "tasks_total", "automated", "identity_sha256")):
             if again["suite"].get(key) != candidate["suite"].get(key):
                 return Verdict(UNUSABLE, notes=[f"rerun suite {key} differs"])
-        for key in ("model", "mode", "app_commit", "grader_sha256"):
+        for key in (() if summary else ("model", "mode", "app_commit", "grader_sha256")):
             if again["run"].get(key) != candidate["run"].get(key):
                 return Verdict(UNUSABLE, notes=[f"rerun {key} differs"])
         if any(t not in again["tasks"] for t in verdict.regressions):
