@@ -164,6 +164,35 @@ def inspect_glb(path: Path, *, expected_material_roles=()) -> dict:
     }
 
 
+def collision_hints(plan: dict) -> dict:
+    """List world-space *candidate* box colliders with door/window gaps intact.
+
+    Blender coordinates are Z-up; the importer transform is not known until
+    Studio import has been verified. Never auto-place these into an open place.
+    """
+    audit = audit_plan(plan)
+    if not audit["valid"]:
+        raise ValueError("Cannot derive collisions from a rejected building plan")
+    boxes = []
+    for part in plan["parts"]:
+        name = part["name"]
+        if part["kind"] == "box" and (
+                part["material"] == "wall" or name == "foundation" or name.startswith("slab_")):
+            boxes.append({"name": name, "center": part["center"],
+                          "size": part["size"], "angle_y": part["angle_y"]})
+    return {
+        "coordinate_space": "Blender XYZ, Z-up, studs",
+        "verified_in_studio": False, "automatic_studio_placement": False,
+        "boxes": boxes, "box_count": len(boxes),
+        "excluded": ["visual glazing", "visual door", "trim", "complex roof", "gable prisms"],
+        "operator_note": (
+            "Inspect model orientation/position after import. Reconcile the Blender-to-Roblox "
+            "coordinate transform before placing anchored invisible colliders; make openings "
+            "walkable and test with a real avatar. Never enable collisions on the fused visual mesh."
+        ),
+    }
+
+
 def design_summary(plan: dict) -> dict:
     """Small, truthful model-facing summary, not thousands of mesh coordinates."""
     audit = audit_plan(plan)
@@ -177,5 +206,7 @@ def design_summary(plan: dict) -> dict:
         "openings": {"entrances": sum(p["name"] == "entry_door" for p in plan["parts"]),
                      "glazed_windows": sum(p["name"].endswith("_glazing") for p in plan["parts"])},
         "palette": plan["palette"], "audit": audit,
+        "candidate_collision_boxes": collision_hints(plan)["box_count"] if audit["valid"] else 0,
+        "style_grammar": plan.get("style_grammar", ""),
         "output": "PLAN_ONLY: not modeled/rendered/imported into Blender or Roblox Studio",
     }
