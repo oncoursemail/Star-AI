@@ -172,6 +172,34 @@ class ResearchWatcher:
             "can_publish": False,
         }
 
+    def due_sources(self, *, interval_seconds: int = 86400, now_at=None) -> list[str]:
+        """Return reviewed IDs eligible for a scheduled refresh.
+
+        Exactly one observation per source per configured interval; errors are
+        also rate-limited to avoid repeated requests to an unavailable server.
+        Changing the application clock may delay refresh but never grants
+        privilege or causes unbounded retries.
+        """
+        if (isinstance(interval_seconds, bool) or not isinstance(interval_seconds, int)
+                or not 3600 <= interval_seconds <= 604800):
+            raise ValueError("Research poll interval must be 1 hour to 7 days")
+        stamp = now_at or datetime.now(timezone.utc)
+        if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
+            raise ValueError("Current time must be timezone-aware")
+        due = []
+        for row in self.db.execute("SELECT source_id,checked_at FROM research_sources ORDER BY source_id"):
+            checked = row["checked_at"]
+            try:
+                last = datetime.fromisoformat(checked) if checked else None
+                if last is not None and (last.tzinfo is None or last.utcoffset() is None):
+                    last = None
+            except (ValueError, TypeError):
+                last = None
+            if last is None or (stamp - last).total_seconds() >= interval_seconds:
+                if row["source_id"] in SOURCES:
+                    due.append(row["source_id"])
+        return due[:MAX_SOURCES_PER_CHECK]
+
     def evidence(self, observation_id: int) -> dict:
         if isinstance(observation_id, bool) or not isinstance(observation_id, int) or observation_id < 1:
             raise ValueError("Observation ID must be a positive integer")
