@@ -38,6 +38,7 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester, may_start_automatic
+from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher,
                             handle as handle_media_action)
 from . import media_places
@@ -667,7 +668,7 @@ def launch():
         def _run_image(self, request_id, prompt, files=(), size='square'):
             settings=Settings.load(self.settings_file)
             home=app_data()
-            self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating the image on this PC…'})
+            self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating your image on this PC...'})
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
@@ -676,6 +677,14 @@ def launch():
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
             chat_id = active_chat
+            if not image_gen.status(settings)['running']:
+                if not settings.comfy_home:
+                    raise RuntimeError('Image generation is not set up on this PC yet. Open Settings → Where STAR generates to set up ComfyUI.')
+                self._emit(request_id,'progress',{'phase':'Starting the image engine (about 30 seconds)...'})
+                self.comfy_launcher.start(settings,home)
+                if self.cancel_chat.is_set():
+                    raise RuntimeError('cancelled by user')
+                self._emit(request_id,'progress',{'phase':'Creating your image on this PC...'})
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat,size=size,
                                        source=files[0] if files else None,
                                        mask=files[1] if len(files)>1 else None)
