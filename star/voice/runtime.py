@@ -39,7 +39,9 @@ class Engines:
                     lambda: engines.make_asr(settings.asr_engine, settings.asr_model, settings.device,
                                              settings.asr_prompt))
         tts = timed("Loading Star's voice",
-                    lambda: engines.make_tts(settings.tts_engine, settings.voice, settings.speed, settings.device))
+                    lambda: engines.make_tts(settings.tts_engine, settings.voice, settings.speed, settings.device,
+                                             lang=settings.tts_lang, gap_ms=settings.sentence_gap_ms,
+                                             pitch_semitones=settings.pitch_semitones))
 
         def warm() -> None:
             if hasattr(tts, "warm_up"):
@@ -61,7 +63,7 @@ def build_session(settings: VoiceSettings, engines: Engines, speaker: Speaker, b
     brain = brain or make_brain(settings)
     config = settings.call_config()
     if prime and hasattr(brain, "prime"):
-        brain.prime([system_message(config.system_extra)])      # server reads the voice prompt before turn one
+        brain.prime([system_message(config.system_extra, config.style)])   # server reads the voice prompt before turn one
     if hasattr(engines.vad, "reset"):
         engines.vad.reset()
     return CallSession(vad=engines.vad, asr=engines.asr, brain=brain, tts=engines.tts, speaker=speaker,
