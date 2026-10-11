@@ -15,10 +15,10 @@
       "id": "MIT",
       "url": "https://www.lua.org/license.html",
       "redistribution_allowed": true,
-      "attribution": "Retain Lua.org/PUC-Rio copyright and MIT licence notice in substantial copies.",
+      "attribution": "Preserve the Lua.org/PUC-Rio copyright and MIT licence notice in substantial copies; credit reference manual authors and original page URL.",
       "conditions": "The Lua reference manuals are explicitly made available under the Lua licence.",
       "evidence_url": "https://www.lua.org/manual/5.4/manual.html",
-      "evidence_quote": "Freely available under the terms of the Lua license."
+      "evidence_quote": "Freely available under the terms of the"
     },
     "code_samples": {
       "id": "MIT",
