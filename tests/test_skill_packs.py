@@ -12,6 +12,7 @@ from star.desktop_core import Settings, run_task
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
+         "roblox-environment-art",
          "game-obby", "game-tycoon", "game-simulator", "game-rounds",
          "game-inventory", "game-npc-quests",
          "eng-debugging", "eng-test-first", "eng-verify-before-done"]
@@ -62,6 +63,14 @@ def test_selection_needs_a_roblox_question_that_names_the_topic():
         assert skill_packs.select(prompt, enabled=NAMES) == [], prompt
     assert skill_packs.select(None, enabled=NAMES) == []
     assert skill_packs.select("x" * 30_000 + " Roblox ScreenGui", enabled=NAMES) == []
+
+
+def test_environment_art_pack_is_opt_in_and_stays_scoped():
+    assert "roblox-environment-art" not in skill_packs.DEFAULT_ENABLED
+    prompt = "In Roblox Studio, build environmental storytelling with foliage and swaying trees."
+    assert skill_packs.matching_names(prompt, enabled=NAMES) == ["roblox-environment-art"]
+    assert skill_packs.matching_names(prompt, enabled=["roblox-vfx"]) == []
+    assert skill_packs.matching_names("Design a website with swaying trees", enabled=NAMES) == []
 
 
 def test_one_generic_word_is_not_enough():
