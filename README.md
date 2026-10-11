@@ -27,6 +27,18 @@ The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**. GitHub Releas
 
 Source-level unit/build checks cannot replace live Windows GPU, installer-upgrade and Roblox Studio acceptance testing.
 
+### Experimental building and Blender kit (source branch only)
+
+STAR includes an **architecture planning tool** (`star_architecture_preview`) and a controlled Blender exterior generator in the [architecture prototype branch](https://github.com/oncoursemail/Star-AI/pull/68). They support eight **starter** design grammars, validated geometry, source `.blend` and `.glb` export, optional PNG previews, geometry audit, candidate collision hints and a real-Blender GitHub Actions smoke test. These capabilities are **not proof of production-quality environments or an installed public release**. Studio import, actual collision placement, lighting, editable final textures, room navigation and device profiling remain manual acceptance steps.
+
+From the source branch, run:
+
+```powershell
+python -m star.architecture_pipeline examples/architecture/storybook_shop.json --out out/storybook-v1 --blender "C:\\Path\\To\\blender.exe" --preview
+```
+
+Omit `--blender` and `--preview` for a fast plan-only run. See the [architecture research and QA guide](docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md) and the [Blender smoke workflow](.github/workflows/architecture-blender-smoke.yml). The new skill pack remains off by default until STAR's independent evaluation gate allows it.
+
 ### Three-step start
 
 1. Install the latest `STAR-Setup-vX.Y.Z.exe` from Releases. Existing installations are upgraded in place.

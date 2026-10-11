@@ -44,7 +44,7 @@ An excellent environment is not a random set of boxes with windows. STAR should 
 | Sci-fi / spaceport | Repeatable structural modules, believable vents, maintainable seams, ports, equipment/service volumes | Arbitrary glows and pipes; tiny controls; nonfunctional mechanical features |
 | Stylized Roblox / studs | Deliberate visible grid, crisp silhouettes, gameplay legibility and real asset kits | Looks like random part art; gaps; unsuitable scale; excessive unique meshes |
 
-These are **design constraints to research further**, not styles STAR already renders. The shipped generator has four named palette/roof presets (`storybook`, `industrial`, `modern`, `spaceport`). Gothic, brutalist, richly textured assets, interiors, terrain, props, irregular plans, animated building pieces and production-quality detail remain later work.
+These are **design constraints to research further**, not styles STAR already renders. The shipped prototype has eight bounded palette/geometry grammars (`storybook`, `industrial`, `modern`, `spaceport`, `gothic`, `brutalist`, `coastal`, `anime_city`). True gothic/brutalist historical accuracy, authored textured assets, interiors, terrain, props, irregular plans, animated building pieces and production-quality detail remain later work.
 
 ## 3. Implemented: controlled, reproducible prototype
 
@@ -210,3 +210,17 @@ Measure the complete **brief -> plan -> Blender build -> .glb export -> Studio i
 ## 8. Definition of the next milestone
 
 A user can request: "Build a stylized haunted timber shop using this reference board." STAR returns (a) a reviewable structural floor/mass diagram, (b) a set of modular Blender meshes with meaningful UVs/materials, (c) a Blender viewport comparison and source .blend, (d) a Roblox-imported private test-place screenshot, (e) an actual avatar walkthrough proving entrance and collisions, and (f) real device metrics. The owner accepts or rejects the art direction; STAR then makes a targeted revision using the actual feedback. **Until those artifacts exist, label the work a prototype.**
+
+
+## 9. GitHub integration update (same draft PR, 2026-10-11)
+
+The source branch now implements more than this document's initial vertical slice:
+
+- `star/intelligence.py`: the model-facing, **read-only** `star_architecture_preview` tool is discoverable for Roblox architecture/Blender prompts, gives a compact design/metrics summary and never edits Studio or invokes a process.
+- `star/architecture_pipeline.py`: eight constrained facade/roof grammars, repeatable geometry, audited output, an asset manifest with SHA-256 provenance, candidate collision data, and optional `--preview` CLI flag. It does not auto-place the collision proxies or upload models.
+- `star/architecture_quality.py`: fail-closed dimension/material/name/triangle gates, structural opening checks, plus GLB 2.0 header/mesh-name inspection. GLB container checks cannot prove engine import, normals or visuals.
+- `scripts/blender_building.py`: material-batched mesh build, consistent world-projected tile UVs, optional Workbench 3/4-angle preview camera, source .blend and GLB export using a fixed script. These are **prototype UVs**, not handcrafted trim atlases/PBR image textures.
+- `tests/test_architecture_pipeline.py`, `tests/test_architecture_quality.py`, `tests/test_architecture_tool.py`: deterministic offline regression tests for geometry, eight style signatures, preview flags, tool scope, and GLB evidence.
+- `.github/workflows/architecture-blender-smoke.yml`: isolated real Blender headless export on a runner with no owner credentials. It checks the GLB material groups and keeps the generated .blend/.glb as short-lived artifacts. A green smoke job, when observed, proves export **only**, not Roblox import.
+
+Future quality work must still integrate artist-reviewed references, visual comparison in the actual game camera, audited PBR textures, modular instancing, valid interiors/stair navigation, reusable assets, real Studio import/reimport, live memory and frame-time measurements, and feedback-driven iteration. The candidate skill stays disabled until the independently owned evaluation gate passes; no checklist or static audit may certify art quality by itself.
