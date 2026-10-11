@@ -60,9 +60,10 @@ python -m star.environment_craft inspect path\to\reference.png
 python -m star.environment_craft compare path\to\reference.png path\to\render.png
 python -m star.environment_craft lighting winter-shrine
 python -m star.environment_craft foliage --quality medium
+python -m star.environment_craft vfx falling-snow
 ~~~
 
-Lighting and foliage commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
+Lighting, foliage and ambient VFX commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
 
 ## Architecture
 
