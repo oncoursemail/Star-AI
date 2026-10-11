@@ -76,6 +76,10 @@ sets it for a lesson.
   otherwise, 240 characters per lesson. The block is read on every turn and is not in the server's
   prompt cache, so on a CPU server each lesson costs time before the first token.
 - A lesson is recorded after the answer, so the turn that states it is sent exactly as typed.
+- Only this section may look like lessons. In every other section of the turn (stored notes, web
+  results, documentation passages) a copy of the heading or of a `[#12 preference]` line is rewritten
+  (`guard_sections`), so reference text cannot borrow the standing of a lesson. One lesson is always
+  one line. Tool results are separate messages and are not covered by this guard.
 
 ## Optional background summary
 

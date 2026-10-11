@@ -666,8 +666,32 @@ class LessonStore:
 
 
 def context_lines(lessons: list[Lesson]) -> str:
-    """The lines a turn carries. The id is the provenance: the review page shows where each came from."""
-    return "\n".join(f"[#{lesson.id} {lesson.kind}] {lesson.text[:RECALL_CLIP]}" for lesson in lessons)
+    """The lines a turn carries, one lesson per line (a decision typed on several lines is
+    joined). The id is the provenance: the review page shows where each came from."""
+    return "\n".join(f"[#{lesson.id} {lesson.kind}] {' '.join(lesson.text.split())[:RECALL_CLIP]}"
+                     for lesson in lessons)
+
+
+# The lessons heading in any letter case, apostrophe or spacing, and the start of a lesson line.
+_HEADING_COPY = re.compile(r"owner\W{0,3}s\s+lessons", re.I)
+_LINE_COPY = re.compile(r"\[#(\d+)\s+([a-z]+)\]", re.I)
+
+
+def guard_sections(sections) -> list[tuple[str, str]]:
+    """Only the section written by this module may look like lessons.
+
+    The heading asks the model to apply what follows, which no other reference text is
+    allowed to ask. A stored note, a web result or a documentation passage that repeats the
+    heading or a "[#12 preference]" line would borrow that standing, so both are rewritten
+    in every other section. The text itself stays, as the reference material it is.
+    """
+    guarded = []
+    for heading, text in sections:
+        if heading != LESSONS_HEADING and text:
+            text = _HEADING_COPY.sub("(a heading copied from the app was removed here)", str(text))
+            text = _LINE_COPY.sub(r"(#\1 \2)", text)
+        guarded.append((heading, text))
+    return guarded
 
 
 # --- capture after a turn --------------------------------------------------------------------

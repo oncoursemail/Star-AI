@@ -828,7 +828,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
-                              history=history, turn_sections=turn_sections, mode=mode,
+                              history=history,
+                              # Only the lessons section may look like lessons (guard_sections).
+                              turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
                               turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block),
