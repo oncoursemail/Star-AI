@@ -94,7 +94,8 @@ def test_study_stores_questions_makes_them_searchable_and_resumes(tmp_path):
     assert "TweenService" in brain.passages[0]
     again = study.run(index, log=logs.append, stop=lambda: False, brain=brain)
     assert again["studied_now"] == 1 and brain.chats == 3
-    assert again["index"] == {**again["index"], "studied": 3, "remaining": 0, "questions": 3, "empty": 1}
+    assert again["index"] == {**again["index"], "studied": 3, "remaining": 0, "questions": 3, "empty": 1,
+                              "questions_without_vector": 0}
     assert study.run(index, log=logs.append, stop=lambda: False, brain=brain)["studied_now"] == 0
 
     searcher = search.Searcher(index, brain=brain)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .serve import MAX_SYMBOLS, api_lookup
+from .serve import MAX_SYMBOLS, _SYMBOL, api_lookup
 from .store import REFERENCE_GROUPS, connect_readonly
 
 MEMBER_GROUPS = ("constructors", "constants", "properties", "methods", "functions", "events", "callbacks")
@@ -39,13 +39,15 @@ def symbols_from_sources(sources_dir: Path, manifest: Path) -> tuple[list[tuple[
                         if isinstance(item, dict) and item.get("name") is not None:
                             out.append(("enum item", f"Enum.{name}.{item['name']}"))
                     continue
-                out.append((group[:-1] if group != "classes" else "class", name))
+                if group != "globals":   # "Luau globals" is a page title, not a name in code
+                    out.append((group[:-1] if group != "classes" else "class", name))
                 for member_group in MEMBER_GROUPS:
                     for item in data.get(member_group) or []:
                         full = str(item.get("name") or "") if isinstance(item, dict) else ""
                         if not full:
                             continue
-                        symbol = full if ("." in full or ":" in full) else f"{name}.{full}"
+                        full = full.strip()
+                        symbol = full if ("." in full or ":" in full or group == "globals") else f"{name}.{full}"
                         out.append((f"{group[:-1] if group != 'classes' else 'class'} {member_group[:-1]}", symbol))
     return out, unreadable
 
@@ -75,11 +77,15 @@ def run(db_path: Path, sources_dir: Path, manifest: Path) -> dict:
         wrongly_found += [s for s, r in zip(part, api_lookup(db, part)) if r.get("found")]
     db.close()
     n_total, n_found = sum(total.values()), sum(found.values())
+    unaddressable = [m for m in missing if not _SYMBOL.match(m["symbol"])]
     return {
         "symbols": n_total, "found": n_found, "coverage": round(n_found / n_total, 5) if n_total else None,
         "by_group": {g: f"{found.get(g, 0)}/{n}" for g, n in sorted(total.items())},
         "unreadable_files": unreadable,
         "invented_names_checked": len(invented), "invented_names_wrongly_found": len(wrongly_found),
         "wrongly_found_examples": wrongly_found[:10],
-        "missing_count": len(missing), "missing": missing,
+        "missing_count": len(missing),
+        "missing_not_a_code_name": len(unaddressable),    # e.g. the Studio settings labels with spaces
+        "missing_real": [m["symbol"] for m in missing if m not in unaddressable][:200],
+        "missing": missing,
     }

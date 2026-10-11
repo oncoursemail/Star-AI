@@ -8,6 +8,9 @@ text changes) and made searchable twice: as a fifth FTS column and as their own 
 Rules this job keeps:
   * one request at a time; before every chunk it waits while the server's quiet lock exists;
   * a commit after every chunk: kill it at any point and start it again, it continues;
+  * the questions are embedded in small batches every EMBED_EVERY chunks (and when the job
+    stops), not one request per chunk; questions that still lack a vector are picked up first
+    on the next start;
   * SIGTERM (systemctl stop) finishes the chunk in flight and exits 0;
   * the generated text is index material only. It is never shown to a model as context, so an
     instruction hidden in a documentation page cannot travel through it.
@@ -32,6 +35,7 @@ PROMPT_VERSION = "q1"
 MAX_PASSAGE_CHARS = 900         # about 220 tokens of passage per request (reading the prompt is the slow part)
 MAX_TOKENS = 80
 MAX_QUESTIONS = 3
+EMBED_EVERY = 25                # chunks between two embedding passes over the new questions
 SYSTEM = (
     "You write search questions for a documentation index. You are given one passage from the official "
     "Roblox or Luau documentation. Write 3 different short questions that a Roblox developer might type "
@@ -201,21 +205,39 @@ def pending(db, order: list[str] | None, only_listed: bool) -> list[str]:
     return out
 
 
-def store_result(db, sha: str, questions: list[str], vectors: list[list[float]], seconds: float) -> None:
-    """One chunk's result as one transaction: questions, their vectors, the FTS field, the log row."""
+def store_result(db, sha: str, questions: list[str], seconds: float) -> None:
+    """One chunk's result as one transaction: the questions, the FTS field, the log row. The
+    vectors follow in embed_pending()."""
     stamp = now()
     old = questions_text(db, sha)
     db.execute("DELETE FROM chunk_questions WHERE text_sha=?", (sha,))
-    for ord_, (question, vector) in enumerate(zip(questions, vectors)):
+    for ord_, question in enumerate(questions):
         q_sha = hashlib.sha256(question_input(question).encode("utf-8")).hexdigest()
         db.execute("INSERT INTO chunk_questions(text_sha,ord,question,q_sha,model,created_at) VALUES(?,?,?,?,?,?)",
                    (sha, ord_, question, q_sha, f"{GEN_MODEL}/{PROMPT_VERSION}", stamp))
-        db.execute("INSERT OR REPLACE INTO embeddings(text_sha,model,dim,vec,created_at) VALUES(?,?,?,?,?)",
-                   (q_sha, EMBED_MODEL, len(vector), array("f", vector).tobytes(), stamp))
     set_fts_questions(db, sha, old, "\n".join(questions))
     db.execute("INSERT OR REPLACE INTO study_log(text_sha,status,questions,model,seconds,created_at) VALUES(?,?,?,?,?,?)",
                (sha, "ok" if questions else "empty", len(questions), f"{GEN_MODEL}/{PROMPT_VERSION}", round(seconds, 2), stamp))
     db.commit()
+
+
+def embed_pending(db, brain: Brain, log=print, stop=lambda: False, batch: int = 32) -> int:
+    """Embed every generated question that has no vector yet (resumable, a commit per batch)."""
+    rows = db.execute("""SELECT DISTINCT q.q_sha, q.question FROM chunk_questions q WHERE NOT EXISTS
+                         (SELECT 1 FROM embeddings e WHERE e.text_sha=q.q_sha AND e.model=?)""", (EMBED_MODEL,)).fetchall()
+    done = 0
+    for start in range(0, len(rows), batch):
+        wait_while_locked(log, stop)
+        if stop() and done:      # asked to stop: one batch is enough, the rest waits for the next start
+            break
+        part = rows[start:start + batch]
+        vectors = brain.embed([question_input(r[1]) for r in part])[0]
+        stamp = now()
+        db.executemany("INSERT OR REPLACE INTO embeddings(text_sha,model,dim,vec,created_at) VALUES(?,?,?,?,?)",
+                       [(r[0], EMBED_MODEL, len(v), array("f", v).tobytes(), stamp) for r, v in zip(part, vectors)])
+        db.commit()
+        done += len(part)
+    return done
 
 
 def progress(db) -> dict:
@@ -225,6 +247,9 @@ def progress(db) -> dict:
     row = db.execute("SELECT COUNT(*), AVG(seconds), MAX(created_at) FROM study_log WHERE status IN ('ok','empty')").fetchone()
     return {"chunk_texts": total, "studied": studied, "remaining": total - studied,
             "questions": db.execute("SELECT COUNT(*) FROM chunk_questions").fetchone()[0],
+            "questions_without_vector": db.execute(
+                """SELECT COUNT(*) FROM chunk_questions q WHERE NOT EXISTS
+                   (SELECT 1 FROM embeddings e WHERE e.text_sha=q.q_sha)""").fetchone()[0],
             "empty": db.execute("SELECT COUNT(*) FROM study_log WHERE status='empty'").fetchone()[0],
             "mean_seconds_per_chunk": round(row[1], 2) if row[1] else None, "last_at": row[2]}
 
@@ -245,6 +270,17 @@ def run(db_path: Path, *, order_file: Path | None = None, only_listed: bool = Fa
     tokens_out, gen_seconds = 0, 0.0
     started = time.monotonic()
     log(f"study: {total} chunk texts to study with {GEN_MODEL} (prompt {PROMPT_VERSION})")
+
+    def embed_new() -> None:
+        try:
+            n = embed_pending(db, brain, log, stop)
+            if n:
+                log(f"study: embedded {n} new questions")
+        except RuntimeError as exc:      # they stay pending and are embedded on the next pass
+            log(f"study: embedding the new questions failed ({exc}); will retry")
+
+    if not dry_run:
+        embed_new()
     status = "finished"
     position = 0
     while position < total:
@@ -262,7 +298,6 @@ def run(db_path: Path, *, order_file: Path | None = None, only_listed: bool = Fa
         t0 = time.monotonic()
         try:
             questions, usage = generate(brain, row[0], row[1], row[2])
-            vectors = brain.embed([question_input(q) for q in questions])[0] if questions else []
         except (RuntimeError, KeyError, IndexError, ValueError) as exc:
             failures += 1
             log(f"study: request failed ({type(exc).__name__}), {failures} in a row")
@@ -283,10 +318,12 @@ def run(db_path: Path, *, order_file: Path | None = None, only_listed: bool = Fa
             log(json.dumps({"heading": row[1], "seconds": round(seconds, 1), "usage": usage, "questions": questions},
                            ensure_ascii=False))
         else:
-            store_result(db, sha, questions, vectors, seconds)
+            store_result(db, sha, questions, seconds)
         done += 1
         made += len(questions)
         empty += not questions
+        if not dry_run and done % EMBED_EVERY == 0:
+            embed_new()
         if done % 25 == 0 or done == total:
             per = gen_seconds / done
             log(f"study: {done}/{total} chunks, {made} questions, {empty} empty, {per:.1f} s/chunk, "
@@ -299,6 +336,7 @@ def run(db_path: Path, *, order_file: Path | None = None, only_listed: bool = Fa
            "seconds": round(time.monotonic() - started - paused, 1), "paused_for_lock_s": round(paused, 1),
            "seconds_per_chunk": round(gen_seconds / done, 2) if done else None}
     if not dry_run:
+        embed_new()
         out["index"] = progress(db)
     db.close()
     return out

@@ -65,10 +65,12 @@ def now() -> str:
 
 def connect(path: Path) -> sqlite3.Connection:
     path.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(path, timeout=30)
+    # Writers queue behind each other; the longest writer is the nightly rebuild (one transaction,
+    # about half a minute on a quiet server), so the embedding and study jobs wait up to 5 minutes.
+    db = sqlite3.connect(path, timeout=300)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA journal_mode=WAL")
-    db.execute("PRAGMA busy_timeout=30000")
+    db.execute("PRAGMA busy_timeout=300000")
     db.executescript(SCHEMA)
     return db
 

@@ -317,7 +317,7 @@ def _returns(item: dict) -> tuple[str, str]:
 
 
 def _member_chunks(owner: str, group: str, item: dict, owner_kind: str) -> list[Chunk]:
-    full = str(item.get("name") or "")
+    full = str(item.get("name") or "").strip()   # one reference file has a trailing space in a name
     short = re.split(r"[.:]", full)[-1] if full else ""
     psig, pdetail = _params(item)
     rsig, rdetail = _returns(item)

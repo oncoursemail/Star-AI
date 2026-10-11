@@ -68,6 +68,7 @@ MAX_LUAU_INFLIGHT = 2
 PASSAGE_TEXT = 900
 _SYMBOL = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}(?:[.:][A-Za-z_][A-Za-z0-9_]{0,63}){0,2}$")
 _INHERITS = re.compile(r"^Inherits: (.+)$", re.M)
+GLOBAL_PAGES = ("Luau globals", "Roblox globals")   # print, require, typeof, game, workspace, script, ...
 
 
 def _member_row(db, heading: str):
@@ -79,10 +80,12 @@ def _member_row(db, heading: str):
 
 
 def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict]:
-    """Exact lookup of `Class`, `Class.Member`, `Class:Member` or `Enum.Name` in the engine reference.
+    """Exact lookup of `Class`, `Class.Member`, `Class:Member`, `Enum.Name`, `Enum.Name.Item` or a
+    global (`print`, `workspace`) in the engine reference.
 
     A member that the class inherits (`Frame.BackgroundColor3`) is resolved through the
-    "Inherits:" line of the class overview and reported with `inherited_from`.
+    "Inherits:" line of the class overview and reported with `inherited_from`. An enum item that
+    the enum does not have is reported as not found.
     """
     out = []
     stamp = now()
@@ -96,6 +99,8 @@ def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict
         if owner == "Enum" and member:  # Enum.EasingStyle -> the enum page; Enum.EasingStyle.Linear -> its item
             enum, _, item = member.partition(".")
             row = _member_row(db, "Enum." + enum)
+            if row is None and not item:   # Enum:GetEnumItems(): a method of the Enum data type itself
+                row = _member_row(db, "Enum > " + enum)
             if row is not None and item:
                 # an enum page lists its items as "- Enum.Name.Item = value"; a long enum spans several chunks
                 row = db.execute(
@@ -119,6 +124,8 @@ def api_lookup(db, symbols: list[str], sources: dict | None = None) -> list[dict
                         break
         else:
             row = _member_row(db, owner) or _member_row(db, "Enum." + owner)
+            for page in GLOBAL_PAGES if row is None else ():
+                row = row or _member_row(db, f"{page} > {owner}")
         if row is None:
             out.append({"symbol": symbol, "found": False})
             continue
