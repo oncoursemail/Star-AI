@@ -73,9 +73,9 @@ def load_result(path) -> dict:
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"{path} is not an evaluation result file")
-    data = {**data, "_legacy": Path(path).name in _LEGACY
-            and Path(path).parent.name == "results"
-            and Path(path).parent.parent.name == "evals"}
+    stored = Path(path).resolve()
+    shipped = Path(__file__).resolve().parents[1] / "evals" / "results"
+    data = {**data, "_legacy": stored.parent == shipped and stored.name in _LEGACY}
     return data
 
 
@@ -138,8 +138,14 @@ def _validate(result: dict, label: str) -> list[str]:
                                     or (status == "pass" and not record["passed"])
                                     or (status == "fail" and record["passed"])):
             problems.append(f"{label}: {tid}: inconsistent passed flag")
-        if status in _SCORED and "passed" not in record and not result.get("_legacy"):
-            problems.append(f"{label}: {tid}: missing passed flag")
+        if status in _SCORED and not result.get("_legacy"):
+            for key in ("passed", "reasons", "checks"):
+                if key not in record:
+                    problems.append(f"{label}: {tid}: missing {key}")
+        if status == "error" and record.get("passed") is True:
+            problems.append(f"{label}: {tid}: errored task cannot pass")
+        if status in _SCORED and isinstance(selected, list) and tid not in selected:
+            problems.append(f"{label}: {tid}: scored task not in suite.selected")
         if "checks" in record and (not isinstance(record["checks"], list)
                                    or any(not isinstance(c, dict) or not isinstance(c.get("id"), str)
                                           or not isinstance(c.get("ok"), bool) for c in record["checks"])):
