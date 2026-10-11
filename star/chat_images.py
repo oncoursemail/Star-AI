@@ -84,3 +84,24 @@ def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None, *,
         raise RuntimeError("Unexpected generated image filename")
     return {"answer": "Image generated locally · original saved in STAR/generated-images",
             "image": preview_image(first), "message": PREFIX + first.name}
+
+
+def latest_generated_path(home: Path, project: str, chat_id: str) -> Path | None:
+    """Find the most recent generated picture in the current conversation only."""
+    from .desktop_core import Conversations
+    chats = Conversations(home / 'conversations.sqlite3')
+    try:
+        records = chats.recent_records(project, limit=80, chat_id=chat_id)
+    finally:
+        chats.close()
+    directory = (home / 'generated-images').resolve()
+    for row in reversed(records):
+        body = row['body']
+        if row['role'] != 'assistant' or not body.startswith(PREFIX):
+            continue
+        name = body[len(PREFIX):]
+        if not NAME.fullmatch(name) or name in ('.', '..'):
+            return None
+        path = (directory / name).resolve()
+        return path if path.is_relative_to(directory) and path.is_file() else None
+    return None

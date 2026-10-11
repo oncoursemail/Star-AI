@@ -140,7 +140,7 @@ export function startRun(id: string, mode: RunMode, now: number): ActivityRun {
     outcome: 'running',
     startedAt: now,
     steps: [],
-    phase: mode === 'image' ? 'Creating image' : 'Sending',
+    phase: mode === 'image' ? 'Creating your image on this PC...' : 'Sending',
     streaming: false,
   }
 }
