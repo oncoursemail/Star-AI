@@ -6,11 +6,14 @@ A Blender build is an explicit CLI operation using STAR's fixed, shipped generat
 from __future__ import annotations
 
 import argparse
+import hashlib
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
 import re
 import subprocess
+
+from .architecture_quality import audit_plan, inspect_glb
 
 
 PALETTES = {
@@ -163,9 +166,18 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
         blender = Path(blender).expanduser().resolve()
         if not blender.is_file() or blender.name.lower() not in {"blender", "blender.exe"}:
             raise ValueError("Explicit path to the installed Blender executable required")
+    # Static validation is required even though STAR itself generated the geometry.
+    plan_data = make_plan(brief)
+    review = audit_plan(plan_data)
+    if not review["valid"]:
+        raise RuntimeError("Building plan failed its geometry audit: " + "; ".join(review["errors"]))
     output_dir.mkdir(parents=True, exist_ok=False)
     plan = output_dir / "building-plan.json"
-    plan.write_text(json.dumps(make_plan(brief), indent=2) + "\n", encoding="utf-8")
+    text = json.dumps(plan_data, indent=2) + "\n"
+    plan.write_text(text, encoding="utf-8")
+    (output_dir / "architecture-audit.json").write_text(
+        json.dumps(review, indent=2) + "\n", encoding="utf-8")
+    export = None
     if blender is not None:
         script = Path(__file__).resolve().parents[1] / "scripts" / "blender_building.py"
         glb = output_dir / "building.glb"
@@ -179,6 +191,37 @@ def create_package(raw: object, output_dir: Path, *, blender: Path | None = None
             raise RuntimeError(f"Blender export failed: {str(exc.stderr or '')[-1500:]}") from exc
         if not glb.is_file() or not (output_dir / "building.blend").is_file():
             raise RuntimeError("Blender did not write the expected .glb and .blend files")
+        try:
+            export = inspect_glb(glb, expected_material_roles=tuple(plan_data["palette"]))
+        except ValueError as exc:
+            raise RuntimeError(f"Blender GLB export was not validated: {exc}") from exc
+
+    manifest = {
+        "schema_version": 1,
+        "status": "exported_needs_studio_review" if export else "plan_only",
+        "name": brief.name, "style": brief.style,
+        "brief_sha256": hashlib.sha256(json.dumps(asdict(brief), sort_keys=True).encode("utf-8")).hexdigest(),
+        "plan_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        "files": ["building-plan.json", "architecture-audit.json", "studio-import-guide.md",
+                  "asset-manifest.json"] + (["building.blend", "building.glb"] if export else []),
+        "blender_export": export,
+        "studio_imported": False, "visual_quality_verified": False,
+        "review_required": plan_data["review_required"],
+    }
+    (output_dir / "asset-manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (output_dir / "studio-import-guide.md").write_text(
+        "# STAR building import review\n\n"
+        "This is a procedural **prototype**, NOT an approved, playable building.\n\n"
+        "1. Open a private test place in Roblox Studio and use File > Import on building.glb.\n"
+        "2. Preview the mesh. Set World Forward to Front, World Up to Top and Scale Unit to Stud.\n"
+        "3. Verify proportions with real R6/R15 avatars, lighting, face normals and imported materials.\n"
+        "4. Doors and glass are static visual placeholders. Configure collisions and working doors in Studio.\n"
+        "5. For upper floors, implement and test stairs/landings before claiming accessibility.\n"
+        "6. Inspect memory, rendering, streaming and draw calls on target devices.\n"
+        "7. Preserve the STAR_<role> mesh names for reimport; obtain owner approval before uploads.\n\n"
+        "Reference: https://create.roblox.com/docs/art/blender\n",
+        encoding="utf-8")
     return plan
 
 
