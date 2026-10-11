@@ -623,7 +623,7 @@ def launch():
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                user_id=chats.add(settings.project,'user',display_prompt or prompt,chat_id=active_chat)
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
@@ -665,7 +665,7 @@ def launch():
             self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
-        def _run_image(self, request_id, prompt, files=(), size='square', followup=False):
+        def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None):
             settings=Settings.load(self.settings_file)
             home=app_data()
             self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating your image on this PC...'})
@@ -983,7 +983,7 @@ def launch():
                     self.active_task=True
                     self.cancel_chat = threading.Event()
                     try:
-                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True))
+                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True,body.get('display_prompt')))
                     except Exception:
                         self.active_task=False
                         raise
