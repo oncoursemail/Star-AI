@@ -261,3 +261,42 @@ class BlenderController:
             if code:
                 raise BlenderJobError("Blender scene job failed; inspect the job's private worker.log")
             return self.inspect(job_id)
+
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Owner-run smoke checks, independent of LLM inference or an MCP client."""
+    import argparse
+    from .desktop_core import Settings
+
+    parser = argparse.ArgumentParser(description="STAR's guarded local Blender scene workflow")
+    parser.add_argument("--settings", type=Path, required=True, help="An existing STAR settings JSON")
+    actions = parser.add_mutually_exclusive_group(required=True)
+    actions.add_argument("--probe", action="store_true")
+    actions.add_argument("--scene", type=Path, help="Owner-reviewed JSON scene recipe")
+    actions.add_argument("--inspect", type=str, help="Previous STAR Blender job ID")
+    arguments = parser.parse_args(argv)
+    if not arguments.settings.is_file():
+        parser.error("STAR settings JSON not found")
+    settings = Settings.load(arguments.settings)
+    settings.validate()
+    controller = BlenderController(settings=settings, home=arguments.settings.parent)
+    try:
+        if arguments.probe:
+            report = asyncio.run(controller.probe())
+        elif arguments.scene:
+            file = arguments.scene
+            if file.is_symlink() or not file.is_file() or file.stat().st_size > MAX_SPEC_BYTES:
+                raise ValueError("Choose a regular small local JSON scene file")
+            spec = validate_scene(json.loads(file.read_text(encoding="utf-8")))
+            report = asyncio.run(controller.build(spec))
+        else:
+            report = controller.inspect(arguments.inspect)
+    except (ValueError, PermissionError, BlenderUnavailable, BlenderJobError) as exc:
+        parser.error(str(exc))
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
