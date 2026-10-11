@@ -1,0 +1,126 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "PERF-01"
+  ]
+ },
+ "run": {
+  "app_commit": "30eea0ffb2b7f8dea8043e1c597d6ea1ff17541e",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-performance-streaming",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "42e2e40f5ed8",
+  "started_at": "2026-10-11T10:20:45+00:00",
+  "waited_for_lock_s": 0.5,
+  "finished_at": "2026-10-11T10:23:23+00:00",
+  "rescored_at": "2026-10-11T10:38:12+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "PERF-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "38d7a6b82bfae04f",
+   "reasons": [
+    "require:event_or_throttle: event-driven, or a throttled query"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:event_or_throttle",
+     "ok": false,
+     "detail": "event-driven, or a throttled query"
+    },
+    {
+     "id": "forbid:frame_poll_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_task",
+     "ok": true
+    },
+    {
+     "id": "forbid:render_stepped",
+     "ok": true
+    }
+   ],
+   "seconds": 157.7,
+   "timings": {
+    "luau_check_s": 0.14
+   },
+   "blocks": 2,
+   "answer_chars": 6350,
+   "answer_sha256": "0fafaab6d9f2a4b636f8da647fbfde028fe94e3219026d0dbfcf68b49ec54cfe",
+   "packs": [
+    "roblox-performance-streaming"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 233
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-performance-streaming"
+     ],
+     "chars": 1050
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the rewritten, event-driven solution.\n\n### The Solution\n\nReplace the polling loop with a `CollectionService` signal that reacts only when a player enters or leaves the workspace.\n\n```lua\nlocal CollectionService = game:GetService(\"CollectionService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal door = script.Parent -- Assuming the script is inside the door\nlocal TAG_NAME = \"ProximityTarget\" -- Optional: Use tags to mark relevant parts if needed, \n                                   -- but we can also just listen to CharacterAdded.\n\n-- We will track the state locally to avoid flickering if multiple players are near\nlocal isPlayerNear = false\n\n-- Helper to check if ANY player is currently within 10 studs\nlocal function checkProximity()\n\tlocal isNear = false\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal character = player.Character\n\t\tif character and character:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\tlocal rootPart = character:FindFirstChild(\"HumanoidRootPart\")\n\t\t\tif (rootPart.Position - door.Position).Magnitude < 10 then\n\t\t\t\tisNear = true\n\t\t\t\tbreak -- Found one, no need to check others\n\t\t\tend\n\t\tend\n\tend\n\treturn isNear\nend\n\n-- Initial check\nisPlayerNear = checkProximity()\ndoor.Transparency = isPlayerNear and 0.5 or 0\n\n-- Listen for new players joining\nPlayers.PlayerAdded:Connect(function(player)\n\tplayer.CharacterAdded:Connect(function(character)\n\t\t-- Wait for the root part to exist\n\t\tlocal rootPart = character:WaitForChild(\"HumanoidRootPart\", 5)\n\t\tif rootPart then\n\t\t\t-- Check immediately in case they spawn close\n\t\t\tif checkProximity() then\n\t\t\t\tisPlayerNear = true\n\t\t\t\tdoor.Transparency = 0.5\n\t\t\tend\n\t\t\t\n\t\t\t-- Listen for movement (optional, but ensures accuracy if they walk in)\n\t\t\t-- Note: For strict \"always accurate\" without polling, we rely on \n\t\t\t-- the fact that PlayerAdded/CharacterAdded covers spawns. \n\t\t\t-- If you need to detect walking in after spawn, see the \"Hybrid\" note below.\n\t\tend\n\tend)\nend)\n\n-- Listen for players leaving\nPlayers.PlayerRemoving:Connect(function(player)\n\t-- If the player who left was the one making it transparent, check again\n\tif isPlayerNear then\n\t\tisPlayerNear = checkProximity()\n\t\tdoor.Transparency = isPlayerNear and 0.5 or 0\n\tend\nend)\n\n-- OPTIONAL: If you need to detect players WALKING into the zone after spawning,\n-- use a simple Heartbeat loop with a throttle, or a Region3/OverlapParams check \n-- triggered by proximity prompts. However, for most \"door\" mechanics, \n-- detecting spawn proximity and player removal is often sufficient. \n-- If you strictly need \"walking in\" detection without per-frame polling, \n-- consider using a ProximityPrompt on the door instead.\n```\n\n### Explanation of Choice\n\n**I chose an event-driven approach using `PlayerAdded` and `PlayerRemoving` because it eliminates the continuous CPU cost of per-frame distance calculations, only executing logic when the set of active players changes, which aligns with the Roblox documentation's recommendation to \"write event-driven code rather than per-frame calculations\" [4].**\n\n### Important Note on \"Walking In\" Detection\n\nThe code above handles players who **spawn** near the door or **leave** the game. It does **not** handle a player who spawns far away and then **walks** into the 10-stud radius, because that would require either:\n1.  **Polling** (which you wanted to avoid).\n2.  **ProximityPrompts** (if the door has a prompt).\n3.  **A throttled Heartbeat loop** (if you must detect walking).\n\nIf you **must** detect players walking into the zone, here is the **throttled** alternative using `RunService.Heartbeat` with a throttle, which is still more efficient than `wait()` in a `while true` loop because it uses the engine's frame timing and can be easily throttled:\n\n```lua\nlocal RunService = game:GetService(\"RunService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal door = script.Parent\nlocal lastCheckTime = 0\nlocal CHECK_INTERVAL = 0.25 -- Check every 0.25 seconds instead of every frame\n\nlocal function checkProximity()\n\tfor _, player in Players:GetPlayers() do\n\t\tlocal character = player.Character\n\t\tif character and character:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\tlocal rootPart = character:FindFirstChild(\"HumanoidRootPart\")\n\t\t\tif (rootPart.Position - door.Position).Magnitude < 10 then\n\t\t\t\treturn true\n\t\t\tend\n\t\tend\n\tend\n\treturn false\nend\n\nRunService.Heartbeat:Connect(function(deltaTime)\n\tlocal currentTime = tick()\n\tif currentTime - lastCheckTime >= CHECK_INTERVAL then\n\t\tlastCheckTime = currentTime\n\t\tlocal isNear = checkProximity()\n\t\tdoor.Transparency = isNear and 0.5 or 0\n\tend\nend)\n```\n\n**Why this is better:**\n*   **Throttled:** It only calculates distances 4 times per second instead of 60 times per second, reducing CPU load by ~93% [4].\n*   **Accurate:** It detects players walking into the zone.\n*   **Event-Driven Hybrid:** It uses `Heartbeat` but with a throttle, which is a common pattern for spatial checks that can't be fully event-driven [4].\n\n### Recommendation\n\nIf you can use **ProximityPrompts**, that is the most performant and user-friendly solution. If not, the **throttled Heartbeat** approach is the best balance of performance and accuracy. The pure event-driven approach (first code block) is the most performant but has the limitation of not detecting walking.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Optimize your game > Cull nonessential content > Delete layered transparencies](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/optimize-your-experience#delete-layered-transparencies) · retrieved, not cited\n2. [Design for performance > Streaming and teleportation](https://create.roblox.com/docs/performance-optimization/design#streaming-and-teleportation) · retrieved, not cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n4. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 0,
+  "fail": 1,
+  "error": 0,
+  "scored": 1,
+  "pass_rate": 0.0,
+  "median_seconds": 157.7
+ }
+}

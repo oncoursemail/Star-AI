@@ -1,0 +1,116 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "UIS-02"
+  ]
+ },
+ "run": {
+  "app_commit": "292b75d48efa0b3ad007809126a5c5d70d7aff5b",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-ui-styles",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "aab895996001",
+  "started_at": "2026-10-11T10:47:07+00:00",
+  "waited_for_lock_s": 0.4,
+  "finished_at": "2026-10-11T10:50:36+00:00",
+  "rescored_at": "2026-10-11T11:07:56+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "UIS-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "cea35387904c35b8",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:pow",
+     "ok": true
+    }
+   ],
+   "seconds": 208.1,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.48
+   },
+   "blocks": 2,
+   "answer_chars": 5581,
+   "answer_sha256": "aadc9ec5c32d2a420b04601610eebc9e3db0498c740ded33a84e608368a3d4f2",
+   "packs": [
+    "roblox-ui-styles"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 452
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-ui-styles"
+     ],
+     "chars": 1028
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 1
+    }
+   ],
+   "answer": "Here is the pure-Luau ModuleScript implementing the requested color utilities. It uses no Roblox API, no `Color3`, and operates entirely on the specified `{r, g, b}` table format.\n\n```lua\n-- ColorUtils\n-- Pure-Luau color math module.\n-- Input/Output format: { r = number, g = number, b = number } where each is 0..1.\n\nlocal ColorUtils = {}\n\n-- Gamma-compress a single linear channel value.\n-- WCAG 2.x formula: v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ^ 2.4\nlocal function gamma_compress(v)\n\tif v <= 0.03928 then\n\t\treturn v / 12.92\n\telse\n\t\treturn ((v + 0.055) / 1.055) ^ 2.4\n\tend\nend\n\n--- Calculate WCAG relative luminance of a color.\n-- @param c table { r, g, b }\n-- @return number luminance (0..1)\nfunction ColorUtils.luminance(c)\n\tlocal r = gamma_compress(c.r)\n\tlocal g = gamma_compress(c.g)\n\tlocal b = gamma_compress(c.b)\n\treturn 0.2126 * r + 0.7152 * g + 0.0722 * b\nend\n\n--- Calculate WCAG contrast ratio between two colors.\n-- @param a table { r, g, b }\n-- @param b table { r, g, b }\n-- @return number contrast ratio (1..21)\nfunction ColorUtils.contrast(a, b)\n\tlocal lumA = ColorUtils.luminance(a)\n\tlocal lumB = ColorUtils.luminance(b)\n\n\tlocal lighter = math.max(lumA, lumB)\n\tlocal darker = math.min(lumA, lumB)\n\n\treturn (lighter + 0.05) / (darker + 0.05)\nend\n\n--- Pick the text color with the higher contrast against the background.\n-- @param bg table { r, g, b } background color\n-- @param light table { r, g, b } light text candidate\n-- @param dark table { r, g, b } dark text candidate\n-- @return table the chosen text color (light if equal)\nfunction ColorUtils.pickText(bg, light, dark)\n\tlocal contrastLight = ColorUtils.contrast(bg, light)\n\tlocal contrastDark = ColorUtils.contrast(bg, dark)\n\n\tif contrastLight >= contrastDark then\n\t\treturn light\n\telse\n\t\treturn dark\n\tend\nend\n\n--- Shade a color by moving channels toward white (positive) or black (negative).\n-- @param c table { r, g, b }\n-- @param amount number clamped to [-1, 1]\n-- @return table a NEW color table\nfunction ColorUtils.shade(c, amount)\n\t-- Clamp amount to [-1, 1]\n\tif amount > 1 then amount = 1\n\telseif amount < -1 then amount = -1\n\tend\n\n\tlocal r, g, b = c.r, c.g, c.b\n\n\tif amount >= 0 then\n\t\t-- Move toward white (1, 1, 1)\n\t\tr = r + (1 - r) * amount\n\t\tg = g + (1 - g) * amount\n\t\tb = b + (1 - b) * amount\n\telse\n\t\t-- Scale toward black (0, 0, 0)\n\t\tr = r * (1 + amount)\n\t\tg = g * (1 + amount)\n\t\tb = b * (1 + amount)\n\tend\n\n\treturn { r = r, g = g, b = b }\nend\n\nreturn ColorUtils\n```\n\n### Notes on Implementation\n\n1.  **`luminance`**: Follows the WCAG 2.x specification exactly. Each channel is gamma-compressed individually before applying the sRGB luminance coefficients (0.2126, 0.7152, 0.0722) [1].\n2.  **`contrast`**: Computes the relative luminance of both inputs, identifies the lighter and darker, and applies the standard WCAG ratio formula: `(L_lighter + 0.05) / (L_darker + 0.05)`.\n3.  **`pickText`**: Returns `light` on a tie (`>=`), as specified. This ensures consistent behavior when the background is exactly midway between the two candidates.\n4.  **`shade`**:\n    *   **Positive amount**: Linearly interpolates each channel toward `1.0` (white). Formula: `c + (1 - c) * amount`.\n    *   **Negative amount**: Scales each channel by `(1 + amount)`, effectively moving it toward `0.0` (black). For example, `amount = -0.5` results in `c * 0.5`.\n    *   Returns a **new** table, leaving the original unchanged.\n    *   Amount is clamped to `[-1, 1]` to prevent invalid color values.\n\n### Usage Example\n\n```lua\nlocal ColorUtils = require(path.to.ColorUtils)\n\nlocal bg = { r = 0.1, g = 0.1, b = 0.1 } -- Dark gray\nlocal white = { r = 1, g = 1, b = 1 }\nlocal black = { r = 0, g = 0, b = 0 }\n\n-- Pick the best text color\nlocal textColor = ColorUtils.pickText(bg, white, black)\n-- textColor will be white (higher contrast against dark bg)\n\n-- Shade the background slightly lighter\nlocal lighterBg = ColorUtils.shade(bg, 0.2)\n\n-- Check contrast\nlocal ratio = ColorUtils.contrast(bg, textColor)\nprint(string.format(\"Contrast ratio: %.2f\", ratio))\n-- Should be ~12.6 for white on dark gray\n```\n\n### References\n*   The WCAG relative luminance and contrast ratio formulas are standard accessibility specifications. The provided documentation confirms Roblox uses RGB values for color properties but does not specify the WCAG algorithm, so this implementation is **unverified** against official Roblox docs [1].\n*   Roblox `Color3` uses `0..1` ranges, which aligns with the input format specified [1].\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 1: Unknown global 'path'; consider assigning to it first (TypeError)\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Object properties > Add comments to scripts > Change a property with code](https://create.roblox.com/docs/tutorials/fundamentals/coding-1/object-properties#change-a-property-with-code) · cited\n2. [CSS Comparisons > Queries](https://create.roblox.com/docs/ui/styling/css-comparisons#queries) · retrieved, not cited\n3. [UI animation/tweens > Single-property tweens > Color](https://create.roblox.com/docs/ui/animation#color) · retrieved, not cited\n4. [UI styling > Selector definitions](https://create.roblox.com/docs/ui/styling#selector-definitions) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 1,
+  "fail": 0,
+  "error": 0,
+  "scored": 1,
+  "pass_rate": 1.0,
+  "median_seconds": 208.1
+ }
+}
