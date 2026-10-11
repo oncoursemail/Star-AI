@@ -122,6 +122,47 @@ describe('streaming and completion', () => {
   })
 })
 
+describe('instant answer origin and speed', () => {
+  it('shows the actual PC brain, measured speed and one persisted answer', async () => {
+    const user = await openChat([], null, {
+      settings: {...backendSettings, provider: 'star_server', instant_route_enabled: null},
+      brain_installed: true, brain_running: true,
+    })
+    await say(user, 'What is a palindrome?')
+    const id = await waitFor(() => desktop.requestOf('sendMessage'))
+    desktop.emitRaw(id, 'progress', {phase: 'STAR · Fast answer',
+      activity: {type: 'route', profile: 'fast', model: 'server-model'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answering on this PC',
+      activity: {type: 'instant', model: 'pc-small'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answer complete',
+      activity: {type: 'answer_stats', brain: 'pc', model: 'pc-small',
+        first_token_ms: 80, tokens_per_second: 20.0, estimated_tokens: false}})
+    desktop.complete(id, 'It reads the same backwards.')
+    expect(await screen.findByText('It reads the same backwards.')).toBeTruthy()
+    expect(await screen.findByText(/answered on this PC/)).toBeTruthy()
+    expect(await screen.findByText(/80 ms first token/)).toBeTruthy()
+    expect(await screen.findByText(/20.0 tok\/s/)).toBeTruthy()
+    expect(seen('It reads the same backwards.')).toHaveLength(1)
+    expect(desktop.sent('sendMessage')).toHaveLength(1)
+  })
+
+  it('shows the server model name and estimated rate after instant fallback', async () => {
+    const user = await openChat()
+    await say(user, 'Hi')
+    const id = await waitFor(() => desktop.requestOf('sendMessage'))
+    desktop.emitRaw(id, 'progress', {phase: 'On-device answer unavailable; using STAR Server',
+      activity: {type: 'instant_fallback', model: 'server-model'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answer complete',
+      activity: {type: 'answer_stats', brain: 'server', model: 'server-model',
+        first_token_ms: 215, tokens_per_second: 14.3, estimated_tokens: true}})
+    desktop.complete(id, 'Server reply.')
+    expect(await screen.findByText('Server reply.')).toBeTruthy()
+    expect(await screen.findByText(/server-model/)).toBeTruthy()
+    expect(await screen.findByText(/14.3 tok\/s/)).toBeTruthy()
+    expect(seen('Server reply.')).toHaveLength(1)
+  })
+})
+
 describe('stopping a turn', () => {
   it('asks the backend to cancel and shows the stopped state once the backend confirms', async () => {
     const user = await openChat()
