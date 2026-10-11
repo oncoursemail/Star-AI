@@ -24,7 +24,7 @@ const initial={
 
 describe('Research Watch candidate evidence',()=>{
   it('shows actual host state and only checks sources on the owner click',async()=>{
-    let reported={...initial}
+    let reported:object={...initial}
     desktop.onAction('researchStatus',()=>({ok:true,data:reported}))
     desktop.onAction('researchCheck',()=>({ok:true,pending:true}))
     desktop.onAction('researchEvidence',call=>({ok:true,data:{
