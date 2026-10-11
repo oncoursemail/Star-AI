@@ -50,7 +50,11 @@ def tool_payload(result):
     text = "\n".join(content)
     if len(text) > 30000:
         text = text[:30000] + "\n[TRUNCATED — narrow the next query]"
-    return json.dumps({"isError": bool(result.get("isError")), "output": redact_text(text)}, ensure_ascii=False)
+    # A failure message can quote the request that failed (a URL with credentials, an Authorization
+    # header), so it is redacted. What a tool read successfully reaches the model unchanged: the model
+    # edits what it reads, and a replaced value would be written back into the owner's file or script.
+    is_error = bool(result.get("isError"))
+    return json.dumps({"isError": is_error, "output": redact_text(text) if is_error else text}, ensure_ascii=False)
 
 
 # Ordinary chat carries no tools, so the tool-use rules above have nothing to act on.
