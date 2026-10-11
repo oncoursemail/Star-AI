@@ -90,6 +90,7 @@ PERMITTED_SETTINGS = frozenset({
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
+    'instant_route_enabled',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud',
     'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
@@ -248,6 +249,30 @@ def sanitize_event(event: dict) -> dict:
             activity['model']=event['model']       # the model this message is sent to
         return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90],
                 'activity':activity}
+    if kind == 'instant_selected':
+        activity = {'type': 'instant'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'Answering on this PC', 'activity': activity}
+    if kind == 'instant_fallback':
+        activity = {'type': 'instant_fallback'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'On-device answer unavailable; using STAR Server', 'activity': activity}
+    if kind == 'answer_stats':
+        activity = {'type': 'answer_stats'}
+        if event.get('brain') in {'pc', 'server', 'cloud'}:
+            activity['brain'] = event['brain']
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        first = _bounded_int(event.get('first_token_ms'), 3_600_000)
+        if first is not None:
+            activity['first_token_ms'] = first
+        rate = event.get('tokens_per_second')
+        if type(rate) in (int, float) and 0 <= rate <= 10000:
+            activity['tokens_per_second'] = round(float(rate), 1)
+        activity['estimated_tokens'] = event.get('estimated_tokens') is True
+        return {'phase': 'Answer complete', 'activity': activity}
     if kind == 'route_fallback':
         # The model chosen for this job is missing or did not load; the configured one answers.
         activity={'type':'route','fallback':True}
@@ -646,7 +671,11 @@ def launch():
                 full_prompt=media.prompt(prompt)
                 documents=media.documents
                 learned={}
+                instant_used=False
                 def relay(e):
+                    nonlocal instant_used
+                    if e.get('event') == 'instant_selected':
+                        instant_used = True
                     # What the turn taught is reported with the result, not as a progress step.
                     if e.get('event')=='lessons_captured':
                         learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
@@ -655,11 +684,11 @@ def launch():
                     self._emit(request_id,'progress',sanitize_event(e))
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt, studio_configuration_home=self.settings_file.parent,
+                    owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
-            if provider_kind(settings)=='lan':
+            if provider_kind(settings)=='lan' and not instant_used:
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
             try:
@@ -669,7 +698,8 @@ def launch():
             # While the owner reads the answer, let the server read it too: the next
             # message then starts from a fully cached conversation. Cancelled by any request.
             # Once that is done the server is idle, which is when raw captures get reworded.
-            self._warm(check=False,then=self._digest_when_idle)
+            if not instant_used:
+                self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
         def _run_image(self, request_id, prompt, files=(), size='square'):
