@@ -14,6 +14,7 @@ class FakeSession:
         self.delay = delay
         self.calls = []
         self.running = set()
+        self.started = asyncio.Event()
         self.peak = 0
         self.bad = None
         self.logs = {}
@@ -31,6 +32,7 @@ class FakeSession:
         assert sid in self.ids
         assert sid not in self.running, "A Studio was used by concurrent calls"
         self.running.add(sid)
+        self.started.set()
         self.peak = max(self.peak, len(self.running))
         self.calls.append((name, sid))
         try:
@@ -158,7 +160,8 @@ def test_external_cancellation_is_not_reported_as_success():
     async def scenario():
         session = FakeSession(delay=10)
         task = asyncio.create_task(farm.inspect(session, ["studio-a", "studio-b"], max_parallel=2))
-        await asyncio.sleep(0.015)
+        # Wait until a real observation starts; a fixed sleep races on busy Windows CI.
+        await asyncio.wait_for(session.started.wait(), timeout=2)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
