@@ -1,0 +1,1667 @@
+[
+  {
+    "id": "DBG-01",
+    "category": "roblox-debugging-waitforchild",
+    "difficulty": 1,
+    "goal": "Fix the waitforchild bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My vault door is nil when the match starts, then it appears.\"\nLocation: ServerScriptService/VaultDoor Script\nBroken Luau:\n```luau\nlocal door = workspace.VaultRooms.VaultDoor\ndoor.CanCollide = false\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Instance.yaml",
+      "content/en-us/scripting/locations.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original waitforchild bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Wait for descendants that may not exist when the server Script starts.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": ":\\s*WaitForChild\\(\\s*[\"']VaultRooms[\"']\\s*\\)",
+          "why": "waitforchild: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*WaitForChild\\(\\s*[\"']VaultDoor[\"']\\s*\\)",
+          "why": "waitforchild: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "workspace\\.VaultRooms\\.VaultDoor\\b",
+          "why": "waitforchild: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: waitforchild: required repair construct 1",
+        "Present: waitforchild: required repair construct 2",
+        "Absent: waitforchild: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-02",
+    "category": "roblox-debugging-gui-reset",
+    "difficulty": 1,
+    "goal": "Fix the gui reset bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My quest GUI disappears every time my character respawns.\"\nLocation: StarterGui/QuestGui ScreenGui LocalScript\nBroken Luau:\n```luau\nlocal gui = script.Parent\ngui.ResetOnSpawn = true\ngui.Enabled = true\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ScreenGui.yaml",
+      "content/en-us/reference/engine/classes/StarterGui.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original gui-reset bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Set ScreenGui.ResetOnSpawn false to preserve a HUD across lives.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.ResetOnSpawn\\s*=\\s*false\\b",
+          "why": "gui-reset: required repair construct 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.ResetOnSpawn\\s*=\\s*true\\b",
+          "why": "gui-reset: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: gui-reset: required repair construct 1",
+        "Absent: gui-reset: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-03",
+    "category": "roblox-debugging-touched-debounce",
+    "difficulty": 1,
+    "goal": "Fix the touched debounce bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My Roblox lava tile damages a player several times for one touch.\"\nLocation: Workspace/LavaTile Script\nBroken Luau:\n```luau\nlocal tile = script.Parent\ntile.Touched:Connect(function(hit)\n local humanoid = hit.Parent:FindFirstChildOfClass(\"Humanoid\")\n if humanoid then humanoid.Health -= 10 end\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/debounce.md",
+      "content/en-us/reference/engine/classes/BasePart.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original touched-debounce bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Guard repeated Touched events per Humanoid before damage.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "touched-debounce: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\b(?:cooldown|debounce|lastHit|hitTimes|recentHits)\\b",
+          "why": "touched-debounce: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "if\\s+not\\s+humanoid\\s+or\\s+cooldown\\s*\\[|if\\s+cooldown\\s*\\[",
+          "why": "touched-debounce: required repair construct 3"
+        },
+        {
+          "id": "required_4",
+          "re": "task\\.delay\\s*\\(|os\\.clock\\s*\\(",
+          "why": "touched-debounce: required repair construct 4"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "if\\s+humanoid\\s+then\\s*humanoid\\.Health\\s*-=\\s*10",
+          "why": "touched-debounce: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: touched-debounce: required repair construct 1",
+        "Present: touched-debounce: required repair construct 2",
+        "Present: touched-debounce: required repair construct 3",
+        "Present: touched-debounce: required repair construct 4",
+        "Absent: touched-debounce: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-04",
+    "category": "roblox-debugging-non-yield-loop",
+    "difficulty": 1,
+    "goal": "Fix the non yield loop bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My loading text script freezes Roblox Studio forever.\"\nLocation: StarterGui/LoadingGui LocalScript\nBroken Luau:\n```luau\nlocal label = script.Parent.Label\nwhile true do\n label.Text = \"Loading\"\nend\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/scheduler.md",
+      "content/en-us/reference/engine/libraries/task.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original non-yield-loop bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Call task.wait inside an unbounded loop so it yields.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "while\\s+true\\s+do[\\s\\S]{0,200}task\\.wait\\s*\\(",
+          "why": "non-yield-loop: required repair construct 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "(?:^|[^.\\w:])wait\\s*\\(",
+          "why": "non-yield-loop: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: non-yield-loop: required repair construct 1",
+        "Absent: non-yield-loop: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-05",
+    "category": "roblox-debugging-client-only-lamp",
+    "difficulty": 1,
+    "goal": "Fix the client only lamp bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My lobby lamp color changes locally, but nobody else sees it.\"\nLocation: StarterGui/LampSwitch LocalScript and ServerScriptService Script; LampToggle RemoteEvent exists in ReplicatedStorage\nBroken Luau:\n```luau\nscript.Parent.Activated:Connect(function()\n workspace.LobbyLamp.Color = Color3.fromRGB(0, 255, 0)\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/scripting/security/client-server-boundary.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original client-only-lamp bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Send a remote request; only the server applies shared changes.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "GetService\\(\\s*[\"']ReplicatedStorage[\"']\\s*\\)",
+          "why": "client-only-lamp: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*FireServer\\s*\\(",
+          "why": "client-only-lamp: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "client-only-lamp: required repair construct 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "workspace\\.LobbyLamp\\.Color\\s*=\\s*Color3\\.fromRGB\\(\\s*0\\s*,\\s*255\\s*,\\s*0\\s*\\)",
+          "why": "client-only-lamp: original mistake 1 must be absent"
+        }
+      ],
+      "min_blocks": 2
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: client-only-lamp: required repair construct 1",
+        "Present: client-only-lamp: required repair construct 2",
+        "Present: client-only-lamp: required repair construct 3",
+        "Absent: client-only-lamp: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-06",
+    "category": "roblox-debugging-wrong-service-name",
+    "difficulty": 1,
+    "goal": "Fix the wrong service name bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My door script errors: TweenServices is not a valid service name.\"\nLocation: Workspace/SlideDoor Script\nBroken Luau:\n```luau\nlocal ts = game:GetService(\"TweenServices\")\nlocal tween = ts:Create(script.Parent, TweenInfo.new(1), {Transparency = 1})\ntween:Play()\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TweenService.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original wrong-service-name bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use the singular documented service name TweenService.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "GetService\\(\\s*[\"']TweenService[\"']\\s*\\)",
+          "why": "wrong-service-name: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*Create\\s*\\(",
+          "why": "wrong-service-name: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "GetService\\(\\s*[\"']TweenServices[\"']\\s*\\)",
+          "why": "wrong-service-name: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: wrong-service-name: required repair construct 1",
+        "Present: wrong-service-name: required repair construct 2",
+        "Absent: wrong-service-name: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-07",
+    "category": "roblox-debugging-nil-on-despawn",
+    "difficulty": 1,
+    "goal": "Fix the nil on despawn bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My firework may be missing by cleanup time, causing attempt to index nil.\"\nLocation: ServerScriptService/FireworkCleanup Script\nBroken Luau:\n```luau\nlocal spark = workspace:FindFirstChild(\"Firework\")\ntask.wait(3)\nspark.Transparency = 1\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Instance.yaml",
+      "content/en-us/luau/type-checking.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original nil-on-despawn bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Validate a possibly missing or destroyed Instance after yielding.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "if\\s+spark\\s+and\\s+spark\\.Parent\\s+then|if\\s+spark\\s*~=\\s*nil\\s+and\\s+spark\\.Parent\\s+then",
+          "why": "nil-on-despawn: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "spark\\.Transparency\\s*=\\s*1",
+          "why": "nil-on-despawn: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "task\\.wait\\(\\s*3\\s*\\)\\s*spark\\.Transparency\\s*=",
+          "why": "nil-on-despawn: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: nil-on-despawn: required repair construct 1",
+        "Present: nil-on-despawn: required repair construct 2",
+        "Absent: nil-on-despawn: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-08",
+    "category": "roblox-debugging-connection-disconnect",
+    "difficulty": 1,
+    "goal": "Fix the connection disconnect bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"Every reopen of my crafting menu doubles the button click behavior.\"\nLocation: StarterGui/CraftGui LocalScript; openMenu can run more than once\nBroken Luau:\n```luau\nlocal button = script.Parent.Craft\nlocal function openMenu()\n button.Activated:Connect(function() print(\"craft\") end)\nend\nopenMenu()\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/datatypes/RBXScriptConnection.yaml",
+      "content/en-us/scripting/events/index.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original connection-disconnect bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Retain and disconnect event connections when reopening or closing UI.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Activated\\s*:\\s*Connect\\s*\\(",
+          "why": "connection-disconnect: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*Disconnect\\s*\\(\\s*\\)",
+          "why": "connection-disconnect: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "\\bcloseMenu\\b",
+          "why": "connection-disconnect: required repair construct 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "^\\s*button\\.Activated\\s*:\\s*Connect\\s*\\(\\s*function\\(",
+          "why": "connection-disconnect: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: connection-disconnect: required repair construct 1",
+        "Present: connection-disconnect: required repair construct 2",
+        "Present: connection-disconnect: required repair construct 3",
+        "Absent: connection-disconnect: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-09",
+    "category": "roblox-debugging-remote-event-parameters",
+    "difficulty": 2,
+    "goal": "Fix the remote event parameters bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My server tip handler treats the amount as a Player and errors.\"\nLocation: ServerScriptService/Tips Script; ReplicatedStorage/TipRemote\nBroken Luau:\n```luau\nlocal remote = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"TipRemote\")\nremote.OnServerEvent:Connect(function(amount)\n print(amount.UserId)\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original remote-event-parameters bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "OnServerEvent passes the sender Player before client arguments.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*(?:player|sender)\\s*,\\s*amount\\b",
+          "why": "remote-event-parameters: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "typeof\\(\\s*amount\\s*\\)",
+          "why": "remote-event-parameters: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "OnServerEvent\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*amount\\s*\\)",
+          "why": "remote-event-parameters: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: remote-event-parameters: required repair construct 1",
+        "Present: remote-event-parameters: required repair construct 2",
+        "Absent: remote-event-parameters: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-10",
+    "category": "roblox-debugging-intvalue-not-number",
+    "difficulty": 2,
+    "goal": "Fix the intvalue not number bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My chest script cannot add five coins because Coins is an Instance.\"\nLocation: ServerScriptService/Chest Script\nBroken Luau:\n```luau\nlocal coins = player.leaderstats.Coins\ncoins = coins + 5\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/IntValue.yaml",
+      "content/en-us/players/leaderboards.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original intvalue-not-number bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Increment an IntValue's numeric Value, not the IntValue Instance.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "coins\\.Value\\s*(?:\\+=\\s*5\\b|=\\s*coins\\.Value\\s*\\+\\s*5\\b)",
+          "why": "intvalue-not-number: required repair construct 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "coins\\s*=\\s*coins\\s*\\+\\s*5\\b",
+          "why": "intvalue-not-number: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: intvalue-not-number: required repair construct 1",
+        "Absent: intvalue-not-number: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-11",
+    "category": "roblox-debugging-server-localplayer",
+    "difficulty": 2,
+    "goal": "Fix the server localplayer bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My server welcome message fails because LocalPlayer is nil.\"\nLocation: ServerScriptService/Welcome Script\nBroken Luau:\n```luau\nlocal player = game:GetService(\"Players\").LocalPlayer\nprint(player.Name)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Players.yaml",
+      "content/en-us/reference/engine/classes/Player.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original server-localplayer bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use Players.PlayerAdded on the server instead of client-only LocalPlayer.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "GetService\\(\\s*[\"']Players[\"']\\s*\\)",
+          "why": "server-localplayer: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.PlayerAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "server-localplayer: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.LocalPlayer\\b",
+          "why": "server-localplayer: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: server-localplayer: required repair construct 1",
+        "Present: server-localplayer: required repair construct 2",
+        "Absent: server-localplayer: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-12",
+    "category": "roblox-debugging-stale-character",
+    "difficulty": 2,
+    "goal": "Fix the stale character bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My stamina listener works once and breaks after the first death.\"\nLocation: StarterPlayerScripts/Stamina LocalScript\nBroken Luau:\n```luau\nlocal p = game:GetService(\"Players\").LocalPlayer\nlocal hum = p.Character.Humanoid\nhum.Running:Connect(function(speed) print(speed) end)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Player.yaml",
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original stale-character bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Bind to each new character and account for an already loaded character.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.CharacterAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "stale-character: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*WaitForChild\\(\\s*[\"']Humanoid[\"']\\s*\\)",
+          "why": "stale-character: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "if\\s+p\\.Character\\s+then",
+          "why": "stale-character: required repair construct 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "p\\.Character\\.Humanoid\\b",
+          "why": "stale-character: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: stale-character: required repair construct 1",
+        "Present: stale-character: required repair construct 2",
+        "Present: stale-character: required repair construct 3",
+        "Absent: stale-character: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-13",
+    "category": "roblox-debugging-remote-in-serverstorage",
+    "difficulty": 2,
+    "goal": "Fix the remote in serverstorage bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My GUI client waits for RoundSignal forever; the RemoteEvent is in ServerStorage.\"\nLocation: StarterPlayerScripts/RoundHud LocalScript\nBroken Luau:\n```luau\nlocal remote = game:GetService(\"ServerStorage\"):WaitForChild(\"RoundSignal\")\nremote.OnClientEvent:Connect(function(text) print(text) end)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ServerStorage.yaml",
+      "content/en-us/reference/engine/classes/ReplicatedStorage.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original remote-in-serverstorage bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Move shared RemoteEvents from ServerStorage to ReplicatedStorage.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "GetService\\(\\s*[\"']ReplicatedStorage[\"']\\s*\\)",
+          "why": "remote-in-serverstorage: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": ":\\s*WaitForChild\\(\\s*[\"']RoundSignal[\"']\\s*\\)",
+          "why": "remote-in-serverstorage: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "\\.OnClientEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "remote-in-serverstorage: required repair construct 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "GetService\\(\\s*[\"']ServerStorage[\"']\\s*\\)",
+          "why": "remote-in-serverstorage: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: remote-in-serverstorage: required repair construct 1",
+        "Present: remote-in-serverstorage: required repair construct 2",
+        "Present: remote-in-serverstorage: required repair construct 3",
+        "Absent: remote-in-serverstorage: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-14",
+    "category": "roblox-debugging-textlabel-click",
+    "difficulty": 2,
+    "goal": "Fix the textlabel click bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"I click the Play label and get no MouseButton1Click event.\"\nLocation: StarterGui/MainMenu LocalScript creates the control\nBroken Luau:\n```luau\nlocal label = Instance.new(\"TextLabel\")\nlabel.Parent = script.Parent\nlabel.MouseButton1Click:Connect(function() print(\"Play\") end)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TextButton.yaml",
+      "content/en-us/reference/engine/classes/GuiButton.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original textlabel-click bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use TextButton with Activated for mouse, touch and gamepad.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "Instance\\.new\\(\\s*[\"']TextButton[\"']\\s*\\)",
+          "why": "textlabel-click: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.Activated\\s*:\\s*Connect\\s*\\(",
+          "why": "textlabel-click: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "Instance\\.new\\(\\s*[\"']TextLabel[\"']\\s*\\)",
+          "why": "textlabel-click: original mistake 1 must be absent"
+        },
+        {
+          "id": "forbidden_2",
+          "re": "\\.MouseButton1Click\\s*:\\s*Connect",
+          "why": "textlabel-click: original mistake 2 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: textlabel-click: required repair construct 1",
+        "Present: textlabel-click: required repair construct 2",
+        "Absent: textlabel-click: original mistake 1 must be absent",
+        "Absent: textlabel-click: original mistake 2 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-15",
+    "category": "roblox-debugging-datastore-client",
+    "difficulty": 2,
+    "goal": "Fix the datastore client bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"Saving fails because DataStoreService is forbidden in my LocalScript.\"\nLocation: Rewrite StarterPlayerScripts/Saver LocalScript as a server Script in ServerScriptService\nBroken Luau:\n```luau\nlocal store = game:GetService(\"DataStoreService\"):GetDataStore(\"QuestSave\")\nlocal user = game:GetService(\"Players\").LocalPlayer\nstore:SetAsync(tostring(user.UserId), 4)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/index.md",
+      "content/en-us/reference/engine/classes/DataStoreService.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original datastore-client bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Access DataStoreService only in a server Script, with error handling.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "GetService\\(\\s*[\"']DataStoreService[\"']\\s*\\)",
+          "why": "datastore-client: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.PlayerRemoving\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*player",
+          "why": "datastore-client: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "\\bpcall\\s*\\(",
+          "why": "datastore-client: required repair construct 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.LocalPlayer\\b",
+          "why": "datastore-client: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: datastore-client: required repair construct 1",
+        "Present: datastore-client: required repair construct 2",
+        "Present: datastore-client: required repair construct 3",
+        "Absent: datastore-client: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-16",
+    "category": "roblox-debugging-proximityprompt-argument",
+    "difficulty": 2,
+    "goal": "Fix the proximityprompt argument bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My shopkeeper prompt errors on hit.Parent when a player presses E.\"\nLocation: Workspace/ShopKeeper/ProximityPrompt Script\nBroken Luau:\n```luau\nlocal prompt = script.Parent\nprompt.Triggered:Connect(function(hit)\n print(hit.Parent.Name)\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ProximityPrompt.yaml",
+      "content/en-us/ui/proximity-prompts.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original proximityprompt-argument bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "ProximityPrompt.Triggered provides a Player, not a Touched part.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Triggered\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*player\\s*\\)",
+          "why": "proximityprompt-argument: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "player\\.(?:UserId|Character|Name)\\b",
+          "why": "proximityprompt-argument: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.Triggered\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*hit\\s*\\)",
+          "why": "proximityprompt-argument: original mistake 1 must be absent"
+        },
+        {
+          "id": "forbidden_2",
+          "re": "hit\\.Parent\\b",
+          "why": "proximityprompt-argument: original mistake 2 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: proximityprompt-argument: required repair construct 1",
+        "Present: proximityprompt-argument: required repair construct 2",
+        "Absent: proximityprompt-argument: original mistake 1 must be absent",
+        "Absent: proximityprompt-argument: original mistake 2 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-17",
+    "category": "roblox-debugging-sound-not-started",
+    "difficulty": 2,
+    "goal": "Fix the sound not started bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"The LevelJingle Sound exists but my win celebration is silent.\"\nLocation: ServerScriptService/LevelUp Script\nBroken Luau:\n```luau\nlocal ding = workspace:WaitForChild(\"LevelJingle\")\nding.Playing = false\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Sound.yaml",
+      "content/en-us/sound/index.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original sound-not-started bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use Sound:Play to start an existing Sound.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": ":\\s*Play\\s*\\(\\s*\\)",
+          "why": "sound-not-started: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "LevelJingle",
+          "why": "sound-not-started: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.Playing\\s*=\\s*false\\b",
+          "why": "sound-not-started: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: sound-not-started: required repair construct 1",
+        "Present: sound-not-started: required repair construct 2",
+        "Absent: sound-not-started: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-18",
+    "category": "roblox-debugging-color3-ranges",
+    "difficulty": 2,
+    "goal": "Fix the color3 ranges bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My orange checkpoint renders yellow because I use 0–255 values with Color3.new.\"\nLocation: Workspace/OrangeCheckpoint Script\nBroken Luau:\n```luau\nlocal pad = script.Parent\npad.Color = Color3.new(255, 128, 0)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/datatypes/Color3.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original color3-ranges bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Color3.new uses unit-range channels; fromRGB takes byte-range channels.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "Color3\\.fromRGB\\(\\s*255\\s*,\\s*128\\s*,\\s*0\\s*\\)",
+          "why": "color3-ranges: required repair construct 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "Color3\\.new\\(\\s*255\\s*,\\s*128\\s*,\\s*0\\s*\\)",
+          "why": "color3-ranges: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: color3-ranges: required repair construct 1",
+        "Absent: color3-ranges: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-19",
+    "category": "roblox-debugging-tween-not-played",
+    "difficulty": 2,
+    "goal": "Fix the tween not played bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My gate fading Tween gets created but never starts.\"\nLocation: Workspace/Gate Script\nBroken Luau:\n```luau\nlocal ts = game:GetService(\"TweenService\")\nlocal tween = ts:Create(script.Parent, TweenInfo.new(2), {Transparency = 1})\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Tween.yaml",
+      "content/en-us/reference/engine/classes/TweenService.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original tween-not-played bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Call Tween:Play after TweenService:Create.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": ":\\s*Create\\s*\\(",
+          "why": "tween-not-played: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "(?:tween|fade|animation)\\s*:\\s*Play\\s*\\(\\s*\\)",
+          "why": "tween-not-played: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "(?:tween|fade|animation)\\s*:\\s*Cancel\\s*\\(",
+          "why": "tween-not-played: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: tween-not-played: required repair construct 1",
+        "Present: tween-not-played: required repair construct 2",
+        "Absent: tween-not-played: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-20",
+    "category": "roblox-debugging-handleless-tool",
+    "difficulty": 2,
+    "goal": "Fix the handleless tool bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My magic wand has no Handle part and will not activate.\"\nLocation: StarterPack/MagicWand LocalScript\nBroken Luau:\n```luau\nlocal tool = script.Parent\ntool.RequiresHandle = true\ntool.Activated:Connect(function() print(\"Cast\") end)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Tool.yaml",
+      "content/en-us/players/tools.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original handleless-tool bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Set Tool.RequiresHandle=false on a Tool intentionally lacking a Handle.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.RequiresHandle\\s*=\\s*false\\b",
+          "why": "handleless-tool: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.Activated\\s*:\\s*Connect\\s*\\(",
+          "why": "handleless-tool: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.RequiresHandle\\s*=\\s*true\\b",
+          "why": "handleless-tool: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: handleless-tool: required repair construct 1",
+        "Present: handleless-tool: required repair construct 2",
+        "Absent: handleless-tool: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-21",
+    "category": "roblox-debugging-continuous-particles",
+    "difficulty": 2,
+    "goal": "Fix the continuous particles bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My treasure chest sparkle sprays forever instead of one twenty-particle burst.\"\nLocation: Workspace/Chest/Attachment/ParticleEmitter Script\nBroken Luau:\n```luau\nlocal sparks = script.Parent\nsparks.Rate = 20\nsparks.Enabled = true\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ParticleEmitter.yaml",
+      "content/en-us/effects/particle-emitters.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original continuous-particles bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use ParticleEmitter:Emit with Rate=0 for a one-shot burst.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": ":\\s*Emit\\s*\\(\\s*20\\s*\\)",
+          "why": "continuous-particles: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.Rate\\s*=\\s*0\\b",
+          "why": "continuous-particles: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.Rate\\s*=\\s*20\\b",
+          "why": "continuous-particles: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: continuous-particles: required repair construct 1",
+        "Present: continuous-particles: required repair construct 2",
+        "Absent: continuous-particles: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-22",
+    "category": "roblox-debugging-unequip-walkspeed",
+    "difficulty": 2,
+    "goal": "Fix the unequip walkspeed bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"After unequipping my sprint boots I permanently run too fast.\"\nLocation: StarterPack/SprintBoots Script\nBroken Luau:\n```luau\nlocal tool = script.Parent\ntool.Equipped:Connect(function()\n tool.Parent.Humanoid.WalkSpeed = 28\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Tool.yaml",
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original unequip-walkspeed bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Cache the equipped Humanoid and restore its original WalkSpeed after unequip.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Equipped\\s*:\\s*Connect\\s*\\(",
+          "why": "unequip-walkspeed: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.Unequipped\\s*:\\s*Connect\\s*\\(",
+          "why": "unequip-walkspeed: required repair construct 2"
+        },
+        {
+          "id": "required_3",
+          "re": "\\b(?:oldSpeed|previousSpeed|originalSpeed|savedSpeed)\\b",
+          "why": "unequip-walkspeed: required repair construct 3"
+        },
+        {
+          "id": "required_4",
+          "re": "\\.WalkSpeed\\s*=\\s*(?:oldSpeed|previousSpeed|originalSpeed|savedSpeed)\\b",
+          "why": "unequip-walkspeed: required repair construct 4"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.Unequipped\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*\\)\\s*tool\\.Parent\\.Humanoid\\.WalkSpeed\\s*=\\s*28",
+          "why": "unequip-walkspeed: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: unequip-walkspeed: required repair construct 1",
+        "Present: unequip-walkspeed: required repair construct 2",
+        "Present: unequip-walkspeed: required repair construct 3",
+        "Present: unequip-walkspeed: required repair construct 4",
+        "Absent: unequip-walkspeed: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-23",
+    "category": "roblox-debugging-renderstepped-server",
+    "difficulty": 2,
+    "goal": "Fix the renderstepped server bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My server-run sign rotation complains RenderStepped only works on clients.\"\nLocation: ServerScriptService/RotateSign Script\nBroken Luau:\n```luau\nlocal run = game:GetService(\"RunService\")\nrun.RenderStepped:Connect(function(dt)\n workspace.Sign.Orientation += Vector3.new(0, dt * 30, 0)\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/RunService.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original renderstepped-server bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Use RunService.Heartbeat rather than a client render event in a server Script.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Heartbeat\\s*:\\s*Connect\\s*\\(",
+          "why": "renderstepped-server: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\b(?:dt|deltaTime)\\b",
+          "why": "renderstepped-server: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "\\.RenderStepped\\b",
+          "why": "renderstepped-server: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: renderstepped-server: required repair construct 1",
+        "Present: renderstepped-server: required repair construct 2",
+        "Absent: renderstepped-server: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-24",
+    "category": "roblox-debugging-destroyed-menu",
+    "difficulty": 2,
+    "goal": "Fix the destroyed menu bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My pause menu closes and then never reopens.\"\nLocation: StarterPlayerScripts/PauseMenu LocalScript\nBroken Luau:\n```luau\nlocal gui = game:GetService(\"Players\").LocalPlayer.PlayerGui:WaitForChild(\"PauseGui\")\nlocal function close() gui:Destroy() end\nclose()\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ScreenGui.yaml",
+      "content/en-us/reference/engine/classes/Instance.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original destroyed-menu bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Hide and reuse ScreenGui via Enabled instead of Destroy.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": "\\.Enabled\\s*=\\s*false\\b",
+          "why": "destroyed-menu: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\.Enabled\\s*=\\s*true\\b",
+          "why": "destroyed-menu: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "gui\\s*:\\s*Destroy\\s*\\(\\s*\\)",
+          "why": "destroyed-menu: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: destroyed-menu: required repair construct 1",
+        "Present: destroyed-menu: required repair construct 2",
+        "Absent: destroyed-menu: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-25",
+    "category": "roblox-debugging-remotefunction-call",
+    "difficulty": 2,
+    "goal": "Fix the remotefunction call bug in a beginner Roblox script",
+    "prompt": "In my Roblox game: \"My GetWave RemoteFunction says FireServer isn't a valid member.\"\nLocation: StarterGui/StatsGui LocalScript; ReplicatedStorage/GetWave RemoteFunction already has an OnServerInvoke handler\nBroken Luau:\n```luau\nlocal query = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"GetWave\")\nlocal wave = query:FireServer()\nprint(wave)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/RemoteFunction.yaml",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 700,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The original remotefunction-call bug remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "RemoteFunction:InvokeServer returns a value; FireServer is for RemoteEvents.",
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "required_1",
+          "re": ":\\s*InvokeServer\\s*\\(",
+          "why": "remotefunction-call: required repair construct 1"
+        },
+        {
+          "id": "required_2",
+          "re": "\\bpcall\\s*\\(",
+          "why": "remotefunction-call: required repair construct 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": ":\\s*FireServer\\s*\\(",
+          "why": "remotefunction-call: original mistake 1 must be absent"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Fenced Luau compiles and satisfies all required and forbidden patterns"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Compile Luau with the knowledge service /luau/check",
+        "Present: remotefunction-call: required repair construct 1",
+        "Present: remotefunction-call: required repair construct 2",
+        "Absent: remotefunction-call: original mistake 1 must be absent"
+      ]
+    },
+    "split": "development"
+  }
+]
