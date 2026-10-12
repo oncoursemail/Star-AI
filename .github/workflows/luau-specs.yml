@@ -84,4 +84,4 @@ jobs:
         env:
           STAR_LUAU_ANALYZE: 'on'
           STAR_LUAU_TOOLS_DIR: ${{ runner.temp }}/tools
-        run: python3 scripts/luau_quality_smoke.py
+        run: python3 -m scripts.luau_quality_smoke
