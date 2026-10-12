@@ -246,8 +246,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        streamRef.current='';sending.current=false
        const row:ChatMessage={...makeMsg('event',msg),status:cancelled?'cancelled':'failed'}
        fresh.current.add(row.id)
-       if(chatRef.current===answeringChat.current)setMessages(m=>[...m,row])
-       setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
+       if(chatRef.current===answeringChat.current){
+         setMessages(m=>[...m,row])
+         setRetryText(lastSent.current)
+       }
+       setBusy(false);setStopping(false);setStreamingText('')
        setPetTerminal({kind:cancelled?'cancelled':'error',at:Date.now()})
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
        // The host has just recorded this failure; without this the Model page would still say "not checked yet".
