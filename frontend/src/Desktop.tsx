@@ -16,6 +16,7 @@ import {RobloxPanel} from './RobloxPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
+import {chatImageRequest} from './imageIntent'
 import {VoiceSettings} from './VoiceSettings'
 import {StudioTargetSettings} from './StudioTargetSettings'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
@@ -346,10 +347,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
    if(teamMode&&!runsOnOwnHardware(data.settings)){setNotice('STAR Teams runs on your own hardware. Choose Local or STAR Server in Settings.');return}
    sending.current=true
-   const mine=beginRun(value,selected,imageMode?'image':teamMode?'team':'chat')
+   // A plain picture request typed in the ordinary chat goes to the picture engine; everything else stays text.
+   const intent=!teamMode&&!imageMode&&chatMode!=='agent'&&data.settings.media_chat_auto!==false?chatImageRequest(value,selected,messages,retryMessageId!==undefined):null
+   const makeImage=imageMode||!!intent
+   const mine=beginRun(value,selected,makeImage?'image':teamMode?'team':'chat')
    if(retryMessageId===undefined)setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
-   const action=imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
+   const action=intent?'generateImage':imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
+   const res=await act(action,intent?{prompt:intent.prompt,display_prompt:value,files:selected,size:imageSize,followup:intent.followup,...(retryMessageId===undefined?{}:{retryMessageId})}:imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
@@ -358,7 +362,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      fresh.current.add(row.id)
      setMessages(m=>[...m,row])
    }
- },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,imageSize,data.settings,chatMode,teamMode,research,githubSource])
+ },[prompt,busy,files,inactive,act,beginRun,updateRun,imageMode,imageSize,data.settings,chatMode,teamMode,research,githubSource,messages])
 
  const stop=useCallback(()=>{
    if(!busy||stopping)return
@@ -700,6 +704,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          <RobloxPanel status={data.roblox} draft={draft} onChange={setDraft} invoke={act} disabled={inactive}/>
          <StudioTargetSettings settings={data.settings} disabled={inactive} onSaved={()=>void sync()} openTools={()=>nav('tools')}/>
          <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult} chooseFolder={()=>void selectRouterFolder()} startRouter={()=>void startLocalRouter()} stopBrain={()=>void stopLocalBrain()} testTeam={()=>void testSpecialists()}/>
+           <label className="setting-switch"><span><strong>Create images straight from chat</strong><small>A message that clearly asks for a picture ("generate an image of ...", "create a logo for ...") is made on this PC with ComfyUI instead of going to the text model. Off: such messages go to the text model.</small></span><input type="checkbox" checked={draft.media_chat_auto!==false} onChange={e=>setDraft(d=>({...d,media_chat_auto:e.target.checked}))}/></label>
+           <label className="setting-switch"><span><strong>Describe session capabilities to the model</strong><small>Experimental prompt addition; off until evaluated.</small></span><input type="checkbox" checked={draft.session_capabilities_prompt===true} onChange={e=>setDraft(d=>({...d,session_capabilities_prompt:e.target.checked}))}/></label>
            <MediaPlaces settings={data.settings} invoke={act} disabled={inactive} refresh={()=>void sync()}/>
            <VoiceSettings disabled={inactive}/>
            <details className="settings-expander" open={imageMode}>

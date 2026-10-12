@@ -77,7 +77,8 @@ def bridge(tmp_path, monkeypatch):
         def close(self):
             pass
 
-    settings = SimpleNamespace(model='fixture-model', project='project', media_use_references=False)
+    settings = SimpleNamespace(model='fixture-model', project='project', media_use_references=False,
+                               session_capabilities_prompt=False)
 
     def model_boundary(settings, prompt, pictures, **kwargs):
         captured.pictures = pictures
