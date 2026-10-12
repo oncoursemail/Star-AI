@@ -109,6 +109,7 @@ class Settings:
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    luau_run_before_answer: bool = False  # explicit opt-in, remote sandbox only
     # Learning (star/lessons.py). Lessons are local project notes, never weights.
     learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
@@ -145,7 +146,7 @@ class Settings:
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
+                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -802,6 +803,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
+    # With consent, keep unreviewed code off the screen until review completes.
+    stream_tokens = stream_tokens and not settings.luau_run_before_answer
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
     if not settings.model.strip():
@@ -1129,7 +1132,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     result = await answer_with(settings.model)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
                 return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
-                                                    started=started, on_event=audited_event)
+                                                    started=started, on_event=audited_event, settings=settings)
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
