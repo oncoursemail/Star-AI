@@ -1,0 +1,44 @@
+<roblox version="4">
+  <Item class="Model" referent="RBX0">
+    <Properties><string name="Name">Demo</string><Ref name="PrimaryPart">RBX1</Ref></Properties>
+    <Item class="Part" referent="RBX1">
+      <Properties>
+        <string name="Name">Pad</string><bool name="Anchored">true</bool>
+        <float name="Transparency">0.25</float>
+        <Vector3 name="Size"><X>4</X><Y>1</Y><Z>4</Z></Vector3>
+        <string name="UnknownProperty">SHOULD_NOT_BE_EXTRACTED</string>
+        <BinaryString name="AttributesSerialize">AAAA</BinaryString>
+      </Properties>
+    </Item>
+    <Item class="Folder">
+      <Properties><string name="Name">Logic</string></Properties>
+      <Item class="Script">
+        <Properties>
+          <string name="Name">Server</string><bool name="Disabled">false</bool><token name="RunContext">1</token>
+          <ProtectedString name="Source"><![CDATA[local storage = game:GetService("ReplicatedStorage")
+local remote = storage:WaitForChild("Submit")
+local settings = require(script.Parent.Settings)
+local function onRequest(player)
+    remote:FireClient(player, settings.read())
+end
+remote.OnServerEvent:Connect(onRequest)
+-- game:GetService("NotAService")
+]]></ProtectedString>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript">
+        <Properties><string name="Name">Settings</string><ProtectedString name="Source"><![CDATA[local Settings = {}
+function Settings.read()
+    return "value < limit & valid"
+end
+return Settings
+]]></ProtectedString></Properties>
+      </Item>
+      <Item class="LocalScript">
+        <Properties><string name="Name">Client</string><ProtectedString name="Source">local remote = script.Parent.Remote
+remote:FireServer(&quot;ready&quot;)
+</ProtectedString></Properties>
+      </Item>
+    </Item>
+  </Item>
+</roblox>

@@ -775,7 +775,7 @@ def launch():
                     elif kind=='image':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Choose images','','Images (*.png *.jpg *.jpeg *.webp)')
                     else:
-                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json *.rbxmx *.rbxlx *.rbxm *.rbxl)')
                     picked=[]
                     for name in names[:8]:
                         path=Path(name).resolve(strict=True)
