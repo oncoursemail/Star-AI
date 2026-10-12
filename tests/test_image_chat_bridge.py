@@ -15,6 +15,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from star import media_actions
 from star import react_shell as shell
 from star.chat_images import PREFIX, latest_generated_path
 from star.desktop_core import Conversations, Settings
@@ -39,6 +40,8 @@ def bridge_class():
 
 def host(tmp_path, monkeypatch, **changes):
     monkeypatch.setattr(shell, 'app_data', lambda: tmp_path)
+    # Never find the ComfyUI of the PC the tests run on: a test that wants a found folder says so.
+    monkeypatch.setattr(media_actions, 'detect_comfy_home', lambda: '')
     settings_file = tmp_path / 'settings.json'
     settings = Settings()
     settings.model = 'test-model'
@@ -179,6 +182,16 @@ def test_no_engine_and_no_folder_fails_clearly_and_keeps_the_question_for_retry(
     state = retry_state(tmp_path)
     assert state['status'] == 'failed' and state['prompt'] == DOG and state['detail'] == detail
     assert [row['role'] for row in rows(tmp_path)] == ['user', 'event']      # no invented answer
+
+
+def test_a_folder_found_on_its_own_is_used_when_none_is_chosen(tmp_path, monkeypatch):
+    instance = host(tmp_path, monkeypatch)
+    monkeypatch.setattr(media_actions, 'detect_comfy_home', lambda: str(tmp_path))
+    monkeypatch.setattr(shell.image_gen, 'status', lambda settings: {'running': False})
+    monkeypatch.setattr(shell, 'generate_chat_image', made('found.png'))
+    result = instance._run_image('request', 'a dog', display_prompt=DOG)
+    assert result['answer'] == 'Created'
+    instance.comfy_launcher.start.assert_called_once()
 
 
 def test_a_place_that_cannot_make_pictures_fails_before_anything_is_started(tmp_path, monkeypatch):

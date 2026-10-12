@@ -34,7 +34,7 @@ export type BootData = { version:string; build?:BuildInfo; project:string; proje
 export type MediaPlace = 'servers'|'pc'
 export type MediaOption = { id: MediaPlace; label: string; available: boolean; note: string; reason: string }
 export type MediaCapability = { id: 'images'|'voice'|'video'; title: string; field: string; chosen: MediaPlace; options: MediaOption[] }
-export type MediaStatus = { places: MediaCapability[]; images: { running: boolean; ready: boolean; missing: string[]; model: string; message: string; version?: string }; sizes: Array<{id: string; label: string}>; can_start: boolean; ffmpeg: { found: boolean; message: string }; measured_on: string; references: number }
+export type MediaStatus = { places: MediaCapability[]; images: { running: boolean; ready: boolean; missing: string[]; model: string; message: string; version?: string }; sizes: Array<{id: string; label: string}>; can_start: boolean; detected_home?: string; ffmpeg: { found: boolean; message: string }; measured_on: string; references: number }
 export type MediaReference = { id: string; label: string; note: string; width: number; height: number; added: string; preview: string }
 export type MediaComparison = { reference: {id: string; label: string}; image: string; saved: string; candidate: string; differences: string[]; measured: { lines: string[] }; model: string; seconds: number; model_error: string }
 /** `voice` events belong to a voice call or a voice preview; they are keyed by the request that started it. */

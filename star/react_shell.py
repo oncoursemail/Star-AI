@@ -42,7 +42,7 @@ from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester, may_start_automatic
 from . import image_gen
-from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher,
+from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
                             handle as handle_media_action)
 from . import media_places
 from .chat_media import prepare_turn
@@ -702,10 +702,10 @@ def launch():
             # The chosen place first: a choice that cannot make pictures fails here, before ComfyUI is started.
             media_places.require(settings,'images',home)
             if not image_gen.status(settings)['running']:
-                if not settings.comfy_home.strip():
-                    raise ComfyError('not_running', 'Pictures are made by ComfyUI on this PC, and it is not running. STAR has no '
-                                     'ComfyUI folder to start it from. Choose that folder in Settings → Where STAR generates '
-                                     '(or start ComfyUI yourself), then ask again.')
+                if not effective_comfy_home(settings):
+                    raise ComfyError('not_running', 'No image engine is set up: pictures are made by ComfyUI on this PC, it is not '
+                                     'running, and STAR found no ComfyUI folder to start it from. Choose that folder in Settings → '
+                                     'Where STAR generates (or start ComfyUI yourself), then ask again.')
                 self._emit(request_id,'progress',{'phase':'Starting the image engine...'})
                 self.comfy_launcher.start(settings,home)
                 if self.cancel_chat.is_set():

@@ -14,12 +14,32 @@ describe('image intent',()=>{
   ['make me an image of a castle','a castle'],
   ['create a logo for my game','a logo for my game'],
   ['render a wallpaper of a forest','a wallpaper of a forest'],
+  ['draw a cat','a cat'],
+  ['Draw me a cat.','a cat'],
+  ['please draw a castle','a castle'],
+  ['paint a sunset','a sunset'],
+  ['sketch me a house on a hill','a house on a hill'],
+  ['make me a logo','a logo'],
+  ['Make me a logo for my game','a logo for my game'],
+  ['show me an image of a castle','a castle'],
+  ['Show me a picture of a sunset over the sea','a sunset over the sea'],
+  ['I need a poster of a robot','a poster of a robot'],
+  ["I'd like a picture of my dog",'my dog'],
+  ['I want an image of a dragon.','a dragon'],
+  ['Can you make an image of a robot?','a robot'],
+  ['Could you please draw a cat?','a cat'],
+  ['Can you create images of cats?','cats'],
  ])('routes %s as a new picture',(input,prompt)=>expect(imageIntent(input)).toEqual({prompt,followup:false}))
 
  it.each([
   'how do I generate an ImageLabel in Roblox','draw a UI layout in code','explain image formats',
   'write python code to create an image','make a Luau script that draws a sprite','create an icon component in react',
   'what is a good logo size?','Generate','',
+  // questions about what STAR can do, and other uses of the same words
+  'Can you create images?','Can you create an image?','Can you make a logo?','Can you draw?','Do you generate images?',
+  'draw a conclusion from this','draw attention to the second point','draw a line under the total','draw a diagram of the architecture',
+  'draw a flowchart for the login','show me the picture frame code','I need a picture frame','I need help with a logo',
+  'make me a table of the results','show me a list of images',
  ])('leaves %j in chat',input=>expect(imageIntent(input)).toBeNull())
 
  it('keeps an order that is only the command whole',()=>expect(imageIntent('Generate an image')).toEqual({prompt:'an image',followup:false}))
