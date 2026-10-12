@@ -140,7 +140,13 @@ class ResearchWatcher:
                     "SELECT url FROM research_sources WHERE source_id=?", (source_id,)
                 ).fetchone()
                 if existing["url"] != url:
-                    raise ValueError("Source definition changed; migrate it in reviewed code")
+                    # The address of a source was corrected in SOURCES. The stored cursor belongs to the old
+                    # page, so it is cleared and the next check starts a new baseline. The history is kept.
+                    self.db.execute(
+                        "UPDATE research_sources SET url=?, last_digest=NULL, etag='', last_modified='', "
+                        "last_outcome='never', error_code='' WHERE source_id=?",
+                        (url, source_id),
+                    )
 
     def close(self) -> None:
         self.db.close()

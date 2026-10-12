@@ -17,11 +17,8 @@ The inspected integration branch has:
   in .github/workflows/windows-desktop.yml.
 - A public release updater in star/updates.py.
 
-As independently checked through GitHub on October 11, main did **not**
-report branch protection and the repository had no configured rulesets.
-GitHub permissions and environment protection must be configured in the
-repository UI by its owner. Source v0.9.0 was not the latest public installer:
-the observed public release was v0.8.1.
+GitHub permissions, branch rules and environment protection are configured in
+the repository UI by its owner; this document does not record their state.
 
 ## What this PR really implements
 

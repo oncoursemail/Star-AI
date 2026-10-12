@@ -263,3 +263,23 @@ def test_daily_research_requires_boolean_owner_setting():
     enabled.validate()
     with pytest.raises(ValueError, match="true or false"):
         Settings(research_auto_check="enabled").validate()
+
+
+def test_a_corrected_source_address_is_migrated_and_history_is_kept(tmp_path):
+    import sqlite3
+    database = tmp_path / "research.sqlite"
+    key = "roblox-studio-mcp"
+    with ResearchWatcher(database) as watcher, _client(
+            lambda request: _page("Reference documentation for a validated Studio tool interface.")) as client:
+        assert watcher.check(key, client=client)["outcome"] == "baseline"
+        before = watcher.status()["candidate_count"]
+    db = sqlite3.connect(database)
+    with db:
+        db.execute("UPDATE research_sources SET url=? WHERE source_id=?", ("https://old.example/page", key))
+    db.close()
+    with ResearchWatcher(database) as reopened:          # used to raise ValueError for every call
+        row = reopened.db.execute(
+            "SELECT url,last_digest,etag,last_outcome FROM research_sources WHERE source_id=?", (key,)).fetchone()
+        assert row["url"] == SOURCES[key]
+        assert row["last_digest"] is None and row["etag"] == "" and row["last_outcome"] == "never"
+        assert reopened.status()["candidate_count"] == before

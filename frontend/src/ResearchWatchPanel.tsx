@@ -32,7 +32,7 @@ type Evidence = Observation&{url:string;excerpt:string;untrusted_reference_only:
 const sourceTitle=(value:string)=>value.split('-').map(part=>part.toUpperCase()==='MCP'?'MCP':part.charAt(0).toUpperCase()+part.slice(1)).join(' ')
 const lastChecked=(value:string|null)=>value?new Date(value).toLocaleString():'Never checked'
 
-/** All network requests require an operator click. Nothing observed is made trusted. */
+/** Network requests happen on an operator click, or once a day per source when the owner turned the automatic check on (off by default). Nothing observed is made trusted. */
 export function ResearchWatchPanel({disabled=false,autoCheck=false,onAutoChange}:{disabled?:boolean;autoCheck?:boolean;onAutoChange?:(enabled:boolean)=>void}) {
   const [status,setStatus]=useState<ResearchStatus|null>(null)
   const [evidence,setEvidence]=useState<Evidence|null>(null)
