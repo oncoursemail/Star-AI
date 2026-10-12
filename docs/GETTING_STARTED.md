@@ -1,15 +1,15 @@
 # Getting started with STAR v0.9.0
 
-STAR v0.9.0 is a **source release candidate**, not a confirmed public Windows installer. Use [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest) to find the latest published installer. At the time of the release acceptance document, the public installer was v0.8.1. Some features below need a separate setup or real Windows test.
+**Release status (checked October 12, 2026):** STAR v0.9.0 was published on October 11, 2026 with a Windows Setup installer, portable ZIP and SHA-256 manifest. Use [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest) to check the latest published installer. This guide describes the v0.9.0 release; newer source-branch features may not be in that installer. Hardware and Roblox workflows still require their own verification.
 
 ## 1. Install or upgrade from v0.8
 
 1. Download the Windows Setup from [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest). Do not treat a branch build or pull request as a published installer.
 2. Before upgrading, close STAR and copy `%APPDATA%\STAR` somewhere safe.
-3. When a v0.9.0 Setup has actually been released, install it over the older version. Do not delete your data folder.
+3. Install the published v0.9.0 Setup over the older version. Do not delete your data folder.
 4. Open STAR and check old conversations, references, projects, settings and downloaded models.
 
-The installer is designed to preserve `%APPDATA%\STAR`, including conversations, references, model files and settings. Migration of single-stream chat history into threads is designed to keep old user messages. A real v0.8-to-v0.9.0 upgrade on the user's Windows profile is **not confirmed**. The old desktop interface can be launched with `STAR.exe --legacy-ui` where that executable is installed.
+The installer is designed to preserve `%APPDATA%\STAR`, including conversations, references, model files and settings. Migration of single-stream chat history into threads is designed to keep old user messages. The [published v0.9.0 release notes](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0), dated October 11, 2026, report one real v0.8.0-to-v0.9.0 upgrade on Windows 11 with unchanged personal-file hashes and no lost chat database rows or columns. That is a reported one-machine acceptance run, **not** verification of every Windows profile, v0.8.1 upgrade or GPU. The old desktop interface can be launched with `STAR.exe --legacy-ui` where that executable is installed.
 
 ### Administrator rights on Windows
 

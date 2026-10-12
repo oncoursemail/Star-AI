@@ -1,0 +1,35 @@
+# Documentation accuracy audit — October 12, 2026
+
+**Scope:** 15 concrete feature/release claims in `docs/GETTING_STARTED.md`, `docs/STAR_V090_RELEASE_NOTES.md`, `docs/STAR_V090_RELEASE_ACCEPTANCE.md`, and `README.md`, compared with code and the official published v0.9.0 release. The file/line column identifies **original lines before this change** at `star/next` commit `63164d261a1e5b08dbb1711961c96b80be40b3de` (line numbers may move after corrections). Evidence names the code symbol, file, release or recorded measurement. Reading source is not equivalent to executing a product workflow.
+
+| # | Original claim and source line | Code / release evidence | Verdict | Resolution |
+|---|---|---|---|---|
+| 1 | **GETTING_STARTED.md:3:** v0.9.0 is only a source release candidate | GitHub release v0.9.0: published 2026-10-11 22:34:59Z; `star/version.py:2` | **false** | State that v0.9.0 is published |
+| 2 | **GETTING_STARTED.md:3:** The public installer is v0.8.1 | GitHub v0.9.0 release asset listing: `STAR-Setup-v0.9.0.exe`, portable ZIP, `SHA256SUMS.txt` | **false** | Name the published v0.9.0 assets |
+| 3 | **GETTING_STARTED.md:9:** Install v0.9.0 only *when* it is released | GitHub v0.9.0 release metadata, published 2026-10-11 | **false** | Make instruction unconditional for the published version |
+| 4 | **GETTING_STARTED.md:12:** A real v0.8-to-v0.9.0 upgrade is not confirmed | Published v0.9.0 release notes (2026-10-11) report a v0.8.0 Windows 11 upgrade, unchanged file hashes and preserved chat records; not independently rerun | **false** | Report the one-PC release claim and preserve limitations |
+| 5 | **GETTING_STARTED.md:16:** Setup defaults to per-user without elevation | `installer/STAR.iss:15,24` (`{localappdata}`, `PrivilegesRequired=lowest`) | **true** | Retained |
+| 6 | **GETTING_STARTED.md:16:** All-users installation can be selected and requires elevation | `installer/STAR.iss:24-25` (`PrivilegesRequiredOverridesAllowed=dialog`); expected Windows UAC behavior | **true** | Retained |
+| 7 | **GETTING_STARTED.md:74:** Pending Open Cloud actions expire after 15 minutes | `star/roblox_cloud.py:45-48` (`ACTION_TTL = 15 * 60`, `MAX_PENDING = 5`) | **true** | Retained |
+| 8 | **STAR_V090_RELEASE_NOTES.md:1-3:** v0.9.0 release notes describe a draft/unpublished candidate | Published v0.9.0 GitHub release metadata, 2026-10-11; `star/version.py:2` | **false** | Retitle as published release notes |
+| 9 | **STAR_V090_RELEASE_NOTES.md:15:** Eighteen packs ship and five are enabled by default | Published 2026-10-11 release notes report 18/5; audited 2026-10-12 source has 26 `star/skill_packs/` subdirectories and five `DEFAULT_ENABLED` names in `star/skill_packs/__init__.py:40-46` | **partly** | Separate the historical published inventory from newer source directories; avoid claiming 26 shipped |
+| 10 | **STAR_V090_RELEASE_NOTES.md:27:** Upgrade of existing Windows profile still needs verification | Published v0.9.0 release notes (2026-10-11) report one physical Windows 11 upgrade from v0.8.0; other profiles still untested | **false** | Distinguish reported one-PC run from untested paths |
+| 11 | **STAR_V090_RELEASE_NOTES.md:31:** PR #40 test counts describe v0.9.0 verification | Earlier PR #40 text records 2,058 Python/172 frontend; published 2026-10-11 release reports 2,723 Python/215 interface and 65-step acceptance | **partly** | Date and attribute both historical PR and release counts |
+| 12 | **STAR_V090_RELEASE_NOTES.md:35:** The public website is not deployed | `.github/workflows/website-pages.yml:66-81` defines conditional deployment; no source or build record proves the current public site state | **partly** | Mark deployment unverified rather than assert absence |
+| 13 | **STAR_V090_RELEASE_NOTES.md:39:** The highest 18/34 and 11/23 results are a current single baseline | `docs/evals.md` measured-results section (2026-10-11, real `star.evals run`/`rescore`); `docs/WEBSITE_RELEASE_CHECKLIST.md:9` records released run 13/34 on 2026-10-12 and earlier outcomes | **partly** | Give dates, method, 13–18/34 variation, unreproduced creation and Studio limits |
+| 14 | **STAR_V090_RELEASE_ACCEPTANCE.md:3:** v0.9.0 is unpublished pending candidate checks | Published GitHub release v0.9.0 (2026-10-11) with three named assets; `star/version.py:2` | **false** | Record published status without asserting full hardware acceptance |
+| 15 | **README.md:44:** A verified Windows upgrade is reported by the linked release notes | Published 2026-10-11 GitHub release notes report one v0.8.0 upgrade; the linked `docs/STAR_V090_RELEASE_ACCEPTANCE.md:39` instead described an unrun v0.8.1 scenario | **partly** | Cite the actual published release notes for the tested v0.8.0 upgrade |
+
+## Disposition and measurement limits
+
+Of the 15 checked claims: **3 true**, **5 partly true**, **7 false**. The **12 partly true/false claims were corrected** in their source documentation. Three supported statements were left intact. Historical PR counts and released-source test counts must not be presented as interchangeable; publication does not verify all GPU, Studio, browser deployment or upgrade paths.
+
+GitHub v0.9.0 publication was checked from the release tag and asset metadata on October 12, 2026 (published October 11, 2026). The release's test and physical acceptance counts were **read from its release notes**, not rerun here. The October 11 historical Roblox baseline was reported by `docs/evals.md` as `python -m star.evals run` on the fixed task sets followed by `python -m star.evals rescore`; the October 12 newer outcome is recorded in `docs/WEBSITE_RELEASE_CHECKLIST.md:9`. No local pytest, Vitest, real Windows installer, Roblox engine or external-site deployment check was performed for this audit. GitHub Actions checks for the draft PR are reported separately on the PR.
+
+## Audit approach (alternatives considered)
+
+- **Direct source-to-claim review (selected):** GitHub API read of exact source and release metadata, with a dated evidence table. No new dependency, licence or runtime cost; review must be repeated when code/releases change.
+- **Existing Vitest documentation assertions:** uses the project's existing frontend tooling (no new tool/licence cost), but checks text fragments, not whether behavior is backed by implementation; upkeep means maintaining literal fixtures.
+- **New link-checking dependency:** can detect dead URLs but not false functional claims, introduces a third-party licence/upkeep and network/CI cost; not added.
+
+**No application code or tests were changed.** Documentation-only corrections are submitted for existing GitHub CI checks, which are not a real-device acceptance run.
