@@ -58,7 +58,7 @@ local bogus = Instance.new("Bad")
 local a = "Instance.new('Bogus') p:NotReal()"
 local b = 'game:GetService("NoSuch")'
 local c = [==[ Instance.new("Fake") ]==]
-local d = \`Instance.new("Bogus")\`
+local d = `Instance.new("Bogus")`
 local e = "backslash \\" Instance.new('FalsePositive')"
 local p = Instance.new("Part")
 -- p:Unreal()
@@ -78,6 +78,15 @@ local read = p.ChildNamedByUser
 p = getDynamicObject()
 p:MadeUp()
 """
+    assert check_luau_api(source, dump) == []
+
+
+@pytest.mark.parametrize("source", [
+    'local p = Instance.new("Part")\nlocal function inspect(p)\n    p:MadeUp()\nend',
+    'local p = Instance.new("Part")\nlocal p\np:MadeUp()',
+    'local p = Instance.new("Part")\np = getDynamicObject()\np:MadeUp()',
+])
+def test_shadowing_and_reassignment_stop_type_inference(dump, source):
     assert check_luau_api(source, dump) == []
 
 

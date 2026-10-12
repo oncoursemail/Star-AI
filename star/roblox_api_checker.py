@@ -172,9 +172,9 @@ def _creation_at(tokens: list[_Token], values: list[str], index: int,
     if index + 5 >= len(tokens) or (index and values[index - 1] in (".", ":")):
         return None
     if values[index:index + 4] == ["Instance", ".", "new", "("]:
-        kind, allowed, rule = "class", dump.classes, "unknown-class"
+        allowed, rule = dump.classes, "unknown-class"
     elif values[index:index + 4] == ["game", ":", "GetService", "("]:
-        kind, allowed, rule = "service", dump.services, "unknown-service"
+        allowed, rule = dump.services, "unknown-service"
     else:
         return None
 
@@ -204,6 +204,24 @@ def check_luau_api(source: str, dump: ApiDump) -> list[ApiFinding]:
     known: dict[str, str] = {}
     findings: list[ApiFinding] = []
     for i, token in enumerate(tokens):
+        # Shadowed locals or function parameters do not retain an inferred class.
+        # We do not restore outer bindings: missing a hit is safer than a false one.
+        if token.kind == "word" and token.value == "local" and i + 1 < len(tokens):
+            known.pop(values[i + 1], None)
+        if token.kind == "word" and token.value == "function":
+            opening = next((j for j in range(i + 1, min(i + 7, len(tokens)))
+                            if values[j] == "("), None)
+            if opening is not None:
+                expect_name = True
+                for j in range(opening + 1, len(tokens)):
+                    if values[j] == ")":
+                        break
+                    if values[j] == ",":
+                        expect_name = True
+                    elif expect_name and tokens[j].kind == "word":
+                        known.pop(values[j], None)
+                        expect_name = False
+
         # An ordinary reassignment kills the last simple inferred type.
         if (token.kind == "word" and values[i + 1:i + 2] == ["="]
                 and values[i + 2:i + 3] != ["="]
