@@ -9,11 +9,21 @@ on:
     paths:
       - 'examples/**'
       - 'scripts/run_luau_specs.py'
+      - 'scripts/luau_quality_smoke.py'
+      - 'star/luau_lint.py'
+      - 'star/luau_analyze.py'
+      - 'star/roblox_craft.py'
+      - 'tests/test_luau_analyze.py'
       - '.github/workflows/luau-specs.yml'
   pull_request:
     paths:
       - 'examples/**'
       - 'scripts/run_luau_specs.py'
+      - 'scripts/luau_quality_smoke.py'
+      - 'star/luau_lint.py'
+      - 'star/luau_analyze.py'
+      - 'star/roblox_craft.py'
+      - 'tests/test_luau_analyze.py'
       - '.github/workflows/luau-specs.yml'
   workflow_dispatch:
 
@@ -47,3 +57,31 @@ jobs:
           echo "$RUNNER_TEMP/luau" >> "$GITHUB_PATH"
       - name: Run every Luau spec
         run: python3 scripts/run_luau_specs.py
+
+  luau-quality-smoke:
+    name: Pinned Luau analyzer smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Fetch checksum-pinned official analyzer without administrator installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          zip="$RUNNER_TEMP/luau-ubuntu.zip"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$zip" \
+            "https://github.com/luau-lang/luau/releases/download/${LUAU_VERSION}/luau-ubuntu.zip"
+          echo "${LUAU_ZIP_SHA256}  ${zip}" | sha256sum --check
+          dest="$RUNNER_TEMP/tools/luau-${LUAU_VERSION}"
+          mkdir -p "$dest"
+          unzip -q "$zip" -d "$dest"
+          chmod +x "$dest/luau-analyze"
+          test -x "$dest/luau-analyze"
+      - name: Run adapter against three STAR-derived Luau snippets
+        env:
+          STAR_LUAU_ANALYZE: 'on'
+          STAR_LUAU_TOOLS_DIR: ${{ runner.temp }}/tools
+        run: python3 scripts/luau_quality_smoke.py

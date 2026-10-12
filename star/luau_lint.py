@@ -78,8 +78,8 @@ def _tokens(code: str) -> list[_Token]:
     return out
 
 
-def lint(code: str) -> list[Finding]:
-    """Return sorted findings; no evaluation, execution, filesystem or network calls."""
+def lint(code: str, *, external: bool | None = None) -> list[Finding]:
+    """Return static findings; optional CLI second opinion is OFF by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -227,4 +227,10 @@ def lint(code: str) -> list[Finding]:
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")
                         break
+    if external is None:
+        from .luau_analyze import enabled
+        external = enabled()
+    if external:
+        from .luau_analyze import analyze
+        findings.extend(analyze(code))
     return sorted(set(findings), key=lambda f: (f.line, f.rule_id, f.message))

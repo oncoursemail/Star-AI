@@ -207,8 +207,17 @@ def audit(instances: list[dict], scripts: list[dict] | None = None, *, target: s
                 "Confirm the Animator's owner, replication and rig hierarchy in Studio.",
                 doc="animations", certainty="heuristic")
 
+    from .luau_analyze import enabled as analyzer_enabled
+    use_external = analyzer_enabled()
+    external_count = 0
     for script in sorted(scripts, key=lambda entry: entry["path"]):
         path, source = script["path"], script["source"]
+        if use_external and external_count < 3:
+            from .luau_analyze import analyze
+            external_count += 1
+            for finding in analyze(source):
+                add(finding.rule_id, "code", finding.severity, path, finding.message,
+                    finding.suggested_fix, doc="luau", certainty="analyzer")
         if not re.search(r"(?m)^[ \t]*--!strict\b", source):
             add("luau-strict", "code", "review", path, "No --!strict directive was observed.",
                 "Consider strict mode, then run the real Luau analyzer and fix type diagnostics.",
@@ -235,6 +244,8 @@ def audit(instances: list[dict], scripts: list[dict] | None = None, *, target: s
                 doc="luau", certainty="heuristic")
 
     counts = Counter(node["class"] for node in by_path.values())
+    extra_limits = (["Only the first three scripts received opt-in Luau analysis; remaining scripts are unverified."]
+                    if use_external and len(scripts) > 3 else [])
     return {
         "read_only": True, "executed": False, "snapshot_incomplete": True,
         "target": target, "reviewed_instances": len(instances),
@@ -250,6 +261,7 @@ def audit(instances: list[dict], scripts: list[dict] | None = None, *, target: s
             "Source patterns are heuristic, not a parsed AST or a Luau type-checker result.",
             "No screenshot, animation clip, running gameplay or GPU profiling was inspected.",
             "Native editable UI, live rig alignment and VFX appearance need Studio/device playtests.",
+            *extra_limits,
         ],
         "next_steps": [
             "Capture real screen shots at phone, desktop and gamepad viewports.",
