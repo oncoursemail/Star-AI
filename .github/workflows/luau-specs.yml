@@ -1,6 +1,15 @@
 name: Luau template specs
 
+# Runs every examples/**/*.spec.luau on the official standalone Luau CLI, pinned by
+# release tag and by the SHA-256 that GitHub publishes for that release asset.
+# Raising the version means changing LUAU_VERSION and LUAU_ZIP_SHA256 together.
 on:
+  push:
+    branches: [main, 'star/**']
+    paths:
+      - 'examples/**'
+      - 'scripts/run_luau_specs.py'
+      - '.github/workflows/luau-specs.yml'
   pull_request:
     paths:
       - 'examples/**'
@@ -11,22 +20,29 @@ on:
 permissions:
   contents: read
 
+env:
+  LUAU_VERSION: '0.691'
+  LUAU_ZIP_SHA256: '9b7699968c911beb3781f682c6be298440879ae279ff352d36dd58603418de2b'
+
 jobs:
   luau-specs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: Install pinned official Luau Linux CLI
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 \
-            --output /tmp/luau-ubuntu.zip \
-            https://github.com/luau-lang/luau/releases/download/0.691/luau-ubuntu.zip
-          echo '9b7699968c911beb3781f682c6be298440879ae279ff352d36dd58603418de2b  /tmp/luau-ubuntu.zip' | sha256sum --check
+          zip="$RUNNER_TEMP/luau-ubuntu.zip"
+          curl --fail --location --retry 3 --proto '=https' --tlsv1.2 \
+            --output "$zip" \
+            "https://github.com/luau-lang/luau/releases/download/${LUAU_VERSION}/luau-ubuntu.zip"
+          echo "${LUAU_ZIP_SHA256}  ${zip}" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/luau"
-          unzip -q /tmp/luau-ubuntu.zip -d "$RUNNER_TEMP/luau"
+          unzip -q "$zip" -d "$RUNNER_TEMP/luau"
           chmod +x "$RUNNER_TEMP/luau/luau"
           echo "$RUNNER_TEMP/luau" >> "$GITHUB_PATH"
       - name: Run every Luau spec
