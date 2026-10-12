@@ -89,7 +89,7 @@ PERMITTED_SETTINGS = frozenset({
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
-    'server_endpoint','server_timeout','server_parallel','server_context_tokens',
+    'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud',
     'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
