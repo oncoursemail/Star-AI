@@ -21,11 +21,11 @@ describe('model fleet settings',()=>{
  it('updates only the edited specialist, including the maximum documented context value',()=>{
   const changes:AppSettings[]=[]
   render(<ModelFleetPanel {...panelProps({onChange:next=>changes.push(next)})}/>)
-  fireEvent.change(screen.getByRole('textbox',{name:'Fast answers'}),{target:{value:'fast-model'}})
+  fireEvent.change(screen.getByRole('combobox',{name:'Fast answers'}),{target:{value:'fast-model'}})
   expect(changes.at(-1)).toMatchObject({fast_model:'fast-model',reasoning_model:'',model:'qwen-test'})
   fireEvent.change(screen.getByRole('spinbutton',{name:'Context tokens'}),{target:{value:'32768'}})
   expect(changes.at(-1)?.router_context).toBe(32768)
-  fireEvent.change(screen.getByRole('textbox',{name:'Fast answers'}),{target:{value:''}})
+  fireEvent.change(screen.getByRole('combobox',{name:'Fast answers'}),{target:{value:''}})
   expect(changes.at(-1)?.fast_model).toBe('')
  })
  it('does not start a local router without a folder or while the managed Brain is running',async()=>{
@@ -77,7 +77,7 @@ describe('model fleet settings',()=>{
   await screen.findByRole('textbox',{name:/message star/i})
   await user.click(screen.getByRole('button',{name:/^settings/i}))
   const fleet=within(await screen.findByRole('region',{name:'STAR model fleet'}))
-  fireEvent.change(fleet.getByRole('textbox',{name:'Fast answers'}),{target:{value:'fast-specialist'}})
+  fireEvent.change(fleet.getByRole('combobox',{name:'Fast answers'}),{target:{value:'fast-specialist'}})
   await user.click(screen.getByRole('button',{name:'Save settings'}))
   await waitFor(()=>expect(desktop.sent('saveSettings').some(call=>(call.payload.settings as Record<string,unknown>)?.fast_model==='fast-specialist')).toBe(true))
   expect(desktop.snapshot().settings.fast_model).toBe('fast-specialist')
