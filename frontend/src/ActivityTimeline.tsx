@@ -89,7 +89,11 @@ export function ActivityTimeline({run, onStop, stopping = false}: {run: Activity
   const listId = useId()
   const done = countDone(run)
   const total = run.steps.length
-  const meta = [run.label, total ? (running ? `${done} of ${total} steps done` : `${total} ${total === 1 ? 'step' : 'steps'}`) : '', run.model ? (running ? run.model : `answered by ${run.model}`) : ''].filter(Boolean).join(' · ')
+  const brainLabel = run.brain === 'pc' ? 'answered on this PC'
+    : run.brain === 'server' ? (run.model || 'STAR Server') : run.model ? (running ? run.model : `answered by ${run.model}`) : ''
+  const meta = [run.label, total ? (running ? `${done} of ${total} steps done` : `${total} ${total === 1 ? 'step' : 'steps'}`) : '',
+    brainLabel, run.firstTokenMs != null ? `${run.firstTokenMs} ms first token` : '',
+    run.tokensPerSecond != null ? `${run.estimatedTokens ? '≈' : ''}${run.tokensPerSecond.toFixed(1)} tok/s` : ''].filter(Boolean).join(' · ')
   return (
     <section className={'act act-' + run.outcome + (open ? ' is-open' : '')} aria-label="What STAR did">
       <div className="act-head">
