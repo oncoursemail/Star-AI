@@ -2,8 +2,10 @@
 from contextlib import asynccontextmanager
 from copy import deepcopy
 import socket
+import sys
 from types import SimpleNamespace
 
+import httpx
 import pytest
 
 from star import desktop_core, doc_grounding, roblox_errors
@@ -62,12 +64,16 @@ def offline(monkeypatch):
         calls.append(True)
         raise AssertionError("Unexpected external service call")
 
-    monkeypatch.setattr(socket.socket, "connect", forbidden)
+    async def forbidden_async(*args, **kwargs):
+        forbidden(*args, **kwargs)
+
+    # Guard application I/O, not socket.connect: Windows asyncio uses it for
+    # its local socketpair. The optional keyring package need not be installed.
     monkeypatch.setattr(socket, "create_connection", forbidden)
-    import keyring
-    monkeypatch.setattr(keyring, "get_password", forbidden)
-    monkeypatch.setattr(keyring, "set_password", forbidden)
-    monkeypatch.setattr(keyring, "delete_password", forbidden)
+    monkeypatch.setattr(httpx.Client, "send", forbidden)
+    monkeypatch.setattr(httpx.AsyncClient, "send", forbidden_async)
+    monkeypatch.setitem(sys.modules, "keyring", SimpleNamespace(
+        get_password=forbidden, set_password=forbidden, delete_password=forbidden))
     yield
     assert calls == []
 
