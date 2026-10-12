@@ -7,6 +7,7 @@ import math
 import operator
 import re
 import statistics
+import time
 
 MAX_LENGTH = 512
 MAX_DEPTH = 24
@@ -14,6 +15,7 @@ MAX_NODES = 160
 MAX_EXPONENT = 100
 MAX_FACTORIAL = 1000
 MAX_BITS = 8192
+MAX_SECONDS = 0.5      # wall-clock budget for one expression
 
 _OPERATORS = {
     ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
@@ -58,7 +60,9 @@ def _integer(value):
     return value
 
 
-def _evaluate(node, depth=0):
+def _evaluate(node, depth=0, deadline=None):
+    if deadline is not None and time.monotonic() > deadline:
+        raise ValueError("Calculation took too long")
     if depth > MAX_DEPTH:
         raise ValueError("Expression nesting too deep")
     if isinstance(node, ast.Constant):
@@ -72,12 +76,12 @@ def _evaluate(node, depth=0):
     if isinstance(node, ast.List) or isinstance(node, ast.Tuple):
         if len(node.elts) > 80:
             raise ValueError("List too long")
-        return [_evaluate(item, depth + 1) for item in node.elts]
+        return [_evaluate(item, depth + 1, deadline) for item in node.elts]
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY:
-        return _checked(_UNARY[type(node.op)](_evaluate(node.operand, depth + 1)))
+        return _checked(_UNARY[type(node.op)](_evaluate(node.operand, depth + 1, deadline)))
     if isinstance(node, ast.BinOp) and type(node.op) in _OPERATORS:
-        left = _evaluate(node.left, depth + 1)
-        right = _evaluate(node.right, depth + 1)
+        left = _evaluate(node.left, depth + 1, deadline)
+        right = _evaluate(node.right, depth + 1, deadline)
         if isinstance(left, list) or isinstance(right, list):
             raise ValueError("Lists are only permitted as function arguments")
         if isinstance(node.op, ast.Pow):
@@ -91,12 +95,12 @@ def _evaluate(node, depth=0):
             return _checked(Fraction(left) ** int(right))
         return _checked(_OPERATORS[type(node.op)](left, right))
     if isinstance(node, ast.Compare):
-        left = _evaluate(node.left, depth + 1)
+        left = _evaluate(node.left, depth + 1, deadline)
         for op, comparator in zip(node.ops, node.comparators):
             if type(op) not in _OPERATORS or type(op) not in (
                 ast.Eq, ast.NotEq, ast.Lt, ast.LtE, ast.Gt, ast.GtE):
                 raise ValueError("Comparison not allowed")
-            right = _evaluate(comparator, depth + 1)
+            right = _evaluate(comparator, depth + 1, deadline)
             if not _OPERATORS[type(op)](left, right):
                 return False
             left = right
@@ -105,7 +109,7 @@ def _evaluate(node, depth=0):
         if not isinstance(node.func, ast.Name) or node.func.id not in _ALLOWED or node.keywords:
             raise ValueError("Function not allowed")
         name = node.func.id
-        args = [_evaluate(arg, depth + 1) for arg in node.args]
+        args = [_evaluate(arg, depth + 1, deadline) for arg in node.args]
         if name in _INT_FUNCS:
             args = [_integer(v) for v in args]
         if name in _FLOAT_FUNCS:
@@ -139,7 +143,7 @@ def evaluate(expression: str):
         root = ast.parse(expression, mode="eval")
         if sum(1 for _ in ast.walk(root)) > MAX_NODES:
             raise ValueError("Expression too complex")
-        return _evaluate(root.body)
+        return _evaluate(root.body, 0, time.monotonic() + MAX_SECONDS)
     except (SyntaxError, TypeError, OverflowError, ZeroDivisionError, RecursionError) as exc:
         raise ValueError("Invalid arithmetic expression") from exc
 
@@ -195,14 +199,29 @@ def describe(values: list, operation: str):
     return _checked(getattr(statistics, operation)(numbers))
 
 
+_OP = r"(?:\*\*|[+*/%^]|\s-\s|\s[x×]\s)"
+_TRIGGERS = (
+    # An explicit request to calculate something that contains a number.
+    re.compile(r"\b(?:calculate|compute)\b[^.?!\n]{0,80}\d", re.I),
+    # "convert 14 studs to metres"
+    re.compile(r"\bconvert\s+-?\d[\d.,]*\s*[a-z]+\s+(?:to|into|in)\s+[a-z]+", re.I),
+    # "average of 2, 3 and 7" (not "the average user", not "what do you mean")
+    re.compile(r"\b(?:average|mean|median|variance|standard deviation|stdev)\s+of\b[^.?!\n]{0,80}\d", re.I),
+    re.compile(r"\bfactorial\s+of\s+\d", re.I),
+    # "what is 4 + 8" / "what's 3*7"; a bare date such as 2026-10-12 has no spaces around the minus and never matches.
+    re.compile(r"\bwhat(?:'s|\s+is)\s+\(*-?\d[\d.]*\s*" + _OP + r"\s*\(*-?\d", re.I),
+    re.compile(r"\bhow\s+many\s+(?:metres|meters|feet|studs|seconds|bytes)\b[^.?!\n]{0,60}\d", re.I),
+)
+
+
 def numerical_request(text: str) -> bool:
-    """Conservative, small trigger; ordinary version numbers do not attach the tool."""
+    """Conservative trigger: only a clear request to calculate attaches the tool.
+
+    Version numbers, dates, ranges and ordinary words such as "mean" or "average" do not.
+    """
     if not isinstance(text, str):
         return False
-    return bool(re.search(r"\b(calculate|compute|convert|average|mean|median|variance|stdev|factorial|"
-                          r"how many (?:metres|meters|feet|studs|seconds|bytes)|"
-                          r"what is \d+\s*[\+\-\*/%])\b", text, re.I)
-                or re.search(r"\d+\s*(?:\*\*|[+\-*/%])\s*\d+", text))
+    return any(pattern.search(text) for pattern in _TRIGGERS)
 
 
 TOOL = {"name": "star_calculate",

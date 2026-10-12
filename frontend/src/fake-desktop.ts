@@ -14,7 +14,7 @@ import {act} from '@testing-library/react'
 
 export type Call = {action: string; payload: Record<string, unknown>; requestId: string}
 export type Reply = {ok: boolean; data?: unknown; pending?: boolean; error?: string}
-type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string}
+type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string; image?: string}
 
 /** Mirrors `asdict(Settings())` in star/desktop_core.py; loosely typed on purpose. */
 export const backendSettings = {
@@ -24,6 +24,7 @@ export const backendSettings = {
   max_calls: 12, context_chars: 26000, reduced_motion: true, obsidian_vault: '', obsidian_enabled: false,
   skills_enabled: true, graphify_enabled: true, comfy_workflow: '', comfy_prompt_node: '6', comfy_port: 8188,
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
+  blender_enabled: false, blender_edit: false, blender_executable: '',
   roblox_research_enabled: true, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
 }
 
@@ -102,6 +103,8 @@ export function installFakeDesktop() {
 
   return {
     calls,
+    snapshot: () => boot(),
+    saved: () => db.map((m,i) => ({...m,id: `saved-${i}`})),
     sent: (action: string) => calls.filter(c => c.action === action),
     requestOf,
     /** Start every test from a clean backend. */

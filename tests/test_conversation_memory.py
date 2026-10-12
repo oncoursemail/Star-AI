@@ -1,6 +1,7 @@
 """Offline coverage, provenance and atomicity for complete dialogue prefixes."""
 import asyncio
 import copy
+import hashlib
 import json
 import re
 import threading
@@ -126,36 +127,116 @@ def test_restart_reuses_checkpoint_and_next_move_summarizes_only_new_prefix(dial
     assert cm.read_checkpoint(store_path(store), 'P', chat) == advanced.checkpoint
 
 
-def test_failed_or_cancelled_prior_user_is_retained_with_outcome(dialogue):
+@pytest.mark.parametrize('scenario', [
+    'stopped_then_failed_image',
+    'cancelled',
+    'failed',
+    'interrupted',
+    'orphan_between',
+    'event_between',
+])
+def test_history_shaping_excludes_bad_turns_and_keeps_pairs(dialogue, scenario):
     store, chat = dialogue
-    user = store.add('P', 'user', 'EVIDENCE_KEEP_FAILED_REQUIREMENT', chat_id=chat)
-    event = store.add_terminal('P', chat, user, 'cancelled', 'Owner stopped the turn.')
+    store.add('P', 'user', 'Stable question', chat_id=chat)
+    store.add('P', 'assistant', 'Stable answer', chat_id=chat)
+    if scenario == 'stopped_then_failed_image':
+        stopped = store.add('P', 'user', 'stopped request', chat_id=chat)
+        store.add_terminal('P', chat, stopped, 'cancelled', 'Stopped by owner')
+        image = store.add('P', 'user', 'generate image', chat_id=chat)
+        store.add_terminal('P', chat, image, 'failed', 'Image generation failed')
+    elif scenario in ('cancelled', 'failed'):
+        owner = store.add('P', 'user', 'bad request', chat_id=chat)
+        store.add_terminal('P', chat, owner, scenario, 'failed')
+    elif scenario in ('interrupted', 'orphan_between'):
+        store.add('P', 'user', 'orphan request', chat_id=chat)
+    else:
+        store.add('P', 'event', 'UI notification', chat_id=chat)
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 10000, current_text='what is 2+2?')
+    assert window.messages == [{'role': 'user', 'content': 'Stable question'},
+                               {'role': 'assistant', 'content': 'Stable answer'}]
+    assert len(window.messages) % 2 == 0
+    assert window.through_id == 0
+
+
+@pytest.mark.parametrize('current_text', [None, 'what is 2+2?', 'A different question'])
+def test_completed_exchange_survives_repeated_current_text(dialogue, current_text):
+    store, chat = dialogue
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    store.add('P', 'assistant', '4', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    expected = [{'role': 'user', 'content': 'what is 2+2?'},
+                {'role': 'assistant', 'content': '4'}]
+    idle = cm.select_window(records, 10000)
+    active = cm.select_window(records, 10000, current_text=current_text)
+    assert active == idle and active.messages == expected
+    # Saving an identical new question must not rewrite the completed prefix.
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    busy = cm.select_window(store.raw_history_records('P', chat), 10000, current_text='what is 2+2?')
+    assert busy.messages == expected and busy.omitted == []
+    assert store.raw_history_records('P', chat)[:len(records)] == records
+
+
+def test_multi_row_answer_joins_with_paragraph_newlines(dialogue):
+    store, chat = dialogue
+    store.add('P', 'user', 'Explain in two parts.', chat_id=chat)
+    store.add('P', 'assistant', 'First part.', chat_id=chat)
+    store.add('P', 'assistant', 'Second part.', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 10000)
+    assert window.messages == [{'role': 'user', 'content': 'Explain in two parts.'},
+                               {'role': 'assistant', 'content': 'First part.\n\nSecond part.'}]
+    assert window.exchanges == [records]
+    assert store.raw_history_records('P', chat) == records
+
+
+@pytest.mark.parametrize('selection', ['window', 'pressure'])
+@pytest.mark.parametrize('status', ['cancelled', 'failed'])
+def test_filtered_rows_cannot_enter_recaps_and_checkpoint_prefix_is_stable(dialogue, selection, status):
+    store, chat = dialogue
     for index in range(4):
         add_exchange(store, chat, index)
-    models = Models()
-    result = prepare(store, chat, models)
-    transcript = json.loads(models.requests[0]['messages'][1]['content'].split('NEW TRANSCRIPT (redacted source):\n', 1)[1])
-    assert next(record for record in transcript if record['record_id'] == event)['status'] == 'cancelled'
-    assert 'EVIDENCE_KEEP_FAILED_REQUIREMENT' in result.checkpoint.summary
-
-
-@pytest.mark.parametrize('status', ['failed', 'cancelled'])
-def test_last_historic_failure_is_not_mistaken_for_the_active_question(dialogue, status):
-    store, chat = dialogue
-    user = store.add('P', 'user', 'Continue.', chat_id=chat)
-    event = store.add_terminal('P', chat, user, status, 'Historic outcome.')
+    owner = store.add('P', 'user', 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK', chat_id=chat)
+    event = store.add_terminal('P', chat, owner, status, 'EVIDENCE_EVENT_SHOULD_NOT_LEAK')
+    orphan = store.add('P', 'user', 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK', chat_id=chat)
+    # Force the excluded rows INTO the omitted prefix, not beyond the recap boundary.
+    for index in range(4, 8):
+        add_exchange(store, chat, index)
     records = store.raw_history_records('P', chat)
-    window = cm.select_window(records, 1000, current_text='Continue.')
-    assert window.messages[0]['content'] == 'Continue.'
-    assert [record['id'] for record in window.exchanges[0]] == [user, event]
-
-
-def test_similar_new_question_does_not_remove_an_unrelated_unanswered_record(dialogue):
-    store, chat = dialogue
-    user = store.add('P', 'user', 'Please', chat_id=chat)
-    window = cm.select_window(store.raw_history_records('P', chat), 1000, current_text='Please continue.')
-    assert window.messages[0]['content'] == 'Please'
-    assert window.exchanges[0][0]['id'] == user
+    window = cm.select_window(records, 1000)
+    if selection == 'pressure':
+        window = cm.omit_messages(cm.select_window(records, 10000), 14)
+    excluded = {owner, event, orphan}
+    assert excluded <= {row['id'] for row in window.omitted}
+    assert window.omitted == [row for row in records if row['id'] <= window.through_id]
+    models = Models()
+    candidate = asyncio.run(cm.prepare(client(models), 'offline', store_path(store),
+                                      'P', chat, records, window))
+    assert candidate.changed and candidate.checkpoint.through_id == window.through_id
+    source = json.loads(models.requests[0]['messages'][1]['content'].split(
+        'NEW TRANSCRIPT (redacted source):\n', 1)[1])
+    assert [row['record_id'] for row in source] == [row['id'] for row in window.omitted
+                                                  if row['id'] not in excluded]
+    assert [row['role'] for row in source] == ['user', 'assistant'] * 7
+    assert 'EVIDENCE_USER_0' in candidate.checkpoint.summary
+    assert 'EVIDENCE_USER_6' in candidate.checkpoint.summary
+    serialized = json.dumps(models.requests) + candidate.checkpoint.summary
+    assert 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK' not in serialized
+    assert 'EVIDENCE_EVENT_SHOULD_NOT_LEAK' not in serialized
+    assert 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK' not in serialized
+    cm.commit(store_path(store), candidate)
+    assert cm.read_checkpoint(store_path(store), 'P', chat) == candidate.checkpoint
+    assert store.raw_history_records('P', chat) == records
+    unchanged_models = Models()
+    unchanged = prepare(store, chat, unchanged_models)
+    assert unchanged.checkpoint == candidate.checkpoint and not unchanged.changed
+    assert unchanged_models.requests == []
+    # Exclusion from model input must NOT exclude a stored row from source integrity.
+    with store.connection:
+        store.connection.execute("UPDATE messages SET body='changed event' WHERE id=?", (event,))
+    with pytest.raises(cm.ConversationRetentionError, match='changed or are missing'):
+        cm.read_checkpoint(store_path(store), 'P', chat)
 
 
 def test_legacy_checkpoint_matches_actual_writes_and_never_includes_other_chats(dialogue):
@@ -299,3 +380,63 @@ def test_recaps_respect_source_work_bound_without_touching_originals(dialogue, m
         prepare(store, chat, models)
     assert not models.requests and store.raw_history_records('P', chat) == original
     assert cm.read_checkpoint(store_path(store), 'P', chat) is None
+
+
+def test_retried_turn_keeps_its_answer_after_a_terminal_record(dialogue):
+    """Retry reuses the failed question's row, so the answer lands AFTER the terminal event."""
+    store, chat = dialogue
+    asked = store.add('P', 'user', 'Please retry me', chat_id=chat)
+    store.add_terminal('P', chat, asked, 'failed', 'Cannot reach STAR Brain.')
+    assert cm.select_window(store.raw_history_records('P', chat), 10000).exchanges == []   # nothing answered yet
+    assert store.recover_turn('P', chat, asked, 'Please retry me') == asked   # what the Retry button does
+    store.add('P', 'assistant', 'Retried answer.', chat_id=chat)
+    answered_then_stopped = store.add('P', 'user', 'Answer saved, then Stop arrived', chat_id=chat)
+    store.add('P', 'assistant', 'Saved answer.', chat_id=chat)
+    store.add_terminal('P', chat, answered_then_stopped, 'cancelled', 'Request stopped.')
+    store.add('P', 'user', 'next question', chat_id=chat)
+    window = cm.select_window(store.raw_history_records('P', chat), 10000, current_text='next question')
+    assert window.messages == [
+        {'role': 'user', 'content': 'Please retry me'}, {'role': 'assistant', 'content': 'Retried answer.'},
+        {'role': 'user', 'content': 'Answer saved, then Stop arrived'},
+        {'role': 'assistant', 'content': 'Saved answer.'}]
+    # The terminal event text is storage and UI state; it never becomes dialogue.
+    assert 'Cannot reach' not in json.dumps(window.messages) and 'Request stopped' not in json.dumps(window.messages)
+
+
+def test_event_text_alone_never_drops_a_completed_exchange(dialogue):
+    """A note that merely mentions "image" or "interrupted" must not erase a real answered turn."""
+    store, chat = dialogue
+    store.add('P', 'user', 'make a thumbnail', chat_id=chat)
+    store.add('P', 'event', 'image generation interrupted note', chat_id=chat)
+    store.add('P', 'assistant', 'Here is the thumbnail plan.', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 10000)
+    assert window.messages == [{'role': 'user', 'content': 'make a thumbnail'},
+                               {'role': 'assistant', 'content': 'Here is the thumbnail plan.'}]
+    assert window.exchanges == [records]
+
+
+def test_checkpoint_made_before_filtering_ending_on_a_dropped_turn_still_loads(dialogue):
+    """A cursor saved at the end of a stopped turn (older behaviour) must not break the chat."""
+    store, chat = dialogue
+    for index in range(2):
+        add_exchange(store, chat, index)
+    stopped = store.add('P', 'user', 'EVIDENCE_STOPPED', chat_id=chat)
+    end = store.add_terminal('P', chat, stopped, 'cancelled', 'Request stopped.')
+    for index in range(2, 6):
+        add_exchange(store, chat, index)
+    records = store.raw_history_records('P', chat)
+    covered = [row for row in records if row['id'] <= end]
+    legacy = cm.Checkpoint('P', chat, end, cm.source_digest(covered), 'Unverified checkpoint: EVIDENCE_USER_0',
+                           hashlib.sha256(b'Unverified checkpoint: EVIDENCE_USER_0').hexdigest())
+    cm.commit(store_path(store), cm.Prepared(legacy, None, True))
+    window = cm.select_window(records, 100000)
+    assert window.through_id == 0 and len(window.messages) == 12
+    resumed = cm.respect_checkpoint(window, cm.read_checkpoint(store_path(store), 'P', chat))
+    assert resumed.through_id == records[3]['id']             # the two answered exchanges before the stop
+    assert resumed.messages[0]['content'].startswith('EVIDENCE_USER_2')
+    assert resumed.messages[1]['content'].startswith('EVIDENCE_ANSWER_2')
+    # A cursor inside a replayed exchange is still refused.
+    inside = cm.Checkpoint('P', chat, records[6]['id'], cm.source_digest(records[:7]), 'x', 'x')
+    with pytest.raises(cm.ConversationRetentionError, match='complete exchange boundary'):
+        cm.respect_checkpoint(window, inside)

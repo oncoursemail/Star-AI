@@ -1,0 +1,282 @@
+{
+  "hit_spark": {
+    "version": 1,
+    "name": "Hit spark",
+    "effects": [
+      {
+        "id": "sparks",
+        "class": "ParticleEmitter",
+        "emit": 12,
+        "duration": 0.05,
+        "properties": {
+          "Lifetime": [0.1, 0.25],
+          "Speed": [8, 16],
+          "SpreadAngle": [35, 35],
+          "Size": [[1, 0], [0, 0.2], [0.2, 0.4]],
+          "Color": [[1, [1, 0.3, 0]], [0, [1, 1, 0.6]]],
+          "Transparency": [[1, 1], [0, 0]],
+          "LightEmission": 1
+        }
+      }
+    ]
+  },
+  "heal_aura": {
+    "version": 1,
+    "name": "Heal aura",
+    "effects": [
+      {
+        "id": "motes",
+        "class": "ParticleEmitter",
+        "duration": 2,
+        "properties": {
+          "Rate": 8,
+          "Lifetime": [0.5, 1],
+          "Speed": [0.5, 1],
+          "Color": [0.2, 1, 0.4],
+          "Size": 0.15,
+          "Acceleration": [0, 1, 0],
+          "Transparency": [[0, 1], [0.2, 0.1], [1, 1]]
+        }
+      },
+      {
+        "id": "glow",
+        "class": "PointLight",
+        "duration": 2,
+        "properties": {
+          "Color": [0.2, 1, 0.4],
+          "Brightness": 0,
+          "Range": 6
+        },
+        "tweens": [
+          {
+            "duration": 0.5,
+            "to": {
+              "Brightness": 2
+            },
+            "reverses": true,
+            "repeat_count": 1
+          }
+        ]
+      }
+    ]
+  },
+  "level_up_burst": {
+    "version": 1,
+    "name": "Level up",
+    "effects": [
+      {
+        "id": "burst",
+        "class": "ParticleEmitter",
+        "emit": 40,
+        "properties": {
+          "Lifetime": [0.4, 0.8],
+          "Speed": [5, 12],
+          "SpreadAngle": [180, 180],
+          "Color": [1, 0.8, 0.2],
+          "Acceleration": [0, -8, 0],
+          "Rotation": [0, 360],
+          "RotSpeed": [-180, 180],
+          "LightEmission": 0.8
+        }
+      },
+      {
+        "id": "outline",
+        "class": "Highlight",
+        "duration": 1,
+        "properties": {
+          "FillTransparency": 1,
+          "OutlineTransparency": 1,
+          "OutlineColor": [1, 0.8, 0.2]
+        },
+        "tweens": [
+          {
+            "duration": 0.5,
+            "to": {
+              "OutlineTransparency": 0
+            },
+            "reverses": true
+          }
+        ]
+      }
+    ],
+    "camera_shake": {
+      "duration": 0.3,
+      "position": [0.03, 0.03, 0],
+      "rotation": [0.2, 0.2, 0.1],
+      "seed": 5
+    }
+  },
+  "dash_trail": {
+    "version": 1,
+    "name": "Dash",
+    "effects": [
+      {
+        "id": "ribbon",
+        "class": "Trail",
+        "duration": 0.3,
+        "attachments": [[-0.5, 0, 0], [0.5, 0, 0]],
+        "properties": {
+          "Lifetime": 0.25,
+          "WidthScale": [[0, 1], [1, 0]],
+          "Color": [[0, [1, 1, 1]], [1, [0.2, 0.5, 1]]],
+          "Transparency": [[0, 0.1], [1, 1]],
+          "LightEmission": 0.7
+        }
+      }
+    ]
+  },
+  "explosion": {
+    "version": 1,
+    "name": "Explosion",
+    "effects": [
+      {
+        "id": "debris",
+        "class": "ParticleEmitter",
+        "emit": 60,
+        "duration": 0.1,
+        "properties": {
+          "Lifetime": [0.2, 0.6],
+          "Speed": [20, 50],
+          "SpreadAngle": [180, 180],
+          "Drag": 3,
+          "Size": [[0, 1], [0.2, 2, 0.5], [1, 0]],
+          "Color": [[0, [1, 0.8, 0.3]], [0.3, [1, 0.2, 0]], [1, [0.2, 0.1, 0.1]]],
+          "Transparency": [[0, 0], [1, 1]],
+          "LightEmission": 1
+        }
+      },
+      {
+        "id": "flash",
+        "class": "PointLight",
+        "duration": 0.2,
+        "properties": {
+          "Brightness": 0,
+          "Range": 24,
+          "Color": [1, 0.4, 0.1]
+        },
+        "tweens": [
+          {
+            "duration": 0.1,
+            "to": {
+              "Brightness": 10
+            },
+            "reverses": true
+          }
+        ]
+      }
+    ],
+    "camera_shake": {
+      "duration": 0.6,
+      "position": [0.3, 0.2, 0.1],
+      "rotation": [2, 1, 1],
+      "frequency": 20,
+      "seed": 17
+    }
+  },
+  "rain": {
+    "version": 1,
+    "name": "Rain",
+    "effects": [
+      {
+        "id": "drops",
+        "class": "ParticleEmitter",
+        "duration": 5,
+        "offset": [0, 20, 0],
+        "properties": {
+          "Rate": 100,
+          "Lifetime": [0.5, 1],
+          "Speed": [25, 35],
+          "EmissionDirection": "Bottom",
+          "SpreadAngle": [10, 10],
+          "Size": 0.08,
+          "Color": [0.6, 0.7, 0.8],
+          "Transparency": 0.5,
+          "Orientation": "VelocityParallel",
+          "Acceleration": [0, -20, 0]
+        }
+      }
+    ]
+  },
+  "portal": {
+    "version": 1,
+    "name": "Portal",
+    "effects": [
+      {
+        "id": "arc",
+        "class": "Beam",
+        "duration": 3,
+        "attachments": [[0, -2, 0], [0, 2, 0]],
+        "properties": {
+          "CurveSize0": 4,
+          "CurveSize1": -4,
+          "Width0": 0.4,
+          "Width1": 0.4,
+          "Color": [[0, [0.4, 0.2, 1]], [0.5, [1, 0.8, 1]], [1, [0.4, 0.2, 1]]],
+          "LightEmission": 1,
+          "Segments": 20
+        },
+        "tweens": [
+          {
+            "duration": 0.5,
+            "to": {
+              "Width0": 0.7,
+              "Width1": 0.7
+            },
+            "reverses": true,
+            "repeat_count": 2
+          }
+        ]
+      },
+      {
+        "id": "core",
+        "class": "PointLight",
+        "at": 0.1,
+        "duration": 2.8,
+        "properties": {
+          "Color": [0.5, 0.2, 1],
+          "Brightness": 2,
+          "Range": 10
+        }
+      }
+    ]
+  },
+  "coin_pickup": {
+    "version": 1,
+    "name": "Coin pickup",
+    "effects": [
+      {
+        "id": "stars",
+        "class": "ParticleEmitter",
+        "at": 0.05,
+        "emit": 8,
+        "duration": 0.05,
+        "properties": {
+          "Lifetime": [0.2, 0.4],
+          "Speed": [2, 4],
+          "SpreadAngle": [180, 180],
+          "Color": [1, 0.75, 0.1],
+          "Size": 0.15
+        }
+      },
+      {
+        "id": "shine",
+        "class": "Highlight",
+        "duration": 0.4,
+        "properties": {
+          "FillColor": [1, 0.75, 0.1],
+          "FillTransparency": 1,
+          "OutlineTransparency": 1
+        },
+        "tweens": [
+          {
+            "duration": 0.2,
+            "to": {
+              "FillTransparency": 0.2
+            },
+            "reverses": true
+          }
+        ]
+      }
+    ]
+  }
+}

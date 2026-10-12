@@ -12,3 +12,9 @@ def _no_owner_roblox_key(monkeypatch, tmp_path_factory):
     for name in ("ROBLOX_OPEN_CLOUD_API_KEY", "ROBLOX_API_KEY"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("STAR_ROBLOX_KEY_FILE", str(tmp_path_factory.getbasetemp() / "no-roblox-key.env"))
+
+
+@pytest.fixture(autouse=True)
+def _default_slot_pinning(monkeypatch):
+    """The slot rules are tested as the app ships them, whatever the machine's environment says."""
+    monkeypatch.delenv("STAR_SERVER_SLOT_PINNING", raising=False)

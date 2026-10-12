@@ -65,11 +65,41 @@ def test_conversions(value, source, target, expected):
 
 
 @pytest.mark.parametrize(("op", "result"), [
-    ("mean", 2.5), ("median", 2.5), ("mode", 1),
+    ("mean", 2.5), ("median", 2.0), ("mode", 1),
     ("variance", 11 / 3), ("stdev", math.sqrt(11 / 3)),
 ])
 def test_statistics(op, result):
     assert float(describe([1, 1, 3, 5], op)) == pytest.approx(result)
+
+
+def test_running_time_is_bounded(monkeypatch):
+    import star.calc as calc
+    assert evaluate("1+2") == 3
+    monkeypatch.setattr(calc, "MAX_SECONDS", -1)          # the budget is already spent
+    with pytest.raises(ValueError, match="too long"):
+        evaluate("1+2")
+
+
+def test_size_depth_and_exponent_limits_have_their_own_messages():
+    with pytest.raises(ValueError, match="length"):
+        evaluate("1+" * 300 + "1")
+    with pytest.raises(ValueError, match="nesting"):
+        evaluate("-" * 40 + "1")
+    with pytest.raises(ValueError, match="nesting"):
+        evaluate("(" * 30 + "1" + ")" * 30)
+    with pytest.raises(ValueError, match="Exponent"):
+        evaluate("2**1000000")
+    with pytest.raises(ValueError, match="Exponent"):
+        evaluate("2**-101")
+    assert evaluate("2**100") == 2 ** 100
+
+
+def test_no_eval_or_exec_in_the_module():
+    import ast
+    import inspect
+    import star.calc as calc
+    names = {node.id for node in ast.walk(ast.parse(inspect.getsource(calc))) if isinstance(node, ast.Name)}
+    assert not names & {"eval", "exec", "compile", "__import__"}
 
 
 def test_calculate_dispatch_and_invalid_units():
@@ -89,6 +119,13 @@ def test_calculate_dispatch_and_invalid_units():
     ("Calculate 72 / 3", True), ("what is 4 + 8?", True),
     ("convert 14 studs to metres", True), ("mean of 2,3", True),
     ("Roblox 0.9.0 is released", False), ("please make UI", False),
+    ("What is 2026-10-12 in the changelog?", False), ("Update from v1.2-3 to 4", False),
+    ("What do you mean by that?", False), ("Who is the average user of the app?", False),
+    ("Convert this file to PDF", False), ("Fix the bug in lines 10-20", False),
+    ("Meet at 10/12 in the lobby", False), ("What is a Humanoid?", False),
+    ("What is 6 x 7?", True), ("what's 3*7", True), ("compute 2**8", True),
+    ("average of 2, 3 and 7", True), ("factorial of 6", True),
+    ("How many studs are in 12 metres?", True),
 ])
 def test_numeric_trigger(prompt, selected):
     assert numerical_request(prompt) is selected

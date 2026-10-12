@@ -203,7 +203,8 @@ def summarise(settings, home, *, minimum):
 
 def test_the_automatic_summary_does_not_replace_the_cache_of_the_routed_quick_model(tmp_path):
     """Plain chat is routed to the server's quick model, which `star-quick` is another name of.
-    The summary that follows the warm-up may use that model only in the slot next to the chat's."""
+    The summary that follows the warm-up may use that model only when it has a second slot, and
+    is sent without a slot number: the server places it."""
     raw_notes(tmp_path)
     settings = server(project="P")
     assert digest.chat_models(settings) >= {"star-fast", "star-voice"}
@@ -215,7 +216,7 @@ def test_the_automatic_summary_does_not_replace_the_cache_of_the_routed_quick_mo
         report, models = summarise(settings, tmp_path, minimum=3)
         assert report["skipped"] == "no_spare_model" and models.requests == []
 
-    # Two slots: the chat keeps its slot (primed by the warm-up) and the summary takes the other one.
+    # Two slots: the chat keeps its slot (primed by the warm-up) and the summary names no slot.
     remember_server_limits(LAN, "star-voice", 16384, 2)
     chats = Conversations(tmp_path / "conversations.sqlite3")
     try:
@@ -225,7 +226,8 @@ def test_the_automatic_summary_does_not_replace_the_cache_of_the_routed_quick_mo
     own = llama_request_fields(settings, conversation=conversation, model="star-voice", prime=True)["id_slot"]
     report, models = summarise(settings, tmp_path, minimum=3)
     assert report["created"] == 1 and report["model"] == "star-quick" and "shared_model" not in report
-    assert [request["extra_body"]["id_slot"] for request in models.requests] == [1 - own]
+    assert [request["extra_body"] for request in models.requests] == [
+        {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}]
     assert llama_request_fields(settings, conversation=conversation, model="star-voice")["id_slot"] == own
 
 
