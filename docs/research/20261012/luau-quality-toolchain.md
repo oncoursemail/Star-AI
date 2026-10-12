@@ -17,13 +17,13 @@ Research snapshot **2026-10-12**, using official source repositories and STAR's 
 
 ## Why choose the official analyzer
 
-Lowest incremental integration cost: STAR's [pinned Luau template workflow](../../../.github/workflows/luau-specs.yml) already verifies `luau-ubuntu.zip` for release **0.691 (2025-09-15)** with published SHA-256 `9b7699968c911beb3781f682c6be298440879ae279ff352d36dd58603418de2b`. The upstream [0.691 analyzer implementation](https://github.com/luau-lang/luau/blob/0.691/CLI/src/Analyze.cpp) supports strict mode, stdin and diagnostics of the form `stdin(line,column): Kind: message`. This is a **fixed older version**, not a claim to use the latest Luau.
+Lowest incremental integration cost: STAR's [pinned Luau template workflow](../../../.github/workflows/luau-specs.yml) already verifies `luau-ubuntu.zip` for release **0.691 (2025-09-15)** with published SHA-256 `9b7699968c911beb3781f682c6be298440879ae279ff352d36dd58603418de2b`. The upstream [0.691 analyzer implementation](https://github.com/luau-lang/luau/blob/0.691/CLI/src/Analyze.cpp) supports strict mode and diagnostics of the form `file(line,column): Kind: message`. This is a **fixed older version**, not a claim to use the latest Luau.
 
 ## Operator configuration and safeguards
 
 - **OFF by default:** only `STAR_LUAU_ANALYZE=on` activates it. `lint(code, external=False)` forces the original path; the `LocalIntelligence.call` Studio craft audit uses the same opt-in setting. Off means no binary lookup or subprocess and byte-identical results (offline tests).
 - Executable resolution: `STAR_LUAU_TOOLS_DIR/luau-0.691/luau-analyze` (`.exe` on Windows), else `luau-analyze` already on PATH. The PATH alternative is not assumed checksum-pinned. The runtime **never downloads or installs** software; user-owned folder or PATH requires no administrator access.
-- On opt-in, source is passed through **stdin**, not executed or written to the owner's repository. The analyzer gets a fresh temporary working directory, a six-second timeout, a minimal environment with no provider credentials, a 20,000-byte source cap and 48,000-byte diagnostic cap.
+- On opt-in, source is staged in a fixed-named temporary `.luau` file, never executed or written to the owner's repository. The analyzer gets a fresh temporary working directory, a six-second timeout, a minimal environment with no provider credentials, a 20,000-byte source cap and 48,000-byte diagnostic cap.
 - Exact CLI diagnostic locations and types are mapped to STAR `Finding` entries: syntax = error, type = warning, other lint = review; no false engine-global findings for known Roblox names. A missing binary or failed run emits a single generic notice per process, then the original checks remain available. No raw external errors or local paths enter the model's prompt.
 - The real Studio craft audit checks **at most three scripts**, retaining existing read-only/no-Luau-execution behavior and disclosing truncated analysis. Findings include the actual inspected script path, `certainty: analyzer`, and official [Luau type-checking docs](https://create.roblox.com/docs/luau/type-checking).
 
@@ -36,3 +36,5 @@ An additional `luau-quality-smoke` CI job downloads the **same** 0.691 official 
 **Certain only after green CI:** The selected binary actually runs and recognizes injected syntax and type defects missed by baseline pattern diagnostics. **Unknown:** defects present in unmodified STAR examples, full false-positive rates with Roblox APIs, real Studio gameplay correctness and improvement in model answer quality. The unmodified example's findings are printed in CI for inspection.
 
 **Smallest next step:** Independently compare a few analyzer warnings to Studio's actual typed engine APIs in a disposable place; then evaluate opt-in against a fixed practice set without touching the golden or holdout suites.
+
+**Pinned CLI caveat (2026-10-12):** In [the initial real CLI smoke](https://github.com/oncoursemail/Star-AI/actions/runs/38254718008), `luau-analyze --mode=strict -` returned exit 0 and no diagnostics for deliberately malformed source. Unlike a captured-output unit test, this exposes a version-specific limitation: the adapter now checks a disposable `star-check.luau` file rather than relying on stdin. A green follow-up smoke must confirm parser/typechecker execution.

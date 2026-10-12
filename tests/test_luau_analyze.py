@@ -26,8 +26,11 @@ def fake_analyzer(monkeypatch, *, stderr="", status=0, stdout="", exception=None
 
     def run(argv, **kwargs):
         calls.append((argv, kwargs))
-        assert argv == ["/tools/luau-analyze", "--mode=strict", "-"]
-        assert kwargs["input"].startswith("--!strict")
+        assert argv == ["/tools/luau-analyze", "--mode=strict", "star-check.luau"]
+        staged = luau_analyze.Path(kwargs["cwd"]) / "star-check.luau"
+        assert staged.is_file()
+        assert staged.read_text(encoding="utf-8").startswith("--!strict")
+        assert "input" not in kwargs
         assert kwargs["capture_output"] and kwargs["check"] is False
         assert kwargs["timeout"] == 6
         assert kwargs["text"] is True
@@ -59,9 +62,9 @@ def test_opt_out_is_byte_identical_and_no_binary_lookup(monkeypatch, tmp_path):
 
 def test_recorded_syntax_type_and_lint_diagnostics_extend_lint(monkeypatch):
     calls = fake_analyzer(monkeypatch, status=1, stderr=(
-        "stdin(1,7): SyntaxError: Expected identifier when parsing expression\n"
-        "stdin(2,8): TypeError: Type 'string' could not be converted into 'number'\n"
-        "stdin(3,1): UnusedLocal: Unused local 'unused'\n"))
+        "star-check.luau(1,7): SyntaxError: Expected identifier when parsing expression\n"
+        "star-check.luau(2,8): TypeError: Type 'string' could not be converted into 'number'\n"
+        "star-check.luau(3,1): UnusedLocal: Unused local 'unused'\n"))
     actual = lint(CODE, external=True)
     assert [f.rule_id for f in actual] == [
         "luau-analyze-syntaxerror", "luau-analyze-typeerror", "luau-analyze-unusedlocal"]
@@ -86,14 +89,14 @@ def test_missing_binary_warns_once_then_original_self_check(monkeypatch):
 
 def test_unknown_roblox_globals_do_not_become_game_errors(monkeypatch):
     calls = fake_analyzer(monkeypatch, status=1,
-                          stderr="stdin(2,10): TypeError: Unknown global 'game'\n")
+                          stderr="star-check.luau(2,10): TypeError: Unknown global 'game'\n")
     result = luau_analyze.analyze("--!strict\nreturn game:GetService('Players')")
     assert result == [] and len(calls) == 1
 
 
 def test_unknown_nonroblox_global_is_still_reported(monkeypatch):
     fake_analyzer(monkeypatch, status=1,
-                  stderr="stdin(2,2): TypeError: Unknown global 'pointss'\n")
+                  stderr="star-check.luau(2,2): TypeError: Unknown global 'pointss'\n")
     assert "pointss" in luau_analyze.analyze(CODE)[0].message
 
 
@@ -128,8 +131,8 @@ def test_unrecognized_binary_result_reports_only_generic_warning(monkeypatch):
 def test_recorded_parser_enforces_stdin_origin_and_skips_engine_types():
     parsed = luau_analyze.parse_diagnostics(
         "private.lua(1,1): SyntaxError: not from stdin\n"
-        "stdin(7,2): SyntaxError: bad Luau\n"
-        "stdin(8,1): TypeError: Unknown type 'Instance'\n")
+        "star-check.luau(7,2): SyntaxError: bad Luau\n"
+        "star-check.luau(8,1): TypeError: Unknown type 'Instance'\n")
     assert len(parsed) == 1
     assert parsed[0].line == 7 and parsed[0].rule_id == "luau-analyze-syntaxerror"
 
@@ -137,7 +140,7 @@ def test_recorded_parser_enforces_stdin_origin_and_skips_engine_types():
 def test_real_craft_audit_tool_dispatch_adds_analyzer_finding(monkeypatch, tmp_path):
     monkeypatch.setenv(luau_analyze.ENV_VAR, "on")
     calls = fake_analyzer(monkeypatch, stderr=(
-        "stdin(2,1): SyntaxError: Malformed function definition\n"), status=1)
+        "star-check.luau(2,1): SyntaxError: Malformed function definition\n"), status=1)
     hub = LocalIntelligence(home=tmp_path, skills_enabled=False, graphify_enabled=False)
     available = {t["name"] for t in hub.definitions("Audit Roblox UI and VFX")}
     result = hub.call("star_roblox_craft_audit", {

@@ -23,8 +23,9 @@ MAX_SOURCE_BYTES = 20_000
 MAX_OUTPUT_BYTES = 48_000
 MAX_FINDINGS = 20
 TIMEOUT_SECONDS = 6
+_STAGED_NAME = "star-check.luau"
 _DIAGNOSTIC = re.compile(
-    r"^stdin\((?P<line>[0-9]{1,6}),(?P<column>[0-9]{1,6})\): "
+    r"^(?P<file>.*?)\((?P<line>[0-9]{1,6}),(?P<column>[0-9]{1,6})\): "
     r"(?P<kind>[A-Za-z][A-Za-z0-9]*): (?P<message>[^\r\n]*)$"
 )
 _UNKNOWN_SYMBOL = re.compile(
@@ -71,11 +72,11 @@ def _notice_once(key: str, message: str) -> None:
 
 
 def parse_diagnostics(output: str) -> list[Finding]:
-    """Parse exact upstream stdout/stderr shape from stdin (not arbitrary files)."""
+    """Parse only diagnostics for STAR's staged Luau script."""
     findings: list[Finding] = []
     for raw in output.splitlines():
         match = _DIAGNOSTIC.fullmatch(raw)
-        if match is None:
+        if match is None or Path(match["file"]).name != _STAGED_NAME:
             continue
         kind = match["kind"]
         message = match["message"]
@@ -98,7 +99,7 @@ def parse_diagnostics(output: str) -> list[Finding]:
 
 
 def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
-    """Parse/type-check source on stdin; fail open with one generic warning."""
+    """Check source staged temporarily, not in the owner workspace; never run Luau."""
     if not isinstance(source, str):
         raise TypeError("source must be str")
     if len(source.encode("utf-8")) > MAX_SOURCE_BYTES:
@@ -110,6 +111,9 @@ def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
         return []
     try:
         with tempfile.TemporaryDirectory(prefix="star-luau-check-") as temporary:
+            # Luau 0.691's stdin '-' path was silent in the pinned CI smoke.
+            # Stage source in an isolated directory to force file analysis.
+            (Path(temporary) / _STAGED_NAME).write_text(source, encoding="utf-8")
             # Preserve OS runtime only, not provider credentials or custom keys.
             environment = {"PATH": os.environ.get("PATH", ""),
                            "HOME": temporary, "USERPROFILE": temporary,
@@ -118,7 +122,7 @@ def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
                 if name in os.environ:
                     environment[name] = os.environ[name]
             result = subprocess.run(
-                [binary, "--mode=strict", "-"], input=source,
+                [binary, "--mode=strict", _STAGED_NAME],
                 cwd=temporary, env=environment,
                 capture_output=True, encoding="utf-8", errors="replace",
                 text=True, check=False, timeout=TIMEOUT_SECONDS)
