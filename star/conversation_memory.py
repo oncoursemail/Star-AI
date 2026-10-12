@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 import sqlite3
 
-from .context_layout import NO_REPLY
 from .memory import compact, COMPACTION_SUMMARY_CHARS
 
 
@@ -110,6 +109,7 @@ class Window:
     omitted: list[dict]
     through_id: int
     exchanges: list[list[dict]] = field(default_factory=list)
+    records: list[dict] = field(default_factory=list)
 
 
 def select_window(records: list[dict], budget_chars: int, *, current_text: str | None = None) -> Window:
@@ -117,46 +117,58 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
 
     A large prior message moves to the summarized prefix as a whole. The current
     unanswered question never enters that prefix; no source suffix disappears.
+    Repeating current_text does not discard an earlier completed exchange: only
+    the presence of a successful answer distinguishes history from an orphan.
+    (current_text is accepted for callers; the unanswered newest question is an
+    orphan like any other and is never part of the window.)
     """
     if type(budget_chars) is not int or budget_chars < 0:
         raise _error('history budget must be a nonnegative integer')
     _validate_records(records)
+    # Only answered text exchanges belong in model history. A question with no
+    # stored answer (failed, stopped, interrupted, or still running) is dropped,
+    # never padded with a synthetic assistant message, which also keeps user
+    # turns from becoming adjacent. A terminal event only records that a turn
+    # ended without an answer; when an answer exists anyway (Retry reuses the
+    # failed question's row, so its answer is stored AFTER the failure record)
+    # the exchange is real history. Event rows are UI state and never dialogue,
+    # whatever their text says.
     groups = []
     for record in records:
-        if record['role'] == 'user' or not groups:
-            groups.append([])
-        groups[-1].append(record)
-    if groups:
-        last = groups[-1]
-        user = next((record for record in last if record['role'] == 'user'), None)
-        answered = any(record['role'] == 'assistant' for record in last)
-        terminal = user is not None and any(record['role'] == 'event' and
-            record['reply_to'] == user['id'] and record['status'] in {'failed', 'cancelled'} for record in last)
-        if user is not None and not answered and not terminal and (
-                current_text is None or current_text == user['body']):
-            groups.pop()
-    exchanges = []
+        if record['role'] == 'user':
+            groups.append([record])
+        elif groups:
+            groups[-1].append(record)
+    eligible = []
     for group in groups:
-        users = [record['body'] for record in group if record['role'] == 'user']
-        answers = [record['body'] for record in group if record['role'] == 'assistant']
-        user = users[0] if users else '[Earlier record has no user message.]'
-        answer = '\n\n'.join(answers) if answers else NO_REPLY
-        messages = [{'role': 'user', 'content': user if user.strip() else '[Earlier empty user message.]'},
-                    {'role': 'assistant', 'content': answer if answer.strip() else '[Earlier empty assistant response.]'}]
-        exchanges.append((group, messages, sum(len(message['content']) for message in messages)))
+        owner = group[0]
+        answers = [row for row in group if row['role'] == 'assistant'
+                   and row['status'] == 'complete']
+        if not answers or owner['status'] != 'complete':
+            continue
+        user = owner['body']
+        answer = '\n\n'.join(row['body'] for row in answers)
+        if not user.strip() or not answer.strip():
+            continue
+        pair = [{'role': 'user', 'content': user},
+                {'role': 'assistant', 'content': answer}]
+        eligible.append((group, pair, len(user) + len(answer)))
     half = max(1, budget_chars // 2)
     before, total = [], 0
-    for _, _, size in exchanges:
+    for _, _, size in eligible:
         before.append(total)
         total += size
     target = (total // half - 1) * half
-    start = next((index for index, size in enumerate(before) if size >= target), len(exchanges))
-    while start < len(exchanges) and sum(item[2] for item in exchanges[start:]) > budget_chars:
+    start = next((index for index, size in enumerate(before) if size >= target), len(eligible))
+    while start < len(eligible) and sum(item[2] for item in eligible[start:]) > budget_chars:
         start += 1
-    omitted = [record for group, _, _ in exchanges[:start] for record in group]
-    messages = [message for _, pair, _ in exchanges[start:] for message in pair]
-    return Window(messages, omitted, omitted[-1]['id'] if omitted else 0,
-                  [group for group, _, _ in exchanges[start:]])
+    through_id = eligible[start - 1][0][-1]['id'] if start else 0
+    # Preserve every original row in the checkpoint's integrity digest, including
+    # filtered rows. Only eligible pairs enter the recap model transcript.
+    omitted = [record for record in records if record['id'] <= through_id]
+    messages = [message for _, pair, _ in eligible[start:] for message in pair]
+    return Window(messages, omitted, through_id,
+                  [group for group, _, _ in eligible[start:]], records)
 
 
 def omit_messages(window: Window, count: int) -> Window:
@@ -164,22 +176,31 @@ def omit_messages(window: Window, count: int) -> Window:
     if type(count) is not int or count <= 0 or count % 2 or count > len(window.messages):
         raise _error('request pressure did not identify complete replay exchanges')
     cut = count // 2
-    newly_omitted = [record for group in window.exchanges[:cut] for record in group]
+    boundary = window.exchanges[cut - 1][-1]['id']
+    newly_omitted = [record for record in window.records
+                     if window.through_id < record['id'] <= boundary]
     if not newly_omitted:
         raise _error('request pressure has no corresponding original records')
     omitted = [*window.omitted, *newly_omitted]
-    return Window(window.messages[count:], omitted, omitted[-1]['id'], window.exchanges[cut:])
+    return Window(window.messages[count:], omitted, omitted[-1]['id'],
+                  window.exchanges[cut:], window.records)
 
 
 def respect_checkpoint(window: Window, checkpoint: Checkpoint | None) -> Window:
     """A durable cursor keeps replay from moving back after a budget adjustment."""
     if checkpoint is None or checkpoint.through_id <= window.through_id:
         return window
-    cut = next((index + 1 for index, group in enumerate(window.exchanges)
-                if group[-1]['id'] == checkpoint.through_id), None)
-    if cut is None:
+    # The cursor must sit between whole turns of the stored dialogue: after the
+    # last row of a turn, never inside one. It may follow dropped turns (a
+    # stopped question): a cursor saved before such turns were filtered out of
+    # replay can end on one, and that must not make the chat unusable.
+    index = next((i for i, record in enumerate(window.records)
+                  if record['id'] == checkpoint.through_id), None)
+    if index is None or (index + 1 < len(window.records)
+                         and window.records[index + 1]['role'] != 'user'):
         raise _error('saved cursor is not a complete exchange boundary')
-    return omit_messages(window, cut * 2)
+    cut = sum(1 for group in window.exchanges if group[-1]['id'] <= checkpoint.through_id)
+    return omit_messages(window, cut * 2) if cut else window
 
 
 @dataclass(frozen=True)
@@ -291,8 +312,13 @@ async def prepare(client, model: str, path: Path, project: str, chat: str | None
            'through_id': window.through_id})
     # record_id remains visible in serialized source. The durable range and
     # digest provide exact provenance without an unbounded per-ID model footer.
+    # Use exactly the eligible model exchanges for recap, not UI/terminal rows.
+    clean = select_window(newly_omitted, 10 ** 12)
+    valid_ids = {row['id'] for group in clean.exchanges for row in group
+                 if row['role'] in {'user', 'assistant'}}
     transcript = [{'record_id': record['id'], 'role': record['role'], 'content': record['body'],
-                   'status': record['status'], 'reply_to': record['reply_to']} for record in newly_omitted]
+                   'status': record['status'], 'reply_to': record['reply_to']}
+                  for record in newly_omitted if record['id'] in valid_ids]
     summary = await compact(client, model, f'{project} / conversation {chat}',
                             base.summary if base is not None else '', transcript,
                             summary_chars=summary_chars)

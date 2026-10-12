@@ -65,7 +65,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
 # Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
-# the model asked for (star/roblox_cloud.py, docs/ROBLOX_ACCESS.md). Never a publish action itself.
+# the model asked for (star/roblox_cloud.py). Never a publish action itself.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
@@ -807,13 +807,13 @@ def launch():
                     self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='switchChat':
-                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.switch_chat(settings.project,chat_id)
                     finally: conversations.close()
-                    self._warm(check=False)
+                    if not self.active_task:self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.

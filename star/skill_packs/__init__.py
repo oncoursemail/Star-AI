@@ -9,10 +9,9 @@ Where it goes: `desktop_core.run_task` appends the rendered block to `turn_secti
 `star.agent.volatile_context` puts after the user's own words. It never enters the system message,
 which stays byte-stable for the model server's prompt cache.
 
-Cost: the text is read by the model on every turn it is added. Each pack is about 240 tokens (measured
-with the server's tokenizer) and only the best-matching pack is added (MAX_PACKS_PER_TURN = 1), so the
-first token is delayed by about 4 seconds at the server's prompt-reading speed of roughly 65 tokens per
-second, and only for matching prompts.
+Cost: the text is read by the model on every turn it is added. Only the best-matching pack is added
+(MAX_PACKS_PER_TURN = 1). Bodies must fit MAX_BODY_CHARS; richer, unmeasured design packs remain opt-in.
+Do not extend latency measurements from the shorter measured packs to these longer packs.
 
 Whether a pack is on is decided by evidence, not by hope: a pack is enabled by default (DEFAULT_ENABLED)
 only after the evaluation gate (docs/evals.md) showed that it does not lower the golden-task score.
@@ -105,6 +104,23 @@ TRIGGERS: dict[str, re.Pattern] = {
     "eng-verify-before-done": re.compile(
         r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
+    # Design guidance, not implementation recipes; unmeasured and OFF by default.
+    "design-core-loop-and-progression": re.compile(
+        r"\b(?:core loops?|progression design|progression pacing|reward schedules?|difficulty curves?)\b", re.IGNORECASE),
+    "design-onboarding-and-tutorial": re.compile(
+        r"\b(?:onboarding|first[- ]time user experience|first (?:60|sixty) seconds|teaching by doing|tutorial design)\b",
+        re.IGNORECASE),
+    "design-game-feel": re.compile(
+        r"\b(?:game feel|action feedback|input feel|impact feedback|camera feedback|sound feedback|feedback timing)\b",
+        re.IGNORECASE),
+    "design-level-and-obby-layout": re.compile(
+        r"\b(?:obby layout|checkpoint spacing|level readability|level flow|risk and reward|risk[- ]reward)\b", re.IGNORECASE),
+    "design-economy-and-fair-monetisation": re.compile(
+        r"\b(?:economy|currency sinks?|currency sources?|inflation|fair moneti[sz]ation|paid random items?|odds disclosure)\b",
+        re.IGNORECASE),
+    "design-ui-ux-for-games": re.compile(
+        r"\b(?:game UX|UI hierarchy|information hierarchy|thumb zones?|mobile[- ]first|readable text|colou?r[- ]blind)\b",
+        re.IGNORECASE),
 }
 
 
