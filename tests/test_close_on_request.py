@@ -125,6 +125,9 @@ def test_real_close_cleans_children_before_watchdog(
     bridge.warmer = SimpleNamespace(cancel=lambda: cleanup('warmer'))
     bridge.runtime = SimpleNamespace(stop=lambda: cleanup('runtime', 10.0))
     bridge.voice = SimpleNamespace(close=close_voice)
+    research_stops = []
+    # The hourly research-watch timer is stopped once, before any child process is cleaned up.
+    bridge.research_timer = SimpleNamespace(stop=lambda: research_stops.append(list(events)))
     bridge.pool = SimpleNamespace(shutdown=shutdown)
     monkeypatch.setattr(shell_module, 'app_data', lambda: tmp_path)
     monkeypatch.setattr(shell_module, 'record_turn_failure', record)
@@ -147,6 +150,7 @@ def test_real_close_cleans_children_before_watchdog(
     assert events == expected
     assert bridge._closing and cancellation.is_set()
     assert len(timers) == int(packaged_windows)
+    assert research_stops == [[]]
 
     saved = records()
     close(bridge)
