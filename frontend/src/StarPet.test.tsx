@@ -2,19 +2,22 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {act,fireEvent,render,renderHook,screen,cleanup} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {StarPet,petImage,usePetIdleMs} from './StarPet'
+import {StarPet,petImage,petPosePath,usePetIdleMs} from './StarPet'
 
 beforeEach(()=>{localStorage.clear()})
-afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers()})
+afterEach(()=>{cleanup();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers()})
 describe('Star mascot',()=>{
  it('maps all activity states to approved art names',()=>{
   expect(petImage('idle').face).toBe('normal')
   expect(petImage('idle',true).face).toBe('content')
   expect(petImage('typing').face).toBe('focused')
   expect(petImage('thinking').pose).toBe('think')
-  expect(petImage('streaming').pose).toBe('type-1')
-  expect(petImage('streaming',true).pose).toBe('type-2')
+  expect(petImage('streaming').pose).toBe('think')
+  expect(petImage('streaming',true).pose).toBe('think')
   expect(petImage('finished').face).toBe('happy')
+  expect(petImage('finished').pose).toBe('jump')
+  expect(petImage('idle',true).pose).toBe('blink')
+  expect(petImage('typing').pose).toBe('look-a')
   expect(petImage('error').face).toBe('nervous')
   expect(petImage('cancelled').face).toBe('surprised')
   expect(petImage('sleepy').face).toBe('sleepy')
@@ -44,9 +47,9 @@ describe('Star mascot',()=>{
  it('does not alternate art with reduced motion',()=>{
   vi.useFakeTimers()
   const {container}=render(<StarPet state="streaming" reducedMotion/>)
-  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/think.png')
   act(()=>vi.advanceTimersByTime(10000))
-  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/think.png')
  })
  it('shows and hides status when clicked',async()=>{
   const user=userEvent.setup()
@@ -138,5 +141,87 @@ describe('pet idle clock',()=>{
   expect(vi.getTimerCount()).toBe(0)
   act(()=>vi.advanceTimersByTime(900000))
   expect(result.current).toBe(0)
+ })
+})
+
+describe('Star sprite animation',()=>{
+ it.each([
+  ['idle','stand'],['typing','look-a'],['thinking','think'],
+  ['streaming','think'],['finished','jump'],['error','sad'],
+  ['asleep','sleep-lie']
+ ] as const)('shows the approved full-body %s pose', (state,pose)=>{
+  const {container}=render(<StarPet state={state} reducedMotion/>)
+  expect(container.querySelector('.star-pet__image--current')?.getAttribute('src')).toBe(petPosePath(pose))
+ })
+ it.each(['../secret','blink.png','',null,undefined,7,{}])('rejects malformed or unknown sprite paths (%s)',bad=>{
+  expect(petPosePath(bad)).toBe('./assets/mascot/poses/stand.png')
+ })
+ it('blinks using the matching pose and waves only when chat opens',()=>{
+  vi.useFakeTimers()
+  const {container}=render(<StarPet state="idle"/>)
+  expect(container.querySelector('.star-pet__wave--a')?.getAttribute('src')).toBe(petPosePath('wave-a'))
+  expect(container.querySelector('.star-pet__wave--b')?.getAttribute('src')).toBe(petPosePath('wave-b'))
+  expect(container.querySelector('.star-pet__blink')).toBeNull()
+  act(()=>vi.advanceTimersByTime(980))
+  expect(container.querySelector('.star-pet__wave--a')).toBeNull()
+  expect(container.querySelector('.star-pet__exhale')?.getAttribute('src')).toBe(petPosePath('breathe-out'))
+  expect(container.querySelector('.star-pet__blink')?.getAttribute('src')).toBe(petPosePath('blink'))
+  expect(container.querySelector('.star-pet__image--current')?.getAttribute('src')).toBe(petPosePath('stand'))
+  expect(vi.getTimerCount()).toBe(1) // Existing 30-second sleep clock, no animation interval.
+ })
+ it('cross-fades only during state changes, even for identical poses with different expressions',()=>{
+  vi.useFakeTimers()
+  const {container,rerender}=render(<StarPet state="thinking"/>)
+  rerender(<StarPet state="streaming"/>)
+  expect(container.querySelector('.star-pet__image--current')?.getAttribute('src')).toBe(petPosePath('think'))
+  expect(container.querySelector('.star-pet__image--previous')?.getAttribute('src')).toBe(petPosePath('think'))
+  act(()=>vi.advanceTimersByTime(230))
+  expect(container.querySelector('.star-pet__image--previous')).toBeNull()
+  rerender(<StarPet state="finished"/>)
+  expect(container.querySelector('.star-pet__image--previous')?.getAttribute('src')).toBe(petPosePath('think'))
+  expect(container.querySelector('.star-pet__image--current')?.getAttribute('src')).toBe(petPosePath('jump'))
+  act(()=>vi.advanceTimersByTime(230))
+  expect(container.querySelector('.star-pet__image--previous')).toBeNull()
+  expect(vi.getTimerCount()).toBe(0)
+ })
+ it('suppresses every animation when the saved reduced-motion preference is on',()=>{
+  vi.useFakeTimers()
+  const {container,rerender}=render(<StarPet state="idle" reducedMotion/>)
+  expect(screen.getByTestId('star-pet').getAttribute('data-motion')).toBe('off')
+  expect(container.querySelector('.star-pet__wave--a')).toBeNull()
+  expect(container.querySelector('.star-pet__blink')).toBeNull()
+  expect(container.querySelector('.star-pet__exhale')).toBeNull()
+  rerender(<StarPet state="finished" reducedMotion/>)
+  expect(container.querySelector('.star-pet__image--previous')).toBeNull()
+  expect(container.querySelector('.star-pet__image--current')?.classList.contains('is-animated')).toBe(false)
+  expect(vi.getTimerCount()).toBe(0)
+ })
+ it('honors OS reduced motion even if the app preference permits movement',()=>{
+  vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener:vi.fn(),removeEventListener:vi.fn()}))
+  vi.useFakeTimers()
+  const {container}=render(<StarPet state="idle" reducedMotion={false}/>)
+  expect(screen.getByTestId('star-pet').getAttribute('data-motion')).toBe('off')
+  expect(container.querySelector('.star-pet__wave--a')).toBeNull()
+  expect(container.querySelector('.star-pet__blink')).toBeNull()
+  expect(vi.getTimerCount()).toBe(1) // Idle clock, not a motion timer.
+ })
+ it('does not replay the greeting on later idle periods; hiding stops its timers',()=>{
+  vi.useFakeTimers()
+  const {container,rerender}=render(<StarPet state="idle"/>)
+  act(()=>vi.advanceTimersByTime(980))
+  rerender(<StarPet state="thinking"/>)
+  rerender(<StarPet state="idle"/>)
+  expect(container.querySelector('.star-pet__wave--a')).toBeNull()
+  rerender(<StarPet state="idle" visible={false}/>)
+  expect(vi.getTimerCount()).toBe(0)
+  rerender(<StarPet state="idle" visible/>)
+  expect(container.querySelector('.star-pet__wave--a')).toBeTruthy()
+ })
+ it('keeps the pet visible when an optional wave sprite cannot load',()=>{
+  const {container}=render(<StarPet state="idle"/>)
+  fireEvent.error(container.querySelector('.star-pet__wave--a') as HTMLImageElement)
+  expect(screen.getByTestId('star-pet')).toBeTruthy()
+  expect(container.querySelector('.star-pet__image--current')?.getAttribute('src')).toBe(petPosePath('stand'))
+  expect(container.querySelector('.star-pet__wave--a')).toBeNull()
  })
 })

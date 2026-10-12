@@ -1,3 +1,4 @@
+/* Image-backed mascot. Motion uses only compositor opacity and transforms. */
 .star-pet{position:fixed;z-index:40;width:100px;height:112px;pointer-events:none}
 .star-pet--bottom-right{right:20px;bottom:145px}
 .star-pet--bottom-left{left:20px;bottom:145px}
@@ -5,6 +6,39 @@
 .star-pet--top-left{left:20px;top:80px}
 .star-pet__button{position:relative;border:0;background:transparent;padding:0;width:100%;height:100%;cursor:grab;pointer-events:auto;touch-action:none}
 .star-pet__button:active{cursor:grabbing}
+.star-pet__body{position:absolute;inset:0;display:block;transform-origin:50% 94%}
+.star-pet--idle[data-motion="on"] .star-pet__body{animation:star-pet-breathe 4.8s ease-in-out infinite}
 .star-pet__image{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
-.star-pet__bubble{position:absolute;right:0;bottom:100%;max-width:220px;min-width:140px;border:1px solid var(--line,#747b8b);background:var(--surface,#202630);color:var(--text,#fff);border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.4;box-shadow:0 6px 24px #0003}
-@media(prefers-reduced-motion:reduce){.star-pet,.star-pet *{animation:none!important;transition:none!important}}
+.star-pet__image--previous{opacity:1}
+.star-pet__image--current.is-animated{animation:star-pet-enter .23s cubic-bezier(.2,1.25,.35,1) both}
+.star-pet__exhale{opacity:0;animation:star-pet-exhale 4.8s ease-in-out infinite}
+.star-pet__blink{opacity:0;animation:star-pet-blink 7.4s linear infinite}
+.star-pet__wave--a{opacity:0;animation:star-pet-wave-a .98s linear both}
+.star-pet__wave--b{opacity:0;animation:star-pet-wave-b .98s linear both}
+.star-pet__bubble{position:absolute;right:0;bottom:100%;width:112px;border:1px solid var(--line,#747b8b);background:var(--surface,#202630);color:var(--text,#fff);border-radius:10px;padding:8px;font-size:11px;line-height:1.4;overflow-wrap:anywhere;box-shadow:0 6px 24px #0003}
+@keyframes star-pet-breathe{0%,100%{transform:scaleY(1)}48%{transform:scaleY(1.016)}}
+@keyframes star-pet-exhale{0%,18%,75%,100%{opacity:0}45%,52%{opacity:.85}}
+@keyframes star-pet-blink{0%,73%,76%,82%,85%,100%{opacity:0}74%,75%,83%,84%{opacity:1}}
+@keyframes star-pet-enter{from{opacity:0;transform:translateY(3px) scale(.96)}60%{opacity:1;transform:translateY(-2px) scale(1.035)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes star-pet-wave-a{0%,19%,45%,69%{opacity:1}20%,44%,70%,100%{opacity:0}}
+@keyframes star-pet-wave-b{0%,19%,45%,69%,96%,100%{opacity:0}20%,44%,70%,95%{opacity:1}}
+/* Reserve a side gutter when the window is too narrow for Star to live outside
+   the centered reading column. Saved drag placement selects the appropriate side. */
+@media(max-width:1380px){
+ .shell:has(.star-pet--bottom-left) .thread-column,.shell:has(.star-pet--top-left) .thread-column{padding-left:calc(var(--star-gutter) - 10px + 118px)}
+ .shell:has(.star-pet--bottom-left) .dock,.shell:has(.star-pet--top-left) .dock{padding-left:calc(var(--star-gutter) + 118px)}
+ .shell:has(.star-pet--bottom-right) .thread-column,.shell:has(.star-pet--top-right) .thread-column{padding-right:calc(var(--star-gutter) - 10px + 118px)}
+ .shell:has(.star-pet--bottom-right) .dock,.shell:has(.star-pet--top-right) .dock{padding-right:calc(var(--star-gutter) + 118px)}
+}
+@media(max-width:760px){
+ .star-pet{width:72px;height:82px}
+ .star-pet--bottom-right,.star-pet--top-right{right:12px}
+ .star-pet--bottom-left,.star-pet--top-left{left:12px}
+ .star-pet__bubble{width:84px;font-size:10px}
+ .shell:has(.star-pet--bottom-left) .thread-column,.shell:has(.star-pet--top-left) .thread-column{padding-left:calc(var(--star-gutter) - 10px + 90px)}
+ .shell:has(.star-pet--bottom-left) .dock,.shell:has(.star-pet--top-left) .dock{padding-left:calc(var(--star-gutter) + 90px)}
+ .shell:has(.star-pet--bottom-right) .thread-column,.shell:has(.star-pet--top-right) .thread-column{padding-right:calc(var(--star-gutter) - 10px + 90px)}
+ .shell:has(.star-pet--bottom-right) .dock,.shell:has(.star-pet--top-right) .dock{padding-right:calc(var(--star-gutter) + 90px)}
+}
+.star-pet[data-motion="off"] .star-pet__body,.star-pet[data-motion="off"] .star-pet__image{animation:none!important;transition:none!important;transform:none!important}
+@media(prefers-reduced-motion:reduce){.star-pet,.star-pet *{animation:none!important;transition:none!important;transform:none!important}}
