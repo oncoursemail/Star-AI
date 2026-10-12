@@ -581,7 +581,6 @@ def recent_context(recent: list[tuple[str, str, str]], current_prompt: str) -> s
 
 def query_models(settings: Settings) -> list[str]:
     settings.validate()
-    stream_tokens = stream_tokens and not settings.luau_run_before_answer
     import httpx
     endpoint, key = connection_for(settings)
     with httpx.Client(timeout=8, trust_env=False) as client:
@@ -804,6 +803,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
+    stream_tokens = stream_tokens and not settings.luau_run_before_answer
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
     if not settings.model.strip():
