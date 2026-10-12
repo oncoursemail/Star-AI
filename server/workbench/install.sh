@@ -19,7 +19,7 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 trap 'install -d -m 700 /etc/star-workbench; touch /etc/star-workbench/PAUSED; systemctl stop star-workbench.service 2>/dev/null || true' ERR
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y python3 python3-venv python3-dev nodejs npm git build-essential \
+apt-get install -y --no-install-recommends python3 python3-venv python3-dev nodejs npm git build-essential \
   bubblewrap util-linux nftables openssl ca-certificates curl
 node -e 'const [a,b]=process.versions.node.split(".").map(Number); if (!(a>22 || a===22&&b>=12 || a===20&&b>=19)) process.exit(1)'
 useradd --system --user-group --home-dir /work --shell /usr/sbin/nologin star-workbench
@@ -70,17 +70,42 @@ RemainAfterExit=yes
 [Install]
 WantedBy=multi-user.target
 EOF
+# An unprivileged LXD container WITHOUT nesting has files mounted over /proc, and the
+# kernel then refuses the fresh /proc that bubblewrap mounts for each command ("Can't
+# mount proc ... Operation not permitted"). One clean procfs kept mounted by container
+# root satisfies that kernel check without turning nesting on. Failure is tolerated here
+# (other container types): the sandbox smoke test below still aborts if bwrap cannot run.
+cat > /etc/systemd/system/star-workbench-proc.service <<'EOF'
+[Unit]
+Description=Clean procfs so the STAR Workbench sandbox can mount its own /proc
+Before=star-workbench.service
+ConditionPathIsMountPoint=!/run/star-workbench-proc
+[Service]
+Type=oneshot
+ExecStartPre=/bin/mkdir -p -m 555 /run/star-workbench-proc
+ExecStart=-/bin/mount -t proc -o nosuid,nodev,noexec proc /run/star-workbench-proc
+RemainAfterExit=yes
+[Install]
+WantedBy=multi-user.target
+EOF
 cat > /etc/systemd/system/star-workbench.service <<'EOF'
 [Unit]
 Description=Isolated STAR MCP Workbench
 Requires=star-workbench-firewall.service
-After=network-online.target star-workbench-firewall.service
+Wants=star-workbench-proc.service
+After=network-online.target star-workbench-firewall.service star-workbench-proc.service
 [Service]
 Type=simple
 User=star-workbench
 Group=star-workbench
 WorkingDirectory=/work
 LoadCredential=token:/etc/star-workbench/token
+# Without nesting, an unprivileged LXD container gets NO credential directory from the
+# line above (systemd cannot mount it and says nothing). Root therefore also places a
+# private copy in the runtime directory; it disappears when the service stops.
+RuntimeDirectory=star-workbench
+RuntimeDirectoryMode=0700
+ExecStartPre=+/usr/bin/install -o star-workbench -g star-workbench -m 400 /etc/star-workbench/token /run/star-workbench/token
 Environment=WORKBENCH_PORT=8765
 ExecStart=/opt/star-workbench/venv/bin/python /opt/star-workbench/app.py
 Restart=on-failure
@@ -91,6 +116,8 @@ AmbientCapabilities=
 ProtectSystem=strict
 ProtectHome=yes
 ReadWritePaths=/work /var/lib/star-workbench /var/log/star-workbench/audit.jsonl
+# The clean procfs must not become read-only here or the kernel check fails again.
+ReadWritePaths=-/run/star-workbench-proc
 PrivateTmp=yes
 PrivateDevices=yes
 ProtectKernelTunables=yes
@@ -114,6 +141,7 @@ WantedBy=multi-user.target
 EOF
 systemctl daemon-reload
 systemctl enable --now star-workbench-firewall.service
+systemctl enable --now star-workbench-proc.service
 # REAL sandbox/network/toolchain smoke test; abort rather than silently running unsandboxed.
 # Preparation is unprivileged and uses the same bwrap/prlimit launcher as all MCP commands.
 runuser -u star-workbench -- /opt/star-workbench/venv/bin/python /opt/star-workbench/app.py --prepare

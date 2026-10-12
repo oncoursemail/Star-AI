@@ -100,6 +100,33 @@ def test_tunnel_filter_never_forwards_request_credentials(tmp_path):
     assert secret not in result.stdout + result.stderr
 
 
+def test_tunnel_address_reaches_the_journal_while_the_tunnel_keeps_running(tmp_path):
+    # Seen on a real Debian 13 install: with `| awk` (mawk) the address stayed in a pipe
+    # buffer for as long as the tunnel ran, so `tunnel.sh url` never returned anything.
+    import select
+    executable = tmp_path / "fake-cloudflared"
+    executable.write_text("#!/bin/sh\necho 'INF |  https://fixture.trycloudflare.com  |'\n"
+                          "echo 'ERR https://fixture.trycloudflare.com/mcp/secret/'\nexec sleep 30\n")
+    executable.chmod(0o700)
+    text = (FOLDER / "tunnel.sh").read_text()
+    text = text.replace("/usr/local/bin/star-cloudflared", str(executable))
+    text = text.replace("/opt/star/secrets", str(tmp_path / "absent"))
+    text = text.replace("[[ $EUID -ne 0 ]]", "[[ 1 -ne 0 ]]")
+    staged = tmp_path / "tunnel.sh"
+    staged.write_text(text)
+    process = subprocess.Popen(["bash", str(staged), "serve"], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               start_new_session=True)
+    try:
+        ready, _, _ = select.select([process.stdout], [], [], 5)
+        assert ready, "no address line within five seconds although the tunnel is running"
+        assert os.read(process.stdout.fileno(), 4096) == b"https://fixture.trycloudflare.com\n"
+        assert process.poll() is None
+        assert not select.select([process.stdout], [], [], .3)[0]  # the request line is swallowed
+    finally:
+        os.killpg(process.pid, 9)
+        process.wait()
+
+
 def test_private_install_publishes_read_only_server_venv(tmp_path):
     text = (FOLDER / "install.sh").read_text()
     command = next(line for line in text.splitlines() if line.startswith("chmod -R go-w,go+rX "))

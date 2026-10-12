@@ -368,6 +368,15 @@ def test_repo_sync_status_diff_with_local_fixture_only(bench, tmp_path, monkeypa
             call(bench, "repo_sync", branch=branch)
 
 
+def test_frontend_preparation_does_not_need_a_lock_file_and_leaves_none(tmp_path):
+    # Seen on a real install: `npm ci` exits with EUSAGE because the project has no lock file.
+    assert app.frontend_install(tmp_path)[:3] == ["npm", "install", "--no-package-lock"]
+    (tmp_path / "package-lock.json").write_text("{}")
+    assert app.frontend_install(tmp_path)[:2] == ["npm", "ci"]
+    for argv in (app.frontend_install(tmp_path), app.frontend_install(tmp_path / "absent")):
+        app.validate_argv(argv)
+
+
 def test_search_explicitly_reports_depth_limit(bench):
     path = "/".join(["level"] * 9) + "/deep"
     call(bench, "ws_write", path=path, content="needle")

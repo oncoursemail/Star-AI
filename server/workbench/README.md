@@ -74,9 +74,26 @@ root and mode **0600**. It never prints the token, only the file path. systemd's
 private, read-only credential copy. The token is not passed through an environment
 variable, command line or child-process file descriptor.
 
+**Unprivileged LXD container without nesting** (`security.nesting=false`, the
+recommended setting): two things do not work there as on a normal host, and the
+installer handles both without turning nesting on.
+
+- systemd cannot mount its credential store and silently provides none. The unit
+  therefore also runs, as root before start, `install -m 400` of the token into the
+  service's own runtime directory `/run/star-workbench` (mode 0700, removed when the
+  service stops). The server uses the systemd credential when present, else that copy.
+- bubblewrap cannot mount a fresh `/proc` for a command, because the container's own
+  `/proc` has files mounted over it. `star-workbench-proc.service` keeps one clean
+  procfs mounted at `/run/star-workbench-proc`, which satisfies the kernel's check.
+
+The secret path is accepted with or without its final slash (`/mcp/<token>/` or
+`/mcp/<token>`); anything else under `/mcp/` is refused.
+
 Preparation uses the **real sandboxed runner** to fetch `star/next` from the fixed
 public repository, create `/work/.venv`, install the project's Python requirements
-plus pytest, and run `npm ci` in `/work/Star-AI/frontend`. Dependency installation
+plus pytest, and install the frontend's packages in `/work/Star-AI/frontend` (`npm ci`
+when a `package-lock.json` exists, otherwise `npm install --no-package-lock`: the
+project commits no npm lock file). Dependency installation
 needs public networking; test execution itself does not. Source/build lifecycle
 scripts are untrusted and run unprivileged. A failing sandbox, firewall, dependency
 installation or Node version check aborts installation. Inspect retained job logs
@@ -155,7 +172,7 @@ sequenced by the client, not issued concurrently with commands that rewrite the
 same files. A read/write tool is not a substitute for a Git commit or a backup.
 
 All launches use `prlimit`: 8 GiB virtual address space, CPU seconds equal to the
-rounded-up timeout, 64 MiB per file, 128 processes per service UID, 128 descriptors,
+rounded-up timeout, 64 MiB per file, 128 processes per service UID, 1024 descriptors,
 and no core dumps. systemd additionally caps aggregate memory at 4 GiB, tasks at
 384, and CPU at 200%; outer container quotas are still required. Node's heap is
 limited to 1 GiB and its large WebAssembly trap reservation is disabled. Resource

@@ -8,9 +8,18 @@ umask 077
 # URLs, so piping its full stderr to journald would disclose path credentials.
 if [[ "${1:-}" == serve ]]; then
   [[ $EUID -ne 0 ]] || { echo 'Refusing root tunnel process' >&2; exit 1; }
+  # A shell loop, not awk: Debian's awk (mawk) waits for a full input block on a pipe,
+  # so the one hostname line never reached the journal while the tunnel kept running.
   /usr/local/bin/star-cloudflared tunnel --no-autoupdate --protocol http2 --url http://127.0.0.1:8765 2>&1 |
-    sed -unE 's#.*(https://[a-z0-9-]+\.trycloudflare\.com).*#\1#p' |
-    awk '!seen++ { print; fflush() }'
+    {
+      printed=
+      while IFS= read -r line; do
+        if [[ -z "$printed" && "$line" =~ (https://[a-z0-9-]+\.trycloudflare\.com) ]]; then
+          printf '%s\n' "${BASH_REMATCH[1]}"
+          printed=1
+        fi
+      done
+    }
   exit
 fi
 [[ $EUID -eq 0 ]] || { echo 'Run as container root' >&2; exit 1; }

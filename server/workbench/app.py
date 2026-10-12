@@ -36,6 +36,8 @@ AUTHORIZED = contextvars.ContextVar("workbench_authorized", default=False)
 TOOLS = ("ws_list", "ws_read", "ws_write", "ws_apply_patch", "ws_delete", "ws_search",
          "run", "job_start", "job_status", "job_output", "job_stop", "repo_sync",
          "repo_status", "repo_diff", "test_python", "test_frontend", "info")
+READ_ONLY = frozenset(("ws_list", "ws_read", "ws_search", "job_status", "job_output",
+                       "repo_status", "repo_diff", "info"))
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class Limits:
     memory_bytes: int = 8 * 1024**3
     file_bytes: int = 64 * 1024**2
     processes: int = 128
+    open_files: int = 1024  # 128 made the package installer fail with EMFILE on a real install
     jobs: int = 3
     retained_jobs: int = 32
     requests_per_minute: int = 120
@@ -416,7 +419,8 @@ class Workbench:
         clean.update(env or {})
         command = ["/usr/bin/prlimit", f"--as={self.limits.memory_bytes}",
                    f"--cpu={max(1, math.ceil(timeout_s))}", f"--fsize={self.limits.file_bytes}",
-                   f"--nproc={self.limits.processes}", "--nofile=128", "--core=0", "--"]
+                   f"--nproc={self.limits.processes}", f"--nofile={self.limits.open_files}",
+                   "--core=0", "--"]
         relative = Path(*self.ws.parts(cwd))
         if self.sandbox:
             command += ["/usr/bin/bwrap", "--unshare-all", "--share-net", "--die-with-parent",
@@ -635,6 +639,21 @@ def load_token(path):
     return token
 
 
+def credential_path(environ):
+    """The systemd credential when there is one, else the private copy root made at start.
+
+    In an unprivileged LXD container without nesting systemd cannot mount its credential
+    store: it starts the service anyway and sets no CREDENTIALS_DIRECTORY (seen for real).
+    The unit therefore also has root place a 0400 copy in the service's runtime directory.
+    Both variables hold a directory path, never the token itself.
+    """
+    for variable in ("CREDENTIALS_DIRECTORY", "RUNTIME_DIRECTORY"):
+        directory = environ.get(variable, "")
+        if directory.startswith("/") and ":" not in directory:
+            return Path(directory) / "token"
+    raise SystemExit("No credential directory: start through the installed systemd unit")
+
+
 class Gate:
     """Pure ASGI gate: authenticate BEFORE routing; never log URLs, headers or bodies."""
     def __init__(self, app, token, rate=120, delay=.2):
@@ -642,8 +661,13 @@ class Gate:
         self.rate, self.delay, self.requests = rate, delay, deque()
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
+        if scope["type"] == "lifespan":
             return await self.app(scope, receive, send)
+        if scope["type"] != "http":
+            # WebSocket (or any future scope) would otherwise bypass authentication.
+            if scope["type"] == "websocket":
+                await send({"type": "websocket.close", "code": 1008})
+            return
         async def respond(status):
             await send({"type": "http.response.start", "status": status,
                         "headers": [(b"content-type", b"text/plain"), (b"cache-control", b"no-store")]})
@@ -651,7 +675,8 @@ class Gate:
         headers = dict(scope.get("headers", []))
         auth = headers.get(b"authorization", b"")
         path = scope.get("path", "")
-        match = re.fullmatch(r"/mcp/([^/]+)/", path)
+        # Clients differ on the final slash of a pasted connector address; accept both.
+        match = re.fullmatch(r"/mcp/([^/]+)/?", path)
         path_token = match.group(1).encode() if match else b""
         bearer = auth[7:] if auth.startswith(b"Bearer ") else b""
         header_ok = hmac.compare_digest(hashlib.sha256(bearer).digest(), self.secret)
@@ -712,6 +737,7 @@ class Gate:
 def create_server(workbench, token):
     from mcp.server.fastmcp import FastMCP
     from mcp.server.transport_security import TransportSecuritySettings
+    from mcp.types import ToolAnnotations
     server = FastMCP("STAR Workbench", stateless_http=True, json_response=True,
                      streamable_http_path="/mcp/", host="127.0.0.1",
                      transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False))
@@ -723,10 +749,21 @@ def create_server(workbench, token):
                 raise PermissionError("authenticated HTTP request required")
             bound = inspect.signature(method).bind(*args, **kwargs)
             return await asyncio.to_thread(workbench.invoke, name, bound.arguments)
-        server.add_tool(call, name=name)
+        # Lets a chat client skip its confirmation prompt for tools that only read.
+        server.add_tool(call, name=name, annotations=ToolAnnotations(
+            readOnlyHint=name in READ_ONLY, destructiveHint=name not in READ_ONLY,
+            openWorldHint=name not in READ_ONLY))
     for name in TOOLS:
         register(name)
     return server, Gate(server.streamable_http_app(), token, workbench.limits.requests_per_minute)
+
+
+def frontend_install(frontend):
+    """`npm ci` needs a lock file; the project commits none, so install from package.json."""
+    if (Path(frontend) / "package-lock.json").is_file():
+        return ["npm", "ci", "--no-audit", "--no-fund"]
+    # No lock file is written: an untracked one would make every later repo_sync refuse.
+    return ["npm", "install", "--no-package-lock", "--no-audit", "--no-fund"]
 
 
 def main():
@@ -742,14 +779,14 @@ def main():
                      lambda: workbench.run(["python3", "-m", "venv", "/work/.venv"], timeout_s=900),
                      lambda: workbench.run(["/work/.venv/bin/python", "-m", "pip", "install", "-r",
                                             "/work/Star-AI/requirements.txt", "pytest", "pytest-asyncio"], timeout_s=900),
-                     lambda: workbench.run(["npm", "ci"], "Star-AI/frontend", 900)]
+                     lambda: workbench.run(frontend_install(workbench.ws.root / "Star-AI/frontend"),
+                                           "Star-AI/frontend", 900)]
             for step in steps:
                 result = step()
                 if result["exit_code"]:
                     raise SystemExit("Preparation failed; inspect retained job output as operator")
             return
-        credential = Path(os.environ["CREDENTIALS_DIRECTORY"]) / "token"
-        token = load_token(credential)
+        token = load_token(credential_path(os.environ))
         _, application = create_server(workbench, token)
         import uvicorn
         # SDK/ASGI error logs can include validation inputs or secret-path URLs.
