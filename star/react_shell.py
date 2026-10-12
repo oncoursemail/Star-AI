@@ -478,6 +478,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
     }
 
 
+def close_for_session(shell, manager=None):
+    """Close the real window on a Qt session-end / Restart Manager request."""
+    shell.close()
+
+
 def launch():
     try:
         from PySide6.QtCore import QObject, QUrl, Slot, Signal, Qt, QTimer
@@ -527,6 +532,7 @@ def launch():
             self.cancel_chat = threading.Event()
             self.turn: TurnRef | None = None
             self.active_update = False
+            self._closing = False
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
@@ -618,7 +624,7 @@ def launch():
             from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
-            return start_model_router(self.runtime, self.settings_file, app_data(), source)
+            return self.runtime, self.settings_file, app_data(), source
 
         def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False, retry_id=None):
             home=app_data()
@@ -660,6 +666,8 @@ def launch():
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
+            if self.cancel_chat.is_set():
+                raise RuntimeError('cancelled by user')
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -1150,11 +1158,29 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
-            self.voice.close()
+            # Restart Manager, session end and ordinary window close share this path.
+            # Record the cancellation before stopping services: Qt may exit while a
+            # background worker is still waiting on its provider.
+            if self._closing:
+                return
+            self._closing = True
             self.cancel_chat.set()
+            if self.turn is not None:
+                _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
+                record_turn_failure(app_data(), self.turn, 'cancelled', detail)
+            # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
             self.warmer.cancel()
             self.runtime.stop()
+            # A provider thread may be stuck in native I/O and ThreadPoolExecutor
+            # workers are non-daemon. The packaged Windows fallback starts only
+            # after child cleanup; it is not a deadline for the entire shutdown.
+            # The daemon timer has no effect if Python exits normally.
+            if os.name == 'nt' and getattr(sys, 'frozen', False):
+                deadline = threading.Timer(1.8, lambda: os._exit(0))
+                deadline.daemon = True
+                deadline.start()
+            self.voice.close()
             self.pool.shutdown(wait=False,cancel_futures=True)
 
     class Shell(QMainWindow):
@@ -1199,6 +1225,10 @@ def launch():
             return 0
     try:
         shell=Shell()
+        # Windows Restart Manager asks Qt to end the session via commitDataRequest.
+        # aboutToQuit also covers app.quit() without a close event.
+        app.commitDataRequest.connect(lambda manager: close_for_session(shell, manager))
+        app.aboutToQuit.connect(shell.bridge.close)
         shell.show()
         return app.exec()
     finally:
