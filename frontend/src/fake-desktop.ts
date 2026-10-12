@@ -14,7 +14,7 @@ import {act} from '@testing-library/react'
 
 export type Call = {action: string; payload: Record<string, unknown>; requestId: string}
 export type Reply = {ok: boolean; data?: unknown; pending?: boolean; error?: string}
-type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string}
+type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string; image?: string}
 
 /** Mirrors `asdict(Settings())` in star/desktop_core.py; loosely typed on purpose. */
 export const backendSettings = {

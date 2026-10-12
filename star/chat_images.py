@@ -87,7 +87,11 @@ def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None, *,
 
 
 def latest_generated_path(home: Path, project: str, chat_id: str) -> Path | None:
-    """Find the most recent generated picture in the current conversation only."""
+    """The picture a follow-up such as "make it brown" refers to: the newest answer of this chat, if it is one.
+
+    Only the newest answer counts. After a text answer there is no "it" to change, so an earlier
+    picture is never picked up by a follow-up that is really about something else.
+    """
     from .desktop_core import Conversations
     chats = Conversations(home / 'conversations.sqlite3')
     try:
@@ -96,9 +100,11 @@ def latest_generated_path(home: Path, project: str, chat_id: str) -> Path | None
         chats.close()
     directory = (home / 'generated-images').resolve()
     for row in reversed(records):
-        body = row['body']
-        if row['role'] != 'assistant' or not body.startswith(PREFIX):
+        if row['role'] != 'assistant':
             continue
+        body = row['body']
+        if not body.startswith(PREFIX):
+            return None
         name = body[len(PREFIX):]
         if not NAME.fullmatch(name) or name in ('.', '..'):
             return None

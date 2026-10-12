@@ -29,7 +29,8 @@ from .intelligence import for_settings
 from .providers import credential_status, save_api_key, clear_api_key, provider_kind
 from .model_health import (explain_model_failure, missing_model_message, note_server_result,
                            probe_server, server_status)
-from .chat_images import chat_image, generate_chat_image
+from .chat_images import chat_image, generate_chat_image, latest_generated_path
+from .comfy import ComfyError
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
@@ -676,32 +677,39 @@ def launch():
             self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
-        def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None):
+        def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None, retry_id=None):
             settings=Settings.load(self.settings_file)
             home=app_data()
+            shown=display_prompt or prompt     # the words the owner typed; `prompt` is what the picture model gets
             self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files or followup else 'Creating your image on this PC...'})
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=chats.add(settings.project,'user',display_prompt or prompt,chat_id=active_chat)
+                if retry_id is not None:
+                    user_id=chats.recover_turn(settings.project,active_chat,retry_id,shown)
+                else:
+                    user_id=chats.add(settings.project,'user',shown,chat_id=active_chat)
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
             chat_id = active_chat
+            source=files[0] if files else None
+            if followup and source is None:
+                source=latest_generated_path(home, settings.project, active_chat)
+                if source is None:
+                    raise ValueError('The previous picture is no longer available to edit.')
+            # The chosen place first: a choice that cannot make pictures fails here, before ComfyUI is started.
+            media_places.require(settings,'images',home)
             if not image_gen.status(settings)['running']:
-                if not settings.comfy_home:
-                    return self._image_setup_reply(settings, home, active_chat)
+                if not settings.comfy_home.strip():
+                    raise ComfyError('not_running', 'Pictures are made by ComfyUI on this PC, and it is not running. STAR has no '
+                                     'ComfyUI folder to start it from. Choose that folder in Settings → Where STAR generates '
+                                     '(or start ComfyUI yourself), then ask again.')
                 self._emit(request_id,'progress',{'phase':'Starting the image engine...'})
                 self.comfy_launcher.start(settings,home)
                 if self.cancel_chat.is_set():
                     raise RuntimeError('cancelled by user')
                 self._emit(request_id,'progress',{'phase':'Creating your image on this PC...'})
-            source=files[0] if files else None
-            if followup and source is None:
-                from .chat_images import latest_generated_path
-                source=latest_generated_path(home, settings.project, active_chat)
-                if source is None:
-                    raise ValueError('The previous picture is no longer available to edit.')
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat,size=size,
                                        source=source,
                                        mask=files[1] if len(files)>1 else None)
@@ -711,15 +719,6 @@ def launch():
             finally:
                 chats.close()
             return {'answer':result['answer'],'image':result['image']}
-
-        def _image_setup_reply(self, settings, home, active_chat):
-            answer = 'Image generation is not set up on this PC yet. Open Settings → Where STAR generates to configure it.'
-            chats = Conversations(home/'conversations.sqlite3')
-            try:
-                chats.add(settings.project, 'assistant', answer, chat_id=active_chat)
-            finally:
-                chats.close()
-            return {'answer': answer}
 
         def _run_team(self, request_id: str, prompt: str):
             """One user request, four bounded read-only specialists, one stored answer."""
@@ -1011,6 +1010,12 @@ def launch():
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
                     if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    # What the owner typed in chat, when `prompt` is the part the picture model should get.
+                    display=body.get('display_prompt')
+                    if display is not None:
+                        if not isinstance(display,str) or not 1<=len(display.strip())<=1500:
+                            raise ValueError('Invalid image request text')
+                        display=display.strip()
                     # Optional: the picture to edit, then a mask (white = the part to change).
                     files=body.get('files') or []
                     if not isinstance(files,list) or len(files)>2:
@@ -1018,10 +1023,20 @@ def launch():
                     pictures=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
                     size=body.get('size','square')
                     if not isinstance(size,str):raise ValueError('Invalid image size')
+                    retry_id=body.get('retryMessageId')
+                    if retry_id is not None and (type(retry_id) is not int or retry_id<1 or pictures):
+                        raise ValueError('Invalid Retry request')
                     self.active_task=True
                     self.cancel_chat = threading.Event()
                     try:
-                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True,body.get('display_prompt')))
+                        if retry_id is not None:
+                            chats=Conversations(app_data()/'conversations.sqlite3')
+                            try:
+                                current=Settings.load(self.settings_file).project
+                                chats.recover_turn(current,chats.active_chat(current),retry_id,display or prompt)
+                            finally:
+                                chats.close()
+                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True,display,retry_id))
                     except Exception:
                         self.active_task=False
                         raise
