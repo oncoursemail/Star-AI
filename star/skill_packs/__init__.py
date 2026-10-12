@@ -9,10 +9,9 @@ Where it goes: `desktop_core.run_task` appends the rendered block to `turn_secti
 `star.agent.volatile_context` puts after the user's own words. It never enters the system message,
 which stays byte-stable for the model server's prompt cache.
 
-Cost: the text is read by the model on every turn it is added. Each pack is about 240 tokens (measured
-with the server's tokenizer) and only the best-matching pack is added (MAX_PACKS_PER_TURN = 1), so the
-first token is delayed by about 4 seconds at the server's prompt-reading speed of roughly 65 tokens per
-second, and only for matching prompts.
+Cost: the text is read by the model on every turn it is added. Only the best-matching pack is added
+(MAX_PACKS_PER_TURN = 1). Bodies must fit MAX_BODY_CHARS; richer, unmeasured design packs remain opt-in.
+Do not extend latency measurements from the shorter measured packs to these longer packs.
 
 Whether a pack is on is decided by evidence, not by hope: a pack is enabled by default (DEFAULT_ENABLED)
 only after the evaluation gate (docs/evals.md) showed that it does not lower the golden-task score.
@@ -89,6 +88,12 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-ui-styles": re.compile(
         r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
         r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
+    "roblox-environment-art": re.compile(
+        r"\b(?:environment art|environment design|foliage|swaying trees?|tree sway|wind sway|"
+        r"winter shrine|torii|snowy forest|volcanic crypt|catacombs?|dungeon|"
+        r"SurfaceAppearance|PBR|texture atlas|reference screenshot|art direction|"
+        r"volumetric|skinned trees?|environmental storytelling|lighting preset)\b",
+        re.IGNORECASE),
     # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
     "game-obby": re.compile(r"\b(?:obby|checkpoint|checkpoints|kill brick|stage progression|obstacle course)\b", re.IGNORECASE),
     "game-tycoon": re.compile(r"\b(?:tycoon|dropper|droppers|collector|collectors|purchase button|factory plot)\b", re.IGNORECASE),
@@ -110,6 +115,23 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:vectors?|Vector3|dot products?|cross products?|CFrame composition|CFrame|look[- ]?at|"
         r"lerp|easing(?: families)?|critically damped|springs?|quadratic|cubic|B[eé]zier|projectiles?|gravity|"
         r"angle wrapping|weighted random|seeded random|fixed[- ]timestep|raycast geometry)\b", re.IGNORECASE),
+    # Design guidance, not implementation recipes; unmeasured and OFF by default.
+    "design-core-loop-and-progression": re.compile(
+        r"\b(?:core loops?|progression design|progression pacing|reward schedules?|difficulty curves?)\b", re.IGNORECASE),
+    "design-onboarding-and-tutorial": re.compile(
+        r"\b(?:onboarding|first[- ]time user experience|first (?:60|sixty) seconds|teaching by doing|tutorial design)\b",
+        re.IGNORECASE),
+    "design-game-feel": re.compile(
+        r"\b(?:game feel|action feedback|input feel|impact feedback|camera feedback|sound feedback|feedback timing)\b",
+        re.IGNORECASE),
+    "design-level-and-obby-layout": re.compile(
+        r"\b(?:obby layout|checkpoint spacing|level readability|level flow|risk and reward|risk[- ]reward)\b", re.IGNORECASE),
+    "design-economy-and-fair-monetisation": re.compile(
+        r"\b(?:economy|currency sinks?|currency sources?|inflation|fair moneti[sz]ation|paid random items?|odds disclosure)\b",
+        re.IGNORECASE),
+    "design-ui-ux-for-games": re.compile(
+        r"\b(?:game UX|UI hierarchy|information hierarchy|thumb zones?|mobile[- ]first|readable text|colou?r[- ]blind)\b",
+        re.IGNORECASE),
 }
 
 

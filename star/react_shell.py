@@ -21,6 +21,7 @@ import uuid
 
 from .desktop_core import Settings, Conversations, app_data, run_task, query_models, check_studio
 from .analytics import get_dashboard
+from .brain_overview import brain_snapshot
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
@@ -29,17 +30,20 @@ from .intelligence import for_settings
 from .providers import credential_status, save_api_key, clear_api_key, provider_kind
 from .model_health import (explain_model_failure, missing_model_message, note_server_result,
                            probe_server, server_status)
-from .chat_images import chat_image, generate_chat_image
+from .chat_images import chat_image, generate_chat_image, latest_generated_path
+from .comfy import ComfyError
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
+from .blender_bridge import status as blender_status
 from .studio_connections import connection_status, validate_target, select_instance
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
 from .lesson_digest import Digester, may_start_automatic
-from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher,
+from . import image_gen
+from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
                             handle as handle_media_action)
 from . import media_places
 from .chat_media import prepare_turn
@@ -47,13 +51,14 @@ from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','brainSnapshot','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
+    'researchStatus','researchCheck','researchEvidence','researchNominate',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
+    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
@@ -76,7 +81,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 WARM_UP_STOPPERS = frozenset({
     'sendMessage','runTeam','generateImage','testServer','testModel','testModelTeam','listModels',
     'startModelRouter','stopBrain','startBrain','installBrain','saveSettings','switchProject',
-    'saveProviderKey','clearProviderKey','newChat','switchChat',
+    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender',
 })
 
 # Settings the React interface may change. Never a credential: provider and
@@ -89,10 +94,11 @@ PERMITTED_SETTINGS = frozenset({
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
+    'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud',
-    'media_images','media_voice','media_video','media_use_references','comfy_home','ffmpeg_dir',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','research_auto_check',
+    'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
 
@@ -472,9 +478,15 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
+        'blender':blender_status(settings),
         'studio':connection_status(settings, studio_status, home=settings_file.parent),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
+
+
+def close_for_session(shell, manager=None):
+    """Close the real window on a Qt session-end / Restart Manager request."""
+    shell.close()
 
 
 def launch():
@@ -520,17 +532,53 @@ def launch():
             self.runtime = Runtime()
             self.studio_status = None
             self.pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix='star-react')
+            self.research_running = threading.Event()
+            # Starts no public network activity unless the owner opts in.
+            self.research_timer = QTimer(self)
+            self.research_timer.setInterval(60 * 60 * 1000)
+            self.research_timer.timeout.connect(self._research_tick)
+            self.research_timer.start()
+            QTimer.singleShot(10_000, self._research_tick)
             self.shutdownRequested.connect(QApplication.instance().quit)
             self.allowed_files: set[Path] = set()
             self.active_task = False
             self.cancel_chat = threading.Event()
             self.turn: TurnRef | None = None
             self.active_update = False
+            self._closing = False
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _research_tick(self):
+            """Check due official sources off the GUI thread, at most daily.
+
+            The desktop owns this scheduler, not the model or external web text.
+            Each failure is recorded as a source status; nothing is trusted,
+            executed or committed to GitHub. The timer merely checks eligibility.
+            """
+            if self.active_task or self.research_running.is_set():
+                return
+            if not Settings.load(self.settings_file).research_auto_check:
+                return
+            self.research_running.set()
+
+            def worker():
+                try:
+                    from .evolution_research import ResearchWatcher
+                    with ResearchWatcher(app_data() / 'research-watch.sqlite3') as watcher:
+                        due = watcher.due_sources()
+                        if due:
+                            watcher.check_many(due)
+                finally:
+                    self.research_running.clear()
+
+            try:
+                self.pool.submit(worker)
+            except RuntimeError:
+                self.research_running.clear()
 
         def _warm_target(self):
             """What a message sent now would talk to. Runs on the warm-up thread."""
@@ -617,7 +665,7 @@ def launch():
             from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
-            return start_model_router(self.runtime, self.settings_file, app_data(), source)
+            return self.runtime, self.settings_file, app_data(), source
 
         def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False, retry_id=None):
             home=app_data()
@@ -653,12 +701,17 @@ def launch():
                                        replaced=int(e.get('replaced',0)),not_kept=int(e.get('not_kept',0)))
                         return
                     self._emit(request_id,'progress',sanitize_event(e))
+                if settings.session_capabilities_prompt:
+                    full_prompt = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '
+                                   'Other features depend on the current setup.\n\n' + full_prompt)
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
                     owner_text=prompt, studio_configuration_home=self.settings_file.parent,
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
+            if self.cancel_chat.is_set():
+                raise RuntimeError('cancelled by user')
             if provider_kind(settings)=='lan':
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
@@ -672,20 +725,41 @@ def launch():
             self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
-        def _run_image(self, request_id, prompt, files=(), size='square'):
+        def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None, retry_id=None):
             settings=Settings.load(self.settings_file)
             home=app_data()
-            self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files else 'Creating the image on this PC…'})
+            shown=display_prompt or prompt     # the words the owner typed; `prompt` is what the picture model gets
+            self._emit(request_id,'progress',{'phase':'Editing the image on this PC…' if files or followup else 'Creating your image on this PC...'})
             chats=Conversations(home/'conversations.sqlite3')
             try:
                 active_chat=chats.active_chat(settings.project)
-                user_id=chats.add(settings.project,'user',prompt,chat_id=active_chat)
+                if retry_id is not None:
+                    user_id=chats.recover_turn(settings.project,active_chat,retry_id,shown)
+                else:
+                    user_id=chats.add(settings.project,'user',shown,chat_id=active_chat)
             finally:
                 chats.close()
             self.turn=TurnRef(settings.project,active_chat,user_id)
             chat_id = active_chat
+            source=files[0] if files else None
+            if followup and source is None:
+                source=latest_generated_path(home, settings.project, active_chat)
+                if source is None:
+                    raise ValueError('The previous picture is no longer available to edit.')
+            # The chosen place first: a choice that cannot make pictures fails here, before ComfyUI is started.
+            media_places.require(settings,'images',home)
+            if not image_gen.status(settings)['running']:
+                if not effective_comfy_home(settings):
+                    raise ComfyError('not_running', 'No image engine is set up: pictures are made by ComfyUI on this PC, it is not '
+                                     'running, and STAR found no ComfyUI folder to start it from. Choose that folder in Settings → '
+                                     'Where STAR generates (or start ComfyUI yourself), then ask again.')
+                self._emit(request_id,'progress',{'phase':'Starting the image engine...'})
+                self.comfy_launcher.start(settings,home)
+                if self.cancel_chat.is_set():
+                    raise RuntimeError('cancelled by user')
+                self._emit(request_id,'progress',{'phase':'Creating your image on this PC...'})
             result=generate_chat_image(settings,prompt,home,cancel_event=self.cancel_chat,size=size,
-                                       source=files[0] if files else None,
+                                       source=source,
                                        mask=files[1] if len(files)>1 else None)
             chats=Conversations(home/'conversations.sqlite3')
             try:
@@ -766,7 +840,28 @@ def launch():
                         self._run(rid,action,media_worker)
                         return json.dumps({'ok':True,'pending':True,'requestId':rid})
                     return json.dumps({'ok':True,'data':media_worker()},default=str)
+                if action in {'researchStatus', 'researchCheck', 'researchEvidence', 'researchNominate'}:
+                    # Read-only public documentation, observed into a local candidate-only ledger.
+                    # No model-selected host, reviewed-memory promotion or GitHub publish permission.
+                    def research_task():
+                        from .evolution_research import ResearchWatcher
+                        with ResearchWatcher(app_data() / 'research-watch.sqlite3') as watcher:
+                            if action == 'researchStatus':
+                                return watcher.status()
+                            if action == 'researchEvidence':
+                                return watcher.evidence(body.get('observation'))
+                            if action == 'researchNominate':
+                                project = Settings.load(self.settings_file).project
+                                return watcher.nominate(body.get('observation'), home=app_data(), project=project)
+                            return watcher.check_many()
+                    if action == 'researchCheck':
+                        if self.active_task:
+                            raise RuntimeError('Finish the active task before checking research sources')
+                        self._run(rid, action, research_task)
+                        return json.dumps({'ok':True,'pending':True,'requestId':rid})
+                    return json.dumps({'ok':True,'data':research_task()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
+                if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -775,7 +870,7 @@ def launch():
                     elif kind=='image':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Choose images','','Images (*.png *.jpg *.jpeg *.webp)')
                     else:
-                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json *.rbxmx *.rbxlx *.rbxm *.rbxl)')
                     picked=[]
                     for name in names[:8]:
                         path=Path(name).resolve(strict=True)
@@ -799,13 +894,13 @@ def launch():
                     self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='switchChat':
-                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.switch_chat(settings.project,chat_id)
                     finally: conversations.close()
-                    self._warm(check=False)
+                    if not self.active_task:self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
@@ -864,9 +959,17 @@ def launch():
                         raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
+                    if old.research_auto_check:
+                        QTimer.singleShot(200, self._research_tick)
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action in STUDIO_HOST_ACTIONS:
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
+                if action=='testBlender':
+                    from .blender_bridge import BlenderController
+                    settings=Settings.load(self.settings_file)
+                    self._run(rid,action,lambda:asyncio.run(
+                        BlenderController(settings=settings,home=self.settings_file.parent).probe()))
+                    return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='saveProviderKey':
                     name=str(body.get('provider',''))
                     token=body.get('key','')
@@ -984,6 +1087,12 @@ def launch():
                     if self.active_task:raise RuntimeError('STAR is already handling a task')
                     prompt=str(body.get('prompt','')).strip()
                     if not 1<=len(prompt)<=1500:raise ValueError('Image prompt must be 1–1500 characters')
+                    # What the owner typed in chat, when `prompt` is the part the picture model should get.
+                    display=body.get('display_prompt')
+                    if display is not None:
+                        if not isinstance(display,str) or not 1<=len(display.strip())<=1500:
+                            raise ValueError('Invalid image request text')
+                        display=display.strip()
                     # Optional: the picture to edit, then a mask (white = the part to change).
                     files=body.get('files') or []
                     if not isinstance(files,list) or len(files)>2:
@@ -991,10 +1100,20 @@ def launch():
                     pictures=[file_allowed(Path(str(f)),self.allowed_files) for f in files]
                     size=body.get('size','square')
                     if not isinstance(size,str):raise ValueError('Invalid image size')
+                    retry_id=body.get('retryMessageId')
+                    if retry_id is not None and (type(retry_id) is not int or retry_id<1 or pictures):
+                        raise ValueError('Invalid Retry request')
                     self.active_task=True
                     self.cancel_chat = threading.Event()
                     try:
-                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size))
+                        if retry_id is not None:
+                            chats=Conversations(app_data()/'conversations.sqlite3')
+                            try:
+                                current=Settings.load(self.settings_file).project
+                                chats.recover_turn(current,chats.active_chat(current),retry_id,display or prompt)
+                            finally:
+                                chats.close()
+                        self._run(rid,action,lambda:self._run_image(rid,prompt,pictures,size,body.get('followup') is True,display,retry_id))
                     except Exception:
                         self.active_task=False
                         raise
@@ -1148,11 +1267,30 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
-            self.voice.close()
+            # Restart Manager, session end and ordinary window close share this path.
+            # Record the cancellation before stopping services: Qt may exit while a
+            # background worker is still waiting on its provider.
+            if self._closing:
+                return
+            self._closing = True
+            self.research_timer.stop()
             self.cancel_chat.set()
+            if self.turn is not None:
+                _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
+                record_turn_failure(app_data(), self.turn, 'cancelled', detail)
+            # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
             self.warmer.cancel()
             self.runtime.stop()
+            # A provider thread may be stuck in native I/O and ThreadPoolExecutor
+            # workers are non-daemon. The packaged Windows fallback starts only
+            # after child cleanup; it is not a deadline for the entire shutdown.
+            # The daemon timer has no effect if Python exits normally.
+            if os.name == 'nt' and getattr(sys, 'frozen', False):
+                deadline = threading.Timer(1.8, lambda: os._exit(0))
+                deadline.daemon = True
+                deadline.start()
+            self.voice.close()
             self.pool.shutdown(wait=False,cancel_futures=True)
 
     class Shell(QMainWindow):
@@ -1197,6 +1335,10 @@ def launch():
             return 0
     try:
         shell=Shell()
+        # Windows Restart Manager asks Qt to end the session via commitDataRequest.
+        # aboutToQuit also covers app.quit() without a close event.
+        app.commitDataRequest.connect(lambda manager: close_for_session(shell, manager))
+        app.aboutToQuit.connect(shell.bridge.close)
         shell.show()
         return app.exec()
     finally:

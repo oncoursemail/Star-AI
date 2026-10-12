@@ -1,0 +1,1726 @@
+{
+ "version": 1,
+ "description": "Star mascot final assets. Faces: 512x512 bust, hair-silhouette aligned, soft fade at the bottom. Poses and forms: 512x640, lowest drawn pixel on y=600, centred horizontally.",
+ "provenance": "Original character designed for this project; art generated for the owner with ChatGPT image generation from the project's own character brief on 2026-10-11, then cut out and cleaned with the scripts kept in the project (extract_sprites.py, build_assets.py). No third-party artwork was copied.",
+ "canvas": {
+  "faces": [
+   512,
+   512
+  ],
+  "poses": [
+   512,
+   640
+  ],
+  "forms": [
+   512,
+   640
+  ],
+  "baseline_y": 600
+ },
+ "faces_from_fix_sheet_1": [],
+ "to_be_replaced": [],
+ "poses_from_fix_sheet_3": [
+  "land",
+  "point",
+  "run-1",
+  "run-2"
+ ],
+ "total_bytes": 17334193,
+ "roots": {
+  "site": "frontend/public/assets/mascot",
+  "art": "docs/mascot/art"
+ },
+ "files": [
+  {
+   "file": "faces/normal.png",
+   "group": "faces",
+   "name": "normal",
+   "source_sheet": "expression-1",
+   "source_cell": 1,
+   "source_sprite": "expression-1/01-normal.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 260989,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    37,
+    22,
+    480,
+    472
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/happy.png",
+   "group": "faces",
+   "name": "happy",
+   "source_sheet": "expression-1",
+   "source_cell": 2,
+   "source_sprite": "expression-1/02-happy.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 255183,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    40,
+    22,
+    483,
+    476
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/content.png",
+   "group": "faces",
+   "name": "content",
+   "source_sheet": "expression-1",
+   "source_cell": 3,
+   "source_sprite": "expression-1/03-content.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 252079,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    24,
+    481,
+    473
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/puppy-eyes.png",
+   "group": "faces",
+   "name": "puppy-eyes",
+   "source_sheet": "expression-1",
+   "source_cell": 4,
+   "source_sprite": "expression-1/04-puppy-eyes.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 265010,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    21,
+    480,
+    474
+   ],
+   "notes": [
+    "QA minor: clasped hands are cut by the bottom edge and read as two lumpy fists"
+   ],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/love.png",
+   "group": "faces",
+   "name": "love",
+   "source_sheet": "expression-1",
+   "source_cell": 5,
+   "source_sprite": "expression-1/05-love.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 274524,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    34,
+    24,
+    480,
+    473
+   ],
+   "notes": [
+    "QA minor: left heart eye slightly smaller; fists have no finger definition"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/surprised.png",
+   "group": "faces",
+   "name": "surprised",
+   "source_sheet": "expression-1",
+   "source_cell": 6,
+   "source_sprite": "expression-1/06-surprised.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 266414,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    24,
+    482,
+    472
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/nervous.png",
+   "group": "faces",
+   "name": "nervous",
+   "source_sheet": "expression-1",
+   "source_cell": 7,
+   "source_sprite": "expression-1/07-nervous.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 259784,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    24,
+    481,
+    472
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/very-embarrassed.png",
+   "group": "faces",
+   "name": "very-embarrassed",
+   "source_sheet": "expression-1",
+   "source_cell": 8,
+   "source_sprite": "expression-1/08-very-embarrassed.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 266951,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    40,
+    25,
+    483,
+    475
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/scared.png",
+   "group": "faces",
+   "name": "scared",
+   "source_sheet": "expression-1",
+   "source_cell": 9,
+   "source_sprite": "expression-1/09-scared.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 258329,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    37,
+    24,
+    480,
+    472
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/crying.png",
+   "group": "faces",
+   "name": "crying",
+   "source_sheet": "expression-1",
+   "source_cell": 10,
+   "source_sprite": "expression-1/10-crying.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 260455,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    24,
+    481,
+    473
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/very-angry.png",
+   "group": "faces",
+   "name": "very-angry",
+   "source_sheet": "expression-1",
+   "source_cell": 11,
+   "source_sprite": "expression-1/11-very-angry.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 269422,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    37,
+    20,
+    480,
+    479
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/ticked-off.png",
+   "group": "faces",
+   "name": "ticked-off",
+   "source_sheet": "expression-1",
+   "source_cell": 12,
+   "source_sprite": "expression-1/12-ticked-off.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 260037,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    38,
+    24,
+    484,
+    477
+   ],
+   "notes": [
+    "QA minor: near-black squiggle at the top right has almost no contrast on dark backgrounds"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/smug.png",
+   "group": "faces",
+   "name": "smug",
+   "source_sheet": "expression-2",
+   "source_cell": 1,
+   "source_sprite": "expression-2/01-smug.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 255949,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    29,
+    22,
+    485,
+    480
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/gloating.png",
+   "group": "faces",
+   "name": "gloating",
+   "source_sheet": "expression-2",
+   "source_cell": 2,
+   "source_sprite": "expression-2/02-gloating.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 262803,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    31,
+    22,
+    489,
+    480
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/dizzy.png",
+   "group": "faces",
+   "name": "dizzy",
+   "source_sheet": "expression-2",
+   "source_cell": 3,
+   "source_sprite": "expression-2/03-dizzy.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 275032,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    21,
+    21,
+    486,
+    479
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/squeeze.png",
+   "group": "faces",
+   "name": "squeeze",
+   "source_sheet": "expression-2",
+   "source_cell": 4,
+   "source_sprite": "expression-2/04-squeeze.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 262369,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    28,
+    21,
+    487,
+    479
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/hungry.png",
+   "group": "faces",
+   "name": "hungry",
+   "source_sheet": "expression-2",
+   "source_cell": 5,
+   "source_sprite": "expression-2/05-hungry.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 276331,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    26,
+    24,
+    486,
+    475
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/sleepy.png",
+   "group": "faces",
+   "name": "sleepy",
+   "source_sheet": "expression-2",
+   "source_cell": 6,
+   "source_sprite": "expression-2/06-sleepy.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 255824,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    32,
+    24,
+    489,
+    476
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/asleep.png",
+   "group": "faces",
+   "name": "asleep",
+   "source_sheet": "expression-2",
+   "source_cell": 7,
+   "source_sprite": "expression-2/07-asleep.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 260706,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    30,
+    23,
+    489,
+    476
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/thinking.png",
+   "group": "faces",
+   "name": "thinking",
+   "source_sheet": "expression-2",
+   "source_cell": 8,
+   "source_sprite": "expression-2/08-thinking.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 265771,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    29,
+    23,
+    488,
+    477
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/focused.png",
+   "group": "faces",
+   "name": "focused",
+   "source_sheet": "expression-2",
+   "source_cell": 9,
+   "source_sprite": "expression-2/09-focused.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 259779,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    27,
+    24,
+    487,
+    472
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/proud.png",
+   "group": "faces",
+   "name": "proud",
+   "source_sheet": "expression-2",
+   "source_cell": 10,
+   "source_sprite": "expression-2/10-proud.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 268039,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    23,
+    23,
+    493,
+    475
+   ],
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "faces/flustered.png",
+   "group": "faces",
+   "name": "flustered",
+   "source_sheet": "expression-2",
+   "source_cell": 11,
+   "source_sprite": "expression-2/11-flustered.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 265115,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    24,
+    22,
+    489,
+    476
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "faces/panic.png",
+   "group": "faces",
+   "name": "panic",
+   "source_sheet": "expression-2",
+   "source_cell": 12,
+   "source_sprite": "expression-2/12-panic.png",
+   "size": [
+    512,
+    512
+   ],
+   "bytes": 272057,
+   "scale": 1.3,
+   "head_top_y": 26,
+   "head_center_x": 256,
+   "drawn_bbox": [
+    16,
+    23,
+    491,
+    475
+   ],
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/stand.png",
+   "group": "poses",
+   "name": "stand",
+   "source_sheet": "pose-1",
+   "source_cell": 1,
+   "source_sprite": "pose-1/01-stand.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 211923,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 255.7,
+   "head_top_y": 140.7,
+   "drawn_bbox": [
+    70,
+    139,
+    442,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: hands at the sides are tiny and spiky at 4x"
+   ],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/breathe-out.png",
+   "group": "poses",
+   "name": "breathe-out",
+   "source_sheet": "pose-1",
+   "source_cell": 2,
+   "source_sprite": "pose-1/02-breathe-out.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 199460,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 255.1,
+   "head_top_y": 152.4,
+   "drawn_bbox": [
+    72,
+    152,
+    438,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/blink.png",
+   "group": "poses",
+   "name": "blink",
+   "source_sheet": "pose-1",
+   "source_cell": 3,
+   "source_sprite": "pose-1/03-blink.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 200003,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 254.4,
+   "head_top_y": 148.7,
+   "drawn_bbox": [
+    72,
+    147,
+    440,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/look-a.png",
+   "group": "poses",
+   "name": "look-a",
+   "source_sheet": "pose-1",
+   "source_cell": 4,
+   "source_sprite": "pose-1/04-look-a.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 215045,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 250.5,
+   "head_top_y": 144.7,
+   "drawn_bbox": [
+    70,
+    143,
+    442,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: thin splayed fingers at both sides"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/look-b.png",
+   "group": "poses",
+   "name": "look-b",
+   "source_sheet": "pose-1",
+   "source_cell": 5,
+   "source_sprite": "pose-1/05-look-b.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 208532,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 256.9,
+   "head_top_y": 149.7,
+   "drawn_bbox": [
+    66,
+    149,
+    444,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: thin splayed fingers at both sides"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/wave-a.png",
+   "group": "poses",
+   "name": "wave-a",
+   "source_sheet": "pose-1",
+   "source_cell": 6,
+   "source_sprite": "pose-1/06-wave-a.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 208756,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 258.9,
+   "head_top_y": 148.7,
+   "drawn_bbox": [
+    69,
+    147,
+    442,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: lower hand at the skirt is thin and pointed"
+   ],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/wave-b.png",
+   "group": "poses",
+   "name": "wave-b",
+   "source_sheet": "pose-1",
+   "source_cell": 7,
+   "source_sprite": "pose-1/07-wave-b.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 205708,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 260.8,
+   "head_top_y": 148.4,
+   "drawn_bbox": [
+    68,
+    148,
+    442,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: lower hand at the skirt is thin and pointed"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/crouch.png",
+   "group": "poses",
+   "name": "crouch",
+   "source_sheet": "pose-1",
+   "source_cell": 8,
+   "source_sprite": "pose-1/08-crouch.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 191373,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 224.3,
+   "head_top_y": 193.7,
+   "drawn_bbox": [
+    66,
+    192,
+    444,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: an unexplained pink shape behind the right side of the skirt"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/jump.png",
+   "group": "poses",
+   "name": "jump",
+   "source_sheet": "pose-1",
+   "source_cell": 9,
+   "source_sprite": "pose-1/09-jump.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 217959,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 248.5,
+   "head_top_y": 170.4,
+   "drawn_bbox": [
+    45,
+    170,
+    467,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: spindly raised fingers; boots show only a tiny gold mark; drawn in the air (still rests on the baseline here)"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/land.png",
+   "group": "poses",
+   "name": "land",
+   "source_sheet": "fix-3",
+   "source_cell": 3,
+   "source_sprite": "fix-3/03.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 206050,
+   "scale": 1.0877,
+   "baseline_y": 600,
+   "head_center_x": 254.4,
+   "head_top_y": 188.8,
+   "drawn_bbox": [
+    34,
+    188,
+    477,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "fix sheet 3 cell 3; replaces the pose-sheet drawing (jagged claw-like finger outlines on the knees): rounded fists with soft finger scallops"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/think.png",
+   "group": "poses",
+   "name": "think",
+   "source_sheet": "pose-1",
+   "source_cell": 11,
+   "source_sprite": "pose-1/11-think.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 207846,
+   "scale": 1.3,
+   "baseline_y": 600,
+   "head_center_x": 257.0,
+   "head_top_y": 142.7,
+   "drawn_bbox": [
+    72,
+    141,
+    440,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/point.png",
+   "group": "poses",
+   "name": "point",
+   "source_sheet": "fix-3",
+   "source_cell": 7,
+   "source_sprite": "fix-3/07.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 215764,
+   "scale": 1.0877,
+   "baseline_y": 600,
+   "head_center_x": 248.1,
+   "head_top_y": 143.8,
+   "drawn_bbox": [
+    57,
+    142,
+    455,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "fix sheet 3 cell 7; replaces the pose-sheet drawing: pointing hand and the hand on the hip are both drawn and clean"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/walk-1.png",
+   "group": "poses",
+   "name": "walk-1",
+   "source_sheet": "pose-2",
+   "source_cell": 1,
+   "source_sprite": "pose-2/01-walk-1.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 217355,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 281.4,
+   "head_top_y": 152.1,
+   "drawn_bbox": [
+    54,
+    151,
+    458,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "QA minor: gold swirl ornament on the rear sleeve; boots read dark brown"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/walk-2.png",
+   "group": "poses",
+   "name": "walk-2",
+   "source_sheet": "pose-2",
+   "source_cell": 2,
+   "source_sprite": "pose-2/02-walk-2.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 207972,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 281.3,
+   "head_top_y": 147.9,
+   "drawn_bbox": [
+    70,
+    147,
+    441,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/walk-3.png",
+   "group": "poses",
+   "name": "walk-3",
+   "source_sheet": "pose-2",
+   "source_cell": 3,
+   "source_sprite": "pose-2/03-walk-3.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 219865,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 266.3,
+   "head_top_y": 144.9,
+   "drawn_bbox": [
+    57,
+    145,
+    455,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/walk-4.png",
+   "group": "poses",
+   "name": "walk-4",
+   "source_sheet": "pose-2",
+   "source_cell": 4,
+   "source_sprite": "pose-2/04-walk-4.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 216223,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 259.6,
+   "head_top_y": 146.1,
+   "drawn_bbox": [
+    52,
+    145,
+    459,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/run-1.png",
+   "group": "poses",
+   "name": "run-1",
+   "source_sheet": "fix-3",
+   "source_cell": 1,
+   "source_sprite": "fix-3/01.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 208491,
+   "scale": 1.0877,
+   "baseline_y": 600,
+   "head_center_x": 300.1,
+   "head_top_y": 144.8,
+   "drawn_bbox": [
+    52,
+    144,
+    459,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "fix sheet 3 cell 1; replaces the pose-sheet drawing (three pigtails and three ribbons, rust-smudged boots): two tails, clean fists, star boots"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/run-2.png",
+   "group": "poses",
+   "name": "run-2",
+   "source_sheet": "fix-3",
+   "source_cell": 2,
+   "source_sprite": "fix-3/02.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 210152,
+   "scale": 1.0877,
+   "baseline_y": 600,
+   "head_center_x": 302.3,
+   "head_top_y": 138.7,
+   "drawn_bbox": [
+    53,
+    138,
+    459,
+    600
+   ],
+   "status": "ok",
+   "notes": [
+    "fix sheet 3 cell 2; replaces the pose-sheet drawing (three pigtails and three ribbons): two tails, clean fists, star boots"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/type-1.png",
+   "group": "poses",
+   "name": "type-1",
+   "source_sheet": "pose-2",
+   "source_cell": 7,
+   "source_sprite": "pose-2/07-type-1.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 205557,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 262.1,
+   "head_top_y": 202.1,
+   "drawn_bbox": [
+    59,
+    201,
+    452,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/type-2.png",
+   "group": "poses",
+   "name": "type-2",
+   "source_sheet": "pose-2",
+   "source_cell": 8,
+   "source_sprite": "pose-2/08-type-2.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 213083,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 241.9,
+   "head_top_y": 202.9,
+   "drawn_bbox": [
+    51,
+    203,
+    460,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/sleep-sit.png",
+   "group": "poses",
+   "name": "sleep-sit",
+   "source_sheet": "pose-2",
+   "source_cell": 9,
+   "source_sprite": "pose-2/09-sleep-sit.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 212216,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 276.9,
+   "head_top_y": 202.9,
+   "drawn_bbox": [
+    60,
+    202,
+    452,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/sleep-lie.png",
+   "group": "poses",
+   "name": "sleep-lie",
+   "source_sheet": "pose-2",
+   "source_cell": 10,
+   "source_sprite": "pose-2/10-sleep-lie.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 166838,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 214.5,
+   "head_top_y": 320.1,
+   "drawn_bbox": [
+    44,
+    319,
+    467,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "poses/letter.png",
+   "group": "poses",
+   "name": "letter",
+   "source_sheet": "pose-2",
+   "source_cell": 11,
+   "source_sprite": "pose-2/11-letter.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 204887,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 263.5,
+   "head_top_y": 157.1,
+   "drawn_bbox": [
+    62,
+    156,
+    449,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "poses/sad.png",
+   "group": "poses",
+   "name": "sad",
+   "source_sheet": "pose-2",
+   "source_cell": 12,
+   "source_sprite": "pose-2/12-sad.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 198500,
+   "scale": 1.2366,
+   "baseline_y": 600,
+   "head_center_x": 260.8,
+   "head_top_y": 160.1,
+   "drawn_bbox": [
+    76,
+    159,
+    435,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/cat-paw.png",
+   "group": "forms",
+   "name": "cat-paw",
+   "source_sheet": "cat-puppy",
+   "source_cell": 1,
+   "source_sprite": "cat-puppy/01-cat-paw.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 231584,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 279.4,
+   "head_top_y": 91.9,
+   "drawn_bbox": [
+    92,
+    91,
+    420,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/cat-curious.png",
+   "group": "forms",
+   "name": "cat-curious",
+   "source_sheet": "cat-puppy",
+   "source_cell": 2,
+   "source_sprite": "cat-puppy/02-cat-curious.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 234350,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 223.6,
+   "head_top_y": 92.9,
+   "drawn_bbox": [
+    89,
+    92,
+    421,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/cat-stretch.png",
+   "group": "forms",
+   "name": "cat-stretch",
+   "source_sheet": "cat-puppy",
+   "source_cell": 3,
+   "source_sprite": "cat-puppy/03-cat-stretch.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 226024,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 268.6,
+   "head_top_y": 109.9,
+   "drawn_bbox": [
+    92,
+    109,
+    419,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/cat-startled.png",
+   "group": "forms",
+   "name": "cat-startled",
+   "source_sheet": "cat-puppy",
+   "source_cell": 4,
+   "source_sprite": "cat-puppy/04-cat-startled.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 231010,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 250.2,
+   "head_top_y": 132.9,
+   "drawn_bbox": [
+    84,
+    132,
+    426,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/puppy-beg.png",
+   "group": "forms",
+   "name": "puppy-beg",
+   "source_sheet": "cat-puppy",
+   "source_cell": 5,
+   "source_sprite": "cat-puppy/05-puppy-beg.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 228666,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 265.5,
+   "head_top_y": 121.9,
+   "drawn_bbox": [
+    85,
+    122,
+    425,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/puppy-happy.png",
+   "group": "forms",
+   "name": "puppy-happy",
+   "source_sheet": "cat-puppy",
+   "source_cell": 6,
+   "source_sprite": "cat-puppy/06-puppy-happy.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 218472,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 270.9,
+   "head_top_y": 140.9,
+   "drawn_bbox": [
+    81,
+    140,
+    430,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/puppy-puzzled.png",
+   "group": "forms",
+   "name": "puppy-puzzled",
+   "source_sheet": "cat-puppy",
+   "source_cell": 7,
+   "source_sprite": "cat-puppy/07-puppy-puzzled.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 231489,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 242.2,
+   "head_top_y": 129.9,
+   "drawn_bbox": [
+    78,
+    129,
+    433,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "forms/puppy-sleepy.png",
+   "group": "forms",
+   "name": "puppy-sleepy",
+   "source_sheet": "cat-puppy",
+   "source_cell": 8,
+   "source_sprite": "cat-puppy/08-puppy-sleepy.png",
+   "size": [
+    512,
+    640
+   ],
+   "bytes": 201696,
+   "scale": 0.9871,
+   "baseline_y": 600,
+   "head_center_x": 249.8,
+   "head_top_y": 188.9,
+   "drawn_bbox": [
+    86,
+    189,
+    424,
+    600
+   ],
+   "status": "ok",
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "star-hero.png",
+   "group": "hero",
+   "name": "star-hero",
+   "source_sheet": "art/hero-v2.png",
+   "source_cell": null,
+   "size": [
+    1086,
+    1448
+   ],
+   "bytes": 1319576,
+   "notes": [
+    "unscaled; faint yellow fringe on hair tips removed (near-transparent edge pixels only)"
+   ],
+   "in": [
+    "site"
+   ]
+  },
+  {
+   "file": "star-hero-1024.png",
+   "group": "hero",
+   "name": "star-hero-1024",
+   "source_sheet": "art/hero-v2.png",
+   "source_cell": null,
+   "size": [
+    768,
+    1024
+   ],
+   "bytes": 751131,
+   "notes": [
+    "longest side 1024"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-content.png",
+   "group": "pfp",
+   "name": "star-pfp-content",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 619152,
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-content-256.png",
+   "group": "pfp",
+   "name": "star-pfp-content-256",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    256,
+    256
+   ],
+   "bytes": 88850,
+   "notes": [
+    "256 px version"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-happy.png",
+   "group": "pfp",
+   "name": "star-pfp-happy",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 625496,
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-happy-256.png",
+   "group": "pfp",
+   "name": "star-pfp-happy-256",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    256,
+    256
+   ],
+   "bytes": 89243,
+   "notes": [
+    "256 px version"
+   ],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-normal.png",
+   "group": "pfp",
+   "name": "star-pfp-normal",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    1024,
+    1024
+   ],
+   "bytes": 647389,
+   "notes": [],
+   "in": [
+    "art"
+   ]
+  },
+  {
+   "file": "pfp/star-pfp-normal-256.png",
+   "group": "pfp",
+   "name": "star-pfp-normal-256",
+   "source_sheet": "pfp (make_pfp.py)",
+   "source_cell": null,
+   "size": [
+    256,
+    256
+   ],
+   "bytes": 91555,
+   "notes": [
+    "256 px version"
+   ],
+   "in": [
+    "art"
+   ]
+  }
+ ],
+ "shipped_bytes": 5653422,
+ "art_bytes": 11680771,
+ "roots_note": "site = the only copy shipped in the app and the website (everything the code loads: the hero, the faces and poses used by frontend/src/SiteMascot.tsx and frontend/src/StarPet.tsx). art = approved drawings kept in the repository but not copied into the app or the installer."
+}

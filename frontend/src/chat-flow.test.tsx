@@ -41,6 +41,75 @@ async function say(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.keyboard('{Enter}')
 }
 
+describe('image requests directly in chat', () => {
+  const picture = 'data:image/webp;base64,AA=='
+  it('routes a picture request through the image bridge while preserving its text', async () => {
+    const user = await openChat()
+    await say(user, 'Generate an image of a dog')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'a dog', display_prompt: 'Generate an image of a dog', followup: false})
+    expect(desktop.sent('generateImage')[0].payload).not.toHaveProperty('retryMessageId')
+    expect(stopButton()).not.toBeNull()
+  })
+
+  it('keeps code requests in ordinary chat', async () => {
+    const user = await openChat()
+    await say(user, 'how do I generate an ImageLabel in Roblox')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('treats a new picture request after a picture as new, not as a change to the old one', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture}])
+    await say(user, 'Generate an image of a cat')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'a cat', followup: false})
+  })
+
+  it('changes the last picture for "make it brown" straight after it, and only then', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture}])
+    await say(user, 'make it brown')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'make it brown', followup: true})
+  })
+
+  it('does not hijack a text follow-up that comes after a text answer', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture},
+      {id: '', role: 'user', text: 'Explain how a Roblox remote event works', created: ''},
+      {id: '', role: 'assistant', text: 'A remote event sends a message between server and client.', created: ''}])
+    await say(user, 'Add a short example')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('does not route when the setting is off', async () => {
+    const user = await openChat([], null, {settings: {...backendSettings, media_chat_auto: false}})
+    await say(user, 'Generate an image of a dog')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('retries a failed picture request as a picture request, not as a text question', async () => {
+    const failure = 'ComfyUI is not running on this PC. Start it, then try again.'
+    const user = await openChat(
+      [{id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+       {id: '', role: 'event', text: failure, created: '', status: 'failed'}],
+      {status: 'failed', detail: failure, prompt: 'Generate an image of a dog', message_id: 1, created: ''})
+    await user.click(await waitFor(() => retryButton()!))
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject(
+      {prompt: 'a dog', display_prompt: 'Generate an image of a dog', retryMessageId: 1, followup: false})
+  })
+})
+
 describe('sending a message', () => {
   it('sends the typed text once, shows it immediately and clears the composer', async () => {
     const user = await openChat()

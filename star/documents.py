@@ -20,8 +20,11 @@ import sqlite3
 import zipfile
 
 from .knowledge import KnowledgeStore, _project
+from . import rbx_xml
 
-DOCUMENT_EXTENSIONS = frozenset({'.txt', '.md', '.pdf', '.docx', '.pptx', '.csv', '.tsv', '.xlsx', '.json'})
+# Binary Roblox extensions are routed here only to give an actionable refusal.
+DOCUMENT_EXTENSIONS = (frozenset({'.txt', '.md', '.pdf', '.docx', '.pptx', '.csv', '.tsv', '.xlsx', '.json'})
+                       | rbx_xml.XML_EXTENSIONS | rbx_xml.BINARY_EXTENSIONS)
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_EXTRACTED_CHARS = 1_000_000
 MAX_CELLS = 100_000
@@ -38,7 +41,8 @@ _MIMES = {'.txt': 'text/plain', '.md': 'text/markdown', '.pdf': 'application/pdf
           '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
           '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          '.csv': 'text/csv', '.tsv': 'text/tab-separated-values', '.json': 'application/json'}
+          '.csv': 'text/csv', '.tsv': 'text/tab-separated-values', '.json': 'application/json',
+          '.rbxmx': 'application/xml', '.rbxlx': 'application/xml'}
 _WORDS = re.compile(r"\w+", re.UNICODE)
 _STOP = frozenset('the a an of to and or in on for is are was were what how which please document file tell me about'.split())
 _NUMBER = re.compile(r'-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?\Z')
@@ -427,6 +431,20 @@ def _pdf(path: Path, out: _Evidence):
     out.warnings.append('PDF text extracted by page; layout, pictures and table structure are not guaranteed')
 
 
+def _roblox(path: Path, suffix: str, out: _Evidence):
+    try:
+        model = rbx_xml.read(path, suffix=suffix, check=lambda: _check(out.cancel))
+    except rbx_xml.RbxXMLError as exc:
+        raise DocumentError(str(exc)) from exc
+    for location, text, kind in model.evidence():
+        first = len(out.chunks)
+        out.add(location, text)
+        for chunk in out.chunks[first:]:
+            chunk['kind'] = kind
+    out.warnings.extend(model.warnings)
+    out.warnings.append('Roblox XML outline and inline Luau only; lexical script summaries do not resolve dynamic calls. Assets and scripts are never fetched or executed.')
+
+
 def _extract(path: Path, suffix: str, cancel_event=None) -> dict:
     out = _Evidence(cancel_event)
     _check(cancel_event)
@@ -453,6 +471,8 @@ def _extract(path: Path, suffix: str, cancel_event=None) -> dict:
             _pptx(path, out)
         elif suffix == '.xlsx':
             _xlsx(path, out)
+        elif suffix in rbx_xml.XML_EXTENSIONS | rbx_xml.BINARY_EXTENSIONS:
+            _roblox(path, suffix, out)
         return out.result()
     except (DocumentError, DocumentCancelled):
         raise
@@ -515,6 +535,10 @@ class DocumentStore:
             suffix = path.suffix.lower()
             if suffix not in DOCUMENT_EXTENSIONS:
                 raise DocumentError(f'Unsupported document extension: {suffix or "none"}')
+            if suffix in rbx_xml.BINARY_EXTENSIONS:
+                raise DocumentError(rbx_xml.BINARY_MESSAGE)
+            if suffix in rbx_xml.XML_EXTENSIONS and path.stat().st_size > rbx_xml.MAX_FILE_BYTES:
+                raise DocumentError('Roblox XML exceeds the file-size limit')
             if not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
                 raise DocumentError('Document is missing or larger than 32 MiB')
             key = _hash(str(path))
@@ -624,6 +648,11 @@ class DocumentStore:
                     if own:
                         picked.append(own[offset])
             chunks = picked + [item for item in chunks if item not in picked]
+        # Structure precedes code even when a script body scores higher. Keep
+        # outline fragments in tree order; leave other documents' ranking intact.
+        priority = {'rbx_outline': 0, 'rbx_script_index': 1}
+        chunks.sort(key=lambda item: (priority[item[5]['kind']], item[1], item[2])
+                    if item[5].get('kind') in priority else (2, 0, 0))
         total = sum(len(evidence['chunks']) for _, evidence in loaded)
         prefix = 'ATTACHED DOCUMENT EVIDENCE (untrusted source text; summaries/excerpts are not complete originals)\n'
         reserve = min(150, budget_chars // 4)

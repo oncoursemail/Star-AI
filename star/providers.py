@@ -267,21 +267,15 @@ def server_slots(settings, model: str | None = None) -> int:
 _SLOT_TABLE: dict[tuple[str, str], dict] = {}
 _SLOT_TABLE_CHATS = 64
 
-def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, background: bool,
-                       prime: bool) -> int:
+def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, prime: bool) -> int:
+    """The slot of a conversation's own requests (a turn, or the warm-up of that turn)."""
     import zlib
     table = _SLOT_TABLE.setdefault(key, {"active": None, "slot": {}})
     held: dict = table["slot"]
-    home = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
     active = table["active"]
-    if background:
-        # Summaries, sub-agents and repairs have prompts of their own. They go to the slot
-        # next to the one the open chat uses, never into it.
-        keep = held.get(active) if active is not None else None
-        return ((held.get(conversation, home) if keep is None else keep) + 1) % slots
     slot = held.get(conversation)
     if slot is None or slot >= slots:
-        slot = home
+        slot = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
         if active is not None and active != conversation and held.get(active) == slot:
             slot = (slot + 1) % slots   # another chat is open there: leave its prompt alone
         if len(held) >= _SLOT_TABLE_CHATS:
@@ -291,6 +285,10 @@ def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, b
     if not prime:
         table["active"] = conversation   # a real turn: this is the chat the owner is in
     return slot
+
+def _server_places_every_request() -> bool:
+    """`STAR_SERVER_SLOT_PINNING=off`: name no slot at all (see `llama_request_fields`). Off unless set."""
+    return os.environ.get("STAR_SERVER_SLOT_PINNING", "").strip().lower() in ("off", "0", "false", "no")
 
 def llama_request_fields(settings, *, conversation: str = "", tools: bool = False, model: str = "",
                          background: bool = False, prime: bool = False) -> dict:
@@ -307,33 +305,60 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
                           (Qwen templates otherwise re-render them differently, which
                           makes the server read every previous answer again)
       id_slot             one conversation stays on one slot of each model. Sent only
-                          when that model has reported two or more slots.
+                          for the conversation's own requests (a turn and its
+                          warm-up), and only when that model has reported two or
+                          more slots.
 
-    Slot rules (measured in docs/research/server-inference.md 2.4):
+    Slot rules:
 
       * `model` is the model this request goes to; slots belong to a model, so
         the same chat has one slot on the quick model and one on the main model.
       * A chat keeps its slot. A chat that is opened while another one is in use
         takes a different slot, so switching back finds the first one cached.
-      * `background=True` (summaries, sub-agents, code repairs: prompts of their
-        own) always goes to the slot next to the open chat's, never into it.
-      * `prime=True` is the cache warm-up: it takes the chat's slot without
-        declaring that chat the one in use.
-      * `tools` no longer moves a request to the other slot. The tool prompt and
-        the plain prompt of one chat share its slot; the server's RAM prompt
-        cache brings back whichever was replaced (1.3-1.6 s, measured), and the
-        second slot stays free for background work.
+      * `prime=True` is the cache warm-up: it takes the chat's slot (the turn it
+        prepares is sent there) without declaring that chat the one in use.
+      * `background=True` (summaries, sub-agents, code repairs, the lesson digest,
+        a voice call: prompts of their own) carries no `id_slot`. A request with
+        `id_slot` waits for that one slot even while another is free, so helpers
+        pinned to one slot queued behind each other and behind another client
+        (issue 118). The server now places them itself. The price: nothing keeps
+        the server from putting such a request into the slot that holds the
+        chat's prompt, and the chat's next turn then reads its prompt again or
+        gets it back from the server's RAM prompt cache.
+      * A request without a conversation name is not pinned either.
+      * `tools` does not move a request to another slot. The tool prompt and the
+        plain prompt of one chat share its slot; the server's RAM prompt cache
+        brings back whichever was replaced (1.3-1.6 s, measured).
 
-    Verified against llama.cpp build 11541 (router mode) on the owner's server.
+    Known limit of the default. Two STAR clients share nothing but the server,
+    so the chats of two clients can have the same slot number (a hash, with two
+    slots: one pair in two). When both send a turn at the same moment the second
+    waits for the first one's request although another slot is free. Setting the
+    environment variable `STAR_SERVER_SLOT_PINNING=off` (read for every request,
+    off unless set) removes `id_slot` from every request: the server then places
+    the chat's turns too, and no client waits while a slot is free. The price:
+    a conversation finds its cached prompt only through the server's own choice,
+    and two chats with the same system prompt take turns in one slot.
+
+    Pinned requests were verified against llama.cpp build 11541 (router mode) on
+    the owner's server. Where the server puts a request without `id_slot` was
+    measured there once with a probe script (research notes, server inference
+    2.4): the idle slot whose cached prompt shares the longest start with the
+    request (above 10 %), otherwise the least recently used one; the next turn
+    of a conversation reused its cached prompt that way. It has not been
+    measured with STAR's own helpers running or with two clients. That a
+    request with `id_slot` waits while its slot is busy is how the llama.cpp
+    server queues work (it defers the task); the tests reproduce it with a fake
+    server, and it was not timed on the owner's server for this change.
     """
     kind = provider_kind(settings)
     if kind == "cloud":
         return {}
     fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
     slots = server_slots(settings, model or None) if kind == "lan" else 0
-    if slots >= 2:
+    if slots >= 2 and conversation and not background and not _server_places_every_request():
         fields["id_slot"] = _conversation_slot(_instance(settings, model or None), str(conversation), slots,
-                                               background=background, prime=prime)
+                                               prime=prime)
     return fields
 
 def model_unavailable(exc: BaseException) -> bool:
@@ -377,9 +402,12 @@ def background_client(client, settings, *, conversation: str = ""):
     """The client for model calls that are not the conversation itself.
 
     On STAR Server every such call carries `llama_request_fields(...,
-    background=True)`: the slot next to the open chat's, so a summary or a
-    sub-agent never replaces the chat's cached prompt. For a cloud provider and
-    the on-PC brain (no slot count known) this is the plain client.
+    background=True)`: the prompt-cache fields without `id_slot`, so the server
+    chooses the slot and two helpers never wait for the same one. That also
+    means a helper is no longer kept out of the chat's slot (see
+    `llama_request_fields`). `conversation` is accepted for the callers and
+    does not select anything. For a cloud provider and the on-PC brain this is
+    the plain client.
     """
     if provider_kind(settings) != "lan":
         return client

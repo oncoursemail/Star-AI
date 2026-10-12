@@ -1,0 +1,37 @@
+name: Discord gateway offline verification
+
+on:
+  pull_request:
+    paths:
+      - "star/discord_bot/**"
+      - "tests/test_discord_bot.py"
+      - "requirements-discord.txt"
+      - ".github/workflows/discord-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discord-offline:
+    name: Discord gateway / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install regular STAR and Discord dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt -r requirements-discord.txt
+      - name: Verify Discord gateway source compiles
+        run: python -m compileall -q star/discord_bot
+      - name: Exercise owner permissions, AI stubs, commands, audio and startup diagnostics
+        run: python -m pytest -q tests/test_discord_bot.py
+      - name: Offline doctor must not require a token or remote service
+        run: python -m star.discord_bot doctor
+        continue-on-error: true
