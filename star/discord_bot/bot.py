@@ -119,10 +119,12 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             if links:
                 response.add_field(name="Sources (search excerpts, not full pages)",
                                    value=" · ".join(links)[:1024], inline=False)
+        # discord.py treats file=None as a file and fails, so the file is passed only when there is one.
+        extra = {"file": attach} if attach is not None else {}
         await interaction.followup.send(
-            embed=response, file=attach,
+            embed=response,
             view=AnswerActions(key, answer, allow_public_voice=not ephemeral), ephemeral=ephemeral,
-            allowed_mentions=discord.AllowedMentions.none(),
+            allowed_mentions=discord.AllowedMentions.none(), **extra,
         )
 
     class AnswerActions(discord.ui.View):
