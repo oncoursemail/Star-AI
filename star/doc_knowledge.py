@@ -1,11 +1,12 @@
 """Client for STAR Knowledge: official Roblox and Luau documentation on the owner's STAR Server.
 
 The knowledge service runs beside the model server on the private network. It answers three
-read-only questions:
+read-only documentation questions (and an explicit sandbox run call):
 
   search      cited passages from the indexed official documentation
   api_lookup  does this exact engine class or member exist, and is it deprecated
   luau_check  does this Luau snippet compile and pass static type analysis (it is never run)
+  luau_run    explicitly run code and optional tests in the opt-in server sandbox, never here
 
 Rules this module enforces:
   * the address is the owner's setting, validated as a private IP address exactly like
@@ -39,7 +40,7 @@ CHECK_TIMEOUT = 25.0
 CONNECT_TIMEOUT = 2.0
 # Hosts a documentation link may point at. Anything else is dropped, not shown.
 _SOURCE_HOSTS = frozenset({"create.roblox.com", "luau.org", "github.com"})
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f​-‏‪-‮⁦-⁩]")
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 # A documentation link is written by STAR into the prompt and into the Markdown sources list, so
 # it may only contain characters that cannot end a line, a Markdown link or the data region.
 _SOURCE_URL = re.compile(r"https://[A-Za-z0-9.-]+(?:/[A-Za-z0-9._~%/#?=&+:@,;-]*)?")
@@ -222,6 +223,13 @@ class KnowledgeClient:
                 })
             results.append(item)
         return results
+
+    def luau_run(self, code: str, *, tests: str = "", time_limit_s: float = 3.0,
+                 memory_limit_mb: int = 256) -> dict:
+        """Explicit server-side run. No local fallback; the caller owns opt-in consent."""
+        from .luau_run_client import run
+        return run(self, code, tests=tests, time_limit_s=time_limit_s,
+                   memory_limit_mb=memory_limit_mb)
 
     def luau_check(self, code: str, *, strict: bool = False) -> dict:
         """Static check only. `ran` is True only when the service really ran its tools."""

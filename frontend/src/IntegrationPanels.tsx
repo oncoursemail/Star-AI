@@ -244,6 +244,9 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
      </select>
    </label>
    <p className="integrated-help">After changing provider, save Settings. STAR sends your prompt only to the provider you explicitly selected; ordinary local chat never silently falls back to a cloud model.</p>
+   <label className="integrated-switch"><input type="checkbox" disabled={disabled} checked={draft.luau_run_before_answer===true}
+     onChange={e=>onChange({...draft,luau_run_before_answer:e.target.checked})}/><span>Run my Luau before answering</span></label>
+   <p className="integrated-help">Off by default. Save Settings to send up to two Lua/Luau code blocks to your configured STAR Knowledge sandbox before displaying the answer. Runs only on that server, never on this PC; the server must separately enable execution. A smoke run does not test Roblox services or prove the code is correct.</p>
    {(connecting||usesStarServer(draft))?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
    <div className="integrated-key-controls">
      <label className="integrated-field">Cloud key provider
