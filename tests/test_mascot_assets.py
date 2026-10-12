@@ -43,7 +43,9 @@ def test_manifest_lists_the_expected_drawings():
     assert count["forms"] == 8
     assert count["hero"] == 2
     assert count["pfp"] == 6
-    assert set(doc["to_be_replaced"]) == {"land", "run-1", "run-2"}
+    # fix sheet 3 replaced land, run-1, run-2 and point (docs/mascot/ASSETS.md): nothing is pending replacement any more
+    assert doc["to_be_replaced"] == []
+    assert set(doc["poses_from_fix_sheet_3"]) == {"land", "point", "run-1", "run-2"}
     for entry in doc["files"]:
         assert entry["in"], entry["file"]
         assert set(entry["in"]) <= set(doc["roots"])

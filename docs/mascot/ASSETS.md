@@ -1,8 +1,8 @@
 # Star mascot: image assets
 
 Approved artwork for Star, the mascot of STAR Intelligence, in the form the website and the in-app Star pet load.
-The character itself is specified in [CHARACTER.md](CHARACTER.md); this page lists the files, the canvas rules and what
-is still pending replacement. The machine-readable list is [manifest.json](manifest.json) (file, group, source sheet and
+The character itself is specified in [CHARACTER.md](CHARACTER.md); this page lists the files, the canvas rules and which
+drawings were replaced by the third redraw sheet. The machine-readable list is [manifest.json](manifest.json) (file, group, source sheet and
 cell, size, bytes, notes); `tests/test_mascot_assets.py` checks it against the files.
 
 ## Where the files are
@@ -47,26 +47,40 @@ All files are 8-bit RGBA PNG with no metadata, transparent background, and none 
   horizontally by its bounding box (`head_center_x` in the manifest gives the head's x for animation code that wants to
   keep the head steady across frames, for example the four walk frames). The three source sheets were drawn at different
   scales (the cat / puppy sheet about 1.3 x larger), so each sheet has its own factor derived from the measured hair
-  width; poses use a scale of 1.3 (sheet 1) and 1.237 (sheet 2), forms 0.987. Heads therefore have the same size across
-  poses and forms. Native sprites are only about 350 px tall, so the files are enlarged by roughly 1.0 to 1.3 x.
+  width; poses use a scale of 1.3 (sheet 1) and 1.237 (sheet 2), forms 0.987, and the four poses taken from the third
+  redraw sheet 1.088 (its drawings are natively about 1.2 x larger; the factor also carries a 2 % calibration so that the
+  hair-top-to-chin height of the upright poses matches the other sheets). Heads therefore have the same size across poses
+  and forms. Native sprites are only about 350 px tall, so the files are enlarged by roughly 1.0 to 1.3 x.
 
-## Pending replacement
+## Fix sheet 3 (2026-10-12): what was replaced and what was kept
 
-Listed as `"status": "to be replaced"` in the manifest; the files are usable until their replacements arrive.
+Nothing is pending replacement any more (`"to_be_replaced": []` in the manifest; `"poses_from_fix_sheet_3"` lists the four
+new files). A third redraw sheet (8 full-body drawings in the pose-sheet costume, with rounded hands) was checked against
+the drawings it could replace, at the final size on a dark (#1b2a4a) and a light (#e9e9ee) background and enlarged around
+the hands. Only drawings that were at least as good in every respect were taken.
 
-| File | Reason |
-| --- | --- |
-| `poses/land.png` | hands on the knees have jagged, claw-like finger outlines |
-| `poses/run-1.png` | three pigtails and three ribbons (should be two), rust-smudged boots |
-| `poses/run-2.png` | three pigtails and three ribbons |
+| Pose | Result | Reason |
+| --- | --- | --- |
+| `land` | replaced | the knee hands had jagged, claw-like finger outlines; the new ones are rounded fists with soft finger scallops |
+| `run-1` | replaced | the old drawing had three pigtails and three ribbons and rust-smudged boots; the new one has two tails, clean fists and star boots |
+| `run-2` | replaced | the old drawing had three pigtails and three ribbons; the new one has two tails and clean fists |
+| `point` | replaced | pointing hand and the hand on the hip are both drawn and crisp (the old drawing hid the second hand) |
+| `wave-a`, `wave-b` | kept | the new wave drawing has a soft grey smudge beside the thumb of the raised hand |
+| `jump` | kept | the new drawing's raised hands have soft, feathered outer edges; the old ones are crisp |
+| `think` | kept | no clear gain: small gold specks on the sleeve, the dress star half hidden by the arm |
+| (new "cheer", arms out) | not added | it has no counterpart in the 24 poses and its raised hand has the same soft edge |
+
+All four new files use the same canvas rules as the others (512 x 640, lowest pixel on y = 600). One difference to know
+about: in the fix-sheet drawings the lace under the gold skirt frill reads tan instead of white, which is only visible
+when enlarged. The thin red fringe on the hair edges of the source sheet was
+invisible haze (alpha 1 to 7) and is cleared in the pipeline; no red or white rim remains on either background.
 
 Smaller known flaws (visible only when enlarged) are recorded as notes in the manifest: puppy-eyes (clasped hands cut by the
 source crop, now hidden by the bottom fade), love, ticked-off (near-black squiggle with almost no contrast on dark
 backgrounds), stand, look-a, look-b, wave-a, wave-b (thin, pointed hands), crouch (unexplained pink shape), jump, walk-1.
-A redraw of the full-body poses with the correct costume (a "fix sheet 3") is still to come; the first fix sheet's
-full-body redraws use the cat / puppy boots and a striped skirt, so they were not adopted. The two face redraws on that
-sheet (puppy-eyes, thinking) were also not adopted: they have a different expression (no tear, half-lidded eyes, no question
-mark) and are full-body drawings in the other costume.
+The first fix sheet's full-body redraws use the cat / puppy boots and a striped skirt, so they were not adopted. The two
+face redraws on that sheet (puppy-eyes, thinking) were also not adopted: they have a different expression (no tear,
+half-lidded eyes, no question mark) and are full-body drawings in the other costume.
 
 ## Provenance
 
