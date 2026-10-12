@@ -259,6 +259,12 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         raise ValueError("Maximum four images per task")
     registry = allowed_registry(discovered or [], may_edit, allow_luau=allow_luau)
     definitions = [{"type": "function", "function": {"name": name, "description": t.get("description", ""), "parameters": t["inputSchema"]}} for name, t in registry.items()]
+    from .calc import TOOL as CALCULATOR_TOOL, numerical_request
+    calculator_enabled = numerical_request(prompt)
+    if calculator_enabled:
+        definitions.append({"type": "function", "function": {"name": CALCULATOR_TOOL["name"],
+                            "description": CALCULATOR_TOOL["description"],
+                            "parameters": CALCULATOR_TOOL["inputSchema"]}})
     if github_enabled:
         definitions.extend([
             {"type": "function", "function": {
@@ -541,7 +547,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 name = tool_call.function.name
                 try:
                     args = json.loads(tool_call.function.arguments)
-                    if name == 'star_github_tree':
+                    if name == 'star_calculate':
+                        if not calculator_enabled:
+                            raise PermissionError('Calculator not authorized for this task')
+                    elif name == 'star_github_tree':
                         if not github_enabled or not isinstance(args,dict) or not set(args)<= {'prefix'} or (
                             'prefix' in args and not isinstance(args['prefix'],str)):
                             raise PermissionError('GitHub source listing is not authorized')
@@ -591,7 +600,14 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     # Authorized: announce before running so progress is not retroactive.
                     tool_actions_started = True
                     event({"event": "tool_started", "tool": name})
-                    if name == 'star_github_tree' or name == 'star_github_read':
+                    if name == 'star_calculate':
+                        try:
+                            from .calc import calculate
+                            value = calculate(args)
+                            data = {"isError": False, "content": [{"type": "text", "text": json.dumps(value)}]}
+                        except (ValueError, ArithmeticError, OverflowError, TypeError) as exc:
+                            data = {"isError": True, "content": [{"type": "text", "text": f"Calculator rejected: {type(exc).__name__}"}]}
+                    elif name == 'star_github_tree' or name == 'star_github_read':
                         try:
                             from .repo_intelligence import repo_tree, repo_read
                             if name == 'star_github_tree':

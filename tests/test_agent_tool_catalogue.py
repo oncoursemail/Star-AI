@@ -63,6 +63,7 @@ REGISTRY = ["star_mcp_registry_search"]
 WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_test", "star_toolforge_run"]
 # The research team (star/specialist_agents.py DELEGATE_TOOL).
 SPECIALISTS = ["star_delegate_research"]
+CALCULATOR = ["star_calculate"]
 # Composer switches: research (web search) and the STAR source reader.
 WEB = ["star_web_search"]
 GITHUB = ["star_github_tree", "star_github_read"]
@@ -175,7 +176,7 @@ def test_a_scripted_model_calls_the_skill_catalogue_and_gets_the_real_list(desk)
 
 
 EVERYTHING_PROMPT = (
-    "Research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
+     "Calculate 2 + 2, then research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
     "video tutorial, read the docs, check the Open Cloud data store, look at the graph of the codebase, "
     "list the MCP connector tool catalog, build a custom tool, and delegate to the research team.")
 
@@ -212,7 +213,7 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
     names = everything_on(desk, monkeypatch, knowledge=False)
-    expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
                 + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
     assert names == expected          # the order is part of the request the server caches
@@ -220,8 +221,10 @@ def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch)
 
 
 def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch(desk, monkeypatch):
-    names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True)
-    expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
+    # Every source on plus the calculator is more tool text than the default 26,000-character request budget;
+    # this test is about which tools are offered, not about the budget, so give it room.
+    names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True, context_chars=40000)
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
                 + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
                 + REGISTRY + WORKSHOP + SPECIALISTS)
     assert names == expected
@@ -247,6 +250,8 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     assert [tool["name"] for tool in mcp_registry.TOOLS] == REGISTRY
     assert [tool["name"] for tool in tool_workshop.TOOL_SCHEMAS] == WORKSHOP
     assert specialist_agents.DELEGATE_TOOL["name"] == SPECIALISTS[0]
+    from star.calc import TOOL
+    assert TOOL["name"] == CALCULATOR[0]
 
 
 def test_the_registry_search_needs_the_search_the_web_switch(desk):
@@ -313,3 +318,29 @@ def test_scripted_obsidian_links_call_returns_real_evidence_through_run_task(des
     assert evidence["backlinks_total"] == 1
     assert evidence["partial_scan"] is False
     assert evidence["read_only"] is True
+
+
+def test_calculator_runs_through_real_agent_loop(desk):
+    result = desk.turn("Calculate 1/3 + 1/6", answers=[
+        reply(None, [tool_call("star_calculate", '{"expression":"1/3+1/6"}')]),
+        reply("The result is 1/2."),
+    ])
+    assert result.answer == "The result is 1/2."
+    assert offered(result.requests[0]) == CALCULATOR + ALWAYS      # no skills: the prompt does not ask for them
+    assert {"event": "tool_started", "tool": "star_calculate"} in desk.events
+    assert {"event": "tool_finished", "tool": "star_calculate", "is_error": False} in desk.events
+    sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    assert json.loads(payload["output"]) == {"result": "1/2"}
+
+
+def test_ordinary_prompts_do_not_offer_the_calculator_and_it_cannot_be_called_unoffered(desk):
+    result = desk.turn("Roblox 0.9.0 shipped on 2026-10-12. What do you mean by the average player?", answers=[
+        reply(None, [tool_call("star_calculate", '{"expression":"1+1"}')]),
+        reply("Understood."),
+    ])
+    assert "star_calculate" not in offered(result.requests[0])
+    sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
+    assert json.loads(sent_back[0]["content"])["isError"] is True      # refused: the tool was never offered
