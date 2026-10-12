@@ -25,28 +25,28 @@ _OPEN = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\r\n]*)\r?\n?$")
 _UNSET = object()
 
 
-def snippets(answer: str) -> list[str]:
-    """Closed, explicitly labelled Lua/Luau fences, not fences inside other fences.
-
-    Unlike the static check's historical extractor, this accepts only the exact
-    language label. Source bytes (including whitespace) are preserved.
-    """
+def source_spans(answer: str) -> list[tuple[int, int, str]]:
+    """Offsets and source of exact closed Lua/Luau fences, excluding nested fences."""
     result = []
-    fence, language, body = "", "", []
+    fence, language, start = "", "", 0
+    offset = 0
     for line in answer.splitlines(keepends=True):
         if not fence:
             match = _OPEN.fullmatch(line)
             if match:
-                fence, language = match[1], match[2].strip().lower()
-                body = []
+                fence, language, start = match[1], match[2].strip().lower(), offset + len(line)
         elif re.fullmatch(r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}[ \t]*\r?\n?", line):
-            code = "".join(body)
+            code = answer[start:offset]
             if language in ("lua", "luau") and code.strip():
-                result.append(code)
-            fence, language, body = "", "", []
-        else:
-            body.append(line)
+                result.append((start, offset, code))
+            fence, language, start = "", "", 0
+        offset += len(line)
     return result
+
+
+def snippets(answer: str) -> list[str]:
+    """Source strings for compatibility with the existing smoke-run API."""
+    return [code for _, _, code in source_spans(answer)]
 
 
 def _emit(on_event, event: dict) -> None:

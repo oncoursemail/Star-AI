@@ -371,8 +371,16 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
                 _emit(on_event, {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0})
         runs = []
         if getattr(settings, "luau_run_before_answer", False) is True:
-            from .luau_run_review import review
-            answer, runs = await review(answer, settings, route, started=started, on_event=on_event)
+            if model_client is None:
+                # Compatibility path for callers without a separate assertion writer.
+                from .luau_run_review import review
+                answer, runs = await review(answer, settings, route, started=started, on_event=on_event)
+            else:
+                from .luau_run_repair import review
+                answer, runs = await review(
+                    answer, settings, route, prompt=prompt, model_client=model_client,
+                    checker=knowledge.luau_check if knowledge is not None else None,
+                    started=started, on_event=on_event)
             if runs:
                 archive = [*archive, {"star_luau_run": {"blocks": runs}}]
         answer = answer.rstrip() + sources_footer(grounding.passages, answer) if grounding.passages else answer
