@@ -50,9 +50,10 @@ def bootstrap(settings) -> str:
     return key
 
 
-def pin_slots(slot_of) -> None:
+def pin_slots(slot_of):
     """Every chat request the application sends carries `id_slot = slot_of(model)`. Done at the HTTP layer, so it
-    also covers the helper calls (summaries, repairs, sub-agents) that would otherwise use the neighbouring slot."""
+    also covers the helper calls (summaries, repairs, sub-agents) that would otherwise use the neighbouring slot.
+    Returns a function that puts the application's own client factory back."""
     import httpx
     from star import providers
 
@@ -72,7 +73,6 @@ def pin_slots(slot_of) -> None:
         async def aclose(self):
             await self._inner.aclose()
 
-    original = getattr(providers, "_night_school_original_open_client", None) or providers.open_client
 
     def open_client(settings, *, request_timeout: float | None = None):
         from openai import AsyncOpenAI
@@ -82,11 +82,17 @@ def pin_slots(slot_of) -> None:
         client = httpx.AsyncClient(trust_env=False, timeout=timeout, transport=PinTransport())
         return AsyncOpenAI(base_url=endpoint, api_key=key, timeout=timeout, max_retries=0, http_client=client)
 
-    providers._night_school_original_open_client = original
+    replaced = []
     for module in list(sys.modules.values()):
         name = getattr(module, "__name__", "")
         if (name == "star" or name.startswith("star.")) and getattr(module, "open_client", None) is not None:
+            replaced.append((module, module.open_client))
             module.open_client = open_client
+
+    def undo() -> None:
+        for module, original in replaced:
+            module.open_client = original
+    return undo
 
 
 class LocalSandbox:
@@ -156,7 +162,7 @@ class RealModel:
         self._knowledge = client_for(self.app_settings)
         self._luau_check = luau_check
         self._sandbox = sandbox or LocalSandbox(settings.luau_vm)
-        pin_slots(self.slot_of)
+        self.close = pin_slots(self.slot_of)      # close() gives the application its own client factory back
 
     # --- slot and politeness ----------------------------------------------------------------------------
     def slot_of(self, model: str) -> int:

@@ -124,7 +124,10 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
         store = Store(dry.data)
         engine = Engine(dry, pool, store, solve=model.solve, diagnose=model.diagnose, check_lesson=model.check_lesson, log=log)
         log(f"dry run: {len(engine.training)} training tasks, {len(engine.validation)} validation tasks")
-        engine.run_batch(items)
+        try:
+            engine.run_batch(items)
+        finally:
+            model.close()
         text = report.write(dry.report_file, store.state, status="dry run with the fake brain")
         out = export_outbox(dry, store.state)
         slots = sorted({body.get("id_slot") for body in brain.completions})

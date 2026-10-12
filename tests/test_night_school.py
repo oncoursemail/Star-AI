@@ -425,7 +425,7 @@ def test_dry_run_goes_through_the_app_path_pins_slot_one_and_learns(tmp_path, mo
     assert "promoted to active: 1" in out and "passed first time:" in out
 
 
-def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_outbox(tmp_path, monkeypatch):
+def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_outbox(tmp_path, monkeypatch, request):
     pytest.importorskip("openai")
     from nightschool.real import RealModel, bootstrap, export_outbox, parse_diagnosis
     repo = Path(__file__).resolve().parents[1]
@@ -438,6 +438,9 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
         bootstrap(settings)
         gate = IdleGate(settings, BrainWatch(brain.url), log=lambda _text: None)
         model = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok)
+        request.addfinalizer(model.close)                       # also when an assertion below fails
+        import star.providers as providers
+        assert providers.open_client.__qualname__.startswith("pin_slots")
         task = dict(fake.practice_task("P-01", "limitHealth"), _test_body="")
         first = model.solve(task, [])
         assert first.passed is False and first.reasons == ["require:uses_expected_call: the expected call is used"]
@@ -478,3 +481,5 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
         row = json.loads((settings.outbox / "worked-examples.jsonl").read_text(encoding="utf-8"))
         assert row["reviewed"] is False and row["instruction"] == task["prompt"]
         assert "next release" in (settings.outbox / "README.txt").read_text(encoding="utf-8")
+        model.close()
+        assert not providers.open_client.__qualname__.startswith("pin_slots")      # the app's own factory is back
