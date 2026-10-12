@@ -1,0 +1,38 @@
+return build({
+    name = "Hit spark",
+    cleanup_after = 0.35,
+    effects = {
+        {
+            id = "sparks",
+            class = "ParticleEmitter",
+            at = 0,
+            duration = 0.05,
+            tail = 0.25,
+            emit = 12,
+            offset = Vector3.new(0, 0, 0),
+            properties = {
+                {"Acceleration", Vector3.new(0, 0, 0)},
+                {"Brightness", 1},
+                {"Color", ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(1, 1, 0.6)), ColorSequenceKeypoint.new(1, Color3.new(1, 0.3, 0))})},
+                {"Drag", 0},
+                {"EmissionDirection", Enum.NormalId.Top},
+                {"Lifetime", NumberRange.new(0.1, 0.25)},
+                {"LightEmission", 1},
+                {"LightInfluence", 0},
+                {"LockedToPart", false},
+                {"Orientation", Enum.ParticleOrientation.FacingCamera},
+                {"Rate", 0},
+                {"RotSpeed", NumberRange.new(0, 0)},
+                {"Rotation", NumberRange.new(0, 0)},
+                {"Size", NumberSequence.new({NumberSequenceKeypoint.new(0, 0.2, 0), NumberSequenceKeypoint.new(0.2, 0.4, 0), NumberSequenceKeypoint.new(1, 0, 0)})},
+                {"Speed", NumberRange.new(8, 16)},
+                {"SpreadAngle", Vector2.new(35, 35)},
+                {"Texture", "rbxasset://textures/particles/sparkles_main.dds"},
+                {"Transparency", NumberSequence.new({NumberSequenceKeypoint.new(0, 0, 0), NumberSequenceKeypoint.new(1, 1, 0)})},
+                {"VelocityInheritance", 0},
+            },
+            tweens = {
+            },
+        },
+    },
+})
