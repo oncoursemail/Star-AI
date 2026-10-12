@@ -105,6 +105,11 @@ TRIGGERS: dict[str, re.Pattern] = {
     "eng-verify-before-done": re.compile(
         r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
+    # Shipped for explicit evaluation only; do not enable before the gate passes.
+    "roblox-game-math": re.compile(
+        r"\b(?:vectors?|Vector3|dot products?|cross products?|CFrame composition|CFrame|look[- ]?at|"
+        r"lerp|easing(?: families)?|critically damped|springs?|quadratic|cubic|B[eé]zier|projectiles?|gravity|"
+        r"angle wrapping|weighted random|seeded random|fixed[- ]timestep|raycast geometry)\b", re.IGNORECASE),
 }
 
 

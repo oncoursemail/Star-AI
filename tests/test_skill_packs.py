@@ -14,7 +14,7 @@ NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
          "game-obby", "game-tycoon", "game-simulator", "game-rounds",
          "game-inventory", "game-npc-quests",
-         "eng-debugging", "eng-test-first", "eng-verify-before-done"]
+         "eng-debugging", "eng-test-first", "eng-verify-before-done", "roblox-game-math"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
