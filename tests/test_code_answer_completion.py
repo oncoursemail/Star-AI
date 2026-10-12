@@ -179,7 +179,7 @@ def test_streamed_cut_is_never_shown_before_continuation_finishes():
     deltas = [(i, event["text"]) for i, event in enumerate(events) if event["event"] == "assistant_delta"]
     continuing_at = next(i for i, event in enumerate(events) if event["event"] == "answer_continuing")
     assert len(deltas) == 1 and deltas[0] == (continuing_at + 1, answer)
-    assert "pri" not in answer
+    assert "    pri\n" not in answer, "the truncated line must be replaced, not appended"
     assert model.requests[0]["stream"] is True
     assert "stream" not in model.requests[1]
     assert messages[-1] == {"role": "assistant", "content": answer}
