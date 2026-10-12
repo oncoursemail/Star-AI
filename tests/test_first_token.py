@@ -293,10 +293,10 @@ def test_own_llama_servers_get_cache_fields_and_a_steady_slot(desk):
     tools = llama_request_fields(lan, conversation="STAR::chat::a", tools=True)
     assert chat["cache_prompt"] is True and chat["id_slot"] in (0, 1)
     assert chat == llama_request_fields(lan, conversation="STAR::chat::a")   # one conversation, one slot
-    # One conversation, one slot per model: the tool prompt shares it, and the other slot is
-    # kept for background work (tests/test_model_routing.py covers the slot rules).
+    # One conversation, one slot per model: the tool prompt shares it. Background work names
+    # no slot (tests/test_model_routing.py covers the slot rules).
     assert tools["id_slot"] == chat["id_slot"]
-    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True)["id_slot"] == 1 - chat["id_slot"]
+    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True) == local
     remember_server_limits("http://192.168.50.20:8080/v1", "star-fast", 32768, 1)
     assert "id_slot" not in llama_request_fields(lan, conversation="a")
 

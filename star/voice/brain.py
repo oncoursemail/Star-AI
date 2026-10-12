@@ -64,11 +64,12 @@ def server_connection(settings=None, *, discover: bool = True) -> tuple[str, str
     `settings` is the app's Settings object (loaded from disk when omitted). With `discover`
     the server is asked once which models it offers, if STAR has not asked it yet in this
     process, so the quick model is known; a server that does not answer just leaves the
-    configured model. `slot` pins the call to the slot next to the open chat's on a server
-    that has reported two or more (None otherwise), so a call and a typed chat on the same
-    model do not replace each other's cached prompt.
+    configured model. `slot` is always None: a call is background work, and background
+    requests carry no `id_slot` (providers.llama_request_fields), so a call never waits
+    for one slot while another is free. The server chooses the slot; nothing keeps a
+    call and a typed chat on the same model out of each other's slot any more.
     """
-    from ..providers import STAR_SERVER, get_api_key, llama_request_fields, validate_lan_endpoint
+    from ..providers import STAR_SERVER, get_api_key, validate_lan_endpoint
     from .. import server_roles
     settings = _app_settings() if settings is None else settings
     url = os.environ.get("STAR_SERVER_URL", "").strip()
@@ -83,18 +84,12 @@ def server_connection(settings=None, *, discover: bool = True) -> tuple[str, str
     except Exception:
         key = ""
     model = os.environ.get("STAR_VOICE_MODEL", "").strip()
-    slot = None
     if url and key and settings is not None and not overridden:
         if not model and discover and not server_roles.known(url):
             server_roles.discover(url, key)
         if not model:
             model = server_roles.quick_model(settings, DEFAULT_MODEL)
-        try:
-            slot = llama_request_fields(settings, conversation="voice-call", model=model,
-                                        background=True).get("id_slot")
-        except ValueError:
-            slot = None
-    return url, key, model or DEFAULT_MODEL, slot
+    return url, key, model or DEFAULT_MODEL, None
 
 
 def server_configured() -> bool:
@@ -239,7 +234,7 @@ class ServerBrain:
             "chat_template_kwargs": {"enable_thinking": False},   # a voice reply must not spend seconds thinking
         }
         if self.id_slot is not None:
-            payload["id_slot"] = self.id_slot                      # the call's own slot (see server_connection)
+            payload["id_slot"] = self.id_slot                      # only when a caller asked for one slot
         return ChatStream(lambda: self._client.stream("POST", f"{self.base_url}/chat/completions",
                                                       headers=self._headers, json=payload))
 

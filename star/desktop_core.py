@@ -951,7 +951,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
                 # Summaries, sub-agents, specialists and code repair are not the conversation:
-                # on STAR Server they use the slot next to it (providers.llama_request_fields).
+                # on STAR Server they carry no id_slot, the server places them (providers.llama_request_fields).
                 helper = background_client(client, settings, conversation=memory_scope)
                 specialists = (ResearchTeam(
                     client=helper,model=route.subagent_model,project=settings.project,
