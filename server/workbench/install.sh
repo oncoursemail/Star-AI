@@ -49,7 +49,7 @@ cat > /etc/star-workbench/egress.nft <<EOF
    type filter hook output priority 0; policy accept;
    meta skuid $WORK_UID ct state established,related accept
    meta skuid $WORK_UID meta nfproto ipv6 reject
-   meta skuid $WORK_UID ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4 } reject
+   meta skuid $WORK_UID ip daddr { 0.0.0.0/8, 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 240.0.0.0/4 } reject # star:allow
    meta skuid $WORK_UID ip daddr { 1.1.1.1, 1.0.0.1 } udp dport 53 accept
    meta skuid $WORK_UID ip daddr { 1.1.1.1, 1.0.0.1 } tcp dport 53 accept
    meta skuid $WORK_UID tcp dport 443 accept

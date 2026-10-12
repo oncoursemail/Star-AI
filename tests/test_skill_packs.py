@@ -15,7 +15,7 @@ NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-environment-art",
          "game-obby", "game-tycoon", "game-simulator", "game-rounds",
          "game-inventory", "game-npc-quests",
-         "eng-debugging", "eng-test-first", "eng-verify-before-done",
+         "eng-debugging", "eng-test-first", "eng-verify-before-done", "roblox-game-math",
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
