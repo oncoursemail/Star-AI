@@ -311,3 +311,18 @@ def test_real_desktop_request_omits_stopped_and_failed_image_rows(desk):
     assert messages[-1]['content'][0]['text'].startswith('what is 2+2?')
     assert 'stop this request' not in json.dumps(messages)
     assert 'generate an image' not in json.dumps(messages)
+
+
+def test_real_desktop_request_keeps_a_retried_turn_that_has_a_failure_record(desk):
+    """Retry reuses the failed question's row; its answer is stored after the failure record."""
+    project = desk.settings.project
+    asked = desk.chats.add(project, 'user', 'Retry this question', chat_id=desk.chat)
+    desk.chats.add_terminal(project, desk.chat, asked, 'failed', 'Cannot reach STAR Brain.')
+    assert desk.chats.recover_turn(project, desk.chat, asked, 'Retry this question') == asked
+    desk.chats.add(project, 'assistant', 'Answer after retry.', chat_id=desk.chat)
+    assert turn(desk, 'what did I just ask?') == 'Fixture answer.'
+    messages = desk.models.requests[-1]['messages']
+    assert [item['role'] for item in messages] == ['system', 'user', 'assistant', 'user']
+    assert messages[1:3] == [{'role': 'user', 'content': 'Retry this question'},
+                             {'role': 'assistant', 'content': 'Answer after retry.'}]
+    assert 'Cannot reach STAR Brain' not in json.dumps(messages)

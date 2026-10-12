@@ -119,14 +119,20 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
     unanswered question never enters that prefix; no source suffix disappears.
     Repeating current_text does not discard an earlier completed exchange: only
     the presence of a successful answer distinguishes history from an orphan.
+    (current_text is accepted for callers; the unanswered newest question is an
+    orphan like any other and is never part of the window.)
     """
     if type(budget_chars) is not int or budget_chars < 0:
         raise _error('history budget must be a nonnegative integer')
     _validate_records(records)
-    # Only successful, paired text exchanges belong in model history. A terminal
-    # outcome invalidates its owner question even if legacy data contains a reply.
-    # Orphan questions (including interrupted replies) are dropped, never padded
-    # with synthetic assistant messages. This also prevents adjacent user turns.
+    # Only answered text exchanges belong in model history. A question with no
+    # stored answer (failed, stopped, interrupted, or still running) is dropped,
+    # never padded with a synthetic assistant message, which also keeps user
+    # turns from becoming adjacent. A terminal event only records that a turn
+    # ended without an answer; when an answer exists anyway (Retry reuses the
+    # failed question's row, so its answer is stored AFTER the failure record)
+    # the exchange is real history. Event rows are UI state and never dialogue,
+    # whatever their text says.
     groups = []
     for record in records:
         if record['role'] == 'user':
@@ -136,16 +142,9 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
     eligible = []
     for group in groups:
         owner = group[0]
-        terminal = any(row['role'] == 'event' and row['reply_to'] == owner['id']
-                       and row['status'] in {'failed', 'cancelled'} for row in group)
-        # Image-generation event rows and interrupted-reply notes are UI state,
-        # not dialogue. Event bodies must not become model text or recap input.
-        image_event = any(row['role'] == 'event' and
-                          ('image' in row['body'].lower() or 'interrupt' in row['body'].lower())
-                          for row in group)
         answers = [row for row in group if row['role'] == 'assistant'
                    and row['status'] == 'complete']
-        if terminal or image_event or not answers or owner['status'] != 'complete':
+        if not answers or owner['status'] != 'complete':
             continue
         user = owner['body']
         answer = '\n\n'.join(row['body'] for row in answers)
@@ -191,11 +190,17 @@ def respect_checkpoint(window: Window, checkpoint: Checkpoint | None) -> Window:
     """A durable cursor keeps replay from moving back after a budget adjustment."""
     if checkpoint is None or checkpoint.through_id <= window.through_id:
         return window
-    cut = next((index + 1 for index, group in enumerate(window.exchanges)
-                if group[-1]['id'] == checkpoint.through_id), None)
-    if cut is None:
+    # The cursor must sit between whole turns of the stored dialogue: after the
+    # last row of a turn, never inside one. It may follow dropped turns (a
+    # stopped question): a cursor saved before such turns were filtered out of
+    # replay can end on one, and that must not make the chat unusable.
+    index = next((i for i, record in enumerate(window.records)
+                  if record['id'] == checkpoint.through_id), None)
+    if index is None or (index + 1 < len(window.records)
+                         and window.records[index + 1]['role'] != 'user'):
         raise _error('saved cursor is not a complete exchange boundary')
-    return omit_messages(window, cut * 2)
+    cut = sum(1 for group in window.exchanges if group[-1]['id'] <= checkpoint.through_id)
+    return omit_messages(window, cut * 2) if cut else window
 
 
 @dataclass(frozen=True)
