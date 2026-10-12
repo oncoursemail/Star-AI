@@ -461,3 +461,92 @@ permits a broader domain; they are not inferred engine guarantees.
 - [NumberSequence](https://create.roblox.com/docs/reference/engine/datatypes/NumberSequence), [ColorSequence](https://create.roblox.com/docs/reference/engine/datatypes/ColorSequence)
 - [TweenService](https://create.roblox.com/docs/reference/engine/classes/TweenService), [TweenInfo](https://create.roblox.com/docs/reference/engine/datatypes/TweenInfo)
 - [Debris](https://create.roblox.com/docs/reference/engine/classes/Debris), [task](https://create.roblox.com/docs/reference/engine/libraries/task)
+
+## Player-data compiler
+
+`star.roblox_data_compiler` is a standalone, standard-library-only Python
+compiler from a declarative JSON schema to a strict server Luau ModuleScript
+and a **Roblox Studio-only smoke spec**. Compilation does not contact Roblox,
+write to DataStore, modify a place, or register an app/model tool.
+
+### Example and installation
+
+```json
+{
+  "version": 2,
+  "store_name": "MyGameData",
+  "autosave_seconds": 60,
+  "lock_timeout_seconds": 180,
+  "fields": {
+    "Coins": {"type": "number", "default": 0, "min": 0, "max": 1000000, "leaderstats": true},
+    "Nickname": {"type": "string", "default": "Player", "max": 32},
+    "HasPass": {"type": "boolean", "default": false}
+  },
+  "migrations": [
+    {"from": 1, "to": 2, "operations": [{"op": "rename", "field": "Money", "to": "Coins"}]}
+  ]
+}
+```
+
+`compile_schema(schema)` returns the source pair, without writing any files.
+`compile_file("schema.json", "generated")` writes only
+`generated/PlayerData.luau` and `generated/PlayerData.spec.luau`.
+Install the first as a server-only ModuleScript, and require it once from a
+trusted server script. `Data.get(player)` returns an active profile; use
+`Data.set(player, field, value)` for checked updates and leaderstats mirroring.
+
+Fields support finite numbers, strings, and booleans; optional numeric bounds
+constrain values, while string bounds count **UTF-8 bytes**, as Luau's
+`#string` does. Identifiers must be safe ASCII Luau identifiers. Unicode and
+control-character defaults and migration set-values become decimal UTF-8
+byte escapes, never JSON-style Unicode escapes. Invalid Unicode scalar
+sequences and out-of-bound defaults are rejected with `ValueError`.
+Each version change from 1 to the schema version must declare a sequential
+`rename`, `set`, or `delete` migration; arbitrary Luau is not permitted.
+
+### Session lock and data lifecycle
+
+The module uses conditional `UpdateAsync`, guarded by `pcall` retries, for
+acquisition, refresh, save, and release. A live foreign lock is never
+overwritten. **The lock timeout must be at least twice the autosave interval
+plus 30 seconds:** `lock_timeout_seconds >= 2 * autosave_seconds + 30`.
+The defaults are **60 seconds autosave** and **180 seconds lock timeout**.
+Autosave accepts integers 10–3600; lock timeout accepts integers 10–86400
+and must satisfy the inequality. Long expiries also mean longer wait times
+after a server crash. This margin is a defensive configuration rule, not a
+guarantee under a hung scheduler or prolonged DataStore outage.
+
+If a player departs during the yielding load/retry path, the acquired token
+is conditionally released before that player can be registered for autosave.
+Autosave takes a snapshot of active player IDs before each yielding save,
+instead of iterating a mutating table. Leaving also attempts to release
+an active profile; shutdown saves run within a bounded window.
+A live foreign lock currently **kicks immediately**, without a retry or a
+cross-server handoff; rapid server hops may trigger the "data still open"
+message. Failed DataStore writes and abrupt server termination can delay
+lock release until expiry. Save success is never guaranteed.
+
+Missing profile fields silently receive declared defaults. **Present invalid
+values** (type mismatch, non-finite number, or out-of-range value) are
+reset to defaults and reported with `warn`; numeric outliers are not clamped.
+Schema updates must be coordinated with published game versions and existing
+stored profiles before use with real player data.
+
+### Verification and limitations
+
+`tests/test_roblox_data_compiler.py` executes Python validation and generation,
+including Unicode byte literals, clock inequality boundaries, malformed
+schema types, and generated lifecycle control-flow assertions. Its structural
+Luau checks **do not execute generated Luau**, perform real DataStore writes,
+or prove real Studio concurrency. The spec requires the generated
+`PlayerData` ModuleScript as a sibling **in a Roblox Studio test place**.
+Requiring that module initializes `DataStoreService:GetDataStore`,
+`PlayerAdded`/`PlayerRemoving` listeners, autosave tasks, and
+`game:BindToClose`; it is **not** a side-effect-free Luau CLI spec.
+
+Before shipping, use a **disposable test place** to verify real DataStore
+service behavior: Unicode and malformed stored values, the migration chain,
+two-server lock contention, departure during a stalled/retried acquire,
+lock release failure, autosave during concurrent joins, rapid rejoining,
+shutdown expiry, and surviving actual server restarts. Never treat a Python
+substring check or a generated spec as proof of safe live player persistence.
