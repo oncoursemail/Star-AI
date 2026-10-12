@@ -108,7 +108,7 @@ def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server
                                               or (allow_cgnat is True and address in _CGNAT_NETWORK)):
         raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
                          "127.x or an IPv6 unique local address). Public, link-local, shared "
-                         "(100.64.x) and cloud metadata addresses are refused.")
+                         "(100.64.x unless explicitly enabled) and cloud metadata addresses are refused.")
     host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     if port is None or not 1024 <= port <= 65535:
         raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
