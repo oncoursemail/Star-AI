@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import sqlite3
 import sys
 import tempfile
 import threading
@@ -40,7 +41,8 @@ from .studio_connections import connection_status, validate_target, select_insta
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
-from .lessons import LESSON_ACTIONS, handle_action as handle_lesson_action, learning_status, write_export
+from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
+                      import_bundled_lessons, learning_status, write_export)
 from .lesson_digest import Digester, may_start_automatic
 from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
@@ -97,7 +99,7 @@ PERMITTED_SETTINGS = frozenset({
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','research_auto_check',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -491,6 +493,10 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
 def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
     settings = Settings.load(settings_file)
     home = app_data()
+    try:
+        lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -531,6 +537,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'tool_workshop':tool_workshop_status,
         'analytics':get_dashboard(home,settings.project),
         'learning':learning_status(home,settings.project),
+        'lesson_bundle':lesson_bundle,
         'credentials':credential_status(),
         'server':server_status(settings),
         'roblox':roblox_state(home),
