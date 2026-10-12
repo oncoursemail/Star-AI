@@ -3,12 +3,13 @@ from contextlib import asynccontextmanager
 from copy import deepcopy
 import socket
 import sys
+import traceback
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from star import desktop_core, doc_grounding, roblox_errors
+from star import desktop_core, doc_grounding, roblox_cloud, roblox_errors
 from star.agent import system_prefix
 from star.brain_router import ROBLOX_QUALITY_NOTES
 from star.desktop_core import Conversations, Settings, run_task
@@ -61,7 +62,7 @@ def offline(monkeypatch):
     calls = []
 
     def forbidden(*args, **kwargs):
-        calls.append(True)
+        calls.append(" -> ".join(frame.name for frame in traceback.extract_stack(limit=6)[:-1]))
         raise AssertionError("Unexpected external service call")
 
     async def forbidden_async(*args, **kwargs):
@@ -89,6 +90,9 @@ def setup_turn(monkeypatch, tmp_path, knowledge=None):
     monkeypatch.setattr(desktop_core, "app_data", lambda: home)
     monkeypatch.setattr(desktop_core, "open_client", client)
     monkeypatch.setattr(doc_grounding, "client_for", lambda settings: knowledge)
+    # Agent mode constructs RobloxCloud even without a cloud request. Fake its
+    # credential lookup, not the real local-intelligence or chat execution path.
+    monkeypatch.setattr(roblox_cloud, "load_key", lambda: (None, ""))
     settings = Settings(model="m", knowledge_endpoint="off", specialists_enabled=False,
                         tool_workshop_enabled=False, graphify_enabled=False,
                         learning_auto_accept=False, learning_digest=False)
