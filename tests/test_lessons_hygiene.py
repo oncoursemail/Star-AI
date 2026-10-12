@@ -395,3 +395,11 @@ def test_scope_longest_name_and_generic_project_terms(forty):
     for kwargs in ({"project_names": [None]}, {"global_projects": [None]}):
         with pytest.raises(ValueError):
             build_report(rows, as_of=CLOCK, **kwargs)
+
+
+@pytest.mark.parametrize("as_of", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_cli_utc_conversion_overflow_has_no_traceback_or_partial_report(capsys, as_of):
+    assert main(["report", "--input", str(FIXTURE), "--as-of", as_of]) == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "Unable to report" in output.err and "Traceback" not in output.err

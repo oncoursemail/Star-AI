@@ -505,7 +505,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if missing:
             result["warnings"] = (*result["warnings"], "No lesson database exists; nothing was created")
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
-    except (OSError, ValueError, TypeError, sqlite3.Error):
+    except (OSError, ValueError, TypeError, OverflowError, sqlite3.Error):
         # Keep local paths, raw input and provider details out of diagnostics. A malformed
         # database must not be opened by a writer as a fallback to 'repair' it.
         print("Unable to report: check the input schema, timestamps, options and existing lesson database", file=sys.stderr)
