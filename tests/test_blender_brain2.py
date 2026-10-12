@@ -254,6 +254,10 @@ def test_static_blender_worker_has_no_model_code_execution_or_asset_fetching():
 
 def test_auto_route_uses_blender_without_touching_studio():
     from star.desktop_core import needs_project_tools, needs_studio_connection
-    assert needs_project_tools("Use Blender to build a forest cottage 3D model")
-    assert not needs_studio_connection("Use Blender to build a Roblox-ready GLB asset")
-    assert needs_studio_connection("Use Blender to build a model and import it into Roblox Studio")
+    assert needs_project_tools("Use Blender to build a forest cottage 3D model", blender=True)
+    assert not needs_studio_connection("Use Blender to build a Roblox-ready GLB asset", blender=True)
+    assert needs_studio_connection("Use Blender to build a model and import it into Roblox Studio", blender=True)
+    # With the Blender switch off (the default) routing is what it was before Blender existed.
+    assert not needs_project_tools("Use Blender to build a forest cottage 3D model")
+    assert not needs_project_tools("Create a 3D model of a sword")
+    assert needs_studio_connection("Fix the Roblox tree I exported from Blender")

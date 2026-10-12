@@ -609,14 +609,17 @@ def redact_for_logs(value):
     return value
 
 
-def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None, *,
+                        blender: bool = False) -> bool:
     """Load task tools on explicit request or scoped short edit follow-up.
 
     User context hints are not permissions; executable scopes remain enforced.
     """
     text = prompt.lower()
     scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game', 'my files',
-              'project folder', 'current place', 'blender', '3d asset', '3d model', '3d mesh', 'gltf', 'glb')
+              'project folder', 'current place')
+    if blender:   # only with the Blender switch on (Settings.blender_enabled); off, these stay plain chat
+        scopes += ('blender', '3d asset', '3d model', '3d mesh', 'gltf', 'glb')
     actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
                'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
                'remove ', 'delete ', 'test ', 'make it', 'update ')
@@ -641,7 +644,8 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
                 and any(any(x in turn.lower() for x in scopes)
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
-def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None, *,
+                            blender: bool = False) -> bool:
     """Only connect to Roblox Studio for an actual selected-place operation.
 
     A configured studio_id is NOT a request to connect for every agent call.
@@ -651,10 +655,11 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
     if not isinstance(prompt,str) or not prompt.strip():
         return False
     text=prompt.lower()
-    # Exporting a Blender asset for Roblox does not itself authorize Studio edits.
-    if 'blender' in text and not any(term in text for term in (
+    # Exporting a Blender asset for Roblox does not itself authorize Studio edits. Only with the Blender
+    # switch on: with it off, a prompt that mentions Blender attaches Studio exactly as before.
+    if blender and 'blender' in text and not any(term in text for term in (
             'studio', 'current place', 'selected place', 'my game', 'the place',
-            'game hierarchy', 'explorer tree', 'datamodel')):
+            'game hierarchy', 'explorer tree', 'datamodel', 'my project', 'my roblox game')):
         return False
     actions=('inspect','edit','modify','build','create','fix','test ','run ','playtest',
              'open ','change ','update ','delete ','remove ','add ','insert ','scan ')
@@ -888,7 +893,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             and recent_all[-1][1] and prompt.startswith(recent_all[-1][1]) else recent_all
         )
         recent_users = [body for role,body in route_history if role=='user']
-        project_tools = needs_project_tools(prompt, recent_users)
+        project_tools = needs_project_tools(prompt, recent_users, blender=settings.blender_enabled is True)
         referential = len(prompt) <= 160 and bool(re.search(
             r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
         roblox_context = bool(project_tools and referential
@@ -942,9 +947,12 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             workshop = ToolWorkshop(home=home,project=settings.project,knowledge=knowledge,
                                     workspace=workspace,intelligence=intelligence)
         allow_studio = bool(use_tools and settings.studio_id and
-                            needs_studio_connection(prompt,recent_users))
-        from .blender_mcp import wants_blender
-        allow_blender = bool(use_tools and settings.blender_enabled and wants_blender(prompt))
+                            needs_studio_connection(prompt,recent_users,
+                                                    blender=settings.blender_enabled is True))
+        allow_blender = False
+        if use_tools and settings.blender_enabled is True:   # the Blender modules load only when it is on
+            from .blender_mcp import wants_blender
+            allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
         # Searchable public metadata only; no connector is installed or approved.
         from .mcp_registry import RegistryDiscovery
