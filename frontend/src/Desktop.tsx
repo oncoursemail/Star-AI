@@ -194,7 +194,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(!action)return
    if(action==='warmUp'){
      // The host's own background check: no notice, no chat row. Only the status light is re-read.
-     if(event.kind!=='progress')running.current.delete(requestId)
+     if(event.kind!=='progress')running.current.delete(event.requestId)
      void refreshConnection()
      return
    }
