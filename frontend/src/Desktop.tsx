@@ -130,6 +130,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const runRef=useRef<ActivityRun|null>(null)
  const streamRef=useRef('')
  const chatRef=useRef(data.active_chat)
+ const answeringChat=useRef('')
  const cancelRequested=useRef(false)
  const lastError=useRef('')
  const fresh=useRef<Set<string>>(new Set())
@@ -146,7 +147,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const sync=useCallback(async()=>{
    if(inactive)return
    const r=await request<BootData>('bootstrap')
-   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
+   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);if(!sending.current&&!runRef.current)setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
  /** Re-read only what the host knows about the connection. The conversation on screen is left alone. */
@@ -221,7 +222,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    running.current.delete(event.requestId)
    const endRun=(outcome:'done'|'failed'|'cancelled')=>{
      const current=runRef.current
-     if(current)setLastRun({chat:chatRef.current,run:settleRun(current,outcome,Date.now())})
+     if(current)setLastRun({chat:answeringChat.current,run:settleRun(current,outcome,Date.now())})
      updateRun(null)
    }
    if(event.kind==='error'){
@@ -236,7 +237,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        streamRef.current='';sending.current=false
        const row:ChatMessage={...makeMsg('event',msg),status:cancelled?'cancelled':'failed'}
        fresh.current.add(row.id)
-       setMessages(m=>[...m,row])
+       if(chatRef.current===answeringChat.current)setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
        // The host has just recorded this failure; without this the Model page would still say "not checked yet".
@@ -264,7 +265,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      // A statement the content rules turned away: say so, or the owner believes it was learned.
      else if(learned?.not_kept)setNotice('That was not kept as a lesson: it reads like a permission or setting, or contains something like a key. Lessons cannot hold those.')
      if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current,...(answeredBy?{model:answeredBy}:{})})
-     setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
+     if(chatRef.current===answeringChat.current)setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('The local model is running.');void sync()
    }else if(action==='testModel'){
@@ -321,6 +322,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[inactive,act,warmTarget,data.settings.model])
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
+   answeringChat.current=chatRef.current
    lastSent.current=value;lastFiles.current=attachments
    askedTarget.current=targetRef.current
    cancelRequested.current=false
@@ -426,10 +428,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles',imageMode?{kind:'image'}:{});if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,imageMode?2:8))}
  const transcribe=async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}
- const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{chatRef.current=b.active_chat;setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText(b.active_chat===answeringChat.current?streamRef.current:'');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
  const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
- const openChat=async(id:string)=>{if(busy&&id!==data.active_chat)setNotice('Stop the current answer before switching chats.');if(busy||id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ const openChat=async(id:string)=>{if(id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
  const filteredChats=data.chats.filter(c=>c.title.toLowerCase().includes(historyQuery.toLowerCase()))
  const chatGroups=groupChats(filteredChats.slice(0,60))
@@ -532,13 +534,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
- const shownRun=busy?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
+ const viewingAnswer=busy&&data.active_chat===answeringChat.current
+ const shownRun=viewingAnswer?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
  const timeline=!query&&shownRun&&(isRich(shownRun)||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
  let lastUser=-1,lastStar=-1
  messages.forEach((m,i)=>{if(m.role==='user')lastUser=i;else if(m.role==='assistant')lastStar=i})
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
- const turns:ChatMessage[]=busy&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
- const empty=!messages.length&&!busy
+ const turns:ChatMessage[]=viewingAnswer&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
+ const empty=!messages.length&&!viewingAnswer
  // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
  const pending=data.retry&&data.retry.prompt?data.retry:null
  const retryPrompt=retryText||pending?.prompt||''
