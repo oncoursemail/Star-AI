@@ -171,6 +171,10 @@ def test_ordinary_research_chat_keeps_one_bounded_search_for_long_prompt(monkeyp
     monkeypatch.setattr(core, "open_client", fake_open)
     monkeypatch.setattr(web_search, "search_web", search)
     monkeypatch.setattr(core.doc_grounding, "client_for", lambda _: None)
+    # The independent local knowledge lookup has a pre-existing 4k limit; this
+    # test isolates the real Research web-search path rather than that gate.
+    monkeypatch.setattr("star.knowledge.KnowledgeStore.find_contextual",
+                        lambda *args, **kwargs: [])
     prompt = "Research Roblox animation " + "a" * 12100
     answer = core.run_task(core.Settings(model="offline", knowledge_endpoint="off"),
                            prompt, mode="auto", research=True)
