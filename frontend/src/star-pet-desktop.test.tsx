@@ -119,6 +119,9 @@ describe('Desktop mascot preference and activity',()=>{
  })
  it('animates the actual opt-in chat mascot and unmounts outside chat',async()=>{
   localStorage.setItem('star.pet.visible','on')
+  // The fake desktop defaults to reduced motion: this test explicitly opts out.
+  const boot=desktop.snapshot() as BootData
+  desktop.host({settings:{...boot.settings,reduced_motion:false}})
   const {user}=await openChat()
   expect(pet()?.getAttribute('data-greeting')).toBe('true')
   expect(pet()?.querySelector('.star-pet__wave--a')).toBeTruthy()
