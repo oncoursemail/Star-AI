@@ -12,6 +12,18 @@ from star import react_shell, updates
 from star.react_shell import finish_desktop_update, prepare_desktop_update, run_desktop
 
 
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """The harness must run offline: any real socket connection fails the test."""
+    import socket
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("updater harness attempted a real network connection")
+
+    monkeypatch.setattr(socket.socket, "connect", refuse)
+    monkeypatch.setattr(socket, "create_connection", refuse)
+
+
 def _patch_release(delta: int) -> str:
     """The running version with its patch number raised, so a release bump cannot break these tests."""
     major, minor, patch = updates.Version(updates.__version__).parts
@@ -337,4 +349,7 @@ def test_desktop_launch_runs_the_update_tail():
     with nothing left to start Setup, so Install & restart would only quit STAR.
     """
     import inspect
-    assert "run_desktop(app, Shell, instance" in inspect.getsource(react_shell.launch)
+    source = inspect.getsource(react_shell.launch)
+    assert "run_desktop(app, make_shell, instance" in source
+    # Pull request 126's session-end and quit hooks must stay wired to the shell.
+    assert "app.commitDataRequest.connect" in source and "app.aboutToQuit.connect" in source

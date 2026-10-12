@@ -51,6 +51,16 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 
 Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
+### Blender for STAR Brain 2 (experimental first-party MCP)
+
+STAR's optional **local Blender MCP** lets Brain 2 create actual editable .blend scenes and Roblox-compatible .glb assets using a small, constrained scene recipe. It has no unrestricted model-authored Python, no third-party Blender addon and no public listener. Scene creation writes **new private per-project outputs only**, and is disabled by default.
+
+Install Blender yourself from [Blender.org](https://www.blender.org/download/), then open **Tools → Blender for Brain 2**. Enable the connector, save settings, and run **Test local Blender**. Only then, if you wish, enable **Allow Blender scene creation** and save. You may specify the trusted Blender executable path if automatic local discovery fails.
+
+The same first-party server is available to an explicitly configured source MCP client with \`python -m star.blender_mcp --settings <local-STAR-settings.json>\`. Optional owner-run smoke recipes live in \`examples/blender/\`. The connector does not install Blender or import/publish assets into Roblox automatically; Studio import, visual quality and live Blender performance still require device testing.
+
+See [Brain 2 Blender MCP setup, architecture, examples and QA](docs/STAR_BLENDER_BRAIN2_MCP.md).
+
 ## Architecture
 
 | Component | Implementation |
@@ -84,6 +94,20 @@ py -3.11 -m venv .venv
 To preview the website: `cd frontend && npm run dev`, then open the URL shown by Vite. `?preview=1` displays an explicitly read-only interface preview and cannot access a local user's files. On a real STAR desktop, Qt WebChannel enables authenticated local operations through a restricted Python action registry.
 
 Windows packaging runs `scripts/build_windows.ps1`. `STAR.exe --doctor` verifies the bundled Python backend; browser/QWebChannel and GPU use also require live Windows acceptance testing.
+
+### Reference-guided Roblox environment craft (experimental)
+
+The source tree contains an **experimental, offline environment art toolkit** for Roblox lighting and reference analysis (not part of the installed STAR.exe; run it from a source checkout with Python). It does **not** automatically reconstruct 3D assets or edit the current Studio place. Image metrics describe color/composition only and are not proof of visually identical scenes.
+
+~~~powershell
+python -m star.environment_craft inspect path\to\reference.png
+python -m star.environment_craft compare path\to\reference.png path\to\render.png
+python -m star.environment_craft lighting winter-shrine
+python -m star.environment_craft foliage --quality medium
+python -m star.environment_craft vfx falling-snow
+~~~
+
+Lighting, foliage and ambient VFX commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
 
 ## Research and product policy
 
