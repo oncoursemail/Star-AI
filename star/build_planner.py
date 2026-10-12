@@ -7,13 +7,19 @@ must be treated as requirements to reconcile, not assumed to match source.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from pathlib import Path
+import re
+from typing import AbstractSet, Mapping
 
-from star.studio_milestones import GAMES, load_milestones
+from .studio_milestones import GAMES, load_milestones
+
+_TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "examples" / "roblox-templates"
 
 
 @dataclass(frozen=True)
 class BuildStep:
+    """One module milestone with absolute source paths in ``create``."""
+
     id: str
     description: str
     depends_on: tuple[str, ...]
@@ -69,7 +75,9 @@ _MODULES: dict[str, tuple[tuple[str, str, tuple[str, ...], int], ...]] = {
     ),
 }
 _CHECKS = {
-    "obby": (("obby.checkpoints",), ("obby.checkpoints",), ("obby.kill_handlers",), ("obby.finish",)),
+    # No independent course check is shipped. Record its completed step ID;
+    # checkpoint verification must not silently account for both modules.
+    "obby": ((), ("obby.checkpoints",), ("obby.kill_handlers",), ("obby.finish",)),
     "tycoon": (("tycoon.plots",), ("tycoon.purchase_server",), ("tycoon.buy_buttons",), ("tycoon.upgrade_assets",)),
     "simulator": ((), (), (), ()),
     "rounds": (("rounds.state",), ("rounds.spawns",), ("rounds.phase_controller",), ("rounds.timer",)),
@@ -81,7 +89,12 @@ _UNSUPPORTED = {
     "procedural world generation": ("procedural", "random terrain", "world generation"),
     "combat weapons": ("gun", "weapon", "fps", "shooter"),
     "vehicle physics": ("vehicle", "driving", "car racing"),
-    "pet system": ("pet", "pets"),
+    "pet system": ("pet",),
+}
+# Match whole words (including plurals), retaining multi-word phrases intact.
+_UNSUPPORTED_PATTERNS = {
+    name: re.compile(r"\b(?:" + "|".join(map(re.escape, keywords)) + r")s?\b")
+    for name, keywords in _UNSUPPORTED.items()
 }
 # The simulator starter genuinely has buyable pets.
 _SUPPORTED_EXCEPTIONS = {"simulator": frozenset({"pet system"})}
@@ -92,6 +105,7 @@ def build_plan(brief: str, template: str, *, max_failed_repairs: int = 3) -> Bui
 
     Unknown requested capabilities are surfaced as unsupported, not generated.
     'results' accepted by next_step maps check IDs to booleans; no check runs here.
+    Source paths are anchored to this repository, not the working directory.
     """
     if not isinstance(brief, str) or not brief.strip():
         raise ValueError("brief must be nonempty")
@@ -100,9 +114,9 @@ def build_plan(brief: str, template: str, *, max_failed_repairs: int = 3) -> Bui
     if type(max_failed_repairs) is not int or max_failed_repairs < 0:
         raise ValueError("max_failed_repairs must be a nonnegative integer")
     lower = brief.casefold()
-    unsupported = tuple(name for name, keywords in _UNSUPPORTED.items()
+    unsupported = tuple(name for name, pattern in _UNSUPPORTED_PATTERNS.items()
                         if name not in _SUPPORTED_EXCEPTIONS.get(template, ())
-                        and any(word in lower for word in keywords))
+                        and pattern.search(lower))
     # Validate references against the shipped Studio catalog. The simulator
     # intentionally has no Studio manifest, therefore has no check IDs.
     available = {m.id for m in load_milestones(template)} if template in GAMES else set()
@@ -115,7 +129,7 @@ def build_plan(brief: str, template: str, *, max_failed_repairs: int = 3) -> Bui
             id=identifier,
             description=description,
             depends_on=(steps[-1].id,) if steps else (),
-            create=tuple("examples/roblox-templates/" + template + "/" + f for f in files),
+            create=tuple(str(_TEMPLATE_DIR / template / f) for f in files),
             template_module=files[0],
             check_ids=checks,
             token_budget=budget,
@@ -124,15 +138,22 @@ def build_plan(brief: str, template: str, *, max_failed_repairs: int = 3) -> Bui
 
 
 def next_step(plan: BuildPlan, results: Mapping[str, bool] | None = None,
-              *, failed_repairs: Mapping[str, int] | None = None) -> NextStep:
-    """Return the first unverified step or bounded repair target.
+              *, failed_repairs: Mapping[str, int] | None = None,
+              completed_steps: AbstractSet[str] | None = None) -> NextStep:
+    """Return the first unfinished step or bounded repair target.
 
     A missing check result is never treated as passed. A failed check is
     retried until its per-check failure count reaches the plan's limit.
     Record counts from actual failed repair attempts, not from check polling.
+
+    For steps with no checks (the obby course and every simulator step), callers
+    record successful builds by BuildStep.id in completed_steps. These IDs do
+    not replace missing or failed Studio checks on checked steps. Completion
+    of an unchecked step records caller-reported work, not Studio verification.
     """
     results = {} if results is None else results
     failed_repairs = {} if failed_repairs is None else failed_repairs
+    completed_steps = frozenset() if completed_steps is None else completed_steps
     if plan.unsupported:
         return NextStep("unsupported", reason="Unsupported capabilities: " + ", ".join(plan.unsupported))
     for step in plan.milestones:
@@ -141,6 +162,11 @@ def next_step(plan: BuildPlan, results: Mapping[str, bool] | None = None,
                 if failed_repairs.get(check, 0) >= plan.max_failed_repairs:
                     return NextStep("stopped", step, check, "Repair attempt limit reached")
                 return NextStep("repair", step, check, "Repair failing Studio check")
-        if not step.check_ids or any(results.get(check) is not True for check in step.check_ids):
+        if not step.check_ids:
+            if step.id not in completed_steps:
+                return NextStep("build", step, reason="Build this milestone and record its completed step ID")
+        elif any(results.get(check) is not True for check in step.check_ids):
             return NextStep("build", step, reason="Build or verify this milestone")
-    return NextStep("complete", reason="All available Studio checks passed")
+    if any(step.check_ids for step in plan.milestones):
+        return NextStep("complete", reason="All available Studio checks passed; unchecked steps explicitly completed")
+    return NextStep("complete", reason="All steps explicitly completed; no Studio checks are available")
