@@ -219,7 +219,7 @@ def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch)
 def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch(desk, monkeypatch):
     names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True)
     expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
-                + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
+                + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
                 + WORKSHOP + SPECIALISTS)
     assert names == expected
     assert not set(ROBLOX_LINKS) & set(names)
