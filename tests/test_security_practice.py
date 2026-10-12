@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DIR = ROOT / "evals" / "roblox"
 SUITE = DIR / "practice-tasks-security-v1.json"
 PRIOR = ("golden-tasks-v1.json", "golden-tasks-v2.json", "golden-tasks-creation-v1.json", "holdout-v1.json")
-TOPICS = {"remote-validation": 8, "economy-receipts": 4, "data-boundaries": 3, "authorization-trust": 5}
+TOPICS = {"remote-validation": 9, "economy-receipts": 4, "data-boundaries": 3, "authorization-trust": 4}
 OVERLAP_LIMIT = 0.5
 
 # Each pair is a compact syntax probe: safe markers, then an unsafe anti-example.
