@@ -102,7 +102,7 @@ def test_tunnel_filter_never_forwards_request_credentials(tmp_path):
 
 def test_private_install_publishes_read_only_server_venv(tmp_path):
     text = (FOLDER / "install.sh").read_text()
-    command = next(line for line in text.splitlines() if line.startswith("chmod -R go+rX "))
+    command = next(line for line in text.splitlines() if line.startswith("chmod -R go-w,go+rX "))
     assert command.split()[-1] == "/opt/star-workbench/venv"
     assert text.index("venv/bin/pip install") < text.index(command) < text.index("runuser -u")
     runtime = tmp_path / "venv"
@@ -112,6 +112,8 @@ def test_private_install_publishes_read_only_server_venv(tmp_path):
     module = next(runtime.glob("lib/python*/site-packages")) / "fixture.py"
     module.write_text("VALUE = 42\n")
     module.chmod(0o600)
+    # venv copies some upstream script modes, independently of the private umask.
+    (runtime / "bin/Activate.ps1").chmod(0o777)
     token = tmp_path / "token"
     token.write_text(secrets.token_hex(32))
     token.chmod(0o600)
