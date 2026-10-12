@@ -38,7 +38,7 @@ describe('real activity timeline rendering',()=>{
  it('shows failure details without treating a failed tool as done',()=>{
   show(run('failed',[{...step,state:'failed',detail:'The source could not be read.'}]))
   const region=screen.getByRole('region',{name:'What STAR did'})
-  expect(within(region).getByRole('button',{expanded:true})).toBeTruthy()
+  expect(within(region).getByRole('button',{name:'Searching workspace'}).getAttribute('aria-expanded')).toBe('true')
   expect(within(region).getByText('The source could not be read.')).toBeTruthy()
   expect(within(region).queryByRole('button',{name:'Stop'})).toBeNull()
  })
