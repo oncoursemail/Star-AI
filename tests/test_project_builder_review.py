@@ -4,9 +4,9 @@ import hashlib
 import json
 from pathlib import Path, PureWindowsPath
 import socket
-from types import SimpleNamespace
+import sys
+from types import ModuleType, SimpleNamespace
 
-import keyring
 import pytest
 
 from star import desktop_core, project_builder as builder, providers
@@ -45,8 +45,11 @@ def no_external_services(monkeypatch):
     monkeypatch.setattr(socket, "create_connection", blocked)
     monkeypatch.setattr(socket.socket, "connect", connect)
     monkeypatch.setattr(socket, "socketpair", socketpair)
-    monkeypatch.setattr(keyring, "get_password", blocked)
-    monkeypatch.setattr(keyring, "set_password", blocked)
+    # Keyring is optional in the core-only CI environment; never require or use it.
+    credential_store = ModuleType("keyring")
+    for name in ("get_password", "set_password", "get_credential", "delete_password"):
+        setattr(credential_store, name, blocked)
+    monkeypatch.setitem(sys.modules, "keyring", credential_store)
 
 
 @pytest.mark.parametrize("flavour", [Path, PureWindowsPath])
