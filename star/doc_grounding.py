@@ -369,6 +369,7 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
             except asyncio.TimeoutError:
                 # The check did not finish in the time the turn had left: no claim about the code.
                 _emit(on_event, {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0})
+        runs = []
         if getattr(settings, "luau_run_before_answer", False) is True:
             from .luau_run_review import review
             answer, runs = await review(answer, settings, route, started=started, on_event=on_event)
@@ -377,8 +378,13 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
         answer = answer.rstrip() + sources_footer(grounding.passages, answer) if grounding.passages else answer
         if grounding.status != "off" or grounding.checks:
             archive = [*archive, {"star_knowledge": grounding.record()}]
-        if answer != original and messages and messages[-1].get("role") == "assistant":
-            messages = [*messages[:-1], {**messages[-1], "content": answer}]
+        if answer != original:
+            if messages and messages[-1].get("role") == "assistant":
+                messages = [*messages[:-1], {**messages[-1], "content": answer}]
+            elif runs:
+                # Fast mode returns the answer separately from its request messages.
+                # Persist the reviewed version without replacing the user's question.
+                messages = [*messages, {"role": "assistant", "content": answer}]
         return answer, messages, archive
     except asyncio.CancelledError:
         raise

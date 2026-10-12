@@ -14,7 +14,7 @@ async function openSettings(){
  const user=userEvent.setup()
  render(<App/>)
  await screen.findByRole('textbox',{name:/message star/i})
- await user.click(screen.getByRole('button',{name:/^settings$/i}))
+ await user.click(screen.getByRole('button',{name:/^settings(?:\s|$)/i}))
  return user
 }
 const toggle=()=>screen.getByRole('checkbox',{name:'Run my Luau before answering'})
