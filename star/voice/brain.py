@@ -76,7 +76,8 @@ def server_connection(settings=None, *, discover: bool = True) -> tuple[str, str
     overridden = bool(url)
     if not url and settings is not None:
         try:
-            url = validate_lan_endpoint(getattr(settings, "server_endpoint", ""))
+            url = validate_lan_endpoint(getattr(settings, "server_endpoint", ""),
+                                      allow_cgnat=getattr(settings, "allow_cgnat", False))
         except ValueError:
             url = ""
     try:

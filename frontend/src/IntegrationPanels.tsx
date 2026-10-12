@@ -143,6 +143,8 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
        <input list="star-server-model-ids" spellCheck={false} autoComplete="off" disabled={disabled} value={draft.model??''} placeholder="Test server to list its models" onChange={e=>change({model:e.target.value.trim()})}/>
      </label>
    </div>
+   <label className="integrated-field"><input type="checkbox" disabled={disabled} checked={draft.allow_cgnat??false} onChange={e=>change({allow_cgnat:e.target.checked})}/> Allow Tailscale and carrier-grade NAT addresses</label>
+   <p className="integrated-help">Turn this on only for a Tailscale (or similar VPN) address. On an ordinary carrier network this range is shared with other customers and the connection is not encrypted. Cloud metadata addresses stay blocked.</p>
    <datalist id="star-server-model-ids">{(report?.models??[]).map(id=><option key={id} value={id}/>)}</datalist>
    <div className="integrated-key-controls">
      <label className="integrated-field">Server key (stored in Windows Credential Manager)
