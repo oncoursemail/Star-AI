@@ -601,7 +601,7 @@
     "category": "roblox-debugging-intvalue-not-number",
     "difficulty": 2,
     "goal": "Fix the intvalue not number bug in a beginner Roblox script",
-    "prompt": "In my Roblox game: \"My chest script cannot add five coins because Coins is an Instance.\"\nLocation: ServerScriptService/Chest Script\nBroken Luau:\n```luau\nlocal coins = player.leaderstats.Coins\ncoins = coins + 5\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
+    "prompt": "In my Roblox game: \"My chest script cannot add five coins because Coins is an Instance.\"\nLocation: ServerScriptService/Chest Script\nBroken Luau:\n```luau\nlocal prompt = script.Parent:WaitForChild(\"ProximityPrompt\")\nprompt.Triggered:Connect(function(player)\n    local coins = player:WaitForChild(\"leaderstats\"):WaitForChild(\"Coins\")\n    coins = coins + 5\nend)\n```\nFind and fix the bug. Return corrected Luau in fenced code and explain it briefly. If client and server scripts are needed, provide both.",
     "run_mode": "automated",
     "helps": [],
     "expected_sources": [
