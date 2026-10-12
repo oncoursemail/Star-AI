@@ -16,16 +16,14 @@ There is exactly one copy of every image, and only what the code loads is shippe
 
 | Folder | In the app and installer? | Contents |
 | --- | --- | --- |
-| `frontend/public/assets/mascot/` | yes (copied into `frontend/dist/assets/mascot/`; about 5.7 MB) | `star-hero.png`; 11 faces `asleep`, `content`, `focused`, `happy`, `nervous`, `normal`, `proud`, `puppy-eyes`, `sleepy`, `surprised`, `thinking`; 7 poses `letter`, `sleep-sit`, `stand`, `think`, `type-1`, `type-2`, `wave-a` |
-| `docs/mascot/art/` | no (documentation only; about 11.7 MB) | the other 13 faces, the other 17 poses, `forms/` (8), `pfp/` (3 profile pictures at 1024 px and 256 px), `star-hero-1024.png` |
+| `frontend/public/assets/mascot/` | yes (copied into `frontend/dist/assets/mascot/`; about 5.9 MB) | `star-hero.png`; 8 website faces `content`, `focused`, `happy`, `normal`, `proud`, `puppy-eyes`, `surprised`, `thinking`; 12 shared website/pet poses `blink`, `breathe-out`, `jump`, `letter`, `look-a`, `sad`, `sleep-lie`, `sleep-sit`, `stand`, `think`, `wave-a`, `wave-b` |
+| `docs/mascot/art/` | no (documentation only; about 11.5 MB) | the other 16 faces, the other 12 poses, `forms/` (8), `pfp/` (3 profile pictures at 1024 px and 256 px), `star-hero-1024.png` |
 
 Both consumers load from the shipped folder with a relative path, because the packaged app is opened as a local file:
 
 - the public website, `frontend/src/SiteMascot.tsx`: `./assets/mascot/star-hero.png`, the eight faces of "Meet Star" (`normal`, `happy`,
   `content`, `puppy-eyes`, `surprised`, `thinking`, `focused`, `proud`; `content` is also the hero blink) and the poses `stand` and `wave-a`;
-- the Star pet in the chat, `frontend/src/StarPet.tsx`: faces `normal`, `content` (idle), `focused` (typing and streaming),
-  `thinking`, `happy`, `nervous`, `surprised`, `sleepy`, `asleep` and poses `think`, `type-1`, `type-2`, `wave-a`, `sleep-sit`, `letter`
-  under the same `./assets/mascot/` prefix. The pet is off until the owner turns on "Show Star" in Settings and respects reduced motion.
+- the Star pet in the chat, `frontend/src/StarPet.tsx`: full-body sprites from the 12 allowed poses, including `stand`/`blink` (aligned blink), `breathe-out` (gentle breathing), `wave-a`/`wave-b` (once on chat opening), `think` (thinking and streaming), `jump` (happy completion), and `sad` (error), under the same `./assets/mascot/` prefix. Face names describe the expression/status but are not additional images requested by the pet. The pet is off until the owner turns on "Show Star" in Settings and respects both app and OS reduced motion.
 
 Before 2026-10-12 the 24 faces and 2 poses were stored twice (`frontend/public/mascot/` and `frontend/public/assets/mascot/`) and about
 16 MB (forms, profile pictures, unused poses and faces) was copied into the app although nothing loaded it, about 24 MB in all. To

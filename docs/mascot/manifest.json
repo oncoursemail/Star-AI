@@ -214,7 +214,7 @@
    ],
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -502,7 +502,7 @@
    ],
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -528,7 +528,7 @@
    ],
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -716,7 +716,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -744,7 +744,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -774,7 +774,7 @@
     "QA minor: thin splayed fingers at both sides"
    ],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -864,7 +864,7 @@
     "QA minor: lower hand at the skirt is thin and pointed"
    ],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -924,7 +924,7 @@
     "QA minor: spindly raised fingers; boots show only a tiny gold mark; drawn in the air (still rests on the baseline here)"
    ],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -971,7 +971,7 @@
    "bytes": 207846,
    "scale": 1.3,
    "baseline_y": 600,
-   "head_center_x": 257.0,
+   "head_center_x": 257,
    "head_top_y": 142.7,
    "drawn_bbox": [
     72,
@@ -1214,7 +1214,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -1242,7 +1242,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -1298,7 +1298,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -1354,7 +1354,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "art"
+    "site"
    ]
   },
   {
@@ -1720,7 +1720,7 @@
    ]
   }
  ],
- "shipped_bytes": 5653422,
- "art_bytes": 11680771,
+ "shipped_bytes": 5861981,
+ "art_bytes": 11472212,
  "roots_note": "site = the only copy shipped in the app and the website (everything the code loads: the hero, the faces and poses used by frontend/src/SiteMascot.tsx and frontend/src/StarPet.tsx). art = approved drawings kept in the repository but not copied into the app or the installer."
 }

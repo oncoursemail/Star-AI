@@ -81,19 +81,23 @@ def _images_loaded_by_the_code():
         assert "const assets='./assets/mascot'" in source
     wanted = {m.lstrip("/") for m in re.findall(r"assets\+'(/[a-z0-9/_.-]+\.png)'", site_source)}
     wanted |= {f"faces/{face}.png" for face in re.findall(r"\{id:'([a-z-]+)',name:", site_source)}
-    # petImage(): face:'x' / pose:'y' and the alternating pair face:alternate?'a':'b'
-    for kind, alternate, name in re.findall(r"(face|pose):(?:alternate\?'([a-z0-9-]+)':)?'([a-z0-9-]+)'", pet_source):
-        for item in (alternate, name):
-            if item:
-                wanted.add(f"{kind}s/{item}.png")
+    # The pet displays full-body art only, through an explicit static pose allowlist.
+    # Face names in petImage describe expressions/status, not separate downloaded sprites.
+    match = re.search(r"const poses=\\[([^\\]]+)\\] as const", pet_source)
+    assert match, "pet sprite allowlist is required"
+    assert "petPosePath(image.pose)" in pet_source
+    names = set(re.findall(r"'([a-z0-9-]+)'", match.group(1)))
+    assert {"stand", "blink", "breathe-out", "wave-a", "wave-b", "think", "jump"} <= names
+    wanted |= {f"poses/{name}.png" for name in names}
     return wanted
 
 
 def test_every_image_the_website_and_the_pet_load_exists():
     site_root = REPO / _manifest()["roots"]["site"]
     wanted = _images_loaded_by_the_code()
-    assert {"star-hero.png", "faces/normal.png", "faces/nervous.png", "poses/stand.png", "poses/wave-a.png",
-            "poses/type-1.png", "poses/type-2.png", "poses/letter.png"} <= wanted
+    assert {"star-hero.png", "faces/normal.png", "poses/stand.png", "poses/blink.png",
+            "poses/breathe-out.png", "poses/wave-a.png", "poses/wave-b.png",
+            "poses/think.png", "poses/jump.png", "poses/letter.png"} <= wanted
     assert len(wanted) >= 19
     for rel in sorted(wanted):
         assert (site_root / rel).is_file(), f"the app loads ./assets/mascot/{rel} but it is missing"
