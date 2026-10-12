@@ -30,6 +30,7 @@ MAX_INSTANCES = 20_000
 MAX_TEXT_CHARS = 2_000_000
 MAX_NAME_CHARS = 256
 MAX_PATH_CHARS = 4096
+MAX_RECEIVER_PARTS = 24
 SCRIPT_CLASSES = frozenset({'Script', 'LocalScript', 'ModuleScript'})
 USEFUL_PROPERTIES = frozenset({
     'Archivable', 'Disabled', 'Enabled', 'RunContext', 'Anchored', 'CanCollide',
@@ -194,6 +195,10 @@ def _receiver(tokens, end: int) -> str:
         return '(expression)'
     start = end
     while start >= 2 and tokens[start - 1][1] == '.' and tokens[start - 2][0] == 'id':
+        # Repeated event names in one dotted chain otherwise rescan the whole
+        # prefix for every token, making hostile source quadratic to summarize.
+        if end - start >= 2 * (MAX_RECEIVER_PARTS - 1):
+            return '(long expression)'
         start -= 2
     return _short(''.join(value for _, value in tokens[start:end + 1]))
 

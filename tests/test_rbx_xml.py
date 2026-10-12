@@ -244,3 +244,31 @@ def test_invalid_output_limits(value):
         model.outline(max_depth=value)
     with pytest.raises(RbxXMLError):
         model.focus('/Demo', budget_chars=value)
+
+
+def test_summary_receiver_work_is_bounded_on_long_dotted_chains(tmp_path, monkeypatch):
+    # Count token accesses, not wall time: this fails deterministically if each
+    # event walks back through the entire chain (quadratic work on hostile input).
+    original = rbx_xml._tokens
+    observed = []
+    class CountedTokens(list):
+        accesses = 0
+        def __getitem__(self, key):
+            self.accesses += 1
+            assert self.accesses < 200_000, 'Unbounded receiver scan'
+            return super().__getitem__(key)
+    def counted(source):
+        tokens = CountedTokens(original(source))
+        observed.append(tokens)
+        return tokens
+    monkeypatch.setattr(rbx_xml, '_tokens', counted)
+    source = 'remote' + '.OnClientEvent' * 1000
+    path = xml_file(tmp_path, '<roblox><Item class="Script"><Properties>'
+                    '<ProtectedString name="Source"><![CDATA[' + source
+                    + ']]></ProtectedString></Properties></Item></roblox>')
+    model = read(path)
+    assert observed and observed[0].accesses < 200_000
+    summary = model.script_list()[0]['summary']
+    assert '(long expression).OnClientEvent' in summary
+    assert len(summary) <= 1200
+    assert model.scripts[0].source == source
