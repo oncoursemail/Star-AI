@@ -996,6 +996,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
                                else settings.endpoint, route.subagent_model),
                     timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
+                    web_enabled=bool(research),
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and

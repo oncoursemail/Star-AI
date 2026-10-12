@@ -363,7 +363,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const mine=beginRun(value,selected,makeImage?'image':teamMode?'team':'chat')
    if(retryMessageId===undefined)setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=intent?'generateImage':imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,intent?{prompt:intent.prompt,display_prompt:value,files:selected,size:imageSize,followup:intent.followup,...(retryMessageId===undefined?{}:{retryMessageId})}:imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
+   const res=await act(action,intent?{prompt:intent.prompt,display_prompt:value,files:selected,size:imageSize,followup:intent.followup,...(retryMessageId===undefined?{}:{retryMessageId})}:imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value,research}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
@@ -654,7 +654,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
-               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.`:'STAR can make mistakes. Check important information.'}</p>}
+               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
            <div className="thread-rest" aria-hidden="true"/>
            <div className="sr-only" role="status" aria-live="polite">{announce}</div>
