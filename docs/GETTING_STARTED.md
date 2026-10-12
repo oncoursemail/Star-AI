@@ -31,6 +31,7 @@ foreach ($scope in $scopes) {
 ```
 
 **Per-user** means the uninstall entry belongs to your Windows account (`HKEY_CURRENT_USER`); **all-users** means it is registered for the machine (`HKEY_LOCAL_MACHINE`). If both appear, more than one install may be registered: confirm which copy you intend to upgrade. If neither appears, you may be running the portable ZIP or STAR may be installed under a different Windows account.
+
 ## 2. Choose a brain: STAR Server or this PC
 
 Open **Settings → Model & provider**.
