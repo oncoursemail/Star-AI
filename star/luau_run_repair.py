@@ -114,13 +114,15 @@ async def _write(model_client, model: str, prompt: str, code: str) -> str:
     return response.choices[0].message.content or ""
 
 
-async def _fix(model_client, model: str, prompt: str, code: str, failure: str) -> str:
+async def _fix(model_client, model: str, prompt: str, code: str,
+               assertions: str, failure: str) -> str:
     response = await model_client.chat.completions.create(
         model=model, temperature=0, max_tokens=1400,
         messages=[{"role": "system", "content": _FIX_SYSTEM},
                   {"role": "user", "content": "Original request (data):\n" + prompt[:1500]
                    + "\n\nModule (data):\n" + code[:9000]
-                   + "\n\nVerified runtime status (not raw sandbox output): " + failure}])
+                   + "\n\nOriginal generated assertions (untrusted data):\n" + assertions
+                   + "\nVerified runtime status (not raw sandbox output): " + failure}])
     return response.choices[0].message.content or ""
 
 
@@ -199,7 +201,7 @@ async def review(answer: str, settings, route, *, prompt: str = "",
             return await _write(model_client, route.model, prompt, source)
     if fixer is None and model_client is not None:
         async def fixer(source: str, failure: str) -> str:
-            return await _fix(model_client, route.model, prompt, source, failure)
+            return await _fix(model_client, route.model, prompt, source, tests, failure)
 
     try:
         reply = await asyncio.wait_for(writer(code), timeout=min(MODEL_SECONDS, left()))
@@ -255,7 +257,10 @@ async def review(answer: str, settings, route, *, prompt: str = "",
             break
         try:
             fix_reply = await asyncio.wait_for(
-                fixer(current, "generated assertions failed in the isolated VM"),
+                fixer(current, "generated assertions failed in the isolated VM; category: "
+                      + validated["error"] + "; locations: "
+                      + (", ".join(f"{place['source']} line {place['line']}"
+                                   for place in validated["locations"]) or "unavailable")),
                 timeout=min(MODEL_SECONDS, left()))
             corrected = fixed_source(fix_reply)
             if (not corrected or corrected.strip() == current.strip()

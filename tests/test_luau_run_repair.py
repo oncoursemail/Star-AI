@@ -304,6 +304,12 @@ def test_real_finalization_writes_assertions_runs_and_persists_repair(monkeypatc
         settings=settings, model_client=model, prompt=item.topic))
     assert item.right in output and item.wrong not in output
     assert len(model.calls) == 2 and len(vm.calls) == 2
+    # Repairs must see the same model-generated assertions the sandbox ran.
+    repair_prompt = model.calls[1]["messages"][-1]["content"]
+    assert f"assert(result({item.x}) == {item.expected})" in repair_prompt
+    assert f"assert(result({item.y}) == {item.expected_y})" in repair_prompt
+    assert "category: runtime_error" in repair_prompt
+    assert "untrusted model response" not in repair_prompt
     assert saved[-1] == {"role": "assistant", "content": output}
     assert messages == [{"role": "user", "content": item.topic}]
     assert archive[-1]["star_luau_run"]["blocks"][0]["state"] == "repaired"
