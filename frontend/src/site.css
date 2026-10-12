@@ -106,6 +106,8 @@
 .sw-hero-facts{display:flex;flex-wrap:wrap;gap:9px 22px;margin-top:23px!important;font-size:.8125rem;color:var(--sw-faint)}
 .sw-hero-facts li{display:flex;align-items:center;gap:8px}
 .sw-hero-facts li::before{content:"";width:4px;height:4px;background:var(--sw-gold-soft);border-radius:50%}
+.sw .sw-hero-shipping{max-width:56ch;margin-top:16px;font-size:.8125rem;line-height:1.55;color:var(--sw-faint)}
+.sw .sw-hero-shipping strong{color:var(--sw-text);font-weight:600}
 .sw-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,288px);gap:40px clamp(40px,6vw,96px);align-items:end}
 .sw-hero h1{max-width:11em}
 .sw-hero .sw-lede{margin-top:clamp(20px,2.4vw,30px)}
