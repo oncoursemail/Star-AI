@@ -386,6 +386,12 @@ def sanitize_event(event: dict) -> dict:
     if kind == 'tool_requested':
         # The model began to write a tool call. Nothing is authorized or run yet, so no name.
         return {'phase':'Preparing a tool request'}
+    if kind == 'answer_continuing':
+        # The answer hit its length limit inside a code block; the missing lines are being asked for.
+        return {'phase':'Finishing the code'}
+    if kind == 'tool_call_unparseable':
+        # The server could not read the model's tool request; the question is asked again without tools.
+        return {'phase':'Answering without tools'}
     if kind == 'model_started':
         # Routing and context are ready; the request goes out next (after Studio connects, if it is used).
         return {'phase':'Contacting the model'}

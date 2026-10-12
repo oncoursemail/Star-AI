@@ -4,13 +4,16 @@ Two entry points, both called from `desktop_core.run_task`, and both unable to f
 
   prepare(...)   before the model call: follow the route's GroundingPlan, fetch passages from
                  STAR Knowledge and render them as a delimited block of UNTRUSTED reference data.
-  finalize(...)  after the model call: statically check fenced Luau in the answer (at most two
-                 blocks, one repair round), then append a list of the sources STAR retrieved.
+  finalize(...)  after the model call: statically check fenced Luau in the answer (at most three
+                 blocks; a failing block is repaired in at most two rounds and a repair is kept
+                 only when the re-check says the block got better), check the engine API names
+                 the code provably uses against the official reference (star/api_check.py), then
+                 append a list of the sources STAR retrieved.
 
 Honesty rules:
   * The answer says code was checked only when the check really ran and returned a result.
-  * A passing check is described as what it is: compiled and type-analysed, not run, Roblox
-    API names not verified.
+  * A passing check is described as what it is: compiled and type-analysed, not run; API names
+    are called checked only for the ones the reference was really asked about.
   * The sources list says which passages the answer cites and which were only retrieved.
 """
 from __future__ import annotations
@@ -20,6 +23,7 @@ from dataclasses import dataclass, field
 import re
 from time import monotonic
 
+from . import api_check
 from .brain_router import NO_GROUNDING, GroundingPlan, followup_grounding, retrieval_query
 from .doc_knowledge import KnowledgeClient, client_for
 
@@ -27,7 +31,10 @@ REFERENCE_OPEN = "<<<UNTRUSTED_REFERENCE_DATA kind=official-documentation>>>"
 REFERENCE_CLOSE = "<<<END_UNTRUSTED_REFERENCE_DATA>>>"
 SOURCES_MARKER = "**Sources retrieved by STAR**"
 CHECK_MARKER = "**Luau check by STAR:**"
-MAX_CHECKED_BLOCKS = 2
+MAX_CHECKED_BLOCKS = 3
+MAX_REPAIR_ROUNDS = 2       # per block; the second only after the first made the block better
+SECOND_ROUND_MAX_ERRORS = 2
+MAX_REPAIR_CALLS = 2        # per answer: each one writes a whole block again, which takes as long as writing it did
 # The whole task has one deadline (route.task_timeout) and an answer that is already written must
 # never be lost to it. The self-check gets what is left of the turn minus REVIEW_RESERVE, and a
 # repair call is stopped REPAIR_RESERVE before the deadline (time for the re-check and the save).
@@ -57,9 +64,22 @@ _RULES_EMPTY = (
     "documentation did not cover it, then give your best answer and mark it as unverified.\n"
 )
 _REPAIR_SYSTEM = (
-    "You fix Luau code for Roblox. Reply with only the corrected code in one ```luau fenced block and no "
-    "explanation. Keep the behaviour and structure; change only what the diagnostics require. The diagnostics "
-    "come from the official Luau compiler and type checker."
+    "You fix Luau code for Roblox. Reply with only the complete corrected code in one ```luau fenced block and no "
+    "explanation. Keep the behaviour, the names and the structure; change only what the diagnostics require and do "
+    "not remove features. The diagnostics come from the official Luau compiler and type checker and from the "
+    "official Roblox API reference; each one shows the source line it is about.\n"
+    "How such diagnostics are usually fixed:\n"
+    "- a value the checker does not accept although the code checks it with `type(x) == \"number\"`: cast it "
+    "where it is used (`math.floor(x :: number)`) or copy it into a typed local (`local n: number = x`); a "
+    "parameter that may be anything is annotated `x: any`;\n"
+    "- engine classes are bare type names (`Player`, `BasePart`), and Luau has no `void`: a function that returns "
+    "nothing has no return annotation;\n"
+    "- an unknown global: define it in this block before it is used;\n"
+    "- a syntax error on a line that looks right in another language: Luau is not Lua 5.4 or TypeScript. It has no "
+    "`|`, `&`, `<<`, `>>` operators (use `bit32.bor`, `bit32.band`, `bit32.lshift`, `bit32.rshift`), no `!=` (write "
+    "`~=`) and no `goto`; a dictionary type is `{ [string]: any }` and an array type is `{ string }` (`{string, any}` "
+    "is not a type);\n"
+    "- an API name that is not in the reference: use a member that exists, on the class that really has it."
 )
 
 
@@ -246,89 +266,296 @@ def _changed_lines(before: str, after: str, limit: int = 500) -> str:
 
 
 def _describe(errors: list[dict], limit: int = 4) -> str:
-    return "\n".join(f"- line {e['line']}: {e['message']} ({e['kind']})" for e in errors[:limit])
+    return "\n".join((f"- line {e['line']}: " if e.get("line") else "- ") + f"{e['message']} ({e['kind']})"
+                     for e in errors[:limit])
+
+
+# --- what counts as a defect ------------------------------------------------------------------
+
+# The checker on the STAR Server is the standalone Luau one: it has no Roblox type definitions, so
+# every engine value is `unknown` to it. In `--!strict` mode ordinary engine code then "fails"
+# (`player.Name .. "!"`: "Operator '..' could not be applied to operands of types unknown and
+# string"). Those diagnostics say nothing about the code, and a repair turn cannot make them go
+# away, so code that touches the engine is analysed in non-strict mode: syntax errors, unknown
+# names and real mismatches are still reported. Pure Luau is analysed exactly as written.
+_ENGINE_CODE = re.compile(
+    r"(?<![\w.])(?:game|workspace|script|Instance|Enum|Vector3|Vector2|CFrame|UDim2|UDim|Color3|TweenInfo|"
+    r"RaycastParams|OverlapParams|NumberSequence|ColorSequence|NumberRange|BrickColor|task)\s*[.:]"
+    r"|:\s*(?:Player|Instance|BasePart|Part|Model|Humanoid|Tool|Animator|AnimationTrack|GuiObject|Frame|TextLabel|"
+    r"TextButton|RBXScriptConnection|RBXScriptSignal|RemoteEvent|DataStore|Vector3|CFrame|Color3|UDim2)\b")
+_STRICT_DIRECTIVE = re.compile(r"^([ \t]*)--!strict\b", re.M)
+# The checker's lint warnings are mostly style (an unused local). These few are bugs whatever the
+# type-checking mode is, and they are what non-strict analysis of engine code would otherwise miss.
+BUG_LINTS = frozenset({"ComparisonPrecedence", "MisleadingAndOr", "DuplicateCondition", "DuplicateFunction",
+                       "TableOperations", "ForRange", "UninitializedLocal", "FormatString"})
+_UNKNOWN_GLOBAL = re.compile(r"Unknown global '([A-Za-z_]\w*)'")
+_IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
+SYNTAX = "SyntaxError"
+
+
+def touches_engine(code: str) -> bool:
+    """Does this block use Roblox globals or engine classes (comments and strings do not count)?"""
+    return bool(_ENGINE_CODE.search(api_check.blank(code)))
+
+
+def check_source(code: str) -> str:
+    """The text handed to the checker: engine code with its `--!strict` read as `--!nonstrict`."""
+    return _STRICT_DIRECTIVE.sub(r"\1--!nonstrict", code, count=1) if touches_engine(code) else code
+
+
+def _defined_names(code: str) -> set[str]:
+    text = api_check.blank(code)
+    names = set(re.findall(r"\blocal\s+function\s+([A-Za-z_]\w*)", text))
+    names.update(re.findall(r"\bfunction\s+([A-Za-z_]\w*)\s*\(", text))
+    for group in re.findall(r"\blocal\s+([A-Za-z_][\w \t,]*?)(?::|=|\n|$)", text):
+        names.update(part.strip() for part in group.split(",") if part.strip().isidentifier())
+    return names
+
+
+def context_names(prompt: str, other_blocks: list[str]) -> set[str]:
+    """Names a block may use without defining them: the request's own identifiers (a pasted
+    snippet's `door`, `SpeedMode`) and what the answer's other blocks define (tests shown before
+    the function they test)."""
+    names = set(_IDENTIFIER.findall(prompt or ""))
+    for block in other_blocks:
+        names.update(_defined_names(block))
+    return names
+
+
+def real_errors(report: dict, code: str, context: set[str]) -> list[dict]:
+    """The checker's diagnostics minus unknown globals that are context, not defects."""
+    lines = api_check.blank(code).splitlines()
+    kept = []
+    for error in report.get("errors") or []:
+        found = _UNKNOWN_GLOBAL.search(str(error.get("message")))
+        if found:
+            name = found.group(1)
+            number = error.get("line") or 0
+            line = lines[number - 1] if 0 < number <= len(lines) else ""
+            # `require(path.to.Module)`: the usual placeholder for "wherever you put the module".
+            if name in context or re.search(rf"\brequire\s*\(\s*{re.escape(name)}\b", line):
+                continue
+        kept.append(error)
+    return kept
+
+
+def _substance(code: str) -> int:
+    """How much code there is: characters outside comments and whitespace."""
+    return len("".join(api_check.blank(code, strings=False).split()))
+
+
+def _hard(errors: list[dict]) -> list[dict]:
+    return [e for e in errors if e.get("kind") not in api_check.ADVISORY_KINDS]
+
+
+def _weight(state: dict) -> tuple[int, int, int]:
+    """Smaller is better: (syntax errors, other hard errors, advisories)."""
+    errors = state["errors"]
+    syntax = sum(1 for e in errors if e.get("kind") == SYNTAX)
+    advisory = len(errors) - len(_hard(errors))
+    return syntax, state["count"] - syntax - advisory, advisory
+
+
+def _numbered(code: str, errors: list[dict], limit: int = 8) -> str:
+    """Diagnostics for the repair prompt, each with the source line it points at."""
+    lines = code.splitlines()
+    out = []
+    for e in errors[:limit]:
+        line = e.get("line") or 0
+        where = (f"line {line}" + (f", column {e['column']}" if e.get("column") else "") + ": ") if line else ""
+        out.append(f"- {where}{e['message']} ({e['kind']})" + (f" {e['hint']}" if e.get("hint") else ""))
+        if 0 < line <= len(lines) and lines[line - 1].strip():
+            out.append(f"    {line} | {lines[line - 1].strip()[:160]}")
+    return "\n".join(out)
+
+
+def repair_tokens(code: str, response_tokens: int = 1600) -> int:
+    """Room for the whole corrected block. Luau runs at about 3 characters per token on the STAR
+    Server's tokenizer and a fix may add lines (a missing function, annotations), so the earlier
+    `len(code) / 3 + 220` cut long repairs off before their closing fence."""
+    return int(max(400, min(max(response_tokens, 1600) + 600, len(code) / 2.6 + 420)))
 
 
 async def _repair(model_client, model: str, prompt: str, code: str, errors: list[dict], max_tokens: int) -> str:
-    listing = "\n".join(f"- line {e['line']}, column {e['column']}: {e['message']} ({e['kind']})" for e in errors[:8])
     response = await model_client.chat.completions.create(
         model=model, temperature=0, max_tokens=max_tokens,
         messages=[{"role": "system", "content": _REPAIR_SYSTEM},
                   {"role": "user", "content": f"The code was written for this request:\n{prompt[:1200]}\n\n"
-                                              f"Code:\n```luau\n{code.rstrip()}\n```\n\nDiagnostics:\n{listing}"}])
+                                              f"Code:\n```luau\n{code.rstrip()}\n```\n\n"
+                                              f"Diagnostics:\n{_numbered(code, errors)}"}])
     text = response.choices[0].message.content or ""
     found = _FENCE.search(text)
     return found.group(1) if found and found.group(1).strip() else ""
 
 
-async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tuple[str, list[dict]]:
-    """Check up to two fenced Luau blocks; repair a failing block once when `repair` is given.
+async def review_luau(answer: str, check, *, repair=None, on_event=None, prompt: str = "",
+                      api_lookup=None) -> tuple[str, list[dict]]:
+    """Check up to three fenced Luau blocks and repair what fails, in at most two rounds per block.
 
     `check(code)` returns the luau_check dict or raises OSError/ValueError when it could not run.
-    `repair(code, errors)` returns corrected code ('' when it has none). Returns the answer with
-    its note appended and one record per block examined. Says nothing when no check ran.
+    `repair(code, errors)` returns corrected code ('' when it has none). `api_lookup(symbols)` is
+    the knowledge client's exact-name lookup; with it, engine API names the code provably uses are
+    checked against the official reference and names the request asked for are looked for.
+    Returns the answer with its note appended and one record per block examined. Says nothing when
+    no check ran. A repair is kept only when the re-check says the block is strictly better.
     """
     blocks = luau_blocks(answer)
     if not blocks:
         return answer, []
-    _emit(on_event, {"event": "luau_check_started", "blocks": min(len(blocks), MAX_CHECKED_BLOCKS)})
+    started = monotonic()
+    examined = blocks[:MAX_CHECKED_BLOCKS]
+    _emit(on_event, {"event": "luau_check_started", "blocks": len(examined)})
+    codes = [code for _, _, code in blocks]
+    # Engine names the request asks for: looked for in the whole answer, reported on its main block.
+    requested: list[dict] = []
+    if api_lookup is not None and prompt:
+        try:
+            requested = await asyncio.to_thread(api_check.requested_names, prompt, api_lookup)
+        except Exception:
+            requested = []
+    main = max(range(len(examined)), key=lambda i: len(examined[i][2]))
+
+    async def examine(code: str, index: int) -> dict | None:
+        """One pass over one block: {'errors', 'count', 'api'}, or None when the check did not run."""
+        try:
+            report = await asyncio.to_thread(check, check_source(code))
+        except (OSError, ValueError):
+            return None
+        if not isinstance(report, dict) or report.get("ran") is not True:
+            return None
+        others = [c for i, c in enumerate(codes) if i != index]
+        errors = real_errors(report, code, context_names(prompt, others))
+        dropped = len(report.get("errors") or []) - len(errors)
+        count = max(len(errors), (report.get("error_count") or 0) - dropped)
+        # Lint findings that are bugs in any type-checking mode (`not x == y`, a for loop that never runs).
+        lints = [w for w in report.get("warnings") or [] if w.get("kind") in BUG_LINTS]
+        errors, count = errors + lints, count + len(lints)
+        checked = None
+        if api_lookup is not None and not any(e.get("kind") == SYNTAX for e in errors):
+            try:
+                found, checked = await asyncio.to_thread(api_check.diagnose, code, api_lookup)
+                errors, count = errors + found, count + len(found)
+            except Exception:
+                checked = None          # the reference could not be asked: no claim about API names
+        if index == main and requested:
+            missing = api_check.missing_requested(requested, [code, *others])
+            errors, count = errors + missing, count + len(missing)
+        return {"errors": errors, "count": count, "api": checked}
+
     records: list[dict] = []
     replacements: list[tuple[int, int, str]] = []
-    for number, (start, end, code) in enumerate(blocks[:MAX_CHECKED_BLOCKS], 1):
+    repair_calls = 0
+    for number, (start, end, code) in enumerate(examined, 1):
         record = {"block": number, "ran": False, "ok": False, "repaired": False, "errors": []}
         records.append(record)
-        try:
-            report = await asyncio.to_thread(check, code)
-        except (OSError, ValueError):
+        state = await examine(code, number - 1)
+        if state is None:
             continue   # did not run: no claim is made about this block
-        if not isinstance(report, dict) or report.get("ran") is not True:
+        record.update(ran=True, ok=not _hard(state["errors"]), errors=list(state["errors"]),
+                      error_count=state["count"])
+        if state["api"] is not None:
+            record["api_checked"] = state["api"]
+        if check_source(code) != code:
+            record["non_strict"] = True      # its `--!strict` was read as non-strict for the check
+        if not state["errors"] or repair is None:
             continue
-        record.update(ran=True, ok=report.get("ok") is True, errors=list(report.get("errors") or []),
-                      error_count=report.get("error_count", 0))
-        if record["ok"] or repair is None or not record["errors"]:
-            continue
-        _emit(on_event, {"event": "luau_repair_started", "block": number})
-        try:
-            fixed = await repair(code, record["errors"])
-            second = await asyncio.to_thread(check, fixed) if fixed and fixed.strip() != code.strip() else None
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            continue   # the repair attempt failed: the original block stays, with its diagnostics
-        record["repair_attempted"] = True
-        if isinstance(second, dict) and second.get("ran") is True and second.get("ok") is True:
-            # `fix` is the short list of changed lines, kept for the lesson this repair may become.
-            record.update(repaired=True, ok=True, fix=_changed_lines(code, fixed))
-            replacements.append((start, end, fixed if fixed.endswith("\n") else fixed + "\n"))
+        current, current_state = code, state
+        for round_number in range(1, MAX_REPAIR_ROUNDS + 1):
+            if repair_calls >= MAX_REPAIR_CALLS:
+                break
+            repair_calls += 1
+            _emit(on_event, {"event": "luau_repair_started", "block": number, "round": round_number})
+            try:
+                fixed = await repair(current, current_state["errors"])
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                break      # the repair attempt failed: what we have stays, with its diagnostics
+            record["repair_attempted"] = True
+            # No change is no fix, and a "fix" that throws most of the code away is not one either
+            # (measured without comments: a repair may drop them, and that is not lost code).
+            if (not fixed or fixed.strip() == current.strip()
+                    or _substance(fixed) < 0.6 * _substance(current)):
+                break
+            codes[number - 1] = fixed
+            second = await examine(fixed, number - 1)
+            if second is None or _weight(second) >= _weight(current_state):
+                codes[number - 1] = current
+                break
+            current, current_state = fixed, second
+            if not current_state["errors"]:
+                break
+            # A second round costs as much as the first (the whole block is written again). It is
+            # worth that when the first one uncovered what a syntax error had hidden, or when only
+            # a little is left; a block that is still full of type errors stays as it is now.
+            if not (any(e.get("kind") == SYNTAX for e in state["errors"])
+                    or len(_hard(current_state["errors"])) <= SECOND_ROUND_MAX_ERRORS):
+                break
+        if current is not code:
+            record.update(repaired=True, ok=not _hard(current_state["errors"]), fix=_changed_lines(code, current),
+                          remaining=list(current_state["errors"]))
+            if current_state["api"] is not None:
+                record["api_checked"] = current_state["api"]
+            replacements.append((start, end, current if current.endswith("\n") else current + "\n"))
     for start, end, fixed in reversed(replacements):
         answer = answer[:start] + fixed + answer[end:]
     ran = [r for r in records if r["ran"]]
     failed = [r for r in ran if not r["ok"]]
-    state = ("unavailable" if not ran else "failed" if failed
-             else "repaired" if any(r["repaired"] for r in ran) else "passed")
-    _emit(on_event, {"event": "luau_check_finished", "state": state, "blocks": len(ran),
-                     "errors": sum(len(r["errors"]) for r in failed)})
+    state_name = ("unavailable" if not ran else "failed" if failed
+                  else "repaired" if any(r["repaired"] for r in ran) else "passed")
+    _emit(on_event, {"event": "luau_check_finished", "state": state_name, "blocks": len(ran),
+                     "errors": sum(len(_hard(r.get("remaining", r["errors"]))) for r in failed),
+                     "repairs": sum(1 for r in ran if r.get("repair_attempted")),
+                     "elapsed_ms": int((monotonic() - started) * 1000)})
     if not ran:
         return answer, records
-    scope = "Roblox API names and types were not verified, and the code was not run."
+    api_names = sum(r.get("api_checked") or 0 for r in ran)
+    scope = (f"{api_names} API name(s) the code uses were checked against the official API reference; other "
+             "names and types were not verified, and the code was not run." if api_names
+             else "Roblox API names and types were not verified, and the code was not run.")
+    if any(r.get("non_strict") for r in ran):
+        scope = ("Code that uses the engine was analysed in non-strict mode, because the checker has no Roblox type "
+                 "definitions. " + scope)
     notes = []
+    listed = False
     for r in ran:
         name = "The code block" if len(blocks) == 1 else f"Code block {r['block']}"
-        if r["repaired"]:
-            notes.append(f"{name} first failed the static Luau check ({r['errors'][0]['message']}, line "
-                         f"{r['errors'][0]['line']}). STAR corrected it; the version shown compiles and passes "
-                         "Luau type analysis.")
+        left = r.get("remaining", r["errors"])
+        first = r["errors"][0] if r["errors"] else None
+        where = f", line {first['line']}" if first and first.get("line") else ""
+        advisories = [e for e in left if e.get("kind") in api_check.ADVISORY_KINDS]
+        if r["repaired"] and r["ok"]:
+            notes.append(f"{name} first failed the static Luau check ({first['message']}{where}). "
+                         "STAR corrected it; the version shown compiles and passes Luau type analysis."
+                         if first.get("kind") not in api_check.API_KINDS else
+                         f"{name} compiles and passes Luau type analysis. STAR revised it after checking its engine "
+                         f"API names ({first['message']}).")
         elif r["ok"]:
             notes.append(f"{name} compiles and passes Luau type analysis.")
+        elif all(e.get("kind") == api_check.UNKNOWN for e in _hard(left)):
+            revised = " STAR revised it once and these remain." if r["repaired"] else (
+                " An automatic fix was tried and did not remove them." if r.get("repair_attempted") else "")
+            notes.append(f"{name} compiles and passes Luau type analysis, but it uses names STAR did not find in the "
+                         f"official API reference.{revised} Treat them as unverified:\n{_describe(_hard(left))}")
+            listed = True
+        elif r["repaired"]:
+            notes.append(f"{name} did not pass STAR's static check ({first['message']}{where}). STAR corrected part "
+                         "of it; the version shown still has these problems, treat it as unverified:\n"
+                         f"{_describe(_hard(left))}")
+            listed = True
         else:
             tried = " An automatic fix was tried and did not pass either." if r.get("repair_attempted") else ""
             notes.append(f"{name} did not pass the static Luau check and is shown unchanged.{tried} "
-                         f"Treat it as unverified:\n{_describe(r['errors'])}")
+                         f"Treat it as unverified:\n{_describe(_hard(left))}")
+            listed = True
+        if advisories and r["ok"]:
+            notes.append("Worth a look:\n" + _describe(advisories))
+            listed = True
     skipped = len(blocks) - len(ran)
     if skipped > 0:
         notes.append(f"{skipped} other code block(s) were not checked.")
     # A diagnostics list ends the note's first paragraph; the scope sentence then gets its own.
-    joiner = "\n\n" if failed else " "
+    joiner = "\n\n" if listed else " "
     return answer.rstrip() + "\n\n" + CHECK_MARKER + " " + " ".join(notes) + joiner + scope + "\n", records
 
 
@@ -354,12 +581,18 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
             if (model_client is not None and not getattr(route, "quick", True)
                     and left() >= max(90, 0.35 * budget)):
                 async def repair(code: str, errors: list[dict]) -> str:
-                    # Stopped before the task deadline: the block then stays with its diagnostics.
+                    # A later round starts only while the turn still has room for it; a call is
+                    # stopped before the task deadline: the block then stays with its diagnostics.
+                    if timed and left() < max(90, 0.2 * budget):
+                        return ""
                     return await asyncio.wait_for(
                         _repair(model_client, route.model, prompt, code, errors,
-                                min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)),
+                                repair_tokens(code, getattr(route, "response_tokens", 1600))),
                         timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS))
-            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event)
+            # Engine API names are checked on full answers only: a quick chat turn stays quick.
+            lookup = None if getattr(route, "quick", True) else getattr(knowledge, "api_lookup", None)
+            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event,
+                                 prompt=prompt, api_lookup=lookup)
             try:
                 answer, grounding.checks = await (
                     asyncio.wait_for(review, timeout=left() - REVIEW_RESERVE_SECONDS) if timed else review)

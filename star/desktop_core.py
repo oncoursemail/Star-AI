@@ -28,7 +28,7 @@ from .providers import (ALL_PROVIDERS, background_client, call_limits, connectio
 from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
-from . import doc_grounding, skill_packs
+from . import answer_shape, doc_grounding, skill_packs
 from . import studio_loop
 from .studio_connections import default_target, validate_target
 
@@ -1022,6 +1022,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
                     audited_event({'event': 'skill_packs', 'names': [pack.name for pack in packs], 'chars': len(pack_block)})
                 # <<< Skill packs
+                # >>> Answer shape (star/answer_shape.py): "the complete code first, then a short explanation".
+                # OFF unless STAR_ANSWER_SHAPE=on (it reproduced two regressions on the evaluation suite).
+                # Full answers to requests for Roblox/Luau code only; it follows the documentation and the pack.
+                shape_block = (answer_shape.SHAPE_RULES
+                               if (not quick and docs.plan.check_luau and answer_shape.rule_enabled()
+                                   and answer_shape.asks_for_code(prompt)) else '')
+                if shape_block:
+                    turn_sections.insert((1 if docs.block else 0) + (1 if pack_block else 0),
+                                         (answer_shape.SHAPE_HEADING, shape_block))
+                # <<< Answer shape
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
@@ -1030,7 +1040,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block) + len(pack_block),
+                              turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
+                                                  + len(document_block) + len(pack_block) + len(shape_block)),
+                              # An answer cut off inside its code is asked to finish (full answers only).
+                              continuation_tokens=0 if quick else answer_shape.CONTINUATION_TOKENS,
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,

@@ -5,6 +5,7 @@ from datetime import datetime
 from time import monotonic
 from types import SimpleNamespace
 from pathlib import Path
+from . import answer_shape
 from .context_layout import assemble, clean_history, context_block, drop_oldest_turns, final_user_text
 from .media import image_part, mcp_images
 from .redact import redact_text
@@ -176,6 +177,8 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             responding = True
             event({'event': 'model_responding'})
         delta = chunk.choices[0].delta
+        if seen is not None and getattr(chunk.choices[0], 'finish_reason', None):
+            seen['finish_reason'] = chunk.choices[0].finish_reason
         for part in getattr(delta, 'tool_calls', None) or []:
             if not calls:
                 if pending:   # show the text that came before the call first
@@ -227,6 +230,55 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
     return ''.join(chunks), tool_calls, bool(chunks)
 
 
+def malformed_tool_call(exc: Exception) -> bool:
+    """The server refused the model's own output because its tool call was not valid JSON."""
+    text = str(exc).lower()
+    return 'parse tool call' in text or ('tool call' in text and 'json' in text and 'parse' in text)
+
+
+async def complete_cut_answer(answer: str, messages: list[dict], kwargs: dict, request, event, *,
+                              tokens: int, cut_by_length: bool) -> str:
+    """Finish an answer that stopped at the length limit. Never loses what was written.
+
+    Inside a code block: ask for the missing lines only (the same request plus the cut answer
+    and one instruction, so the server re-reads nothing), at most twice, and join them on. In
+    the closing prose: no model call, one honest line. Any failure returns the answer as it was.
+    """
+    if not answer_shape.stops_inside_code(answer):
+        return answer.rstrip() + answer_shape.LENGTH_NOTE if cut_by_length else answer
+    original = dict(kwargs)
+    try:
+        for _ in range(answer_shape.MAX_CONTINUATIONS):
+            kept, instruction = answer_shape.continuation(answer)
+            event({'event': 'answer_continuing'})
+            kwargs.update(messages=[*messages, {'role': 'assistant', 'content': kept},
+                                    {'role': 'user', 'content': instruction}], max_tokens=tokens)
+            response = await request()
+            choice = response.choices[0]
+            if getattr(choice.message, 'tool_calls', None) or not (choice.message.content or '').strip():
+                break
+            answer = answer_shape.splice(kept, choice.message.content)
+            cut_again = getattr(choice, 'finish_reason', None) == 'length'
+            if not answer_shape.stops_inside_code(answer):
+                # The code is whole. If the limit was reached again, it was in the closing prose.
+                return answer.rstrip() + answer_shape.LENGTH_NOTE if cut_again else answer
+            if not cut_again:
+                # The model wrote the remaining lines and stopped without closing the fence.
+                return answer.rstrip('\n') + '\n```\n'
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass
+    finally:
+        kwargs.clear()
+        kwargs.update(original)
+    # Still open: close the fence so the text renders, and say that the code is incomplete.
+    if answer_shape.stops_inside_code(answer):
+        answer = (answer.rstrip('\n') + '\n```\n\n*(STAR\'s answer reached its length limit: the code block above '
+                  'is incomplete.)*')
+    return answer
+
+
 async def execute(*, client, model: str, prompt: str, image_paths: list[Path], studio=None,
                   discovered=None, studio_id="", may_edit=False, project_memory="", max_calls=12,
                   context_chars=25000, checkpoint=None, on_event=None, allow_luau=False,
@@ -238,7 +290,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
                   tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
-                  preserve_history=False):
+                  preserve_history=False, continuation_tokens=0):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -252,6 +304,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     the prompt stays byte-identical from turn to turn. `helper_client` is the
     client for calls that are not this conversation (summaries, sub-agents);
     on a llama.cpp server its requests carry no `id_slot` and the server places them.
+    `continuation_tokens` > 0 completes final code answers cut off by the length limit
+    with at most two bounded follow-up requests; zero disables continuation.
     """
     if not prompt.strip():
         raise ValueError("Prompt is empty")
@@ -421,6 +475,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     shown_text = False
     helper = helper_client or client
     answered: dict = {}
+    plain_only = False      # set after the server rejected the model's own tool call as unparseable
     for step in range(max_calls):
         if request_size(messages) > context_chars:
             # Cheapest first: forget the oldest earlier turns in whole blocks. The system
@@ -481,7 +536,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             checkpoint(summary)
             project_memory = summary
         require_fit(messages)
-        kwargs = dict(model=model, messages=messages, tools=definitions or None, tool_choice="auto" if definitions else None,
+        offered = None if plain_only else (definitions or None)
+        kwargs = dict(model=model, messages=messages, tools=offered, tool_choice="auto" if offered else None,
                       temperature=0, max_tokens=response_tokens)
         # Some local model servers do not accept null tools/tool_choice values.
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
@@ -508,35 +564,48 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         response = None
         streamed = False
         answer_text, tool_calls = '', []
-        if stream_tokens:
-            # Stream every turn, with or without tools: the answer appears as it is
-            # written, and a tool-using turn shows its text while the call is composed.
-            try:
-                stream = await request(stream=True)
-            except Exception as exc:
-                # Rejection of the *stream mode* is safe to retry without streaming:
-                # the server did not accept the request, so no output was emitted.
-                if getattr(exc, 'status_code', None) not in (400, 422, 501):
-                    raise
-                stream_tokens = False
-            else:
-                if hasattr(stream, '__aiter__'):
-                    answer_text, tool_calls, shown = await read_stream(
-                        stream, event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_',
-                        seen=answered)
-                    shown_text = shown_text or shown
-                    streamed = True
+        answered.pop('finish_reason', None)
+        shown_before = shown_text
+        try:
+            if stream_tokens:
+                # Stream every turn, with or without tools: the answer appears as it is
+                # written, and a tool-using turn shows its text while the call is composed.
+                try:
+                    stream = await request(stream=True)
+                except Exception as exc:
+                    # Rejection of the *stream mode* is safe to retry without streaming:
+                    # the server did not accept the request, so no output was emitted.
+                    if getattr(exc, 'status_code', None) not in (400, 422, 501):
+                        raise
+                    stream_tokens = False
                 else:
-                    # Defensive compatibility: an adapter may ignore stream=True
-                    # and return an ordinary ChatCompletion rather than AsyncStream.
-                    response = stream
-        if not streamed:
-            if response is None:
-                response = await request()
-            msg = response.choices[0].message
-            answer_text, tool_calls = msg.content or "", list(msg.tool_calls or [])
-            if isinstance(getattr(response, 'model', None), str) and response.model:
-                answered['model'] = response.model
+                    if hasattr(stream, '__aiter__'):
+                        answer_text, tool_calls, shown = await read_stream(
+                            stream, event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_',
+                            seen=answered)
+                        shown_text = shown_text or shown
+                        streamed = True
+                    else:
+                        # Defensive compatibility: an adapter may ignore stream=True
+                        # and return an ordinary ChatCompletion rather than AsyncStream.
+                        response = stream
+            if not streamed:
+                if response is None:
+                    response = await request()
+                msg = response.choices[0].message
+                answer_text, tool_calls = msg.content or "", list(msg.tool_calls or [])
+                answered['finish_reason'] = getattr(response.choices[0], 'finish_reason', None)
+                if isinstance(getattr(response, 'model', None), str) and response.model:
+                    answered['model'] = response.model
+        except Exception as exc:
+            # The model wrote a tool call the server could not parse (usually a long argument
+            # cut off by the length limit). Nothing ran and, unless text was already streamed,
+            # nothing was shown: ask once more for a plain answer instead of failing the turn.
+            if plain_only or not offered or shown_text != shown_before or not malformed_tool_call(exc):
+                raise
+            plain_only = True
+            event({'event': 'tool_call_unparseable'})
+            continue
         if tool_calls:
             messages.append({"role": "assistant", "content": answer_text or "", "tool_calls": [
                 {"id": t.id, "type": "function", "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in tool_calls]})
@@ -725,6 +794,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             if not answer.strip():
                 raise RuntimeError('Local model streamed no visible answer' if streamed
                                    else "Local model gave no text or tool calls")
+            if continuation_tokens > 0 and (answered.get('finish_reason') == 'length'
+                                            or answer_shape.stops_inside_code(answer)):
+                answer = await complete_cut_answer(answer, messages, kwargs, request, event,
+                                                   tokens=continuation_tokens,
+                                                   cut_by_length=answered.get('finish_reason') == 'length')
             if streamed:
                 messages.append({'role': 'assistant', 'content': answer})
             # The name the server reported, else the one that was asked for.
