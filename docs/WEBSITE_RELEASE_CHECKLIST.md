@@ -6,7 +6,7 @@
 
 The website uses the published stable GitHub release to label capabilities, and it explains when source features are newer than the published installer. If release data cannot be checked, it links to GitHub rather than assuming availability. LAN and optional hosted model routing belong to published v0.9.0; unmerged features do not.
 
-**Roblox evaluation, not game quality:** an automated scripting run on released v0.9.0 on **October 12, 2026** passed **13 / 34**; earlier runs passed **16 / 34** and **18 / 34**. The observed range is **13–18 / 34**, and single runs vary. An earlier **11 / 23 creation** result is not reproduced on the release, so no current combined score is claimed. Another **16 Roblox v2 tasks** need separate Studio/manual evaluation. None of these numbers proves live gameplay or visual quality.
+**Roblox evaluation, not game quality:** an automated scripting run on released v0.9.0 on **October 12, 2026** passed **13 / 34**; earlier runs passed **16 / 34** and **18 / 34**. The observed range is **13–18 / 34**, and single runs vary. An earlier **11 / 23 creation** result is not reproduced on the release, so no current combined score is claimed. Another **16 Roblox v2 tasks** need separate Studio/manual evaluation. This is not a game-quality score. None of these numbers proves live gameplay or visual quality.
 
 **Mascot assets:** approved hero, faces and poses have been added through [PR #136](https://github.com/oncoursemail/Star-AI/pull/136) and [PR #151](https://github.com/oncoursemail/Star-AI/pull/151). Assets existing in the repository do not prove that a deployed site or the October 11 installer contains later changes. Review pending artwork replacements, mobile crops and performance before deployment.
 
