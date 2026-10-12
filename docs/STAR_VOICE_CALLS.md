@@ -345,9 +345,12 @@ What the four runs show:
 - **Server provider (done).** `runtime.make_brain` builds the brain with `ServerBrain.from_settings()`:
   address from the app's Settings (`providers.validate_lan_endpoint`), key from the keyring
   (`providers.get_api_key`), model from `server_roles.quick_model`. The environment variables above still override
-  them, and `voiceStatus` reports `serverConfigured` from the same lookup without any network call. On a server
-  that reported two or more slots the call is pinned to the slot next to the open chat's, so a call and a typed
-  chat on the same model do not replace each other's cached prompt.
+  them, and `voiceStatus` reports `serverConfigured` from the same lookup without any network call. A call is
+  sent without a slot number, like other background requests (`providers.llama_request_fields`): it never waits
+  for one slot while another is free, and the server chooses the slot. A call and a typed chat on the same model
+  can therefore replace each other's cached prompt. Without a slot number the server takes the idle slot whose
+  cached prompt starts like the request, otherwise the least recently used one (measured once with a probe
+  script, not with a call and a typed chat running together).
 - **Real microphone untested.** Device opening, sample-rate negotiation on unusual audio hardware, and how the
   thresholds feel with a human voice all still need a person. `Microphone` asks PortAudio for 16 kHz mono directly.
 - **Echo.** With loudspeakers the microphone hears Star. The energy echo gate (`output: speakers`) stops her

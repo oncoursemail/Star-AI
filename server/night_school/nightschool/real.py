@@ -52,7 +52,7 @@ def bootstrap(settings) -> str:
 
 def pin_slots(slot_of):
     """Every chat request the application sends carries `id_slot = slot_of(model)`. Done at the HTTP layer, so it
-    also covers the helper calls (summaries, repairs, sub-agents) that would otherwise use the neighbouring slot.
+    also covers the helper calls (summaries, repairs, sub-agents) that the application sends without a slot number.
     Returns a function that puts the application's own client factory back."""
     import httpx
     from star import providers

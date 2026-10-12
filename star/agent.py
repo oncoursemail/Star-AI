@@ -251,7 +251,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     conversation attached, in a fixed order, so the tool list at the start of
     the prompt stays byte-identical from turn to turn. `helper_client` is the
     client for calls that are not this conversation (summaries, sub-agents);
-    on a llama.cpp server it is pinned to the slot next to the conversation's.
+    on a llama.cpp server its requests carry no `id_slot` and the server places them.
     """
     if not prompt.strip():
         raise ValueError("Prompt is empty")
