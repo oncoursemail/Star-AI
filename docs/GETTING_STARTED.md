@@ -11,6 +11,26 @@ STAR v0.9.0 is a **source release candidate**, not a confirmed public Windows in
 
 The installer is designed to preserve `%APPDATA%\STAR`, including conversations, references, model files and settings. Migration of single-stream chat history into threads is designed to keep old user messages. A real v0.8-to-v0.9.0 upgrade on the user's Windows profile is **not confirmed**. The old desktop interface can be launched with `STAR.exe --legacy-ui` where that executable is installed.
 
+### Administrator rights on Windows
+
+Setup defaults to installing STAR **just for your Windows account (per-user)**, with **no administrator rights required** for installation or upgrades. You may instead choose **all users** in the installer dialog; this needs administrator approval. If STAR was already installed for all users, a newer Setup upgrades that shared installation in the same mode, and Windows asks for administrator approval **on every upgrade**. That prompt is expected. Do not disable Windows UAC to avoid it.
+
+To tell which kind of installation you have, open **Windows PowerShell** (no administrator rights needed) and run this **read-only** check:
+
+```powershell
+$scopes = @(
+  @{ Scope = 'Per-user'; Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' },
+  @{ Scope = 'All-users'; Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' },
+  @{ Scope = 'All-users'; Path = 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' }
+)
+foreach ($scope in $scopes) {
+  Get-ItemProperty -Path $scope.Path -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -eq 'STAR Intelligence' } |
+    ForEach-Object { [pscustomobject]@{ 'Install type' = $scope.Scope; 'Install folder' = $_.InstallLocation } }
+}
+```
+
+**Per-user** means the uninstall entry belongs to your Windows account (`HKEY_CURRENT_USER`); **all-users** means it is registered for the machine (`HKEY_LOCAL_MACHINE`). If both appear, more than one install may be registered: confirm which copy you intend to upgrade. If neither appears, you may be running the portable ZIP or STAR may be installed under a different Windows account.
 ## 2. Choose a brain: STAR Server or this PC
 
 Open **Settings → Model & provider**.
