@@ -116,7 +116,8 @@ def test_missing_service_is_explicit_and_never_executes_locally():
     assert records[0]["attempted"] is False and records[0]["state"] == "not_configured"
 
 
-@pytest.mark.parametrize("source", ['x' * 65537, 'é' * 32769, '\ud800', 'x\x00y'])
+@pytest.mark.parametrize("source", ['x' * 65537, 'é' * 32769, '\ud800', 'x\x00y'],
+                         ids=["oversize_ascii", "oversize_utf8", "surrogate", "null_byte"])
 def test_bad_source_is_rejected_before_any_request(source):
     client = Client()
     final, records = run('```luau\n' + source + '\n```', client=client)
