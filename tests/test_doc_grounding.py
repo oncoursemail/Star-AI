@@ -396,13 +396,269 @@ def test_a_repair_that_raises_or_returns_nothing_leaves_the_block_and_its_note()
         assert "did not pass the static Luau check" in answer and "local x: string = 1\n" in answer
 
 
-def test_at_most_two_blocks_are_checked_and_the_rest_is_said_to_be_unchecked():
-    three = "```luau\nprint(1)\n```\n```lua\nprint(2)\n```\n```luau\nprint(3)\n```"
+def test_at_most_three_blocks_are_checked_and_the_rest_is_said_to_be_unchecked():
+    four = "```luau\nprint(1)\n```\n```lua\nprint(2)\n```\n```luau\nprint(3)\n```\n```luau\nprint(4)\n```"
     knowledge = FakeKnowledge()
-    answer, records = review(three, knowledge)
-    assert knowledge.checked == ["print(1)\n", "print(2)\n"] and len(records) == 2
-    assert "Code block 1 compiles" in answer and "Code block 2 compiles" in answer
+    answer, records = review(four, knowledge)
+    assert knowledge.checked == ["print(1)\n", "print(2)\n", "print(3)\n"] and len(records) == 3
+    assert "Code block 1 compiles" in answer and "Code block 3 compiles" in answer
     assert "1 other code block(s) were not checked" in answer
+
+
+# --- what counts as a defect, and repairs that are kept ---------------------------------------
+
+def errors(*items) -> dict:
+    """A failed report with several diagnostics: (line, kind, message)."""
+    return {"ran": True, "ok": False, "executed": False, "error_count": len(items),
+            "errors": [{"line": line, "column": 1, "kind": kind, "message": message} for line, kind, message in items]}
+
+
+def test_engine_code_is_analysed_non_strict_and_pure_luau_exactly_as_written():
+    from star.doc_grounding import check_source, touches_engine
+    engine = '-- Gate (ModuleScript)\n--!strict\nlocal Players = game:GetService("Players")\nprint(Players.Name .. "!")\n'
+    pure = "--!strict\nlocal function add(a: number, b: number): number\n\treturn a + b\nend\nreturn add\n"
+    typed = "--!strict\nlocal function name(player: Player): string\n\treturn player.Name\nend\n"
+    assert touches_engine(engine) and touches_engine(typed) and not touches_engine(pure)
+    assert check_source(engine).splitlines()[1] == "--!nonstrict" and check_source(engine).count("\n") == engine.count("\n")
+    assert check_source(pure) == pure
+    # a Roblox word in a comment or a string does not make pure Luau "engine code"
+    assert not touches_engine('--!strict\n-- uses game:GetService elsewhere\nlocal s = "workspace.Part"\nreturn s\n')
+    knowledge = FakeKnowledge(reports=[passed()])
+    answer, records = review("```luau\n" + engine + "```", knowledge)
+    assert knowledge.checked == [check_source(engine)] and "--!strict\nlocal Players" in answer, "only the check sees the change"
+    assert records[0]["non_strict"] and "analysed in non-strict mode, because the checker has no Roblox type" in answer
+    answer, records = review("```luau\n" + pure + "```", FakeKnowledge(reports=[passed()]))
+    assert "non_strict" not in records[0] and "non-strict" not in answer
+
+
+def test_lint_findings_that_are_bugs_count_and_style_warnings_do_not():
+    report = {**passed(), "warnings": [
+        {"line": 3, "column": 5, "kind": "LocalUnused", "message": "Variable 'x' is never used"},
+        {"line": 8, "column": 7, "kind": "ComparisonPrecedence", "message": "not X == Y is equivalent to (not X) == Y"}]}
+    seen = []
+
+    async def repair(code, found):
+        seen.append([e["kind"] for e in found])
+        return "local fixed = true\n"
+
+    answer, records = review(ANSWER, FakeKnowledge(reports=[report, passed()]), repair)
+    assert seen == [["ComparisonPrecedence"]] and "local fixed = true" in answer
+    assert "first failed the static Luau check (not X == Y is equivalent to (not X) == Y, line 8)" in answer
+    quiet, records = review(ANSWER, FakeKnowledge(reports=[{**passed(), "warnings": report["warnings"][:1]}]), repair)
+    assert records[0]["ok"] and not records[0]["repaired"] and len(seen) == 1, "an unused local is not worth a model call"
+
+
+def test_names_from_the_request_and_from_other_blocks_are_context_not_defects():
+    tests_first = ("```luau\nlocal r = chunk({1, 2, 3}, 2)\nassert(#r == 2)\n```\n\n"
+                   "```luau\nlocal function chunk(list, size)\n\treturn {}\nend\nreturn chunk\n```\n\n"
+                   "```luau\nlocal Chunk = require(path.to.Chunk)\ndoor.Touched:Connect(print)\nmystery()\n```")
+    knowledge = FakeKnowledge(reports=[
+        errors((1, "TypeError", "Unknown global 'chunk'; consider assigning to it first")), passed(),
+        errors((1, "TypeError", "Unknown global 'path'; consider assigning to it first"),
+               (2, "TypeError", "Unknown global 'door'; consider assigning to it first"),
+               (3, "TypeError", "Unknown global 'mystery'; consider assigning to it first"))])
+    answer, records = asyncio.run(review_luau(tests_first, knowledge.luau_check,
+                                              prompt="Fix this: door.Touched:Connect(function() end)"))
+    assert records[0]["ok"] and records[1]["ok"], "`chunk` is defined by the answer's own second block"
+    assert not records[2]["ok"] and [e["line"] for e in records[2]["errors"]] == [3]
+    assert "Unknown global 'mystery'" in answer and "'door'" not in answer and "'path'" not in answer
+
+
+def test_a_repair_that_only_uncovers_the_next_error_is_kept_and_a_second_round_finishes_it():
+    knowledge = FakeKnowledge(reports=[
+        errors((2, "SyntaxError", "Expected identifier when parsing expression, got ':'"),
+               (2, "SyntaxError", "Expected function call arguments after '('")),
+        errors((3, "TypeError", "Key 'isFinite' not found in table 'math'")),      # hidden behind the syntax error
+        passed()])
+    repairs = []
+
+    async def repair(code, found):
+        repairs.append((code, [e["message"] for e in found]))
+        return "local step = %d\n" % len(repairs)
+
+    events = []
+    answer, records = review(ANSWER, knowledge, repair, events)
+    assert len(repairs) == 2 and repairs[1][0] == "local step = 1\n" and "isFinite" in repairs[1][1][0]
+    assert "```luau\nlocal step = 2\n```" in answer and "local x: string = 1" not in answer
+    assert "first failed the static Luau check (Expected identifier" in answer and "STAR corrected it" in answer
+    assert records[0]["ok"] and records[0]["repaired"] and records[0]["remaining"] == []
+    assert [e.get("round") for e in events if e["event"] == "luau_repair_started"] == [1, 2]
+    assert events[-1]["state"] == "repaired" and events[-1]["repairs"] == 1 and "elapsed_ms" in events[-1]
+
+
+def test_a_partly_successful_repair_is_shown_and_said_to_be_unverified():
+    knowledge = FakeKnowledge(reports=[
+        errors((2, "SyntaxError", "Expected ')'"), (9, "TypeError", "Unknown type 'void'")),
+        errors((9, "TypeError", "Unknown type 'void'"))])
+
+    async def repair(code, found):
+        return "local better = true\n" if "x: string" in code else code       # round 2 has nothing new to offer
+
+    answer, records = review(ANSWER, knowledge, repair)
+    assert "```luau\nlocal better = true\n```" in answer
+    assert "STAR corrected part of it" in answer and "treat it as unverified" in answer
+    assert "- line 9: Unknown type 'void' (TypeError)" in answer and "Expected ')'" in answer.split("still has")[0]
+    assert records[0]["repaired"] and not records[0]["ok"] and len(records[0]["remaining"]) == 1
+
+
+def test_no_second_round_for_a_block_that_is_still_full_of_type_errors():
+    many = [(n, "TypeError", f"type problem {n}") for n in range(1, 9)]
+    knowledge = FakeKnowledge(reports=[errors(*many), errors(*many[:4])])
+    calls = []
+
+    async def repair(code, found):
+        calls.append(len(found))
+        return "local attempt = %d\n" % len(calls)
+
+    answer, records = review(ANSWER, knowledge, repair)
+    assert calls == [8], "the first round helped (8 -> 4) but four type errors are not 'a little left'"
+    assert "local attempt = 1" in answer and "STAR corrected part of it" in answer and len(records[0]["remaining"]) == 4
+
+
+def test_at_most_two_repair_calls_per_answer_however_many_blocks_fail():
+    three = "```luau\nlocal a: string = 1\n```\n```luau\nlocal b: string = 2\n```\n```luau\nlocal c: string = 3\n```"
+    knowledge = FakeKnowledge(reports=[failed(), passed(), failed(), passed(), failed()])
+    calls = []
+
+    async def repair(code, found):
+        calls.append(code)
+        return code.replace("= ", '= "') .rstrip("\n") + '"\n'
+
+    answer, records = review(three, knowledge, repair)
+    assert len(calls) == 2, "each call writes a whole block again: two is the budget of one answer"
+    assert [r["repaired"] for r in records] == [True, True, False] and not records[2]["ok"]
+    assert "Code block 3 did not pass the static Luau check and is shown unchanged." in answer
+    assert "did not pass either" not in answer, "no fix was tried on the third block, so none is claimed"
+
+
+def test_a_repair_that_is_no_better_or_throws_the_code_away_is_not_used():
+    long_code = "local a = 1\n" * 30
+    answer_text = "```luau\n" + long_code + "```"
+    for fixed, second in (("local a = 2\n" * 30, errors((1, "TypeError", "still wrong"), (2, "TypeError", "worse"))),
+                          ("return nil\n", passed())):
+        knowledge = FakeKnowledge(reports=[failed(), second])
+
+        async def repair(code, found, fixed=fixed):
+            return fixed
+
+        answer, records = review(answer_text, knowledge, repair)
+        assert long_code in answer and "shown unchanged" in answer and "did not pass either" in answer
+        assert not records[0]["repaired"] and not records[0]["ok"]
+
+
+def test_a_repair_that_drops_the_comments_has_not_thrown_the_code_away():
+    commented = ("--!strict\n" + "-- a long explanation that the repair leaves out, line after line\n" * 12
+                 + "local function pack(flags)\n\tlocal out = 0\n\tout = out | 1\n\treturn out\nend\nreturn pack\n")
+    bare = "--!strict\nlocal function pack(flags)\n\tlocal out = 0\n\tout = bit32.bor(out, 1)\n\treturn out\nend\nreturn pack\n"
+    assert len(bare) < 0.6 * len(commented), "by raw length this repair looks like most of the code is gone"
+    knowledge = FakeKnowledge(reports=[errors((15, "SyntaxError", "Expected identifier when parsing expression, got '|'")),
+                                       passed()])
+
+    async def repair(code, found):
+        return bare
+
+    answer, records = review("```luau\n" + commented + "```", knowledge, repair)
+    assert "bit32.bor(out, 1)" in answer and records[0]["repaired"] and records[0]["ok"]
+
+
+def test_the_repair_prompt_quotes_each_source_line_and_has_room_for_the_whole_block():
+    from star.doc_grounding import _numbered, repair_tokens
+    code = "local a = 1\nlocal b: string = a\nreturn b\n"
+    text = _numbered(code, [{"line": 2, "column": 19, "kind": "TypeError", "message": "Expected 'string', got 'number'"},
+                            {"line": 0, "column": 0, "kind": "RequestedAPI", "message": "The code never uses `UIScale`.",
+                             "hint": "Use it if the request asks for it."}])
+    assert "- line 2, column 19: Expected 'string', got 'number' (TypeError)\n    2 | local b: string = a" in text
+    assert "- The code never uses `UIScale`. (RequestedAPI) Use it if the request asks for it." in text
+    # 3,000 characters of Luau are about 1,000 tokens: the old budget (len/3 + 220) left no room to add a line
+    assert repair_tokens("x" * 3000) > 3000 / 2.6 + 400 and repair_tokens("x" * 300) >= 400
+    assert repair_tokens("x" * 20000, 1600) == 2200, "bounded: one repair never runs longer than a long answer"
+
+
+class Reference:
+    """api_lookup over a tiny reference: GuiService, Camera and UIScale as the documentation has them."""
+    KNOWN = {"GuiService": "GuiService   [class]\n\nTags: Service\n\nMembers of GuiService:\nproperties: TopbarInset\nmethods: GetGuiInset",
+             "DataModel": "DataModel   [class]", "DataModel:GetService": "DataModel:GetService(name)",
+             "GuiService:GetGuiInset": "GuiService:GetGuiInset()", "UIScale": "UIScale   [class]\n\nMembers of UIScale:\nproperties: Scale",
+             "UIScale.Scale": "UIScale.Scale: float", "UDim2.fromOffset": "UDim2.fromOffset(x, y)",
+             "Instance.new": "Instance.new(className)", "UIScale.Parent": "Instance.Parent: Instance"}   # inherited
+
+    def __init__(self, error=None):
+        self.asked, self.error = [], error
+
+    def __call__(self, symbols):
+        if self.error:
+            raise self.error
+        self.asked.extend(symbols)
+        return [{"symbol": s, "found": s in self.KNOWN, "deprecated": False, "text": self.KNOWN.get(s, "")} for s in symbols]
+
+
+INVENTED = ('Here it is:\n\n```luau\nlocal GuiService = game:GetService("GuiService")\n'
+            'local size = GuiService:GetScreenResolution()\n```')
+
+
+def test_an_invented_engine_member_fails_the_check_and_is_handed_to_the_repair_with_the_real_members():
+    knowledge, seen = FakeKnowledge(reports=[passed(), passed()]), []
+
+    async def repair(code, found):
+        seen.append(found)
+        return 'local GuiService = game:GetService("GuiService")\nlocal inset = GuiService:GetGuiInset()\n'
+
+    answer, records = asyncio.run(review_luau(INVENTED, knowledge.luau_check, repair=repair, api_lookup=Reference()))
+    assert [e["kind"] for e in seen[0]] == ["UnknownAPI"] and "GetGuiInset" in seen[0][0]["hint"]
+    assert "GuiService:GetGuiInset()" in answer and "GetScreenResolution()\n```" not in answer
+    assert "STAR revised it after checking its engine API names" in answer
+    assert "3 API name(s) the code uses were checked against the official API reference" in answer
+    assert "Roblox API names and types were not verified" not in answer
+    assert records[0]["ok"] and records[0]["repaired"] and records[0]["api_checked"] == 3
+
+
+def test_an_invented_member_that_cannot_be_repaired_is_named_in_the_note_not_called_a_compile_failure():
+    answer, records = asyncio.run(review_luau(INVENTED, FakeKnowledge(reports=[passed()]).luau_check,
+                                              api_lookup=Reference()))
+    assert "compiles and passes Luau type analysis, but it uses names STAR did not find" in answer
+    assert "`GuiService:GetScreenResolution` is not in the official Roblox API reference" in answer
+    assert "Members of GuiService" not in answer, "the member list is for the repair model, not for the reader"
+    assert not records[0]["ok"]
+
+
+def test_when_the_reference_cannot_be_asked_nothing_is_claimed_about_api_names():
+    answer, records = asyncio.run(review_luau(INVENTED, FakeKnowledge(reports=[passed()]).luau_check,
+                                              api_lookup=Reference(error=KnowledgeUnavailable("down"))))
+    assert records[0]["ok"] and "api_checked" not in records[0]
+    assert "Roblox API names and types were not verified, and the code was not run." in answer
+
+
+def test_a_name_the_request_asked_for_but_the_code_never_uses_gets_one_repair_and_then_an_honest_note():
+    request = "Rewrite the panel so it scales: use a UIScale and clamp it."
+    plain = "```luau\nlocal panel = script.Parent\npanel.Size = UDim2.fromOffset(500, 300)\n```"
+
+    async def adds_it(code, found):
+        assert [e["kind"] for e in found] == ["RequestedAPI"] and "UIScale" in found[0]["message"]
+        return 'local panel = script.Parent\nlocal scale = Instance.new("UIScale")\nscale.Scale = 1\nscale.Parent = panel\n'
+
+    async def refuses(code, found):
+        return code
+
+    fixed, records = asyncio.run(review_luau(plain, FakeKnowledge().luau_check, repair=adds_it, prompt=request,
+                                             api_lookup=Reference()))
+    assert 'Instance.new("UIScale")' in fixed and records[0]["ok"] and records[0]["repaired"]
+    kept, records = asyncio.run(review_luau(plain, FakeKnowledge().luau_check, repair=refuses, prompt=request,
+                                            api_lookup=Reference()))
+    assert "UDim2.fromOffset(500, 300)\n```" in kept and records[0]["ok"], "an unused name is advice, not a failed check"
+    assert "Worth a look:\n- The request names `UIScale`, but the code never uses `UIScale`." in kept
+    assert "only background" not in kept, "the instruction to the repair model is not shown to the reader"
+
+
+def test_finalize_checks_api_names_on_full_answers_only_and_passes_the_request_on():
+    knowledge = FakeKnowledge(reports=[passed()])
+    knowledge.api_lookup = Reference()
+    answer, _, archive = run_finalize(grounding(knowledge), INVENTED, quick=False, prompt="Get the screen size")
+    assert "names STAR did not find in the official API reference" in answer
+    assert archive[-1]["star_knowledge"]["luau_checks"][0]["api_checked"] == 3
+    quick = FakeKnowledge(reports=[passed()])
+    quick.api_lookup = Reference()
+    answer, _, _ = run_finalize(grounding(quick), INVENTED, quick=True, prompt="Get the screen size")
+    assert quick.api_lookup.asked == [] and "compiles and passes Luau type analysis." in answer
 
 
 @pytest.mark.parametrize("error", [KnowledgeUnavailable("down"), TimeoutError("slow"), ValueError("too long")])
