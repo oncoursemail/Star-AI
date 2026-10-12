@@ -65,7 +65,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
 # Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
-# the model asked for (star/roblox_cloud.py). Never a publish action itself.
+# the model asked for (star/roblox_cloud.py, docs/STAR_ROBLOX_ACCESS.md). Never a publish action itself.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
@@ -1166,18 +1166,19 @@ def launch():
             if self.turn is not None:
                 _, detail = failure_outcome('sendMessage', RuntimeError('cancelled by user'), cancelled=True)
                 record_turn_failure(app_data(), self.turn, 'cancelled', detail)
+            # Stop owned child processes before any forced exit can interrupt cleanup.
+            self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
+            self.warmer.cancel()
+            self.runtime.stop()
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor
-            # workers are non-daemon. In the packaged Windows app only, enforce
-            # Restart Manager's shutdown deadline as a last resort. The timer is
-            # daemonized and has no effect if Python exits normally.
+            # workers are non-daemon. The packaged Windows fallback starts only
+            # after child cleanup; it is not a deadline for the entire shutdown.
+            # The daemon timer has no effect if Python exits normally.
             if os.name == 'nt' and getattr(sys, 'frozen', False):
                 deadline = threading.Timer(1.8, lambda: os._exit(0))
                 deadline.daemon = True
                 deadline.start()
             self.voice.close()
-            self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
-            self.warmer.cancel()
-            self.runtime.stop()
             self.pool.shutdown(wait=False,cancel_futures=True)
 
     class Shell(QMainWindow):

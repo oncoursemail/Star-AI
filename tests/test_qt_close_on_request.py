@@ -2,6 +2,8 @@
 
 Run with QT_QPA_PLATFORM=offscreen and PySide6 installed. WebEngine is replaced
 with an inert QWidget because these checks exercise host lifecycle, not Chromium.
+The session case calls the handler, not Windows Restart Manager. The quit case
+emits the real Qt aboutToQuit signal; neither case replaces packaged W04b.
 """
 import os
 import sys
@@ -10,7 +12,7 @@ import types
 import pytest
 
 
-@pytest.mark.parametrize("mode", ["idle", "running", "session"])
+@pytest.mark.parametrize("mode", ["idle", "running", "session", "quit"])
 def test_real_shell_shutdown_paths(monkeypatch, tmp_path, mode):
     os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
     QtWidgets = pytest.importorskip("PySide6.QtWidgets")
@@ -88,15 +90,22 @@ def test_real_shell_shutdown_paths(monkeypatch, tmp_path, mode):
             bridge.turn = shell_module.TurnRef("default", chat_id, message_id)
             bridge.active_task = True
         if mode == "session":
-            # Simulate Qt session callback with the same handler launch wires.
+            # Direct handler coverage, not a real commitDataRequest or installer request.
             shell_module.close_for_session(window, object())
+        elif mode == "quit":
+            app.aboutToQuit.emit()
         else:
             window.close()
-        bridge.close()  # aboutToQuit path is intentionally idempotent
+        # Exercise the signal connection launch registered, including repeated close.
+        app.aboutToQuit.emit()
+        assert all(service.stopped for service in
+                   (bridge.comfy_launcher, bridge.warmer, bridge.runtime, bridge.voice))
         seen.append((bridge.cancel_chat.is_set(), bridge._closing))
+        window.close()
         return 0
 
-    monkeypatch.setattr(QtWidgets.QApplication, "exec", fake_exec)
+    # QApplication.exec is static; a plain function would bind an extra argument.
+    monkeypatch.setattr(QtWidgets.QApplication, "exec", staticmethod(fake_exec))
     assert shell_module.launch() == 0
     assert seen == [(True, True)]
     if mode != "idle":
