@@ -83,7 +83,7 @@ def _images_loaded_by_the_code():
     wanted |= {f"faces/{face}.png" for face in re.findall(r"\{id:'([a-z-]+)',name:", site_source)}
     # The pet displays full-body art only, through an explicit static pose allowlist.
     # Face names in petImage describe expressions/status, not separate downloaded sprites.
-    match = re.search(r"const poses=\\[([^\\]]+)\\] as const", pet_source)
+    match = re.search(r"const poses=\[(.*?)\] as const", pet_source)
     assert match, "pet sprite allowlist is required"
     assert "petPosePath(image.pose)" in pet_source
     names = set(re.findall(r"'([a-z0-9-]+)'", match.group(1)))
