@@ -15,6 +15,7 @@ import {ProviderPanel,McpPanel} from './IntegrationPanels'
 import {RobloxPanel} from './RobloxPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
+import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
 import {VoiceSettings} from './VoiceSettings'
@@ -707,6 +708,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                 <button className="secondary-button" onClick={()=>nav('library')}>View knowledge library <ArrowRight size={14}/></button>
               </Panel>
             </div>
+            <ResearchWatchPanel disabled={inactive||busy}
+              autoCheck={!!data.settings.research_auto_check}
+              onAutoChange={enabled=>{void (async()=>{
+                const result=await act('saveSettings',{settings:{research_auto_check:enabled}})
+                if(result)await sync()
+              })()}}/>
             <Panel className="settings-section"><h2><Shield size={18}/> Scoped access</h2><p>GitHub updates and model downloads never require your AI to see your private credentials. Publishing and unrestricted PC control are not enabled by default.</p><div className="toggle-line"><span>Studio edits</span><Tag kind={data.settings.studio_edit?'gold':'neutral'}>{data.settings.studio_edit?'Enabled':'Read only'}</Tag></div><div className="toggle-line"><span>Workspace writes</span><Tag kind={data.settings.workspace_edit?'gold':'neutral'}>{data.settings.workspace_edit?'Enabled':'Read only'}</Tag></div></Panel><McpPanel draft={draft} onChange={setDraft} status={data.mcp} invoke={act} disabled={inactive}/>
            <ReviewToolsPanel settings={draft} onChange={setDraft} status={data.tool_workshop} recipes={customTools} query={customQuery} onQuery={setCustomQuery} preview={customPreview} busy={customBusy} disabled={inactive} refresh={refreshCustomTools} runPreview={id=>customAction('previewCustomTool',id)} approve={id=>customAction('approveCustomTool',id)} disable={id=>customAction('disableCustomTool',id)}/><button type="button" className="secondary-button" disabled={inactive} onClick={()=>void saveSettings()}><Check size={15}/> Save connector settings</button></div></div>}
          {tab==='library'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT RESOURCES" title="Your library" description="Project references, verified decisions, conversation history, and generated files."/><div className="two-up"><Panel className="settings-section"><FolderOpen size={23} className="gold"/><h2>STAR data folder</h2><p>Local storage for saved conversations, checkpoints, images, and project knowledge.</p><button className="secondary-button" onClick={()=>void act('openDataFolder')}>Open local STAR files <ArrowRight size={15}/></button></Panel><Panel className="settings-section"><BookOpen size={23} className="gold"/><h2>Verified knowledge</h2><p>STAR only promotes reviewed, source-grounded knowledge into trusted project memory.</p><button className="secondary-button" onClick={()=>nav('projects')}>View projects <ArrowRight size={15}/></button></Panel></div><Panel className="settings-section"><h2>Created images & files</h2><p>Your generated images appear in the conversation where they were created. The originals are stored privately in your local STAR folder.</p><button type="button" className="secondary-button" onClick={()=>void act('openDataFolder')}><FolderOpen size={16}/> Open local files <ArrowRight size={15}/></button></Panel></div></div>}

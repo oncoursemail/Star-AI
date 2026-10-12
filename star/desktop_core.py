@@ -108,6 +108,7 @@ class Settings:
     learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
+    research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
     def load(cls, file: Path):
@@ -138,7 +139,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau')):
+                            'learning_digest_cloud', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
