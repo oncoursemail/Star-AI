@@ -15,6 +15,7 @@ import base64
 import io
 import os
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -36,14 +37,19 @@ class ComfyLauncher:
         self._lock = threading.Lock()
 
     @staticmethod
+    def python_for(base: Path) -> Path | None:
+        """ComfyUI's own Python for an install folder (the one `setup_comfyui.sh` makes, or the portable one)."""
+        candidates = [base / '.venv' / 'Scripts' / 'python.exe', base / '.venv' / 'bin' / 'python',
+                      base.parent / 'python_embeded' / 'python.exe']
+        return next((path for path in candidates if path.is_file()), None)
+
+    @staticmethod
     def command(folder: str, port: int) -> tuple[list[str], Path]:
         base = Path(folder).expanduser()
         if not folder or not (base / 'main.py').is_file():
             raise ValueError('Set the ComfyUI folder in Settings → Where STAR generates first '
                              '(the folder that contains main.py).')
-        candidates = [base / '.venv' / 'Scripts' / 'python.exe', base / '.venv' / 'bin' / 'python',
-                      base.parent / 'python_embeded' / 'python.exe']
-        python = next((path for path in candidates if path.is_file()), None)
+        python = ComfyLauncher.python_for(base)
         if python is None:
             raise ValueError("ComfyUI's own Python was not found in that folder (.venv). "
                              'Run scripts/media/setup_comfyui.sh code first.')
@@ -65,7 +71,7 @@ class ComfyLauncher:
             return {'started': False, 'running': True, 'message': 'ComfyUI is already running.'}
         with self._lock:
             if not self.running():
-                command, folder = self.command(settings.comfy_home, settings.comfy_port)
+                command, folder = self.command(effective_comfy_home(settings), settings.comfy_port)
                 logs = home / 'logs'
                 logs.mkdir(parents=True, exist_ok=True)
                 with open(logs / 'comfyui.log', 'ab') as log:
@@ -104,6 +110,76 @@ class ComfyLauncher:
             process.kill()
 
 
+COMFY_ENV = 'STAR_COMFY_HOME'
+
+
+def find_comfy_home(*, env: dict | None = None, data_dir: Path | None = None, search_from: tuple = (),
+                    user_home: Path | None = None) -> str:
+    """The ComfyUI install STAR may start when the owner has not chosen a folder, or '' if there is none.
+
+    A fixed, short list and nothing else (no disk search): the folder named by STAR_COMFY_HOME; a `media/ComfyUI`
+    folder inside STAR's own data folder; and `media/ComfyUI` next to STAR's own folder or up to four levels above
+    it, which is where `scripts/media/setup_comfyui.sh` puts it when MEDIA_HOME is the project's `media` folder.
+    The folders above STAR count only when they are inside the user's own profile, so a folder that another user of
+    this PC could create (for example one at the root of a drive) is never run. A folder counts only when it
+    has `main.py` and ComfyUI's own Python, exactly what the launcher needs.
+    """
+    env = os.environ if env is None else env
+
+    def usable(path: Path) -> bool:
+        try:
+            return (path / 'main.py').is_file() and ComfyLauncher.python_for(path) is not None
+        except OSError:
+            return False
+
+    named = str(env.get(COMFY_ENV, '') or '').strip()
+    if named and usable(Path(named).expanduser()):
+        return str(Path(named).expanduser())
+    try:
+        mine = (data_dir if data_dir is not None else _app_data()) / 'media' / 'ComfyUI'
+        if usable(mine):
+            return str(mine)
+        profile = (user_home if user_home is not None else Path.home()).resolve()
+        for start in (search_from or _code_places()):
+            start = Path(start).resolve()
+            for level in [start, *list(start.parents)[:4]]:
+                try:
+                    level.relative_to(profile)
+                except ValueError:
+                    break                       # left the user's profile: stop climbing
+                if level == profile:
+                    break
+                found = level / 'media' / 'ComfyUI'
+                if usable(found):
+                    return str(found)
+    except (OSError, RuntimeError):
+        return ''
+    return ''
+
+
+def _app_data() -> Path:
+    from .desktop_core import app_data
+    return app_data()
+
+
+def _code_places() -> tuple:
+    """Where STAR runs from: its source folder, and the program's folder when it is a built app."""
+    places = [Path(__file__).resolve().parents[1]]
+    if getattr(sys, 'frozen', False):
+        places.append(Path(sys.executable).resolve().parent)
+    return tuple(places)
+
+
+def detect_comfy_home() -> str:
+    return find_comfy_home()
+
+
+def effective_comfy_home(settings) -> str:
+    """The folder chosen in Settings; when none is chosen, the one found on its own. A chosen folder is never replaced."""
+    chosen = str(getattr(settings, 'comfy_home', '') or '').strip()
+    return chosen or detect_comfy_home()
+
+
 def _data_url(path: Path, side: int = 1600) -> str:
     from PIL import Image
     with Image.open(path) as image:
@@ -125,7 +201,8 @@ def status(settings, home: Path) -> dict:
     return {'places': media_places.describe(settings, home),
             'images': image_gen.status(settings),
             'sizes': [{'id': key, 'label': image_gen.SIZE_LABELS[key]} for key in image_gen.SIZES],
-            'can_start': bool(str(getattr(settings, 'comfy_home', '') or '').strip()),
+            'can_start': bool(effective_comfy_home(settings)),
+            'detected_home': '' if str(getattr(settings, 'comfy_home', '') or '').strip() else detect_comfy_home(),
             'ffmpeg': ffmpeg,
             'measured_on': str((measured.get('images', {}).get('pc', {}) or {}).get('date', '')),
             'references': len(references.entries(home, settings.project))}

@@ -112,6 +112,12 @@ describe('where STAR generates', () => {
     expect(start.title).toMatch(/Set the ComfyUI folder/)
   })
 
+  it('says which ComfyUI folder it found on its own, and lets the owner start it', async () => {
+    render(<MediaPlaces settings={settings} invoke={mediaHost(status({can_start: true, detected_home: 'C:/Projects/media/ComfyUI'})).invoke}/>)
+    expect(await screen.findByText(/Found automatically: C:\/Projects\/media\/ComfyUI/)).toBeTruthy()
+    expect((screen.getByRole('button', {name: /start comfyui/i}) as HTMLButtonElement).disabled).toBe(false)
+  })
+
   it('saves the picture size the brain reads and the references switch', async () => {
     const host = mediaHost(status())
     const user = userEvent.setup()

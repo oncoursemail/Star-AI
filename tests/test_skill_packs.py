@@ -12,9 +12,12 @@ from star.desktop_core import Settings, run_task
 NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
+         "roblox-environment-art",
          "game-obby", "game-tycoon", "game-simulator", "game-rounds",
          "game-inventory", "game-npc-quests",
-         "eng-debugging", "eng-test-first", "eng-verify-before-done"]
+         "eng-debugging", "eng-test-first", "eng-verify-before-done",
+         "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
+         "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
@@ -37,9 +40,10 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
     assert len(worst) <= skill_packs.MAX_BLOCK_CHARS
 
 
-def test_every_pack_cites_official_documentation_and_lists_the_api_names_it_checked():
+def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
-        if pack.name in ENGINEERING:
+        # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
+        if pack.name in ENGINEERING or pack.name.startswith("design-"):
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
@@ -62,6 +66,14 @@ def test_selection_needs_a_roblox_question_that_names_the_topic():
         assert skill_packs.select(prompt, enabled=NAMES) == [], prompt
     assert skill_packs.select(None, enabled=NAMES) == []
     assert skill_packs.select("x" * 30_000 + " Roblox ScreenGui", enabled=NAMES) == []
+
+
+def test_environment_art_pack_is_opt_in_and_stays_scoped():
+    assert "roblox-environment-art" not in skill_packs.DEFAULT_ENABLED
+    prompt = "In Roblox Studio, build environmental storytelling with foliage and swaying trees."
+    assert skill_packs.matching_names(prompt, enabled=NAMES) == ["roblox-environment-art"]
+    assert skill_packs.matching_names(prompt, enabled=["roblox-vfx"]) == []
+    assert skill_packs.matching_names("Design a website with swaying trees", enabled=NAMES) == []
 
 
 def test_one_generic_word_is_not_enough():

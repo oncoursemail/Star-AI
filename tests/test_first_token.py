@@ -191,13 +191,21 @@ def test_per_turn_notes_reach_only_their_own_turn(desk, monkeypatch):
     assert rendered(second).startswith(rendered(first[:-1]) + "<|im_start|>user\nWhat colour is the door?")
 
 
-def test_history_marks_an_unanswered_message_and_leaves_out_failure_records(desk):
-    desk.turn("first", "one")
+@pytest.mark.parametrize("status", ["failed", "cancelled", None], ids=["failed", "cancelled", "interrupted"])
+def test_history_drops_unanswered_turns_and_preserves_failure_records_in_storage(desk, status):
+    first = desk.turn("first", "one")["messages"]
     failed = desk.chats.add("STAR", "user", "this one failed", chat_id=desk.chat)
-    desk.chats.add_terminal("STAR", desk.chat, failed, "failed", "SECRET-FAILURE-TEXT")
+    if status is not None:
+        desk.chats.add_terminal("STAR", desk.chat, failed, status, "SECRET-FAILURE-TEXT")
+    originals = desk.chats.raw_history_records("STAR", desk.chat)
     messages = desk.turn("second", "two")["messages"]
-    assert [text_of(m) for m in messages[1:]] == ["first", "one", "this one failed", NO_REPLY, "second"]
-    assert "SECRET-FAILURE-TEXT" not in json.dumps(messages)
+    # The exclusion rule drops the whole orphan, not just its failure event.
+    assert [text_of(m) for m in messages[1:]] == ["first", "one", "second"]
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    for excluded in ("this one failed", NO_REPLY, "SECRET-FAILURE-TEXT"):
+        assert excluded not in json.dumps(messages)
+    assert rendered(messages).startswith(rendered(first) + "<|im_start|>assistant\none<|im_end|>\n")
+    assert desk.chats.raw_history_records("STAR", desk.chat)[:len(originals)] == originals
 
 
 # ------------------------------------------------------------------ trimming
@@ -293,10 +301,10 @@ def test_own_llama_servers_get_cache_fields_and_a_steady_slot(desk):
     tools = llama_request_fields(lan, conversation="STAR::chat::a", tools=True)
     assert chat["cache_prompt"] is True and chat["id_slot"] in (0, 1)
     assert chat == llama_request_fields(lan, conversation="STAR::chat::a")   # one conversation, one slot
-    # One conversation, one slot per model: the tool prompt shares it, and the other slot is
-    # kept for background work (tests/test_model_routing.py covers the slot rules).
+    # One conversation, one slot per model: the tool prompt shares it. Background work names
+    # no slot (tests/test_model_routing.py covers the slot rules).
     assert tools["id_slot"] == chat["id_slot"]
-    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True)["id_slot"] == 1 - chat["id_slot"]
+    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True) == local
     remember_server_limits("http://192.168.50.20:8080/v1", "star-fast", 32768, 1)
     assert "id_slot" not in llama_request_fields(lan, conversation="a")
 

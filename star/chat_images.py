@@ -84,3 +84,30 @@ def generate_chat_image(settings, prompt: str, home: Path, cancel_event=None, *,
         raise RuntimeError("Unexpected generated image filename")
     return {"answer": "Image generated locally · original saved in STAR/generated-images",
             "image": preview_image(first), "message": PREFIX + first.name}
+
+
+def latest_generated_path(home: Path, project: str, chat_id: str) -> Path | None:
+    """The picture a follow-up such as "make it brown" refers to: the newest answer of this chat, if it is one.
+
+    Only the newest answer counts. After a text answer there is no "it" to change, so an earlier
+    picture is never picked up by a follow-up that is really about something else.
+    """
+    from .desktop_core import Conversations
+    chats = Conversations(home / 'conversations.sqlite3')
+    try:
+        records = chats.recent_records(project, limit=80, chat_id=chat_id)
+    finally:
+        chats.close()
+    directory = (home / 'generated-images').resolve()
+    for row in reversed(records):
+        if row['role'] != 'assistant':
+            continue
+        body = row['body']
+        if not body.startswith(PREFIX):
+            return None
+        name = body[len(PREFIX):]
+        if not NAME.fullmatch(name) or name in ('.', '..'):
+            return None
+        path = (directory / name).resolve()
+        return path if path.is_relative_to(directory) and path.is_file() else None
+    return None
