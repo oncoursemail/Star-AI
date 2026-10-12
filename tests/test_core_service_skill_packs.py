@@ -133,3 +133,13 @@ def test_malformed_pack_is_skipped_by_real_inventory(tmp_path, monkeypatch):
     monkeypatch.setattr(skill_packs, "PACKS_DIR", tmp_path)
     skill_packs.available.cache_clear()
     assert skill_packs.available() == ()
+
+
+def test_datastore_examples_fail_closed_on_existing_wrong_schema():
+    pack = next(p for p in skill_packs.available()
+                if p.name == "roblox-datastore-service-patterns")
+    examples = re.findall(r"^~~~luau\n(.*?)\n~~~$", pack.body, re.M | re.S)
+    assert len(examples) == 3
+    for example in examples[:2]:
+        assert 'if old ~= nil and typeof(old) ~= "number" then return nil end' in example
+    assert 'if old ~= nil and typeof(old) ~= "table" then return nil end' in examples[2]

@@ -27,8 +27,8 @@ local store = game:GetService("DataStoreService"):GetDataStore("ExampleCoinsV1")
 local function awardServerReward(player)
     local ok, result = pcall(function()
         return store:UpdateAsync("Player_" .. player.UserId, function(old)
-            local balance = if typeof(old) == "number" then old else 0
-            return balance + 10
+            if old ~= nil and typeof(old) ~= "number" then return nil end
+            return (old or 0) + 10
         end)
     end)
     if not ok then
@@ -50,13 +50,13 @@ local function saveServerStage(player, stage)
         or service:GetRequestBudgetForRequestType(Enum.DataStoreRequestType.StandardWrite) < 1 then
         return false -- Defer; the stage has not been saved.
     end
-    local ok = pcall(function()
-        stages:UpdateAsync("Player_" .. player.UserId, function(old)
-            local previous = if typeof(old) == "number" then old else 0
-            return math.max(previous, stage)
+    local ok, saved = pcall(function()
+        return stages:UpdateAsync("Player_" .. player.UserId, function(old)
+            if old ~= nil and typeof(old) ~= "number" then return nil end
+            return math.max(old or 0, stage)
         end)
     end)
-    return ok
+    return ok and saved ~= nil
 end
 ~~~
 Stage must come from trusted server progress. Budget may change after this preflight check. [S3][S4]
@@ -83,8 +83,8 @@ local function tryClaim(player)
             nextMeta.LockId = token
             nextMeta.LeaseUntil = now + 240
             local ids = if keyInfo then keyInfo:GetUserIds() else { player.UserId }
-            local data = if typeof(old) == "table" then old else { Coins = 0 }
-            return data, ids, nextMeta
+            if old ~= nil and typeof(old) ~= "table" then return nil end
+            return old or { Coins = 0 }, ids, nextMeta
         end)
     end)
     return if ok and value ~= nil then token else nil
