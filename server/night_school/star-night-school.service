@@ -1,0 +1,42 @@
+[Unit]
+Description=STAR night school (STAR practises Roblox tasks by itself while the brain is idle; no weights are changed)
+After=network-online.target star-brain.service star-knowledge.service
+
+# What it does: waits until the brain has had no other client for 10 minutes, answers one practice task through the
+# application's own path, checks the answer, keeps verified examples and proven lessons, writes numbers to
+# /opt/star/learning/report/latest.md, and backs off at once when another client appears. It never uses slot 0.
+# Pause without stopping:  touch /opt/star/learning/data/HOLD      Resume:  rm /opt/star/learning/data/HOLD
+# Log:  journalctl -u star-night-school -n 50      Stop:  systemctl stop star-night-school
+# Optional settings (STAR_NS_...; see nightschool/config.py) go into /opt/star/learning/env, not into this file.
+[Service]
+Type=simple
+User=star
+Group=star
+WorkingDirectory=/opt/star/learning/app/server/night_school
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=STAR_NS_HOME=/opt/star/learning
+Environment=HOME=/opt/star/learning/data/home
+Environment=XDG_DATA_HOME=/opt/star/learning/data/home/share
+EnvironmentFile=-/opt/star/learning/env
+ExecStart=/opt/star/learning/venv/bin/python -m nightschool run
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=5
+Restart=on-failure
+RestartSec=120
+TimeoutStopSec=120
+KillMode=mixed
+MemoryMax=3G
+TasksMax=128
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/star/learning
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
