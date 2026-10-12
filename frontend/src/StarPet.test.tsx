@@ -2,7 +2,7 @@
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {act,fireEvent,render,renderHook,screen,cleanup} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import {StarPet,petImage,usePetIdleMs} from './StarPet'
+import {StarPet,petImage,petCanBlink,petShouldCrossfade,usePetIdleMs} from './StarPet'
 
 beforeEach(()=>{localStorage.clear()})
 afterEach(()=>{cleanup();vi.restoreAllMocks();vi.useRealTimers()})
@@ -138,5 +138,54 @@ describe('pet idle clock',()=>{
   expect(vi.getTimerCount()).toBe(0)
   act(()=>vi.advanceTimersByTime(900000))
   expect(result.current).toBe(0)
+ })
+})
+
+
+describe('composited mascot animation',()=>{
+ it('blinks only for 512px face states and skips all motion when requested',()=>{
+  expect(petCanBlink('idle',false)).toBe(true)
+  expect(petCanBlink('typing',false)).toBe(true)
+  expect(petCanBlink('finished',false)).toBe(true)
+  for(const state of ['thinking','streaming','asleep','error','update'] as const)expect(petCanBlink(state,false)).toBe(false)
+  expect(petCanBlink('idle',true)).toBe(false)
+  expect(petCanBlink('malformed' as never,false)).toBe(false)
+ })
+ it('crossfades changed sprites but not empty, identical or reduced-motion input',()=>{
+  expect(petShouldCrossfade('a.png','b.png',false)).toBe(true)
+  expect(petShouldCrossfade('a.png','a.png',false)).toBe(false)
+  expect(petShouldCrossfade('','a.png',false)).toBe(false)
+  expect(petShouldCrossfade('a.png','',false)).toBe(false)
+  expect(petShouldCrossfade('a.png','b.png',true)).toBe(false)
+ })
+ it('mounts a feet-pivoted breath stage and matching closed-eye image',()=>{
+  const {container}=render(<StarPet state="idle"/>)
+  expect(container.querySelector('.star-pet__breath')).toBeTruthy()
+  expect(container.querySelector('.star-pet__blink')?.getAttribute('src')).toBe('./assets/mascot/faces/content.png')
+  expect(container.querySelectorAll('.star-pet__image')).toHaveLength(2)
+ })
+ it('crossfades thinking into streaming then celebrates completion',()=>{
+  vi.useFakeTimers()
+  const {container,rerender}=render(<StarPet state="thinking"/>)
+  expect(container.querySelector('.star-pet__blink')).toBeNull()
+  rerender(<StarPet state="streaming"/>)
+  expect(container.querySelector('.star-pet__outgoing')?.getAttribute('src')).toContain('/poses/think.png')
+  expect(container.querySelector('.star-pet__incoming')?.getAttribute('src')).toContain('/poses/type-1.png')
+  act(()=>vi.advanceTimersByTime(220))
+  expect(container.querySelector('.star-pet__outgoing')).toBeNull()
+  rerender(<StarPet state="finished"/>)
+  expect(container.querySelector('.star-pet')?.getAttribute('data-state')).toBe('finished')
+  expect(container.querySelector('.star-pet__blink')).toBeTruthy()
+ })
+ it('renders exactly one static sprite under reduced motion',()=>{
+  vi.useFakeTimers()
+  const {container,rerender}=render(<StarPet state="idle" reducedMotion/>)
+  expect(container.querySelector('.star-pet--still')).toBeTruthy()
+  expect(container.querySelectorAll('.star-pet__image')).toHaveLength(1)
+  rerender(<StarPet state="finished" reducedMotion/>)
+  expect(container.querySelectorAll('.star-pet__image')).toHaveLength(1)
+  expect(container.querySelector('.star-pet__outgoing')).toBeNull()
+  // Finished state stops the idle clock; reduced motion creates no visual timers.
+  expect(vi.getTimerCount()).toBe(0)
  })
 })

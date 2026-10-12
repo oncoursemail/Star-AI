@@ -34,6 +34,16 @@ export function usePetIdleMs(active:boolean):number {
  return idleMs
 }
 
+/** Closed-eye art is only composited over matching 512px face canvases, never over 640px poses. */
+export function petCanBlink(state:PetState, reducedMotion:boolean):boolean {
+ return !reducedMotion&&['idle','typing','finished'].includes(state)
+}
+
+/** Transitions only retain the old frame when a different sprite is available and motion is permitted. */
+export function petShouldCrossfade(previous:string, next:string, reducedMotion:boolean):boolean {
+ return !reducedMotion&&Boolean(previous)&&Boolean(next)&&previous!==next
+}
+
 type Corner='bottom-right'|'bottom-left'|'top-right'|'top-left'
 const corners:Corner[]=['bottom-right','bottom-left','top-right','top-left']
 function savedCorner():Corner {
@@ -44,6 +54,8 @@ export function StarPet({state,visible=true,reducedMotion=false,idleEnabled=true
  const [bubble,setBubble]=useState(false)
  const [alternate,setAlternate]=useState(false)
  const [failed,setFailed]=useState(false)
+ const [outgoing,setOutgoing]=useState<string|null>(null)
+ const previousSource=useRef('')
  const origin=useRef<{x:number;y:number}|null>(null)
  const dragged=useRef(false)
  // Typing, in-flight work and terminal states all end the previous idle period.
@@ -60,8 +72,19 @@ export function StarPet({state,visible=true,reducedMotion=false,idleEnabled=true
  const showPose=['streaming','thinking','sleepy','asleep','update'].includes(currentState)
  const source=assets+(showPose?'/poses/'+image.pose:'/faces/'+image.face)+'.png'
  useEffect(()=>{setFailed(false)},[source])
+ useEffect(()=>{
+  const prior=previousSource.current
+  previousSource.current=source
+  if(!visible||!petShouldCrossfade(prior,source,reducedMotion)){
+   setOutgoing(null)
+   return
+  }
+  setOutgoing(prior)
+  const timeout=window.setTimeout(()=>setOutgoing(null),210)
+  return ()=>window.clearTimeout(timeout)
+ },[source,reducedMotion,visible])
  if(!visible||failed)return null
- return <div className={'star-pet star-pet--'+corner} data-testid="star-pet" data-state={currentState}>
+ return <div className={'star-pet star-pet--'+corner+(reducedMotion?' star-pet--still':'')} data-testid="star-pet" data-state={currentState}>
   {bubble&&<div role="status" className="star-pet__bubble">{image.status}</div>}
   <button type="button" className="star-pet__button" aria-label="Star mascot" aria-expanded={bubble} title="Star" onPointerDown={event=>{
    origin.current={x:event.clientX,y:event.clientY};dragged.current=false
@@ -80,7 +103,11 @@ export function StarPet({state,visible=true,reducedMotion=false,idleEnabled=true
    dragged.current=false
    if(!skip)setBubble(v=>!v)
   }}>
-   <img className="star-pet__image" src={source} alt="" draggable={false} onError={()=>setFailed(true)}/>
+   <span className="star-pet__breath" aria-hidden="true">
+    {outgoing&&<img className="star-pet__image star-pet__outgoing" src={outgoing} alt="" draggable={false}/>}
+    <img key={source} className={"star-pet__image"+(outgoing?" star-pet__incoming":"")} src={source} alt="" draggable={false} onError={()=>setFailed(true)}/>
+    {petCanBlink(currentState,reducedMotion)&&<img className="star-pet__image star-pet__blink" src={assets+"/faces/content.png"} alt="" draggable={false}/>}
+   </span>
   </button>
  </div>
 }
