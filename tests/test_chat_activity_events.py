@@ -146,3 +146,14 @@ def test_the_status_line_never_shows_an_internal_event_name():
     for name in ("model_started", "something_new", "internal_step_v2"):
         phase = sanitize_event({"event": name})["phase"]
         assert name not in phase and "_" not in phase
+
+
+def test_checked_practice_activity_exposes_only_count():
+    found = sanitize_event({"event": "worked_example_used", "count": 1,
+                            "chars": 1900, "instruction": "private prompt",
+                            "response": "do not relay this code"})
+    assert found == {"phase": "Using 1 checked practice example",
+                     "activity": {"type": "example", "count": 1}}
+    assert "private prompt" not in str(found) and "do not relay" not in str(found)
+    assert sanitize_event({"event": "worked_example_used", "count": "invalid"}) == {
+        "phase": "Reviewing local reference data"}

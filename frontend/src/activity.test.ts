@@ -37,6 +37,17 @@ describe('activity timeline is driven only by backend events', () => {
     expect(settleRun(answered, 'done', 10000).model).toBe('star-voice')
   })
 
+  it('reports checked-example retrieval only after a trusted, bounded event', () => {
+    const start = startRun('example', 'chat', 0)
+    expect(applyProgress(start, {activity: {type: 'example', count: 0}}, 1).steps).toEqual([])
+    expect(applyProgress(start, {activity: {type: 'example', count: 900}}, 1).steps).toEqual([])
+    const selected = applyProgress(start, {activity: {type: 'example', count: 2}}, 300)
+    expect(selected.steps).toHaveLength(1)
+    expect(selected.steps[0].title).toBe('Used checked practice examples')
+    expect(selected.steps[0].detail).toContain('not Roblox Studio')
+    expect(applyProgress(selected, {activity: {type: 'example', count: 2}}, 500).steps).toHaveLength(1)
+  })
+
   it('keeps a plain answer to one status line, not a timeline', () => {
     const run = replay('chat', [
       {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast'}},
