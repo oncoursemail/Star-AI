@@ -186,7 +186,9 @@ def test_initial_preparation_markers_withhold_legacy_pair(tmp_path, marker):
         path.write_text("incomplete", encoding="utf-8")
     hub = host_hub(root, tmp_path)
     assert names(hub) == NEIGHBORS
-    assert not hub.status()["shared_brain"]["ready"]
+    status = hub.status()["shared_brain"]
+    assert not status["ready"]
+    assert status["note"] == "preparation markers present, legacy graph tools withdrawn"
     result = hub.call("shared_brain_stats", {}, enabled=SHARED)
     assert result == {"available": False, "reference_data_only": True,
                       "reason": "operator-prepared shared store unavailable"}
