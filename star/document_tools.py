@@ -124,12 +124,19 @@ class DocumentTools:
                 # unrelated attachments block a valid calculation.
                 selected = [table for table in self.store.datasets() if table['id'] == args.get('dataset_id')]
                 output = analyze(selected, args)
+                profile = args.get("operation") == "profile"
                 output["provenance"] = {
-                    "kind": "bounded_decimal_calculation", "scope": "attached sources only",
+                    "kind": "bounded_table_profile" if profile else "bounded_decimal_calculation",
+                    "scope": "attached sources only",
                     "dataset_id": output["dataset_id"], "source": output["source"],
                     "untrusted_source": True,
-                    "note": "Calculated from the attached table, without executing code or spreadsheet formulas. "
-                            "See row counts, missing values, exact/rounded status and source warnings.",
+                    "note": (
+                        "Observed from attached table cells only; type assessments are heuristic. "
+                        "No raw text samples or spreadsheet formula evaluation."
+                        if profile else
+                        "Calculated from the attached table, without executing code or spreadsheet formulas. "
+                        "See row counts, missing values, exact/rounded status and source warnings."
+                    ),
                 }
             if len(json.dumps(output, ensure_ascii=False)) > MAX_TOOL_RESULT_CHARS:
                 raise ValueError("Document tool output exceeds its result budget; narrow the query or filter the table/grouping")
