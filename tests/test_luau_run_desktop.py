@@ -10,7 +10,7 @@ import pytest
 
 from star import desktop_core, doc_grounding, doc_knowledge
 from star.desktop_core import Settings, run_task
-from star.luau_run_review import MARKER
+from star.luau_run_repair import MARKER
 
 CODE = "return 6 * 7\n"
 ANSWER = "Example:\n```luau\n" + CODE + "```\n"
@@ -57,7 +57,14 @@ class Model:
     async def create(self, **kwargs):
         self.calls.append(kwargs)
         assert not kwargs.get("stream"), "opt-in code must not be shown before review"
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=ANSWER, tool_calls=None))])
+        system = str((kwargs.get("messages") or [{}])[0].get("content") or "")
+        if "Write independent executable assertions" in system:
+            text = "```luau\nassert(result == 42)\nassert(result ~= 0)\n```"
+        elif "Repair one pure Luau module" in system:
+            text = "```luau\n" + CODE + "```"
+        else:
+            text = ANSWER
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text, tool_calls=None))])
 
 
 @pytest.mark.parametrize("status, ok", [(200, True), (200, False), (503, False), (429, False)])
@@ -70,7 +77,8 @@ def test_run_task_real_model_path_and_client_http_contract(monkeypatch, tmp_path
         assert request.method == "POST" and request.url.path == "/luau/run"
         assert request.headers["Authorization"] == "Bearer " + key
         assert json.loads(request.content) == {
-            "code": CODE, "tests": "", "time_limit_s": 3.0, "memory_limit_mb": 256}
+            "code": CODE, "tests": "assert(result == 42)\nassert(result ~= 0)\n",
+            "time_limit_s": 3.0, "memory_limit_mb": 256}
         return httpx.Response(status, json=response(ok) if status == 200 else {"executed": False})
     knowledge = doc_knowledge.KnowledgeClient("https://knowledge.invalid", key, httpx.MockTransport(server))
     @asynccontextmanager
@@ -83,10 +91,11 @@ def test_run_task_real_model_path_and_client_http_contract(monkeypatch, tmp_path
     answer = run_task(Settings(model="m", luau_run_before_answer=True),
                       "Give a tiny arithmetic example.", mode="fast", stream_tokens=True,
                       on_event=events.append)
-    assert len(model.calls) == len(calls) == 1
+    assert len(calls) == 1
+    assert len(model.calls) == (3 if status == 200 and not ok else 2)
     assert CODE in answer and MARKER in answer
-    assert ("passed a standalone" in answer) is (status == 200 and ok)
-    assert ("no verified execution result" in answer) is (status != 200)
+    assert ("generated assertions passed" in answer) is (status == 200 and ok)
+    assert ("not verified" in answer) is (status != 200)
     transcript = json.loads(next((tmp_path / "runs").glob("*/transcript.json")).read_text())
     assert transcript["messages"][-1]["content"] == answer
     records = [a["star_luau_run"]["blocks"] for a in transcript["archive"] if "star_luau_run" in a]
@@ -137,9 +146,13 @@ def test_runtime_uses_the_repaired_displayed_code_and_preserves_transcript(monke
             return {"ran": True, **response()}
     class Repair:
         def __init__(self):
+            self.calls = 0
             self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
         async def create(self, **kwargs):
-            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content='```luau\n'+fixed+'```'))])
+            self.calls += 1
+            text = ('```luau\n' + fixed + '```' if self.calls == 1
+                    else '```luau\nassert(result == "1")\nassert(result ~= "2")\n```')
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=text))])
     knowledge = Knowledge()
     monkeypatch.setattr(doc_knowledge, "client_for", lambda settings: knowledge)
     found = doc_grounding.Grounding(client=knowledge,
@@ -151,7 +164,7 @@ def test_runtime_uses_the_repaired_displayed_code_and_preserves_transcript(monke
         settings=Settings(luau_run_before_answer=True), started=monotonic()))
     assert len(checked) == 2 and executed == [fixed]
     assert fixed in result[0] and "not run by this static check" in result[0]
-    assert "passed a standalone" in result[0] and result[1][-1]["content"] == result[0]
+    assert "generated assertions passed" in result[0] and result[1][-1]["content"] == result[0]
     assert any("star_luau_run" in item for item in result[2])
 
 
