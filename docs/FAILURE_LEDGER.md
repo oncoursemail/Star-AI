@@ -1,7 +1,7 @@
 # Failure ledger and targeted practice
 
 This feature is opt-in and offline. It reads the stored JSON evaluation results,
-attributes every record marked \`fail\` to one primary, evidence-backed cause, and
+attributes every record marked `fail` to one primary, evidence-backed cause, and
 can write **new**, parametrized practice exercises for the most frequent cause.
 It does not contact a brain, execute Luau, modify evaluation files, or enroll
 tasks into night school automatically.
@@ -16,14 +16,14 @@ tasks into night school automatically.
 
       python -m star.evals ledger practice --out ledger-practice/targeted.json
 
-  This creates \`targeted.json\`, \`prelude.luau\`, and
-  \`tests/LEDGER-*.luau\` in that directory. No file is written without
-  \`practice --out\`; existing outputs are never overwritten. The caller
+  This creates `targeted.json`, `prelude.luau`, and
+  `tests/LEDGER-*.luau` in that directory. No file is written without
+  `practice --out`; existing outputs are never overwritten. The caller
   chooses whether to copy or generate into an actual night-school pool.
-  \`--count N\` limits exercises to N distinct source task IDs. Both commands
-  accept \`--results DIR\` and \`--suites DIR\`.
+  `--count N` limits exercises to N distinct source task IDs. Both commands
+  accept `--results DIR` and `--suites DIR`.
 
-Results marked \`error\` (infrastructure), \`pass\`, or \`skipped\` are
+Results marked `error` (infrastructure), `pass`, or `skipped` are
 excluded. Result files belonging to a holdout suite are ignored, and
 the holdout catalog is never opened. A classification is a reproducible
 **primary label**, not a proven diagnosis of model cognition; retry attempts
@@ -31,18 +31,18 @@ can receive different labels if their recorded failed checks differ.
 
 ## Ledger on the stored result files
 
-The 26 JSON files currently committed under \`evals/results/\` contain
+The 26 JSON files currently committed under `evals/results/` contain
 65 failed attempts involving 34 distinct task IDs. Counts include independent
 baseline, control, skill-pack and rerun attempts. This table is obtained by
-applying the exact ordered rules in \`star/failure_ledger.py\` to those records:
+applying the exact ordered rules in `star/failure_ledger.py` to those records:
 
 | Cause | Failed attempts | Distinct IDs with this cause | Illustrative stored evidence |
 |---|---:|---:|---|
-| Wrong logic | 15 | 10 | baseline-v2 / SYS-01: failing \`unit_tests\` assertions |
-| Required feature missing | 25 | 16 | baseline-v2 / UI-12: \`require:uiscale\` |
-| Self-check error left unrepaired | 13 | 8 | baseline-v2 / NET-07: \`luau_check[1]\` type error |
-| Answer cut off | 11 | 9 | baseline-creation-v1 / ANI-07: \`product_failure\` |
-| Invented API name | 1 | 1 | baseline-v2 / NET-05: \`Unknown type 'Players.Player'\` |
+| Wrong logic | 15 | 10 | baseline-v2 / SYS-01: failing `unit_tests` assertions |
+| Required feature missing | 25 | 16 | baseline-v2 / UI-12: `require:uiscale` |
+| Self-check error left unrepaired | 13 | 8 | baseline-v2 / NET-07: `luau_check[1]` type error |
+| Answer cut off | 11 | 9 | baseline-creation-v1 / ANI-07: `product_failure` |
+| Invented API name | 1 | 1 | baseline-v2 / NET-05: `Unknown type 'Players.Player'` |
 | **Total** | **65** | **34 overall** | Per-cause distinct IDs overlap across reruns |
 
 Rule priority: recorded truncation/no answer/no Luau block; unknown
@@ -57,8 +57,8 @@ a lesson.
 
 The planning brief names counts **12, 9, 9, 8, 3** (41 total). In that
 order, the checked-in corpus differs by **+3, +16, +4, +3, -2**. The
-referenced \`docs/research/20261012/learning-loop.md\` is absent from
-\`star/next\`, so there is no trustworthy inclusion list, classification
+referenced `docs/research/20261012/learning-loop.md` is absent from
+`star/next`, so there is no trustworthy inclusion list, classification
 priority, or run timestamp for that 41-failure cohort. The stored corpus
 includes repeated task attempts and currently totals 65, not 41. Therefore
 these two tables cannot be equated; do not tune the rules merely to force
@@ -81,13 +81,13 @@ checks plus a generated Luau test with **four** behavioral assertions:
 the function is returned, fractional input is floored before scaling,
 the low boundary is respected, and the high boundary is respected.
 The output includes a minimal sandbox prelude and is validated by
-night school's actual \`load_pool\` in the tests. A copy guard compares
+night school's actual `load_pool` in the tests. A copy guard compares
 every generated prompt with every golden task by token overlap, rejecting
 any eight-token verbatim stretch or high overall overlap. The separate
 holdout file is never read.
 
 The CI unit tests use a scripted sandbox to exercise the actual
-\`score_answer\` code path and its checks; they do **not** execute an
+`score_answer` code path and its checks; they do **not** execute an
 actual Luau VM. Full runtime validation awaits an explicitly authorized
 night-school run. Generated tasks are not switched on by default.
 

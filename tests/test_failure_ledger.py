@@ -205,3 +205,32 @@ def test_cli_read_only_by_default(stored_failures, tmp_path, capsys):
     out = capsys.readouterr().out
     assert "required feature missing" in out and "Recorded check evidence" in out
     assert not output.exists()
+
+
+def test_public_evals_command_dispatches_through_night_school_loader(tmp_path, capsys):
+    """Public module entry point exercises read, classify, template, write and load."""
+    from star.evals import main as dispatch
+
+    out = tmp_path / "new-pool" / "targeted.json"
+    assert dispatch(["ledger", "practice", "--results", str(DEFAULT_RESULTS),
+                     "--suites", str(DEFAULT_SUITES), "--out", str(out)]) == 0
+    assert "Wrote 16 independent practice tasks" in capsys.readouterr().out
+    assert len(load_pool(out.parent).tasks) == 16
+
+
+def test_parent_cli_options_are_not_shadowed_by_practice_parser(tmp_path, capsys):
+    """Options before the subcommand still select the requested results folder."""
+    from star.evals import main as dispatch
+
+    results = tmp_path / "results"
+    results.mkdir()
+    (results / "failure.json").write_text(json.dumps({
+        "suite": {"file": "golden-tasks-v2.json"},
+        "tasks": {"UI-12": {"status": "fail", "checks": [
+            {"id": "require:uiscale", "ok": False, "detail": "operation omitted"}]}},
+    }), encoding="utf-8")
+    out = tmp_path / "pool" / "tasks.json"
+    assert dispatch(["ledger", "--results", str(results), "practice",
+                     "--out", str(out)]) == 0
+    assert "Wrote 1 independent practice tasks" in capsys.readouterr().out
+    assert len(load_pool(out.parent).tasks) == 1
