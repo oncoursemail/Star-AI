@@ -233,7 +233,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   workspace=None, workspace_edit=False, stream_tokens=False,
                   response_tokens=1600, web_search_enabled=False,
                   subagents_enabled=False, subagent_parallelism=1,
-                  github_enabled=False, intelligence=None, mcp_gateway=None,
+                  github_enabled=False, intelligence=None, mcp_gateway=None, mcp_registry=None,
                   subagent_model=None, tool_workshop=None, specialists=None,
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
@@ -311,6 +311,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         "name": tool["name"], "description": tool["description"],
         "parameters": tool["inputSchema"]}} for tool in mcp_definitions)
     enabled_mcp = {tool["name"] for tool in mcp_definitions}
+    registry_definitions = selected(mcp_registry)
+    definitions.extend({"type": "function", "function": {
+        "name": tool["name"], "description": tool["description"],
+        "parameters": tool["inputSchema"]}} for tool in registry_definitions)
+    enabled_registry = {tool["name"] for tool in registry_definitions}
     workshop_definitions = selected(tool_workshop)
     definitions.extend({"type":"function","function":{"name":t["name"],
                        "description":t["description"],"parameters":t["inputSchema"]}}
@@ -554,6 +559,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     elif mcp_gateway is not None and mcp_gateway.owns(name):
                         if name not in enabled_mcp:
                             raise PermissionError("MCP tool not authorized for this task")
+                    elif mcp_registry is not None and mcp_registry.owns(name):
+                        if name not in enabled_registry:
+                            raise PermissionError("MCP Registry discovery not authorized for this task")
                     elif tool_workshop is not None and tool_workshop.owns(name):
                         if name not in enabled_workshop:
                             raise PermissionError('Custom tool not authorized for this task')
@@ -649,6 +657,15 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             # Never relay external bearer tokens, response bodies or server errors.
                             data = {"isError": True, "content": [{"type": "text",
                                     "text": f"MCP tool unavailable: {type(exc).__name__}"}]}
+                    elif mcp_registry is not None and mcp_registry.owns(name):
+                        try:
+                            local_output = await mcp_registry.call(name, args)
+                            data = {"isError": False, "content": [{"type": "text",
+                                    "text": json.dumps(local_output, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            # Registry responses and headers are untrusted and may contain secrets.
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"MCP Registry discovery failed: {type(exc).__name__}"}]}
                     elif name in TOOL_NAMES:
                         try:
                             local_output = workspace.call(name, args, allow_write=workspace_edit)
