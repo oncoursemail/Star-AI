@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 import sqlite3
 
-from .context_layout import NO_REPLY
 from .memory import compact, COMPACTION_SUMMARY_CHARS
 
 
@@ -118,6 +117,8 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
 
     A large prior message moves to the summarized prefix as a whole. The current
     unanswered question never enters that prefix; no source suffix disappears.
+    Repeating current_text does not discard an earlier completed exchange: only
+    the presence of a successful answer distinguishes history from an orphan.
     """
     if type(budget_chars) is not int or budget_chars < 0:
         raise _error('history budget must be a nonnegative integer')
@@ -146,11 +147,8 @@ def select_window(records: list[dict], budget_chars: int, *, current_text: str |
                    and row['status'] == 'complete']
         if terminal or image_event or not answers or owner['status'] != 'complete':
             continue
-        # The current request is always sent separately, never as prior history.
-        if current_text is not None and owner['body'] == current_text and group is groups[-1]:
-            continue
         user = owner['body']
-        answer = '\\n\\n'.join(row['body'] for row in answers)
+        answer = '\n\n'.join(row['body'] for row in answers)
         if not user.strip() or not answer.strip():
             continue
         pair = [{'role': 'user', 'content': user},

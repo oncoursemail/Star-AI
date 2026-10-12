@@ -164,25 +164,83 @@ def test_history_shaping_excludes_bad_turns_and_keeps_pairs(dialogue, scenario):
     assert window.through_id == 0
 
 
-def test_filtered_rows_cannot_enter_recaps_and_checkpoint_prefix_is_stable(dialogue):
+@pytest.mark.parametrize('current_text', [None, 'what is 2+2?', 'A different question'])
+def test_completed_exchange_survives_repeated_current_text(dialogue, current_text):
+    store, chat = dialogue
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    store.add('P', 'assistant', '4', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    expected = [{'role': 'user', 'content': 'what is 2+2?'},
+                {'role': 'assistant', 'content': '4'}]
+    idle = cm.select_window(records, 10000)
+    active = cm.select_window(records, 10000, current_text=current_text)
+    assert active == idle and active.messages == expected
+    # Saving an identical new question must not rewrite the completed prefix.
+    store.add('P', 'user', 'what is 2+2?', chat_id=chat)
+    busy = cm.select_window(store.raw_history_records('P', chat), 10000, current_text='what is 2+2?')
+    assert busy.messages == expected and busy.omitted == []
+    assert store.raw_history_records('P', chat)[:len(records)] == records
+
+
+def test_multi_row_answer_joins_with_paragraph_newlines(dialogue):
+    store, chat = dialogue
+    store.add('P', 'user', 'Explain in two parts.', chat_id=chat)
+    store.add('P', 'assistant', 'First part.', chat_id=chat)
+    store.add('P', 'assistant', 'Second part.', chat_id=chat)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 10000)
+    assert window.messages == [{'role': 'user', 'content': 'Explain in two parts.'},
+                               {'role': 'assistant', 'content': 'First part.\n\nSecond part.'}]
+    assert window.exchanges == [records]
+    assert store.raw_history_records('P', chat) == records
+
+
+@pytest.mark.parametrize('selection', ['window', 'pressure'])
+@pytest.mark.parametrize('status', ['cancelled', 'failed'])
+def test_filtered_rows_cannot_enter_recaps_and_checkpoint_prefix_is_stable(dialogue, selection, status):
     store, chat = dialogue
     for index in range(4):
         add_exchange(store, chat, index)
     owner = store.add('P', 'user', 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK', chat_id=chat)
-    store.add_terminal('P', chat, owner, 'cancelled', 'EVIDENCE_EVENT_SHOULD_NOT_LEAK')
-    store.add('P', 'user', 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK', chat_id=chat)
-    add_exchange(store, chat, 5)
+    event = store.add_terminal('P', chat, owner, status, 'EVIDENCE_EVENT_SHOULD_NOT_LEAK')
+    orphan = store.add('P', 'user', 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK', chat_id=chat)
+    # Force the excluded rows INTO the omitted prefix, not beyond the recap boundary.
+    for index in range(4, 8):
+        add_exchange(store, chat, index)
+    records = store.raw_history_records('P', chat)
+    window = cm.select_window(records, 1000)
+    if selection == 'pressure':
+        window = cm.omit_messages(cm.select_window(records, 10000), 14)
+    excluded = {owner, event, orphan}
+    assert excluded <= {row['id'] for row in window.omitted}
+    assert window.omitted == [row for row in records if row['id'] <= window.through_id]
     models = Models()
-    candidate = prepare(store, chat, models)
-    assert candidate.changed
+    candidate = asyncio.run(cm.prepare(client(models), 'offline', store_path(store),
+                                      'P', chat, records, window))
+    assert candidate.changed and candidate.checkpoint.through_id == window.through_id
     source = json.loads(models.requests[0]['messages'][1]['content'].split(
-        'NEW TRANSCRIPT (redacted source):\\n', 1)[1])
-    serialized = json.dumps(source)
+        'NEW TRANSCRIPT (redacted source):\n', 1)[1])
+    assert [row['record_id'] for row in source] == [row['id'] for row in window.omitted
+                                                  if row['id'] not in excluded]
+    assert [row['role'] for row in source] == ['user', 'assistant'] * 7
+    assert 'EVIDENCE_USER_0' in candidate.checkpoint.summary
+    assert 'EVIDENCE_USER_6' in candidate.checkpoint.summary
+    serialized = json.dumps(models.requests) + candidate.checkpoint.summary
     assert 'EVIDENCE_CANCELLED_SHOULD_NOT_LEAK' not in serialized
     assert 'EVIDENCE_EVENT_SHOULD_NOT_LEAK' not in serialized
     assert 'EVIDENCE_INTERRUPTED_SHOULD_NOT_LEAK' not in serialized
     cm.commit(store_path(store), candidate)
     assert cm.read_checkpoint(store_path(store), 'P', chat) == candidate.checkpoint
+    assert store.raw_history_records('P', chat) == records
+    unchanged_models = Models()
+    unchanged = prepare(store, chat, unchanged_models)
+    assert unchanged.checkpoint == candidate.checkpoint and not unchanged.changed
+    assert unchanged_models.requests == []
+    # Exclusion from model input must NOT exclude a stored row from source integrity.
+    with store.connection:
+        store.connection.execute("UPDATE messages SET body='changed event' WHERE id=?", (event,))
+    with pytest.raises(cm.ConversationRetentionError, match='changed or are missing'):
+        cm.read_checkpoint(store_path(store), 'P', chat)
 
 
 def test_legacy_checkpoint_matches_actual_writes_and_never_includes_other_chats(dialogue):
