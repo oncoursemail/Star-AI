@@ -127,10 +127,10 @@ export const capabilities=[
 ] as const
 
 /** Baselines only: not a measure of Roblox Studio gameplay or a combined skill-pack run. */
+/** Dated observed runs, not a reproducible best score or combined benchmark. */
 export const evalResults=[
- {suite:'Roblox v2 (34 automated of 50)',passed:'18 / 34',rate:'52.9 %'},
- {suite:'Creation v1 (23 automated)',passed:'11 / 23',rate:'47.8 %'},
- {suite:'Both baselines',passed:'29 / 57',rate:'50.9 %'}
+ {suite:'Roblox v2 scripting (October 12 and earlier runs)',passed:'13–18 / 34',rate:'varies by run'},
+ {suite:'Creation v1 (earlier; not reproduced on v0.9.0)',passed:'11 / 23 (historical)',rate:'unverified on release'}
 ] as const
 
 export const steps=[
