@@ -51,20 +51,6 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 
 Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
-### Reference-guided Roblox environment craft (experimental)
-
-STAR includes an **offline, opt-in environment art toolkit** for Roblox lighting and reference analysis, building on its existing Roblox Studio guards. It does **not** automatically reconstruct 3D assets or edit the current Studio place. Image metrics describe color/composition only and are not proof of visually identical scenes.
-
-~~~powershell
-python -m star.environment_craft inspect path\to\reference.png
-python -m star.environment_craft compare path\to\reference.png path\to\render.png
-python -m star.environment_craft lighting winter-shrine
-python -m star.environment_craft foliage --quality medium
-python -m star.environment_craft vfx falling-snow
-~~~
-
-Lighting, foliage and ambient VFX commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
-
 ## Architecture
 
 | Component | Implementation |
@@ -98,6 +84,20 @@ py -3.11 -m venv .venv
 To preview the website: `cd frontend && npm run dev`, then open the URL shown by Vite. `?preview=1` displays an explicitly read-only interface preview and cannot access a local user's files. On a real STAR desktop, Qt WebChannel enables authenticated local operations through a restricted Python action registry.
 
 Windows packaging runs `scripts/build_windows.ps1`. `STAR.exe --doctor` verifies the bundled Python backend; browser/QWebChannel and GPU use also require live Windows acceptance testing.
+
+### Reference-guided Roblox environment craft (experimental)
+
+The source tree contains an **experimental, offline environment art toolkit** for Roblox lighting and reference analysis (not part of the installed STAR.exe; run it from a source checkout with Python). It does **not** automatically reconstruct 3D assets or edit the current Studio place. Image metrics describe color/composition only and are not proof of visually identical scenes.
+
+~~~powershell
+python -m star.environment_craft inspect path\to\reference.png
+python -m star.environment_craft compare path\to\reference.png path\to\render.png
+python -m star.environment_craft lighting winter-shrine
+python -m star.environment_craft foliage --quality medium
+python -m star.environment_craft vfx falling-snow
+~~~
+
+Lighting, foliage and ambient VFX commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
 
 ## Research and product policy
 

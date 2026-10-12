@@ -165,7 +165,7 @@ def lighting_recipe(name: str) -> str:
     (clock, brightness, exposure, ambient, outdoor, density, haze, glare,
      atm, decay, contrast, saturation, tint, bloom) = PRESETS[name]
     return f'''-- STAR environment craft preview: {name}
--- Owner-reviewed lighting starting point; paste into an authorized Studio edit context.
+-- Lighting starting point (starting values, not reviewed by the owner); paste into an authorized Studio edit context.
 -- Does not replace geometry, sky textures, materials, or local authored lights.
 local Lighting = game:GetService("Lighting")
 Lighting.ClockTime = {clock}

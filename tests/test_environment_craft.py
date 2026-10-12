@@ -53,7 +53,7 @@ def test_rejects_wrong_aspect_ratio(tmp_path):
         compare_render(wide, square)
 
 
-def test_rejects_oversized_or_unknown_or_symlink(tmp_path):
+def test_rejects_oversized_or_unknown(tmp_path):
     invalid = tmp_path / "not-picture.png"
     invalid.write_text("not actually a png", encoding="utf-8")
     with pytest.raises(ValueError, match="decode"):
@@ -61,9 +61,15 @@ def test_rejects_oversized_or_unknown_or_symlink(tmp_path):
     invalid.write_bytes(b"x" * 20_000_001)
     with pytest.raises(ValueError, match="20 MB"):
         inspect_reference(invalid)
+
+
+def test_rejects_symlink(tmp_path):
     valid = _picture(tmp_path / "valid.png", "navy")
     linked = tmp_path / "link.png"
-    linked.symlink_to(valid)
+    try:
+        linked.symlink_to(valid)
+    except (OSError, NotImplementedError):
+        pytest.skip("Host does not permit symlinks")
     with pytest.raises(ValueError, match="regular file"):
         inspect_reference(linked)
 
