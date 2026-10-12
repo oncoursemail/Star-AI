@@ -67,7 +67,8 @@ def knowledge_endpoint_for(settings) -> str:
     try:
         if chosen:
             return validate_knowledge_endpoint(chosen)
-        server = validate_lan_endpoint(getattr(settings, "server_endpoint", ""))
+        server = validate_lan_endpoint(getattr(settings, "server_endpoint", ""),
+                                    allow_cgnat=getattr(settings, "allow_cgnat", False))
     except ValueError:
         return ""
     url = urlsplit(server)

@@ -242,7 +242,8 @@ def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
         return report
 
     try:
-        endpoint = validate_lan_endpoint(getattr(settings, 'server_endpoint', ''))
+        endpoint = validate_lan_endpoint(getattr(settings, 'server_endpoint', ''),
+                                         allow_cgnat=getattr(settings, 'allow_cgnat', False))
     except ValueError as exc:
         return finish('bad_address', str(exc))
     try:
