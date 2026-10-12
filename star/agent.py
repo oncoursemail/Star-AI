@@ -11,6 +11,7 @@ from .redact import redact_text
 from .policy import allowed_registry, enforce
 from .memory import compact
 from .workspace import TOOLS, TOOL_NAMES
+from . import code_answer_completion
 
 
 class HistoryWindowPressure(RuntimeError):
@@ -172,6 +173,8 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             seen['model'] = chunk.model
         if not getattr(chunk, 'choices', None):
             continue
+        if seen is not None and getattr(chunk.choices[0], 'finish_reason', None) is not None:
+            seen['finish_reason'] = chunk.choices[0].finish_reason
         if not responding:
             responding = True
             event({'event': 'model_responding'})
@@ -238,7 +241,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
                   tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
-                  preserve_history=False):
+                  preserve_history=False, complete_code_answers=None):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -419,6 +422,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         request_extras = request_extras(tools_attached)
     extras = dict(request_extras) if request_extras else None
     shown_text = False
+    complete_code_answers = (code_answer_completion.enabled() if complete_code_answers is None
+                             else bool(complete_code_answers))
     helper = helper_client or client
     answered: dict = {}
     for step in range(max_calls):
@@ -487,27 +492,50 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         validate_model_roles(messages)
 
-        async def request(**more):
+        async def request(*, override=None, **more):
             nonlocal extras
+            options = kwargs if override is None else override
             # Check at the dispatch boundary too, including adapter/stream retries.
-            require_fit(kwargs["messages"])
+            require_fit(options["messages"])
             if not extras:
-                return await client.chat.completions.create(**kwargs, **more)
+                return await client.chat.completions.create(**options, **more)
             try:
-                return await client.chat.completions.create(**kwargs, **more, extra_body=extras)
+                return await client.chat.completions.create(**options, **more, extra_body=extras)
             except Exception as exc:
                 # An OpenAI-compatible server that is not llama.cpp may refuse the cache
                 # fields. Nothing was generated, so ask again without them, once.
                 if getattr(exc, 'status_code', None) not in (400, 422):
                     raise
                 extras = None
-                return await client.chat.completions.create(**kwargs, **more)
+                return await client.chat.completions.create(**options, **more)
+
+        async def continue_request(followup_messages, budget):
+            followup = {key: value for key, value in kwargs.items() if key not in ('tools', 'tool_choice')}
+            followup.update(messages=followup_messages, max_tokens=budget)
+            return await request(override=followup)
 
         # One real model request is about to start; the UI shows it as a stage.
         event({'event': 'model_turn', 'step': step + 1, 'max_steps': max_calls})
         response = None
         streamed = False
         answer_text, tool_calls = '', []
+        answered.pop('finish_reason', None)
+        shown_before = shown_text
+        buffered_deltas = []
+
+        def stream_event(item):
+            if not complete_code_answers:
+                event(item)
+            elif item.get('event') == 'assistant_delta':
+                buffered_deltas.append(item)
+            else:
+                # Text preceding a tool call still appears before tool_requested.
+                if item.get('event') == 'tool_requested':
+                    for buffered in buffered_deltas:
+                        event(buffered)
+                    buffered_deltas.clear()
+                event(item)
+
         if stream_tokens:
             # Stream every turn, with or without tools: the answer appears as it is
             # written, and a tool-using turn shows its text while the call is composed.
@@ -522,7 +550,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             else:
                 if hasattr(stream, '__aiter__'):
                     answer_text, tool_calls, shown = await read_stream(
-                        stream, event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_',
+                        stream, stream_event, lead='\n\n' if shown_text else '', call_prefix=f'call_{step + 1}_',
                         seen=answered)
                     shown_text = shown_text or shown
                     streamed = True
@@ -535,9 +563,12 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 response = await request()
             msg = response.choices[0].message
             answer_text, tool_calls = msg.content or "", list(msg.tool_calls or [])
+            answered['finish_reason'] = getattr(response.choices[0], 'finish_reason', None)
             if isinstance(getattr(response, 'model', None), str) and response.model:
                 answered['model'] = response.model
         if tool_calls:
+            for buffered in buffered_deltas:
+                event(buffered)
             messages.append({"role": "assistant", "content": answer_text or "", "tool_calls": [
                 {"id": t.id, "type": "function", "function": {"name": t.function.name, "arguments": t.function.arguments}} for t in tool_calls]})
             for tool_call in tool_calls:
@@ -725,7 +756,13 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             if not answer.strip():
                 raise RuntimeError('Local model streamed no visible answer' if streamed
                                    else "Local model gave no text or tool calls")
+            if complete_code_answers:
+                answer = await code_answer_completion.complete(
+                    answer, answered.get('finish_reason'), history=messages,
+                    send=continue_request, event=event)
             if streamed:
+                if complete_code_answers:
+                    event({'event': 'assistant_delta', 'text': ('\n\n' if shown_before else '') + answer})
                 messages.append({'role': 'assistant', 'content': answer})
             # The name the server reported, else the one that was asked for.
             event({"event": "model_answered", "model": str(answered.get('model') or model)[:180],
