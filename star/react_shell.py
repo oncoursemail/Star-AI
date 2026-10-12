@@ -65,7 +65,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
 # Roblox Open Cloud: the owner's key, its test, the test experience and the approval of each write
-# the model asked for (star/roblox_cloud.py, docs/STAR_ROBLOX_ACCESS.md). Never a publish action itself.
+# the model asked for (star/roblox_cloud.py, docs/ROBLOX_ACCESS.md). Never a publish action itself.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
@@ -623,7 +623,7 @@ def launch():
             from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
-            return start_model_router(self.runtime, self.settings_file, app_data(), source)
+            return self.runtime, self.settings_file, app_data(), source
 
         def _run_chat(self, request_id, prompt, selected, mode='auto', research=False, github=False, retry_id=None):
             home=app_data()
