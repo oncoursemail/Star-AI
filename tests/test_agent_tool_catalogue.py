@@ -51,6 +51,8 @@ ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_
                 "star_roblox_cloud_request_test"]
 # Prompt-scoped craft tools; not part of the ordered general-prompt lists below.
 CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
+# Prepared shared stores only: not in ordered general-prompt tool expectations.
+SHARED_BRAIN = ["shared_brain_query", "shared_brain_stats"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
 WORKSPACE_WRITE = ["workspace_write"]
@@ -245,7 +247,7 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
                                              + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
-                                             + CRAFT)
+                                             + CRAFT + SHARED_BRAIN)
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN
     assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)
