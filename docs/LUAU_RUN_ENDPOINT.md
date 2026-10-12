@@ -1,13 +1,40 @@
 # Standalone Luau run endpoint (draft)
 
-## Scope of this patch
+## Scope and consent
 
-This patch adds the authenticated knowledge-service route and explicit desktop
-`KnowledgeClient.luau_run(...)` call. It does **not** yet add the persisted
-**Run my Luau before answering** desktop setting, its React toggle, or the
-before-answer integration. Those are outstanding work, not enabled behavior.
-No existing chat path calls the new method. No evaluation or workflow files are
-changed. Do not merge this draft as completion of the full feature.
+The knowledge service exposes authenticated `POST /luau/run`, and the desktop
+knowledge client exposes `KnowledgeClient.luau_run(...)`. Both server execution
+and automatic desktop execution remain **OFF by default**. Nothing changes
+Studio permissions, starts a local VM, installs tools, or enables a service.
+
+In Settings, **Run my Luau before answering** persists the strict boolean
+`luau_run_before_answer`, default `false`, including when loading older settings.
+Checking the box does not save it: use Save Settings. The operator must separately
+enable the sandbox on the configured STAR Knowledge service. The existing
+knowledge address and server key are reused; `knowledge_endpoint = "off"` wins.
+No endpoint or credentials are supplied by the model or sandbox output.
+
+When explicitly enabled, `run_task` suppresses model-token streaming so unreviewed
+code is not displayed first. After the existing static check and any successful
+repair, it runs at most two closed, exactly labelled `lua`/`luau` fenced blocks,
+sequentially, using three seconds and 256 MiB per snippet. Other languages,
+embedded fences inside another fenced block, and incomplete fences are ignored.
+The runtime review never rewrites code. Each block is an independent smoke run
+with no separate test body; a pass proves only normal completion, not functional
+correctness or compatibility with Roblox. Call `luau_run` explicitly with `tests`
+for assertion-based checks. The generated report distinguishes static checks,
+execution, failed code, unavailable results, and skipped blocks.
+
+The review has a 40-second budget and preserves ten seconds of the overall turn
+for saving. It does not start a request without the client's 17-second transport
+allowance remaining. Cancellation propagates; a timed-out request is not retried
+and no second snippet is submitted while its worker may still be active. A
+cancelled HTTP worker can finish its bounded request; it cannot cancel a server
+run already accepted, which retains its independent hard timeout. A transport
+failure is **no verified result**, not proof that execution never happened.
+Untrusted VM output and exception text are not added to model prompts, progress
+events, or saved review records. The records contain verdicts, bounded source-line
+locations, and measured usage only. Runtime failure does not discard the answer.
 
 ## Protocol
 
@@ -34,23 +61,20 @@ Code and tests are separately compiled chunks named `code` and `tests`, each
 with its own original line numbering. Tests receive a snapshot of exported code
 globals and their own standard builtins, so code cannot replace the test chunk's
 `assert`. Exported functions still use the code environment. The first value
-returned by the code is available to the test body as `result`.
-Local variables in the code are not visible to the separate test chunk. Returning
-early from code does not skip tests. This is the standalone VM: Roblox engine
-objects, services, Studio state and networking are **not** present.
+returned by the code is available to the test body as `result`. Local variables
+in the code are not visible to the separate test chunk. Returning early from code
+does not skip tests. Roblox objects, services, Studio state and networking are
+not present in the standalone VM.
 
 A completed sandbox attempt returns HTTP 200, even for failed code. The JSON
 contains `ok`, `status` (`pass`/`fail`), `executed`, bounded `output`, an `error`
 category, structured `errors` (`source`, `line`, `message`), `exit_code`,
 `timed_out`, `output_limited`, `usage` and `limits`. Usage reports wall seconds,
 CPU seconds, peak resident bytes and captured output bytes. A limit failure may
-have no source line; one is never fabricated. A passing run means only that the
-snippet and supplied tests returned normally, not that a Roblox game is correct.
-Output and diagnostics are untrusted data, never instructions.
-
-HTTP 400 is invalid input; 401 is the existing authentication failure; 413 is the
-existing body-size rejection; 429 is admission refusal; 503 is disabled or
-unavailable infrastructure. These refusals do not claim code executed.
+have no source line; one is never fabricated. Output and diagnostics are untrusted
+data, never instructions. HTTP 400 is invalid input; 401 is authentication failure;
+413 is body-size rejection; 429 is admission refusal; 503 is disabled or unavailable
+infrastructure. These refusals do not claim code executed.
 
 ## Isolation and limits
 
@@ -92,9 +116,9 @@ an ordinary CLI environment would not be sufficient.
 Run one service process per isolated container/account. These limits are not an
 OS security boundary against a native VM exploit; retain the evaluation
 harness's unprivileged container boundary, update Luau, and keep the account
-free of host secrets. Luau's upstream sandbox guidance is at
-https://luau.org/sandbox/ . The evaluation harness is read-only reference here;
-its files were not modified.
+free of host secrets. Upstream guidance: https://luau.org/sandbox/ .
+`star/eval_sandbox.py` is read-only reference; no evaluation or workflow files
+are changed by this feature.
 
 ## Admission and enablement
 
@@ -106,27 +130,38 @@ multiple independently deployed service processes are not one shared queue.
 
 The server remains OFF unless an operator explicitly sets `STAR_KB_LUAU_RUN=1`
 in its service environment. Other spellings do not enable it. No shipped
-configuration sets this variable. The desktop client makes no automatic calls.
+configuration sets this variable. The desktop setting separately defaults off.
 
 ## Tests and evidence
 
 ```sh
-pytest -q tests/test_luau_run_sandbox.py tests/test_luau_run_http.py tests/test_luau_run_client.py tests/test_luau_run_regressions.py
+pytest -q tests/test_luau_run_sandbox.py tests/test_luau_run_http.py tests/test_luau_run_client.py tests/test_luau_run_regressions.py tests/test_luau_run_review.py tests/test_luau_run_desktop.py
+pytest -q
+cd frontend
+npm test -- --run
 ```
 
-The tests include real local child-process probes for address space, output,
-wall timeout, effective CPU/file/open-file/core/process limits, empty environment,
+Tests include real local child-process probes for address space, output, wall
+timeout, effective CPU/file/open-file/core/process limits, empty environment,
 fork refusal (non-root), cleanup, FIFO/capacity/duplicate admission, the actual HTTP
 handler and authentication, and the real client transport using a fake server.
-The HTTP tests substitute only the unrelated document-index imports so they do
-not add server-only numpy/YAML dependencies to desktop test installations.
-They execute the real service constructor, handler, authorization and queue.
+The HTTP tests substitute only unrelated document-index imports to avoid adding
+server-only numpy/YAML dependencies to desktop test installations. They execute
+the real service constructor, handler, authorization and queue.
 
-Sixteen additional cases execute the **real standalone Luau VM**, including
+Desktop tests drive real Settings persistence/validation and `run_task`, including
+the real model execution path with a fake model and HTTP transport. Review tests
+cover explicit consent, exact final source after repair, serial/two-block limits,
+deadline exhaustion, cancellation, unavailable/malformed responses, and refusal
+to relay arbitrary diagnostics as instructions. Vitest drives the actual App
+through `fake-desktop.ts` to check default-off, save, reload, and revocation.
+
+Sixteen additional cases execute the real standalone Luau VM, including
 loop/memory/output bombs, module/file/process attempts, escape attempts, syntax
 errors, test failures and successful exported functions. They skip explicitly
-when the VM/Linux/non-root prerequisites are absent. To run them, set
+when VM/Linux/non-root prerequisites are absent. To run them, set
 `STAR_LUAU_TOOLS` to an existing reviewed VM installation and run pytest as a
 non-root account. Tests never fetch tools or need a GPU, network or real keyring.
-A skip is not containment evidence. The lead must run the complete test suites
-and real-VM cases before approving this feature.
+A skip is not containment evidence. Consult the PR description for commands and
+check results actually observed; this document's commands are not pass claims.
+The lead must run the complete test suites and real-VM cases before approval.
