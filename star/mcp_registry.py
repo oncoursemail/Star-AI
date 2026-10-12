@@ -16,7 +16,8 @@ from jsonschema import Draft202012Validator
 REGISTRY_URL = "https://registry.modelcontextprotocol.io/v0.1/servers"
 MAX_REPLY_BYTES = 192_000
 MAX_SEARCH_CALLS = 4
-TRIGGER = re.compile(r"\b(?:mcp|connectors?|tool(?:s|ing)?|brain\s*2|brain2|registry)\b", re.I)
+# Only a prompt that names MCP: "tool", "connector" and "registry" are everyday Roblox and Windows words.
+TRIGGER = re.compile(r"\b(?:mcp|model\s+context\s+protocol)\b", re.I)
 SERVER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,140}/[A-Za-z0-9][A-Za-z0-9._/-]{0,140}$")
 
 TOOLS = [{

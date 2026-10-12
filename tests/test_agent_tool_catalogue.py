@@ -56,6 +56,9 @@ WORKSPACE_WRITE = ["workspace_write"]
 WORKSPACE_GAME = ["workspace_game_discover", "workspace_game_inspect", "workspace_game_plan"]
 # Read-only MCP connections (star/mcp_connections.py TOOLS): when one is switched on in Settings.
 MCP = ["star_mcp_search", "star_mcp_call"]
+# Public MCP Registry search (star/mcp_registry.py TOOLS): Agent mode with "Search the web" on, and a prompt
+# that names MCP. It reads metadata only and connects nothing.
+REGISTRY = ["star_mcp_registry_search"]
 # Tool Workshop (star/tool_workshop.py TOOL_SCHEMAS).
 WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_test", "star_toolforge_run"]
 # The research team (star/specialist_agents.py DELEGATE_TOOL).
@@ -208,7 +211,7 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
     names = everything_on(desk, monkeypatch, knowledge=False)
     expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
-                + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + WORKSHOP
+                + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
     assert names == expected          # the order is part of the request the server caches
     assert len(names) == len(set(names))
@@ -218,7 +221,7 @@ def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch
     names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True)
     expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
                 + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
-                + WORKSHOP + SPECIALISTS)
+                + REGISTRY + WORKSHOP + SPECIALISTS)
     assert names == expected
     assert not set(ROBLOX_LINKS) & set(names)
 
@@ -232,11 +235,18 @@ def test_switching_agent_skills_off_removes_only_the_skill_tools(desk):
 
 def test_the_written_lists_are_the_whole_built_in_catalogue():
     """A built-in tool added to (or dropped from) a source table must be added to the lists above."""
-    from star import intelligence, mcp_connections, specialist_agents, tool_workshop, workspace
+    from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
                                              + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD)
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)
     assert [tool["name"] for tool in mcp_connections.TOOLS] == MCP
+    assert [tool["name"] for tool in mcp_registry.TOOLS] == REGISTRY
     assert [tool["name"] for tool in tool_workshop.TOOL_SCHEMAS] == WORKSHOP
     assert specialist_agents.DELEGATE_TOOL["name"] == SPECIALISTS[0]
+
+
+def test_the_registry_search_needs_the_search_the_web_switch(desk):
+    """Without "Search the web" the registry tool is not offered, whatever the prompt says."""
+    result = desk.turn(EVERYTHING_PROMPT, settings=everything_settings(desk))
+    assert "star_mcp_registry_search" not in offered(result.requests[0])

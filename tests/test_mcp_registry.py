@@ -31,6 +31,8 @@ def test_search_is_metadata_only_and_never_exposes_install_commands():
     discovery = RegistryDiscovery(transport=httpx.MockTransport(_registry_response))
     assert discovery.definitions("Find Roblox MCP tools")
     assert not discovery.definitions("Make a chair")
+    assert not discovery.definitions("Make a Tool script for a sword")
+    assert not discovery.definitions("Clean the Windows registry connector")
     out = asyncio.run(discovery.call("star_mcp_registry_search", {"query": "roblox"}))
     assert out["servers"][0]["name"] == "io.github.author/roblox-mcp"
     assert out["servers"][0]["repository_url"].startswith("https://github.com/")
