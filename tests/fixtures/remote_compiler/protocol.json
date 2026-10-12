@@ -1,0 +1,12 @@
+[
+  {"name": "Buy", "direction": "client_to_server", "reliable": true, "reply": true, "rate_limit": 2,
+   "arguments": [{"name": "quantity", "type": "number", "min": 1, "max": 5},
+                 {"name": "item", "type": "string", "min": 1, "max": 4, "enum": ["A", "B"]}]},
+  {"name": "Look", "direction": "client_to_server", "reliable": false, "rate_limit": 1,
+   "arguments": [{"name": "yaw", "type": "number", "min": -180, "max": 180}]},
+  {"name": "Updated", "direction": "server_to_client", "reliable": true, "rate_limit": 2,
+   "arguments": [{"name": "ready", "type": "boolean"}]},
+  {"name": "Pulse", "direction": "server_to_client", "reliable": false, "rate_limit": 1,
+   "arguments": [{"name": "strength", "type": "number", "min": 0, "max": 1}]},
+  {"name": "Ping", "direction": "client_to_server", "reliable": true, "rate_limit": 1, "arguments": []}
+]

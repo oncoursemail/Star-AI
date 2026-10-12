@@ -102,6 +102,8 @@ export function installFakeDesktop() {
 
   return {
     calls,
+    snapshot: () => boot(),
+    saved: () => db.map((m,i) => ({...m,id: `saved-${i}`})),
     sent: (action: string) => calls.filter(c => c.action === action),
     requestOf,
     /** Start every test from a clean backend. */

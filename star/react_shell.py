@@ -21,6 +21,7 @@ import uuid
 
 from .desktop_core import Settings, Conversations, app_data, run_task, query_models, check_studio
 from .analytics import get_dashboard
+from .brain_overview import brain_snapshot
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
@@ -49,7 +50,7 @@ from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','brainSnapshot','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
@@ -793,6 +794,7 @@ def launch():
                         return json.dumps({'ok':True,'pending':True,'requestId':rid})
                     return json.dumps({'ok':True,'data':media_worker()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
+                if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
                 if action=='pickFiles':
                     from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
@@ -801,7 +803,7 @@ def launch():
                     elif kind=='image':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Choose images','','Images (*.png *.jpg *.jpeg *.webp)')
                     else:
-                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json)')
+                        names, _=QFileDialog.getOpenFileNames(self.host,'Attach references','','References (*.png *.jpg *.jpeg *.webp *.mp4 *.mov *.mkv *.webm *.avi *.wav *.mp3 *.m4a *.flac *.ogg *.aac *.txt *.md *.pdf *.docx *.pptx *.csv *.tsv *.xlsx *.json *.rbxmx *.rbxlx *.rbxm *.rbxl)')
                     picked=[]
                     for name in names[:8]:
                         path=Path(name).resolve(strict=True)
@@ -825,13 +827,13 @@ def launch():
                     self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action=='switchChat':
-                    if self.active_task:raise RuntimeError('Wait for the current answer before switching chats')
+                    # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.switch_chat(settings.project,chat_id)
                     finally: conversations.close()
-                    self._warm(check=False)
+                    if not self.active_task:self._warm(check=False)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.

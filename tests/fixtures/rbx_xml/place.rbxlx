@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
+  <External>null</External><External>nil</External>
+  <Item class="Workspace">
+    <Properties><string name="Name">Workspace</string></Properties>
+    <Item class="Part"><Properties><string name="Name">Ground</string><bool name="CanCollide">true</bool></Properties></Item>
+  </Item>
+  <Item class="ReplicatedStorage">
+    <Properties><string name="Name">ReplicatedStorage</string></Properties>
+    <Item class="RemoteEvent"><Properties><string name="Name">Submit</string></Properties></Item>
+  </Item>
+</roblox>

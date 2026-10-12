@@ -732,8 +732,9 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
     Returns (history messages, newest stored rows). The same function feeds a
     real turn and the cache warm-up, so both start with identical bytes. A
     trailing user row is the message being answered now (already saved by the
-    UI) and is not history; an earlier message that never got a reply is kept,
-    marked as unanswered (see context_layout.exchanges).
+    UI) and is not history; an earlier message that never got a reply (failed,
+    stopped or interrupted) is left out, with no placeholder answer (see
+    conversation_memory.select_window).
     """
     window, rows = chat_history_snapshot(settings, home, chat_id)
     return window.messages, [(row['role'], row['body']) for row in rows
