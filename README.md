@@ -51,6 +51,20 @@ The public-facing React website builds from `frontend/` and is intended for **ht
 
 Read the [repository map and agent coordination guide](docs/REPOSITORY_GUIDE.md) and [implementation, research sources and QA plan](docs/STAR_REACT_REDESIGN.md).
 
+### Reference-guided Roblox environment craft (experimental)
+
+STAR includes an **offline, opt-in environment art toolkit** for Roblox lighting and reference analysis, building on its existing Roblox Studio guards. It does **not** automatically reconstruct 3D assets or edit the current Studio place. Image metrics describe color/composition only and are not proof of visually identical scenes.
+
+~~~powershell
+python -m star.environment_craft inspect path\to\reference.png
+python -m star.environment_craft compare path\to\reference.png path\to\render.png
+python -m star.environment_craft lighting winter-shrine
+python -m star.environment_craft foliage --quality medium
+python -m star.environment_craft vfx falling-snow
+~~~
+
+Lighting, foliage and ambient VFX commands print **Luau review templates**, not executed changes. The foliage template requires separately authored, skinned tree bones. The bundled `roblox-environment-art` skill is **opt-in only** until it passes the evaluation gate. Read the [research, official technical sources, reference breakdowns and limitations](docs/STAR_ENVIRONMENT_CRAFT_20261011.md).
+
 ## Architecture
 
 | Component | Implementation |
