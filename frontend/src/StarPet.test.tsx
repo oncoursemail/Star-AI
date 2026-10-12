@@ -185,6 +185,7 @@ describe('composited mascot animation',()=>{
   rerender(<StarPet state="finished" reducedMotion/>)
   expect(container.querySelectorAll('.star-pet__image')).toHaveLength(1)
   expect(container.querySelector('.star-pet__outgoing')).toBeNull()
-  expect(vi.getTimerCount()).toBe(0)
+  // The existing 30-second idle clock is retained; no motion clock is created.
+  expect(vi.getTimerCount()).toBe(1)
  })
 })
