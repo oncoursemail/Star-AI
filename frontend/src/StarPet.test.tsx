@@ -24,8 +24,8 @@ describe('Star mascot',()=>{
  it.each(['idle','typing','thinking','streaming','finished','error','cancelled','sleepy','asleep','update'] as const)('keeps %s artwork relative to the packaged entry point',state=>{
   const {container}=render(<StarPet state={state} reducedMotion/>)
   const src=container.querySelector('img')!.getAttribute('src')!
-  expect(src).toMatch(/^\.\/mascot\//)
-  expect(new URL(src,'file:///app/frontend/dist/index.html').href).toMatch(/^file:\/\/\/app\/frontend\/dist\/mascot\//)
+  expect(src).toMatch(/^\.\/assets\/mascot\/(faces|poses)\/[a-z0-9-]+\.png$/)
+  expect(new URL(src,'file:///app/frontend/dist/index.html').href).toMatch(/^file:\/\/\/app\/frontend\/dist\/assets\/mascot\//)
  })
  it('hides entirely when disabled and stops all pet timers',()=>{
   vi.useFakeTimers()
@@ -44,9 +44,9 @@ describe('Star mascot',()=>{
  it('does not alternate art with reduced motion',()=>{
   vi.useFakeTimers()
   const {container}=render(<StarPet state="streaming" reducedMotion/>)
-  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./mascot/poses/type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/type-1.png')
   act(()=>vi.advanceTimersByTime(10000))
-  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./mascot/poses/type-1.png')
+  expect(container.querySelector('.star-pet__image')?.getAttribute('src')).toBe('./assets/mascot/poses/type-1.png')
  })
  it('shows and hides status when clicked',async()=>{
   const user=userEvent.setup()

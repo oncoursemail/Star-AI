@@ -1,6 +1,8 @@
-"""The Star mascot image assets: every file named in docs/mascot/manifest.json exists in the folders it is listed for,
+"""The Star mascot image assets: every file named in docs/mascot/manifest.json exists in the folder it is listed for,
 is a PNG of the stated size, none is larger than 1.5 MB, no unlisted file sits in the asset folders, and every image the
-public website's SiteMascot.tsx loads is present."""
+website (SiteMascot.tsx) and the chat pet (StarPet.tsx) load is present in the ONE shipped folder
+frontend/public/assets/mascot. That folder holds exactly what the code loads and nothing else: the rest of the approved art
+is kept under docs/mascot/art, which is not copied into the app or the installer."""
 import json
 import re
 import struct
@@ -11,6 +13,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[1]
 MANIFEST = REPO / "docs" / "mascot" / "manifest.json"
 MAX_BYTES = 1_500_000
+MAX_SHIPPED_BYTES = 6_000_000  # was about 24 MB when the art was stored twice and unused art was shipped
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 
@@ -70,13 +73,52 @@ def test_asset_folders_contain_no_unlisted_files():
         assert found == listed, f"{rel}: unlisted {sorted(found - listed)}, missing {sorted(listed - found)}"
 
 
-def test_every_image_the_website_loads_exists():
-    source = (REPO / "frontend" / "src" / "SiteMascot.tsx").read_text(encoding="utf-8")
-    assert "const assets='./assets/mascot'" in source
+def _images_loaded_by_the_code():
+    """Relative paths (under the shipped folder) of every image SiteMascot.tsx and StarPet.tsx can request."""
+    site_source = (REPO / "frontend" / "src" / "SiteMascot.tsx").read_text(encoding="utf-8")
+    pet_source = (REPO / "frontend" / "src" / "StarPet.tsx").read_text(encoding="utf-8")
+    for source in (site_source, pet_source):
+        assert "const assets='./assets/mascot'" in source
+    wanted = {m.lstrip("/") for m in re.findall(r"assets\+'(/[a-z0-9/_.-]+\.png)'", site_source)}
+    wanted |= {f"faces/{face}.png" for face in re.findall(r"\{id:'([a-z-]+)',name:", site_source)}
+    # petImage(): face:'x' / pose:'y' and the alternating pair face:alternate?'a':'b'
+    for kind, alternate, name in re.findall(r"(face|pose):(?:alternate\?'([a-z0-9-]+)':)?'([a-z0-9-]+)'", pet_source):
+        for item in (alternate, name):
+            if item:
+                wanted.add(f"{kind}s/{item}.png")
+    return wanted
+
+
+def test_every_image_the_website_and_the_pet_load_exists():
     site_root = REPO / _manifest()["roots"]["site"]
-    wanted = {m.lstrip("/") for m in re.findall(r"assets\+'(/[a-z0-9/_.-]+\.png)'", source)}
-    wanted |= {f"faces/{face}.png" for face in re.findall(r"\{id:'([a-z-]+)',name:", source)}
-    assert "star-hero.png" in wanted and "faces/normal.png" in wanted and "poses/wave-a.png" in wanted
-    assert len(wanted) >= 11
+    wanted = _images_loaded_by_the_code()
+    assert {"star-hero.png", "faces/normal.png", "faces/nervous.png", "poses/stand.png", "poses/wave-a.png",
+            "poses/type-1.png", "poses/type-2.png", "poses/letter.png"} <= wanted
+    assert len(wanted) >= 19
     for rel in sorted(wanted):
-        assert (site_root / rel).is_file(), f"the website loads ./assets/mascot/{rel} but it is missing"
+        assert (site_root / rel).is_file(), f"the app loads ./assets/mascot/{rel} but it is missing"
+
+
+def test_shipped_folder_holds_exactly_what_the_code_loads_and_stays_small():
+    doc = _manifest()
+    site_root = REPO / doc["roots"]["site"]
+    shipped = {p.relative_to(site_root).as_posix() for p in site_root.rglob("*") if p.is_file()}
+    assert shipped == _images_loaded_by_the_code(), "shipping an image no code loads (or loading one that is not shipped)"
+    size = sum((site_root / rel).stat().st_size for rel in shipped)
+    assert size == doc["shipped_bytes"]
+    assert size <= MAX_SHIPPED_BYTES, f"the shipped art is {size} bytes"
+
+
+def test_art_not_loaded_by_the_code_is_kept_outside_the_app():
+    doc = _manifest()
+    art_root = REPO / doc["roots"]["art"]
+    assert doc["roots"]["art"].startswith("docs/")
+    shipped_names = _images_loaded_by_the_code()
+    kept = {p.relative_to(art_root).as_posix() for p in art_root.rglob("*") if p.is_file()}
+    assert kept, "the unused art must stay in the repository"
+    assert not (kept & shipped_names), "an image is stored twice"
+    # one copy only: the old second folder must be gone and no code may point at it
+    assert not (REPO / "frontend" / "public" / "mascot").exists()
+    for source in (REPO / "frontend" / "src").glob("*.ts*"):
+        text = source.read_text(encoding="utf-8")
+        assert "'./mascot/" not in text and '"./mascot/' not in text, f"{source.name} loads from the removed ./mascot folder"

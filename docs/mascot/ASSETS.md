@@ -3,17 +3,35 @@
 Approved artwork for Star, the mascot of STAR Intelligence, in the form the website and the in-app Star pet load.
 The character itself is specified in [CHARACTER.md](CHARACTER.md); this page lists the files, the canvas rules and which
 drawings were replaced by the third redraw sheet. The machine-readable list is [manifest.json](manifest.json) (file, group, source sheet and
-cell, size, bytes, notes); `tests/test_mascot_assets.py` checks it against the files.
+cell, size, bytes, notes, and the folder it is in); `tests/test_mascot_assets.py` checks it against the files.
+
+## Approval
+
+The owner has seen and approved this artwork (2026-10-11). Nothing in it was re-compressed or redrawn when it was
+reorganised on 2026-10-12; the files are byte-for-byte the approved ones.
 
 ## Where the files are
 
-| Folder | Used by | Contents |
-| --- | --- | --- |
-| `frontend/public/assets/mascot/` | the public website (`frontend/src/SiteMascot.tsx` loads `./assets/mascot/...`) | `star-hero.png`, `faces/<name>.png` (all 24), `poses/stand.png`, `poses/wave-a.png` |
-| `frontend/public/mascot/` | the app's Star pet (`mascot/faces/<name>.png`, `mascot/poses/<name>.png`) | `faces/` (24), `poses/` (24), `forms/` (8), `star-hero-1024.png`, `pfp/` (3 profile pictures at 1024 px and 256 px) |
+There is exactly one copy of every image, and only what the code loads is shipped.
 
-The 24 faces and the two poses the site uses exist in both folders (about 6.6 MB twice) because the two consumers use
-different public paths.
+| Folder | In the app and installer? | Contents |
+| --- | --- | --- |
+| `frontend/public/assets/mascot/` | yes (copied into `frontend/dist/assets/mascot/`; about 5.7 MB) | `star-hero.png`; 11 faces `asleep`, `content`, `focused`, `happy`, `nervous`, `normal`, `proud`, `puppy-eyes`, `sleepy`, `surprised`, `thinking`; 7 poses `letter`, `sleep-sit`, `stand`, `think`, `type-1`, `type-2`, `wave-a` |
+| `docs/mascot/art/` | no (documentation only; about 11.7 MB) | the other 13 faces, the other 17 poses, `forms/` (8), `pfp/` (3 profile pictures at 1024 px and 256 px), `star-hero-1024.png` |
+
+Both consumers load from the shipped folder with a relative path, because the packaged app is opened as a local file:
+
+- the public website, `frontend/src/SiteMascot.tsx`: `./assets/mascot/star-hero.png`, the eight faces of "Meet Star" (`normal`, `happy`,
+  `content`, `puppy-eyes`, `surprised`, `thinking`, `focused`, `proud`; `content` is also the hero blink) and the poses `stand` and `wave-a`;
+- the Star pet in the chat, `frontend/src/StarPet.tsx`: faces `normal`, `content` (idle), `focused` (typing and streaming),
+  `thinking`, `happy`, `nervous`, `surprised`, `sleepy`, `asleep` and poses `think`, `type-1`, `type-2`, `wave-a`, `sleep-sit`, `letter`
+  under the same `./assets/mascot/` prefix. The pet is off until the owner turns on "Show Star" in Settings and respects reduced motion.
+
+Before 2026-10-12 the 24 faces and 2 poses were stored twice (`frontend/public/mascot/` and `frontend/public/assets/mascot/`) and about
+16 MB (forms, profile pictures, unused poses and faces) was copied into the app although nothing loaded it, about 24 MB in all. To
+use another drawing in the app, move it from `docs/mascot/art/` to the same relative place under `frontend/public/assets/mascot/`, load it
+from code, and update `manifest.json` (`"in": ["site"]`); `tests/test_mascot_assets.py` fails when the shipped folder and the code disagree
+or when an image is stored twice.
 
 Exact files the site expects (all present): `star-hero.png`; faces `normal`, `content` (hero blink), `happy`,
 `puppy-eyes`, `surprised`, `thinking`, `focused`, `proud`; poses `stand`, `wave-a`. Nothing had to be mapped or invented.
@@ -30,8 +48,8 @@ walk-1, walk-2, walk-3, walk-4, run-1, run-2, type-1, type-2, sleep-sit, sleep-l
 **Forms (8, 512 x 640)**: cat-paw, cat-curious, cat-stretch, cat-startled, puppy-beg, puppy-happy, puppy-puzzled,
 puppy-sleepy.
 
-**Hero**: `star-hero.png` (1086 x 1448, the unscaled approved illustration) and `star-hero-1024.png` (768 x 1024, longest
-side 1024). **Profile pictures**: `pfp/star-pfp-normal|happy|content.png` (1024 x 1024, round, gold ring) and `-256.png`.
+**Hero**: `star-hero.png` (1086 x 1448, the unscaled approved illustration; shipped) and `star-hero-1024.png` (768 x 1024, longest
+side 1024; in `docs/mascot/art/`). **Profile pictures** (in `docs/mascot/art/pfp/`): `star-pfp-normal|happy|content.png` (1024 x 1024, round, gold ring) and `-256.png`.
 
 ## Canvas rules
 

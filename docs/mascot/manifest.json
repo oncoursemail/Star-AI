@@ -27,8 +27,8 @@
  ],
  "total_bytes": 17334193,
  "roots": {
-  "app": "frontend/public/mascot",
-  "site": "frontend/public/assets/mascot"
+  "site": "frontend/public/assets/mascot",
+  "art": "docs/mascot/art"
  },
  "files": [
   {
@@ -54,7 +54,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -81,7 +80,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -108,7 +106,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -137,7 +134,6 @@
     "QA minor: clasped hands are cut by the bottom edge and read as two lumpy fists"
    ],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -166,8 +162,7 @@
     "QA minor: left heart eye slightly smaller; fists have no finger definition"
    ],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -193,7 +188,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -220,7 +214,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -247,8 +240,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -274,8 +266,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -301,8 +292,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -328,8 +318,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -357,8 +346,7 @@
     "QA minor: near-black squiggle at the top right has almost no contrast on dark backgrounds"
    ],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -384,8 +372,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -411,8 +398,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -438,8 +424,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -465,8 +450,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -492,8 +476,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -519,7 +502,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -546,7 +528,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -573,7 +554,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -600,7 +580,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -627,7 +606,6 @@
    ],
    "notes": [],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -654,8 +632,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -681,8 +658,7 @@
    ],
    "notes": [],
    "in": [
-    "app",
-    "site"
+    "art"
    ]
   },
   {
@@ -712,7 +688,6 @@
     "QA minor: hands at the sides are tiny and spiky at 4x"
    ],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -741,7 +716,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -769,7 +744,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -799,7 +774,7 @@
     "QA minor: thin splayed fingers at both sides"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -829,7 +804,7 @@
     "QA minor: thin splayed fingers at both sides"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -859,7 +834,6 @@
     "QA minor: lower hand at the skirt is thin and pointed"
    ],
    "in": [
-    "app",
     "site"
    ]
   },
@@ -890,7 +864,7 @@
     "QA minor: lower hand at the skirt is thin and pointed"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -920,7 +894,7 @@
     "QA minor: an unexplained pink shape behind the right side of the skirt"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -950,7 +924,7 @@
     "QA minor: spindly raised fingers; boots show only a tiny gold mark; drawn in the air (still rests on the baseline here)"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -980,7 +954,7 @@
     "fix sheet 3 cell 3; replaces the pose-sheet drawing (jagged claw-like finger outlines on the knees): rounded fists with soft finger scallops"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1008,7 +982,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "site"
    ]
   },
   {
@@ -1038,7 +1012,7 @@
     "fix sheet 3 cell 7; replaces the pose-sheet drawing: pointing hand and the hand on the hip are both drawn and clean"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1068,7 +1042,7 @@
     "QA minor: gold swirl ornament on the rear sleeve; boots read dark brown"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1096,7 +1070,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1124,7 +1098,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1152,7 +1126,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1182,7 +1156,7 @@
     "fix sheet 3 cell 1; replaces the pose-sheet drawing (three pigtails and three ribbons, rust-smudged boots): two tails, clean fists, star boots"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1212,7 +1186,7 @@
     "fix sheet 3 cell 2; replaces the pose-sheet drawing (three pigtails and three ribbons): two tails, clean fists, star boots"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1240,7 +1214,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "site"
    ]
   },
   {
@@ -1268,7 +1242,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "site"
    ]
   },
   {
@@ -1296,7 +1270,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "site"
    ]
   },
   {
@@ -1324,7 +1298,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1352,7 +1326,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "site"
    ]
   },
   {
@@ -1380,7 +1354,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1408,7 +1382,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1436,7 +1410,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1464,7 +1438,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1492,7 +1466,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1520,7 +1494,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1548,7 +1522,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1576,7 +1550,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1604,7 +1578,7 @@
    "status": "ok",
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1640,7 +1614,7 @@
     "longest side 1024"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1656,7 +1630,7 @@
    "bytes": 619152,
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1674,7 +1648,7 @@
     "256 px version"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1690,7 +1664,7 @@
    "bytes": 625496,
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1708,7 +1682,7 @@
     "256 px version"
    ],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1724,7 +1698,7 @@
    "bytes": 647389,
    "notes": [],
    "in": [
-    "app"
+    "art"
    ]
   },
   {
@@ -1742,8 +1716,11 @@
     "256 px version"
    ],
    "in": [
-    "app"
+    "art"
    ]
   }
- ]
+ ],
+ "shipped_bytes": 5653422,
+ "art_bytes": 11680771,
+ "roots_note": "site = the only copy shipped in the app and the website (everything the code loads: the hero, the faces and poses used by frontend/src/SiteMascot.tsx and frontend/src/StarPet.tsx). art = approved drawings kept in the repository but not copied into the app or the installer."
 }

@@ -1,6 +1,8 @@
 import {useEffect,useRef,useState} from 'react'
 import './StarPet.css'
 
+/** The one shipped copy of the art (frontend/public/assets/mascot); relative so the packaged app can load it from a local file. */
+const assets='./assets/mascot'
 export type PetState='idle'|'typing'|'thinking'|'streaming'|'finished'|'error'|'cancelled'|'sleepy'|'asleep'|'update'
 export type PetImage={face:string;pose:string;status:string}
 export function petImage(state:PetState,alternate=false):PetImage {
@@ -56,7 +58,7 @@ export function StarPet({state,visible=true,reducedMotion=false,idleEnabled=true
  },[currentState,visible,reducedMotion])
  const image=petImage(currentState,reducedMotion?false:alternate)
  const showPose=['streaming','thinking','sleepy','asleep','update'].includes(currentState)
- const source=showPose?'./mascot/poses/'+image.pose+'.png':'./mascot/faces/'+image.face+'.png'
+ const source=assets+(showPose?'/poses/'+image.pose:'/faces/'+image.face)+'.png'
  useEffect(()=>{setFailed(false)},[source])
  if(!visible||failed)return null
  return <div className={'star-pet star-pet--'+corner} data-testid="star-pet" data-state={currentState}>
