@@ -478,8 +478,16 @@ def _emit(spec: dict[str, Any]) -> str:
             put("end")
         # Set Parent after all local properties and decorations.
         put(f"{var}.Parent = {parent or 'playerGui'}")
+        child_parent = var
+        if kind == "screen":
+            put('local host = Instance.new("Frame")')
+            put('host.Name = "ResponsiveRoot"')
+            put('host.Size = UDim2.fromScale(1, 1)')
+            put('host.BackgroundTransparency = 1')
+            put(f'host.Parent = {var}')
+            child_parent = "host"
         for child in node.get("children", []):
-            walk(child, var)
+            walk(child, child_parent)
 
     walk(root, None)
     ref_width = mobile.get("referenceWidth", 1280)
@@ -487,10 +495,10 @@ def _emit(spec: dict[str, Any]) -> str:
         lines.extend([
             'local screenScale = Instance.new("UIScale")',
             "screenScale.Name = 'ViewportScale'",
-            f"local function rescale() screenScale.Scale = math.clamp(n1.AbsoluteSize.X / {ref_width:g}, 0.5, 2) end",
-            "screenScale.Parent = n1",
+            f"local function rescale() screenScale.Scale = math.clamp(host.AbsoluteSize.X / {ref_width:g}, 0.5, 2) end",
+            "screenScale.Parent = host",
             "rescale()",
-            "track(n1:GetPropertyChangedSignal('AbsoluteSize'):Connect(rescale))",
+            "track(host:GetPropertyChangedSignal('AbsoluteSize'):Connect(rescale))",
         ])
     lines.extend([
         "local function destroy()",
