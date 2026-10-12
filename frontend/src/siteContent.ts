@@ -6,7 +6,7 @@
  * exists only in source or in a draft pull request therefore reads "In development" until a release catches up.
  */
 import pkg from '../package.json'
-import {REPO_URL} from './githubPublic'
+import {REPO_URL,availability} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 
 /** Version of the source this site was built from. It can be ahead of the latest published release. */
@@ -65,6 +65,14 @@ export const brainRoutes:BrainRoute[]=[
  {id:'hosted',icon:'cloud',title:'A hosted provider, with your key',since:'0.9.0',note:'Optional',
   body:'Groq, OpenRouter, Gemini or Cerebras. Off until you add a key, and local chat never falls back to it silently.'}
 ]
+
+/** Only label capabilities as shipped when a stable published release confirms them. */
+export function modelLabelForRelease(latest:ReleaseInfo|null):string{
+ const state=availability('0.9.0',latest)
+ if(state==='released')return 'Local, LAN or opt-in hosted'
+ if(state==='upcoming')return 'On-device model option'
+ return 'Check GitHub'
+}
 
 export const studioScopes=[
  {level:'Inspect',state:'On by default',body:'STAR reads the test place you point it at: instances, scripts and structure.'},
