@@ -87,6 +87,7 @@ class Settings:
     skills_enabled: bool = True
     graphify_enabled: bool = True
     roblox_research_enabled: bool = True
+    asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
     specialist_parallelism: int = 1
@@ -143,7 +144,7 @@ class Settings:
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
-                            'roblox_research_enabled', 'tool_workshop_enabled',
+                            'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
