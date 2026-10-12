@@ -99,7 +99,7 @@ PERMITTED_SETTINGS = frozenset({
 
 def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
     """Stage an official verified Setup and record it before asking Qt to exit."""
-    from .updates import stage_installer, get_latest
+    from .updates import stage_installer, get_latest, select_downloaded_installer
     result = get_latest()
     if not result.available:
         raise RuntimeError('No newer update is available')
@@ -110,6 +110,10 @@ def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
                                                'downloaded': done, 'total': total}))
     if not candidate.checksum_verified or not candidate.expected_sha256:
         raise PermissionError('Automatic restart requires a checksum-verified installer')
+    # Setup starts only after the window has closed, where a refusal can no longer
+    # be shown. Run the file checks that launch_installer repeats now, while the
+    # interface can still report a problem.
+    select_downloaded_installer(candidate.path)
     bridge.pending_update = candidate
     bridge.shutdownRequested.emit()
     return {'status': 'pending_restart', 'version': candidate.version}
@@ -120,16 +124,35 @@ def finish_desktop_update(shell, instance) -> None:
 
     The bridge worker only stages a verified candidate and requests Qt to quit.
     Launch must happen after the event loop has stopped, not on that worker.
+    If closing fails, the lock is still released, Setup is not started and the
+    error propagates.
     """
     candidate = shell.bridge.pending_update if shell is not None else None
     try:
         if shell is not None:
             shell.close()
     finally:
-        finish_desktop_update(shell, instance)
+        if instance is not None:
+            instance.close()
     if candidate is not None:
         from .updates import launch_installer
         launch_installer(candidate, unattended=True)
+
+
+def run_desktop(app, make_shell, instance, adopt=lambda shell: None) -> int:
+    """Show the window, run the Qt event loop, then clean up and run any staged Setup.
+
+    `adopt(shell)` receives the window before it is shown so that a second launch
+    can bring it to the front. Cleanup runs even if the window cannot be built.
+    """
+    shell = None
+    try:
+        shell = make_shell()
+        adopt(shell)
+        shell.show()
+        return app.exec()
+    finally:
+        finish_desktop_update(shell, instance)
 
 
 def apply_setting_changes(settings: Settings, changes: dict) -> Settings:
@@ -562,6 +585,7 @@ def launch():
             self.turn: TurnRef | None = None
             self.active_update = False
             self.pending_update = None
+            self.closed = False
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
@@ -1169,6 +1193,11 @@ def launch():
                 return json.dumps({'ok':False,'error':f'{type(exc).__name__}: {str(exc)[:380]}'})
 
         def close(self):
+            # The window closes this bridge from closeEvent, and finish_desktop_update
+            # closes the window again after the event loop ends: stop things once.
+            if self.closed:
+                return
+            self.closed = True
             self.voice.close()
             self.cancel_chat.set()
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
@@ -1216,10 +1245,9 @@ def launch():
         instance = DesktopInstance(app_data(), activate)
         if not instance.primary:
             return 0
-    try:
-        shell=Shell()
-        shell.show()
-        return app.exec()
-    finally:
-        if instance is not None:
-            instance.close()
+    def adopt(window):
+        nonlocal shell
+        shell = window
+
+    # Closes the window and releases the instance lock, then runs a staged update Setup.
+    return run_desktop(app, Shell, instance, adopt)
