@@ -16,6 +16,8 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 The `oncoursemail/Star-AI` repository is intentionally **PUBLIC**. GitHub Releases here are the single official download/update channel; no separate public-downloads repository, GitHub account, GitHub CLI, or mirrored publisher is needed. GitHub Actions builds the frontend, runs tests, bundles it into PyInstaller, tests the packaged EXE, and only then publishes `STAR-Setup-vX.Y.Z.exe` and a portable ZIP. Install a newer Setup on top of the old version; `%APPDATA%\STAR` (conversations, references, downloaded models, settings) is **preserved**. The verified in-app updater now includes a React **Settings → Stay up to date** panel (in the React desktop), with a check/install/restart flow and progress, and must pass real Windows upgrade QA before general availability.
 
+**Administrator prompts on Windows:** Setup defaults to a **per-user** installation (just your account), which does **not require administrator rights**. You can choose an **all-users** installation, which requires administrator approval. If your existing copy was installed for all users, **every upgrade** also needs the Windows administrator prompt; this is expected and must not be bypassed. To identify your install type, check STAR's Windows uninstall entry: `HKEY_CURRENT_USER` means per-user and `HKEY_LOCAL_MACHINE` means all-users. The [Getting Started guide](docs/GETTING_STARTED.md#administrator-rights-on-windows) shows a read-only check.
+
 ### STAR v0.9 AI and UI improvements
 
 - **Qwen/llama.cpp 500 repair:** one first system message per request, including memory compaction; a real completion-based model health test.
