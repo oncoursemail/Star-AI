@@ -281,9 +281,19 @@ def _extract_update(archive: Path, target: Path):
                 raise ValueError('Unpacked release exceeds 2 GB')
             if info.is_dir():
                 continue
-            dst = target.joinpath(*parts)
+            # An existing destination may contain symlinks even when ZIP names are safe.
+            # Refuse them before opening any member for writing.
+            if target.is_symlink():
+                raise ValueError('Unsafe release ZIP destination')
+            dst = target
+            for component in parts:
+                dst = dst / component
+                if dst.is_symlink():
+                    raise ValueError('Unsafe release ZIP destination')
             dst.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(info) as src, dst.open('wb') as output:
+            if dst.exists():
+                raise ValueError('Release ZIP would overwrite an existing file')
+            with z.open(info) as src, dst.open('xb') as output:
                 shutil.copyfileobj(src, output)
     if not (target / 'STAR.exe').is_file():
         raise ValueError('Release package is missing STAR.exe')

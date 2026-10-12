@@ -79,8 +79,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [data,setData]=useState<BootData>(initial??{version:'0.9.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
- const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')!=='off')
- const [petIdleMs,setPetIdleMs]=useState(0)
+ const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
  const [petTerminal,setPetTerminal]=useState<{kind:PetState;at:number}|null>(null)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
@@ -134,6 +133,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const runRef=useRef<ActivityRun|null>(null)
  const streamRef=useRef('')
  const chatRef=useRef(data.active_chat)
+ const answeringChat=useRef('')
  const cancelRequested=useRef(false)
  const lastError=useRef('')
  const fresh=useRef<Set<string>>(new Set())
@@ -142,12 +142,6 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const askedTarget=useRef('')
  const inactive=preview||!initial
  useEffect(()=>{writePreference('star.pet.visible',showStar?'on':'off')},[showStar])
- useEffect(()=>{
-  const activity=()=>setPetIdleMs(0)
-  window.addEventListener('pointerdown',activity);window.addEventListener('keydown',activity)
-  const timer=setInterval(()=>setPetIdleMs(ms=>ms+30000),30000)
-  return ()=>{window.removeEventListener('pointerdown',activity);window.removeEventListener('keydown',activity);clearInterval(timer)}
- },[])
  useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
@@ -158,7 +152,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const sync=useCallback(async()=>{
    if(inactive)return
    const r=await request<BootData>('bootstrap')
-   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
+   if(r.ok&&r.data){setData(r.data);setDraft(r.data.settings);if(!sending.current&&!runRef.current)setMessages(r.data.messages);setThemeMotion(!r.data.settings.reduced_motion)}
  },[inactive])
  useEffect(()=>{if(!inactive) void sync()},[sync,inactive])
  /** Re-read only what the host knows about the connection. The conversation on screen is left alone. */
@@ -233,7 +227,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    running.current.delete(event.requestId)
    const endRun=(outcome:'done'|'failed'|'cancelled')=>{
      const current=runRef.current
-     if(current)setLastRun({chat:chatRef.current,run:settleRun(current,outcome,Date.now())})
+     if(current)setLastRun({chat:answeringChat.current,run:settleRun(current,outcome,Date.now())})
      updateRun(null)
    }
    if(event.kind==='error'){
@@ -248,7 +242,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        streamRef.current='';sending.current=false
        const row:ChatMessage={...makeMsg('event',msg),status:cancelled?'cancelled':'failed'}
        fresh.current.add(row.id)
-       setMessages(m=>[...m,row])
+       if(chatRef.current===answeringChat.current)setMessages(m=>[...m,row])
        setBusy(false);setStopping(false);setStreamingText('');setRetryText(lastSent.current)
        setPetTerminal({kind:cancelled?'cancelled':'error',at:Date.now()})
        if(!cancelled&&action!=='generateImage')setLastOutcome({ok:false,at:Date.now(),kind:found.kind,target:askedTarget.current})
@@ -278,7 +272,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      // A statement the content rules turned away: say so, or the owner believes it was learned.
      else if(learned?.not_kept)setNotice('That was not kept as a lesson: it reads like a permission or setting, or contains something like a key. Lessons cannot hold those.')
      if(action!=='generateImage')setLastOutcome({ok:true,at:Date.now(),target:askedTarget.current,...(answeredBy?{model:answeredBy}:{})})
-     setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
+     if(chatRef.current===answeringChat.current)setMessages(m=>[...m,{...makeMsg('assistant',String(result?.answer||'')),image:typeof result?.image==='string'?result.image:undefined}]);void sync()
    }else if(action==='installBrain'||action==='startBrain'){
      setBrainProgress(null);setNotice('The local model is running.');void sync()
    }else if(action==='testModel'){
@@ -335,12 +329,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[inactive,act,warmTarget,data.settings.model])
 
  const beginRun=useCallback((value:string,attachments:string[],mode:'chat'|'team'|'image')=>{
+   answeringChat.current=chatRef.current
    lastSent.current=value;lastFiles.current=attachments
    askedTarget.current=targetRef.current
    cancelRequested.current=false
    streamRef.current=''
    followBottom.current=true;setShowJump(false)
    setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false);setStopping(false)
+   setPetTerminal(null)
    const mine=makeMsg('user',value,attachments.map(fileName))
    fresh.current.add(mine.id)
    setBusy(true);setNotice('');setTab('chat');setLastRun(null)
@@ -365,6 +361,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
      updateRun(null);setBusy(false);setRetryText(value)
+     setPetTerminal({kind:'error',at:Date.now()})
      const row:ChatMessage={...makeMsg('event',lastError.current||'STAR could not start this request.'),status:'failed'}
      fresh.current.add(row.id)
      setMessages(m=>[...m,row])
@@ -440,10 +437,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles',imageMode?{kind:'image'}:{});if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,imageMode?2:8))}
  const transcribe=async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}
- const applyBoot=(b:BootData)=>{setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText('');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{chatRef.current=b.active_chat;setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText(b.active_chat===answeringChat.current?streamRef.current:'');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
  const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
- const openChat=async(id:string)=>{if(busy&&id!==data.active_chat)setNotice('Stop the current answer before switching chats.');if(busy||id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ const openChat=async(id:string)=>{if(id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
  const filteredChats=data.chats.filter(c=>c.title.toLowerCase().includes(historyQuery.toLowerCase()))
  const chatGroups=groupChats(filteredChats.slice(0,60))
@@ -546,13 +543,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
- const shownRun=busy?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
+ const viewingAnswer=busy&&data.active_chat===answeringChat.current
+ const shownRun=viewingAnswer?run:lastRun&&lastRun.chat===data.active_chat?lastRun.run:null
  const timeline=!query&&shownRun&&(isRich(shownRun)||shownRun.steps.some(step=>step.state==='waiting'))?shownRun:null
  let lastUser=-1,lastStar=-1
  messages.forEach((m,i)=>{if(m.role==='user')lastUser=i;else if(m.role==='assistant')lastStar=i})
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
- const turns:ChatMessage[]=busy&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
- const empty=!messages.length&&!busy
+ const turns:ChatMessage[]=viewingAnswer&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
+ const empty=!messages.length&&!viewingAnswer
  // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
  const pending=data.retry&&data.retry.prompt?data.retry:null
  const retryPrompt=retryText||pending?.prompt||''
@@ -561,7 +559,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
  const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
  const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[],!retryText&&pending?pending.message_id:undefined)
- const petState:PetState=update?.available?'update':busy?(streamingText?'streaming':'thinking'):petTerminal?.kind??(prompt.trim()?'typing':petIdleMs>=660000?'asleep':petIdleMs>=600000?'sleepy':'idle')
+ const petState:PetState=update?.available?'update':busy?(streamingText?'streaming':'thinking'):petTerminal?.kind??(prompt.trim()?'typing':'idle')
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
@@ -733,7 +731,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <div className="intelligence-folder-row"><label>Obsidian vault folder<input aria-label="Obsidian vault folder" value={draft.obsidian_vault??''} onChange={e=>setDraft(d=>({...d,obsidian_vault:e.target.value}))} placeholder="Choose an Obsidian Markdown vault"/></label><button type="button" className="secondary-button" onClick={async()=>{const result=await act('selectFolder');if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){setDraft(d=>({...d,obsidian_vault:result.path as string}))}}}><FolderOpen size={15}/> Browse folder</button></div>
              <small>Note contents stay local, are not promoted into trusted memory without review, and cannot override tool permissions.</small>
            </Panel>
-           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Show Star</strong><small>Display the mascot over the chat. Saved on this device.</small></span><input aria-label="Show Star" type="checkbox" checked={showStar} onChange={e=>setShowStar(e.target.checked)}/></label><label className="setting-switch"><span><strong>Reduced motion</strong><small>Turns off animation everywhere in STAR. Applied and saved immediately.</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>setReducedMotion(e.target.checked)}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
+           <Panel className="settings-section"><h2>Interface & performance</h2><label className="setting-switch"><span><strong>Show Star</strong><small>Off by default. Display the mascot over the chat. Saved on this device.</small></span><input aria-label="Show Star" type="checkbox" checked={showStar} onChange={e=>setShowStar(e.target.checked)}/></label><label className="setting-switch"><span><strong>Reduced motion</strong><small>Turns off animation everywhere in STAR. Applied and saved immediately.</small></span><input type="checkbox" checked={draft.reduced_motion} onChange={e=>setReducedMotion(e.target.checked)}/></label><div className="field-grid"><label>Model turns per task<input type="number" min="1" max="30" value={draft.max_calls} onChange={e=>setDraft(d=>({...d,max_calls:Number(e.target.value)}))}/></label><label>Context character budget<input type="number" min="6000" max="80000" value={draft.context_chars} onChange={e=>setDraft(d=>({...d,context_chars:Number(e.target.value)}))}/></label></div></Panel></div></details><Panel className="settings-section updater-panel">
             <div className="section-heading"><div><span className="eyebrow">VERSION & UPDATES</span><h2>Stay up to date</h2></div><Tag kind={update?.available?'gold':'neutral'}>{update?.available?'Update ready':`v${data.version}`}</Tag></div>
             <p>STAR downloads official Windows releases, checks the exact file size and SHA-256 checksum, and replaces application files. Your chats, projects, memories, settings, and downloaded models remain in your local profile.</p>
             <div className="update-version-line"><span><strong>Installed</strong> v{data.version}</span><span><strong>Latest checked</strong> {update? `v${update.version}` : 'Not checked yet'}</span></div>
@@ -751,7 +749,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      </AnimatePresence>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
-   {tab==='chat'&&<StarPet state={petState} visible={showStar} reducedMotion={reducedMotion}/>}
+   {tab==='chat'&&showStar&&<StarPet state={petState} reducedMotion={reducedMotion} idleEnabled={!inactive}/>}
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
  </div></MotionPolicy>
 }
