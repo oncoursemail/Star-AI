@@ -98,3 +98,30 @@ def test_tunnel_filter_never_forwards_request_credentials(tmp_path):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "https://fixture.trycloudflare.com"
     assert secret not in result.stdout + result.stderr
+
+
+def test_private_install_publishes_read_only_server_venv(tmp_path):
+    text = (FOLDER / "install.sh").read_text()
+    command = next(line for line in text.splitlines() if line.startswith("chmod -R go+rX "))
+    assert command.split()[-1] == "/opt/star-workbench/venv"
+    assert text.index("venv/bin/pip install") < text.index(command) < text.index("runuser -u")
+    runtime = tmp_path / "venv"
+    subprocess.run(["bash", "-c", 'umask 077; exec "$@"', "venv-fixture",
+                    sys.executable, "-m", "venv", "--without-pip", str(runtime)], check=True)
+    assert runtime.stat().st_mode & 0o077 == 0  # Reproduces the actual installer failure.
+    module = next(runtime.glob("lib/python*/site-packages")) / "fixture.py"
+    module.write_text("VALUE = 42\n")
+    module.chmod(0o600)
+    token = tmp_path / "token"
+    token.write_text(secrets.token_hex(32))
+    token.chmod(0o600)
+    # Execute the installer's exact chmod command, changing only its destination.
+    subprocess.run([*command.split()[:-1], str(runtime)], check=True)
+    for entry in [runtime, *runtime.rglob("*")]:
+        if entry.is_symlink():
+            continue  # Never chmod the system interpreter behind a venv symlink.
+        mode = entry.stat().st_mode
+        assert mode & 0o022 == 0, f"runtime is writable by another account: {entry}"
+        required = 0o055 if entry.is_dir() else 0o044
+        assert mode & required == required, f"runtime is unreadable to the service: {entry}"
+    assert token.stat().st_mode & 0o777 == 0o600

@@ -35,6 +35,9 @@ printf 'nameserver 1.1.1.1\nnameserver 1.0.0.1\n' > /opt/star-workbench/resolv.c
 chmod 644 /opt/star-workbench/resolv.conf
 python3 -m venv /opt/star-workbench/venv
 /opt/star-workbench/venv/bin/pip install --disable-pip-version-check -r /opt/star-workbench/requirements.txt
+# umask 077 protects credentials, but the unprivileged service must read its runtime.
+# Only publish immutable runtime files; NEVER apply this to the token/control directories.
+chmod -R go+rX /opt/star-workbench/venv
 # Root source stays unreadable to the service. systemd supplies a private, read-only copy.
 openssl rand -hex 32 > /etc/star-workbench/token
 chmod 600 /etc/star-workbench/token
