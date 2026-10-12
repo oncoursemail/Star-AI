@@ -96,6 +96,7 @@ class Settings:
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
+    allow_cgnat: bool = False         # opt in to Tailscale / carrier-grade NAT; metadata IP stays blocked
     server_timeout: int = 600        # seconds of silence allowed for one server request
     server_parallel: int = 1         # match the server's llama.cpp -np slot count
     server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
@@ -136,7 +137,8 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau')):
+                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -183,7 +185,7 @@ class Settings:
         if not isinstance(self.server_endpoint, str):
             raise ValueError('STAR Server address must be text')
         if self.server_endpoint:
-            validate_lan_endpoint(self.server_endpoint)
+            validate_lan_endpoint(self.server_endpoint, allow_cgnat=self.allow_cgnat)
         elif provider_kind(self) == 'lan':
             validate_lan_endpoint('')  # raises the "enter your server address" message
         if not isinstance(self.knowledge_endpoint, str):
