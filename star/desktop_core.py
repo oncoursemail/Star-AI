@@ -1026,12 +1026,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< Skill packs
                 # Checked practice is opt-in and treated as untrusted reference data, not a lesson.
                 example_block = ''
+                example_extra_chars = 0
                 if settings.worked_examples_enabled is True:
                     from . import worked_examples
                     base_chars = (min(3000 if quick else 10000, memory_limit)
                                   + len(docs.block) + len(document_block) + len(pack_block))
-                    room = min(worked_examples.MAX_PROMPT_CHARS,
-                               max(0, allowed_context_chars - 3200 - base_chars))
+                    heading_chars = len(worked_examples.HEADING) + 2
+                    room = min(worked_examples.MAX_PROMPT_CHARS - heading_chars,
+                               max(0, allowed_context_chars - 3200 - base_chars - heading_chars))
                     if room >= 200:
                         try:
                             example_block, selected_examples = worked_examples.select(
@@ -1039,6 +1041,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                         except (OSError, sqlite3.DatabaseError, ValueError):
                             example_block, selected_examples = '', []
                         if example_block:
+                            example_extra_chars = len(example_block) + heading_chars
                             turn_sections.append((worked_examples.HEADING, example_block))
                             audited_event({'event': 'worked_example_used',
                                            'count': len(selected_examples), 'chars': len(example_block)})
@@ -1050,7 +1053,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block) + len(pack_block) + len(example_block),
+                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block) + len(pack_block) + example_extra_chars,
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,

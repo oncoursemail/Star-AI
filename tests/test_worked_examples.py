@@ -233,6 +233,10 @@ def test_real_run_task_includes_examples_only_with_opt_in_and_activity(monkeypat
     assert second == "answer"
     assert examples.HEADING in seen[1]["prompt"] and "DataStoreService" in seen[1]["prompt"]
     assert seen[1]["budget"] > seen[0]["budget"]
+    assert "[... shortened]" not in seen[1]["prompt"]
+    assert seen[1]["budget"] - seen[0]["budget"] == (
+        len([s for h, s in seen[1]["sections"] if h == examples.HEADING][0])
+        + len(examples.HEADING) + 2)
     used = [e for e in events if e.get("event") == "worked_example_used"]
     assert len(used) == 1 and used[0]["count"] == 1
     assert used[0]["chars"] <= examples.MAX_PROMPT_CHARS
