@@ -33,7 +33,7 @@ class Practice:
 # Not derived from golden tasks or the blind holdout.
 CASES = [
     Practice("Cap player health at 100", "math.clamp(value, 0, 99)", "math.clamp(value, 0, 100)", 120, 100, -5, 0),
-    Practice("Stamina recharge floors first", "math.ceil(value) * 3", "math.floor(value) * 3", 2, 6, 5, 15),
+    Practice("Stamina recharge floors first", "math.ceil(value) * 3", "math.floor(value) * 3", 2.7, 6, 5.9, 15),
     Practice("Triple coin rewards", "value * 2", "value * 3", 2, 6, 5, 15),
     Practice("Subtract shop discounts", "value + 2", "value - 2", 5, 3, 10, 8),
     Practice("Cap jump boost at ten", "math.max(value, 10)", "math.min(value, 10)", 5, 5, 15, 10),
@@ -155,6 +155,51 @@ def test_hanging_loop_hits_limit_and_never_gets_retried():
         original, settings, route, writer=writer, fixer=no_fix, runner=vm))
     assert len(vm.calls) == 1 and rows[0]["state"] == "timeout"
     assert rows[0]["repairs"] == 0 and final.startswith(original)
+
+
+def test_second_repair_is_allowed_but_never_a_third():
+    settings, route = context()
+    item = CASES[0]
+    vm = ScriptedVM(item.right)
+    attempts = []
+
+    async def writer(_):
+        return assertions(item)
+
+    async def fixer(source, _failure):
+        attempts.append(source)
+        expression = "math.clamp(value, 0, 98)" if len(attempts) == 1 else item.right
+        return FENCE + "luau\n" + code(expression) + FENCE
+
+    final, rows = asyncio.run(luau_run_repair.review(
+        answer(item.wrong), settings, route, writer=writer, fixer=fixer, runner=vm))
+    assert rows[0]["state"] == "repaired"
+    assert rows[0]["attempts"] == 3 and rows[0]["repairs"] == 2
+    assert len(vm.calls) == 3 and len(attempts) == 2
+    assert source_spans(final)[0][2] == code(item.right)
+
+
+def test_repair_failing_static_check_is_never_shown():
+    settings, route = context()
+    item = CASES[0]
+    vm = ScriptedVM(item.right)
+
+    def rejects(_source):
+        return {"ran": True, "ok": False, "errors": [{"message": "bad"}]}
+
+    async def writer(_):
+        return assertions(item)
+
+    async def fixer(_source, _failure):
+        return FENCE + "luau\n" + code(item.right) + FENCE
+
+    initial = answer(item.wrong)
+    final, rows = asyncio.run(luau_run_repair.review(
+        initial, settings, route, writer=writer, fixer=fixer, runner=vm,
+        checker=rejects))
+    assert rows[0]["state"] == "failed" and rows[0]["repairs"] == 0
+    assert len(vm.calls) == 1
+    assert source_spans(final)[0][2] == code(item.wrong)
 
 
 def test_missing_vm_is_unavailable_not_a_turn_error_or_pass():
