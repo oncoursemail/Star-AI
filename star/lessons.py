@@ -35,7 +35,7 @@ MANUAL = "manual"              # typed by the owner in the review panel
 CONTEXT = "chat-correction"    # the owner's words, but they only make sense next to one answer
 # Signals STAR worked out for itself. They can only ever start as candidates.
 INFERRED = (CONTEXT, "feedback", "retry", "verified-fix", "doc", "summary")
-SOURCE_TYPES = (OWNER, MANUAL, *INFERRED)
+SOURCE_TYPES = (OWNER, MANUAL, *INFERRED, "practice", "import")
 # Raw captures the optional background step may rewrite into concise candidates.
 DIGESTIBLE = (CONTEXT, "feedback", "retry", "verified-fix", "doc")
 # Older notes the owner approved by hand are shown and recalled as lessons too.
@@ -347,6 +347,8 @@ def describe_source(source_type: str, source: str) -> str:
         "verified-fix": "A Luau check failed and the code was repaired" + where,
         "doc": "A documentation search found nothing" + where,
         "summary": "Summarised by the fast model from raw captures",
+        "practice": "Imported from STAR practice (awaiting your review)",
+        "import": "Imported from a lesson file (awaiting your review)",
     }.get(source_type or "", "Stored note")
 
 
@@ -436,7 +438,10 @@ class LessonStore:
         uses = self.db.execute(
             "SELECT COALESCE(SUM(u.uses),0) FROM lesson_use u JOIN notes n ON n.id=u.note_id WHERE n.project=?",
             (project,)).fetchone()[0]
-        return {**found, "pending": found["candidate"], "uses": int(uses)}
+        practice = self.db.execute(
+            "SELECT COUNT(*) FROM notes WHERE project=? AND status IS NOT NULL AND source_type='practice'",
+            (_project(project),)).fetchone()[0]
+        return {**found, "pending": found["candidate"], "uses": int(uses), "practice": int(practice)}
 
     # -- writing ---------------------------------------------------------------------------
 
@@ -897,11 +902,11 @@ def learning_status(home: Path, project: str) -> dict:
     try:
         store = LessonStore(home)
     except (sqlite3.Error, OSError, ValueError):
-        return {name: 0 for name in (*STATUSES, "pending", "uses")}
+        return {name: 0 for name in (*STATUSES, "pending", "uses", "practice")}
     try:
         return store.counts(project)
     except ValueError:
-        return {name: 0 for name in (*STATUSES, "pending", "uses")}
+        return {name: 0 for name in (*STATUSES, "pending", "uses", "practice")}
     finally:
         store.close()
 
@@ -982,3 +987,46 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
     finally:
         store.close()
         metrics.close()
+
+
+# --- offline import --------------------------------------------------------------------------
+
+def import_lessons(path: Path, *, home: Path | None = None) -> dict:
+    """Import a star-lessons-v1 file as candidates, without overwriting local records."""
+    from .lesson_import import import_export, read_export
+    from .desktop_core import app_data
+    data = read_export(path)
+    store = LessonStore(home if home is not None else app_data())
+    try:
+        return import_export(store, data)
+    finally:
+        store.close()
+
+
+def import_bundled_lessons(home: Path, version: str, *, enabled: bool = False,
+                           bundle: Path | None = None) -> dict:
+    """Opt-in once per app version; all new records still need review."""
+    from .lesson_import import bundled_once
+    return bundled_once(home, version, enabled=enabled, bundle=bundle)
+
+
+def main(argv=None) -> int:
+    """CLI: python -m star.lessons import FILE [--home DATA_FOLDER]."""
+    import argparse
+    parser = argparse.ArgumentParser(description="STAR local lessons")
+    sub = parser.add_subparsers(dest="command", required=True)
+    importing = sub.add_parser("import", help="import a star-lessons-v1 file as unreviewed candidates")
+    importing.add_argument("file", type=Path)
+    importing.add_argument("--home", type=Path, default=None)
+    args = parser.parse_args(argv)
+    try:
+        receipt = import_lessons(args.file, home=args.home)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
+    print(f"Imported {receipt['imported']} candidates; skipped {receipt['skipped']} "
+          f"in project {receipt['project']}. Review them in STAR.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
