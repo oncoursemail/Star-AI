@@ -1,0 +1,426 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "LUA-05",
+   "UI-10",
+   "NET-06",
+   "NET-14",
+   "PERF-01"
+  ]
+ },
+ "run": {
+  "app_commit": "03af5a57b7f58377dedc63098663b81f9655c575",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-secure-remotes,roblox-animation-craft,roblox-vfx,roblox-building-layout,eng-verify-before-done",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "dabb0dd897ef",
+  "started_at": "2026-10-11T17:52:29+00:00",
+  "waited_for_lock_s": 2.4,
+  "finished_at": "2026-10-11T18:05:11+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "LUA-05": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "8688a704ea8b1782",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    }
+   ],
+   "seconds": 187.3,
+   "timings": {
+    "luau_check_s": 0.11,
+    "unit_s": 0.48
+   },
+   "blocks": 1,
+   "answer_chars": 4103,
+   "answer_sha256": "f8a1ec4e2384a940acadad07680104de7bb3bfd2fda3ddfd79fb2f7f629b32a1",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 202
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0,
+     "repairs": 1,
+     "elapsed_ms": 82188
+    }
+   ],
+   "answer": "```luau\n--!strict\n\nlocal function parseKV(s: string): { [string]: string }\n\tlocal result: { [string]: string } = {}\n\t\n\t-- Split by semicolon. Note: string.split preserves empty strings for consecutive separators.\n\tlocal segments: { string } = string.split(s, \";\")\n\t\n\tfor _, segment in segments do\n\t\t-- Find the first '=' to separate key and value\n\t\tlocal eqIndex: number? = string.find(segment, \"=\")\n\t\t\n\t\t-- If no '=' found, skip this segment\n\t\tif eqIndex == nil then\n\t\t\tcontinue\n\t\tend\n\t\t\n\t\t-- Extract key and value parts\n\t\tlocal keyPart: string = string.sub(segment, 1, eqIndex - 1)\n\t\tlocal valuePart: string = string.sub(segment, eqIndex + 1)\n\t\t\n\t\t-- Trim spaces from key\n\t\t-- Manual trim for key to avoid complex regex or multiple finds\n\t\t-- Find first non-whitespace\n\t\tlocal kStart: number = 1\n\t\twhile kStart <= #keyPart do\n\t\t\tlocal char: string = string.sub(keyPart, kStart, kStart)\n\t\t\tif char ~= \" \" and char ~= \"\\t\" and char ~= \"\\n\" and char ~= \"\\r\" then\n\t\t\t\tbreak\n\t\t\tend\n\t\t\tkStart += 1\n\t\tend\n\t\t\n\t\t-- Find last non-whitespace\n\t\tlocal kEnd: number = #keyPart\n\t\twhile kEnd >= kStart do\n\t\t\tlocal char: string = string.sub(keyPart, kEnd, kEnd)\n\t\t\tif char ~= \" \" and char ~= \"\\t\" and char ~= \"\\n\" and char ~= \"\\r\" then\n\t\t\t\tbreak\n\t\t\tend\n\t\t\tkEnd -= 1\n\t\tend\n\t\t\n\t\t-- If start > end, the key was all whitespace or empty\n\t\tif kStart > kEnd then\n\t\t\tcontinue\n\t\tend\n\t\t\n\t\tlocal key: string = string.sub(keyPart, kStart, kEnd)\n\t\t\n\t\t-- Trim spaces from value\n\t\tlocal vStart: number = 1\n\t\twhile vStart <= #valuePart do\n\t\t\tlocal char: string = string.sub(valuePart, vStart, vStart)\n\t\t\tif char ~= \" \" and char ~= \"\\t\" and char ~= \"\\n\" and char ~= \"\\r\" then\n\t\t\t\tbreak\n\t\t\tend\n\t\t\tvStart += 1\n\t\tend\n\t\t\n\t\tlocal vEnd: number = #valuePart\n\t\twhile vEnd >= vStart do\n\t\t\tlocal char: string = string.sub(valuePart, vEnd, vEnd)\n\t\t\tif char ~= \" \" and char ~= \"\\t\" and char ~= \"\\n\" and char ~= \"\\r\" then\n\t\t\t\tbreak\n\t\t\tend\n\t\t\tvEnd -= 1\n\t\tend\n\t\t\n\t\tlocal value: string = string.sub(valuePart, vStart, vEnd)\n\t\t\n\t\t-- If key is empty after trimming, ignore\n\t\tif key == \"\" then\n\t\t\tcontinue\n\t\tend\n\t\t\n\t\t-- Last value wins (overwrite)\n\t\tresult[key] = value\n\tend\n\t\n\treturn result\nend\n\nreturn parseKV\n```\n\n*   **Logic**: Splits input by `;`, locates the first `=`, trims whitespace from both key and value using manual index scanning (to strictly use built-in `string` library without regex dependencies if preferred, though `string.find` with patterns is also built-in), and populates a dictionary.\n*   **Constraints**: Uses `--!strict`, handles empty keys/values, ignores segments without `=`, and overwrites duplicate keys.\n*   **Trimming**: Implemented manual trimming loops to ensure robustness against various whitespace characters (` `, `\\t`, `\\n`, `\\r`) without relying on external libraries.\n*   **Reference**: Used `string.split` behavior as documented in [3] to handle segment separation.\n*   **Unverified**: The specific edge case of \"empty=\" resulting in an empty string value is handled correctly by the logic (value part is empty string after trim).\n\n**Luau check by STAR:** The code block first failed the static Luau check (Expected this to be 'number', but got 'number?';, line 11). STAR corrected it; the version shown compiles and passes Luau type analysis. 3 API name(s) the code uses were checked against the official API reference; other names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: luau-site@41db794, MIT; creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Luau syntax by example > String interpolation](https://luau.org/syntax#string-interpolation) · retrieved, not cited\n2. [Luau syntax by example > String interpolation > Restrictions and limitations](https://luau.org/syntax#restrictions-and-limitations) · retrieved, not cited\n3. [string > split](https://create.roblox.com/docs/reference/engine/libraries/string#split) · cited\n4. [Intro to dictionaries > Dictionary syntax](https://create.roblox.com/docs/tutorials/fundamentals/coding-5/intro-to-dictionaries#dictionary-syntax) · retrieved, not cited\n"
+  },
+  "UI-10": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "9a85ec51a27908fd",
+   "reasons": [
+    "require:auto_canvas: AutomaticCanvasSize grows the canvas by itself"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:scrolling",
+     "ok": true
+    },
+    {
+     "id": "require:list_layout",
+     "ok": true
+    },
+    {
+     "id": "require:auto_canvas",
+     "ok": false,
+     "detail": "AutomaticCanvasSize grows the canvas by itself"
+    },
+    {
+     "id": "require:padding",
+     "ok": true
+    },
+    {
+     "id": "require:shop_gui",
+     "ok": true
+    },
+    {
+     "id": "forbid:manual_canvas",
+     "ok": true
+    }
+   ],
+   "seconds": 147.9,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 5661,
+   "answer_sha256": "bbf87483e94c6eb91ddcefd2d61b6593ba1206af3559ceddf70b6b8acdbf7345",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0,
+     "repairs": 0,
+     "elapsed_ms": 421
+    }
+   ],
+   "answer": "```lua\n-- LocalScript inside StarterGui > ShopGui\n-- Builds a scrolling shop list with 30 rows, each containing an item name and price.\n\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- Find the existing ScreenGui named ShopGui\nlocal shopGui = playerGui:WaitForChild(\"ShopGui\")\n\n-- Create a ScrollingFrame to hold the shop items\nlocal scrollingFrame = Instance.new(\"ScrollingFrame\")\nscrollingFrame.Name = \"ShopList\"\nscrollingFrame.Parent = shopGui\n\n-- Configure the ScrollingFrame for vertical scrolling\nscrollingFrame.Size = UDim2.new(1, 0, 1, 0) -- Fill the ShopGui\nscrollingFrame.Position = UDim2.new(0, 0, 0, 0)\nscrollingFrame.ScrollBarThickness = 6\nscrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(200, 200, 200)\nscrollingFrame.BackgroundTransparency = 1\nscrollingFrame.CanvasSize = UDim2.new(0, 0, 30, 0) -- Height scales with 30 rows (see UIListLayout)\nscrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y\nscrollingFrame.ScrollingEnabled = true\nscrollingFrame.ClipsDescendants = true\n\n-- Create a UIListLayout to automatically arrange rows vertically\nlocal listLayout = Instance.new(\"UIListLayout\")\nlistLayout.Parent = scrollingFrame\nlistLayout.SortOrder = Enum.SortOrder.LayoutOrder\nlistLayout.Padding = UDim.new(0, 4) -- Spacing between rows\nlistLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center\nlistLayout.VerticalAlignment = Enum.VerticalAlignment.Top\n\n-- Create a UIPadding to ensure content doesn't touch the edges of the ScrollingFrame\nlocal padding = Instance.new(\"UIPadding\")\npadding.Parent = scrollingFrame\npadding.PaddingTop = UDim.new(0, 8)\npadding.PaddingBottom = UDim.new(0, 8)\npadding.PaddingLeft = UDim.new(0, 8)\npadding.PaddingRight = UDim.new(0, 8)\n\n-- Define sample shop data (30 items)\nlocal shopItems = {}\nfor i = 1, 30 do\n\ttable.insert(shopItems, {\n\t\tname = \"Item \" .. tostring(i),\n\t\tprice = (i * 10) .. \" Coins\"\n\t})\nend\n\n-- Create 30 rows\nfor i, item in ipairs(shopItems) do\n\t-- Create the row frame\n\tlocal rowFrame = Instance.new(\"Frame\")\n\trowFrame.Name = \"ItemRow\"\n\trowFrame.Parent = scrollingFrame\n\trowFrame.Size = UDim2.new(1, -16, 0, 40) -- Width with padding, fixed height\n\trowFrame.BackgroundTransparency = 0\n\trowFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)\n\trowFrame.BorderSizePixel = 0\n\trowFrame.LayoutOrder = i -- Ensure correct order\n\n\t-- Create the item name label (left side)\n\tlocal nameLabel = Instance.new(\"TextLabel\")\n\tnameLabel.Parent = rowFrame\n\tnameLabel.Name = \"ItemName\"\n\tnameLabel.Size = UDim2.new(0.5, -8, 1, 0) -- Left half\n\tnameLabel.Position = UDim2.new(0, 8, 0, 0)\n\tnameLabel.BackgroundTransparency = 1\n\tnameLabel.Text = item.name\n\tnameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)\n\tnameLabel.TextSize = 18\n\tnameLabel.Font = Enum.Font.GothamBold\n\tnameLabel.TextXAlignment = Enum.TextXAlignment.Left\n\tnameLabel.TextYAlignment = Enum.TextYAlignment.Center\n\n\t-- Create the price label (right side)\n\tlocal priceLabel = Instance.new(\"TextLabel\")\n\tpriceLabel.Parent = rowFrame\n\tpriceLabel.Name = \"ItemPrice\"\n\tpriceLabel.Size = UDim2.new(0.5, -8, 1, 0) -- Right half\n\tpriceLabel.Position = UDim2.new(0.5, 8, 0, 0)\n\tpriceLabel.BackgroundTransparency = 1\n\tpriceLabel.Text = item.price\n\tpriceLabel.TextColor3 = Color3.fromRGB(255, 215, 0) -- Gold color for price\n\tpriceLabel.TextSize = 18\n\tpriceLabel.Font = Enum.Font.GothamBold\n\tpriceLabel.TextXAlignment = Enum.TextXAlignment.Right\n\tpriceLabel.TextYAlignment = Enum.TextYAlignment.Center\nend\n\n-- Important: The CanvasSize's Y component is set to 30 (rows), and UIListLayout\n-- automatically adjusts the CanvasSize based on the total height of its children.\n-- This means the scrollable area grows with the number of rows without manual calculation.\n-- The UIPadding ensures text doesn't touch the edges of the ScrollingFrame.\n```\n\n**What this does:**\n- Finds the existing `ShopGui` ScreenGui in the player's PlayerGui\n- Creates a ScrollingFrame that fills the ShopGui with vertical scrolling enabled\n- Uses UIListLayout to automatically arrange 30 row frames vertically\n- Each row contains an item name label (left-aligned) and price label (right-aligned)\n- UIPadding prevents content from touching the edges of the scrolling area\n- CanvasSize automatically adjusts to fit all 30 rows without manual height calculation\n\n**Where to put it:**\n- Place this LocalScript as a child of the existing `ShopGui` ScreenGui in StarterGui\n\n**What I could not verify:**\n- The exact existing structure of your ShopGui (I assumed it's empty and ready for content)\n- Whether you have specific item names/prices you want to use (I used generic \"Item 1-30\" with prices 10-300 Coins)\n- The exact size/position requirements for your ShopGui (I made it fill the entire ScreenGui)\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. 59 API name(s) the code uses were checked against the official API reference; other names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Custom text chat UI](https://create.roblox.com/docs/chat/examples/simple-custom-frontend-ui) · retrieved, not cited\n2. [User interface > Layout and design](https://create.roblox.com/docs/ui#layout-and-design) · retrieved, not cited\n3. [Create a GUI > Script the GUI](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#script-the-gui) · retrieved, not cited\n4. [GuiObject > MouseMoved](https://create.roblox.com/docs/reference/engine/classes/GuiObject#MouseMoved) · retrieved, not cited\n"
+  },
+  "NET-06": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "997fede5fc7be8cb",
+   "reasons": [
+    "require:alive: the target must be alive / damage is applied by the server"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:on_server_event",
+     "ok": true
+    },
+    {
+     "id": "require:type_check",
+     "ok": true
+    },
+    {
+     "id": "require:humanoid",
+     "ok": true
+    },
+    {
+     "id": "require:distance",
+     "ok": true
+    },
+    {
+     "id": "require:alive",
+     "ok": false,
+     "detail": "the target must be alive / damage is applied by the server"
+    },
+    {
+     "id": "require:server_clock",
+     "ok": true
+    },
+    {
+     "id": "forbid:extra_args",
+     "ok": true
+    }
+   ],
+   "seconds": 86.5,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 3999,
+   "answer_sha256": "7fb718831f5e384ad77fd5409e5bdc205076e38bb96e56f114fb45b70a5911e4",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 296
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0,
+     "repairs": 0,
+     "elapsed_ms": 327
+    }
+   ],
+   "answer": "Here is the complete server-side handler.\n\n### Server Script (ServerScriptService)\n\n```lua\n--// ServerScriptService.SwordHitHandler\nlocal Players = game:GetService(\"Players\")\n\nlocal DAMAGE = 10\nlocal MAX_DISTANCE = 12\nlocal COOLDOWN = 0.6\n\n-- Track last hit time per player\nlocal lastHitTimes = {}\n\nPlayers.PlayerAdded:Connect(function(player)\n\tlastHitTimes[player] = 0\nend)\n\nPlayers.PlayerRemoving:Connect(function(player)\n\tlastHitTimes[player] = nil\nend)\n\n-- The RemoteEvent is expected to be in ReplicatedStorage\nlocal remote = Instance.new(\"RemoteEvent\")\nremote.Name = \"Hit\"\nremote.Parent = game:GetService(\"ReplicatedStorage\")\n\nremote.OnServerEvent:Connect(function(player, targetModel)\n\t-- 1. Validate target is a Model\n\tif not (targetModel and targetModel:IsA(\"Model\")) then\n\t\treturn\n\tend\n\n\t-- 2. Validate target has a living Humanoid\n\tlocal targetHumanoid = targetModel:FindFirstChildWhichIsA(\"Humanoid\")\n\tif not targetHumanoid or targetHumanoid.Health <= 0 then\n\t\treturn\n\tend\n\n\t-- 3. Validate attacker has a character with a Humanoid\n\tlocal attackerCharacter = player.Character\n\tif not attackerCharacter then\n\t\treturn\n\tend\n\tlocal attackerHumanoid = attackerCharacter:FindFirstChildWhichIsA(\"Humanoid\")\n\tif not attackerHumanoid or attackerHumanoid.Health <= 0 then\n\t\treturn\n\tend\n\n\t-- 4. Prevent self-damage\n\tif targetModel == attackerCharacter then\n\t\treturn\n\tend\n\n\t-- 5. Validate distance (server-side calculation)\n\tlocal targetRoot = targetModel:FindFirstChild(\"HumanoidRootPart\")\n\tlocal attackerRoot = attackerCharacter:FindFirstChild(\"HumanoidRootPart\")\n\n\tif not targetRoot or not attackerRoot then\n\t\treturn\n\tend\n\n\tlocal distance = (targetRoot.Position - attackerRoot.Position).Magnitude\n\tif distance > MAX_DISTANCE then\n\t\treturn\n\tend\n\n\t-- 6. Validate cooldown (server clock)\n\tlocal currentTime = os.clock()\n\tif currentTime - lastHitTimes[player] < COOLDOWN then\n\t\treturn\n\tend\n\tlastHitTimes[player] = currentTime\n\n\t-- 7. Deal damage\n\ttargetHumanoid.Health = targetHumanoid.Health - DAMAGE\nend)\n```\n\n### Key Implementation Details\n\n*   **Authority:** The server calculates the distance using `Magnitude` and enforces the cooldown using `os.clock()`. No values from the client are trusted for logic [1].\n*   **Validation:** It checks that the target is a `Model`, contains a `Humanoid`, and that the `Humanoid` is alive. It also ensures the attacker has a valid character [2].\n*   **Self-Check:** It explicitly rejects hits where the target model is the attacker's own character.\n*   **Distance Check:** It finds the `HumanoidRootPart` of both the attacker and the target and verifies the distance is within 12 studs.\n*   **Cooldown:** It uses a dictionary `lastHitTimes` keyed by the `Player` instance to track the last swing time, ensuring the player cannot swing more than once every 0.6 seconds [3].\n\n### References\n[1] Hit detection with lasers > Secure remotes using validation > Server\n[2] Hit detection with lasers > Damage the player\n[3] Securing the client-server boundary > Validating remote inputs > Weapon targeting\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. 14 API name(s) the code uses were checked against the official API reference; other names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Secure remotes using validation > Server](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#server) · cited\n2. [Hit detection with lasers > Damage the player](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#damage-the-player) · cited\n3. [Securing the client-server boundary > Validating remote inputs > Weapon targeting](https://create.roblox.com/docs/scripting/security/client-server-boundary#weapon-targeting) · cited\n"
+  },
+  "NET-14": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "2afe45ed33ad24d2",
+   "reasons": [
+    "luau_check[1]: line 116: None of the overloads for function that accept 1 arguments are compatible.; line 116: Available overloads: <V>({V}, V) -> (); and <V>({V}, number, V) -> ()"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 116: None of the overloads for function that accept 1 arguments are compatible.; line 116: Available overloads: <V>({V}, V) -> (); and <V>({V}, number, V) -> ()"
+    },
+    {
+     "id": "require:update_async",
+     "ok": true
+    },
+    {
+     "id": "require:pcall",
+     "ok": true
+    },
+    {
+     "id": "require:player_removing",
+     "ok": true
+    },
+    {
+     "id": "require:bind_to_close",
+     "ok": true
+    },
+    {
+     "id": "require:parallel",
+     "ok": true
+    },
+    {
+     "id": "require:deadline",
+     "ok": true
+    },
+    {
+     "id": "require:interval",
+     "ok": true
+    },
+    {
+     "id": "forbid:set_async",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 266.8,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 7268,
+   "answer_sha256": "36435cf92d135f2d47dd05163f3cb2fe9cae2e75d1e9c048bcefe6dcfa7ad617",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0,
+     "repairs": 1,
+     "elapsed_ms": 106359
+    }
+   ],
+   "answer": "Here is the complete server-side DataStore service script. It uses `UpdateAsync` for safe concurrent writes, spreads out auto-saves, and handles shutdown with a 25-second timeout for parallel saves.\n\n```lua\n-- ServerScriptService/DataStoreService.lua\n--!strict\n\nlocal DataStoreService = game:GetService(\"DataStoreService\")\nlocal Players = game:GetService(\"Players\")\n\nlocal playerDataStore = DataStoreService:GetDataStore(\"PlayerData_v1\")\n\n-- Configuration\nlocal AUTO_SAVE_INTERVAL = 60 -- Seconds\nlocal SHUTDOWN_TIMEOUT = 25   -- Seconds for BindToClose\n\n-- In-memory cache: { [UserId] : { data } }\nlocal cachedData = {}\n\n-- Helper: Save a single player's cached data using UpdateAsync\nlocal function savePlayerData(player: Player): boolean\n\tlocal userId = player.UserId\n\tlocal data = cachedData[userId]\n\t\n\tif not data then\n\t\treturn false\n\tend\n\n\tlocal success, result = pcall(function()\n\t\t-- UpdateAsync ensures we don't overwrite data changed by other servers\n\t\t-- between our last load and now. It passes the current stored value\n\t\t-- to the callback, allowing us to merge or replace safely.\n\t\tplayerDataStore:UpdateAsync(userId, function(currentStoredValue)\n\t\t\t-- If there is no current value in the store (new player), use our cache.\n\t\t\t-- If there is a value, we replace it with our cached version.\n\t\t\t-- Note: For complex merging, you would merge currentStoredValue and data here.\n\t\t\treturn data\n\t\tend)\n\tend)\n\n\tif not success then\n\t\twarn(string.format(\"Failed to save data for player %d: %s\", userId, tostring(result)))\n\t\treturn false\n\tend\n\n\treturn true\nend\n\n-- Helper: Load a player's data\nlocal function loadPlayerData(player: Player)\n\tlocal userId = player.UserId\n\t\n\tlocal success, result = pcall(function()\n\t\treturn playerDataStore:GetAsync(userId)\n\tend)\n\n\tif success then\n\t\tif result ~= nil then\n\t\t\tcachedData[userId] = result\n\t\telse\n\t\t\t-- Initialize new player data\n\t\t\tcachedData[userId] = {\n\t\t\t\tCoins = 0,\n\t\t\t\tLevel = 1,\n\t\t\t\tLastLogin = os.time()\n\t\t\t}\n\t\tend\n\telse\n\t\twarn(string.format(\"Failed to load data for player %d: %s\", userId, tostring(result)))\n\t\t-- Provide default data on load failure to prevent soft-lock\n\t\tcachedData[userId] = {\n\t\t\tCoins = 0,\n\t\t\tLevel = 1,\n\t\t\tLastLogin = os.time()\n\t\t}\n\tend\nend\n\n-- Start auto-save loop for a specific player\nlocal function startAutoSave(player: Player)\n\ttask.spawn(function()\n\t\t-- Spread out the first save randomly within the interval\n\t\t-- to prevent all players from hitting the DataStore simultaneously.\n\t\tlocal initialDelay = math.random() * AUTO_SAVE_INTERVAL\n\t\ttask.wait(initialDelay)\n\n\t\twhile player.Parent do\n\t\t\ttask.wait(AUTO_SAVE_INTERVAL)\n\t\t\tif player.Parent then -- Check again after wait\n\t\t\t\tsavePlayerData(player)\n\t\t\tend\n\t\tend\n\tend)\nend\n\n-- Handle new player\nPlayers.PlayerAdded:Connect(function(player: Player)\n\tloadPlayerData(player)\n\tstartAutoSave(player)\nend)\n\n-- Handle player leaving\nPlayers.PlayerRemoving:Connect(function(player: Player)\n\t-- Final save on individual disconnect\n\tsavePlayerData(player)\n\tcachedData[player.UserId] = nil\nend)\n\n-- Handle server shutdown\ngame:BindToClose(function()\n\tlocal players = Players:GetPlayers()\n\tif #players == 0 then\n\t\treturn\n\tend\n\n\tlocal saveTasks = {}\n\t\n\t-- Spawn parallel save tasks for all remaining players\n\tfor _, player in ipairs(players) do\n\t\ttable.insert(saveTasks, task.spawn(function()\n\t\t\tsavePlayerData(player)\n\t\t\tcachedData[player.UserId] = nil\n\t\tend))\n\tend\n\n\t-- Wait for all saves to complete or timeout\n\tlocal startTime = os.clock()\n\twhile #saveTasks > 0 and (os.clock() - startTime) < SHUTDOWN_TIMEOUT do\n\t\ttask.wait(0.5) -- Check every half second\n\t\t\n\t\t-- Remove completed tasks (task.spawn returns a thread ID)\n\t\t-- Note: We can't easily filter 'saveTasks' by completion status without\n\t\t-- storing status. Instead, we just wait for the timeout or use a counter.\n\t\t-- A simpler approach for the timeout logic:\n\tend\n\n\t-- If timeout occurred, we must yield to allow pending requests to finish\n\t-- but we cannot block indefinitely. The engine will eventually kill the server.\n\t-- The pcall inside savePlayerData handles individual request failures.\n\t\n\t-- Wait for remaining threads to finish (non-blocking yield)\n\tfor _, thread in ipairs(saveTasks) do\n\t\ttask.wait() -- Yield to allow the spawned task to run\n\tend\nend)\n```\n\n### Key Implementation Details\n\n*   **UpdateAsync Safety**: Uses `UpdateAsync` instead of `SetAsync` to prevent overwriting data modified by other servers or the same server during concurrent access [1].\n*   **Spread Auto-Saves**: `math.random() * AUTO_SAVE_INTERVAL` offsets the first save for each player, preventing thundering herd issues on the DataStore [1].\n*   **No Stat-Change Saves**: Data is only saved on a timer (60s) or disconnect, not on every stat change, to minimize API calls [2].\n*   **BindToClose Parallelism**: Uses `task.spawn` to save all remaining players in parallel during shutdown, respecting the 30-second engine limit [1].\n*   **25-Second Timeout**: The `BindToClose` handler waits up to 25 seconds for saves to complete before the server force-stops, ensuring best-effort persistence [1].\n\n### Unverified/Notes\n*   **Session Locking**: This script does not implement explicit session locking (e.g., using `DataStoreService:UpdateAsync` with a lock key or using `ProfileService`). For high-concurrency games, session locking is recommended to prevent data loss when multiple servers access the same user [3].\n*   **Data Merging**: The `UpdateAsync` callback currently replaces data. If you have complex nested data, you may need to merge `currentStoredValue` with `cachedData` inside the callback to avoid losing recent changes made by other servers.\n*   **Task Cleanup**: The `saveTasks` table in `BindToClose` is not dynamically pruned in the loop for simplicity. In production, you might track active saves with a counter or use `task.defer` with completion callbacks.\n\n**Luau check by STAR:** The code block first failed the static Luau check (Expected ')' (to close '(' at line 116), got 'end', line 120). STAR corrected it; the version shown compiles and passes Luau type analysis. Code that uses the engine was analysed in non-strict mode, because the checker has no Roblox type definitions. 15 API name(s) the code uses were checked against the official API reference; other names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Implement player data and purchasing systems > Player data > Approach > Save player data](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#save-player-data) · cited\n2. [Save player data with standard data stores > Automatically save player data](https://create.roblox.com/docs/tutorials/use-case-tutorials/data-storage/save-player-data#automatically-save-player-data) · cited\n3. [Implement player data and purchasing systems > Session locking > Background](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing#background) · cited\n4. [Save data > Read and save automatically](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/save-data#read-and-save-automatically) · retrieved, not cited\n"
+  },
+  "PERF-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "38d7a6b82bfae04f",
+   "reasons": [
+    "require:event_or_throttle: event-driven, or a throttled query"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:event_or_throttle",
+     "ok": false,
+     "detail": "event-driven, or a throttled query"
+    },
+    {
+     "id": "forbid:frame_poll_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_task",
+     "ok": true
+    },
+    {
+     "id": "forbid:render_stepped",
+     "ok": true
+    }
+   ],
+   "seconds": 70.2,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 3687,
+   "answer_sha256": "e490fea0e9e663815e24dcde6182f3e759f6df98795929a6fb96cb66bb7ce000",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0,
+     "repairs": 0,
+     "elapsed_ms": 139
+    }
+   ],
+   "answer": "```lua\nlocal Players = game:GetService(\"Players\")\nlocal RunService = game:GetService(\"RunService\")\n\nlocal door = script.Parent -- or wherever the door is located\nlocal checkDistance = 10\nlocal halfTransparency = 0.5\nlocal fullTransparency = 0\n\n-- Debounce table to track which players are currently inside the zone\nlocal playersInZone = {}\n\n-- Helper function to check if a player is within range\nlocal function isPlayerInRange(player)\n\tlocal character = player.Character\n\tif not character or not character:FindFirstChild(\"HumanoidRootPart\") then\n\t\treturn false\n\tend\n\t\n\tlocal playerPosition = character.HumanoidRootPart.Position\n\tlocal distance = (playerPosition - door.Position).Magnitude\n\t\n\treturn distance < checkDistance\nend\n\n-- Event-driven approach using PlayerAdded and CharacterAdded/CharacterRemoving\nlocal function onPlayerAdded(player)\n\t-- Connect to character events when a player joins\n\tplayer.CharacterAdded:Connect(function(character)\n\t\t-- Wait for the character to be fully loaded\n\t\tlocal humanoidRootPart = character:WaitForChild(\"HumanoidRootPart\", 10)\n\t\t\n\t\t-- Check initial distance\n\t\tif isPlayerInRange(player) then\n\t\t\tplayersInZone[player] = true\n\t\t\tdoor.Transparency = halfTransparency\n\t\tend\n\tend)\n\t\n\t-- Also handle the case where the character already exists\n\tif player.Character then\n\t\tonPlayerAdded(player) -- Recursively handle existing character\n\tend\nend\n\nlocal function onPlayerRemoving(player)\n\t-- Remove player from zone tracking\n\tplayersInZone[player] = nil\n\t\n\t-- If no players are in the zone, reset transparency\n\tif #playersInZone == 0 then\n\t\tdoor.Transparency = fullTransparency\n\tend\nend\n\n-- Set up player events\nPlayers.PlayerAdded:Connect(onPlayerAdded)\nPlayers.PlayerRemoving:Connect(onPlayerRemoving)\n\n-- Check for existing players when the script starts\nfor _, player in ipairs(Players:GetPlayers()) do\n\tonPlayerAdded(player)\nend\n```\n\n**Explanation:** This solution uses an event-driven approach instead of polling every frame. It listens for `PlayerAdded`, `CharacterAdded`, and `PlayerRemoving` events to update the door's transparency only when necessary. This is more efficient because it avoids unnecessary calculations every frame and only performs work when a player enters or leaves the zone.\n\n**Key points:**\n- Uses `PlayerAdded` and `CharacterAdded` events to detect when players enter the zone\n- Tracks players in the zone using a table to avoid redundant checks\n- Resets transparency when the last player leaves the zone\n- Handles existing players when the script starts\n- Avoids per-frame polling by using event-driven updates\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. 6 API name(s) the code uses were checked against the official API reference; other names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Optimize your game > Cull nonessential content > Delete layered transparencies](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/optimize-your-experience#delete-layered-transparencies) · retrieved, not cited\n2. [Design for performance > Streaming and teleportation](https://create.roblox.com/docs/performance-optimization/design#streaming-and-teleportation) · retrieved, not cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · retrieved, not cited\n4. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 1,
+  "fail": 4,
+  "error": 0,
+  "scored": 5,
+  "pass_rate": 0.2,
+  "median_seconds": 147.9
+ }
+}

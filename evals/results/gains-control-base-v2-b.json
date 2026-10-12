@@ -1,0 +1,189 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "LUA-03",
+   "NET-01"
+  ]
+ },
+ "run": {
+  "app_commit": "10ea90c",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-secure-remotes,roblox-animation-craft,roblox-vfx,roblox-building-layout,eng-verify-before-done",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "dabb0dd897ef",
+  "started_at": "2026-10-11T23:59:42+00:00",
+  "waited_for_lock_s": 1.0,
+  "finished_at": "2026-10-12T00:03:46+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "LUA-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "1ea58a9a4d5435de",
+   "reasons": [
+    "luau_check[2]: line 13: Operator '%' could not be applied to operands of types unknown and number; there is no cor"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": false,
+     "detail": "line 13: Operator '%' could not be applied to operands of types unknown and number; there is no cor"
+    },
+    {
+     "id": "typecheck_probe",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:strict_header",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_nocheck",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_any",
+     "ok": true
+    }
+   ],
+   "seconds": 120.2,
+   "timings": {
+    "luau_check_s": 0.16,
+    "unit_s": 0.47
+   },
+   "blocks": 2,
+   "answer_chars": 4207,
+   "answer_sha256": "a0dcaa8481ac1c15d6c4977bb4e1131e58ea4d66807908aa15b30aaae2eb33a4",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 297
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a `--!strict` ModuleScript implementation of `ListUtil` with `map`, `filter`, and `find`.\n\n### Implementation\n\n```lua\n--!strict\n\n--!strict ListUtil\n-- A utility module for immutable list operations.\n\nlocal ListUtil = {}\n\n--- Applies a function to every element in the list and returns a new list with the results.\n-- @generic T\n-- @generic U\n-- @param list {T} The input list.\n-- @param fn (T) -> U The mapping function.\n-- @return {U} A new list containing the mapped values.\nfunction ListUtil.map<T, U>(list: {T}, fn: (T) -> U): {U}\n\tlocal result: {U} = {}\n\tfor i = 1, #list do\n\t\tresult[i] = fn(list[i])\n\tend\n\treturn result\nend\n\n--- Returns a new list containing only elements that satisfy the predicate.\n-- @generic T\n-- @param list {T} The input list.\n-- @param pred (T) -> boolean The predicate function.\n-- @return {T} A new list containing the filtered elements.\nfunction ListUtil.filter<T>(list: {T}, pred: (T) -> boolean): {T}\n\tlocal result: {T} = {}\n\tfor i = 1, #list do\n\t\tlocal item = list[i]\n\t\tif pred(item) then\n\t\t\ttable.insert(result, item)\n\t\tend\n\tend\n\treturn result\nend\n\n--- Returns the first element in the list that satisfies the predicate, or nil if none do.\n-- @generic T\n-- @param list {T} The input list.\n-- @param pred (T) -> boolean The predicate function.\n-- @return T? The first matching element, or nil.\nfunction ListUtil.find<T>(list: {T}, pred: (T) -> boolean): T?\n\tfor i = 1, #list do\n\t\tlocal item = list[i]\n\t\tif pred(item) then\n\t\t\treturn item\n\t\tend\n\tend\n\treturn nil\nend\n\nreturn ListUtil\n```\n\n### Key Details\n\n1.  **Immutability**: None of these functions modify the input `list`. `map` and `filter` create and return entirely new tables. `find` only reads from the input table.\n2.  **Type Safety**: The `--!strict` pragma is used, and generic type parameters (`<T>`, `<U>`) are declared in the function signatures to ensure type checking across the module.\n3.  **Index Preservation**: `map` preserves the original indices of the list. `filter` and `find` use sequential indexing for the new result (for `filter`) or return the value directly (for `find`), which is standard for these utility functions.\n4.  **ModuleScript**: This code is designed to be placed in a `ModuleScript` (e.g., inside `ReplicatedStorage`) and required by other scripts using `local ListUtil = require(path.to.ListUtil)`.\n\n### Usage Example\n\n```lua\nlocal ListUtil = require(game.ReplicatedStorage.ListUtil)\n\nlocal numbers = {1, 2, 3, 4, 5}\n\n-- Map: Square each number\nlocal squared = ListUtil.map(numbers, function(n)\n\treturn n * n\nend)\n-- squared is {1, 4, 9, 16, 25}\n\n-- Filter: Keep only even numbers\nlocal evens = ListUtil.filter(numbers, function(n)\n\treturn n % 2 == 0\nend)\n-- evens is {2, 4}\n\n-- Find: Find the first number greater than 3\nlocal found = ListUtil.find(numbers, function(n)\n\treturn n > 3\nend)\n-- found is 4\n```\n\n### Documentation Reference\n\nThe provided official documentation passages [1], [2], and [3] confirm that `ModuleScript` is a valid script type in Roblox, typically used for reusable code like utilities, and can be loaded via `require` [3]. The specific generic type syntax and `--!strict` pragma are part of the Luau language specification, which is the scripting language used by Roblox. The indexed documentation did not provide specific examples of these higher-order functions, so this implementation is based on standard Luau practices.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Roblox for Unity developers > Scripting](https://create.roblox.com/docs/unity#scripting) · cited\n2. [Roblox for Unreal developers > Scripting](https://create.roblox.com/docs/unreal#scripting) · cited\n3. [Create with module scripts](https://create.roblox.com/docs/tutorials/fundamentals/coding-6/create-with-module-scripts) · cited\n4. [Third-party tools > Package managers](https://create.roblox.com/docs/projects/external-tools#package-managers) · retrieved, not cited\n"
+  },
+  "NET-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "d8ec704be7622403",
+   "reasons": [
+    "unit_tests: 5/7 passed; failed: 50 rapid valid calls grant once and charge once; fuzz (500 calls): never an error, the balance never rises or goes negative"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "5/7 passed; failed: 50 rapid valid calls grant once and charge once; fuzz (500 calls): never an error, the balance never rises or goes negative"
+    },
+    {
+     "id": "require:catalog_lookup",
+     "ok": true
+    }
+   ],
+   "seconds": 121.5,
+   "timings": {
+    "luau_check_s": 0.08,
+    "unit_s": 0.48
+   },
+   "blocks": 1,
+   "answer_chars": 4811,
+   "answer_sha256": "51ebf68140e3e59fae7a1e8748a824179f23d2c22e03803176fcee096e26207d",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the secure rewrite. The server now acts as the single source of truth for pricing and ownership, completely ignoring the `price` argument sent by the client.\n\n### The Vulnerability\nThe original code trusted the client to provide the `price`. An exploiter could simply send `0` or a negative number, bypassing the cost entirely.\n\n### The Secure Handler\nThis script assumes `BuyItem` is a `RemoteEvent` inside `ReplicatedStorage`.\n\n```lua\n-- Server Script (e.g., in ServerScriptService)\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Players = game:GetService(\"Players\")\n\n-- 1. Server-side source of truth for prices\nlocal Catalog = {\n\tsword = 100,\n\tshield = 250\n}\n\n-- 2. Server-side tracking of player inventory (to enforce \"own once\" rule)\n-- Using a dictionary of dictionaries: { [Player] = { [itemId] = true } }\nlocal playerInventory = {}\n\nlocal function giveItem(player, itemId)\n\tlocal inventory = playerInventory[player]\n\tif inventory and inventory[itemId] then\n\t\twarn(string.format(\"%s already owns %s\", player.Name, itemId))\n\t\treturn false\n\tend\n\n\t-- Create the item (example: cloning a tool from ReplicatedStorage)\n\tlocal itemTemplate = ReplicatedStorage:WaitForChild(\"Items\"):FindFirstChild(itemId)\n\tif not itemTemplate then\n\t\twarn(string.format(\"Item %s not found in ReplicatedStorage/Items\", itemId))\n\t\treturn false\n\tend\n\n\tlocal newItem = itemTemplate:Clone()\n\tnewItem.Parent = player.Backpack\n\tnewItem.Parent = player.StarterGear -- Ensure they can respawn with it\n\n\t-- Mark as owned\n\tif not playerInventory[player] then\n\t\tplayerInventory[player] = {}\n\tend\n\tplayerInventory[player][itemId] = true\n\n\treturn true\nend\n\n-- 3. Secure Event Handler\nReplicatedStorage.BuyItem.OnServerEvent:Connect(function(player, itemId)\n\t-- A. Validate the Item ID\n\t-- Ensure the item exists in our server catalog\n\tif not Catalog[itemId] then\n\t\twarn(string.format(\"%s attempted to buy invalid item: %s\", player.Name, tostring(itemId)))\n\t\treturn\n\tend\n\n\t-- B. Check Ownership (One per player)\n\tif playerInventory[player] and playerInventory[player][itemId] then\n\t\twarn(string.format(\"%s already owns %s\", player.Name, itemId))\n\t\treturn\n\tend\n\n\t-- C. Determine Price (Server decides, never trust client)\n\tlocal price = Catalog[itemId]\n\n\t-- D. Validate Player State\n\tlocal leaderstats = player:FindFirstChild(\"leaderstats\")\n\tlocal coins = leaderstats and leaderstats:FindFirstChild(\"Coins\")\n\t\n\tif not coins then\n\t\twarn(string.format(\"%s has no Coins stat\", player.Name))\n\t\treturn\n\tend\n\n\t-- E. Validate Funds\n\tif coins.Value < price then\n\t\twarn(string.format(\"%s cannot afford %s (Cost: %d, Has: %d)\", player.Name, itemId, price, coins.Value))\n\t\treturn\n\tend\n\n\t-- F. Process Transaction\n\tcoins.Value -= price\n\tgiveItem(player, itemId)\nend)\n\n-- Cleanup when players leave\nPlayers.PlayerRemoving:Connect(function(player)\n\tplayerInventory[player] = nil\nend)\n```\n\n### Key Security Changes\n1.  **Removed `price` from arguments:** The handler signature is now `OnServerEvent:Connect(function(player, itemId)`. The client no longer sends the price, removing the ability to manipulate it [3].\n2.  **Server-Side Pricing:** The `Catalog` table is defined in the server script. The server looks up the price using the `itemId` provided by the client.\n3.  **Inventory Validation:** The `playerInventory` table tracks what each player owns. The server checks this table before processing the purchase to ensure the \"own once\" rule is enforced [1].\n4.  **Input Validation:** The server checks if `itemId` exists in the `Catalog` and if the player has sufficient funds *after* determining the price server-side.\n\n### References\n*   [1] Securing the client-server boundary > Validating remote inputs > Type and structure validation\n*   [2] Roblox for the AP CSP Create Performance Task > The AP CSP Create Performance Task > Project example\n*   [3] Security and cheat mitigation tactics > Never trust the client\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-12)\n\n1. [Securing the client-server boundary > Validating remote inputs > Type and structure validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#type-and-structure-validation) · cited\n2. [Roblox for the AP CSP Create Performance Task > The AP CSP Create Performance Task > Project example](https://create.roblox.com/docs/education/resources/roblox-for-the-ap-csp-create-performance-task#project-example) · cited\n3. [Security and cheat mitigation tactics > Never trust the client](https://create.roblox.com/docs/scripting/security/security-tactics#never-trust-the-client) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 0,
+  "fail": 2,
+  "error": 0,
+  "scored": 2,
+  "pass_rate": 0.0,
+  "median_seconds": 120.8
+ }
+}

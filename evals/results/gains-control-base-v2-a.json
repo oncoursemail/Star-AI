@@ -1,0 +1,186 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "UI-10",
+   "PERF-01"
+  ]
+ },
+ "run": {
+  "app_commit": "10ea90c",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-secure-remotes,roblox-animation-craft,roblox-vfx,roblox-building-layout,eng-verify-before-done",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "dabb0dd897ef",
+  "started_at": "2026-10-11T18:07:02+00:00",
+  "waited_for_lock_s": 0.9,
+  "finished_at": "2026-10-11T18:12:20+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "UI-10": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "9a85ec51a27908fd",
+   "reasons": [
+    "require:auto_canvas: AutomaticCanvasSize grows the canvas by itself"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:scrolling",
+     "ok": true
+    },
+    {
+     "id": "require:list_layout",
+     "ok": true
+    },
+    {
+     "id": "require:auto_canvas",
+     "ok": false,
+     "detail": "AutomaticCanvasSize grows the canvas by itself"
+    },
+    {
+     "id": "require:padding",
+     "ok": true
+    },
+    {
+     "id": "require:shop_gui",
+     "ok": true
+    },
+    {
+     "id": "forbid:manual_canvas",
+     "ok": true
+    }
+   ],
+   "seconds": 158.1,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 5304,
+   "answer_sha256": "ec8dace78fb55cb5e3dc6ec990395a93c65eab32aabe964a983b9f621cea9ca6",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 32
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here's a LocalScript that builds a scrolling shop list inside the existing `ShopGui` ScreenGui. It uses a `ScrollingFrame` with a `UIListLayout` so the canvas height grows automatically with the number of rows—no manual canvas computation needed.\n\n```lua\n-- LocalScript inside StarterPlayerScripts (or parented to ShopGui)\nlocal Players = game:GetService(\"Players\")\nlocal player = Players.LocalPlayer\nlocal playerGui = player:WaitForChild(\"PlayerGui\")\n\n-- 1. Find the existing ShopGui ScreenGui\nlocal shopGui = playerGui:WaitForChild(\"ShopGui\")\n\n-- 2. Create a ScrollingFrame to hold the rows\nlocal scrollFrame = Instance.new(\"ScrollingFrame\")\nscrollFrame.Name = \"ShopScrollFrame\"\nscrollFrame.Parent = shopGui\n\n-- Anchor and size the scroll frame within the ScreenGui\nscrollFrame.AnchorPoint = Vector2.new(0, 0)\nscrollFrame.Size = UDim2.new(0, 300, 0, 400)       -- adjust to your layout\nscrollFrame.Position = UDim2.new(0.5, -150, 0, 50)  -- center-ish; tweak as needed\nscrollFrame.BackgroundTransparency = 0.5\nscrollFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)\nscrollFrame.BorderSizePixel = 0\nscrollFrame.ScrollBarThickness = 6\n\n-- 3. Add a UIListLayout so rows stack vertically and canvas auto-sizes\nlocal listLayout = Instance.new(\"UIListLayout\")\nlistLayout.Parent = scrollFrame\nlistLayout.SortOrder = Enum.SortOrder.LayoutOrder\nlistLayout.Padding = UDim.new(0, 4)       -- gap between rows\nlistLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center\n\n-- 4. Add padding so text doesn't touch edges\nlocal padding = Instance.new(\"UIPadding\")\npadding.Parent = scrollFrame\npadding.PaddingLeft = UDim.new(0, 12)\npadding.PaddingRight = UDim.new(0, 12)\npadding.PaddingTop = UDim.new(0, 8)\npadding.PaddingBottom = UDim.new(0, 8)\n\n-- 5. Build 30 rows\nlocal shopItems = {\n\t{ name = \"Sword\", price = 100 },\n\t{ name = \"Shield\", price = 150 },\n\t{ name = \"Helmet\", price = 80 },\n\t{ name = \"Boots\", price = 60 },\n\t{ name = \"Potion\", price = 30 },\n\t-- ... add more or generate dynamically\n}\n\n-- Fill remaining rows with placeholders if fewer than 30\nwhile #shopItems < 30 do\n\ttable.insert(shopItems, { name = \"Item \" .. tostring(#shopItems + 1), price = 50 })\nend\n\nfor i, item in ipairs(shopItems) do\n\t-- Row frame\n\tlocal row = Instance.new(\"Frame\")\n\trow.Name = \"ShopRow_\" .. tostring(i)\n\trow.Parent = scrollFrame\n\trow.Size = UDim2.new(1, -24, 0, 40)   -- -24 accounts for left+right padding\n\trow.BackgroundTransparency = 0.3\n\trow.BackgroundColor3 = Color3.fromRGB(60, 60, 60)\n\trow.BorderSizePixel = 0\n\n\t-- Item name label (left)\n\tlocal nameLabel = Instance.new(\"TextLabel\")\n\tnameLabel.Parent = row\n\tnameLabel.Size = UDim2.new(0.6, 0, 1, 0)\n\tnameLabel.Position = UDim2.new(0, 8, 0, 0)\n\tnameLabel.BackgroundTransparency = 1\n\tnameLabel.Text = item.name\n\tnameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)\n\tnameLabel.TextSize = 18\n\tnameLabel.Font = Enum.Font.GothamBold\n\tnameLabel.TextXAlignment = Enum.TextXAlignment.Left\n\n\t-- Price label (right)\n\tlocal priceLabel = Instance.new(\"TextLabel\")\n\tpriceLabel.Parent = row\n\tpriceLabel.Size = UDim2.new(0.35, 0, 1, 0)\n\tpriceLabel.Position = UDim2.new(0.65, 0, 0, 0)\n\tpriceLabel.BackgroundTransparency = 1\n\tpriceLabel.Text = \"Price: \" .. tostring(item.price) .. \" coins\"\n\tpriceLabel.TextColor3 = Color3.fromRGB(255, 215, 0)\n\tpriceLabel.TextSize = 18\n\tpriceLabel.Font = Enum.Font.GothamBold\n\tpriceLabel.TextXAlignment = Enum.TextXAlignment.Right\nend\n```\n\n### Key points\n\n| Requirement | How it's met |\n|---|---|\n| **30 rows** | Loop creates exactly 30 `Frame` children |\n| **Item name left, price right** | Two `TextLabel`s with proportional sizes and `TextXAlignment` |\n| **Layout object arranges rows** | `UIListLayout` on the `ScrollingFrame` stacks them vertically |\n| **Vertical scrolling** | `ScrollingFrame` with `ScrollBarThickness > 0` |\n| **Canvas auto-grows** | `UIListLayout` automatically sets `CanvasSize` based on children — no manual computation [2] |\n| **Padding** | `UIPadding` on the `ScrollingFrame` keeps text away from edges |\n\n### Notes\n\n- The script assumes `ShopGui` already exists under `PlayerGui`. If it doesn't, `WaitForChild` will yield until it appears.\n- Adjust `scrollFrame.Size` and `Position` to fit your existing layout.\n- For production, consider using `UIFlexLayout` or `UIGridLayout` if you need more complex arrangements, but `UIListLayout` is the simplest for a single-column list [2].\n- If you want the shop data to come from the server, replace the hardcoded `shopItems` table with a `RemoteEvent` call to fetch the list.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Custom text chat UI](https://create.roblox.com/docs/chat/examples/simple-custom-frontend-ui) · retrieved, not cited\n2. [User interface > Layout and design](https://create.roblox.com/docs/ui#layout-and-design) · cited\n3. [Create a GUI > Script the GUI](https://create.roblox.com/docs/education/battle-royale-series/creating-a-gui#script-the-gui) · retrieved, not cited\n4. [GuiObject > MouseMoved](https://create.roblox.com/docs/reference/engine/classes/GuiObject#MouseMoved) · retrieved, not cited\n"
+  },
+  "PERF-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "38d7a6b82bfae04f",
+   "reasons": [
+    "require:event_or_throttle: event-driven, or a throttled query"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:event_or_throttle",
+     "ok": false,
+     "detail": "event-driven, or a throttled query"
+    },
+    {
+     "id": "forbid:frame_poll_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:frame_poll_task",
+     "ok": true
+    },
+    {
+     "id": "forbid:render_stepped",
+     "ok": true
+    }
+   ],
+   "seconds": 158.6,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 6515,
+   "answer_sha256": "a708e6bdb67679f179da2f0b6ecbf850b9a48575323f6eb96c53030e79a252c3",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering",
+     "model": "star-fast"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 62
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the rewritten, event-driven script.\n\n### The Solution\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal RunService = game:GetService(\"RunService\")\n\n-- Configuration\nlocal DOOR = script.Parent -- Assuming the script is inside the door\nlocal DETECTION_RADIUS = 10\nlocal FADE_SPEED = 5 -- Tween speed (seconds)\n\n-- State\nlocal isPlayerNear = false\nlocal tween = nil\n\n-- Helper: Update transparency based on current state\nlocal function updateDoorState()\n\tif isPlayerNear then\n\t\tif not tween or tween:GetState() == Enum.TweenState.Completed then\n\t\t\ttween = RunService:Create(DOOR, TweenInfo.new(FADE_SPEED, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.5})\n\t\t\ttween:Play()\n\t\tend\n\telse\n\t\tif not tween or tween:GetState() == Enum.TweenState.Completed then\n\t\t\ttween = RunService:Create(DOOR, TweenInfo.new(FADE_SPEED, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0})\n\t\t\ttween:Play()\n\t\tend\n\tend\nend\n\n-- Event: Player Added\nPlayers.PlayerAdded:Connect(function(player)\n\tplayer.CharacterAdded:Connect(function(character)\n\t\tlocal humanoid = character:WaitForChild(\"Humanoid\")\n\t\t\n\t\t-- Use Heartbeat for precise distance checking (throttled to render frame)\n\t\tlocal connection\n\t\tconnection = RunService.Heartbeat:Connect(function()\n\t\t\tif not character or not character:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\t\tconnection:Disconnect()\n\t\t\t\treturn\n\t\t\tend\n\t\t\t\n\t\t\tlocal distance = (character.HumanoidRootPart.Position - DOOR.Position).Magnitude\n\t\t\t\n\t\t\t-- Check if ANY player is near (simple check for single player, \n\t\t\t-- for multiple players you'd track a counter)\n\t\t\tif distance < DETECTION_RADIUS then\n\t\t\t\tif not isPlayerNear then\n\t\t\t\t\tisPlayerNear = true\n\t\t\t\t\tupdateDoorState()\n\t\t\t\tend\n\t\t\telse\n\t\t\t\t-- Optional: If you want it to close immediately when *this* player leaves,\n\t\t\t\t-- you need to check if *any* other player is still near.\n\t\t\t\t-- For a robust multi-player solution, use a counter.\n\t\t\t\t\n\t\t\t\tlocal anyPlayerNear = false\n\t\t\t\tfor _, otherPlayer in Players:GetPlayers() do\n\t\t\t\t\tif otherPlayer ~= player then\n\t\t\t\t\t\tlocal otherChar = otherPlayer.Character\n\t\t\t\t\t\tif otherChar and otherChar:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\t\t\t\t\tif (otherChar.HumanoidRootPart.Position - DOOR.Position).Magnitude < DETECTION_RADIUS then\n\t\t\t\t\t\t\t\tanyPlayerNear = true\n\t\t\t\t\t\t\t\tbreak\n\t\t\t\t\t\t\tend\n\t\t\t\t\t\tend\n\t\t\t\t\tend\n\t\t\t\tend\n\t\t\t\t\n\t\t\t\tif not anyPlayerNear then\n\t\t\t\t\tisPlayerNear = false\n\t\t\t\t\tupdateDoorState()\n\t\t\t\t\tconnection:Disconnect() -- Stop checking this character\n\t\t\t\tend\n\t\t\tend\n\t\tend)\n\tend)\nend)\n\n-- Cleanup on player removal\nPlayers.PlayerRemoving:Connect(function(player)\n\t-- If the player leaving was the one keeping the door open, \n\t-- we need to ensure the door closes if no one else is near.\n\t-- The Heartbeat loop above handles disconnecting, \n\t-- but we might need to trigger a state update if the door was open.\n\tif isPlayerNear then\n\t\t-- Check if anyone else is near\n\t\tlocal anyPlayerNear = false\n\t\tfor _, otherPlayer in Players:GetPlayers() do\n\t\t\tlocal otherChar = otherPlayer.Character\n\t\t\tif otherChar and otherChar:FindFirstChild(\"HumanoidRootPart\") then\n\t\t\t\tif (otherChar.HumanoidRootPart.Position - DOOR.Position).Magnitude < DETECTION_RADIUS then\n\t\t\t\t\tanyPlayerNear = true\n\t\t\t\t\tbreak\n\t\t\t\tend\n\t\t\tend\n\t\tend\n\t\t\n\t\tif not anyPlayerNear then\n\t\t\tisPlayerNear = false\n\t\t\tupdateDoorState()\n\t\tend\n\tend\nend)\n```\n\n### Explanation of Choice\n\n> **Switching from `wait()` polling to `RunService.Heartbeat` with state tracking eliminates redundant calculations by only checking distances when a player joins/leaves or their character changes, and only updates the door when the \"near/far\" state actually changes, reducing CPU usage from 60 checks/second to near-zero when no state changes occur.**\n\n### Key Improvements\n\n1.  **Event-Driven Initialization:** Instead of polling every player every frame, we only start checking when a player's character is added. This avoids iterating over all players constantly.\n2.  **State Tracking:** The `isPlayerNear` flag ensures we only call `TweenService:Create` and `:Play()` when the transparency *actually needs to change*. This prevents unnecessary tween creation and rendering overhead.\n3.  **`RunService.Heartbeat` vs `wait()`:** `Heartbeat` is synced with the render frame, providing smoother animation and more predictable timing than `wait()`, which can vary. It’s still throttled to the frame rate, but it’s more efficient for physics/position checks.\n4.  **Multi-Player Safety:** The script checks if *any* player is near before closing the door, ensuring it stays open if multiple players are present.\n5.  **Cleanup:** Connections are disconnected when characters are removed or players leave, preventing memory leaks and unnecessary calculations.\n\n### Why Not `Region3` or `OverlapParams`?\n\nFor a simple 10-stud radius, `Magnitude` checks are very fast. If you had hundreds of doors or players, `OverlapParams` with `Workspace:GetPartBoundsInRadius` would be more efficient. However, for a single door, the overhead of creating `OverlapParams` and querying the workspace might outweigh the benefit of avoiding `Magnitude` calculations, especially since we’re only checking players who are actively in the game.\n\n### Citation\n\n-   **Event-driven code is preferred over per-frame calculations** to stay within the 16.67ms frame budget [4].\n-   **`task.wait()` or `RunService.Heartbeat`** should be used to avoid overloading the engine [3].\n-   **Disconnecting unused connections** prevents unnecessary calls [4].\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Optimize your game > Cull nonessential content > Delete layered transparencies](https://create.roblox.com/docs/tutorials/curriculums/environmental-art/optimize-your-experience#delete-layered-transparencies) · retrieved, not cited\n2. [Design for performance > Streaming and teleportation](https://create.roblox.com/docs/performance-optimization/design#streaming-and-teleportation) · retrieved, not cited\n3. [Code the game loop > Code the game loop > Troubleshooting tips](https://create.roblox.com/docs/education/battle-royale-series/coding-the-game-loop#troubleshooting-tips) · cited\n4. [Design for performance > Scripting](https://create.roblox.com/docs/performance-optimization/design#scripting) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 0,
+  "fail": 2,
+  "error": 0,
+  "scored": 2,
+  "pass_rate": 0.0,
+  "median_seconds": 158.3
+ }
+}
