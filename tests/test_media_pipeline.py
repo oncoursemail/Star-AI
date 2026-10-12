@@ -645,6 +645,7 @@ def test_media_actions(tmp_path, monkeypatch):
 
     monkeypatch.setattr(image_gen, 'status', lambda s: {'running': False, 'ready': False, 'missing': [], 'message': 'off'})
     monkeypatch.setattr('star.providers.get_api_key', lambda name: None)
+    monkeypatch.setattr(media_actions, 'detect_comfy_home', lambda: '')       # not the ComfyUI of this PC
     state = media_actions.handle('mediaStatus', {}, **kwargs)
     assert [entry['id'] for entry in state['places']] == ['images', 'voice', 'video']
     assert state['images']['message'] == 'off' and [size['id'] for size in state['sizes']] == ['square', 'wide', 'tall', 'draft']
@@ -668,6 +669,54 @@ def test_launcher_only_ever_binds_this_computer(tmp_path):
     launcher = media_actions.ComfyLauncher()
     already = launcher.start(Settings(comfy_home=str(tmp_path)), tmp_path, is_up=lambda: True)
     assert already == {'started': False, 'running': True, 'message': 'ComfyUI is already running.'}
+
+
+def _comfy_install(folder):
+    folder.mkdir(parents=True)
+    (folder / 'main.py').write_text('')
+    (folder / '.venv' / 'Scripts').mkdir(parents=True)
+    (folder / '.venv' / 'Scripts' / 'python.exe').write_text('')
+    return str(folder)
+
+
+def test_comfyui_is_found_on_its_own_only_in_the_fixed_places(tmp_path):
+    profile = tmp_path / 'profile'
+    nowhere = dict(env={}, data_dir=tmp_path / 'data', user_home=profile)
+    code = profile / 'Documents' / 'work' / 'Star-AI'
+    code.mkdir(parents=True)
+    assert media_actions.find_comfy_home(search_from=(code,), **nowhere) == ''
+    # next to the code, up to four levels above it, inside the user's profile
+    found = _comfy_install(profile / 'Documents' / 'work' / 'media' / 'ComfyUI')
+    assert media_actions.find_comfy_home(search_from=(code,), **nowhere) == found
+    deep = code / 'worktrees' / 'wt-one' / 'star'
+    deep.mkdir(parents=True)
+    assert media_actions.find_comfy_home(search_from=(deep,), **nowhere) == found
+    # the environment variable and STAR's own data folder come first
+    mine = _comfy_install(tmp_path / 'data' / 'media' / 'ComfyUI')
+    assert media_actions.find_comfy_home(search_from=(code,), **nowhere) == mine
+    named = _comfy_install(tmp_path / 'chosen' / 'ComfyUI')
+    assert media_actions.find_comfy_home(search_from=(code,), **{**nowhere, 'env': {'STAR_COMFY_HOME': named}}) == named
+
+
+def test_a_folder_that_is_not_a_complete_install_or_sits_outside_the_profile_is_not_used(tmp_path):
+    profile = tmp_path / 'profile'
+    code = profile / 'work' / 'Star-AI'
+    code.mkdir(parents=True)
+    options = dict(env={}, data_dir=tmp_path / 'data', user_home=profile, search_from=(code,))
+    half = profile / 'work' / 'media' / 'ComfyUI'
+    half.mkdir(parents=True)
+    (half / 'main.py').write_text('')                       # no ComfyUI Python of its own
+    assert media_actions.find_comfy_home(**options) == ''
+    # a drive-root style folder that any user of the PC could have made: climbing stops at the profile
+    _comfy_install(tmp_path / 'media' / 'ComfyUI')
+    assert media_actions.find_comfy_home(**options) == ''
+    assert media_actions.find_comfy_home(**{**options, 'env': {'STAR_COMFY_HOME': str(tmp_path / 'missing')}}) == ''
+
+
+def test_a_folder_chosen_in_settings_is_never_replaced_by_a_found_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(media_actions, 'detect_comfy_home', lambda: str(tmp_path / 'found'))
+    assert media_actions.effective_comfy_home(Settings(comfy_home='  ')) == str(tmp_path / 'found')
+    assert media_actions.effective_comfy_home(Settings(comfy_home=str(tmp_path / 'mine'))) == str(tmp_path / 'mine')
 
 
 def test_a_start_that_never_answers_is_stopped_again(tmp_path, monkeypatch):

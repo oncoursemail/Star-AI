@@ -10,6 +10,7 @@ import sqlite3
 import time
 from .analytics import AnalyticsStore
 from dataclasses import dataclass, asdict, replace, field
+from contextlib import AsyncExitStack
 from typing import Callable
 
 from .agent import execute, HistoryWindowPressure
@@ -73,6 +74,8 @@ class Settings:
     media_images: str = 'pc'
     media_voice: str = 'pc'
     media_video: str = 'servers'
+    media_chat_auto: bool = True
+    session_capabilities_prompt: bool = False
     media_use_references: bool = True     # give a project's pinned reference images to image and UI work
     comfy_home: str = ''                  # folder of the ComfyUI install STAR may start ('' = started by hand)
     ffmpeg_dir: str = ''                  # folder with ffmpeg and ffprobe ('' = look on PATH)
@@ -93,6 +96,9 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
+    blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
+    blender_executable: str = ''           # installed local executable; '' = discover without downloading
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
@@ -107,6 +113,7 @@ class Settings:
     learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
+    research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
     def load(cls, file: Path):
@@ -137,8 +144,8 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau',
-                            'allow_cgnat')):
+                            'learning_digest_cloud', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -153,6 +160,13 @@ class Settings:
             raise ValueError('Team timeout minimum/maximum must be 1 to 1800 seconds')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
+        if self.blender_edit and not self.blender_enabled:
+            raise ValueError('Enable Blender before enabling Blender scene creation')
+        if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
+                or '\x00' in self.blender_executable
+                or self.blender_executable.startswith(('\\\\', '//'))
+                or '://' in self.blender_executable):
+            raise ValueError('Choose a trusted local Blender executable, not a URL or network share')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
@@ -596,7 +610,8 @@ def redact_for_logs(value):
     return value
 
 
-def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None, *,
+                        blender: bool = False) -> bool:
     """Load task tools on explicit request or scoped short edit follow-up.
 
     User context hints are not permissions; executable scopes remain enforced.
@@ -604,6 +619,8 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
     text = prompt.lower()
     scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game', 'my files',
               'project folder', 'current place')
+    if blender:   # only with the Blender switch on (Settings.blender_enabled); off, these stay plain chat
+        scopes += ('blender', '3d asset', '3d model', '3d mesh', 'gltf', 'glb')
     actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
                'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
                'remove ', 'delete ', 'test ', 'make it', 'update ')
@@ -628,7 +645,8 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
                 and any(any(x in turn.lower() for x in scopes)
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
-def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None, *,
+                            blender: bool = False) -> bool:
     """Only connect to Roblox Studio for an actual selected-place operation.
 
     A configured studio_id is NOT a request to connect for every agent call.
@@ -638,6 +656,12 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
     if not isinstance(prompt,str) or not prompt.strip():
         return False
     text=prompt.lower()
+    # Exporting a Blender asset for Roblox does not itself authorize Studio edits. Only with the Blender
+    # switch on: with it off, a prompt that mentions Blender attaches Studio exactly as before.
+    if blender and 'blender' in text and not any(term in text for term in (
+            'studio', 'current place', 'selected place', 'my game', 'the place',
+            'game hierarchy', 'explorer tree', 'datamodel', 'my project', 'my roblox game')):
+        return False
     actions=('inspect','edit','modify','build','create','fix','test ','run ','playtest',
              'open ','change ','update ','delete ','remove ','add ','insert ','scan ')
     requests_action=any(a in text for a in actions)
@@ -732,8 +756,9 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
     Returns (history messages, newest stored rows). The same function feeds a
     real turn and the cache warm-up, so both start with identical bytes. A
     trailing user row is the message being answered now (already saved by the
-    UI) and is not history; an earlier message that never got a reply is kept,
-    marked as unanswered (see context_layout.exchanges).
+    UI) and is not history; an earlier message that never got a reply (failed,
+    stopped or interrupted) is left out, with no placeholder answer (see
+    conversation_memory.select_window).
     """
     window, rows = chat_history_snapshot(settings, home, chat_id)
     return window.messages, [(row['role'], row['body']) for row in rows
@@ -869,7 +894,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             and recent_all[-1][1] and prompt.startswith(recent_all[-1][1]) else recent_all
         )
         recent_users = [body for role,body in route_history if role=='user']
-        project_tools = needs_project_tools(prompt, recent_users)
+        project_tools = needs_project_tools(prompt, recent_users, blender=settings.blender_enabled is True)
         referential = len(prompt) <= 160 and bool(re.search(
             r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
         roblox_context = bool(project_tools and referential
@@ -923,8 +948,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             workshop = ToolWorkshop(home=home,project=settings.project,knowledge=knowledge,
                                     workspace=workspace,intelligence=intelligence)
         allow_studio = bool(use_tools and settings.studio_id and
-                            needs_studio_connection(prompt,recent_users))
+                            needs_studio_connection(prompt,recent_users,
+                                                    blender=settings.blender_enabled is True))
+        allow_blender = False
+        if use_tools and settings.blender_enabled is True:   # the Blender modules load only when it is on
+            from .blender_mcp import wants_blender
+            allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        # Searchable public metadata only; no connector is installed or approved.
+        from .mcp_registry import RegistryDiscovery
+        mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
         connection_for(settings)  # fail early (missing key, bad address) before any work
         limits = call_limits(settings)
         # Own hardware only: the conversation's tool list stays put from turn to turn (STAR
@@ -953,7 +986,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
                 # Summaries, sub-agents, specialists and code repair are not the conversation:
-                # on STAR Server they use the slot next to it (providers.llama_request_fields).
+                # on STAR Server they carry no id_slot, the server places them (providers.llama_request_fields).
                 helper = background_client(client, settings, conversation=memory_scope)
                 specialists = (ResearchTeam(
                     client=helper,model=route.subagent_model,project=settings.project,
@@ -1015,6 +1048,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              mcp_registry=mcp_registry,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
@@ -1032,12 +1066,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             project_memory=conversation_memory.compose_memory(
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
                         try:
-                            if allow_studio:
-                                from .local_mcp import connect_studio
+                            async with AsyncExitStack() as connections:
+                                tool_kwargs = dict(kwargs)
+                                if allow_blender:
+                                    from .blender_mcp import connect_blender
+                                    tool_kwargs["blender"] = await connections.enter_async_context(
+                                        connect_blender(settings, home))
+                                if allow_studio:
+                                    from .local_mcp import connect_studio
                                 # One guarded connection per attempt: a retry below happens only when
                                 # nothing was sent to the model or to Studio, so nothing is replayed.
-                                async with connect_studio(settings, home,
-                                        studio_configuration_home=studio_configuration_home) as guarded:
+                                    guarded = await connections.enter_async_context(
+                                        connect_studio(settings, home,
+                                            studio_configuration_home=studio_configuration_home))
                                     # The tool list is the connector's own, read now. What STAR may do in
                                     # the open place is decided in code from what that place is.
                                     discovered = guarded.discovered
@@ -1046,13 +1087,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     # it may not look like lessons (guard_sections).
                                     sections.extend(learning.guard_sections(
                                         [('ROBLOX STUDIO PLACE', guarded.verdict.reason)]))
-                                    outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,
+                                    outcome = await execute(**{**tool_kwargs, 'turn_sections': sections}, studio=guarded,
                                         discovered=discovered, studio_id=settings.studio_id,
                                         may_edit=guarded.verdict.editable,
                                         allow_luau=guarded.verdict.editable and settings.studio_luau)
                                     result = studio_loop.with_report(outcome, guarded)
-                            else:
-                                result = await execute(**kwargs)
+                                else:
+                                    result = await execute(**tool_kwargs)
                         except HistoryWindowPressure as pressure:
                             if pressure.dispatched or pressure.tool_actions_started:
                                 raise conversation_memory.ConversationRetentionError(

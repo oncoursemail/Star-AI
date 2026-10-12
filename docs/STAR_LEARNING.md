@@ -100,10 +100,12 @@ after a turn and its cache warm-up have finished, STAR may send one small reques
   notes" on the review page may use the fast or main model; the chat's cache is then primed again.
 - On a STAR Server that offers several models, the chat's models include the ones the server
   filled in for role fields you left blank: plain chat goes to the server's quick model, and
-  `star-quick` is another name of it. The summary is sent like every other background request, to
-  the slot next to the open chat's (`providers.background_client`). So the automatic run may use
-  the quick model only when that model has reported two or more slots; with one slot, or before
-  the server has been checked, nothing runs automatically. A quick model you set by hand in
+  `star-quick` is another name of it. The summary is sent like every other background request,
+  without a slot number (`providers.background_client`), and the server chooses the slot. The
+  automatic run may use the quick model only when that model has reported two or more slots, so
+  that there is a slot besides the chat's; the server is not told to use that one and may still
+  replace the chat's cached conversation. With one slot, or before the server has been checked,
+  nothing runs automatically. A quick model you set by hand in
   Settings is the chat's quick model, and the server's small model is then spare.
 
 - Its output is always a candidate (`source_type = summary`) and passes the same content rules.

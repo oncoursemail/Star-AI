@@ -1,0 +1,50 @@
+return build({
+    name = "Portal",
+    cleanup_after = 3.05,
+    effects = {
+        {
+            id = "arc",
+            class = "Beam",
+            at = 0,
+            duration = 3,
+            tail = 0,
+            attachments = {Vector3.new(0, -2, 0), Vector3.new(0, 2, 0)},
+            properties = {
+                {"Brightness", 1},
+                {"Color", ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(0.4, 0.2, 1)), ColorSequenceKeypoint.new(0.5, Color3.new(1, 0.8, 1)), ColorSequenceKeypoint.new(1, Color3.new(0.4, 0.2, 1))})},
+                {"CurveSize0", 4},
+                {"CurveSize1", -4},
+                {"FaceCamera", true},
+                {"LightEmission", 1},
+                {"LightInfluence", 0},
+                {"Segments", 20},
+                {"Texture", "rbxasset://textures/particles/sparkles_main.dds"},
+                {"TextureLength", 1},
+                {"TextureMode", Enum.TextureMode.Wrap},
+                {"TextureSpeed", 1},
+                {"Transparency", NumberSequence.new({NumberSequenceKeypoint.new(0, 0, 0), NumberSequenceKeypoint.new(1, 0, 0)})},
+                {"Width0", 0.4},
+                {"Width1", 0.4},
+            },
+            tweens = {
+                {at = 0, duration = 0.5, span = 3.0, repeat_count = 2, reverses = true, easing = Enum.EasingStyle.Sine, direction = Enum.EasingDirection.InOut, to = {Width0 = 0.7, Width1 = 0.7}},
+            },
+        },
+        {
+            id = "core",
+            class = "PointLight",
+            at = 0.1,
+            duration = 2.8,
+            tail = 0,
+            offset = Vector3.new(0, 0, 0),
+            properties = {
+                {"Brightness", 2},
+                {"Color", Color3.new(0.5, 0.2, 1)},
+                {"Range", 10},
+                {"Shadows", false},
+            },
+            tweens = {
+            },
+        },
+    },
+})

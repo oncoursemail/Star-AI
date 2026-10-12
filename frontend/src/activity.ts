@@ -116,6 +116,7 @@ export function toolLabel(name?: string): string {
   if (name === 'workspace_list') return 'Listing workspace files'
   if (name.startsWith('workspace_')) return 'Reading a workspace file'
   if (name.startsWith('star_delegate')) return 'Briefing specialists'
+  if (name === 'star_mcp_registry_search') return 'Searching the public MCP registry'
   if (name.startsWith('star_mcp_')) return 'Using a connected MCP tool'
   if (name.startsWith('star_toolforge_')) return 'Running a reviewed custom tool'
   if (name === 'star_skill_catalog') return 'Listing Agent Skills'
@@ -140,7 +141,7 @@ export function startRun(id: string, mode: RunMode, now: number): ActivityRun {
     outcome: 'running',
     startedAt: now,
     steps: [],
-    phase: mode === 'image' ? 'Creating image' : 'Sending',
+    phase: mode === 'image' ? 'Creating your image on this PC...' : 'Sending',
     streaming: false,
   }
 }

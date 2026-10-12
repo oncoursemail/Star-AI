@@ -45,7 +45,10 @@ same slot as long as the new request starts with the same bytes. Every model req
 Rules that keep this working: never put per-turn text in the system message or in an earlier turn; trim history from
 the oldest end in whole blocks; keep the tool list in a fixed order with rarely attached tools last (Qwen templates
 render tools before the system text). `providers.llama_request_fields` adds `cache_prompt`, `preserve_thinking` and a
-steady `id_slot` for the owner's own llama.cpp servers only; cloud providers never receive them. `star/warmup.py`
+steady `id_slot` for the owner's own llama.cpp servers only; cloud providers never receive them. `id_slot` goes with
+a chat's own turns and warm-up; summaries, sub-agents and voice calls are sent without it and the server places them.
+The chats of two STAR clients can still get the same slot number, and a turn then waits for the other client's
+request; `STAR_SERVER_SLOT_PINNING=off` in the environment (off unless set) sends no `id_slot` at all. `star/warmup.py`
 checks the selected server at start and sends the start of the open chat once, with `max_tokens=1`, so the first real
 message does not pay for it; it writes nothing and any real request cancels it.
 `scripts/measure_first_token.py` measures the effect against a live server.

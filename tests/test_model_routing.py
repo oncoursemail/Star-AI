@@ -2,12 +2,13 @@
 
 Covers: the role table read from /v1/models, a role set by hand always winning,
 the fall-back to the single configured model, cloud and on-PC providers left
-exactly as they were, one slot per conversation and model with background work
-kept out of it, the tool list of a conversation staying byte-identical from turn
+exactly as they were, one slot per conversation and model, background work sent
+without a slot, the tool list of a conversation staying byte-identical from turn
 to turn, the warm-up following the last request, the history budget, and the
 voice call reading the app's own settings.
 """
 import asyncio
+import copy
 import json
 from dataclasses import asdict
 from types import SimpleNamespace
@@ -435,15 +436,43 @@ def test_one_conversation_keeps_one_slot_on_each_model():
     assert slot(settings, "chat-a", model="star-fast") is None
 
 
-def test_background_work_never_takes_the_open_chats_slot():
+def test_background_work_is_never_pinned_and_changes_no_chats_slot():
     settings = fleet_settings()
     remember_server_limits(LAN, "star-fast", 32768, 2)
     for number in range(12):
         chat = f"STAR::chat::{number}"
         own = slot(settings, chat, model="star-fast")                     # a real turn: this chat is open
+        before = copy.deepcopy(providers._SLOT_TABLE)
         for other in (chat, "lesson-summary", "another-chat", ""):
-            assert slot(settings, other, model="star-fast", background=True) == 1 - own
+            for options in ({}, {"tools": True}, {"prime": True}):
+                fields = llama_request_fields(settings, conversation=other, model="star-fast", background=True,
+                                              **options)
+                assert fields == {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
+        # Background work is not a chat: it takes no slot of its own and does not become the open chat.
+        assert providers._SLOT_TABLE == before
         assert slot(settings, chat, model="star-fast") == own             # and the chat is still where it was
+
+
+def test_a_request_without_a_conversation_is_not_pinned():
+    settings = fleet_settings()
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    for options in ({}, {"prime": True}, {"tools": True}):
+        assert slot(settings, "", model="star-fast", **options) is None
+    assert providers._SLOT_TABLE == {}
+
+
+def test_a_chat_finds_its_slot_again_after_a_restart():
+    settings = fleet_settings()
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    chats = [f"STAR::chat::{number}" for number in range(16)]
+    first = {}
+    for chat in chats:
+        providers._SLOT_TABLE.clear()                                     # a new process: nothing remembered
+        first[chat] = slot(settings, chat, model="star-fast")
+    assert set(first.values()) == {0, 1}                                  # not every chat on one slot
+    for chat in reversed(chats):                                          # another process, another order
+        providers._SLOT_TABLE.clear()
+        assert slot(settings, chat, model="star-fast", prime=True) == first[chat]
 
 
 def test_a_chat_opened_next_to_the_active_one_takes_the_other_slot():
@@ -456,12 +485,14 @@ def test_a_chat_opened_next_to_the_active_one_takes_the_other_slot():
     assert slot(settings, "chat-a", model="star-fast") == active
     # The owner writes in one of them: it keeps the slot it was primed on and is now the open chat.
     assert slot(settings, "other-3", model="star-fast") == 1 - active
-    assert slot(settings, "x", model="star-fast", background=True) == active
+    assert slot(settings, "x", model="star-fast", background=True) is None
+    # A chat opened now is kept off other-3's slot, which shows other-3 is the open chat.
+    assert slot(settings, "other-9", model="star-fast", prime=True) == active
     # Back to chat-a: still its old slot, where the server still holds its prompt.
     assert slot(settings, "chat-a", model="star-fast") == active
 
 
-def test_helper_calls_are_pinned_to_the_background_slot(desk):
+def test_helper_calls_carry_the_cache_fields_and_no_slot(desk):
     own = slot(desk.settings, "STAR::chat::" + desk.chat, model="star-fast")
     models = Models([reply("summary"), not_found("x"), reply("after the refusal")])
     helper = background_client(Client(models), desk.settings, conversation="STAR::chat::" + desk.chat)
@@ -472,19 +503,174 @@ def test_helper_calls_are_pinned_to_the_background_slot(desk):
         return first, second
     first, second = asyncio.run(run())
     assert first.choices[0].message.content == "summary"
-    assert models.requests[0]["extra_body"]["id_slot"] == 1 - own and models.requests[0]["max_tokens"] == 5
-    assert models.requests[0]["extra_body"]["cache_prompt"] is True
+    assert models.requests[0]["extra_body"] == {"cache_prompt": True,
+                                                "chat_template_kwargs": {"preserve_thinking": True}}
+    assert models.requests[0]["max_tokens"] == 5
     # A server that refuses the fields is asked again without them, once.
     assert "extra_body" not in models.requests[2] and second.choices[0].message.content == "after the refusal"
+    assert slot(desk.settings, "STAR::chat::" + desk.chat, model="star-fast") == own
 
 
-def test_a_chat_turn_and_its_helpers_use_different_slots_through_run_task(desk):
+def test_a_chat_turn_is_pinned_and_its_sub_agents_are_not_through_run_task(desk):
     request = desk.turn(ROBLOX_QUESTION, [reply("Use TweenService:Create.", model="star-fast")])
     own = request["extra_body"]["id_slot"]
     assert own == slot(desk.settings, "STAR::chat::" + desk.chat, model="star-fast")
-    assert slot(desk.settings, "STAR::chat::" + desk.chat, model="star-fast", background=True) == 1 - own
     quick = desk.turn("thanks!", [reply("You're welcome.", model="star-voice")])
     assert quick["model"] == "star-voice" and quick["extra_body"]["id_slot"] in (0, 1)
+    # An Agent turn that delegates: the model's own two requests go to the chat's slot, the two
+    # sub-agent requests between them (the real star_delegate path) carry no slot.
+    tasks = json.dumps({"tasks": ["Compare two ways to store the inventory.", "List the risks of each way."]})
+    sent = len(desk.models.requests)
+    desk.turn("Use a skill and delegate research to a team of agents",
+              [reply(calls=[tool_call("star_delegate", tasks)], model="star-fast"), reply("draft one"),
+               reply("draft two"), reply("Both drafts are in.", model="star-fast")], mode="agent")
+    asked, first_draft, second_draft, final = desk.models.requests[sent:]
+    assert asked["model"] == final["model"] == "star-fast"
+    assert asked["extra_body"]["id_slot"] == final["extra_body"]["id_slot"] == own
+    assert "draft one" in json.dumps(final["messages"]) and "draft two" in json.dumps(final["messages"])
+    for draft in (first_draft, second_draft):
+        assert "subagent" in draft["messages"][0]["content"] and "tools" not in draft
+        assert draft["extra_body"] == {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
+
+
+class SlotServer:
+    """A model with numbered slots, as llama.cpp serves it: a request that names a slot waits
+    for that slot, a request that names none takes any free one. Records what each request
+    named and who had to wait. A slot stays taken until `together` requests have arrived, so
+    requests sent at the same moment really meet."""
+
+    def __init__(self, slots=2, together=2):
+        self.free = set(range(slots))
+        self.together = together
+        self.changed = None
+        self.named, self.waited = [], []
+        self.arrived = self.running = self.peak = 0
+
+    async def create(self, **kwargs):
+        self.changed = self.changed or asyncio.Condition()
+        wanted = (kwargs.get("extra_body") or {}).get("id_slot")
+        self.named.append(wanted)
+
+        def usable():
+            return self.free if wanted is None else self.free & {wanted}
+        async with self.changed:
+            self.arrived += 1
+            self.changed.notify_all()
+            if not usable():
+                self.waited.append(wanted)
+                await self.changed.wait_for(usable)
+            taken = min(usable())
+            self.free.discard(taken)
+            self.running += 1
+            self.peak = max(self.peak, self.running)
+            # Still generating while the other request arrives. The time limit only keeps a
+            # broken test from hanging: the assertions on `peak` and `waited` then fail.
+            try:
+                await asyncio.wait_for(self.changed.wait_for(lambda: self.arrived >= self.together), 10)
+            except TimeoutError:
+                pass
+        async with self.changed:
+            self.running -= 1
+            self.free.add(taken)
+            self.changed.notify_all()
+        return reply(f"slot {taken}")
+
+
+def test_two_helpers_at_once_do_not_wait_for_the_same_slot(desk):
+    """Issue 118: helpers pinned to one slot queued behind each other while the other slot was free."""
+    from star.subagents import delegate
+    scope = "STAR::chat::" + desk.chat
+    slot(desk.settings, scope, model="star-voice")                       # the chat is open
+    server = SlotServer(2)
+    helper = background_client(Client(server), desk.settings, conversation=scope)
+    drafts = asyncio.run(delegate(helper, "star-voice", ["Compare two ways to store the inventory.",
+                                                         "List the risks of each way."]))
+    assert sorted(piece["draft"] for piece in drafts) == ["slot 0", "slot 1"]
+    assert server.peak == 2 and server.waited == [] and server.named == [None, None]
+
+    # Two STAR windows with a chat of the same name, each sending one helper request.
+    server = SlotServer(2)
+
+    async def both():
+        calls = []
+        for _ in range(2):
+            providers._SLOT_TABLE.clear()                                  # the other window knows nothing of this one
+            slot(desk.settings, scope, model="star-voice")
+            window = background_client(Client(server), desk.settings, conversation=scope)
+            calls.append(window.chat.completions.create(model="star-voice", messages=[]))
+        return await asyncio.gather(*calls)
+    answers = asyncio.run(both())
+    assert sorted(answer.choices[0].message.content for answer in answers) == ["slot 0", "slot 1"]
+    assert server.peak == 2 and server.waited == []
+
+
+def two_clients_send_a_turn_at_once(settings, server, chats, model="star-fast"):
+    """Two STAR clients, each sending one turn of its own chat through the real request code
+    (agent.execute, with the fields the app attaches) to the same server at the same moment.
+    They are two processes: when a client picks its slot it knows nothing of the other one."""
+    async def turn(scope):
+        def fields(tools):
+            providers._SLOT_TABLE.clear()
+            return llama_request_fields(settings, conversation=scope, tools=tools, model=model)
+        answer, _, _ = await execute(client=Client(server), model=model, prompt="hello there", image_paths=[],
+                                     mode="fast", today="2026-10-10", request_extras=fields)
+        return answer
+
+    async def both():
+        return await asyncio.gather(*(turn(scope) for scope in chats))
+    return asyncio.run(both())
+
+
+def test_two_clients_sending_a_chat_turn_at_once(monkeypatch):
+    """Issue 118, the chat's own turn. Chats of two clients on different slots run side by side.
+    Two chats with the same slot number are the known limit of pinning by a hash: the second
+    turn waits. With STAR_SERVER_SLOT_PINNING=off no slot is named and nobody waits."""
+    monkeypatch.delenv("STAR_SERVER_SLOT_PINNING", raising=False)
+    settings = fleet_settings()
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+
+    def home(chat):                                                       # the slot a new process gives this chat
+        providers._SLOT_TABLE.clear()
+        return slot(settings, chat, model="star-fast")
+    first, *others = [f"STAR::chat::{number}" for number in range(16)]
+    apart = next(chat for chat in others if home(chat) != home(first))
+    same = next(chat for chat in others if home(chat) == home(first))
+
+    server = SlotServer(2)
+    assert sorted(two_clients_send_a_turn_at_once(settings, server, [first, apart])) == ["slot 0", "slot 1"]
+    assert sorted(server.named) == [0, 1] and server.peak == 2 and server.waited == []
+
+    # The known limit, kept visible: both clients name one slot and the second waits for it
+    # although the other slot is free. Both turns are still answered.
+    server = SlotServer(2)
+    answers = two_clients_send_a_turn_at_once(settings, server, [first, same])
+    assert answers == [f"slot {home(first)}"] * 2
+    assert server.named == [home(first)] * 2 and server.waited == [home(first)] and server.peak == 1
+
+    # Opt-in: the server places every request. The same two chats no longer meet in one slot.
+    monkeypatch.setenv("STAR_SERVER_SLOT_PINNING", "off")
+    server = SlotServer(2)
+    assert sorted(two_clients_send_a_turn_at_once(settings, server, [first, same])) == ["slot 0", "slot 1"]
+    assert server.named == [None, None] and server.peak == 2 and server.waited == []
+
+
+@pytest.mark.parametrize("value, pinned", [("", True), ("on", True), ("1", True), ("anything", True),
+                                           ("off", False), (" OFF ", False), ("0", False), ("false", False),
+                                           ("no", False)])
+def test_slot_pinning_is_on_unless_the_owner_switches_it_off(monkeypatch, value, pinned):
+    monkeypatch.setenv("STAR_SERVER_SLOT_PINNING", value)
+    settings = fleet_settings()
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    cache_only = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
+    for options in ({}, {"prime": True}, {"tools": True}):
+        fields = llama_request_fields(settings, conversation="STAR::chat::a", model="star-fast", **options)
+        assert ("id_slot" in fields) is pinned
+        assert {name: value for name, value in fields.items() if name != "id_slot"} == cache_only
+    assert llama_request_fields(settings, conversation="STAR::chat::a", model="star-fast",
+                                background=True) == cache_only
+    assert (providers._SLOT_TABLE != {}) is pinned                        # switched off: no chat is given a slot
+    # Not for a cloud provider, whatever the variable says.
+    assert llama_request_fields(Settings(provider="groq", model="x"), conversation="a") == {}
 
 
 # ------------------------------------------------------------------ sticky tools
@@ -725,7 +911,7 @@ def test_voice_environment_variables_still_override(voice_app):
     assert server_configured() is True and server_connection()[2] == "star-fast"
 
 
-def test_voice_asks_the_server_for_its_models_once_and_takes_the_spare_slot(voice_app, monkeypatch):
+def test_voice_asks_the_server_for_its_models_once_and_is_not_pinned(voice_app, monkeypatch):
     from star.voice import brain as voice_brain
     lan_settings().save(voice_app.home / "settings.json")
     voice_app.keyring["star_server"] = KEY
@@ -742,16 +928,23 @@ def test_voice_asks_the_server_for_its_models_once_and_takes_the_spare_slot(voic
     assert (url, key, model) == (LAN, KEY, "star-voice") and asked == [LAN]
     voice_brain.server_connection()
     assert asked == [LAN]                                                    # known now: not asked again
-    # The typed chat on the quick model keeps its slot; the call uses the other one.
+    # A call is background work: no slot is named, also while a typed chat is open on the quick
+    # model, and the call changes nothing about that chat's slot.
     chat_slot = slot(lan_settings(), "STAR::chat::a", model="star-voice")
-    assert voice_brain.server_connection()[3] == 1 - chat_slot
-    sent = {}
-    brain = voice_brain.ServerBrain(url, key, model, id_slot=1 - chat_slot)
-    monkeypatch.setattr(brain._client, "stream", lambda method, address, **kw: sent.update(kw["json"]) or
-                        (_ for _ in ()).throw(httpx.ConnectError("no server in a unit test")))
-    with pytest.raises(httpx.ConnectError):                 # the fake stops the request before it is sent
-        brain.stream([{"role": "user", "content": "hi"}])
-    assert sent["id_slot"] == 1 - chat_slot and sent["model"] == "star-voice" and sent["cache_prompt"] is True
+    assert chat_slot in (0, 1) and call_slot is None and voice_brain.server_connection()[3] is None
+    assert slot(lan_settings(), "STAR::chat::a", model="star-voice") == chat_slot
+
+    def sent_by(brain):
+        sent = {}
+        monkeypatch.setattr(brain._client, "stream", lambda method, address, **kw: sent.update(kw["json"]) or
+                            (_ for _ in ()).throw(httpx.ConnectError("no server in a unit test")))
+        with pytest.raises(httpx.ConnectError):             # the fake stops the request before it is sent
+            brain.stream([{"role": "user", "content": "hi"}])
+        return sent
+    sent = sent_by(voice_brain.ServerBrain.from_settings())                  # what the app builds for a call
+    assert "id_slot" not in sent and sent["model"] == "star-voice" and sent["cache_prompt"] is True
+    # A caller that names a slot itself still gets it.
+    assert sent_by(voice_brain.ServerBrain(url, key, model, id_slot=1))["id_slot"] == 1
 
 
 def test_discover_reads_the_model_list_and_limits_of_loaded_models_only():
