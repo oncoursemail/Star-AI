@@ -35,6 +35,7 @@ from .comfy import ComfyError
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
 from .mcp_connections import MCPGateway
+from .blender_bridge import status as blender_status
 from .studio_connections import connection_status, validate_target, select_instance
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
@@ -57,7 +58,7 @@ ALLOWED_ACTIONS = frozenset({
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'researchStatus','researchCheck','researchEvidence','researchNominate',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp',
+    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
@@ -80,7 +81,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 WARM_UP_STOPPERS = frozenset({
     'sendMessage','runTeam','generateImage','testServer','testModel','testModelTeam','listModels',
     'startModelRouter','stopBrain','startBrain','installBrain','saveSettings','switchProject',
-    'saveProviderKey','clearProviderKey','newChat','switchChat',
+    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender',
 })
 
 # Settings the React interface may change. Never a credential: provider and
@@ -93,6 +94,7 @@ PERMITTED_SETTINGS = frozenset({
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
+    'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud','research_auto_check',
@@ -476,6 +478,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'roblox':roblox_state(home),
         'intelligence':for_settings(settings,home).status(),
         'mcp':MCPGateway(settings).status(),
+        'blender':blender_status(settings),
         'studio':connection_status(settings, studio_status, home=settings_file.parent),
         'release_url':'https://github.com/oncoursemail/Star-AI/releases/latest',
     }
@@ -961,6 +964,12 @@ def launch():
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action in STUDIO_HOST_ACTIONS:
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
+                if action=='testBlender':
+                    from .blender_bridge import BlenderController
+                    settings=Settings.load(self.settings_file)
+                    self._run(rid,action,lambda:asyncio.run(
+                        BlenderController(settings=settings,home=self.settings_file.parent).probe()))
+                    return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action=='saveProviderKey':
                     name=str(body.get('provider',''))
                     token=body.get('key','')
