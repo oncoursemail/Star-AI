@@ -28,7 +28,7 @@ Back up `%APPDATA%\STAR` first. The **October 11, 2026 published release notes**
 
 ## What is verified and how
 
-The **published v0.9.0 release notes (October 11, 2026)** report **2,723 Python tests and 215 interface tests passing** for the released source, plus a packaged build/smoke test and a **65-step** real Windows app acceptance run. These counts are **reported by the release**, not newly executed or independently measured in this documentation audit. Earlier [PR #40](https://github.com/oncoursemail/Star-AI/pull/40) reports **2,058 Python tests (15 skipped) and 172 frontend tests** for an earlier branch; those are **not** the release's final test totals. Neither set proves every Roblox workflow, GPU or Windows profile works.
+The **published v0.9.0 release notes (October 11, 2026)** report **2,723 Python tests and 215 interface tests passing** for the released source, plus a packaged build/smoke test and a **65-step** real Windows app acceptance run. These counts are **reported by the release**, not newly executed or independently measured in this documentation audit. Earlier [PR #40](https://github.com/oncoursemail/Star-AI/pull/40) reports **2,717 Python tests passing (16 skipped) and 215 Vitest tests passing** on its recorded **October 11, 2026** Windows 11 / Python 3.12 head `7def230`; those are **not** the release's final test totals. Neither set proves every Roblox workflow, GPU or Windows profile works.
 
 ## What is NOT verified yet or needs your setup
 
