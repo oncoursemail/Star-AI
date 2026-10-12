@@ -12,16 +12,15 @@ import {LINKS,capabilities,evalResults,releaseFiles} from './siteContent'
 afterEach(()=>cleanup())
 
 describe('website v0.9.0 claims',()=>{
- it('keeps source-backed feature descriptions with the precise measured baselines',()=>{
+ it('keeps source-backed feature descriptions with dated and qualified evaluation results',()=>{
   expect(capabilities.map(item=>item.name)).toEqual([
    'STAR Server on your network','Roblox answers with sources','Studio and Open Cloud',
    'Skills and the evaluation gate','Project learning','Voice calls','Images and video','Documents and tables'
   ])
   expect(capabilities.every(item=>item.since==='0.9.0')).toBe(true)
   expect(evalResults).toEqual([
-   {suite:'Roblox v2 (34 automated of 50)',passed:'18 / 34',rate:'52.9 %'},
-   {suite:'Creation v1 (23 automated)',passed:'11 / 23',rate:'47.8 %'},
-   {suite:'Both baselines',passed:'29 / 57',rate:'50.9 %'}
+   {suite:'Roblox v2 scripting (October 12 and earlier runs)',passed:'13–18 / 34',rate:'varies by run'},
+   {suite:'Creation v1 (earlier; not reproduced on v0.9.0)',passed:'11 / 23 (historical)',rate:'unverified on release'}
   ])
   const prefix=LINKS.repo+'/blob/main/'
   for(const feature of capabilities){
@@ -30,12 +29,12 @@ describe('website v0.9.0 claims',()=>{
    expect(existsSync(resolve(process.cwd(),'..',source)),source).toBe(true)
   }
  })
- it('does not call candidate source a published release',()=>{
+ it('renders variable evaluation results without claiming a single best combined score',()=>{
   const html=renderToString(<Landing/>)
-  expect(html).toContain('18 / 34')
-  expect(html).toContain('52.9 %')
-  expect(html).toContain('47.8 %')
-  expect(html).toContain('50.9 %')
+  expect(html).toContain('13–18 / 34')
+  expect(html).toContain('varies by run')
+  expect(html).toContain('11 / 23 (historical)')
+  expect(html).not.toContain('29 / 57')
   expect(html).toContain('Three of 18 unchanged')
   expect(html).toContain('not a combined production benchmark')
   expect(html).toContain('Not in a release yet')
