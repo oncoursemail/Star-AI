@@ -49,6 +49,8 @@ STAR_KNOWLEDGE = ["star_docs_search", "star_api_lookup", "star_luau_check"]
 ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_roblox_cloud_place",
                 "star_roblox_cloud_data_stores", "star_roblox_cloud_action", "star_roblox_cloud_request_publish",
                 "star_roblox_cloud_request_test"]
+# Prompt-scoped craft tools; not part of the ordered general-prompt lists below.
+CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
 WORKSPACE_WRITE = ["workspace_write"]
@@ -239,7 +241,8 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     """A built-in tool added to (or dropped from) a source table must be added to the lists above."""
     from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
-                                             + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD)
+                                             + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
+                                             + CRAFT)
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN
     assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)
@@ -313,3 +316,27 @@ def test_scripted_obsidian_links_call_returns_real_evidence_through_run_task(des
     assert evidence["backlinks_total"] == 1
     assert evidence["partial_scan"] is False
     assert evidence["read_only"] is True
+
+
+@pytest.mark.parametrize("source,expected_rules", [
+    ("--!strict\ntask.wait(1)", set()),
+    ("--!strict\nwait(1)", {"luau-legacy-task"}),
+])
+def test_craft_audit_is_offered_and_runs_through_real_agent(desk, source, expected_rules):
+    arguments = json.dumps({"instances": [], "scripts": [
+        {"path": "ServerScriptService.Timer", "class": "Script", "source": source}]})
+    result = desk.turn("Audit this Roblox UI source with star_roblox_craft_audit.", answers=[
+        reply(None, [tool_call("star_roblox_craft_audit", arguments)]),
+        reply("The craft audit finished."),
+    ])
+    assert set(CRAFT) <= set(offered(result.requests[0]))
+    assert len(result.requests) == 2
+    assert {"event": "tool_finished", "tool": "star_roblox_craft_audit", "is_error": False} in desk.events
+    sent_back = [message for message in result.requests[1]["messages"] if message["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    report = json.loads(payload["output"])
+    assert report["reviewed_scripts"] == 1
+    assert report["read_only"] is True and report["executed"] is False
+    assert {item["rule"] for item in report["findings"]} == expected_rules
