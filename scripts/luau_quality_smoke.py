@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
 from statistics import median
 from time import perf_counter
 
 from star.luau_lint import lint
+from star.luau_analyze import locate_analyzer
 
 
 SOURCE = Path("examples/roblox-templates/simulator/ReplicatedStorage/Shared/CostCurve.luau")
@@ -34,6 +36,12 @@ def main() -> int:
         print(f"{name}: static={len(old)} external={len(additional)} "
               f"rules={categories} elapsed_ms={elapsed}", flush=True)
         if name == "syntax" and "luau-analyze-syntaxerror" not in categories:
+            # The input is solely the checked-in public fixture and its known mutation.
+            # Print bounded CLI evidence to diagnose output-contract mismatches in CI.
+            raw = subprocess.run([locate_analyzer(), "--mode=strict", "-"],
+                                 input=code, capture_output=True, text=True, timeout=6)
+            print("Raw pinned CLI: exit=", raw.returncode,
+                  "stderr=", repr(raw.stderr[:450]), "stdout=", repr(raw.stdout[:100]))
             raise AssertionError("Pinned Luau analyzer did not catch seeded syntax error")
         if name == "type" and "luau-analyze-typeerror" not in categories:
             raise AssertionError("Pinned Luau analyzer did not catch seeded type error")
