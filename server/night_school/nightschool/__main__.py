@@ -49,8 +49,17 @@ def run(settings: Settings) -> int:
     settings.ensure_dirs()
     key = bootstrap(settings)
     stop = Stopper()
-    gate = IdleGate(settings, BrainWatch(settings.brain_url, key), log=log)
     store = Store(settings.data)
+
+    def gate_log(text: str) -> None:
+        """The gate speaks when its state changes (and every 15 minutes): keep the report's status line current,
+        so a reader can tell a waiting service from a dead one."""
+        log(text)
+        try:
+            report.write(settings.report_file, store.state, status=text)
+        except OSError:
+            pass
+    gate = IdleGate(settings, BrainWatch(settings.brain_url, key), log=gate_log)
     pool = load_pool(settings.pool)
     log("night school started; " + pool.summary())
     model = RealModel(settings, gate, stop=stop)
