@@ -91,7 +91,7 @@ def make_system_message(project_memory: str = "", *, tools_attached: bool = True
     """Strict Qwen3.5/llama.cpp templates permit one system message at index 0.
 
     Project notes may be incomplete or untrusted. Append them inside that one
-    # first message rather than introducing another system role mid-conversation.
+    first message rather than introducing another system role mid-conversation.
     """
     return {"role": "system", "content": system_prefix(project_memory, tools_attached=tools_attached,
                                                        guidance=guidance)}
@@ -586,7 +586,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 else:
                     # Authorized: announce before running so progress is not retroactive.
                     tool_actions_started = True
-                    event({'event': 'tool_started', 'tool': name})
+                    event({"event": "tool_started", "tool": name})
                     if name == 'star_github_tree' or name == 'star_github_read':
                         try:
                             from .repo_intelligence import repo_tree, repo_read
