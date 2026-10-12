@@ -280,7 +280,7 @@ def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _lua_string(value: str) -> str:
-    return json.dumps(value, ensure_ascii=True)
+    return json.dumps(value, ensure_ascii=False)
 
 
 def _udim(vec: dict[str, Any]) -> str:
@@ -495,10 +495,11 @@ def _emit(spec: dict[str, Any]) -> str:
         lines.extend([
             'local screenScale = Instance.new("UIScale")',
             "screenScale.Name = 'ViewportScale'",
-            f"local function rescale() screenScale.Scale = math.clamp(host.AbsoluteSize.X / {ref_width:g}, 0.5, 2) end",
+            f"local function rescale() local camera = workspace.CurrentCamera; if camera then screenScale.Scale = math.clamp(camera.ViewportSize.X / {ref_width:g}, 0.5, 2) end end",
             "screenScale.Parent = host",
             "rescale()",
-            "track(host:GetPropertyChangedSignal('AbsoluteSize'):Connect(rescale))",
+            "local camera = workspace.CurrentCamera",
+            "if camera then track(camera:GetPropertyChangedSignal('ViewportSize'):Connect(rescale)) end",
         ])
     lines.extend([
         "local function destroy()",
