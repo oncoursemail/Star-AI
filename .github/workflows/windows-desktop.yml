@@ -86,6 +86,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
           python -m compileall -q star star_desktop.py
       - name: Capture real STAR OLED GUI screens for review
         shell: pwsh
@@ -245,4 +246,3 @@ jobs:
           ( cd release-ready && sha256sum "STAR-Setup-$TAG.exe" STAR-Genesis-Windows-x64.zip ) > release-ready/SHA256SUMS.txt
           gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
             --repo "$STAR_REPO" --target "$STAR_COMMIT" --title "STAR Intelligence $TAG" --generate-notes
-

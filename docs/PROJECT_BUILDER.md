@@ -53,6 +53,9 @@ case-insensitively across the project. Path separators, traversal, drive names,
 Windows device names, `init`, language keywords and the injected `dependencies`
 binding are not valid module names. `init` is reserved because Rojo treats
 `init.lua` specially rather than as an ordinary sibling module.
+Module and public interface names matching forbidden API/service identifiers
+(including `load`, `request`, `debug`, `os` and `GetService`) are rejected before
+model calls; use alternatives such as `loadData` and `saveData`.
 
 Dependencies must be declared by exact name, must exist, and cannot form a cycle.
 Server modules may require server/shared modules; client modules may require
@@ -173,7 +176,7 @@ not been built by Rojo or run in Studio merely because this builder succeeds.
 ## Tests
 
 ```console
-pytest -q tests/test_project_builder.py
+pytest -q tests/test_project_builder.py tests/test_project_builder_review.py tests/test_project_builder_windows_workflow.py
 pytest -q
 ```
 
@@ -182,3 +185,11 @@ boundaries; no network, GPU, real credential store or running model is required.
 It drives the actual builder and CLI. Symlink cases explicitly skip only on hosts
 that cannot create symlinks; reparse-point handling also has an offline simulated
 attribute test. The full repository suite remains a separate integration gate.
+
+Review regressions also load and validate real Settings from an isolated profile,
+replacing only the provider boundary while blocking network and credential-store
+access. They exercise native Windows paths, a four-module shared/server/client
+build, and rejection of every forbidden module/interface name before generation.
+The workflow regression executes the actual offline-test step in PowerShell with
+stubbed command results to prove that failed pytest cannot be hidden by compileall;
+it skips only when PowerShell is unavailable on a non-Windows host.

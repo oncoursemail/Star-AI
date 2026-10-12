@@ -62,6 +62,8 @@ def _interface_names(value) -> list[str]:
     names = list(value)
     if any(not _identifier(name) for name in names) or len(names) != len(set(names)):
         raise ValueError("Invalid or duplicate public interface name")
+    if any(name in _FORBIDDEN | _FORBIDDEN_SERVICES | {"os", "GetService"} for name in names):
+        raise ValueError("Public interface name conflicts with forbidden API policy")
     if isinstance(value, dict) and any(not isinstance(v, str) or not v.strip() for v in value.values()):
         raise ValueError("Every interface summary must be non-empty text")
     return names
@@ -80,6 +82,8 @@ def ordered_modules(plan: dict | list) -> list[dict]:
         if (not _identifier(name) or name.casefold() in _RESERVED_FILES
                 or name.casefold() in seen or name == "dependencies"):
             raise ValueError("Invalid, reserved or duplicate module name")
+        if name in _FORBIDDEN | _FORBIDDEN_SERVICES | {"os", "GetService"}:
+            raise ValueError("Module name conflicts with forbidden API policy")
         kind = item.get("kind")
         if not isinstance(kind, str) or kind not in _LOCATIONS:
             raise ValueError(f"Invalid kind for {name}")
@@ -277,7 +281,7 @@ def _file_under(root: Path, relative: Path) -> Path:
     """Recheck every write, including changes made while awaiting the model."""
     text = str(relative)
     if (relative.is_absolute() or PureWindowsPath(text).drive or ".." in relative.parts
-            or not relative.parts or "\\" in text or ":" in text or "\x00" in text):
+            or not relative.parts or any(c in part for part in relative.parts for c in "\\:\x00")):
         raise ValueError("Output path escapes selected folder")
     _no_links(root)
     target = root / relative
