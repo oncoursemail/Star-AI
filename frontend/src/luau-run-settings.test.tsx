@@ -14,8 +14,9 @@ async function openSettings(){
  const user=userEvent.setup()
  render(<App/>)
  await screen.findByRole('textbox',{name:/message star/i})
- await user.click(screen.getByRole('button',{name:/^settings(?:\s|$)/i}))
- await user.click(screen.getByText('Advanced provider settings'))
+ await waitFor(()=>expect(desktop.sent('bootstrap').length).toBeGreaterThan(0))
+ await user.click(screen.getByRole('button',{name:/^settings/i}))
+ await screen.findByRole('region',{name:'AI provider settings'})
  return user
 }
 const toggle=()=>screen.getByRole('checkbox',{name:'Run my Luau before answering'})
@@ -24,7 +25,7 @@ it('is off for old/default settings and does not save a grant just by opening Se
  await openSettings()
  expect(toggle()).toHaveProperty('checked',false)
  expect(desktop.sent('saveSettings')).toHaveLength(0)
- expect(screen.getByText(/runs only on that server, never on this PC/i)).toBeTruthy()
+ expect(screen.getByText(/run assertions in your STAR Knowledge sandbox/i)).toBeTruthy()
 })
 
 it('saves explicit consent, restores it from the bridge, and saves revocation',async()=>{
