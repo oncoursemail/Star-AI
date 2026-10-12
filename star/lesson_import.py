@@ -64,8 +64,8 @@ def parse_export(data: object) -> tuple[str, list[dict]]:
     _time(data["exported"], "export date")
     if "note" in data:
         _text(data["note"], "export note", 500, empty=True, multiline=True)
-    _fields(data["counts"], _COUNT_KEYS, label="counts")
-    for key in _COUNT_KEYS:
+    _fields(data["counts"], _COUNT_KEYS, optional=frozenset({"practice"}), label="counts")
+    for key in _COUNT_KEYS | ({"practice"} if "practice" in data["counts"] else set()):
         _int(data["counts"][key], "count")
     rows = data["lessons"]
     if not isinstance(rows, list) or len(rows) > MAX_IMPORT_ROWS:
