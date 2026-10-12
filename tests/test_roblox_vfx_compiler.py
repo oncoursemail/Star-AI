@@ -105,7 +105,7 @@ def test_seeded_samples_stay_in_property_ranges(cls, key, kind, low, high):
 
 @pytest.mark.parametrize("raw", [None, [], 1, True, b"{}", "not json", "[]", "null", "true",
     '{"version": 1, "version": 1}', '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}',
-    "[" * 2000 + "]" * 2000, " " * 131073, '"\\ud800"',
+    "[" * 2000 + "]" * 2000, pytest.param(" " * 131073, id="oversize-json"), '"\\ud800"',
     '{"n":' + '1' * 5000 + '}', '{"version":1,"name":"x","effects":[{"id":"a","id":"b"}]}'])
 def test_invalid_json_and_root_shapes(raw):
     with pytest.raises(VFXCompileError):
