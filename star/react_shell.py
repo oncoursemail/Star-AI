@@ -834,7 +834,7 @@ def launch():
                 chats.close()
             return {'answer':result['answer'],'image':result['image']}
 
-        def _run_team(self, request_id: str, prompt: str):
+        def _run_team(self, request_id: str, prompt: str, research: bool = False):
             """One user request, four bounded read-only specialists, one stored answer."""
             from .team_service import run_research_team
             import asyncio
@@ -855,7 +855,7 @@ def launch():
             async def run():
                 return await run_until_cancelled(
                     run_research_team(
-                        settings=settings, prompt=prompt, home=home,
+                        settings=settings, prompt=prompt, home=home, research=research,
                         on_event=lambda event: self._emit(
                             request_id, 'progress', sanitize_event(event)),
                     ),
@@ -1110,10 +1110,13 @@ def launch():
                         raise ValueError('Team prompt must be 2–12,000 characters')
                     if body.get('files'):
                         raise ValueError('STAR Teams currently supports text only. Turn off Team mode to attach files.')
+                    research = body.get('research', False)
+                    if type(research) is not bool:
+                        raise ValueError('Team Research mode must be true or false')
                     self.cancel_chat = threading.Event()
                     self.active_task=True
                     try:
-                        self._run(rid,action,lambda:self._run_team(rid,prompt))
+                        self._run(rid,action,lambda:self._run_team(rid,prompt,research))
                     except Exception:
                         self.active_task=False
                         raise

@@ -49,7 +49,7 @@ Choose a mode in the **Chat** composer.
 - **Auto:** STAR chooses a route based on the request. This is the initial chat mode.
 - **Agent:** STAR plans steps, uses permitted tools and checks the result. It may take longer. Permissions still apply.
 
-The chat **+** menu also offers **Use a team**: four read-only reasoning stages, with text-only input, on your own hardware. It does not give Studio write access.
+The chat **+** menu also offers **Use a team**: four read-only reasoning stages, with text-only input. The model runs on your selected local PC or STAR Server; this does not give Studio write access. **Search the web** is a separate, off-by-default switch. When Team and Web are both on, STAR sends a bounded portion of your objective and derived search queries to your configured Brave/Tavily search provider; snippets and citations return to the locally or LAN-run model. Leave Web off to keep a Team run local-only.
 
 ## 4. Ask Roblox questions
 
