@@ -79,8 +79,8 @@ def _tokens(code: str) -> list[_Token]:
 
 
 def lint(code: str, *, external: bool | None = None, safety_checks: bool = False,
-         script_class: str | None = None) -> list[Finding]:
-    """Return sorted static findings; the CLI second opinion and lifetime checks are OFF by default."""
+         script_class: str | None = None, server_security: bool = False) -> list[Finding]:
+    """Return sorted static findings; the CLI second opinion, lifetime and server-trust checks are OFF by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -240,6 +240,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
         findings = [finding for finding in findings
                     if finding.rule_id not in replaced_rules]
         findings.extend(extra)
+    if server_security:
+        # Opt in explicitly; default lint behavior remains unchanged.
+        from star.luau_server_security import lint_server_trust
+        findings.extend(lint_server_trust(code))
     if external is None:
         from .luau_analyze import enabled
         external = enabled()
