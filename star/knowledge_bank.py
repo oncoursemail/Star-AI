@@ -94,9 +94,11 @@ def _parse_cached(raw: bytes, project: str) -> tuple[str, str]:
         digest = hashlib.sha256(entry["text"].encode("utf-8")).hexdigest()
         if entry["sha256"] != digest:
             raise ValueError("Knowledge source revision hash changed")
+        # A source can quote delimiters but cannot close its own untrusted
+        # reference-data region or introduce an apparent new boundary.
+        source = source.replace(_START, "[quoted reference start]").replace(
+            _END, "[quoted reference end]")
         if _BLOCK_MARKER.search(source):
-            # A source can quote the delimiter, but must not be able to
-            # escape its untrusted reference-data region.
             source = _BLOCK_MARKER.sub("[delim]", source)
         seen.add(name)
         items.append((name, kind, revision, licence, digest, source))
