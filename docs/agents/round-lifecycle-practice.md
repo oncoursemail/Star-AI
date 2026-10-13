@@ -14,7 +14,7 @@ This **opt-in practice suite** is at `evals/roblox/practice-tasks-round-lifecycl
 | RND-06 | time-cancellation | Pause and resume a round timer without losing remaining time; Pause for 100 seconds when 3 remain, then resume; remaining should still be about 3. |
 | RND-07 | joins-leaves | Keep late joiners spectators until the next participant snapshot; A player joining immediately after start() is ineligible until start() is called again. |
 | RND-08 | joins-leaves | Cancel intermission when a departing player breaks the minimum; Exactly two players in intermission: one leaves; the countdown must cancel immediately. |
-| RND-09 | joins-leaves | Resolve departures without rewarding disconnected players; Two players disconnect in quick succession; no winner may be a disconnected player. |
+| RND-09 | joins-leaves | Resolve departures without rewarding disconnected players; When the only active contender departs, no winner is declared; repeated leave events are ignored. |
 | RND-10 | results-cleanup | Select a deterministic round winner from scores; Two players with the same score must give the smaller UserId even if table order flips. |
 | RND-11 | results-cleanup | Award a round winner at most once despite duplicate completions; The award callback itself calls finish() again; it must not trigger a second award. |
 | RND-12 | results-cleanup | Disconnect event listeners and destroy temporary arena objects after each round; After two rounds with repeated cleanup, the prior round's Touched listeners must not fire. |

@@ -873,7 +873,7 @@
     "helps": [],
     "split": "development",
     "teaches": "Recompute live contenders after removing a leaver and handle zero-contender rounds explicitly.",
-    "edge_case": "Two players disconnect in quick succession; no winner may be a disconnected player.",
+    "edge_case": "When the only active contender departs, no winner is declared; repeated leave events are ignored.",
     "expected_behavior": [
       "An initial array of three participants is tracked as the active roster.",
       "Leaving one survivor selects that survivor; leaving none produces no winner and duplicate leave events do nothing."
