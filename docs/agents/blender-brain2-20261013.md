@@ -3,7 +3,7 @@
 Branch `star/blender-brain2-20261013` (from origin/star/next 64c1982), worktree `worktrees/wt-blender-brain2`, board item #92.
 PR -> star/next. Evidence: `docs/agents/blender-brain2-20261013/` (images, GLB, report.json).
 
-## Status (23:35Z): code, tests and live run DONE. Not merged (owner / integrator).
+## Status (23:40Z): code, tests, live run and PR #289 DONE. Not merged (owner / integrator).
 
 ## What exists (and what was actually run)
 | piece | where | run on brain 2? |
