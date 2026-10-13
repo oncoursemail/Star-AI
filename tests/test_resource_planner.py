@@ -941,3 +941,43 @@ def test_embedding_job_uses_the_brain2_worker_and_falls_back_to_the_brain(monkey
     fail["on"] = True
     brain, where = embed.embedding_brain(log=lambda m: None)
     assert where == "brain" and brain.url == "brain"
+
+
+def test_run_held_stops_on_yield_and_resumes(tmp_path):
+    client = FakeClient(admits=("run",), renews=("run", "yield", "run"))
+    started = []
+
+    class Proc:
+        def __init__(self, cmd):
+            started.append(cmd)
+            self.code, self.polls = None, 0
+
+        def poll(self):
+            self.polls += 1
+            if len(started) == 2 and self.polls > 2:      # the resumed run finishes by itself
+                self.code = 0
+            return self.code
+
+        def terminate(self):
+            self.code = -15
+
+        def wait(self):
+            return self.code if self.code is not None else 0
+    t = [0.0]
+
+    def sleep(s):
+        t[0] += s
+    stop = tmp_path / "STOP"
+    code = pc.run_held(client, "gpu-train", "pc-practice", "practice", ["train"], stop_file=str(stop), restart=True,
+                       renew_every=2.0, log=lambda m: None, popen=Proc, sleep=sleep, clock=lambda: t[0])
+    assert code == 0 and len(started) == 2
+    assert not stop.exists()                                   # removed again before the resumed run
+    assert sum(1 for c in client.calls if c[0] == "release") == 2
+
+
+def test_confined_adds_ram_cap_and_numa_pinning_when_the_tools_exist(monkeypatch):
+    monkeypatch.setattr(pc.os, "name", "posix")
+    cmd = pc.confined(["job"], memory_max="2G", numa_node=3, which=lambda name: "/usr/bin/" + name)
+    assert cmd[:6] == ["systemd-run", "--scope", "--quiet", "-p", "MemoryMax=2G", "-p"]
+    assert cmd[-4:] == ["numactl", "--cpunodebind=3", "--membind=3", "job"]
+    assert pc.confined(["job"], memory_max="2G", numa_node=3, which=lambda name: None) == ["job"]

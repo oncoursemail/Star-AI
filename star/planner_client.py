@@ -288,6 +288,66 @@ def run_window(client: PlannerClient, holder: str, command: list[str], *, minute
         client.release(grant)
 
 
+def confined(command: list[str], *, memory_max: str = "", numa_node: int | None = None, which=None) -> list[str]:
+    """The command with a per-job RAM cap (systemd-run --scope -p MemoryMax=..., Linux with systemd) and/or pinned to
+    one NUMA node (numactl --cpunodebind=N --membind=N). A missing tool means the plain command."""
+    import shutil
+    which = which or shutil.which
+    out = list(command)
+    if numa_node is not None and which("numactl"):
+        out = ["numactl", f"--cpunodebind={int(numa_node)}", f"--membind={int(numa_node)}", *out]
+    if memory_max and os.name != "nt" and which("systemd-run"):
+        out = ["systemd-run", "--scope", "--quiet", "-p", f"MemoryMax={memory_max}", "-p", "MemorySwapMax=0", *out]
+    return out
+
+
+def run_held(client: PlannerClient, job_class: str, holder: str, job_id: str, command: list[str], *,
+             extra: dict | None = None, stop_file: str = "", restart: bool = False, renew_every: float = 20.0,
+             log=print, popen=subprocess.Popen, sleep=time.sleep, clock=time.monotonic) -> int:
+    """Run `command` while the planner admits `job_class`. On "yield" stop it (create `stop_file` and wait up to two
+    minutes, else terminate); with `restart`, wait for a new admission and start it again (resumable jobs).
+    Planner out: the command runs under its own rules. Returns the exit status of the command."""
+    extra = dict(extra or {})
+    while True:
+        grant = client.wait_for(job_class, holder, job_id, log=log, sleep=sleep, **extra)
+        if not grant.go:
+            log(f"planner: {job_class} refused ({grant.reason})")
+            return 3
+        if stop_file:
+            try:
+                os.remove(stop_file)
+            except OSError:
+                pass
+        log(f"planner: {job_class} {'admitted' if grant.planned else 'running without the planner'} ({grant.reason})")
+        process = popen(command)
+        yielded, last = "", clock()
+        try:
+            while process.poll() is None:
+                sleep(2.0)
+                if grant.planned and clock() - last >= renew_every:
+                    last = clock()
+                    grant = client.renew(grant)
+                    if grant.action in ("yield", "refuse"):
+                        yielded = grant.reason or grant.action
+                        log(f"planner: {job_class} must yield ({yielded}); stopping the job")
+                        if stop_file:
+                            Path(stop_file).write_text("planner: " + yielded + chr(10), encoding="utf-8")
+                            for _ in range(60):
+                                if process.poll() is not None:
+                                    break
+                                sleep(2.0)
+                        if process.poll() is None:
+                            process.terminate()
+                        process.wait()
+                        break
+            code = process.wait()
+        finally:
+            client.release(grant)
+        if not yielded or not restart:
+            return code
+        log(f"planner: {job_class} waits to resume")
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m star.planner_client")
     parser.add_argument("--url", default=None)
@@ -299,6 +359,18 @@ def main(argv=None) -> int:
     w.add_argument("--holder", required=True)
     w.add_argument("--minutes", type=float, default=10.0)
     w.add_argument("command", nargs=argparse.REMAINDER)
+    r = sub.add_parser("run", help="run a command while the planner admits its job class (yield = stop, resume)")
+    r.add_argument("--class", dest="job_class", required=True)
+    r.add_argument("--holder", required=True)
+    r.add_argument("--job-id", default="job")
+    r.add_argument("--memory-mib", type=int, default=None, help="RAM the job needs (admission)")
+    r.add_argument("--vram-mib", type=int, default=None)
+    r.add_argument("--snapshot", choices=["none", "pc"], default="none", help="send this PC's load with each call")
+    r.add_argument("--stop-file", default="", help="created on yield so the job can stop cleanly")
+    r.add_argument("--restart", action="store_true", help="after a yield, wait and start the job again")
+    r.add_argument("--memory-max", default="", help="hard RAM cap for the job, e.g. 2G (systemd-run --scope)")
+    r.add_argument("--numa-node", type=int, default=None, help="pin the job to one NUMA node (numactl)")
+    r.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     client = PlannerClient(url=args.url, key_file=args.key_file, timeout=5.0)
     if args.cmd == "status":
@@ -310,7 +382,16 @@ def main(argv=None) -> int:
         return 0
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
     if not command:
-        parser.error("window needs a command after --")
+        parser.error(f"{args.cmd} needs a command after --")
+    if args.cmd == "run":
+        if args.snapshot == "pc":
+            from .resource_probes import CpuMeter, pc_snapshot
+            meter = CpuMeter()
+            client.snapshot = lambda: pc_snapshot(cpu=meter)
+        extra = {k: v for k, v in (("memory_mib", args.memory_mib), ("vram_mib", args.vram_mib)) if v}
+        return run_held(client, args.job_class, args.holder, args.job_id,
+                        confined(command, memory_max=args.memory_max, numa_node=args.numa_node), extra=extra,
+                        stop_file=args.stop_file, restart=args.restart)
     return run_window(client, args.holder, command, minutes=args.minutes)
 
 
