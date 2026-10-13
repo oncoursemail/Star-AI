@@ -9,7 +9,7 @@ from star import desktop_core, doc_grounding, skill_packs
 from star.agent_skills import SkillLibrary
 from star.desktop_core import Settings, run_task
 
-NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
+NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-physics-and-input", "godot-ui-and-themes", "roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
          "roblox-environment-art",
@@ -50,8 +50,11 @@ def test_implementation_packs_cite_official_documentation_and_list_the_api_names
         if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS:
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
-        assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
-        assert "verified with the knowledge service /api-lookup" in sources, pack.name
+        if pack.name in skill_packs.GODOT_PACKS:
+            assert sources.count("https://docs.godotengine.org/en/stable/") >= 5, pack.name
+        else:
+            assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
+            assert "verified with the knowledge service /api-lookup" in sources, pack.name
         assert "http://" not in sources and "10.17" not in sources
 
 
@@ -258,3 +261,17 @@ def test_run_task_delivers_service_pack_only_when_enabled(monkeypatch, tmp_path,
     assert skill_packs.BLOCK_HEADING not in off_text
     assert not any(e["event"] == "skill_packs" for e in off_events)
     assert messages[0] == off_messages[0]
+
+
+@pytest.mark.parametrize(("name", "prompt"), (
+    ("godot-scenes-and-nodes", "In Godot 4 how do I instantiate a PackedScene and add_child?"),
+    ("godot-gdscript-typing-and-signals", "In Godot 4 GDScript how do typed signals connect?"),
+    ("godot-physics-and-input", "In Godot 4 CharacterBody2D how do physics and move_and_slide work?"),
+    ("godot-ui-and-themes", "In Godot 4 how do Control UI themes and anchors work?"),
+))
+def test_godot_packs_are_off_and_route_only_after_opt_in(name, prompt):
+    assert name not in skill_packs.DEFAULT_ENABLED
+    assert name not in skill_packs.enabled_names({})
+    assert skill_packs.matching_names(prompt) == []
+    assert skill_packs.matching_names(prompt, enabled={name}) == [name]
+    assert skill_packs.matching_names("In Roblox Studio how do I build an inventory UI?", enabled={name}) == []
