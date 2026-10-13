@@ -207,6 +207,27 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
         # Nothing was sent: a chat database or setting that cannot be read is a
         # local problem and says nothing about the server.
         return done(skipped='no_request', error=type(exc).__name__, **checked)
+    # The optional bank is purely an accelerator for this same chat's already
+    # authorized prompt. The ordinary prompt remains authoritative if restore
+    # fails, and the model never receives an extra bank tool or instruction.
+    bank = None
+    bank_home = home or app_data()
+    if kind == 'lan':
+        from . import cache_banks
+        if cache_banks.enabled():
+            bank = cache_banks.plan(settings, request, scope=memory_scope_for(settings, chat_id))
+            if bank is not None and not cancelled():
+                try:
+                    bank_restore = asyncio.run(cache_banks.restore(
+                        settings, bank_home, bank, cancel_event=cancel_event))
+                except Exception:
+                    bank_restore = {'performed': False, 'reason': 'unavailable'}
+            else:
+                bank_restore = None
+        else:
+            bank_restore = None
+    else:
+        bank_restore = None
     try:
         result = asyncio.run(_prime(settings, request, cancel_event, None))
     except Exception as exc:
@@ -217,6 +238,20 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
         return done(error=type(exc).__name__, **({'ok': False, 'code': 'request_failed'} if kind == 'lan' else {}))
     if report:
         result.update(ok=True, code='ok')
+    # Save only a successful, completed, uncancelled priming request. A failed
+    # /slots feature never delays or changes the ordinary model conversation.
+    if bank is not None and result.get('primed') and not cancelled():
+        try:
+            bank_save = asyncio.run(cache_banks.save(
+                settings, bank_home, bank, cancel_event=cancel_event))
+        except Exception:
+            bank_save = {'performed': False, 'reason': 'unavailable'}
+        result['cache_bank'] = {
+            'restored': bool(bank_restore and bank_restore.get('performed')),
+            'saved': bool(bank_save.get('performed')),
+            'restore_reason': str((bank_restore or {}).get('reason', ''))[:50],
+            'save_reason': str(bank_save.get('reason', ''))[:50],
+        }
     result['history_messages'] = len(request['messages']) - 2
     result['model'] = str(request['model'])[:180]
     result['with_tools'] = bool(request.get('tools'))
