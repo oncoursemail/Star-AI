@@ -49,7 +49,7 @@ def classify(reasons: list[str]) -> str:
     """One plain cause label from the first failed check."""
     first = str(reasons[0]) if reasons else ""
     head = first.split(":", 1)[0].strip()
-    if first.startswith("STAR gave no answer") or head == "answer":
+    if head == "answer" or any(str(reason).startswith(("STAR gave no answer", "answer:")) for reason in reasons):
         return "no answer"
     if head == "luau_block":
         return "no Luau code block in the answer"
@@ -209,6 +209,16 @@ class Engine:
         entry["example"] = f"{task['id']}: {str(first.reasons[0])[:150] if first.reasons else ''}"
         seen["cause"] = cause
         outcome = "failed"
+
+        def retry_unavailable(result: Result) -> str:
+            # The initial answer failed, but an unavailable checker cannot judge a lesson's effect.
+            self.store.count("infrastructure_errors")
+            seen["last_error"] = result.error[:160]
+            seen["errors"] = seen.get("errors", 0) + 1
+            seen["status"] = seen["status"] or "error"
+            self.store.save()
+            return "error"
+
         # (a) a waiting candidate for the same kind of failure, most successful first
         waiting = [l for l in self.store.lessons("candidate")
                    if l["cause"] == cause and task["id"] not in l["tried"]]
@@ -216,7 +226,7 @@ class Engine:
         for lesson in waiting[:self.settings.retry_candidates]:
             again = self._attempt(task, active + [lesson], "candidate " + lesson["id"])
             if again.error:
-                continue
+                return retry_unavailable(again)
             lesson["tried"].append(task["id"])
             if again.passed:
                 lesson["fixed"].append(task["id"])
@@ -243,7 +253,9 @@ class Engine:
                 state["next_lesson"] += 1
                 again = self._attempt(task, active + [lesson], "new lesson " + lesson["id"])
                 self.store.count("lessons_proposed")
-                if again.passed and not again.error:
+                if again.error:
+                    return retry_unavailable(again)
+                if again.passed:
                     lesson["status"] = "candidate"
                     lesson["fixed"].append(task["id"])
                     lesson["evidence"].append({"ts": utc(), "fixed": task["id"], "failed_before": first.reasons[:2]})
