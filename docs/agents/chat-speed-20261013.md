@@ -133,3 +133,18 @@ night school on HOLD): `scratchpad/measure_discord.py` = DiscordBrain with strea
 - 18:45Z full suite 6218 passed / 240 skipped (one earlier run hung in test_audio_understanding at ~3%; that file passes alone in 1.2 s, rerun green). Commit 2 pushed to #264.
 - Tests: tests/test_discord_chat_speed.py (14) + updated test_discord_bot.py; discord venv 51 passed / 1 skipped;
   full suite (audit venv) 6212 passed / 240 skipped (before the last two small test additions).
+
+## Next steps (for whoever resumes)
+1. Integrator: merge #264 into star/next (head a495826, tests green).
+2. After merge, restart the Discord bot on that code (not done: the bot is the owner's running process, PID started
+   17:58Z from star-discord.cmd, and #264 is not merged yet). Stop the running bot window (Ctrl+C), then from cmd:
+   `set STAR_CHECKOUT=C:\Users\alexi\Documents\starai\worktrees\<checkout of star/next with #264>` and run
+   `C:\Users\alexi\Documents\starai\star-discord.cmd` (or edit the default STAR_CHECKOUT line in that local launcher).
+   The bot log then shows one line per reply: `Discord reply: model=... quick=... first_text=...s total=...s`.
+3. Release agent, next brain restart window: `bash server/brain/apply.sh` from a star/next checkout applies the
+   star-voice template (and keeps star-embed-ft1). Then check turn-2/3 prompt tokens (should be ~20-35, not 83/195):
+   rerun the 3-turn measurement and `journalctl -u star-brain | grep "prompt eval time"`.
+4. After the eval (~20:00Z), with the quiet lock: measure idle first text for Discord quick path (expected ~1 s).
+5. Proposals that need a measurement window: 3rd star-fast slot + batch clients max 2; nice +5 for star-fast threads;
+   tool-search meta-tools in star/agent.py (after clock-and-web #80 lands); slot-save-path persistence (low priority).
+Status: code DONE (PR #264); live follow-ups 2-4 pending.
