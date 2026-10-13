@@ -79,6 +79,15 @@ At each turn: resolve project, retrieve by lexical exact identifiers plus option
 
 For complex creation and research, use a persistent **plan graph**: objective, constraints, ordered subtasks, dependencies, tools, verification evidence, blockers, next action, and an explicit owner approval boundary. Planning can survive chat resumes without inventing results. A separate creative generator produces competing style/gameplay ideas; an evaluator checks playability, originality, coherence and measurable compliance with human visual references, never substituting its own taste for user acceptance.
 
+### Spoken conversation and screenshot understanding (new proposed subsystem)
+
+Speech input should be **local by default**: mic capture with visible recording indicator and owner control -> VAD/silence segmentation -> user-space streaming ASR (whisper.cpp or faster-whisper small/base int8 profile) -> transcript with timestamps and low-confidence spans -> resolve references to visible screenshot/editor object/current project -> context-aware dialogue plan -> optional local TTS response. Offer push-to-talk and interruption, but never execute destructive tool calls from noisy automatic transcription without explicit confirmation. Reuse the same scoped memory and correction graph whether input came from keyboard, voice or an image.
+
+- Evaluate microphone/noise latency, speaker turn detection, word error rate for *Roblox/Blender terms*, proper nouns, false command activations, privacy and realtime factor on the actual host. Record raw audio only with explicit consent; it must not silently enter training.
+- Offline/permissioned ASR candidates: https://github.com/ggml-org/whisper.cpp (stream example and VAD) and https://github.com/SYSTRAN/faster-whisper (CTranslate2/int8), subject to pinned model licenses. Groq's hosted Whisper endpoints are optional but share organization rate limits and cloud-data permissions.
+- Optional TTS: locally verified Piper or Kokoro compatible licensing, volume/device/latency limits and immediate interruption support. Do not confuse speech *recognition* with proof the model actually understood the intended request.
+- Multimodal desktop screenshots: capture only owner-selected app/window and purpose, recognize visual state against file evidence, ask for clarification if a coordinate/action is uncertain, and validate result from a **new** captured frame. Never claim an imported asset looks good merely because a file exported successfully.
+
 ## 6. Learn faster, but only from reliable outcomes
 
 Combine techniques with verifiable feedback, not uncontrolled self-rewriting:
