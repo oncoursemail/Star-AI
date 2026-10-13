@@ -43,7 +43,11 @@ function Yes-No([string]$prompt, [bool]$defaultNo = $true) {
 }
 function Get-RunPython {
     $venv = Join-Path $repoRoot '.venv\Scripts\python.exe'
-    if (Test-Path -LiteralPath $venv -PathType Leaf) { return @($venv) }
+    if (Test-Path -LiteralPath $venv -PathType Leaf) {
+        $v = & $venv -c 'import sys; print("yes" if (3, 11) <= sys.version_info[:2] <= (3, 12) else "no")' 2>$null
+        if ($v -eq 'yes') { return @($venv) }
+        throw 'This checkout has an incompatible Python virtual environment. Recreate it with Python 3.11/3.12.'
+    }
     $launcher = Get-Command py.exe -ErrorAction SilentlyContinue
     if ($null -ne $launcher) {
         foreach ($version in @('3.12','3.11')) {
