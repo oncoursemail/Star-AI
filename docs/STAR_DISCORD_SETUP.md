@@ -79,6 +79,8 @@ images), including the STAR Brain server when that is your provider. Choose thos
   intact), and remembers the last few turns for an hour (`/star reset` forgets them). Send `help` for
   a reminder.
 - Attach **one screenshot** to a DM (or use `/image`) and ask about it.
+- Attach **two images** to an owner DM (first desired reference, second current STAR result), or use `/compare` with the two attachments. STAR produces a private local-vision critique and a proposed change list; images are normalized and not stored in chat history. A screenshot is not enough to judge motion, rig correctness, or real Studio test results.
+- If `STAR_DISCORD_DM_LEARNING_CANDIDATES=1` is enabled and your previous DM was about an image, a follow-up like “I don’t like that” or “you messed up the animation” creates a review-only correction candidate, not automatic changes or training. You can also use `wrong: ...` or `remember correction: ...` explicitly.
 - Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, plus the `/star ...` group
   (research, speech, voice channel, reset, doctor).
 
