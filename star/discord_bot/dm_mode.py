@@ -111,7 +111,7 @@ def classify_owner_dm(content: str, *, attachments: int,
 
 
 _VISUAL_CRITIQUE = re.compile(
-    r"^(?:i (?:don't|do not) like\b|"
+    r"^(?:i (?:don['’]t|do not) like\b|"
     r"(?:this|that|it) (?:doesn't|does not) (?:look|match|feel)\b|"
     r"(?:this|that|it) looks? (?:bad|wrong|off)\b|"
     r"you messed up\b|not what i (?:wanted|was going for)\b|"
