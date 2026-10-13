@@ -1,6 +1,6 @@
 # Host tuning for brain 1 (Claude, board item #85 host-tuning-20261013)
 
-Status: FILES WRITTEN, PR open (see board #85); owner steps pending. Branch `star/host-tuning-20261013`, worktree `worktrees/host-tuning`.
+Status: FILES WRITTEN, PR #269 open (board #85); owner steps pending. Branch `star/host-tuning-20261013`, worktree `worktrees/host-tuning`.
 Task: write reviewable files the owner runs once at the brain-1 console (tune.sh, star-sudoers, README). Nothing was
 run with sudo and no host setting was changed by this item.
 
@@ -46,3 +46,4 @@ run with sudo and no host setting was changed by this item.
   measurement session under the quiet lock with `--holder hosttune` (README section 4) and a decision to keep or roll back.
 - Open questions: (1) whether to also set a BIOS power profile (owner, maintenance window). (2) THP=always A/B: only
   worth doing if llama.cpp ever allocates anonymous memory for weights (`-lm dio` does) and only with the lock.
+- 19:55Z PR #269 opened against star/next (ready); full pytest 6336 passed, 243 skipped. Claim marked done.
