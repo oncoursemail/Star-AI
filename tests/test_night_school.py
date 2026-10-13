@@ -237,7 +237,7 @@ class Script:
         texts = {l["text"] for l in lessons}
         kind = task["id"][0]
         if kind == "V":
-            passed = not (texts & self.harmful) and (task["id"] != "V-needs" or self.lesson in texts)
+            passed = not (texts & self.harmful) and (not task["id"].startswith("V-needs") or self.lesson in texts)
         else:
             passed = kind == "E" or (kind == "H" and self.lesson in texts)
         reasons = [] if passed else ["require:uses_expected_call: the expected call is used"]
@@ -296,52 +296,130 @@ def test_a_lesson_that_does_not_fix_its_task_is_discarded_with_the_evidence(tmp_
     assert event["event"] == "lesson discarded" and event["lesson"]["text"] == wrong
 
 
-def test_promotion_needs_two_different_fixed_tasks_and_a_validation_slice_that_is_not_worse(tmp_path):
+NEEDS = ["V-needs-1", "V-needs-2", "V-needs-3"]
+
+
+def test_promotion_needs_two_fixed_tasks_and_a_significant_paired_win_on_the_validation_slice(tmp_path):
     script = Script()
-    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1", "V-needs"], script, batch=2,
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1"] + NEEDS, script, batch=2,
                                          recheck_every=99)
+    assert settings.samples == 2
     engine.run_batch()                                          # H-1 fixed by a new lesson, E-1 passes
     lesson = store.state["lessons"]["L1"]
     assert lesson["status"] == "candidate" and len(lesson["fixed"]) == 1
     assert store.state["validation"][0]["why"] == "first baseline" and store.state["validation"][0]["passed"] == 1
+    script.calls.clear()
     engine.run_batch(1)                                         # H-2 fixed by the waiting candidate
     assert lesson["status"] == "active" and sorted(lesson["fixed"]) == ["H-1", "H-2"]
-    assert lesson["promotion"] == {"fixed_tasks": ["H-1", "H-2"], "validation_before": "1/2", "validation_with": "2/2",
-                                   "before_passed": 1}
+    proof = lesson["promotion"]
+    assert {k: proof[k] for k in ("fixed_tasks", "validation_before", "validation_with", "before_passed")} == {
+        "fixed_tasks": ["H-1", "H-2"], "validation_before": "2/8", "validation_with": "8/8", "before_passed": 2}
+    gate = proof["gate"]
+    assert (gate["decision"], gate["wins"], gate["losses"], gate["ties"], gate["tasks"], gate["k"]) == (
+        "PROMOTE", 6, 0, 2, 4, 2)
+    assert gate["p_better"] == round(1 / 64, 4) and gate["mde_tasks"] is not None
     assert store.state["counters"]["lessons_promoted"] == 1
-    assert [row["passed"] for row in store.state["validation"]] == [1, 2]
-    # No validation task was ever used to write a lesson, and the baseline was measured once.
-    assert not {"V-1", "V-needs"} & set(store.state["tasks"])
-    assert [c for c in script.calls if c[0] == "V-1"] == [("V-1", ()), ("V-1", ("L1",))]
+    assert [row["passed"] for row in store.state["validation"]] == [1, 2, 8]
+    # Interleaved in the same session: sample 1 runs base then trial, sample 2 trial then base (per task alternating).
+    v1 = [c[1] for c in script.calls if c[0] == "V-1"]
+    assert v1 == [(), ("L1",), ("L1",), ()]
+    n1 = [c[1] for c in script.calls if c[0] == "V-needs-1"]
+    assert n1 == [("L1",), (), (), ("L1",)]
+    # No validation task was ever used to write a lesson.
+    assert not {"V-1", *NEEDS} & set(store.state["tasks"])
     # From now on the active lesson is in the context of the first attempt.
     script.calls.clear()
     engine.run_item(engine.training[0])
     assert script.calls == [("H-1", ("L1",))]
 
 
-def test_a_candidate_that_lowers_the_validation_slice_is_held_back(tmp_path):
+def test_a_win_below_the_noise_floor_is_inconclusive_never_promotes_and_waits_for_more_fixes(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "H-3", "H-4", "V-1", "V-needs-1"], script, batch=2,
+                                         recheck_every=99)
+    engine.run_batch()                                          # H-1, H-2 fixed: the gate runs
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "candidate" and lesson["gated_at_fixes"] == 2
+    assert lesson["gates"][0]["gate"]["decision"] == "INCONCLUSIVE"
+    assert (lesson["gates"][0]["gate"]["wins"], lesson["gates"][0]["gate"]["losses"]) == (2, 0)
+    assert store.state["counters"]["lessons_inconclusive"] == 1 and engine.active() == []
+    calls = len(script.calls)
+    engine.consider_promotions()                                # nothing new: no second measurement
+    assert len(script.calls) == calls
+    engine.run_batch(2)                                         # H-3, H-4 fixed: 4 fixes, measured again (fresh)
+    assert len(lesson["gates"]) == 2 and lesson["gated_at_fixes"] == 4 and lesson["status"] == "candidate"
+    assert len(store.state["paired_runs"]) == 2
+
+
+def test_a_candidate_that_significantly_lowers_the_validation_slice_is_held_back(tmp_path):
     script = Script()
     script.harmful = {fake.LESSON}
-    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2"], script, batch=2)
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2", "V-3"], script, batch=2)
     engine.run_batch()
     lesson = store.state["lessons"]["L1"]
-    assert lesson["status"] == "held" and lesson["promotion"]["validation_before"] == "2/2"
-    assert lesson["promotion"]["validation_with"] == "0/2"
+    assert lesson["status"] == "held" and lesson["promotion"]["validation_before"] == "6/6"
+    assert lesson["promotion"]["validation_with"] == "0/6" and lesson["promotion"]["gate"]["decision"] == "REJECT"
     assert store.state["counters"]["lessons_held_back"] == 1 and engine.active() == []
 
 
-def test_an_active_lesson_that_later_hurts_is_retired(tmp_path):
+def test_an_active_lesson_is_retired_only_when_the_paired_recheck_shows_a_significant_loss(tmp_path):
     script = Script()
-    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2"], script, batch=2, recheck_every=3)
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2", "V-3"] + NEEDS, script, batch=2,
+                                         recheck_every=3)
     engine.run_batch()
     assert store.state["lessons"]["L1"]["status"] == "active"
     script.harmful = {fake.LESSON}                              # the model (or the pool) changed: the lesson now hurts
     engine.run_batch(1)
     lesson = store.state["lessons"]["L1"]
     assert lesson["status"] == "retired"
-    assert lesson["retirement"] == {"validation_now": "0/2", "validation_before_promotion": "2/2"}
+    retirement = lesson["retirement"]
+    assert (retirement["validation_now"], retirement["validation_without"], retirement["validation_before_promotion"]) == (
+        "0/12", "6/12", "6/12")
+    assert retirement["gate"]["decision"] == "REJECT" and retirement["gate"]["losses"] == 6
     assert store.state["counters"]["lessons_retired"] == 1 and engine.active() == []
-    assert store.state["validation"][-1]["why"] == "recheck"
+    assert store.state["validation"][-1]["why"] == "recheck L1 (trial arm, k=2)"
+
+
+def test_a_small_drop_at_recheck_retires_nothing(tmp_path):
+    """The old rule retired L14 for 6/12 -> 5/12. A one-task drop is noise: the paired recheck keeps the lesson."""
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2", "V-3"] + NEEDS, script, batch=2,
+                                         recheck_every=3)
+    engine.run_batch()
+    assert store.state["lessons"]["L1"]["status"] == "active"
+    original = script.solve
+
+    def one_flaky(task, lessons):                               # V-1 now fails once with the lesson
+        result = original(task, lessons)
+        if task["id"] == "V-1" and lessons and not getattr(one_flaky, "done", False):
+            one_flaky.done = True
+            result.passed, result.reasons = False, ["unit_tests: flaky"]
+        return result
+    engine._solve = one_flaky
+    engine.run_batch(1)
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "active" and lesson["rechecks"][-1]["decision"] == "INCONCLUSIVE"
+    assert "lessons_retired" not in store.state["counters"]
+
+
+def test_an_interrupted_paired_recheck_resumes_where_it_stopped(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2", "V-3"] + NEEDS, script, batch=2,
+                                         recheck_every=99)
+    engine.run_batch()
+    assert store.state["lessons"]["L1"]["status"] == "active"
+    script.calls.clear()
+    script.interrupt_on = "V-3"
+    with pytest.raises(Yielded):
+        engine.recheck()
+    assert "recheck_count" not in store.state
+    script.interrupt_on = None
+    engine.recheck()
+    assert store.state["recheck_count"] == 1
+    # 6 validation tasks x 2 arms x 2 samples, each answered once, plus the one attempt that was interrupted
+    assert len([c for c in script.calls if c[0].startswith("V")]) == 6 * 2 * 2 + 1
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "active" and lesson["rechecks"][-1]["decision"] == "PROMOTE"   # it still helps
 
 
 def test_an_interruption_counts_nothing_and_an_interrupted_validation_run_resumes(tmp_path):
@@ -391,7 +469,7 @@ def test_small_rules_cause_labels_lesson_texts_and_scrubbing():
 
 def test_report_is_short_plain_and_free_of_addresses_and_keys(tmp_path):
     script = Script()
-    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "X-1", "V-1", "V-needs"], script, batch=4)
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "X-1", "V-1"] + NEEDS, script, batch=4)
     engine.run_batch()
     lan = ".".join(["10", "9", "8", "7"])
     store.state["causes"]["leak"] = {"count": 9, "example": f"P-1: server {lan} said Bearer abcdefghijklmnopqrstuvwxyz"}

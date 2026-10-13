@@ -5,10 +5,12 @@ One cycle (one practice task):
   1. solve the task with the active lessons; a pass is stored as a verified worked example;
   2. on a failure, try a waiting candidate lesson for the same kind of failure; then ask the model for the cause and
      ONE short lesson and solve again with it; the lesson is kept as a candidate only if the task now passes;
-  3. a candidate that fixed `promote_fixes` different tasks is measured on the validation slice (tasks that are
-     never used to write lessons) and becomes active only if the slice does not get worse;
-  4. every `recheck_every` tasks the active set is measured again; when it is below the score recorded before the
-     newest active lesson was promoted, that lesson is retired.
+  3. a candidate that fixed `promote_fixes` different tasks is compared with the active set on the validation slice
+     (tasks that are never used to write lessons): both arms, k samples each, interleaved in this session, decided by
+     the paired sign test of star/eval_stats.py (W1). PROMOTE makes it active, REJECT holds it back, INCONCLUSIVE
+     keeps it a candidate (it never promotes) until it has fixed `promote_fixes` more tasks;
+  4. every `recheck_every` tasks the newest active lesson is compared the same way (active set with and without it);
+     it is retired only when it makes the slice significantly worse.
 Every decision is written down with the numbers that justified it (state.json, attempts.jsonl, events.jsonl).
 """
 from __future__ import annotations
@@ -20,6 +22,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sys
 
 from .pool import is_validation
 
@@ -293,44 +296,126 @@ class Engine:
             self.store.save()
         return run
 
+    def _stats(self):
+        """star.eval_stats from the application copy (the same module the evaluation gate uses)."""
+        try:
+            from star import eval_stats
+        except ImportError:
+            app = str(self.settings.app)
+            if app not in sys.path:
+                sys.path.insert(0, app)
+            from star import eval_stats
+        return eval_stats
+
+    def measure_paired(self, base: list[dict], trial: list[dict], why: str, *, samples: int, tag: str = "",
+                       fresh: bool = False) -> dict | None:
+        """Both lesson sets on every validation task, k samples each, interleaved in this session: for sample j the
+        order alternates per task and per sample (base first, then trial first), so drift hits both arms alike.
+        Resumable like `measure`; None when a check could not run (no decision on an incomplete measurement)."""
+        if not self.validation:
+            return None
+        runs = self.store.state.setdefault("paired_runs", {})
+        ident = json.dumps([sorted((l["id"], l["text"]) for l in base), sorted((l["id"], l["text"]) for l in trial),
+                            samples, tag])
+        key = hashlib.sha256(ident.encode()).hexdigest()[:16]
+        if fresh and runs.get(key, {}).get("done"):
+            runs.pop(key)
+        run = runs.setdefault(key, {"base": {}, "trial": {}, "base_lessons": [l["id"] for l in base],
+                                    "trial_lessons": [l["id"] for l in trial], "samples": samples, "why": why,
+                                    "done": False})
+        arms = {"base": base, "trial": trial}
+        if not run["done"]:
+            for j in range(samples):
+                for index, task in enumerate(self.validation):
+                    order = ("base", "trial") if (index + j) % 2 == 0 else ("trial", "base")
+                    for arm in order:
+                        got = run[arm].setdefault(task["id"], [])
+                        if len(got) > j:
+                            continue
+                        result = self._attempt(task, arms[arm], f"validation {arm} {j + 1}/{samples}")
+                        if result.error:
+                            self.store.count("infrastructure_errors")
+                            self.store.save()
+                            return None
+                        got.append(bool(result.passed))
+                        self.store.save()
+            report = self._stats().paired_decision(run["base"], run["trial"], alpha=self.settings.gate_alpha,
+                                                   seed=int(key[:8], 16))
+            run.update(done=True, ts=utc(), decision=report.decision, gate=report.summary(),
+                       base_passed=report.baseline_pass, trial_passed=report.candidate_pass, total=report.samples)
+            for arm, lessons, passed in (("base", base, report.baseline_pass), ("trial", trial, report.candidate_pass)):
+                self.store.state["validation"].append({"ts": run["ts"], "passed": passed, "total": report.samples,
+                                                       "active_lessons": [l["id"] for l in lessons],
+                                                       "why": f"{why} ({arm} arm, k={samples})"})
+            self.store.state["validation"] = self.store.state["validation"][-200:]
+            finished = [k for k, r in runs.items() if r.get("done")]
+            for old_key in finished[:-50]:                  # keep the newest 50 finished paired runs
+                runs.pop(old_key, None)
+            self.store.save()
+        return run
+
     def consider_promotions(self) -> None:
+        """A candidate that fixed `promote_fixes` tasks is compared with the active set on the validation slice,
+        paired and interleaved (W1). PROMOTE -> active; REJECT -> held; INCONCLUSIVE stays a candidate and is measured
+        again only after it fixed `promote_fixes` more tasks. INCONCLUSIVE never promotes."""
         for lesson in sorted(self.store.lessons("candidate"), key=lambda l: l["id"]):
-            if len(set(lesson["fixed"])) < self.settings.promote_fixes:
+            fixed = len(set(lesson["fixed"]))
+            if fixed < self.settings.promote_fixes + lesson.get("gated_at_fixes", 0):
                 continue
             active = self.active()
-            base = self.measure(active, "before " + lesson["id"])
-            trial = self.measure(active + [lesson], "with " + lesson["id"]) if base else None
-            if not base or not trial:
+            run = self.measure_paired(active, active + [lesson], "gate " + lesson["id"], samples=self.settings.samples,
+                                      tag=f"promote {lesson['id']} at {fixed}")
+            if not run:
                 return
-            proof = {"fixed_tasks": sorted(set(lesson["fixed"])), "validation_before": f"{base['passed']}/{base['total']}",
-                     "validation_with": f"{trial['passed']}/{trial['total']}", "before_passed": base["passed"]}
-            if trial["passed"] >= base["passed"]:
+            proof = {"fixed_tasks": sorted(set(lesson["fixed"])),
+                     "validation_before": f"{run['base_passed']}/{run['total']}",
+                     "validation_with": f"{run['trial_passed']}/{run['total']}",
+                     "before_passed": run["base_passed"], "gate": run["gate"]}
+            decision = run["decision"]
+            if decision == "PROMOTE":
                 lesson.update(status="active", promoted=utc(), promotion=proof)
                 self.store.count("lessons_promoted")
-                self._log(f"lesson {lesson['id']} promoted ({proof['validation_before']} -> {proof['validation_with']})")
-            else:
+            elif decision == "REJECT":
                 lesson.update(status="held", held=utc(), promotion=proof)
                 self.store.count("lessons_held_back")
-            self.store.append("events", {"ts": utc(), "event": "lesson " + lesson["status"], "lesson": lesson})
+            else:
+                lesson["gated_at_fixes"] = fixed
+                lesson.setdefault("gates", []).append({"ts": utc(), **proof})
+                self.store.count("lessons_inconclusive")
+            self._log(f"lesson {lesson['id']} gate {decision} ({proof['validation_before']} -> "
+                      f"{proof['validation_with']}, p(better)={run['gate']['p_better']}, MDE "
+                      f"+{run['gate']['mde_tasks']} tasks)")
+            self.store.append("events", {"ts": utc(), "event": f"lesson gate {decision}", "lesson": lesson})
             self.store.save()
 
     def recheck(self) -> None:
-        """Retire the newest active lesson when the validation slice is now below the score it was promoted on."""
+        """Retire the newest active lesson only when a paired comparison (active set with and without it, run
+        interleaved now) says it makes the slice significantly worse (REJECT). A drop below the noise floor retires
+        nothing: that was the old rule's coin flip (L14: promoted at 6/12, retired at 5/12)."""
         active = self.active()
         if not active:
             return
-        now = self.measure(active, "recheck", fresh=True)
-        if not now:
-            return
         newest = active[-1]
-        before = newest.get("promotion", {}).get("before_passed", 0)
-        if now["passed"] < before:
+        number = self.store.state.get("recheck_count", 0) + 1      # counted when finished: an interrupted one resumes
+        run = self.measure_paired(active[:-1], active, "recheck " + newest["id"], samples=self.settings.recheck_samples,
+                                  tag=f"recheck {number}")
+        if not run:
+            return
+        self.store.state["recheck_count"] = number
+        check = {"ts": utc(), "decision": run["decision"], "validation_without": f"{run['base_passed']}/{run['total']}",
+                 "validation_with": f"{run['trial_passed']}/{run['total']}", "gate": run["gate"]}
+        newest.setdefault("rechecks", []).append(check)
+        newest["rechecks"] = newest["rechecks"][-10:]
+        if run["decision"] == "REJECT":
             newest.update(status="retired", retired=utc(),
-                          retirement={"validation_now": f"{now['passed']}/{now['total']}",
-                                      "validation_before_promotion": newest["promotion"]["validation_before"]})
+                          retirement={"validation_now": check["validation_with"],
+                                      "validation_without": check["validation_without"],
+                                      "validation_before_promotion": newest.get("promotion", {}).get("validation_before", "?"),
+                                      "gate": run["gate"]})
             self.store.count("lessons_retired")
             self.store.append("events", {"ts": utc(), "event": "lesson retired", "lesson": newest})
-            self._log(f"lesson {newest['id']} retired (validation {now['passed']}/{now['total']}, was {before})")
+            self._log(f"lesson {newest['id']} retired (with {check['validation_with']}, without "
+                      f"{check['validation_without']}, p(worse)={run['gate']['p_worse']})")
         self.store.save()
 
     def run_batch(self, size: int | None = None, *, before_item=lambda: True) -> dict:

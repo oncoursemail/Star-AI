@@ -1,0 +1,52 @@
+name: Protected closure
+# W2: a diff from a generator branch (star/chatgpt-*, star/autopilot-*, star/night-school-outbox-*, star/outbox-*,
+# star/selfbuild-*, star/genesis-*, star/gen-*) must not touch evals, graders, the holdout, stored results or the gate
+# (list: star/protected_paths.py). pull_request_target runs THIS workflow and the guard script from the base branch,
+# so a pull request cannot weaken its own check; the pull request's code is only diffed, never executed.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  push:
+    branches: ['star/chatgpt-*', 'star/autopilot-*', 'star/night-school-outbox-*', 'star/outbox-*',
+               'star/selfbuild-*', 'star/genesis-*', 'star/gen-*']
+permissions:
+  contents: read
+concurrency:
+  group: protected-closure-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  guard:
+    name: Generators do not edit evals, graders or the gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha || github.sha }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check the pull request diff with the base branch's guard
+        if: github.event_name == 'pull_request_target'
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          git fetch --no-tags origin "pull/${PR_NUMBER}/head:pr-head"
+          cp star/protected_paths.py "$RUNNER_TEMP/guard.py"
+          git diff --name-only --no-renames "${BASE_SHA}...pr-head" > "$RUNNER_TEMP/changed.txt"
+          xargs -a "$RUNNER_TEMP/changed.txt" -d '\n' python "$RUNNER_TEMP/guard.py" --branch "$HEAD_BRANCH" --labels "$LABELS" --files
+      - name: Check a pushed generator branch against star/next
+        if: github.event_name == 'push'
+        env:
+          HEAD_BRANCH: ${{ github.ref_name }}
+        run: |
+          git fetch --no-tags origin star/next
+          cp star/protected_paths.py "$RUNNER_TEMP/guard.py"
+          git show origin/star/next:star/protected_paths.py > "$RUNNER_TEMP/guard.py" 2>/dev/null || true
+          git diff --name-only --no-renames "origin/star/next...${GITHUB_SHA}" > "$RUNNER_TEMP/changed.txt"
+          xargs -a "$RUNNER_TEMP/changed.txt" -d '\n' python "$RUNNER_TEMP/guard.py" --branch "$HEAD_BRANCH" --files

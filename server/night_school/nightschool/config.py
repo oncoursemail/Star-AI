@@ -29,7 +29,12 @@ class Settings:
     slot: int = field(default_factory=lambda: int(_env("STAR_NS_SLOT", "1")))
     # Learning rules.
     validation_percent: int = field(default_factory=lambda: int(_env("STAR_NS_VALIDATION_PERCENT", "20")))
-    validation_max: int = field(default_factory=lambda: int(_env("STAR_NS_VALIDATION_MAX", "12")))
+    # W1 paired gate (star/eval_stats.py): 24 validation tasks, k samples per arm, both arms interleaved in one
+    # session; only a significant improvement promotes, only a significant loss retires.
+    validation_max: int = field(default_factory=lambda: int(_env("STAR_NS_VALIDATION_MAX", "24")))
+    samples: int = field(default_factory=lambda: int(_env("STAR_NS_SAMPLES", "2")))
+    recheck_samples: int = field(default_factory=lambda: int(_env("STAR_NS_RECHECK_SAMPLES", "2")))
+    gate_alpha: float = field(default_factory=lambda: float(_env("STAR_NS_GATE_ALPHA", "0.05")))
     promote_fixes: int = field(default_factory=lambda: int(_env("STAR_NS_PROMOTE_FIXES", "2")))
     batch: int = field(default_factory=lambda: int(_env("STAR_NS_BATCH", "5")))
     recheck_every: int = field(default_factory=lambda: int(_env("STAR_NS_RECHECK_EVERY", "40")))
