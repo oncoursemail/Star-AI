@@ -23,6 +23,7 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
+                        look_for_busy_slots,
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
@@ -1094,6 +1095,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             conversation_records, window,
                             summary_chars=min(6000, max(700, allowed_context_chars // 4)),
                             cancel_event=cancel_event, on_event=audited_event, candidate=candidate)
+                        # Issue 118: is the chat's slot busy with another client right now? Then this
+                        # turn takes an idle slot (providers.look_for_busy_slots; never raises, <0.5 s).
+                        await look_for_busy_slots(settings, model, conversation=memory_scope)
                         kwargs.update(model=model, request_extras=slot_fields(model), history=window.messages,
                             project_memory=conversation_memory.compose_memory(
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
