@@ -1,4 +1,5 @@
 """QLoRA pilot preflight is offline and does not import GPU stacks until approved."""
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -83,3 +84,74 @@ def test_qlora_budgets_reject_unbounded_settings():
                    {"min_free_vram_mib": 1024}):
         with pytest.raises(ValueError):
             lora.QLoRAConfig(**kwargs)
+
+
+def test_approved_export_bytes_match_manifest_without_platform_newline_translation(tmp_path):
+    source_data(tmp_path)
+    directory = tmp_path / "training" / "verified"
+    manifest = json.loads((directory / "manifest.json").read_bytes())
+    assert manifest["accepted"] == 25
+    for split, count in (("train", 15), ("validation", 5), ("test", 5)):
+        contents = (directory / f"{split}.jsonl").read_bytes()
+        assert contents.endswith(b"\n")
+        assert b"\r\n" not in contents
+        assert hashlib.sha256(contents).hexdigest() == manifest["files"][split]["sha256"]
+        assert len(contents.splitlines()) == manifest["files"][split]["examples"] == count
+    result = lora.plan(tmp_path, local_model(tmp_path))
+    assert result["ready_for_owner_review"] and result["training_started"] is False
+    assert result["counts"] == {"train": 15, "validation": 5, "test": 5}
+
+
+@pytest.mark.parametrize("split", ["train", "validation", "test"])
+def test_crlf_conversion_cannot_bypass_training_approval(tmp_path, split):
+    source_data(tmp_path)
+    model = local_model(tmp_path)
+    target = tmp_path / "training" / "verified" / f"{split}.jsonl"
+    approved_bytes = target.read_bytes()
+    assert b"\r\n" not in approved_bytes
+    target.write_bytes(approved_bytes.replace(b"\n", b"\r\n"))
+    with pytest.raises(ValueError, match="SHA-256 differs"):
+        lora.plan(tmp_path, model)
+    assert not (tmp_path / "training" / "lora-runs").exists()
+    target.write_bytes(approved_bytes)
+    assert lora.plan(tmp_path, model)["ready_for_owner_review"] is True
+
+
+@pytest.mark.parametrize("split", ["train", "validation", "test"])
+def test_changing_approval_hash_cannot_authorize_dataset(tmp_path, split):
+    source_data(tmp_path)
+    model = local_model(tmp_path)
+    manifest_path = tmp_path / "training" / "verified" / "manifest.json"
+    original = manifest_path.read_bytes()
+    manifest = json.loads(original)
+    manifest["files"][split]["sha256"] = "0" * 64
+    manifest_path.write_bytes(json.dumps(manifest, sort_keys=True).encode("utf-8"))
+    with pytest.raises(ValueError, match="SHA-256 differs"):
+        lora.plan(tmp_path, model)
+    manifest_path.write_bytes(original)
+    assert lora.plan(tmp_path, model)["ready_for_owner_review"]
+
+
+def test_byte_tampering_fails_before_training_imports_or_gpu_work(tmp_path):
+    source_data(tmp_path)
+    model = local_model(tmp_path)
+    with pytest.raises(PermissionError, match="explicitly approve"):
+        lora.train_approved(tmp_path, model, approved=False)
+    approved = tmp_path / "training" / "verified" / "train.jsonl"
+    approved.write_bytes(approved.read_bytes() + b" ")
+    with pytest.raises(ValueError, match="SHA-256 differs"):
+        lora.train_approved(tmp_path, model, approved=True)
+    assert not (tmp_path / "training" / "lora-runs").exists()
+
+
+@pytest.mark.parametrize("architectures", [
+    [], ["Qwen2ForCausalLM", "UnreviewedArchitecture"], ["UnreviewedArchitecture"],
+])
+def test_model_identity_is_rejected_without_gpu_or_job_side_effects(tmp_path, architectures):
+    source_data(tmp_path)
+    model = local_model(tmp_path)
+    (model / "config.json").write_text(json.dumps({"architectures": architectures}),
+                                       encoding="utf-8")
+    with pytest.raises(PermissionError, match="reviewed local small Qwen"):
+        lora.plan(tmp_path, model)
+    assert not (tmp_path / "training" / "lora-runs").exists()

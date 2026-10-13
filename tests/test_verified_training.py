@@ -140,3 +140,15 @@ def test_tiny_dataset_is_quarantined_and_not_trainable():
     assert result["accepted"] == 1
     assert result["splits"]["quarantine"]
     assert not result["ready_for_owner_training_review"]
+
+
+def test_private_export_approval_manifest_hashes_exact_saved_split_bytes(tmp_path):
+    items, receipts = training_inputs()
+    approved = train.curate(items, receipts, fence(), model_license_reviewed=True)
+    train.export_private(approved, tmp_path, approved=True)
+    base = tmp_path / "training" / "verified"
+    manifest = json.loads((base / "manifest.json").read_bytes())
+    for split in ("train", "validation", "test"):
+        raw = (base / f"{split}.jsonl").read_bytes()
+        assert raw and raw.endswith(b"\n") and b"\r\n" not in raw
+        assert hashlib.sha256(raw).hexdigest() == manifest["files"][split]["sha256"]

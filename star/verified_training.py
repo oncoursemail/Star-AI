@@ -237,9 +237,12 @@ def export_private(dataset: dict, home: Path, *, approved: bool = False) -> dict
                 {"role": "user", "content": row["prompt"]},
                 {"role": "assistant", "content": row["answer"]},
             ]}, ensure_ascii=False) + "\n" for row in rows)
-        file.write_text(content, encoding="utf-8")
+        # Write the exact UTF-8 bytes committed to the approval manifest.
+        # Text-mode writes translate LF to CRLF on Windows, invalidating that hash.
+        encoded = content.encode("utf-8")
+        file.write_bytes(encoded)
         os.chmod(file, 0o600)
-        manifest["files"][split] = {"sha256": hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        manifest["files"][split] = {"sha256": hashlib.sha256(encoded).hexdigest(),
                                     "examples": len(rows)}
     file = base / "manifest.json"
     file.write_text(json.dumps(manifest, indent=2, sort_keys=True), encoding="utf-8")
