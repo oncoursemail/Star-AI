@@ -347,3 +347,39 @@ def test_full_luau_byte_escape_sequence_with_adjacent_digit():
     assert r'n2.Text = "A\0012\195\169\"\\\010"' in code
     assert r"\u0001" not in code
 
+def test_native_luau_spec_is_the_compilers_actual_output():
+    # The pinned Luau spec runner parses this same file in GitHub Actions.
+    # Comparing full bodies, not substrings, prevents the Luau fixture drifting.
+    from pathlib import Path
+
+    minimal = {"root": {"type": "screen", "id": "root"},
+               "mobile": {"safeArea": False, "scaleByViewport": False}}
+    escaped = {"root": {"type": "screen", "id": "root", "children": [
+        {"type": "text", "id": "note", "text":
+         "A" + chr(1) + "2é" + '"' + chr(92) + chr(10)}
+    ]}, "mobile": {"safeArea": False, "scaleByViewport": False}}
+
+    def wrap(name, spec):
+        body = compile_ui(spec).source
+        return "local function " + name + "()\\n" + "".join(
+            "    " + line + "\\n" for line in body.splitlines()
+        ) + "end\\n"
+
+    fixture = (Path(__file__).resolve().parents[1] /
+               "examples/roblox-templates/ui/ServerScriptService/Tests/UICompilerSyntax.spec.luau").read_text(encoding="utf-8")
+    expected = (
+        wrap("compiledMinimal", minimal)
+        + "\\n" + wrap("compiledEscapedText", escaped)
+        + """
+return {
+    ["minimal generated UI parses"] = function()
+        assert(type(compiledMinimal) == "function")
+    end,
+    ["escaped generated UI parses"] = function()
+        assert(type(compiledEscapedText) == "function")
+    end,
+}
+"""
+    )
+    assert fixture == expected
+
