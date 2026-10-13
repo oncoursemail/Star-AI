@@ -76,7 +76,7 @@ WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_tes
 SPECIALISTS = ["star_delegate_research"]
 CALCULATOR = ["star_calculate"]
 # Composer switches: research (web search) and the STAR source reader.
-WEB = ["star_web_search"]
+WEB = ["star_web_search", "star_web_fetch"]   # star_web_fetch (star/web_fetch.py) comes with search
 GITHUB = ["star_github_tree", "star_github_read"]
 
 
@@ -223,7 +223,9 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 
 
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
-    names = everything_on(desk, monkeypatch, knowledge=False)
+    # Every source on is more tool text than the default 26,000-character request budget (the web
+    # page reader, star_web_fetch, tipped it over); this test is about which tools are offered.
+    names = everything_on(desk, monkeypatch, knowledge=False, context_chars=40000)
     expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
                 + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
