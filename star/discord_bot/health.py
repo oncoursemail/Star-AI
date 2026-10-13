@@ -104,6 +104,15 @@ def doctor_snapshot(env=None) -> list[Check]:
     )
 
 
-def format_checks(checks: list[Check]) -> str:
-    symbols = {"ready": "✓", "setup": "✗", "optional": "•"}
+def format_checks(checks: list[Check], *, ascii_only: bool = False) -> str:
+    """Render rich Discord labels or a Windows-console-safe ASCII doctor.
+
+    Legacy Windows shells commonly use CP1252; printing the rich ✓/✗/•
+    symbols from a CLI under that encoding raises UnicodeEncodeError.
+    Keep the rich formatting for Discord embeds, but make terminal
+    diagnostics usable even before the user has configured Python UTF-8.
+    """
+    symbols = ({"ready": "[OK]", "setup": "[SETUP]", "optional": "[OPTIONAL]"}
+               if ascii_only else
+               {"ready": "✓", "setup": "✗", "optional": "•"})
     return "\n".join(f"{symbols[check.status]} **{check.name}:** {check.detail}" for check in checks)
