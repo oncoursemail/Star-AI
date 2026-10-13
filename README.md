@@ -41,7 +41,7 @@ Source-level unit/build checks cannot replace live Windows GPU, installer-upgrad
 
 For setup, upgrades, connection choices, chat modes, Roblox Studio and Open Cloud, voice, images, skills, lessons, data backup and troubleshooting, read the [v0.9.0 Getting Started guide](docs/GETTING_STARTED.md).
 
-1. Install the latest **published** Windows Setup from [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest). Back up `%APPDATA%\\STAR` before upgrading. v0.9.0 is published; the release notes report one tested upgrade from v0.8.0 on Windows 11, not exhaustive device coverage.
+1. Install the latest **published** Windows Setup from [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest). Back up `%APPDATA%\\STAR` before upgrading. v0.9.0 is published; its [October 11, 2026 GitHub release notes](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0) report one tested upgrade from v0.8.0 on Windows 11, not exhaustive device coverage.
 2. In **Settings → Model & provider**, choose **Local STAR Brain** or **STAR Server (LAN)** on your own network. Use **Model & connection → Download and start** for a local model, or set the server address, model and credential then choose **Test server**. No local model download is needed when using STAR Server.
 3. In **Chat**, choose **Fast**, **Auto** or **Agent**. Open **Tools** to connect Roblox Studio on this PC, starting with read-only access. **Settings → Roblox** controls the separate Open Cloud key and private test experience.
 

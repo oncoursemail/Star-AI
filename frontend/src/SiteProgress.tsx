@@ -122,8 +122,8 @@ export function SiteProgress({progress}:{progress:ProgressState}){
     <div className="sw-chapter-head">
      <p className="sw-kicker">Progress</p>
      <h2 id="sw-progress-title">Shipped, in flight, and next.</h2>
-     <p>This board is read from the public GitHub repository when you open the page. Nobody edits it by hand,
-      so it cannot say more than the repository does.</p>
+     <p>This board uses public GitHub data. It may show a dated build-time or browser-cached snapshot while
+      it checks for updates, or when GitHub is unavailable; the status above says which.</p>
     </div>
     <div className="sw-sync">
      <p className="sw-sync-line" data-tone={sync.tone} role="status" aria-live="polite">

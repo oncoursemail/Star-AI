@@ -78,6 +78,45 @@ run, so no verdict). `--allow-partial` is for a change that can only affect some
 matching prompts): tasks the candidate did not run are reported as *not covered*; an error or a regression among the
 tasks it did run still blocks.
 
+This single-run mode compares with a stored baseline from another day and has no statistics: on these suites one task
+is 3 to 4 points and the same prompt flips about 1 time in 6, so it is kept only for legacy files. Promotion decisions
+use the paired mode.
+
+### The paired gate (W1, `star/eval_stats.py`)
+
+```text
+python -m star.evals gate --paired-session --baseline b1.json b2.json --candidate c1.json c2.json [--canary ID,ID] [--method sign|bootstrap] [--json]
+```
+
+- Run both arms **in the same session, interleaved** (B C, C B, ...), k >= 2 result files per arm. Sample j of the
+  baseline is paired with sample j of the candidate. All files must share suite, identity, grader, model and mode,
+  carry `run.started_at` and fall within 36 hours (`--max-session-hours`); stored legacy baselines are refused.
+- Each sample pair is a win, loss or tie. The verdict is an exact sign test on the discordant pairs (one-sided,
+  alpha 0.05 per direction); a cluster bootstrap interval of the mean per-task change is printed beside it, and so is
+  the **minimum detectable effect** for this task count and k.
+- Exit `0` PROMOTE (significantly better), `1` REJECT (significantly worse, or a canary task fails 2 of 3), `4`
+  INCONCLUSIVE (below the noise floor; never promotes), `3` INCOMPLETE, `2` unusable input.
+- A regression is a task the baseline mostly passes and the candidate fails in at least 2 samples and 2/3 of them;
+  a single failure is reported as unconfirmed.
+- From code: `eval_gate.gate_paired(run_baseline, run_candidate, samples=2)` runs the arms interleaved and decides;
+  `eval_gate.evaluate_paired(files_b, files_c)` decides on files. Night school's promotion and recheck use the same
+  `eval_stats.paired_decision` (validation slice 24 tasks, k = 2).
+- Minimum detectable effect at 80 % power (ESTIMATE: independent tasks, 1/6 noise discordance): 12 tasks x 1 sample:
+  +8 tasks; 24 x 2: +6; 57 x 2: +9; 81 x 3: +8. A synthetic check (1,000 runs, 24 x 2): 2.3 % false promotions with no
+  effect, 81.5 % detection of a true +6/24.
+
+### Protected closure (W2, `star/protected_paths.py`)
+
+A diff from a **generator branch** may not touch the evaluation closure. Generator branches by name:
+`star/chatgpt-*` (ChatGPT/Codex autopilot), `star/autopilot-*`, `star/night-school-outbox-*` and `star/outbox-*`
+(night school's pull requests), `star/selfbuild-*` and `star/genesis-*` (STAR's self-builder and GitHub App), and
+`star/gen-*` for any new generator. Protected: `evals/**` (suites, the blind holdout, stored results), the graders and
+the gate (`star/eval_{gate,runner,checks,sandbox,stats}.py`), night school's `pool.py`, `engine.py` and `config.py`, the
+gate's tests, `.github/workflows/**`, and the guard itself. Enforced by the CI job `.github/workflows/protected-closure.yml`
+(the base branch's copy of the guard runs; the owner's label `owner-approved-eval-change` lets a reviewed PR through)
+and by `star commit` in the workspace (no override). Closure changes go on a non-generator branch for owner review.
+The guard keys on branch names: it stops generators that follow the convention, not a branch named otherwise.
+
 ### How a proposed change must be run before it is enabled
 
 1. **Do not enable it first.** Add it behind an off switch (a pack is off unless named in `STAR_SKILL_PACKS`; a routing rule or prompt
@@ -113,8 +152,7 @@ verdict = gate_change("evals/results/baseline-v2.json", run_candidate=lambda: my
 
 ## Skill packs
 
-Twelve packs ship in `star/skill_packs/` in the normal Agent Skill format (`SKILL.md` with `name`/`description`, `references/sources.md`
-listing the official documentation pages and the API names checked against the knowledge service). They are chosen in code
+**Source inventory (October 12, 2026):** `star/next` contains **26 directories** under `star/skill_packs/` (counted from GitHub's source directory listing). This is not a verified installer inventory: the [published October 11, 2026 v0.9.0 release notes](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0) report **18 shipped packs**. In `star/skill_packs/__init__.py`, `available()` only loads directories with a valid `SKILL.md` name and description, so a folder count alone does not prove all 26 can load. Eligible source packs are chosen in code
 (`star/skill_packs/__init__.py`): the prompt must read as a Roblox question *and* name the pack's topic, never in quick
 chat mode, only the best-matching pack is added (about 240 tokens measured with the server's tokenizer, about 4 s of prompt reading at
 roughly 65 tokens per second), and it travels in the per-turn sections after the user's words, never in the system message

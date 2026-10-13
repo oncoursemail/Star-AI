@@ -1,0 +1,247 @@
+{
+  "Version": 1,
+  "Classes": [
+    {
+      "Name": "Instance",
+      "Superclass": "<<<ROOT>>>",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "Name",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Parent",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Destroy",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "FindFirstChild",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "GetChildren",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "GetAttribute",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "Changed",
+          "MemberType": "Event"
+        }
+      ]
+    },
+    {
+      "Name": "PVInstance",
+      "Superclass": "Instance",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "PivotTo",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "GetPivot",
+          "MemberType": "Function"
+        }
+      ]
+    },
+    {
+      "Name": "BasePart",
+      "Superclass": "PVInstance",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "Anchored",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Color",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "CFrame",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Position",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Transparency",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "CanCollide",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Touched",
+          "MemberType": "Event"
+        }
+      ]
+    },
+    {
+      "Name": "Part",
+      "Superclass": "BasePart",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "Shape",
+          "MemberType": "Property"
+        }
+      ]
+    },
+    {
+      "Name": "MeshPart",
+      "Superclass": "BasePart",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "MeshId",
+          "MemberType": "Property"
+        }
+      ]
+    },
+    {
+      "Name": "Model",
+      "Superclass": "PVInstance",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "PrimaryPart",
+          "MemberType": "Property"
+        }
+      ]
+    },
+    {
+      "Name": "Folder",
+      "Superclass": "Instance",
+      "Tags": [],
+      "Members": []
+    },
+    {
+      "Name": "WorldRoot",
+      "Superclass": "Model",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "Raycast",
+          "MemberType": "Function"
+        }
+      ]
+    },
+    {
+      "Name": "Workspace",
+      "Superclass": "WorldRoot",
+      "Tags": [
+        "Service"
+      ],
+      "Members": [
+        {
+          "Name": "Gravity",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "CurrentCamera",
+          "MemberType": "Property"
+        }
+      ]
+    },
+    {
+      "Name": "Players",
+      "Superclass": "Instance",
+      "Tags": [
+        "Service"
+      ],
+      "Members": [
+        {
+          "Name": "GetPlayers",
+          "MemberType": "Function"
+        },
+        {
+          "Name": "PlayerAdded",
+          "MemberType": "Event"
+        }
+      ]
+    },
+    {
+      "Name": "Player",
+      "Superclass": "Instance",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "Character",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "UserId",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "Kick",
+          "MemberType": "Function"
+        }
+      ]
+    },
+    {
+      "Name": "TweenService",
+      "Superclass": "Instance",
+      "Tags": [
+        "Service"
+      ],
+      "Members": [
+        {
+          "Name": "Create",
+          "MemberType": "Function"
+        }
+      ]
+    },
+    {
+      "Name": "RunService",
+      "Superclass": "Instance",
+      "Tags": [
+        "Service"
+      ],
+      "Members": [
+        {
+          "Name": "Heartbeat",
+          "MemberType": "Event"
+        },
+        {
+          "Name": "IsServer",
+          "MemberType": "Function"
+        }
+      ]
+    },
+    {
+      "Name": "ReplicatedStorage",
+      "Superclass": "Instance",
+      "Tags": [
+        "Service"
+      ],
+      "Members": []
+    },
+    {
+      "Name": "Humanoid",
+      "Superclass": "Instance",
+      "Tags": [],
+      "Members": [
+        {
+          "Name": "WalkSpeed",
+          "MemberType": "Property"
+        },
+        {
+          "Name": "MoveTo",
+          "MemberType": "Function"
+        }
+      ]
+    }
+  ],
+  "Enums": []
+}

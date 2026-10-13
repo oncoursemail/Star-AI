@@ -113,7 +113,8 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
     from .real import RealModel, bootstrap, export_outbox
     with tempfile.TemporaryDirectory(prefix="ns-dry-") as folder, fake.FakeBrain() as brain:
         dry = Settings(home=Path(folder), brain_url=brain.url, key_file=settings.key_file, luau_vm=settings.luau_vm,
-                       idle_s=0, poll_s=0.2, watch_s=0.5, validation_percent=100, validation_max=2, batch=items,
+                       idle_s=0, poll_s=0.2, watch_s=0.5, validation_percent=100,
+                       validation_max=len(fake.DRY_VALIDATION_IDS), samples=2, recheck_samples=2, batch=items,
                        lock_dir=str(Path(folder) / "no-lock"))
         dry.ensure_dirs()
         import os
@@ -131,6 +132,7 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
         pool = load_pool(dry.pool, extra=tasks)
         log("dry run: " + pool.summary())
         store = Store(dry.data)
+        store.state["validation_ids"] = list(fake.DRY_VALIDATION_IDS)     # the five validation tasks, fixed
         engine = Engine(dry, pool, store, solve=model.solve, diagnose=model.diagnose, check_lesson=model.check_lesson, log=log)
         log(f"dry run: {len(engine.training)} training tasks, {len(engine.validation)} validation tasks")
         try:

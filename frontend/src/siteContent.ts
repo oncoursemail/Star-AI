@@ -44,7 +44,7 @@ export const tour:TourView[]=[
   points:['Streaming replies','Image and file references','Copyable code blocks']},
  {id:'brain',tab:'Brain',title:'Your model, installed in one step.',
   body:'STAR Brain downloads a verified engine and model, then asks it for a real reply, so you know it works before you rely on it.',
-  points:['About 3.5 GB download','Every file checked by SHA-256','Runs on loopback, on your PC']},
+  points:['About 3.4 GB estimated (v0.9.0 file sizes, October 2026)','SHA-256 checks on engine and weights','Runs on loopback, on your PC']},
  {id:'tools',tab:'Tools',title:'Exactly the access a task needs.',
   body:'Connect Roblox Studio and a project folder. Studio inspection starts read-only; editing a disposable test place requires a separate permission.',
   points:['Official Studio MCP','Read-only Studio inspection','Scoped edits are opt-in']},
@@ -59,7 +59,7 @@ export const tour:TourView[]=[
 export type BrainRoute={id:string;icon:'pc'|'server'|'cloud';title:string;body:string;since:string;note?:string}
 export const brainRoutes:BrainRoute[]=[
  {id:'pc',icon:'pc',title:'This PC',since:'0.8.0',note:'Default',
-  body:'A managed llama.cpp engine with Qwen 3.5 4B, sized for a graphics card with about 8 GB of memory.'},
+  body:'A managed llama.cpp engine with Qwen 3.5 4B. The v0.9.0 setup targets a Vulkan GPU with about 8 GB VRAM; this is guidance, not a hardware benchmark.'},
  {id:'lan',icon:'server',title:'STAR Server, on your network',since:'0.9.0',
   body:'A model server you run on another machine at home. STAR reaches it at a private network address, keeps its key in Windows Credential Manager, and needs no model download on this PC.'},
  {id:'hosted',icon:'cloud',title:'A hosted provider, with your key',since:'0.9.0',note:'Optional',
@@ -75,7 +75,7 @@ export function modelLabelForRelease(latest:ReleaseInfo|null):string{
 }
 
 export const studioScopes=[
- {level:'Inspect',state:'On by default',body:'STAR reads the test place you point it at: instances, scripts and structure.'},
+ {level:'Inspect',state:'Read-only when connected',body:'STAR can read instances, scripts and structure in the test place you connect.'},
  {level:'Edit',state:'Off until you enable it',body:'Scoped changes inside that test place. You review what changed.'},
  {level:'Open Cloud',state:'Separate approval',body:'Studio does not publish. Open Cloud may save a version in your approved private test experience, only after you approve that action.'}
 ] as const
@@ -135,8 +135,8 @@ export const evalResults=[
 
 export const steps=[
  {title:'Download STAR',fact:'installer',
-  body:'One Setup file from GitHub Releases. It installs for your user account, so there is no administrator prompt.'},
- {title:'Start STAR Brain',fact:'3.5 GB download · keep 4.3 GB free',
+  body:'One Setup file from GitHub Releases. Per-user installation normally needs no administrator approval; an all-users installation or upgrade may require it.'},
+ {title:'Start STAR Brain',fact:'v0.9.0 estimate (Oct 2026): ~3.4 GB download; 4.3 GB free-space check',
   body:'Open STAR Brain and press Download and start. STAR fetches the engine and model, checks every file, then runs a test reply.'},
  {title:'Start creating',fact:'Works offline after setup',
   body:'Open Chat and ask for what you need. Attach a screenshot or a file when it helps.'},
@@ -146,8 +146,8 @@ export const steps=[
 
 export const requirements=[
  {term:'System',detail:'Windows 11, 64-bit. Windows 10 is untested.'},
- {term:'Graphics',detail:'The default model targets a Vulkan GPU with about 8 GB of memory.'},
- {term:'Disk',detail:'About 4.3 GB free for STAR Brain, plus the app itself.'},
+ {term:'Graphics',detail:'The v0.9.0 local-model guidance targets a Vulkan GPU with about 8 GB VRAM; hardware coverage is limited.'},
+ {term:'Disk',detail:'v0.9.0 checks for 4.3 GB free before downloading STAR Brain (October 2026 source), plus space for the app.'},
  {term:'Internet',detail:'Needed to download the model and to check for updates. Local chat then works offline.'},
  {term:'Account',detail:'None. No sign-in, no API key for the local brain.'}
 ] as const
@@ -155,7 +155,7 @@ export const requirements=[
 export const limits=[
  {title:'It is early software.',body:'Testing on real Windows 11 machines, graphics cards and the updater is still open.',link:{href:LINKS.acceptance,label:'Acceptance issue #15'}},
  {title:'The installer is not code-signed.',body:'Windows may show a publisher warning. Compare the SHA-256 below before you run it.'},
- {title:'A 4B local model is not a frontier model.',body:'It is quick and private. It also makes mistakes, so check what matters.'},
+ {title:'A 4B local model is not a frontier model.',body:'On-device prompts stay on this PC; speed varies with hardware. The model makes mistakes, so check what matters.'},
  {title:'Roblox work needs your review.',body:'STAR assists inside a Studio session. It does not ship a finished game, and what it writes needs playtesting.'},
  {title:'Windows only, no licence file yet.',body:'The source is public to read. An open-source licence has not been published.',link:{href:LINKS.security,label:'Security and autonomy notes'}}
 ] as const
@@ -164,7 +164,7 @@ export const faqs=[
  {q:'Do I need to pay for a cloud model?',
   a:'No. You can use an on-device model or a STAR Server on your own network. Hosted providers are optional and need their own keys.'},
  {q:'Will updating remove my chats or models?',
-  a:'No. The installer replaces the app folder. Your chats, models and settings live separately in %APPDATA%\\STAR. Keep backups of work you care about anyway.'},
+  a:'The tested v0.8.0-to-v0.9.0 upgrade preserved chats, models and settings in %APPDATA%\\STAR. Keep backups before installing an update.'},
  {q:'Where do the numbers on this page come from?',
   a:'Release and project progress come from public GitHub data. Separately, docs/evals.md reports measured automated Roblox task pass rates; those do not measure Studio game quality.'},
  {q:'Does this website track me?',
