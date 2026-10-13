@@ -84,9 +84,15 @@ def _script(name: str) -> tuple[str, str] | None:
 def _read(path: Path, root: Path, files: list, budget: list) -> str:
     if path.is_symlink():
         raise BuildError(f"Links are not followed: {path.relative_to(root).as_posix()}")
-    raw = path.read_bytes()
+    if len(files) >= MAX_FILES:
+        raise BuildError("The source folder is larger than STAR builds into a test place")
+    try:
+        with path.open("rb") as stream:
+            raw = stream.read(MAX_SOURCE_BYTES - budget[0] + 1)
+    except OSError:
+        raise BuildError(f"Could not read script: {path.relative_to(root).as_posix()}") from None
     budget[0] += len(raw)
-    if len(files) >= MAX_FILES or budget[0] > MAX_SOURCE_BYTES:
+    if budget[0] > MAX_SOURCE_BYTES:
         raise BuildError("The source folder is larger than STAR builds into a test place")
     try:
         text = raw.decode("utf-8-sig")
@@ -94,8 +100,11 @@ def _read(path: Path, root: Path, files: list, budget: list) -> str:
         raise BuildError(f"Not UTF-8 text: {path.relative_to(root).as_posix()}") from None
     if "\x00" in text:
         raise BuildError(f"Not text: {path.relative_to(root).as_posix()}")
+    if any((ord(char) < 32 and char not in "\t\n\r") or char in "\ufffe\uffff"
+           for char in text):
+        raise BuildError(f"Invalid XML character in: {path.relative_to(root).as_posix()}")
     files.append(path.relative_to(root).as_posix())
-    return text.replace("\r\n", "\n")
+    return text
 
 
 def _folder(path: Path, root: Path, trail: tuple, files: list, budget: list) -> Node:
@@ -142,7 +151,9 @@ def read_tree(source: Path) -> tuple[list[Node], list[str]]:
 
 
 def _cdata(text: str) -> str:
-    return "<![CDATA[" + text.replace("]]>", "]]]]><![CDATA[>") + "]]>"
+    # XML parsers normalize literal CR even inside CDATA; a character reference preserves it.
+    return "<![CDATA[" + text.replace("]]>", "]]]]><![CDATA[>").replace(
+        "\r", "]]>&#13;<![CDATA[") + "]]>"
 
 
 def to_rbxlx(services: list[Node]) -> tuple[bytes, int]:
