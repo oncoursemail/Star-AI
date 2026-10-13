@@ -46,8 +46,11 @@ def _private_file(path: Path, *, max_bytes: int = MAX_FILE_BYTES) -> bytes:
     return path.read_bytes()
 
 
-def _read_dataset(file: Path) -> tuple[list[dict], str]:
+def _read_dataset(file: Path, *, expected_sha256: str | None = None) -> tuple[list[dict], str]:
     data = _private_file(file)
+    digest = hashlib.sha256(data).hexdigest()
+    if expected_sha256 is not None and digest != expected_sha256:
+        raise ValueError("Training dataset SHA-256 differs from approval manifest")
     rows = []
     if not data:
         raise ValueError("Training split is empty")
@@ -67,7 +70,7 @@ def _read_dataset(file: Path) -> tuple[list[dict], str]:
                 or not user["content"] or not assistant["content"]):
             raise ValueError("Invalid training roles/content")
         rows.append(item)
-    return rows, hashlib.sha256(data).hexdigest()
+    return rows, digest
 
 
 def _reviewed_source(home: Path) -> tuple[Path, dict, dict]:
@@ -93,11 +96,13 @@ def _reviewed_source(home: Path) -> tuple[Path, dict, dict]:
         raise ValueError("Training must hold out whole nonempty projects")
     prompts = set()
     for split in ("train", "validation", "test"):
-        rows, fingerprint = _read_dataset(folder / f"{split}.jsonl")
         metadata = files[split]
-        if (not isinstance(metadata, dict) or metadata.get("sha256") != fingerprint
-                or metadata.get("examples") != len(rows)):
-            raise ValueError("Training dataset SHA-256 differs from approval manifest")
+        if not isinstance(metadata, dict) or not isinstance(metadata.get("sha256"), str):
+            raise ValueError("Training manifest lacks split hash")
+        rows, fingerprint = _read_dataset(
+            folder / f"{split}.jsonl", expected_sha256=metadata["sha256"])
+        if metadata.get("examples") != len(rows):
+            raise ValueError("Training example count differs from approval manifest")
         for row in rows:
             prompt = " ".join(row["messages"][0]["content"].casefold().split())
             digest = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
@@ -118,7 +123,10 @@ def plan(home: Path, model_dir: Path, options: QLoRAConfig = QLoRAConfig()) -> d
     if not home.is_dir():
         raise ValueError("STAR private profile must exist")
     folder, manifest, data = _reviewed_source(home)
-    model = Path(model_dir).expanduser().resolve(strict=True)
+    chosen_model = Path(model_dir).expanduser()
+    if chosen_model.is_symlink():
+        raise PermissionError("Local model directory may not be a symlink")
+    model = chosen_model.resolve(strict=True)
     if not model.is_dir() or model.is_symlink():
         raise PermissionError("Choose a regular local model directory")
     config = json.loads(_private_file(model / "config.json", max_bytes=256_000))
