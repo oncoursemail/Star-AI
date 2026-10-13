@@ -402,6 +402,7 @@ def test_schema_valid_forgery_is_not_promoted_in_real_opt_in_run_task(monkeypatc
     candidate = row(1, TOPICS[0])
     candidate["evidence"] = ["night-school automated checks: claimed pass, cannot be independently verified"]
     examples.import_file(export_file(tmp_path, [candidate]), home=home, project="STAR")
+    assert not (home / "knowledge").exists()  # import alone cannot create owner lessons
     monkeypatch.setattr(core, "app_data", lambda: home)
     seen = []
 
@@ -425,4 +426,4 @@ def test_schema_valid_forgery_is_not_promoted_in_real_opt_in_run_task(monkeypatc
     assert "claimed automated checks" in seen[-1].lower()
     assert "unreviewed" in seen[-1].lower()
     assert "owner-approved lesson" not in seen[-1].lower()
-    assert not (home / "knowledge").exists()
+    assert _stored_example_count(home, "STAR") == 1  # run_task creates knowledge normally
