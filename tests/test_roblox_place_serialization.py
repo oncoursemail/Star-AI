@@ -117,6 +117,7 @@ def test_ignores_non_source_hidden_entries_and_unsupported_service(tmp_path):
     result = build_place(tmp_path)
     assert result.files == ("ServerScriptService/Valid.luau",)
     assert _parsed(result) == [
+        ("Workspace", "Workspace", None),
         ("ServerScriptService", "ServerScriptService", None),
         ("ServerScriptService/Valid", "ModuleScript", "return true"),
     ]
@@ -206,6 +207,7 @@ def test_symlink_traversal_is_rejected_without_reading_external_source(tmp_path,
             root = project
         elif kind == "service-folder":
             (project / "ServerScriptService/Good.luau").unlink()
+            (project / "ServerScriptService").rmdir()
             os.symlink(outside, project / "ServerScriptService", target_is_directory=True)
             root = project
         else:
