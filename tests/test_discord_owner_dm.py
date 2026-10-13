@@ -187,13 +187,14 @@ def test_discord_service_handles_vision_as_ephemeral_owner_dm_only(tmp_path):
     asyncio.run(work())
 
 
-def test_cli_discord_doctor_survives_cp1252(monkeypatch):
+def test_cli_discord_doctor_survives_cp1252(monkeypatch, tmp_path):
     """Windows legacy consoles must show setup instructions, not Unicode exceptions."""
     import os
     import subprocess
     import sys
 
-    environment = {**os.environ, "PYTHONIOENCODING": "cp1252",
+    # An empty config folder: the owner's real ~/.star/discord-settings.env must not leak into the test.
+    environment = {**os.environ, "PYTHONIOENCODING": "cp1252", "STAR_DISCORD_CONFIG_DIR": str(tmp_path),
                    "STAR_DISCORD_BOT_TOKEN": "", "STAR_DISCORD_OWNER_IDS": ""}
     result = subprocess.run(
         [sys.executable, "-m", "star.discord_bot", "doctor"],
