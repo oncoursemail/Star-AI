@@ -63,7 +63,7 @@ def test_plain_question_ends_with_the_time_and_is_remembered_with_it(monkeypatch
     key = (None, 5, 1)
     asyncio.run(service.ask(key, "what time is it"))
     sent = completions.requests[0]["messages"][-1]["content"]
-    assert sent.startswith("what time is it\n\nNow: ") and "on the owner's PC" in sent
+    assert sent.startswith("what time is it\n\nNow: ") and "the owner's local time" in sent
     assert "lack real-time data" in " ".join(completions.requests[0]["messages"][0]["content"].split())
     # The next request replays exactly what was sent (the server's cache matches it).
     asyncio.run(service.ask(key, "thanks"))
@@ -79,7 +79,9 @@ def test_news_question_gets_cited_results_before_the_time(monkeypatch):
         seen.append(query)
         return [{"title": "Roblox ships a terrain update", "url": "https://news.example/roblox", "snippet": "S"}]
     service, completions = make_service(monkeypatch, searcher=searcher)
-    asyncio.run(service.ask((None, 5, 1), "what's the latest news about Roblox"))
+    answer = asyncio.run(service.ask((None, 5, 1), "what's the latest news about Roblox"))
+    assert answer == ("It is 13:05.\n\nSources:\n- Roblox ships a terrain update: <https://news.example/roblox>")
+    assert service.memory.history((None, 5, 1))[1]["content"] == "It is 13:05."   # as generated (cached)
     sent = completions.requests[0]["messages"][-1]["content"]
     assert seen == ["what's the latest news about Roblox"]
     assert sent.index("https://news.example/roblox") < sent.index("\nNow: ")

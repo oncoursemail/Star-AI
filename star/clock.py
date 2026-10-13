@@ -86,7 +86,7 @@ def forget_server_clock() -> None:
 
 
 def now_line(now: datetime | None = None, *, offset: float | None = None) -> str:
-    """'Now: Tuesday 2026-10-13 13:05 CDT (UTC-05:00) on the owner's PC; 18:05 UTC.'
+    """'Now: Tuesday 2026-10-13 13:05 CDT, the owner's local time (UTC-05:00; 18:05 UTC).'
 
     `offset` is the server-minus-PC clock difference in seconds (default: the last observed one);
     the server time is added only when it differs by more than SERVER_SKEW_SECONDS.
@@ -94,8 +94,9 @@ def now_line(now: datetime | None = None, *, offset: float | None = None) -> str
     local = local_now(now)
     zone = _abbreviation(local.tzname() or "")
     utc = local.astimezone(timezone.utc)
-    line = (f"Now: {local:%A %Y-%m-%d %H:%M} {zone} ({_offset_text(local)}) on the owner's PC; "
-            f"{utc:%H:%M} UTC.")
+    # Local time first and named as the owner's: a small model otherwise tends to answer in UTC.
+    line = (f"Now: {local:%A %Y-%m-%d %H:%M} {zone}, the owner's local time ({_offset_text(local)}; "
+            f"{utc:%H:%M} UTC).")
     skew = server_offset() if offset is None else offset
     if skew is not None and abs(skew) > SERVER_SKEW_SECONDS:
         server = utc + timedelta(seconds=skew)

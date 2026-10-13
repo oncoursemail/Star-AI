@@ -33,7 +33,7 @@ def no_server_clock():
 
 def test_now_line_has_local_date_time_zone_and_utc():
     line = clock.now_line(FIXED)
-    assert line == "Now: Tuesday 2026-10-13 13:05 CDT (UTC-05:00) on the owner's PC; 18:05 UTC."
+    assert line == "Now: Tuesday 2026-10-13 13:05 CDT, the owner's local time (UTC-05:00; 18:05 UTC)."
 
 
 def test_server_clock_is_mentioned_only_when_it_differs():
