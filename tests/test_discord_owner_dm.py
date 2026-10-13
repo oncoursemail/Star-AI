@@ -111,10 +111,9 @@ def test_vision_calls_only_configured_local_model_without_tools(monkeypatch):
                 SimpleNamespace(message=SimpleNamespace(
                     content="The HUD is aligned.", tool_calls=None))])
 
-    monkeypatch.setitem(sys.modules, "star.providers", ModuleType("star.providers"))
-    stub = sys.modules["star.providers"]
-    stub.provider_kind = lambda settings: "lan"
-    stub.open_client = lambda settings, **kwargs: Client()
+    from star import providers as stub
+    monkeypatch.setattr(stub, "provider_kind", lambda settings: "lan")
+    monkeypatch.setattr(stub, "open_client", lambda settings, **kwargs: Client())
     answer = asyncio.run(DiscordVision(settings=settings).reply("Review alignment", jpeg))
     assert "aligned" in answer
     req = sent[0]
