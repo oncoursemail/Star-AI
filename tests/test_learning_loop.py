@@ -18,6 +18,7 @@ from star import lessons as L
 from star.analytics import AnalyticsStore, get_dashboard
 from star.desktop_core import Conversations, Settings, run_task
 from star.knowledge import KnowledgeStore
+from star.context_layout import owner_words
 from star.learning import approve_learning, learned_context
 from star.lessons import LessonRefused, LessonStore, capture_turn, owner_statements
 from star.react_shell import ALLOWED_ACTIONS, PERMITTED_SETTINGS, _get_state
@@ -413,8 +414,10 @@ def test_a_correction_in_one_chat_changes_a_later_chat_of_the_same_project_only(
     second = desk.turn(LESSON, "Understood: task.wait(1).")
     captured = [e for e in second.events if e.get("event") == "lessons_captured"]
     assert captured == [{"event": "lessons_captured", "accepted": 1, "candidates": 0}]
-    # The lesson was learned AFTER that answer: the correcting turn itself carried no extra context.
-    assert text_of(second.request["messages"][-1]) == LESSON
+    # The lesson was learned AFTER that answer: the correcting turn itself carried no extra context
+    # (only the time line every turn ends with).
+    sent = text_of(second.request["messages"][-1])
+    assert owner_words(sent) == LESSON and "lesson" not in sent.lower().replace(LESSON.lower(), "")
 
     store = LessonStore(desk.home)
     try:
@@ -431,8 +434,9 @@ def test_a_correction_in_one_chat_changes_a_later_chat_of_the_same_project_only(
     final = text_of(third.request["messages"][-1])
     assert final.startswith("Write a loop that spawns a part every second.")
     assert f"{L.LESSONS_HEADING}:\n[#{lesson.id} correction] {LESSON}" in final
-    # The whole addition (wrapper, heading, lesson) stays small: it is read again on every turn.
-    assert len(final) - len("Write a loop that spawns a part every second.") < 330
+    # The whole addition (wrapper, heading, lesson, the ~80-character time line) stays small: it is read
+    # again on every turn.
+    assert len(final) - len("Write a loop that spawns a part every second.") < 420
     # Only the final user turn changed: the system message is the same bytes as before the lesson existed.
     assert third.request["messages"][0] == first.request["messages"][0]
     assert LESSON not in third.request["messages"][0]["content"]

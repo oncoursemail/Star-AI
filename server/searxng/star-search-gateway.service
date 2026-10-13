@@ -1,0 +1,29 @@
+[Unit]
+Description=STAR search gateway (STAR Server key + rate limit in front of SearXNG on 127.0.0.1:8888)
+Documentation=file:/opt/star/search-gateway/gateway.py
+After=network-online.target searxng.service
+Wants=searxng.service
+
+[Service]
+User=star
+Group=star
+WorkingDirectory=/opt/star/search-gateway
+Environment=PYTHONUNBUFFERED=1
+Environment=STAR_SEARCH_KEY_FILE=/opt/star/secrets/api_keys
+Environment=STAR_SEARXNG_URL=http://127.0.0.1:8888
+ExecStart=/usr/bin/python3 -I /opt/star/search-gateway/gateway.py --host 0.0.0.0 --port 8093
+Restart=on-failure
+RestartSec=5
+Nice=10
+MemoryMax=256M
+TasksMax=64
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target
