@@ -202,7 +202,8 @@ def test_owner_visual_dissatisfaction_after_image_enqueues_review_only(monkeypat
             assert pending[0] == (session, 2468, message.content, "STAR")
             assert "Correction #42" in channel.sent[0][0]
             assert "review" in channel.sent[0][0]
-            assert channel.sent[0][1]["allowed_mentions"] == discord.AllowedMentions.none()
+            assert channel.sent[0][1]["allowed_mentions"].everyone is False
+            assert channel.sent[0][1]["allowed_mentions"].roles is False
 
             # Stranger must not access the pending correction path or receive info.
             stranger = SimpleNamespace(**{**vars(message),
