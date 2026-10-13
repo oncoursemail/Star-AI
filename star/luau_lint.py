@@ -185,7 +185,8 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             containing = [(a, b) for a, b in loops if a < i < b]
             if containing:
                 a, b = containing[-1]
-                if "=" not in v[a:i] and "Disconnect" not in v[i:b]:
+                # The for-loop counter's "=" is not ownership of this connection.
+                if "=" not in v[max(a, i - 8):i] and "Disconnect" not in v[i:b]:
                     add("loop-connection", i, "Connection in a loop has no visible owner or disconnection.",
                         "Store the connection and disconnect it.", "review")
 
@@ -224,7 +225,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             names = [a[0] for a in args(par) if len(a) == 1]
             body = v[end_of(par) + 1:block_end(fn)]
             for name in names[1:]:
-                if name in body and any(w in body for w in ("+", "-", "*", "/", "amount", "Amount", "target", "Target")):
+                if name in body and (
+                    any(w in body for w in ("+", "-", "*", "/", "amount", "Amount"))
+                    or (name.lower() == "target" and any(
+                        w in body for w in ("Destroy", "PivotTo", "SetAttribute")))):
                     if not any(w in body[:body.index(name)] for w in ("typeof", "type", "clamp")):
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")

@@ -208,3 +208,12 @@ def test_fifty_thousand_char_line_is_processed_with_bounded_token_matches(monkey
     monkeypatch.setattr(luau_lint, "_WORD", SimpleNamespace(match=counted_match))
     assert lint("value = " + "a" * 50_000, external=False) == []
     assert len(calls) <= 8, "One long identifier should tokenize in constant many match calls"
+
+
+def test_target_mutation_needs_validation_but_a_plain_read_is_not_a_remote_risk():
+    unsafe = "remote.OnServerEvent:Connect(function(player, target) target:Destroy() end)"
+    safe = "remote.OnServerEvent:Connect(function(player, target) print(target) end)"
+    assert any(f.rule_id == "remote-unvalidated" and f.severity == "review"
+               for f in lint(unsafe, external=False))
+    assert not any(f.rule_id == "remote-unvalidated"
+                   for f in lint(safe, external=False))

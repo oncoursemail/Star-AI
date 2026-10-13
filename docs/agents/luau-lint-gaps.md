@@ -29,10 +29,11 @@ fails if an ID is added or removed without updating the matrix.
 
 | Kind | Count | Witness | Resolution or limitation |
 | --- | ---: | --- | --- |
-| False positive | 1 | `local function wait(seconds) ... end; wait(1)` was incorrectly flagged as a deprecated global | Small native-linter guard now also recognizes the `local function wait` declaration. A real `lint()` negative regression tests it |
+| False positives | 2 | A local function called `wait` and a harmless `print(target)` in a remote callback were flagged | Targeted guards distinguish local shadowing and target mutation from passive reads; real `lint()` negatives test both |
+| False negatives | 1 | A `for` loop's counter assignment masked an unowned `Touched:Connect` call | Ignore distant loop-counter assignments for the connection-ownership heuristic; real `lint()` matrix asserts the hit |
 | Baseline missing-rule coverage | 0 | All 12 IDs had one positive and one negative | Added 2x matrix and static AST ID-set guard |
 | Baseline cases lacking precise diagnostics | 12 rule IDs | Prior table only compared membership | All matrix positives require exact line, rule ID, severity and nonempty suggestion |
-| New verified false negatives | 0 in the curated cases | 24 independent firing snippets | These are illustrative syntactic patterns, not exhaustive proof |
+| Remaining observed false negatives | 0 in the curated cases after repair | 24 independent firing snippets | These are illustrative syntactic patterns, not exhaustive proof |
 | Fundamental approximation | Not counted as measured defect | Aliasing, dynamic calls, branches and receiver types | Needs native Luau analysis or Studio verification; no automatic correctness claim |
 
 The matrix also exercises line/block comments, quoted/long strings, a shadowed
