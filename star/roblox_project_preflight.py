@@ -94,7 +94,7 @@ def _api_report(source: str, dump: ApiDump) -> list[dict]:
 
 def _lint_report(source: str, script_class: str) -> list[dict]:
     results: list[dict] = []
-    for found in lint(source, safety_checks=True, script_class=script_class,
+    for found in lint(source, external=False, safety_checks=True, script_class=script_class,
                       server_security=(script_class == "Script")):
         results.append({
             "line": found.line, "rule": found.rule_id,

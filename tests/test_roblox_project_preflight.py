@@ -412,3 +412,18 @@ def test_native_flag_deterministic_json_for_same_returned_evidence(
     first = capsys.readouterr().out
     assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
     assert capsys.readouterr().out == first
+
+
+def test_preflight_does_not_implicitly_analyze_from_global_env(
+        tmp_path, monkeypatch):
+    """Only explicit --native-luau may start the standalone analyzer."""
+    root = _project(tmp_path)
+    monkeypatch.setenv(luau_analyze.ENV_VAR, "on")
+    monkeypatch.setattr(
+        luau_analyze, "locate_analyzer",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError(
+            "only --native-luau may locate the tool")))
+    report = preflight(root, api_dump=DUMP)
+    assert report["status"] == "checked"
+    assert "native_analysis" not in report
+    assert all("native_luau" not in f for f in report["files"])
