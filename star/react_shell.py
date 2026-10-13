@@ -967,7 +967,8 @@ def launch():
                     try: conversations.switch_chat(settings.project,chat_id)
                     finally: conversations.close()
                     if not self.active_task:self._warm(check=False)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                    busy=bool(self.active_task and self.turn is not None and self.turn.chat_id==chat_id)
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=busy)})
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)
