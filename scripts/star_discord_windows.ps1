@@ -19,8 +19,8 @@ if ($Sync -and -not $Run) {
 if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') {
     throw 'Use this helper only on Windows. Linux uses a private systemd environment file.'
 }
-$home = Join-Path $env:LOCALAPPDATA 'STAR-Intelligence\discord'
-$configPath = Join-Path $home 'bot-settings.json'
+$configDir = Join-Path $env:LOCALAPPDATA 'STAR-Intelligence\discord'
+$configPath = Join-Path $configDir 'bot-settings.json'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
 function Require-Snowflake([string]$value, [string]$label) {
@@ -60,7 +60,7 @@ function Get-RunPython {
 }
 
 if ($Setup) {
-    New-Item -ItemType Directory -Path $home -Force | Out-Null
+    New-Item -ItemType Directory -Path $configDir -Force | Out-Null
     Write-Host 'STAR Discord Setup (no token is sent to ChatGPT or printed)' -ForegroundColor Cyan
     Write-Host 'Open https://discord.com/developers/applications and create your STAR AI bot.'
     $ownerId = Require-Snowflake (Read-Host 'Your own Discord User ID') 'Owner ID'
