@@ -337,8 +337,8 @@ def _lua_string(value: str) -> str:
     # Fixed-width decimal UTF-8 byte escapes, not unsupported JSON \\uXXXX.
     return '"' + "".join(
         chr(byte) if 32 <= byte < 127 and byte not in (34, 92)
-        else '\\\\' + chr(byte) if byte in (34, 92)
-        else f"\\\\{byte:03d}"
+        else '\\' + chr(byte) if byte in (34, 92)
+        else f"\\{byte:03d}"
         for byte in value.encode("utf-8")
     ) + '"'
 
