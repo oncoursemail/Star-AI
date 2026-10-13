@@ -292,10 +292,35 @@ def record_for(task: dict, asked: Asked | None, score: checks.TaskScore | None, 
     }
 
 
+def _planner_job_id(task_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "-", str(task_id))[:60] or "task"
+
+
 def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info: dict, task_ids=None,
               resume: bool = True, retry_errors: bool = False, sleep=time.sleep, now=time.monotonic,
-              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS) -> dict:
-    """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict."""
+              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS, planner=None,
+              planner_holder: str = "") -> dict:
+    """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict.
+
+    `planner` (star.planner_client.PlannerClient, optional): before each request the runner asks STAR's resource
+    planner for an "eval" lease (one star-fast slot; the planner keeps one slot free for chat and pauses evals for
+    timing windows); during the request a "yield" stops it like the quiet lock does, and it is asked again later.
+    Planner off or unreachable: exactly the old behaviour (the quiet lock only)."""
+    holder = planner_holder or f"eval-{os.getpid()}"
+    lease = {"grant": None}
+
+    def quiet_probe():
+        """True when the request must stop: the quiet lock appeared, or the planner wants the slot back."""
+        locked = lock_probe() if lock_probe is not None else None
+        grant = lease["grant"]
+        if locked is not True and grant is not None and grant.planned:
+            renewed = planner.renew(grant)
+            lease["grant"] = renewed if renewed.action in ("run", "fallback") else None
+            if renewed.action in ("yield", "refuse"):
+                log(f"planner: eval yields ({renewed.reason})")
+                return True
+        return locked
+    watch_probe = quiet_probe if (lock_probe is not None or planner is not None) else None
     selected = [t for t in suite.runnable() if not task_ids or t["id"] in set(task_ids)]
     unknown = set(task_ids or []) - {t["id"] for t in suite.tasks}
     if unknown:
@@ -334,11 +359,19 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
             for interruption in range(MAX_INTERRUPTIONS + MAX_TRUNCATION_RETRIES + 1):
                 if lock_probe is not None:
                     waited += wait_for_lock(lock_probe, sleep=sleep, now=now, log=log)
+                if planner is not None:
+                    began = now()
+                    lease["grant"] = planner.wait_for("eval", holder, _planner_job_id(task["id"]), sleep=sleep,
+                                                      log=log)
+                    waited += now() - began
                 cancel = threading.Event()
-                watcher = LockWatcher(lock_probe, cancel, interval=watch_interval)
+                watcher = LockWatcher(watch_probe, cancel, interval=watch_interval)
                 try:
                     with watcher:
                         asked = ask(task, cancel)
+                    if planner is not None:              # scoring does not use the brain's slot
+                        planner.release(lease["grant"])
+                        lease["grant"] = None
                     if checks.looks_truncated(asked.answer) and truncations < MAX_TRUNCATION_RETRIES:
                         truncations += 1
                         log(f"{task['id']}: the answer stops inside a code block; asking again ({truncations}/{MAX_TRUNCATION_RETRIES})")
@@ -348,13 +381,18 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
                     error = str(exc)
                 except Exception as exc:                   # the task path failed: infrastructure, not a wrong answer
                     if watcher.fired:
-                        log(f"{task['id']}: stopped because the server lock appeared; will repeat it when the lock is gone")
+                        log(f"{task['id']}: stopped because the server lock appeared or the planner needed the slot; "
+                            "will repeat it")
                         asked, score, error = None, None, ""
                         continue
                     if any(text in str(exc) for text in PRODUCT_FAILURES):
                         product_failure = f"{type(exc).__name__}: {str(exc)[:160]}"
                     else:
                         error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                finally:
+                    if planner is not None:
+                        planner.release(lease["grant"])
+                        lease["grant"] = None
                 break
             else:
                 error = f"stopped {MAX_INTERRUPTIONS} times by the server lock"
@@ -628,8 +666,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(done["summary"]))
         return 0
     ids = [x for x in args.tasks.split(",") if x] or None
+    from .planner_client import PlannerClient
+    planner = PlannerClient(timeout=3.0)         # $STAR_PLANNER_URL or ~/.star/planner_url; none = old behaviour
     result = run_suite(suite, out=args.out, ask=ask, scorer=scorer, lock_probe=probe, run_info=run_info,
-                       task_ids=ids, resume=not args.no_resume, retry_errors=args.retry_errors, secrets=secrets)
+                       task_ids=ids, resume=not args.no_resume, retry_errors=args.retry_errors, secrets=secrets,
+                       planner=planner if planner.enabled else None)
     print(json.dumps(result["summary"]))
     return 0 if result.get("complete") else 2
 

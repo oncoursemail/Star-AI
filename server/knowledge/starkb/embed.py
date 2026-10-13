@@ -17,7 +17,7 @@ from pathlib import Path
 import time
 
 from .client import Brain, EMBED_MODEL
-from .quiet import Stopper, wait_while_locked
+from .quiet import Stopper, planner_pacer, wait_while_locked
 from .store import connect, embed_input, now
 
 
@@ -83,6 +83,12 @@ def run(db_path: Path, *, batch: int = 16, limit: int | None = None, where: str 
         nonlocal paused
         paused += wait_while_locked(log, stop)
 
+    # STAR's resource planner (optional): admits the job, keeps it at a quarter duty while chat is active and pauses
+    # it for timing windows. None (not configured) or unreachable: the quiet lock and --duty below, as before.
+    pacer = planner_pacer("embed", log=log, stop=stop) if total else None
+    if pacer is not None:
+        pacer.wait()
+
     for start in range(0, total, batch):
         part = todo[start:start + batch]
         gate()
@@ -111,8 +117,13 @@ def run(db_path: Path, *, batch: int = 16, limit: int | None = None, where: str 
             break
         if pause:
             time.sleep(pause)
-        if 0 < duty < 1:  # keep the server busy only `duty` of the time
+        if pacer is not None:
+            if not pacer.step(batch_seconds, base_duty=duty):     # sleeps for the duty itself
+                pacer.wait()
+        elif 0 < duty < 1:  # keep the server busy only `duty` of the time
             time.sleep(batch_seconds * (1 / duty - 1))
+    if pacer is not None:
+        pacer.close()
     elapsed = time.monotonic() - started - paused
     have = db.execute("SELECT COUNT(*) FROM embeddings WHERE model=?", (EMBED_MODEL,)).fetchone()[0]
     db.close()

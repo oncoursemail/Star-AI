@@ -20,7 +20,7 @@ import time
 from . import report
 from .config import Settings
 from .engine import Engine, Store, Yielded
-from .idle import BrainWatch, IdleGate
+from .idle import BrainWatch, IdleGate, PlannedGate, make_planner
 
 
 def log(text: str) -> None:
@@ -59,7 +59,9 @@ def run(settings: Settings) -> int:
             report.write(settings.report_file, store.state, status=text)
         except OSError:
             pass
-    gate = IdleGate(settings, BrainWatch(settings.brain_url, key), log=gate_log)
+    # The resource planner admits night school while chat is quiet and asks it to yield otherwise; when the planner
+    # is off or unreachable this is exactly the old idle gate.
+    gate = PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=make_planner(settings, key), log=gate_log)
     pool = load_pool(settings.pool)
     log("night school started; " + pool.summary())
     model = RealModel(settings, gate, stop=stop)
@@ -101,6 +103,7 @@ def run(settings: Settings) -> int:
             export_outbox(settings, store.state)
         except Exception as exc:
             log("report or outbox could not be written (" + type(exc).__name__ + ")")
+    gate.close()
     log("night school stopped")
     return 0
 
