@@ -1,0 +1,1261 @@
+[
+  {
+    "id": "RND-01",
+    "category": "round-state-transitions",
+    "difficulty": 2,
+    "goal": "Reject illegal round-phase jumps",
+    "prompt": "In my Roblox multiplayer game: write a server-owned ModuleScript named Round with Round.transition(nextPhase): boolean and Round.phase(): string. Start in Waiting. Only Waiting -> Intermission -> Playing -> Results -> Waiting is legal. Store allowed successors in a TRANSITIONS table and guard each transition before changing phase. Calling transition with the current phase, an unknown phase, or a skipped phase returns false without changing anything. Return one fenced Luau module, not a prose-only plan.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Explicit legal transition graphs prevent skipped or duplicated lifecycle phases.",
+    "edge_case": "Results -> Playing must be rejected even if the requested phase is otherwise valid.",
+    "expected_behavior": [
+      "Four successive accepted transitions complete one cycle and return to Waiting.",
+      "An illegal transition returns false and leaves Round.phase() unchanged."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "transition_map",
+          "re": "local\\s+TRANSITIONS\\s*=\\s*\\{",
+          "why": "Map of legal successor phases is present.",
+          "scope": "code"
+        },
+        {
+          "id": "guard",
+          "re": "TRANSITIONS\\s*\\[\\s*phase\\s*\\]\\s*~=\\s*nextPhase",
+          "why": "Reject transitions not in the graph.",
+          "scope": "code"
+        },
+        {
+          "id": "mutation_after_guard",
+          "re": "phase\\s*=\\s*nextPhase",
+          "why": "Change phase only on the accepted path.",
+          "scope": "code"
+        },
+        {
+          "id": "invalid_result",
+          "re": "return\\s+false\\b",
+          "why": "Return false on rejected transitions.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "skip_directly_to_playing",
+          "re": "\\bphase\\s*=\\s*[\"']Playing[\"']",
+          "why": "Do not hard-code an unconditional Playing phase.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Map of legal successor phases is present.",
+        "Present: Reject transitions not in the graph.",
+        "Present: Change phase only on the accepted path.",
+        "Present: Return false on rejected transitions.",
+        "Absent: Do not hard-code an unconditional Playing phase."
+      ]
+    }
+  },
+  {
+    "id": "RND-02",
+    "category": "round-state-transitions",
+    "difficulty": 3,
+    "goal": "Start each round exactly once and preserve increasing identifiers",
+    "prompt": "In my Roblox multiplayer game: implement a server ModuleScript Round.begin(), Round.finish(), Round.reset() with phases Waiting, Playing and Results. begin() is valid only in Waiting and returns a new monotonically increasing roundId; it returns false otherwise, including a rapid duplicate call. finish() accepts only Playing -> Results; reset() accepts only Results -> Waiting. An invalid call returns false and changes neither phase nor ID. Reset must never reset the ID counter. Supply one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Guarding start/finish/reset separately prevents duplicate match initialization and ID reuse.",
+    "edge_case": "Calling begin() twice before finish() must increment the ID only once.",
+    "expected_behavior": [
+      "The first begin returns 1; a duplicate begin returns false.",
+      "After finish and reset, the next begin returns 2, not 1."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "start_guard",
+          "re": "if\\s+phase\\s*~=\\s*[\"']Waiting[\"']\\s+then",
+          "why": "A second start must be rejected.",
+          "scope": "code"
+        },
+        {
+          "id": "monotonic_id",
+          "re": "roundId\\s*\\+=\\s*1",
+          "why": "The round ID must advance for each accepted start.",
+          "scope": "code"
+        },
+        {
+          "id": "results_guard",
+          "re": "phase\\s*~=\\s*[\"']Results[\"']",
+          "why": "Reset cannot run outside Results.",
+          "scope": "code"
+        },
+        {
+          "id": "finish_guard",
+          "re": "phase\\s*~=\\s*[\"']Playing[\"']",
+          "why": "Finish cannot run outside Playing.",
+          "scope": "code"
+        },
+        {
+          "id": "reset_method",
+          "re": "function\\s+Round\\.reset\\s*\\(",
+          "why": "Provide the reset lifecycle method.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "reset_counter",
+          "re": "(?:^|\\n)\\s*roundId\\s*=\\s*0\\b",
+          "why": "Reset must not reuse an earlier round ID.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: A second start must be rejected.",
+        "Present: The round ID must advance for each accepted start.",
+        "Present: Reset cannot run outside Results.",
+        "Present: Finish cannot run outside Playing.",
+        "Present: Provide the reset lifecycle method.",
+        "Absent: Reset must not reuse an earlier round ID."
+      ]
+    }
+  },
+  {
+    "id": "RND-03",
+    "category": "round-state-transitions",
+    "difficulty": 3,
+    "goal": "Emit ordered notifications only for accepted phase changes",
+    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Round.advance(nextPhase): boolean and Round.subscribe(callback). Use the four-phase Waiting, Intermission, Playing, Results cycle. Maintain a numeric revision initially 0. After each valid phase change increment revision once and call each subscribed callback with (phase, revision) in subscription order; rejected or repeated phases emit nothing and leave revision alone. subscribe() only registers a callback; registering must not emit a change. Return one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Revisioned phase notifications let observers reject stale state and avoid duplicate UI updates.",
+    "edge_case": "A callback registered while Playing receives no event until the next accepted transition.",
+    "expected_behavior": [
+      "An accepted phase change emits exactly one event to each listener with increasing revision.",
+      "Rejected and repeated transitions emit no event; subscribing itself emits no event."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "phase_guard",
+          "re": "allowed\\s*\\[\\s*phase\\s*\\]\\s*~=\\s*nextPhase",
+          "why": "Only accepted edges may notify.",
+          "scope": "code"
+        },
+        {
+          "id": "revision",
+          "re": "revision\\s*\\+=\\s*1",
+          "why": "Revision changes only after accepted transitions.",
+          "scope": "code"
+        },
+        {
+          "id": "ordered_listeners",
+          "re": "for\\s+[^()\\n]+in\\s+ipairs\\s*\\(\\s*listeners\\s*\\)",
+          "why": "Notify callbacks in registration order.",
+          "scope": "code"
+        },
+        {
+          "id": "payload",
+          "re": "callback\\s*\\(\\s*phase\\s*,\\s*revision\\s*\\)",
+          "why": "Callbacks receive both phase and revision.",
+          "scope": "code"
+        },
+        {
+          "id": "subscribe",
+          "re": "function\\s+Round\\.subscribe\\s*\\(",
+          "why": "Expose subscription API.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "immediate_subscribe_emit",
+          "re": "function\\s+Round\\.subscribe\\s*\\([^)]*\\)\\s*callback\\s*\\(",
+          "why": "Subscription must not impersonate a phase change.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Only accepted edges may notify.",
+        "Present: Revision changes only after accepted transitions.",
+        "Present: Notify callbacks in registration order.",
+        "Present: Callbacks receive both phase and revision.",
+        "Present: Expose subscription API.",
+        "Absent: Subscription must not impersonate a phase change."
+      ]
+    }
+  },
+  {
+    "id": "RND-04",
+    "category": "round-time-cancellation",
+    "difficulty": 3,
+    "goal": "Drive a round countdown from a deadline and stop its frame listener",
+    "prompt": "In my Roblox multiplayer game: build a server ModuleScript Countdown.start(seconds, now, onTick, onExpire), where now is an injected monotonic clock callback. Use RunService.Heartbeat to report remaining = math.max(0, deadline - now()) to onTick while active; compute deadline from now() + max(0, seconds), not by decrementing one each frame. When the deadline passes, disconnect the Heartbeat connection and invoke onExpire once. Return a cancellation function that disconnects without invoking onExpire. A 3-second frame hitch must not extend the match. Return a fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Deadline-based timekeeping survives irregular frame durations and requires listener cancellation.",
+    "edge_case": "A single Heartbeat delayed past the deadline must expire once, without negative remaining time.",
+    "expected_behavior": [
+      "onTick never receives a negative value, even after a frame hitch.",
+      "Expiration disconnects the listener; manual cancellation never fires expiration."
+    ],
+    "engine_symbols": [
+      "RunService.Heartbeat",
+      "RBXScriptConnection:Disconnect"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/RunService.yaml",
+      "content/en-us/reference/engine/datatypes/RBXScriptConnection.yaml",
+      "content/en-us/reference/engine/libraries/task.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/RunService",
+      "https://create.roblox.com/docs/reference/engine/datatypes/RBXScriptConnection",
+      "https://create.roblox.com/docs/reference/engine/libraries/task"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "heartbeat",
+          "re": "RunService\\.Heartbeat\\s*:\\s*Connect\\s*\\(",
+          "why": "Listen for server Heartbeat ticks.",
+          "scope": "code"
+        },
+        {
+          "id": "deadline",
+          "re": "deadline\\s*=\\s*now\\s*\\(\\s*\\)\\s*\\+\\s*math\\.max\\s*\\(\\s*0\\s*,\\s*seconds\\s*\\)",
+          "why": "Use an absolute deadline, not frame counting.",
+          "scope": "code"
+        },
+        {
+          "id": "clamped_remaining",
+          "re": "math\\.max\\s*\\(\\s*0\\s*,\\s*deadline\\s*-\\s*now\\s*\\(\\s*\\)\\s*\\)",
+          "why": "Never expose negative time.",
+          "scope": "code"
+        },
+        {
+          "id": "stop_listener",
+          "re": "connection\\s*:\\s*Disconnect\\s*\\(\\s*\\)",
+          "why": "Disconnect at expiration and cancellation.",
+          "scope": "code"
+        },
+        {
+          "id": "expiry_callback",
+          "re": "onExpire\\s*\\(\\s*\\)",
+          "why": "Notify expiration.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "one_second_poll",
+          "re": "\\btask\\.wait\\s*\\(\\s*1\\s*\\)",
+          "why": "Do not extend the clock with a one-second loop.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Listen for server Heartbeat ticks.",
+        "Present: Use an absolute deadline, not frame counting.",
+        "Present: Never expose negative time.",
+        "Present: Disconnect at expiration and cancellation.",
+        "Present: Notify expiration.",
+        "Absent: Do not extend the clock with a one-second loop."
+      ]
+    }
+  },
+  {
+    "id": "RND-05",
+    "category": "round-time-cancellation",
+    "difficulty": 3,
+    "goal": "Invalidate delayed round callbacks when a match is cancelled",
+    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Round.scheduleFinish(seconds) and Round.cancel(). scheduleFinish() should use task.delay to end the current Playing round in Results after the requested time. Use a monotonically increasing generation counter and capture a token for each delayed callback. cancel() invalidates any pending callbacks and switches to Waiting. A delayed finish from an old round must not end a newer Playing round, even if cancellation and a fresh schedule occur rapidly. Return fenced Luau.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Generation checks defend against stale asynchronous completions crossing round boundaries.",
+    "edge_case": "Schedule A, cancel it, then schedule B; A's delayed callback must never affect B.",
+    "expected_behavior": [
+      "Only the callback holding the current generation may transition Playing to Results.",
+      "A cancelled callback leaves Waiting or a newer round untouched."
+    ],
+    "engine_symbols": [
+      "task.delay"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/libraries/task.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/libraries/task"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "scheduler",
+          "re": "task\\.delay\\s*\\(",
+          "why": "Schedule a callback through the supported task API.",
+          "scope": "code"
+        },
+        {
+          "id": "version_increment",
+          "re": "generation\\s*\\+=\\s*1",
+          "why": "Bump the lifecycle generation.",
+          "scope": "code"
+        },
+        {
+          "id": "capture_token",
+          "re": "local\\s+token\\s*=\\s*generation",
+          "why": "Capture the generation when scheduling.",
+          "scope": "code"
+        },
+        {
+          "id": "stale_guard",
+          "re": "token\\s*~=\\s*generation",
+          "why": "Reject old scheduled callbacks.",
+          "scope": "code"
+        },
+        {
+          "id": "phase_guard",
+          "re": "phase\\s*~=\\s*[\"']Playing[\"']",
+          "why": "Only Playing may complete.",
+          "scope": "code"
+        },
+        {
+          "id": "cancel",
+          "re": "function\\s+Round\\.cancel\\s*\\(",
+          "why": "Expose explicit cancellation.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "blocking_wait",
+          "re": "\\bwait\\s*\\(\\s*seconds\\s*\\)",
+          "why": "Do not block and then finish without checking a generation.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Schedule a callback through the supported task API.",
+        "Present: Bump the lifecycle generation.",
+        "Present: Capture the generation when scheduling.",
+        "Present: Reject old scheduled callbacks.",
+        "Present: Only Playing may complete.",
+        "Present: Expose explicit cancellation.",
+        "Absent: Do not block and then finish without checking a generation."
+      ]
+    }
+  },
+  {
+    "id": "RND-06",
+    "category": "round-time-cancellation",
+    "difficulty": 3,
+    "goal": "Pause and resume a round timer without losing remaining time",
+    "prompt": "In my Roblox multiplayer game: implement a pure Luau ModuleScript Timer.new(duration, now) returning an object with :pause(), :resume(), and :remaining(). now is an injected clock callback. Start the timer immediately. pause() freezes remaining time; resume() extends the deadline by exactly the elapsed paused interval; remaining() is clamped at zero. Calling pause twice or resume twice must be harmless. No task.wait loops; the timer must not burn seconds while paused. Return one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "A frozen timestamp and adjusted deadline produce correct pause/resume semantics despite long waits.",
+    "edge_case": "Pause for 100 seconds when 3 remain, then resume; remaining should still be about 3.",
+    "expected_behavior": [
+      "Elapsed real time while paused does not reduce remaining time.",
+      "Repeated pause/resume calls do not shift the deadline more than once."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/luau.md",
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/luau",
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "paused_sentinel",
+          "re": "local\\s+pausedAt\\s*=\\s*nil",
+          "why": "Track whether the timer is paused.",
+          "scope": "code"
+        },
+        {
+          "id": "repeat_pause_guard",
+          "re": "if\\s+pausedAt\\s*==\\s*nil\\s+then",
+          "why": "Do not replace an earlier pause time.",
+          "scope": "code"
+        },
+        {
+          "id": "resume_adjust",
+          "re": "deadline\\s*\\+=\\s*now\\s*\\(\\s*\\)\\s*-\\s*pausedAt",
+          "why": "Restore paused elapsed time to the deadline.",
+          "scope": "code"
+        },
+        {
+          "id": "freeze_when_paused",
+          "re": "deadline\\s*-\\s*\\(\\s*pausedAt\\s+or\\s+now\\s*\\(\\s*\\)\\s*\\)",
+          "why": "Use frozen time while paused.",
+          "scope": "code"
+        },
+        {
+          "id": "clamp",
+          "re": "math\\.max\\s*\\(\\s*0\\s*,",
+          "why": "Clamp remaining time at zero.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "busy_wait",
+          "re": "\\btask\\.wait\\s*\\(",
+          "why": "Timer reads must not depend on a yielding loop.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Track whether the timer is paused.",
+        "Present: Do not replace an earlier pause time.",
+        "Present: Restore paused elapsed time to the deadline.",
+        "Present: Use frozen time while paused.",
+        "Present: Clamp remaining time at zero.",
+        "Absent: Timer reads must not depend on a yielding loop."
+      ]
+    }
+  },
+  {
+    "id": "RND-07",
+    "category": "round-joins-leaves",
+    "difficulty": 3,
+    "goal": "Keep late joiners spectators until the next participant snapshot",
+    "prompt": "In my Roblox multiplayer game: implement a server ModuleScript Roster.start() and Roster.isParticipant(player) plus a Players.PlayerAdded handler. Roster.start() takes a snapshot of Players:GetPlayers() keyed by Player.UserId at the moment the round begins, and marks the round active. During an active round, PlayerAdded marks the joining player as spectator (not as a participant); joining players become eligible at the next call to start(). isParticipant returns a boolean from the snapshot. Do not mutate the active membership snapshot on PlayerAdded. Return fenced Luau.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "A fixed participant snapshot separates current-round eligibility from changing server population.",
+    "edge_case": "A player joining immediately after start() is ineligible until start() is called again.",
+    "expected_behavior": [
+      "start() includes connected players at that instant.",
+      "A late join is a spectator in the active round but joins the next snapshot."
+    ],
+    "engine_symbols": [
+      "Players:GetPlayers",
+      "Players.PlayerAdded",
+      "Player.UserId"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Players.yaml",
+      "content/en-us/reference/engine/classes/Player.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Players",
+      "https://create.roblox.com/docs/reference/engine/classes/Player"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "snapshot_players",
+          "re": "Players\\s*:\\s*GetPlayers\\s*\\(\\s*\\)",
+          "why": "Capture the existing Players service population.",
+          "scope": "code"
+        },
+        {
+          "id": "store_member",
+          "re": "members\\s*\\[\\s*player\\.UserId\\s*\\]\\s*=\\s*true",
+          "why": "Snapshot membership by UserId.",
+          "scope": "code"
+        },
+        {
+          "id": "join_event",
+          "re": "Players\\.PlayerAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "Handle a player joining the server.",
+          "scope": "code"
+        },
+        {
+          "id": "spectator_on_join",
+          "re": "if\\s+active\\s+then\\s+spectators\\s*\\[\\s*player\\.UserId\\s*\\]\\s*=\\s*true",
+          "why": "Mark late joins as spectators.",
+          "scope": "code"
+        },
+        {
+          "id": "membership_query",
+          "re": "return\\s+members\\s*\\[\\s*player\\.UserId\\s*\\]\\s*==\\s*true",
+          "why": "Answer from the snapshot, not live Players.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "late_join_into_members",
+          "re": "PlayerAdded\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\(\\s*player\\s*\\)\\s*members\\s*\\[\\s*player\\.UserId\\s*\\]\\s*=\\s*true",
+          "why": "The PlayerAdded callback may not append to active participants.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Capture the existing Players service population.",
+        "Present: Snapshot membership by UserId.",
+        "Present: Handle a player joining the server.",
+        "Present: Mark late joins as spectators.",
+        "Present: Answer from the snapshot, not live Players.",
+        "Absent: The PlayerAdded callback may not append to active participants."
+      ]
+    }
+  },
+  {
+    "id": "RND-08",
+    "category": "round-joins-leaves",
+    "difficulty": 3,
+    "goal": "Cancel intermission when a departing player breaks the minimum",
+    "prompt": "In my Roblox multiplayer game: write a server ModuleScript Lobby.start() using a minimum of two eligible players and a Players.PlayerRemoving listener. During Intermission, losing a player so fewer than two remain must cancel the countdown, bump countdownVersion to invalidate outstanding work, and revert to Waiting. PlayerRemoving fires before the player is gone: implement a countExcluding(exiting) helper iterating Players:GetPlayers() and omitting the departing Player, rather than comparing #Players:GetPlayers() inside that callback. No cancellation after the round is Playing. Return one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "PlayerRemoving is a pre-removal event, so eligibility counts must account for the departing member.",
+    "edge_case": "Exactly two players in intermission: one leaves; the countdown must cancel immediately.",
+    "expected_behavior": [
+      "With three players, one departure leaves intermission running.",
+      "With two players, one departure invalidates the countdown before a match can start."
+    ],
+    "engine_symbols": [
+      "Players:GetPlayers",
+      "Players.PlayerRemoving"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Players.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Players"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "leave_event",
+          "re": "Players\\.PlayerRemoving\\s*:\\s*Connect\\s*\\(",
+          "why": "React to a departure before removal.",
+          "scope": "code"
+        },
+        {
+          "id": "exclude_leaver",
+          "re": "\\b\\w+\\s*~=\\s*exiting\\b",
+          "why": "Omit the leaving player from the count.",
+          "scope": "code"
+        },
+        {
+          "id": "minimum",
+          "re": "<\\s*2\\b",
+          "why": "Require at least two eligible players.",
+          "scope": "code"
+        },
+        {
+          "id": "phase_guard",
+          "re": "phase\\s*==\\s*[\"']Intermission[\"']",
+          "why": "Only cancel during intermission.",
+          "scope": "code"
+        },
+        {
+          "id": "invalidate_timer",
+          "re": "countdownVersion\\s*\\+=\\s*1",
+          "why": "Invalidate outstanding countdown work.",
+          "scope": "code"
+        },
+        {
+          "id": "return_waiting",
+          "re": "phase\\s*=\\s*[\"']Waiting[\"']",
+          "why": "Return to Waiting on cancellation.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "premature_live_count",
+          "re": "#\\s*Players\\s*:\\s*GetPlayers\\s*\\(\\s*\\)",
+          "why": "PlayerRemoving runs before the player leaves; counting live Players directly is wrong.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: React to a departure before removal.",
+        "Present: Omit the leaving player from the count.",
+        "Present: Require at least two eligible players.",
+        "Present: Only cancel during intermission.",
+        "Present: Invalidate outstanding countdown work.",
+        "Present: Return to Waiting on cancellation.",
+        "Absent: PlayerRemoving runs before the player leaves; counting live Players directly is wrong."
+      ]
+    }
+  },
+  {
+    "id": "RND-09",
+    "category": "round-joins-leaves",
+    "difficulty": 3,
+    "goal": "Resolve departures without rewarding disconnected players",
+    "prompt": "In my Roblox multiplayer game: write a server ModuleScript Round that tracks an active alive table keyed by UserId and reacts to Players.PlayerRemoving while phase is Playing. Ignore repeated leave notifications for players already removed. Remove a departing player before counting survivors. If none remain, return to Waiting with no winner; if exactly one remains, enter Results and store that survivor's UserId as winnerId. A departing player must never become the winner just because their leave event ran last. Return fenced Luau.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Recompute live contenders after removing a leaver and handle zero-contender rounds explicitly.",
+    "edge_case": "Two players disconnect in quick succession; no winner may be a disconnected player.",
+    "expected_behavior": [
+      "After a departure, exactly one remaining contender produces that contender as winner.",
+      "Zero contenders produce no winner; duplicate leave events do not finish twice."
+    ],
+    "engine_symbols": [
+      "Players.PlayerRemoving",
+      "Player.UserId"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Players.yaml",
+      "content/en-us/reference/engine/classes/Player.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Players",
+      "https://create.roblox.com/docs/reference/engine/classes/Player"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "leave_listener",
+          "re": "Players\\.PlayerRemoving\\s*:\\s*Connect\\s*\\(",
+          "why": "Subscribe to the leave event.",
+          "scope": "code"
+        },
+        {
+          "id": "remove_first",
+          "re": "alive\\s*\\[\\s*player\\.UserId\\s*\\]\\s*=\\s*nil",
+          "why": "Remove the departing user before selecting a winner.",
+          "scope": "code"
+        },
+        {
+          "id": "recount",
+          "re": "for\\s+\\w+\\s+in\\s+pairs\\s*\\(\\s*alive\\s*\\)",
+          "why": "Count surviving active entries.",
+          "scope": "code"
+        },
+        {
+          "id": "zero_remaining",
+          "re": "count\\s*==\\s*0\\b",
+          "why": "Handle no survivor.",
+          "scope": "code"
+        },
+        {
+          "id": "one_remaining",
+          "re": "count\\s*==\\s*1\\b",
+          "why": "Handle one survivor.",
+          "scope": "code"
+        },
+        {
+          "id": "playing_only",
+          "re": "phase\\s*~=\\s*[\"']Playing[\"']",
+          "why": "Do not modify finished rounds.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "departing_winner",
+          "re": "winnerId\\s*=\\s*player\\.UserId",
+          "why": "Do not select the player who just left.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Subscribe to the leave event.",
+        "Present: Remove the departing user before selecting a winner.",
+        "Present: Count surviving active entries.",
+        "Present: Handle no survivor.",
+        "Present: Handle one survivor.",
+        "Present: Do not modify finished rounds.",
+        "Absent: Do not select the player who just left."
+      ]
+    }
+  },
+  {
+    "id": "RND-10",
+    "category": "round-results-cleanup",
+    "difficulty": 3,
+    "goal": "Select a deterministic round winner from scores",
+    "prompt": "In my Roblox multiplayer game: implement a pure Luau ModuleScript Results.winner(scores), where scores maps numeric Player UserIds to numeric final round scores. Return the UserId with the largest score. Resolve an exact score tie by choosing the smallest numeric UserId, independent of pairs() iteration order; return nil for an empty scores table. Scores may be zero or negative. Do not select a random winner or rely on the last iterated key. Return a fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Deterministic result ordering gives reproducible winner decisions even with ties and unordered maps.",
+    "edge_case": "Two players with the same score must give the smaller UserId even if table order flips.",
+    "expected_behavior": [
+      "{[13] = 5, [9] = 5, [2] = 3} returns 9.",
+      "An empty table returns nil, and negative-score contenders are still eligible."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/luau.md",
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/luau",
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "score_iteration",
+          "re": "for\\s+\\w+\\s*,\\s*\\w+\\s+in\\s+pairs\\s*\\(\\s*scores\\s*\\)",
+          "why": "Inspect every score regardless of table iteration order.",
+          "scope": "code"
+        },
+        {
+          "id": "highest_score",
+          "re": "score\\s*>\\s*bestScore",
+          "why": "Prefer a strictly larger score.",
+          "scope": "code"
+        },
+        {
+          "id": "tie_condition",
+          "re": "score\\s*==\\s*bestScore",
+          "why": "Detect equal scores.",
+          "scope": "code"
+        },
+        {
+          "id": "stable_tie",
+          "re": "id\\s*<\\s*bestId",
+          "why": "Break ties by the smaller numeric UserId.",
+          "scope": "code"
+        },
+        {
+          "id": "return_winner",
+          "re": "return\\s+bestId\\b",
+          "why": "Return the selected UserId (or nil).",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "random_tie",
+          "re": "math\\.random\\s*\\(",
+          "why": "Ties must be deterministic.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Inspect every score regardless of table iteration order.",
+        "Present: Prefer a strictly larger score.",
+        "Present: Detect equal scores.",
+        "Present: Break ties by the smaller numeric UserId.",
+        "Present: Return the selected UserId (or nil).",
+        "Absent: Ties must be deterministic."
+      ]
+    }
+  },
+  {
+    "id": "RND-11",
+    "category": "round-results-cleanup",
+    "difficulty": 3,
+    "goal": "Award a round winner at most once despite duplicate completions",
+    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Results.begin() returning a fresh increasing round token, and Results.finish(token, winnerId, award): boolean. begin starts Playing and clears a finished guard. finish accepts only the current token while Playing and only once; set finished before calling the injected award(winnerId) callback, then move to Results. If winnerId is nil, record the finish without an award. Old tokens, reentrant callbacks and duplicate finish calls must return false and never pay again. Return one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Setting an idempotence guard before external effects prevents duplicate winner rewards.",
+    "edge_case": "The award callback itself calls finish() again; it must not trigger a second award.",
+    "expected_behavior": [
+      "Two finish calls for the same round invoke award at most once.",
+      "A callback with an older round token cannot award the next round."
+    ],
+    "engine_symbols": [],
+    "expected_sources": [
+      "content/en-us/scripting/module.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/module"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "token_guard",
+          "re": "if\\s+token\\s*~=\\s*current",
+          "why": "Reject a completion belonging to an old round.",
+          "scope": "code"
+        },
+        {
+          "id": "phase_guard",
+          "re": "or\\s+phase\\s*~=\\s*[\"']Playing[\"']",
+          "why": "Require Playing phase.",
+          "scope": "code"
+        },
+        {
+          "id": "finished_guard",
+          "re": "or\\s+finished\\s+then",
+          "why": "Reject a duplicate completion.",
+          "scope": "code"
+        },
+        {
+          "id": "reset_guard",
+          "re": "finished\\s*=\\s*false",
+          "why": "Clear idempotence when starting a new round.",
+          "scope": "code"
+        },
+        {
+          "id": "set_before_payout",
+          "re": "finished\\s*=\\s*true[\\s\\S]{0,150}\\baward\\s*\\(\\s*winnerId\\s*\\)",
+          "why": "Mark completed before granting the reward.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "pay_then_mark",
+          "re": "award\\s*\\(\\s*winnerId\\s*\\)[\\s\\S]{0,100}finished\\s*=\\s*true",
+          "why": "Never pay before setting finished.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Reject a completion belonging to an old round.",
+        "Present: Require Playing phase.",
+        "Present: Reject a duplicate completion.",
+        "Present: Clear idempotence when starting a new round.",
+        "Present: Mark completed before granting the reward.",
+        "Absent: Never pay before setting finished."
+      ]
+    }
+  },
+  {
+    "id": "RND-12",
+    "category": "round-results-cleanup",
+    "difficulty": 3,
+    "goal": "Disconnect event listeners and destroy temporary arena objects after each round",
+    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Arena.attach(part: BasePart), Arena.addObject(instance: Instance), and Arena.cleanup(). Track each part.Touched:Connect RBXScriptConnection in a connections array and each round-owned instance in spawned. On cleanup, call Disconnect() on every tracked connection, Destroy() every spawned instance, and table.clear() both arrays so cleanup can run twice safely and the next round starts empty. Do not merely unparent temporary objects or discard connection references. Return one fenced Luau module.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "teaches": "Cleanup must release both event subscriptions and round-owned Instance resources.",
+    "edge_case": "After two rounds with repeated cleanup, the prior round's Touched listeners must not fire.",
+    "expected_behavior": [
+      "After cleanup, the tracked connection and object collections are empty.",
+      "Calling cleanup twice is harmless, and no old listeners or arena objects survive."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "RBXScriptConnection:Disconnect",
+      "Instance:Destroy",
+      "table.clear"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/BasePart.yaml",
+      "content/en-us/reference/engine/datatypes/RBXScriptConnection.yaml",
+      "content/en-us/reference/engine/classes/Instance.yaml",
+      "content/en-us/reference/engine/libraries/table.yaml"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/BasePart",
+      "https://create.roblox.com/docs/reference/engine/datatypes/RBXScriptConnection",
+      "https://create.roblox.com/docs/reference/engine/classes/Instance",
+      "https://create.roblox.com/docs/reference/engine/libraries/table"
+    ],
+    "scoring_scope": "static syntax/structure only; behavior requires sandbox or Studio verification",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "Wrong or repeated lifecycle transition",
+      "Fails to handle the specified edge case"
+    ],
+    "pass_conditions": [
+      "Fenced Luau satisfies STAR compile/type diagnostics and all required and forbidden static checks",
+      "The specified edge case is documented for additional sandbox/Studio verification (not verified by static scoring)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "part_event",
+          "re": "Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "Register a Touched listener.",
+          "scope": "code"
+        },
+        {
+          "id": "store_connection",
+          "re": "table\\.insert\\s*\\(\\s*connections\\s*,",
+          "why": "Retain each listener handle for teardown.",
+          "scope": "code"
+        },
+        {
+          "id": "disconnect",
+          "re": ":\\s*Disconnect\\s*\\(\\s*\\)",
+          "why": "Disconnect every tracked listener.",
+          "scope": "code"
+        },
+        {
+          "id": "clear_connections",
+          "re": "table\\.clear\\s*\\(\\s*connections\\s*\\)",
+          "why": "Clear connection handles after teardown.",
+          "scope": "code"
+        },
+        {
+          "id": "destroy_objects",
+          "re": ":\\s*Destroy\\s*\\(\\s*\\)",
+          "why": "Destroy round-owned Instances.",
+          "scope": "code"
+        },
+        {
+          "id": "clear_instances",
+          "re": "table\\.clear\\s*\\(\\s*spawned\\s*\\)",
+          "why": "Clear temporary object references.",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "discard_objects",
+          "re": "(?:^|\\n)\\s*spawned\\s*=\\s*nil\\b",
+          "why": "Discarding object references is not destroying them.",
+          "scope": "code"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Luau compilation/type diagnostics through the existing knowledge check",
+        "Present: Register a Touched listener.",
+        "Present: Retain each listener handle for teardown.",
+        "Present: Disconnect every tracked listener.",
+        "Present: Clear connection handles after teardown.",
+        "Present: Destroy round-owned Instances.",
+        "Present: Clear temporary object references.",
+        "Absent: Discarding object references is not destroying them."
+      ]
+    }
+  }
+]
