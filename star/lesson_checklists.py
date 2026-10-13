@@ -72,6 +72,10 @@ _RULES = (
 )
 _BY_KEY = {rule.key: rule for rule in _RULES}
 _NEGATED = re.compile(r"\b(?:no|without|exclude|omit|don't add|do not add)\s+(?:an?\s+|the\s+)?$", re.I)
+_NEGATIVE_GROUP = re.compile(
+    r"\b(?:no|without|exclude|omit|don't add|do not add)\s+"
+    r"(?:(?:an?\s+|the\s+)?[\w-]+\s+(?:and|or)\s+){1,3}(?:an?\s+|the\s+)?$", re.I
+)
 
 
 def required_features(request: str) -> tuple[Requirement, ...]:
@@ -85,7 +89,8 @@ def required_features(request: str) -> tuple[Requirement, ...]:
     found: list[tuple[int, Requirement]] = []
     for rule in _RULES:
         for match in re.finditer(rule.request, request, re.I):
-            if _NEGATED.search(request[max(0, match.start() - 24):match.start()]):
+            prefix = request[max(0, match.start() - 80):match.start()]
+            if _NEGATED.search(prefix) or _NEGATIVE_GROUP.search(prefix):
                 continue
             found.append((match.start(), Requirement(rule.key, rule.label)))
             break

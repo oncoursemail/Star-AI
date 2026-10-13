@@ -120,3 +120,20 @@ def test_invalid_request_or_answer_types_fail(bad):
 def test_raw_luau_snippets_supported_without_markdown():
     sample = 'local coin = Instance.new("IntValue")\ncoin.Name = "Coins"\ncoin.Value = 0'
     assert check_answer(sample, required_features("coins"))[0].present
+
+
+def test_markdown_lessons_are_complete_and_source_linked():
+    from pathlib import Path
+    import re
+
+    catalog = Path(__file__).resolve().parents[1] / "docs/lessons/logic-and-missing-features.md"
+    text = catalog.read_text(encoding="utf-8")
+    entries = re.split(r"(?m)^## \d+\. ", text)[1:]
+    assert len(entries) == 12
+    for entry in entries:
+        assert "**Mistake:**" in entry
+        assert "**Bad (illustrative):**" in entry
+        assert "**Corrected pattern:**" in entry
+        assert "**Rule:**" in entry
+        assert "[Recorded failure]" in entry
+        assert "[official API/scripting reference](https://create.roblox.com/" in entry
