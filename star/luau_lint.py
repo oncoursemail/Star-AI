@@ -78,8 +78,8 @@ def _tokens(code: str) -> list[_Token]:
     return out
 
 
-def lint(code: str) -> list[Finding]:
-    """Return sorted findings; no evaluation, execution, filesystem or network calls."""
+def lint(code: str, *, safety_checks: bool = False, script_class: str | None = None) -> list[Finding]:
+    """Return sorted diagnostics; optional lifetime checks remain off by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -227,4 +227,14 @@ def lint(code: str) -> list[Finding]:
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")
                         break
+    if safety_checks:
+        # Import lazily: the optional module reuses this linter's lexer and Finding.
+        from .luau_safety import inspect_safety
+
+        extra = inspect_safety(code, script_class=script_class)
+        # Prefer the stronger opt-in text when an existing rule reports the same line.
+        replaced = {(finding.rule_id, finding.line) for finding in extra}
+        findings = [finding for finding in findings
+                    if (finding.rule_id, finding.line) not in replaced]
+        findings.extend(extra)
     return sorted(set(findings), key=lambda f: (f.line, f.rule_id, f.message))
