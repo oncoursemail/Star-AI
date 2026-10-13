@@ -338,3 +338,12 @@ return {handles = handles, destroy = destroy}
         "n1.ScreenInsets = Enum.ScreenInsets.None\nn1.Enabled = false\n",
     )
 
+def test_full_luau_byte_escape_sequence_with_adjacent_digit():
+    # A fixed-width escape must not swallow the ASCII digit that follows it.
+    value = "A" + chr(1) + "2é" + '"' + chr(92) + chr(10)
+    code = compile_ui({"root": {"type": "screen", "id": "ui", "children": [
+        {"type": "text", "id": "note", "text": value}
+    ]}}).source
+    assert r'n2.Text = "A\0012\195\169\"\\\010"' in code
+    assert r"\u0001" not in code
+
