@@ -141,3 +141,75 @@ def test_visual_dissatisfaction_is_narrowly_classified_and_review_only():
         assert not is_visual_critique(phrase), phrase
     # Only an explicitly opted-in owner image-followup may turn those words
     # into a correction; this pure classifier does no learning or writing.
+
+
+def test_owner_visual_dissatisfaction_after_image_enqueues_review_only(monkeypatch):
+    discord = pytest.importorskip("discord")
+    from star.discord_bot.bot import create_bot
+
+    owner = 123
+    channel_id = 987
+    config = BotConfig.from_env({
+        "STAR_DISCORD_BOT_TOKEN": "test-token",
+        "STAR_DISCORD_OWNER_IDS": str(owner),
+        "STAR_DISCORD_DM_CHAT": "1",
+        "STAR_DISCORD_DM_IMAGES": "1",
+        "STAR_DISCORD_DM_LEARNING_CANDIDATES": "1",
+    })
+    service = DiscordService(config.policy)
+    session = (None, channel_id, owner)
+    service.memory.remember(
+        session,
+        "[Image comparison reference=0123456789abcdef result=abcdef0123456789] No neon",
+        "This image is brighter than the reference.",
+    )
+    pending = []
+
+    async def fake_correction(key, *, message_id, text, project, home=None):
+        pending.append((key, message_id, text, project))
+        return ({"id": 42}, None)
+
+    monkeypatch.setattr(service, "propose_dm_correction", fake_correction)
+    bot = create_bot(config, service=service)
+
+    class Typing:
+        async def __aenter__(self):
+            return None
+        async def __aexit__(self, *_):
+            return False
+
+    class Channel:
+        def __init__(self):
+            self.id = channel_id
+            self.type = discord.ChannelType.private
+            self.sent = []
+        def typing(self):
+            return Typing()
+        async def send(self, content=None, **kwargs):
+            self.sent.append((content, kwargs))
+            return SimpleNamespace(edit=lambda **kwargs: None)
+
+    channel = Channel()
+    message = SimpleNamespace(
+        id=2468, guild=None, channel=channel, attachments=[],
+        author=SimpleNamespace(id=owner, bot=False),
+        content="I don't like that, you messed up the animation",
+    )
+    async def run():
+        try:
+            await bot.on_message(message)
+            assert len(pending) == 1
+            assert pending[0] == (session, 2468, message.content, "STAR")
+            assert "Correction #42" in channel.sent[0][0]
+            assert "review" in channel.sent[0][0]
+            assert channel.sent[0][1]["allowed_mentions"] == discord.AllowedMentions.none()
+
+            # Stranger must not access the pending correction path or receive info.
+            stranger = SimpleNamespace(**{**vars(message),
+                                         "author": SimpleNamespace(id=555, bot=False)})
+            await bot.on_message(stranger)
+            assert len(pending) == 1 and len(channel.sent) == 1
+        finally:
+            await bot.close()
+
+    asyncio.run(run())
