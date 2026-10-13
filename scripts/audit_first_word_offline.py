@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections import defaultdict
 from contextlib import ExitStack, asynccontextmanager
 from dataclasses import dataclass
+import hashlib
 import json
 import asyncio
 from pathlib import Path
@@ -39,6 +40,7 @@ class Row:
     stages_ms: dict[str, float]
     prompt_chars: int
     answer: str
+    request_sha256: str
 
 
 class FakeCompletions:
@@ -129,11 +131,16 @@ def audit() -> list[Row]:
                         chats.add("STAR", "assistant", answer, chat_id=chat_id)
                         messages = models.requests[-1]["messages"]
                         size = sum(len(str(message["content"])) for message in messages)
+                        # Hash the *actual* provider message list, not merely its length.
+                        # JSON is stable for the fake's text-only request shape.
+                        request_sha256 = hashlib.sha256(json.dumps(
+                            messages, sort_keys=True, ensure_ascii=False,
+                            separators=(",", ":")).encode("utf-8")).hexdigest()
                         elapsed = (first[0] - start) / 1_000_000
                         tracked = sum(timings.values())
                         stages = dict(timings)
                         stages["other (incl. assembly/provider)"] = max(0.0, elapsed - tracked)
-                        rows.append(Row(index, elapsed, stages, size, answer))
+                        rows.append(Row(index, elapsed, stages, size, answer, request_sha256))
             finally:
                 chats.close()
     return rows

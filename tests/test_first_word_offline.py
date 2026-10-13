@@ -15,6 +15,7 @@ def test_real_first_visible_delta_includes_ten_stage_timings(monkeypatch):
     assert len(rows) == len(PROMPTS) == 10
     assert [row.index for row in rows] == list(range(1, 11))
     assert all(row.elapsed_ms > 0 and row.prompt_chars > 0 for row in rows)
+    assert all(len(row.request_sha256) == 64 for row in rows)
     assert all(row.answer.startswith("READY") for row in rows)
     assert all(row.stages_ms["history"] >= 0 for row in rows)
     assert all(row.stages_ms["knowledge"] >= 0 for row in rows)
@@ -71,6 +72,7 @@ def test_opt_in_ten_turn_before_after_matches_prompts_answers(monkeypatch):
     assert len(baseline) == len(first_delta) == len(no_thread) == len(combined) == len(PROMPTS) == 10
     for rows in (first_delta, no_thread, combined):
         assert [row.prompt_chars for row in rows] == [row.prompt_chars for row in baseline]
+        assert [row.request_sha256 for row in rows] == [row.request_sha256 for row in baseline]
         assert [row.answer for row in rows] == [row.answer for row in baseline]
     warnings.warn("OFFLINE_FIRST_WORD_BEFORE_AFTER\nBEFORE\n" + report(baseline)
                   + "\nFIRST_DELTA\n" + report(first_delta)
