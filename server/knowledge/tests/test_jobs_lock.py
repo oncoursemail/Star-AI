@@ -16,6 +16,10 @@ from starkb import corpus_plan, coverage, embed, evaluate, quiet, refresh, store
 from starkb.chunking import Chunk, Doc  # noqa: E402
 from corpus_fixture import snapshot  # noqa: E402
 
+import time as _time  # noqa: E402
+
+_REAL_SLEEP = _time.sleep
+
 
 class FakeClock:
     def __init__(self, lock: Path, release_after: float | None = 10.0):
@@ -34,6 +38,12 @@ class FakeClock:
         os.utime(self.lock / "owner", (self.now, self.now))
 
     def sleep(self, seconds: float) -> None:
+        if seconds < 0.5:
+            # time.sleep is patched process-wide, so subprocess.run(timeout=...) polling a git child
+            # (sleeps of 0.001, 0.002, ... s on POSIX) lands here too. No quiet-lock poll is that short;
+            # let those pass through for real instead of recording them.
+            _REAL_SLEEP(seconds)
+            return
         self.sleeps.append(seconds)
         self.now += seconds
         if self.release_after is not None and sum(self.sleeps) >= self.release_after:
