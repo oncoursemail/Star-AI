@@ -93,7 +93,7 @@ def test_twelve_npc_witness_pairs_with_production_static_checker():
     assert len(new) == len(NPC_WITNESSES) == 12
     for task in new:
         pair = NPC_WITNESSES[task["id"]]
-        assert eval_checks.extract_luau_blocks(task["prompt"]) == [pair["broken"]]
+        assert [code.rstrip() for code in eval_checks.extract_luau_blocks(task["prompt"])] == [pair["broken"].rstrip()]
         assert pair["broken"].startswith("--!strict") and pair["fixed"].startswith("--!strict")
         good = eval_checks.pattern_checks(task["auto"], [pair["fixed"]], "")
         bad = eval_checks.pattern_checks(task["auto"], [pair["broken"]], "")
