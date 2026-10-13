@@ -10,7 +10,7 @@ Reviewed source paths (2026-10-13):
 
 ## Measured baseline — GitHub Linux, fake streaming provider
 
-The pinned fake replies to **10** sequential user turns. GitHub Actions job [Offline Python checks](https://github.com/oncoursemail/Star-AI/actions/runs/38418575000) ran a real-timer (`perf_counter_ns`) harness; the authoritative values below are copied from job `115362328512` (the job URL for this SHA can be retrieved from its GitHub check run). These are observations for one CI run, not CPU inference latency nor end-user time to first token on a server. Milliseconds fluctuate with host load. Prompts/answers were not changed by this instrumentation.
+The pinned fake replies to **10** sequential user turns. GitHub Actions job [Offline Python checks](https://github.com/oncoursemail/Star-AI/actions/runs/38416473011/job/115362328512) ran a real-timer (`perf_counter_ns`) harness; the authoritative values below are copied from job `115362328512`. These are observations for one CI run, not CPU inference latency nor end-user time to first token on a server. Milliseconds fluctuate with host load. Prompts/answers were not changed by this instrumentation.
 
 | Turn | Prompt chars before | Prompt chars after* | First visible ms | Settings ms | History ms | Knowledge ms | Lessons ms | Docs ms | Skills ms | Remainder ms |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
