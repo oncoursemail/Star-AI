@@ -179,9 +179,12 @@ def test_screenshots_require_explicit_operator_manifest_and_hash(tmp_path):
         write(digest_value="0" * 64).verified_bytes(report=report, directory=tmp_path)
     with pytest.raises(ValueError, match="filename"):
         write(filename="../secrets.png").verified_bytes(report=report, directory=tmp_path)
-    with pytest.raises(ValueError, match="Linked"):
-        p.unlink()
+    p.unlink()
+    try:
         p.symlink_to(manifest)
+    except OSError:  # Windows without Developer Mode cannot create symlinks
+        pytest.skip("symlinks need extra privileges on this Windows account")
+    with pytest.raises(ValueError, match="Linked"):
         write().verified_bytes(report=report, directory=tmp_path)
 
 

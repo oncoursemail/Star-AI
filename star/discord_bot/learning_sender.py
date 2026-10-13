@@ -27,6 +27,7 @@ from .learning_reports import (
 )
 
 MAX_SNOWFLAKE = 2**64 - 1
+UNKNOWN_HOLD_HOURS = 24
 
 
 @dataclass(frozen=True)
@@ -126,9 +127,13 @@ class DeliveryLedger:
             raise ValueError("Current clock must be timezone aware")
         if type(cooldown_hours) is not int or not 1 <= cooldown_hours <= 168:
             raise ValueError("Invalid cooldown")
+        # A pending/unknown delivery blocks new DMs for a day (no retry storm after a network
+        # error), but never forever: the bot must not go silent until someone edits SQLite.
+        since = (now - timedelta(hours=UNKNOWN_HOLD_HOURS)).astimezone(timezone.utc).isoformat()
         if self.db.execute(
-            "SELECT 1 FROM learning_dms WHERE owner_id=? AND state IN ('pending','unknown') LIMIT 1",
-            (self.owner,),
+            "SELECT 1 FROM learning_dms WHERE owner_id=? AND state IN ('pending','unknown') "
+            "AND claimed_at > ? LIMIT 1",
+            (self.owner, since),
         ).fetchone():
             return "awaiting_review", None
         earlier, sent_at = self._last()
@@ -198,9 +203,12 @@ async def send_one_dm(settings: DeliverySettings, text: str, *, visual=None):
         await client.close()
 
 
-async def run_delivery(settings: DeliverySettings, *, dry_run: bool = True, now=None):
+async def run_delivery(settings: DeliverySettings, *, dry_run: bool = True, now=None,
+                       snapshot: LearningSnapshot | None = None, send=None):
+    """``snapshot``/``send`` let the running bot reuse its own connection and report source."""
     now = now or datetime.now(timezone.utc)
-    snapshot = read_night_school_report(settings.report_path)
+    if snapshot is None:
+        snapshot = read_night_school_report(settings.report_path)
     ledger = DeliveryLedger(settings.state_path, settings.owner_id)
     try:
         if dry_run:
@@ -227,7 +235,10 @@ async def run_delivery(settings: DeliverySettings, *, dry_run: bool = True, now=
         if reason != "ready":
             return {"state": reason, "sent": False}
         try:
-            await send_one_dm(settings, body, visual=visual)
+            if send is None:
+                await send_one_dm(settings, body, visual=visual)
+            else:
+                await send(body, visual)
         except BaseException:
             ledger.mark(snapshot, "unknown", now=now)
             raise

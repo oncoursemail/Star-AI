@@ -1,5 +1,7 @@
 # STAR Discord owner DMs, screenshots and reviewable lessons (DRAFT)
 
+> **Setup on Windows without PowerShell scripts:** follow `docs/STAR_DISCORD_SETUP.md` (token in `%USERPROFILE%\.star\discord.env`, IDs and switches in `discord-settings.env`, launcher `scripts\star_discord.cmd`). The PowerShell helper below remains an alternative.
+
 This integrates with STAR's existing opt-in Discord bot, not a new bot, self-bot, developer-account scraper or privileged guild listener.
 
 ## Capabilities

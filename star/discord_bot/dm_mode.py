@@ -121,16 +121,42 @@ def prepare_discord_image(filename: str, content_type: str | None,
             if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
                 raise ValueError("Image dimensions are too large")
             # Transpose using EXIF, then discard original metadata and color channels.
-            flattened = ImageOps.exif_transpose(image).convert("RGB")
-            flattened.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
-            stream = BytesIO()
-            flattened.save(stream, format="JPEG", quality=85)
-            result = stream.getvalue()
-            if len(result) > MAX_IMAGE_BYTES:
-                raise ValueError("Normalized image exceeds the size limit")
-            return result
+            return normalize_pil_image(ImageOps.exif_transpose(image))
     except (UnidentifiedImageError, OSError) as exc:
         raise ValueError("Image could not be decoded") from exc
+
+
+def normalize_pil_image(image) -> bytes:
+    """Bounded RGB JPEG without metadata (shared by uploads and confirmed screen captures)."""
+    if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
+        raise ValueError("Image dimensions are too large")
+    flattened = image.convert("RGB")
+    flattened.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
+    stream = BytesIO()
+    flattened.save(stream, format="JPEG", quality=85)
+    result = stream.getvalue()
+    if len(result) > MAX_IMAGE_BYTES:
+        raise ValueError("Normalized image exceeds the size limit")
+    return result
+
+
+def capture_screen(grab=None) -> bytes:
+    """One capture of the primary screen of the PC running the bot, normalized to JPEG.
+
+    Callers must obtain an explicit, per-request owner confirmation first (see bot.py /screen).
+    Nothing is written to disk.
+    """
+    if grab is None:
+        from PIL import ImageGrab
+        grab = ImageGrab.grab
+    try:
+        shot = grab()
+    except OSError as exc:  # no desktop session (service account, locked screen, Linux without X)
+        raise ValueError("STAR could not capture this PC's screen (no desktop session)") from exc
+    try:
+        return normalize_pil_image(shot)
+    finally:
+        shot.close()
 
 
 class DiscordVision:

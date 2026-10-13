@@ -1,5 +1,7 @@
 # STAR Discord learning digests (draft, default OFF)
 
+> **Now built into the running bot (opt-in):** with `STAR_DISCORD_LEARNING_DM_OPT_IN=1` and one report source (`STAR_DISCORD_LEARNING_REPORT_SSH=user@host` read-only over the owner's key login, or `STAR_DISCORD_LEARNING_REPORT=<absolute file>`), the bot checks every 30 minutes and DMs the owner only when the verified counters change (`star/discord_bot/digest_task.py`); `/digest` shows the numbers on demand. A pending/unknown delivery now blocks new DMs for 24 hours instead of forever. The one-shot CLI below still works.
+
 STAR already includes an owner-only Discord bot with slash commands, web research, voice features, and no desktop tool permissions. This proposal adds a **separate opt-in one-shot sender** for evidence-backed Night School updates. It does not listen to user messages, install a background service, import screenshots automatically, or change model weights.
 
 ## Before using it

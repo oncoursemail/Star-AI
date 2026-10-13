@@ -4,17 +4,28 @@ No message-content intent, self-bot account, autonomous actions, or background
 recording is used. The gateway is strictly opt-in and owner-scoped.
 """
 from dataclasses import dataclass, field
+import asyncio
 import io
 import logging
 import os
 
 from .audio import MAX_ATTACHMENT_BYTES, ffmpeg_path, post_voice_message, validate_attachment, pcm_to_wav
-from .core import AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, embed_parts
+from .core import (AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, RateLimited, RateLimiter, embed_parts,
+                   split_message)
+from .digest_task import DigestConfig
 from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
 from .service import DiscordService
 
 _LOG = logging.getLogger(__name__)
 _GOLD = 0xE4B95B
+DM_HELP = (
+    "**Talk to STAR here like a normal chat.**\n"
+    "- Type a question: STAR answers (it remembers the last few turns for an hour).\n"
+    "- Attach one screenshot (PNG/JPG/WebP) with a question: STAR looks at it (if images are on).\n"
+    "- `remember: ...` proposes a lesson you approve later in STAR Desktop (if switched on).\n"
+    "- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, `/star reset`.\n"
+    "STAR cannot touch your files, Roblox Studio, GitHub or a shell from Discord."
+)
 
 
 @dataclass(frozen=True)
@@ -24,6 +35,10 @@ class BotConfig:
     sync_commands: bool = False
     sync_guild_id: int | None = None
     dm: DMSettings = field(default_factory=DMSettings)
+    sync_global: bool = False
+    screen_capture: bool = False
+    rate_limit: int = 30
+    digest: DigestConfig = field(default_factory=lambda: DigestConfig(False))
 
     @classmethod
     def from_env(cls, env=None) -> "BotConfig":
@@ -33,15 +48,22 @@ class BotConfig:
             raise ValueError("STAR_DISCORD_BOT_TOKEN must be set outside the repository")
         policy = AccessPolicy.from_env(vars)
         raw = vars.get("STAR_DISCORD_SYNC_GUILD_ID", "").strip()
-        sync = vars.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip()
-        if sync not in {"", "0", "1"}:
-            raise ValueError("STAR_DISCORD_SYNC_COMMANDS must be 0 or 1")
+        sync = vars.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip().lower()
+        if sync not in {"", "0", "1", "global"}:
+            raise ValueError("STAR_DISCORD_SYNC_COMMANDS must be 0 or 1 (or 'global')")
         if raw and (not raw.isdecimal() or int(raw) not in policy.guilds):
             raise ValueError("Command-sync test guild must be in STAR_DISCORD_GUILD_IDS")
+        if sync == "1" and not raw and len(policy.guilds) == 1:
+            raw = str(next(iter(policy.guilds)))  # the single approved server is the obvious target
         if sync == "1" and not raw:
             raise ValueError("Supply an approved STAR_DISCORD_SYNC_GUILD_ID before syncing commands")
+        screen = vars.get("STAR_DISCORD_SCREEN_CAPTURE", "0").strip() or "0"
+        if screen not in {"0", "1"}:
+            raise ValueError("STAR_DISCORD_SCREEN_CAPTURE must be 0 or 1")
         return cls(token, policy, sync == "1", int(raw) if raw else None,
-                   DMSettings.from_env(vars))
+                   DMSettings.from_env(vars), sync_global=sync == "global",
+                   screen_capture=screen == "1", rate_limit=RateLimiter.from_env(vars).limit,
+                   digest=DigestConfig.from_env(vars, policy=policy))
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None):
@@ -50,11 +72,15 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
     from discord import app_commands
     from discord.ext import commands
 
-    service = service or DiscordService(config.policy)
+    service = service or DiscordService(config.policy, rate_limiter=RateLimiter(limit=config.rate_limit))
     intents = discord.Intents.default()
     intents.message_content = False
     intents.members = False
     intents.presences = False
+    # STAR never reads server conversations, so it does not even subscribe to them.
+    intents.guild_messages = False
+    intents.guild_typing = False
+    intents.dm_typing = False
     # DMs addressed directly to this bot do not require privileged MESSAGE_CONTENT.
     # Guild message text and attachments remain inaccessible.
     intents.dm_messages = config.dm.enabled
@@ -63,11 +89,16 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         async def setup_hook(self):
             # Never repeatedly bulk-overwrite a server's commands unless the
             # owner explicitly requests a sync for an initial install/update.
-            if config.sync_commands:
+            if config.sync_global:
+                # Global commands also appear in the owner's DM with the bot.
+                await self.tree.sync()
+            elif config.sync_commands:
                 guild = discord.Object(id=config.sync_guild_id) if config.sync_guild_id else None
                 if guild:
                     self.tree.copy_global_to(guild=guild)
                 await self.tree.sync(guild=guild)
+            if config.digest.enabled:
+                self.loop.create_task(digest_loop())
 
     bot = StarBot(command_prefix=commands.when_mentioned, help_command=None,
                   intents=intents, allowed_mentions=discord.AllowedMentions.none())
@@ -108,12 +139,14 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
     async def publish_answer(interaction, answer: str, *, ephemeral: bool, key: tuple,
                              sources: tuple[dict, ...] = ()):
         chunks = embed_parts(answer)
-        # Long AI answers are delivered as a real file, not silently truncated.
+        # Up to three more embeds continue a long answer in order; beyond that the
+        # full reply is delivered as a real file, never silently truncated.
+        more = chunks[1:4]
         attach = None
-        if len(chunks) > 1:
+        if len(chunks) > 4:
             attach = discord.File(io.BytesIO(answer.encode("utf-8")), filename="star-answer.txt")
         response = embed("✦ STAR · Research" if sources else "✦ STAR · Answer",
-                         chunks[0] + ("\n\n*Full reply attached.*" if attach else ""))
+                         chunks[0] + ("\n\n*(continued below)*" if more else ""))
         if sources:
             # Source URLs come directly from STAR's constrained search adapter,
             # not fabricated by the model or allowed to become executable tools.
@@ -126,12 +159,24 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 response.add_field(name="Sources (search excerpts, not full pages)",
                                    value=" · ".join(links)[:1024], inline=False)
         # discord.py treats file=None as a file and fails, so the file is passed only when there is one.
-        extra = {"file": attach} if attach is not None else {}
-        await interaction.followup.send(
-            embed=response,
-            view=AnswerActions(key, answer, allow_public_voice=not ephemeral), ephemeral=ephemeral,
-            allowed_mentions=discord.AllowedMentions.none(), **extra,
-        )
+        if not more:
+            await interaction.followup.send(
+                embed=response,
+                view=AnswerActions(key, answer, allow_public_voice=not ephemeral), ephemeral=ephemeral,
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return
+        await interaction.followup.send(embed=response, ephemeral=ephemeral,
+                                        allowed_mentions=discord.AllowedMentions.none())
+        for index, part in enumerate(more):
+            last = index == len(more) - 1
+            extra = {"file": attach} if (last and attach is not None) else {}
+            if last:
+                extra["view"] = AnswerActions(key, answer, allow_public_voice=not ephemeral)
+            text = part + ("\n\n*Full reply attached.*" if last and attach is not None else "")
+            await interaction.followup.send(
+                embed=embed(f"✦ STAR · Answer ({index + 2}/{len(more) + 1})", text),
+                ephemeral=ephemeral, allowed_mentions=discord.AllowedMentions.none(), **extra)
 
     class AnswerActions(discord.ui.View):
         def __init__(self, key: tuple, answer: str, *, allow_public_voice: bool):
@@ -166,7 +211,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                         "This channel's temporary conversation context is cleared. No desktop memory was changed."),
                         ephemeral=True)
 
-    star = app_commands.Group(name="star", description="STAR Intelligence AI and speech tools")
+    star = app_commands.Group(name="star", description="STAR Intelligence AI and speech tools",
+                              allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=True,
+                                                                               private_channel=False),
+                              allowed_installs=app_commands.AppInstallationType(guild=True, user=False))
 
     @star.command(name="ask", description="Ask STAR's configured local or hosted brain")
     @app_commands.describe(prompt="Question or Roblox development request", private="Only show your answer to you")
@@ -199,6 +247,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         if await permit(interaction) is None:
             return
         result = embed("✦ STAR · Command Center",
+            "**Quick**\n`/ask` — ask STAR · `/image` — STAR looks at an image you attach\n"
+            "`/status` — what is switched on · `/digest` — latest Night School numbers\n"
+            "`/screen` — STAR looks at this PC's screen (asks you to confirm every time)\n"
+            "Or just **DM the bot** like a normal chat (text or one screenshot).\n"
             "**Thinking**\n`/star ask` — ask Star (private by default)\n"
             "`/star research` — web-supported answer with actual search sources\n"
             "`/star reset` — forget this channel's temporary context\n"
@@ -214,24 +266,46 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             "*Discord mode is chat-only: Roblox Studio, filesystem, GitHub and MCP edits are unavailable.*")
         await interaction.response.send_message(embed=result, ephemeral=True)
 
-    @star.command(name="status", description="Check STAR's Discord configuration")
-    async def status(interaction: discord.Interaction):
-        if await permit(interaction) is None:
-            return
+    def status_text() -> str:
         try:
             from ..desktop_core import Settings, app_data
             settings = Settings.load(app_data() / "settings.json")
             from ..server_roles import quick_model
             model = quick_model(settings) or "Not selected"
+            vision = str(getattr(settings, "vision_model", "") or "") or "Not selected"
             provider = settings.provider
         except (OSError, ValueError):
-            model, provider = "Not configured", "Not configured"
-        detail = (f"**Provider:** `{provider[:60]}`\n**Model:** `{model[:120]}`\n"
-                  "**Access:** configured Discord owner only\n**Intents:** non-privileged\n"
-                  "**Tools:** disabled in Discord\n**Context:** temporary, in RAM\n"
-                  "**Voice:** Kokoro + FFmpeg (optional)\n**Listening:** audio attachments by explicit request only\n"
-                  "*Model availability and audio output have not been tested by this status command.*")
-        await interaction.response.send_message(embed=embed("✦ STAR · Status", detail), ephemeral=True)
+            model, vision, provider = "Not configured", "Not configured", "Not configured"
+
+        def onoff(flag: bool) -> str:
+            return "on" if flag else "off"
+
+        try:
+            from .digest_task import ledger_state
+            digest = config.digest.describe() + (f" · {ledger_state(config.digest)}" if config.digest.enabled else "")
+        except Exception:  # a broken state file must not break /status
+            digest = config.digest.describe()
+        return (f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
+                f"**Vision model:** `{vision[:120]}`\n"
+                "**Access:** configured Discord owner only · "
+                f"{config.rate_limit} requests / 10 min\n"
+                f"**DM chat:** {onoff(config.dm.enabled)} · **Images:** {onoff(config.dm.images)} · "
+                f"**Remember:** {onoff(config.dm.learning_candidates)} · "
+                f"**PC screenshots:** {onoff(config.screen_capture)} (each needs a button press)\n"
+                f"**Night School digests:** {digest}\n"
+                "**Intents:** non-privileged (no server message content)\n"
+                "**Tools:** none from Discord (no files, Studio, GitHub or shell)\n"
+                "**Context:** temporary, in RAM (`/star reset` clears it)\n"
+                "*Model availability has not been tested by this status command; ask something to check.*")
+
+    async def send_status(interaction):
+        if await permit(interaction) is None:
+            return
+        await interaction.response.send_message(embed=embed("✦ STAR · Status", status_text()), ephemeral=True)
+
+    @star.command(name="status", description="Check STAR's Discord configuration")
+    async def status(interaction: discord.Interaction):
+        await send_status(interaction)
 
     @star.command(name="doctor", description="Check STAR Discord installation and voice dependencies")
     async def doctor(interaction: discord.Interaction):
@@ -388,6 +462,151 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
 
     bot.tree.add_command(star)
 
+    # ---- Short top-level commands (also usable in the owner's DM once synced globally) ----
+
+    def owner_contexts(command):
+        # Server channels and the owner's DM with the bot; never group DMs or user installs.
+        command = app_commands.allowed_installs(guilds=True, users=False)(command)
+        return app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)(command)
+
+    async def run_ask(interaction, prompt: str, private: bool):
+        key = await permit(interaction)
+        if key is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=private)
+        try:
+            answer = await service.ask(key, prompt)
+            await publish_answer(interaction, answer, ephemeral=private, key=key)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
+    @owner_contexts
+    @bot.tree.command(name="ask", description="Ask STAR anything (private by default)")
+    @app_commands.describe(prompt="Your question or Roblox development request",
+                           private="Only show the answer to you")
+    async def ask_top(interaction: discord.Interaction, prompt: str, private: bool = True):
+        await run_ask(interaction, prompt, private)
+
+    @owner_contexts
+    @bot.tree.command(name="status", description="What STAR's Discord bot has switched on")
+    async def status_top(interaction: discord.Interaction):
+        await send_status(interaction)
+
+    @owner_contexts
+    @bot.tree.command(name="image", description="STAR looks at an image or screenshot you attach")
+    @app_commands.describe(image="PNG, JPG or WebP, up to 6 MiB", question="What should STAR look for?",
+                           private="Only show the answer to you")
+    async def image_top(interaction: discord.Interaction, image: discord.Attachment,
+                        question: str = "", private: bool = True):
+        key = await permit(interaction)
+        if key is None:
+            return
+        if not config.dm.images:
+            await problem(interaction, "Image analysis is off. Set STAR_DISCORD_DM_IMAGES=1 in "
+                                       "discord-settings.env and restart the bot.")
+            return
+        await interaction.response.defer(thinking=True, ephemeral=private)
+        try:
+            if not 0 < (image.size or 0) <= MAX_IMAGE_BYTES:
+                raise ValueError("Image must be nonempty and at most 6 MiB")
+            payload = await image.read()
+            photo = prepare_discord_image(image.filename, image.content_type, image.size, payload)
+            answer = await service.inspect_image(key, question or "Describe this image and point out problems.",
+                                                 photo)
+            await publish_answer(interaction, answer, ephemeral=private, key=key)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
+    class ScreenConfirm(discord.ui.View):
+        """Per-request confirmation: one capture per button press, owner only, expires in 60 s."""
+
+        def __init__(self, key: tuple, owner_id: int, question: str):
+            super().__init__(timeout=60)
+            self.key, self.owner_id, self.question, self.used = key, owner_id, question, False
+
+        async def interaction_check(self, interaction: discord.Interaction) -> bool:
+            return interaction.user.id == self.owner_id
+
+        @discord.ui.button(label="Capture my screen now", emoji="📸", style=discord.ButtonStyle.danger)
+        async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+            if self.used:
+                await problem(interaction, "That confirmation was already used. Run `/screen` again.")
+                return
+            self.used = True
+            self.stop()
+            if await permit(interaction) != self.key:
+                return
+            await interaction.response.defer(thinking=True, ephemeral=True)
+            try:
+                answer, jpeg = await service.screen_capture(self.key, self.question)
+                shot = discord.File(io.BytesIO(jpeg), filename="star-screen.jpg")
+                await interaction.followup.send(
+                    embed=embed("✦ STAR · Screen", "This is the one capture STAR looked at (not saved)."),
+                    file=shot, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+                await publish_answer(interaction, answer, ephemeral=True, key=self.key)
+            except Exception as exc:
+                await handle_failure(interaction, exc)
+
+        @discord.ui.button(label="Cancel", style=discord.ButtonStyle.secondary)
+        async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+            self.used = True
+            self.stop()
+            await interaction.response.send_message("Cancelled. Nothing was captured.", ephemeral=True)
+
+    @owner_contexts
+    @bot.tree.command(name="screen", description="STAR looks at this PC's screen (asks you to confirm first)")
+    @app_commands.describe(question="What should STAR look for on the screen?")
+    async def screen_top(interaction: discord.Interaction, question: str = ""):
+        key = await permit(interaction)
+        if key is None:
+            return
+        if not config.screen_capture:
+            await problem(interaction, "PC screenshots are off. Set STAR_DISCORD_SCREEN_CAPTURE=1 in "
+                                       "discord-settings.env and restart the bot.")
+            return
+        await interaction.response.send_message(
+            embed=embed("✦ STAR · Confirm screenshot",
+                        "STAR will take **one** screenshot of the PC it runs on and send it to your "
+                        "configured vision model. Nothing is saved. Confirm within 60 seconds."),
+            view=ScreenConfirm(key, interaction.user.id, question), ephemeral=True)
+
+    @owner_contexts
+    @bot.tree.command(name="digest", description="Latest Night School practice numbers (verified counters only)")
+    async def digest_top(interaction: discord.Interaction):
+        if await permit(interaction) is None:
+            return
+        if not config.digest.enabled:
+            await problem(interaction, "Night School digests are off. Set STAR_DISCORD_LEARNING_DM_OPT_IN=1 and a "
+                                       "report source in discord-settings.env, then restart the bot.")
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            from .digest_task import current_digest
+            text = await current_digest(config.digest)
+            await interaction.followup.send(embed=embed("✦ STAR · Night School", text), ephemeral=True)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
+    async def digest_loop():
+        """Owner opt-in: DM a digest only when the verified counters change."""
+        from .digest_task import check_and_send
+        await bot.wait_until_ready()
+
+        async def send(body: str, visual):
+            user = await bot.fetch_user(config.digest.owner_id)
+            extra = {}
+            if visual is not None:
+                extra["file"] = discord.File(io.BytesIO(visual[1]), filename=visual[0])
+            await user.send(content=body, allowed_mentions=discord.AllowedMentions.none(), **extra)
+
+        while not bot.is_closed():
+            try:
+                result = await check_and_send(config.digest, send)
+                _LOG.info("Night School digest check: %s", result.get("state"))
+            except Exception as exc:  # never log report text, IDs or tokens
+                _LOG.warning("Night School digest check failed: %s", type(exc).__name__)
+            await asyncio.sleep(config.digest.check_minutes * 60)
+
     @app_commands.context_menu(name="Ask STAR about this")
     async def ask_about_message(interaction: discord.Interaction, message: discord.Message):
         key = await permit(interaction)
@@ -423,8 +642,14 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         try:
             key = service.authorized(message.author.id, None, message.channel.id)
+        except RateLimited as exc:  # only reachable after the owner check passed
+            await message.channel.send(str(exc), allowed_mentions=discord.AllowedMentions.none())
+            return
         except PermissionError:
             return  # No response or information to unapproved users.
+        if (message.content or "").strip().lower() in {"help", "/help", "?", "commands"} and not message.attachments:
+            await message.channel.send(DM_HELP, allowed_mentions=discord.AllowedMentions.none())
+            return
         action = classify_owner_dm(
             message.content or "", attachments=len(message.attachments), options=config.dm)
         if action.error:
@@ -469,12 +694,16 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             # Never write prompts, screenshots, credentials, or model outputs to logs.
             _LOG.warning("STAR owner DM failed: %s", type(exc).__name__)
             reply_text = "STAR could not process this DM. Check its configured model and image settings."
-        options = {"allowed_mentions": discord.AllowedMentions.none()}
-        if len(reply_text) > 1900:
-            options["file"] = discord.File(
-                io.BytesIO(reply_text.encode("utf-8")), filename="star-dm-answer.txt")
-            reply_text = reply_text[:1700] + "\n\nFull answer attached."
-        await message.channel.send(content=reply_text, **options)
+        # Long answers arrive as several normal messages (code blocks kept intact);
+        # anything beyond six messages is attached as a text file instead of truncated.
+        parts, overflow = split_message(reply_text)
+        for index, part in enumerate(parts):
+            options = {"allowed_mentions": discord.AllowedMentions.none()}
+            if overflow and index == len(parts) - 1:
+                options["file"] = discord.File(
+                    io.BytesIO(reply_text.encode("utf-8")), filename="star-dm-answer.txt")
+                part = part[:1900] + "\n\n*Full answer attached.*"
+            await message.channel.send(content=part, **options)
 
     @bot.event
     async def on_ready():
