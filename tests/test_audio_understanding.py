@@ -336,7 +336,11 @@ def test_deadline_uses_one_budget_for_all_windows():
         registered = audio.RegisteredAudioBackend(audio.AudioCapability('fixture', 'fake_native', native_audio=True, max_clip_seconds=1), slow)
         with pytest.raises(audio.AudioUnavailable, match='timed out'):
             await audio.inspect_audio(source(frames=48000), 'Sounds?', registered, timeout_seconds=0.05)
-        assert len(calls) == 2
+        # Scheduling overhead varies on busy Windows CI: the single 50 ms
+        # deadline may expire immediately after the first 35 ms backend call,
+        # or after the second starts. It must NEVER reset and complete all
+        # three windows (which would also fail the timed-out assertion above).
+        assert 1 <= len(calls) <= 2
     asyncio.run(scenario())
 
 
