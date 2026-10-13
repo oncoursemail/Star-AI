@@ -1024,3 +1024,32 @@ def test_a_connector_studio_id_maps_to_a_free_attached_studio():
     both = [taken, lease("studio-test", "studio-lab-c", studio_id="studio-101")]
     assert admit("studio-test", two, both, holder="studio-lab-a", studio_id="mcp-abc", universe_id=universe,
                  place_id=place, identity_verified=True).action == "wait"
+
+
+# --- Brain page panel ---------------------------------------------------------------------------------------------------
+
+def test_brain_page_planner_snapshot_is_compact_and_fails_closed(tmp_path):
+    from star.brain_overview import planner_snapshot
+    from star.desktop_core import Settings
+    settings_file = tmp_path / "settings.json"
+    Settings().save(settings_file)
+    assert planner_snapshot(settings_file)["available"] is False          # local provider: nothing is asked
+    p, clock = planner(tmp_path)
+    p.observe(snap_dict(brain1(), clock))
+    p.admit({"job_class": "nightschool", "holder": "nightschool", "job_id": "practice", "slot": 1})
+    p.admit({"job_class": "eval", "holder": "eval-1", "job_id": "A-1"})
+    clock.t += 1
+    p.observe(snap_dict(brain1(busy=(1,)), clock))
+
+    class Direct:
+        def status(self):
+            return p.status()
+    data = planner_snapshot(settings_file, client=Direct())
+    assert data["available"] is True and data["machines"][0]["name"] == "brain1"
+    assert data["machines"][0]["slots"]["star-fast"] == {"busy": 1, "total": 2}
+    assert data["jobs"][0]["jobClass"] == "nightschool" and data["queue"][0]["jobClass"] == "eval"
+
+    class Silent:
+        def status(self):
+            return None
+    assert planner_snapshot(settings_file, client=Silent())["available"] is False
