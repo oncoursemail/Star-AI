@@ -262,6 +262,7 @@ class JobClass:
     chat_duty: float = 1.0           # share of time it may keep the machine busy while chat is active
     exclusive: bool = False          # a timing window: nothing else batch on the machine, quiet lock held
     max_ttl_s: int = 120             # a lease not renewed within this time is gone
+    machines: tuple = ()             # alternatives, best first: the job goes to the first one with headroom
 
     def __post_init__(self) -> None:
         if not _identifier(self.name) or not _identifier(self.machine) or not _identifier(self.capability):
@@ -280,6 +281,10 @@ DEFAULT_CLASSES: dict[str, JobClass] = {c.name: c for c in (
     JobClass("reindex", "brain1", 20, "cpu", cpu_threads=8, memory_mib=2048, chat_duty=0.25, max_ttl_s=300),
     JobClass("studio-test", "brain2", 50, "studio", cpu_threads=2, memory_mib=2048, max_ttl_s=600),
     JobClass("gpu-train", "pc", 30, "gpu", cpu_threads=4, memory_mib=4096, vram_mib=2048, max_ttl_s=300),
+    # Non-LLM CPU work (Luau VM test runs, luau-analyze, linters, grading/verify scripts): brain 2's CPU-worker
+    # pool first (beside Studio, inside its RAM budget), brain 1 only when brain 2 has no headroom.
+    JobClass("cpu-work", "brain2", 35, "cpu", cpu_threads=1, memory_mib=512, max_ttl_s=300,
+             machines=("brain2", "brain1")),
 )}
 
 
@@ -295,6 +300,8 @@ class LivePolicy:
     stale_s: Mapping[str, float] | None = None        # a machine snapshot older than this is not trusted
     cpu_busy_max: float = 0.95                        # sustained CPU above this: no new batch process on the machine
     min_free_mib: Mapping[str, int] | None = None     # running batch yields below this much available RAM
+    studio_reserve_mib: int = 2560                    # kept free for an attached Studio's playtests (brain 2 measured:
+                                                      # Studio + WebView ~5.8 GiB of a 12 GiB container, peaks at it)
     helper_models: frozenset = HELPER_MODELS          # used by batch jobs themselves: never a sign of chat
 
     def __post_init__(self) -> None:
@@ -543,6 +550,8 @@ def _capacity_check(req: JobRequest, cls: JobClass, snap: MachineSnapshot, lease
     if len(mine) >= 7:
         return "too many jobs on this machine"
     memory = snap.mem_available_mib - policy.mem_reserve_mib.get(cls.machine, 0) + sum(l.memory_mib for l in mine)
+    if snap.studios and cls.capability != "studio":     # the CPU-worker pool never eats Studio's playtest headroom
+        memory -= policy.studio_reserve_mib
     cpu = snap.cpu_threads - policy.cpu_reserve_threads.get(cls.machine, 0)
     if memory < 1:
         return f"not enough free RAM on {cls.machine} ({snap.mem_available_mib} MiB available)"
@@ -636,6 +645,27 @@ def resolve_studio(req: JobRequest, snap: MachineSnapshot | None, leases: list) 
     return replace(req, studio_id=(free or ids)[0])
 
 
+def decide_admit_any(req: JobRequest, snapshots: Mapping[str, MachineSnapshot], leases: list, *, now: float,
+                     last_chat: Mapping[str, float], pending=(), classes: Mapping[str, JobClass] = DEFAULT_CLASSES,
+                     policy: LivePolicy = LivePolicy()) -> tuple[Decision, str]:
+    """For a class with alternative machines: the first machine that admits it (best first), else the first
+    machine's answer. Returns (decision, machine)."""
+    from dataclasses import replace
+    cls = classes.get(req.job_class)
+    if cls is None:
+        return Decision("refuse", f"unknown job class {req.job_class}", retry_after_s=600), ""
+    answers = []
+    for machine in (cls.machines or (cls.machine,)):
+        local = {**classes, cls.name: replace(cls, machine=machine)}
+        decision = decide_admit(req, snapshots.get(machine), leases, now=now, last_chat=last_chat, pending=pending,
+                                classes=local, policy=policy)
+        if decision.action == "run":
+            return decision, machine
+        answers.append((decision, machine))
+    waits = [a for a in answers if a[0].action == "wait"]
+    return (waits or answers)[0]
+
+
 def decide_admit(req: JobRequest, snap: MachineSnapshot | None, leases: list, *, now: float,
                  last_chat: Mapping[str, float], pending=(), classes: Mapping[str, JobClass] = DEFAULT_CLASSES,
                  policy: LivePolicy = LivePolicy()) -> Decision:
@@ -696,6 +726,10 @@ def decide_renew(lease: Lease, snap: MachineSnapshot | None, leases: list, *, no
     """May this running job go on? "run" (with a duty factor), "yield" (stop at the next safe point and ask again
     later), "fallback" (no fresh load data) or "refuse" (the lease is gone: ask for a new one)."""
     cls = classes.get(lease.job_class)
+    if cls is not None and cls.machines and lease.machine in cls.machines and lease.machine != cls.machine:
+        from dataclasses import replace
+        cls = replace(cls, machine=lease.machine)
+        classes = {**classes, cls.name: cls}
     if cls is None or now > lease.expires_at:
         return Decision("refuse", "lease expired or unknown", retry_after_s=1)
     problem = _snapshot_problem(snap, cls.machine, now, policy)

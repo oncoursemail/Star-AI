@@ -868,3 +868,53 @@ def test_lane_answers_run_in_a_child_process_that_a_yield_kills(tmp_path, monkey
     with pytest.raises(NsYielded):
         model.solve({"id": "slow", "prompt": "p"}, [])
     assert Child.killed
+
+
+# --- brain 2 as two pools ---------------------------------------------------------------------------------------------
+
+def test_cpu_work_goes_to_brain2_first_and_never_eats_studio_headroom():
+    snaps = {"brain1": brain1(), "brain2": brain2(mem=4600)}
+    req = arp.JobRequest("cpu-work", "eval-check", "luau-check")
+    decision, machine = arp.decide_admit_any(req, snaps, [], now=NOW, last_chat={})
+    assert decision.action == "run" and machine == "brain2"
+    tight = {"brain1": brain1(), "brain2": brain2(mem=3500)}     # 3500 - 1024 base - 2560 Studio play reserve < 512
+    decision, machine = arp.decide_admit_any(req, tight, [], now=NOW, last_chat={})
+    assert decision.action == "run" and machine == "brain1"
+    busy1 = {"brain1": brain1(cpu=0.99), "brain2": brain2(mem=3500)}
+    decision, machine = arp.decide_admit_any(req, busy1, [], now=NOW, last_chat={})
+    assert decision.action == "wait"
+    assert arp.decide_admit_any(req, {}, [], now=NOW, last_chat={})[0].action == "fallback"
+
+
+def test_service_places_cpu_work_and_renews_on_that_machine(tmp_path):
+    p, clock = planner(tmp_path)
+    p.observe(snap_dict(brain1(), clock))
+    p.observe(snap_dict(brain2(mem=4600), clock))
+    grant = p.admit({"job_class": "cpu-work", "holder": "eval-check", "job_id": "luau-check"})
+    assert grant["action"] == "run" and grant["machine"] == "brain2"
+    assert p.renew({"lease_id": grant["lease_id"]})["action"] == "run"
+    assert p.status()["leases"][0]["machine"] == "brain2"
+
+
+def test_planned_sandbox_uses_the_machine_the_planner_picked():
+    from star import eval_runner as er
+
+    class Box:
+        def __init__(self, name):
+            self.name, self.limits = name, {"wall_s": 15}
+
+        def run(self, source):
+            return self.name
+
+        def lock_present(self):
+            return False
+
+    class Picker(FakeClient):
+        def admit(self, job_class, holder, job_id, **extra):
+            grant = super().admit(job_class, holder, job_id, **extra)
+            grant.machine = "brain2" if grant.planned else ""
+            return grant
+    box = er.PlannedSandbox({"brain2": Box("b2"), "brain1": Box("b1")}, Picker(), Box("default"))
+    assert box.run("print(1)") == "b2" and box.placed == {"brain2": 1}
+    out = er.PlannedSandbox({"brain2": Box("b2")}, FakeClient(admits=("fallback",)), Box("default"))
+    assert out.run("print(1)") == "default" and out.lock_present() is False

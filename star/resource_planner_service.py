@@ -32,7 +32,8 @@ import time
 import urllib.request
 
 from .agent_resource_planner import (DEFAULT_CLASSES, Decision, JobRequest, Lease, LivePolicy, MachineSnapshot,
-                                     Pending, chat_signs, decide_admit, decide_renew, planner_lock_owner,
+                                     Pending, chat_signs, decide_admit, decide_admit_any, decide_renew,
+                                     planner_lock_owner,
                                      resolve_studio)
 from . import resource_probes as probes
 
@@ -103,15 +104,22 @@ class Planner:
             snap = self.snapshots.get(cls.machine) if cls else None
             if cls is not None and cls.capability == "studio":
                 req = resolve_studio(req, snap, list(self.leases.values()))
-            decision = decide_admit(req, snap, list(self.leases.values()), now=now, last_chat=self.last_chat,
-                                    pending=self.pending, classes=self.classes, policy=self.policy)
+            machine = cls.machine if cls else ""
+            if cls is not None and cls.machines:
+                decision, machine = decide_admit_any(req, self.snapshots, list(self.leases.values()), now=now,
+                                                     last_chat=self.last_chat, pending=self.pending,
+                                                     classes=self.classes, policy=self.policy)
+            else:
+                decision = decide_admit(req, snap, list(self.leases.values()), now=now, last_chat=self.last_chat,
+                                        pending=self.pending, classes=self.classes, policy=self.policy)
             lease = None
             if decision.action == "run" and cls is not None:
                 if cls.exclusive and not self._take_lock(req.holder):
                     decision = Decision("wait", "could not set the quiet lock", retry_after_s=15)
                 else:
                     ttl = min(cls.max_ttl_s, req.ttl_s or cls.max_ttl_s)
-                    lease = Lease(secrets.token_hex(8), cls.name, cls.machine, req.holder, req.job_id, cls.capability,
+                    lease = Lease(secrets.token_hex(8), cls.name, machine or cls.machine, req.holder, req.job_id,
+                                  cls.capability,
                                   now, now + ttl, req.memory_mib or cls.memory_mib, cls.cpu_threads, slot=req.slot,
                                   studio_id=req.studio_id, vram_mib=req.vram_mib or cls.vram_mib, duty=decision.duty)
                     self.leases[lease.lease_id] = lease
@@ -221,7 +229,7 @@ class Planner:
         out = {"action": decision.action, "reason": decision.reason, "duty": decision.duty,
                "retry_after_s": decision.retry_after_s}
         if lease is not None:
-            out.update(lease_id=lease.lease_id, ttl_s=round(lease.expires_at - self.clock(), 1))
+            out.update(lease_id=lease.lease_id, ttl_s=round(lease.expires_at - self.clock(), 1), machine=lease.machine)
         return out
 
     def _sample(self) -> None:

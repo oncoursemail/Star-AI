@@ -34,6 +34,7 @@ class Grant:
     retry_after_s: float = 10.0
     job_class: str = ""
     request: dict = field(default_factory=dict)
+    machine: str = ""                # where the planner put the job (classes with alternative machines)
 
     @property
     def go(self) -> bool:
@@ -122,7 +123,7 @@ class PlannerClient:
             return Grant("fallback", fallback_reason, job_class=job_class, request=request)
         return Grant(answer["action"], str(answer.get("reason", ""))[:200], str(answer.get("lease_id") or ""),
                      float(answer.get("duty", 1.0) or 1.0), float(answer.get("retry_after_s", 10) or 10),
-                     job_class, request)
+                     job_class, request, str(answer.get("machine") or "")[:20])
 
     def admit(self, job_class: str, holder: str, job_id: str, **extra) -> Grant:
         request = {"job_class": job_class, "holder": holder, "job_id": job_id, **extra}

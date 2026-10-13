@@ -457,6 +457,31 @@ def served_models(server: str, key: str) -> list[str]:
         return []
 
 
+class PlannedSandbox:
+    """Luau VM checks on whichever STAR container the resource planner picks for "cpu-work" (brain 2's CPU-worker
+    pool first, brain 1 when brain 2 has no headroom). Planner off or unreachable: the default sandbox, as before."""
+
+    def __init__(self, boxes: dict, planner, default, holder: str = ""):
+        self.boxes, self.planner, self.default = boxes, planner, default
+        self.holder = holder or f"eval-check-{os.getpid()}"
+        self.limits = getattr(default, "limits", {})
+        self.placed: dict[str, int] = {}
+
+    def run(self, source: str):
+        grant = self.planner.admit("cpu-work", self.holder, "luau-check")
+        box = self.boxes.get(grant.machine) if grant.planned else None
+        try:
+            chosen = box or self.default
+            name = grant.machine if box else "default"
+            self.placed[name] = self.placed.get(name, 0) + 1
+            return chosen.run(source)
+        finally:
+            self.planner.release(grant)
+
+    def lock_present(self, *args, **kwargs):
+        return self.default.lock_present(*args, **kwargs)
+
+
 def build_real(args, log=print):
     """(run_info, ask, scorer, lock_probe, secrets) wired to the real server."""
     from .desktop_core import Settings, run_task
@@ -478,7 +503,16 @@ def build_real(args, log=print):
     if knowledge is None:
         raise SystemExit("STAR Knowledge is not configured for this server address")
     ssh = args.ssh or os.environ.get("STAR_EVAL_SSH", "")
-    sandbox = ContainerSandbox(ssh) if ssh else None
+    # The Luau VM runs (sandbox) may go to another STAR container (brain 2: CPU work off the model machine); the
+    # quiet-lock probe always asks brain 1.
+    sandbox_ssh = getattr(args, "sandbox_ssh", "") or os.environ.get("STAR_EVAL_SANDBOX_SSH", "") or ssh
+    sandbox = ContainerSandbox(sandbox_ssh) if sandbox_ssh else None
+    lock_box = ContainerSandbox(ssh) if ssh else None
+    if sandbox is not None and lock_box is not None and sandbox_ssh != ssh:
+        from .planner_client import PlannerClient
+        planner = PlannerClient(timeout=3.0)
+        if planner.enabled:
+            sandbox = PlannedSandbox({"brain2": sandbox, "brain1": lock_box}, planner, sandbox)
 
     def luau_check(code: str, strict: bool = False):
         last = None
@@ -515,8 +549,9 @@ def build_real(args, log=print):
         "platform": sys.platform,
         "fingerprint": hashlib.sha256(json.dumps(fingerprint_source, sort_keys=True).encode()).hexdigest()[:12],
     }
-    probe = sandbox.lock_present if sandbox else None
-    return run_info, ask, scorer, probe, [key, server, ssh, ssh.split("@")[-1] if ssh else ""]
+    probe = lock_box.lock_present if lock_box else None
+    return run_info, ask, scorer, probe, [key, server, ssh, ssh.split("@")[-1] if ssh else "",
+                                          sandbox_ssh, sandbox_ssh.split("@")[-1] if sandbox_ssh else ""]
 
 
 def rescore(suite: Suite, result: dict, scorer, *, log=print) -> dict:
@@ -615,6 +650,8 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--suite", required=True, type=Path)
     parser.add_argument("--server", default="", help="STAR Server URL (or STAR_EVAL_SERVER)")
     parser.add_argument("--ssh", default="", help="user@host of the server's LXD host (or STAR_EVAL_SSH)")
+    parser.add_argument("--sandbox-ssh", default="", help="user@host whose STAR container runs the Luau VM checks "
+                        "(or STAR_EVAL_SANDBOX_SSH; default: --ssh). Brain 2 takes this CPU work off the model machine")
     parser.add_argument("--key-file", default=str(DEFAULT_KEY_FILE))
     parser.add_argument("--model", default="star-fast")
     parser.add_argument("--mode", default="auto", choices=["auto", "fast", "agent"])
