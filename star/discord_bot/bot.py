@@ -16,6 +16,7 @@ from .digest_task import DigestConfig
 from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
 from .service import DiscordService
 from .streaming import LiveReply
+from .presence import PresenceSettings, activity_at, rotate_presence
 
 _LOG = logging.getLogger(__name__)
 _GOLD = 0xE4B95B
@@ -41,6 +42,7 @@ class BotConfig:
     screen_capture: bool = False
     rate_limit: int = 30
     digest: DigestConfig = field(default_factory=lambda: DigestConfig(False))
+    presence: PresenceSettings = field(default_factory=PresenceSettings)
 
     @classmethod
     def from_env(cls, env=None) -> "BotConfig":
@@ -66,7 +68,8 @@ class BotConfig:
         return cls(token, policy, sync == "1", int(raw) if raw else None,
                    DMSettings.from_env(vars), sync_global=sync == "global",
                    screen_capture=screen == "1", rate_limit=RateLimiter.from_env(vars).limit,
-                   digest=DigestConfig.from_env(vars, policy=policy))
+                   digest=DigestConfig.from_env(vars, policy=policy),
+                   presence=PresenceSettings.from_env(vars))
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None):
@@ -102,9 +105,29 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 await self.tree.sync(guild=guild)
             if config.digest.enabled:
                 self.loop.create_task(digest_loop())
+            if config.presence.enabled:
+                self._star_presence_task = self.loop.create_task(rotate_presence(
+                    self, config.presence, activity_factory=make_discord_activity,
+                    on_error=lambda name: _LOG.warning("STAR Discord activity update failed (%s)", name)))
 
+        async def close(self):
+            task = getattr(self, "_star_presence_task", None)
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            await super().close()
+
+    def make_discord_activity(kind: str, label: str):
+        return discord.Activity(type=getattr(discord.ActivityType, kind), name=label)
+
+    # The initial Gateway activity is constructor metadata. In particular,
+    # do not send presence updates inside on_ready (which runs on reconnect).
+    initial = {"activity": make_discord_activity(*activity_at(0))} if config.presence.enabled else {}
     bot = StarBot(command_prefix=commands.when_mentioned, help_command=None,
-                  intents=intents, allowed_mentions=discord.AllowedMentions.none())
+                  intents=intents, allowed_mentions=discord.AllowedMentions.none(), **initial)
 
     def embed(title: str, description: str, *, footer: str = "STAR Intelligence · Discord"):
         result = discord.Embed(title=title[:250], description=description[:MAX_EMBED_DESCRIPTION], color=_GOLD)
@@ -305,7 +328,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             digest = config.digest.describe() + (f" · {ledger_state(config.digest)}" if config.digest.enabled else "")
         except Exception:  # a broken state file must not break /status
             digest = config.digest.describe()
-        return (f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
+        presence = (f"on · rotates every {config.presence.interval_minutes} min (when connected)"
+                    if config.presence.enabled else "off")
+        return (f"**Bot activity:** {presence}\\n"
+                f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
                 f"**Vision model:** `{vision[:120]}`\n"
                 "**Access:** configured Discord owner only · "
                 f"{config.rate_limit} requests / 10 min\n"
