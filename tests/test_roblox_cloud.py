@@ -491,7 +491,7 @@ def test_script_kinds_init_files_and_awkward_text(tmp_path):
                        "Prices": "ModuleScript", "StarterPlayer": "StarterPlayer",
                        "StarterPlayerScripts": "StarterPlayerScripts", "Hud": "LocalScript"}
     main = root.find(".//Item[@class='Script']/Properties/ProtectedString").text
-    assert main == "print('a ]]> b <&> é')\n"
+    assert main == "print('a ]]> b <&> é')\r\n"
 
 
 def test_the_builder_refuses_what_it_cannot_represent(tmp_path):
