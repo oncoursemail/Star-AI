@@ -24,6 +24,9 @@ TOOLS = [
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
+    {"name": "workspace_binary_triage", "description": "Identify and SHA-256 fingerprint an explicitly selected PE/ELF/Mach-O/WASM binary for approved REA/Ghidra investigations. Does not execute or disassemble it.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}},
+                     "required": ["path"], "additionalProperties": False}},
     {"name": "workspace_asset_audit", "description": "Audit a selected .gltf/.glb 3D asset's meshes, triangle budget, materials, skins and animations without running Blender or reading external assets.",
      "inputSchema": {"type": "object", "properties": {
          "path": {"type": "string"}, "target": {"type": "string", "enum": ["general", "roblox", "godot", "unity", "unreal"]},
@@ -78,6 +81,9 @@ class Workspace:
             validate(args, schema)
         except ValidationError:
             raise ValueError('Invalid workspace tool arguments') from None
+        if name == 'workspace_binary_triage':
+            from . import binary_evidence
+            return binary_evidence.triage(self, args['path'])
         if name == 'workspace_asset_audit':
             from . import artifact_intelligence
             return artifact_intelligence.audit(self, args['path'], target=args.get('target', 'general'),
