@@ -271,3 +271,20 @@ def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
     assert "roblox-architecture-blender" not in skill_packs.matching_names(prompt)
     assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
     assert skill_packs.enabled_names({skill_packs.ENV_VAR: "roblox-architecture-blender"}) == {"roblox-architecture-blender"}
+
+
+def test_architecture_guidance_documents_opt_in_and_source_only():
+    # The skill is bundled for future opt-in, but it may not suggest the installed
+    # application can export Blender files or that native CI proves Studio import.
+    pack = next(pack for pack in skill_packs.available() if pack.name == "roblox-architecture-blender")
+    assert "STAR_ARCHITECTURE_TOOLS=1" in pack.body
+    assert "source checkout of STAR" in pack.body
+    assert "installed app does not include" in pack.body
+
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    guide = (root / "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md").read_text(encoding="utf-8")
+    assert "Experimental building and Blender kit (source checkout only, off by default)" in readme
+    assert "STAR_ARCHITECTURE_TOOLS=1" in readme
+    assert "final commit has no new native Blender smoke check" in readme
+    assert "Roblox Studio never ran" in guide
