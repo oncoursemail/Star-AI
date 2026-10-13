@@ -330,7 +330,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             digest = config.digest.describe()
         presence = (f"on · rotates every {config.presence.interval_minutes} min (when connected)"
                     if config.presence.enabled else "off")
-        return (f"**Bot activity:** {presence}\\n"
+        return (f"**Bot activity:** {presence}\n"
                 f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
                 f"**Vision model:** `{vision[:120]}`\n"
                 "**Access:** configured Discord owner only · "
