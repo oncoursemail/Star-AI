@@ -993,3 +993,19 @@ def test_studio_processes_counts_studio_itself_not_its_webview_helpers(tmp_path)
     proc(13, "vinegar", "roblox-studio:1+placeId:1")
     found = probes.studio_processes(str(tmp_path))
     assert found == [{"studio_id": "studio-10", "place_id": 128074805767678, "universe_id": 10770312935}]
+
+
+def test_lesson_drafts_on_star_quick_are_not_mistaken_for_chat(tmp_path):
+    ns = arp.Lease("L", "nightschool", "brain1", "nightschool", "practice", "star-fast", NOW, NOW + 100, 3072, 12,
+                   slot=1, extra_models=("star-voice",))
+    assert arp.chat_signs(None, brain1(busy=(1,), voice_busy=(1,)), [ns]) == []
+    assert arp.chat_signs(None, brain1(busy=(1,), voice_busy=(0,)), [ns])          # star-voice slot 0 = chat
+    p, clock = planner(tmp_path)
+    p.observe(snap_dict(brain1(), clock))
+    grant = p.admit({"job_class": "nightschool", "holder": "ns", "job_id": "practice", "slot": 1,
+                     "extra_models": ["star-voice"]})
+    assert grant["action"] == "run" and p.leases[grant["lease_id"]].extra_models == ("star-voice",)
+    settings = ns_settings(tmp_path, diagnose_model="star-voice")
+    client = FakeClient()
+    PlannedGate(settings, FakeWatch(), planner=client, log=lambda m: None).look()
+    assert client.calls[0][4] == {"slot": 1, "extra_models": ["star-voice"]}

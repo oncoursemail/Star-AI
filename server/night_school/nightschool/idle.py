@@ -225,7 +225,11 @@ class PlannedGate(IdleGate):
             grant = self.planner.renew(self.grant)
             if grant.action != "refuse":
                 return grant
-        return self.planner.admit("nightschool", self.holder, "practice", slot=self.slot)
+        extra = {}
+        drafts = getattr(self.settings, "diagnose_model", "")
+        if drafts and drafts != getattr(self.settings, "model", ""):
+            extra["extra_models"] = [drafts]       # its lesson drafts on that model are not "chat"
+        return self.planner.admit("nightschool", self.holder, "practice", slot=self.slot, **extra)
 
     def look(self) -> str:
         if self.planner is None or not getattr(self.planner, "enabled", False):

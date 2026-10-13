@@ -414,6 +414,7 @@ class Lease:
     studio_id: str = ""
     vram_mib: int = 0
     duty: float = 1.0
+    extra_models: tuple = ()           # other models the job uses on the same slot number (e.g. star-quick drafts)
 
     def public(self, now: float) -> dict:
         return {"lease_id": self.lease_id, "job_class": self.job_class, "machine": self.machine,
@@ -436,10 +437,15 @@ class JobRequest:
     place_id: int = 0
     identity_verified: bool = False
     clients: int = 1
+    extra_models: tuple = ()
 
     def __post_init__(self) -> None:
         if not _identifier(self.job_class) or not _identifier(self.holder) or not _identifier(self.job_id):
             raise ValueError("Invalid job request")
+        if not isinstance(self.extra_models, (tuple, list)) or len(self.extra_models) > 4 or any(
+                not _identifier(str(m)) for m in self.extra_models):
+            raise ValueError("Invalid extra models")
+        object.__setattr__(self, "extra_models", tuple(str(m) for m in self.extra_models))
         if self.slot is not None and (type(self.slot) is not int or not 0 <= self.slot <= 64):
             raise ValueError("Invalid slot")
         for value in (self.memory_mib, self.vram_mib):
@@ -485,9 +491,10 @@ def chat_signs(before: MachineSnapshot | None, after: MachineSnapshot, leases: l
     for model, slots in after.models.items():
         if model in policy.helper_models:
             continue
-        mine = [l for l in leases if l.machine == after.machine and l.capability == model]
+        mine = [l for l in leases if l.machine == after.machine
+                and (l.capability == model or model in getattr(l, "extra_models", ()))]
         pinned = {l.slot for l in mine if l.slot is not None}
-        unpinned = sum(1 for l in mine if l.slot is None)
+        unpinned = sum(1 for l in mine if l.slot is None and l.capability == model)
         busy = [s for s in slots if s.processing and s.id not in pinned]
         if len(busy) > unpinned:
             signs.append(f"{model}: {len(busy) - unpinned} busy slot(s) without a lease")

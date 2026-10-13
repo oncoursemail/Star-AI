@@ -193,7 +193,7 @@ class RealModel:
 
     # --- slot and politeness ----------------------------------------------------------------------------
     def slot_of(self, model: str) -> int:
-        if self.lane:
+        if self.lane and model in (self.settings.model, ""):
             return self.lane_slots[self.lane]
         if time.monotonic() - self._slots_at > 600:
             try:
@@ -352,7 +352,8 @@ class RealModel:
         async def ask(cancel):
             async with providers.open_client(self.app_settings) as client:
                 job = asyncio.ensure_future(client.chat.completions.create(
-                    model=self.settings.model, messages=messages, max_tokens=260, temperature=0.2,
+                    model=getattr(self.settings, "diagnose_model", "") or self.settings.model, messages=messages,
+                    max_tokens=260, temperature=0.2,
                     extra_body={"cache_prompt": False, "chat_template_kwargs": {"enable_thinking": False}}))
                 while not job.done():
                     if cancel.is_set():

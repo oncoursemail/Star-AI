@@ -121,7 +121,8 @@ class Planner:
                     lease = Lease(secrets.token_hex(8), cls.name, machine or cls.machine, req.holder, req.job_id,
                                   cls.capability,
                                   now, now + ttl, req.memory_mib or cls.memory_mib, cls.cpu_threads, slot=req.slot,
-                                  studio_id=req.studio_id, vram_mib=req.vram_mib or cls.vram_mib, duty=decision.duty)
+                                  studio_id=req.studio_id, vram_mib=req.vram_mib or cls.vram_mib, duty=decision.duty,
+                                  extra_models=req.extra_models)
                     self.leases[lease.lease_id] = lease
                     self.pending = [p for p in self.pending if not (p.holder == req.holder
                                                                     and p.job_class == req.job_class)]
