@@ -149,7 +149,7 @@ def curate(examples: list[Example], trusted_receipts: Mapping[str, TestReceipt],
             if receipt.answer_sha256 != sha(item.answer):
                 raise ValueError("test evidence does not match answer bytes")
             if item.project in fence.excluded_projects or sha(item.prompt) in fence.excluded_prompt_digests:
-                raise ValueError("heldout contamination")
+                raise ValueError("holdout contamination")
             if receipt.test_suite_sha256 == fence.suite_sha256:
                 raise ValueError("holdout test suite reused in training")
             if item.id in seen_examples:
