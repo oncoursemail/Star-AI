@@ -37,7 +37,7 @@ def test_bundled_spec_passes_the_dry_run_and_the_lab_check():
 
 
 @pytest.mark.parametrize("change, word", [
-    (lambda s: s.update(kind="ui"), "kind"),
+    (lambda s: s.update(kind="scene"), "kind"),
     (lambda s: s.update(maxIterations=9), "maxIterations"),
     (lambda s: s.update(playSeconds=1), "playSeconds"),
     (lambda s: s["plan"].pop("route"), "route"),
@@ -187,14 +187,17 @@ def passing_probe(plan, *, high_on=None, fail_on=None):
             "failed_leg": next((l for l in legs if not l["reached"]), None), "problem": ""}
 
 
-def test_diagnose_unintended_support_from_height_and_fix_raises_the_banner():
+def test_diagnose_unintended_support_from_height_and_fix_moves_the_banner_aside():
     plan = spec()["plan"]
     defects = studio_lab.diagnose(plan, {"ok": True}, passing_probe(plan, high_on="P3"), [])
     assert [d["code"] for d in defects] == ["route-unintended-support"]
     assert defects[0]["objects"] == ["Banner"] and defects[0]["evidence"]["leg"] == "P2 -> P3"
+    assert defects[0]["fix"] == "clear-route" and defects[0]["strategies"][0]["strategy"] == "move-aside"
     fixed, changes = studio_lab.fix_plan(plan, defects)
     banner = next(p for p in fixed["parts"] if p["name"] == "Banner")
-    assert changes[0]["object"] == "Banner" and banner["position"][1] - 5 >= 8.5 + studio_lab.JUMP_CLEARANCE
+    # Moved beside the path (same height and shape), not floated: the smallest move out of every corridor.
+    assert changes == [{"fix": "move-aside", "object": "Banner", "delta": [0.0, 0.0, 7.5]}]
+    assert banner["position"] == [98, 12, 7.5] and banner["size"] == [0.4, 10, 8]
     assert map_plan.dry_run(fixed)["ok"]
     assert plan["parts"][4]["position"] == [98, 12, 0]          # the input plan is not changed
     assert studio_lab.diagnose(fixed, {"ok": True}, passing_probe(fixed), []) == []
@@ -409,7 +412,8 @@ class StandInStudio:
                 banner = self.parts.get("Banner")
                 legs = []
                 for point in self.config["waypoints"]:
-                    high = banner is not None and point["name"] == "P3" and banner["position"][1] - banner["size"][1] / 2 < 22
+                    in_path = banner is not None and abs(banner["position"][2]) - banner["size"][2] / 2 < 3.5
+                    high = in_path and point["name"] == "P3" and banner["position"][1] - banner["size"][1] / 2 < 22
                     legs.append({"name": point["name"], "reached": True, "highest": 27.1 if high else point["top"][1] + 7,
                                  "stood_on": []})
                 self.console += probe_lines(self.token, legs) + "\n"
