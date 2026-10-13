@@ -6,6 +6,7 @@ Offline, no automatic installation and no model or Roblox server connection.
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 import re
 import shutil
@@ -98,23 +99,31 @@ def parse_diagnostics(output: str) -> list[Finding]:
     return sorted(set(findings), key=lambda f: (f.line, f.rule_id, f.message))
 
 
-def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
-    """Check source staged temporarily, not in the owner workspace; never run Luau."""
+@dataclass(frozen=True)
+class AnalyzerEvidence:
+    """One native source-analysis outcome; never a Roblox Studio verdict."""
+
+    status: str
+    findings: tuple[Finding, ...] = ()
+    engine_symbols_ignored: int = 0
+
+
+def analyze_evidence(source: str, *, tools_root: Path | None = None) -> AnalyzerEvidence:
+    """Check a source using an already installed standalone Luau analyzer.
+
+    No code execution or network access. No source, tool path, output stderr,
+    or project file path is copied into the returned evidence.
+    """
     if not isinstance(source, str):
         raise TypeError("source must be str")
     if len(source.encode("utf-8")) > MAX_SOURCE_BYTES:
-        _notice_once("size", "Luau analyzer skipped oversized code; static checks remain available.")
-        return []
+        return AnalyzerEvidence("skipped")
     binary = locate_analyzer(tools_root=tools_root)
     if not binary:
-        _notice_once("missing", "Luau analyzer is missing; using STAR's static checks only.")
-        return []
+        return AnalyzerEvidence("unavailable")
     try:
         with tempfile.TemporaryDirectory(prefix="star-luau-check-") as temporary:
-            # Luau 0.691's stdin '-' path was silent in the pinned CI smoke.
-            # Stage source in an isolated directory to force file analysis.
             (Path(temporary) / _STAGED_NAME).write_text(source, encoding="utf-8")
-            # Preserve OS runtime only, not provider credentials or custom keys.
             environment = {"PATH": os.environ.get("PATH", ""),
                            "HOME": temporary, "USERPROFILE": temporary,
                            "TEMP": temporary, "TMP": temporary}
@@ -126,25 +135,58 @@ def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
                 cwd=temporary, env=environment,
                 capture_output=True, encoding="utf-8", errors="replace",
                 text=True, check=False, timeout=TIMEOUT_SECONDS)
-    except (OSError, UnicodeError, subprocess.TimeoutExpired):
-        _notice_once("failure", "Luau analyzer could not run; using STAR's static checks only.")
-        return []
+    except subprocess.TimeoutExpired:
+        return AnalyzerEvidence("timed_out")
+    except (OSError, UnicodeError):
+        return AnalyzerEvidence("failed")
+
+    if (type(result.returncode) is not int or result.returncode not in (0, 1)
+            or not isinstance(result.stderr, str)
+            or not isinstance(result.stdout, str)):
+        return AnalyzerEvidence("malformed")
     output = result.stderr
-    if (result.returncode not in (0, 1) or not isinstance(output, str)
-            or not isinstance(result.stdout, str)
-            or len(output.encode("utf-8")) > MAX_OUTPUT_BYTES
+    if (len(output.encode("utf-8")) > MAX_OUTPUT_BYTES
             or len(result.stdout.encode("utf-8")) > MAX_OUTPUT_BYTES):
+        return AnalyzerEvidence("truncated")
+    if result.stdout.strip():
+        return AnalyzerEvidence("malformed")
+    diagnostic_rows = 0
+    suppressed = 0
+    max_line = source.count("\n") + 1
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        match = _DIAGNOSTIC.fullmatch(line)
+        if (match is None or Path(match["file"]).name != _STAGED_NAME
+                or not 1 <= int(match["line"]) <= max_line
+                or int(match["column"]) < 1):
+            return AnalyzerEvidence("malformed")
+        diagnostic_rows += 1
+        symbol = _UNKNOWN_SYMBOL.match(match["message"])
+        if (match["kind"] == "TypeError" and symbol
+                and symbol["name"] in _ROBLOX_SYMBOLS):
+            suppressed += 1
+    if diagnostic_rows > MAX_FINDINGS:
+        # The existing parser caps output; never disguise incomplete results.
+        return AnalyzerEvidence("truncated", tuple(parse_diagnostics(output)), suppressed)
+    if result.returncode == 0:
+        return AnalyzerEvidence("malformed") if diagnostic_rows else AnalyzerEvidence("checked")
+    if not diagnostic_rows:
+        return AnalyzerEvidence("malformed")
+    findings = tuple(parse_diagnostics(output))
+    return AnalyzerEvidence("diagnostics" if findings else "engine_limited",
+                            findings, suppressed)
+
+
+def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
+    """Retain legacy advisory behavior; callers needing evidence use analyze_evidence."""
+    evidence = analyze_evidence(source, tools_root=tools_root)
+    if evidence.status == "skipped":
+        _notice_once("size", "Luau analyzer skipped oversized code; static checks remain available.")
+    elif evidence.status == "unavailable":
+        _notice_once("missing", "Luau analyzer is missing; using STAR's static checks only.")
+    elif evidence.status in {"failed", "timed_out"}:
+        _notice_once("failure", "Luau analyzer could not run; using STAR's static checks only.")
+    elif evidence.status in {"truncated", "malformed"}:
         _notice_once("failure", "Luau analyzer returned an invalid result; using static checks only.")
-        return []
-    findings = parse_diagnostics(output)
-    if result.returncode != 0 and not findings:
-        # Unknown engine globals are intentionally suppressed; otherwise warn
-        # that a failure could not be interpreted rather than alleging success.
-        if not output.strip() or not all(
-            (m := _DIAGNOSTIC.fullmatch(line)) and m["kind"] == "TypeError"
-            and (symbol := _UNKNOWN_SYMBOL.match(m["message"]))
-            and symbol["name"] in _ROBLOX_SYMBOLS
-            for line in output.splitlines() if line.strip()
-        ):
-            _notice_once("unparsed", "Luau analyzer diagnostics were not understood; static checks remain available.")
-    return findings
+    return list(evidence.findings)
