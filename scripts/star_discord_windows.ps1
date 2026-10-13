@@ -48,8 +48,11 @@ function Get-RunPython {
         }
     }
     $python = Get-Command python.exe -ErrorAction SilentlyContinue
-    if ($null -ne $python) { return @($python.Source) }
-    throw 'Install Python 3.11 or 3.12 and STAR requirements first.'
+    if ($null -ne $python) {
+        $v = & $python.Source -c 'import sys; print("yes" if (3, 11) <= sys.version_info[:2] <= (3, 12) else "no")' 2>$null
+        if ($v -eq 'yes') { return @($python.Source) }
+    }
+    throw 'Set up a Python 3.11/3.12 virtual environment in this STAR checkout and install requirements.txt plus requirements-discord.txt before using -Doctor/-Run.'
 }
 
 if ($Setup) {
