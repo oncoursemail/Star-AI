@@ -241,7 +241,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
                   tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
-                  preserve_history=False, complete_code_answers=None):
+                  preserve_history=False, complete_code_answers=None,
+                  tool_discovery_enabled=False, candidate_code_team_enabled=False):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -301,6 +302,30 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                 "query": {"type": "string", "description": "Specific research question, at most 600 characters"}
             }, "required": ["query"], "additionalProperties": False}
         }})
+    # Dormant experimental helpers. The existing native MCP Registry adapter owns
+    # the same name; never duplicate its tool definition or bypass its permissions.
+    registry_enabled = False
+    if tool_discovery_enabled and web_search_enabled and mcp_registry is None:
+        from .tool_discovery import REGISTRY_TOOL, wants_tool_discovery
+        def choose_registry(text):
+            return [REGISTRY_TOOL] if wants_tool_discovery(text) else []
+        chosen_registry = (choose_registry(prompt) if tool_memory is None
+                           else tool_memory.choose(choose_registry, prompt))
+        registry_enabled = bool(chosen_registry)
+        definitions.extend({"type": "function", "function": {
+            "name": tool["name"], "description": tool["description"],
+            "parameters": tool["inputSchema"]}} for tool in chosen_registry)
+    code_team_tools = []
+    if candidate_code_team_enabled and subagents_enabled and workspace is not None:
+        from .candidate_code_team import definitions as code_team_definitions
+        def choose_code_team(text):
+            return code_team_definitions(text, enabled=True)
+        code_team_tools = (choose_code_team(prompt) if tool_memory is None
+                           else tool_memory.choose(choose_code_team, prompt))
+        definitions.extend({"type": "function", "function": {
+            "name": tool["name"], "description": tool["description"],
+            "parameters": tool["inputSchema"]}} for tool in code_team_tools)
+    code_team_enabled = bool(code_team_tools)
     if workspace is not None:
         definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
     def selected(source) -> list[dict]:
@@ -598,6 +623,13 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             raise PermissionError('Web search is not authorized')
                         if not isinstance(args['query'], str) or not 1 <= len(args['query'].strip()) <= 600:
                             raise ValueError('Invalid web search query')
+                    elif name == 'star_mcp_registry_search' and registry_enabled:
+                        if (not registry_enabled or not isinstance(args,dict)
+                                or not {'query'} <= set(args) <= {'query','limit'}):
+                            raise PermissionError('Registry discovery is not authorized')
+                    elif name == 'star_candidate_code_team':
+                        if not code_team_enabled or not isinstance(args,dict):
+                            raise PermissionError('Code specialist team is not authorized')
                     elif intelligence is not None and intelligence.owns(name):
                         if name not in enabled_intelligence:
                             raise PermissionError("Intelligence tool not authorized for this task")
@@ -667,6 +699,30 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             data = {"isError": False, "content": [{"type": "text", "text": source_context(found)}]}
                         except Exception as exc:
                             data = {"isError": True, "content": [{"type": "text", "text": f"Search failed: {type(exc).__name__}: {str(exc)[:180]}"}]}
+                    elif name == 'star_mcp_registry_search' and registry_enabled:
+                        try:
+                            from .tool_discovery import discover_registry
+                            found = await discover_registry(
+                                args['query'], limit=args.get('limit', 5))
+                            data = {"isError": False, "content": [{"type": "text",
+                                    "text": json.dumps(found, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Registry discovery failed: {type(exc).__name__}"}]}
+                    elif name == 'star_candidate_code_team':
+                        try:
+                            from .candidate_code_team import run_candidate_code_team
+                            found = await run_candidate_code_team(
+                                client=helper, model=subagent_model or model,
+                                project=workspace.root.name, workspace=workspace,
+                                goal=args['goal'], paths=args['paths'],
+                                parallel=subagent_parallelism, on_event=event)
+                            data = {"isError": not found['status'] == 'candidate',
+                                    "content": [{"type": "text",
+                                                "text": json.dumps(found, ensure_ascii=False)}]}
+                        except Exception as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Candidate coding team failed: {type(exc).__name__}"}]}
                     elif intelligence is not None and intelligence.owns(name):
                         try:
                             local_output = intelligence.call(name, args, enabled=enabled_intelligence)
