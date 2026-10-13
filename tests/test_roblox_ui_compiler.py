@@ -147,7 +147,7 @@ def test_local_variable_limit():
         {"type": "text", "id": f"node{i}", "text": "Hi"} for i in range(149)
     ]}
     code = compile_ui({"root": root}).source
-    assert len(re.findall(r"^local n\\d+ = Instance.new", code, re.MULTILINE)) == 150
+    assert len(re.findall(r"^local n\d+ = Instance.new", code, re.MULTILINE)) == 150
     root["children"].extend({"type": "text", "id": f"node{i}"} for i in range(149, 250))
     with pytest.raises(SpecError) as error:
         compile_ui({"root": root})
@@ -334,7 +334,7 @@ return {handles = handles, destroy = destroy}
     disabled = compile_ui({"root": {"type": "screen", "id": "root", "enabled": False},
                            "mobile": {"safeArea": False, "scaleByViewport": False}}).source
     assert disabled == expected.replace(
-        "n1.ScreenInsets = Enum.ScreenInsets.None\\n",
-        "n1.ScreenInsets = Enum.ScreenInsets.None\\nn1.Enabled = false\\n",
+        "n1.ScreenInsets = Enum.ScreenInsets.None\n",
+        "n1.ScreenInsets = Enum.ScreenInsets.None\nn1.Enabled = false\\n",
     )
 
