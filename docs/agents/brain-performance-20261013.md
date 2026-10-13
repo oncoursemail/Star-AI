@@ -3,7 +3,7 @@
 Task: baseline + tune both brain servers (llama.cpp router on server 1, second brain on server 2).
 Brief: docs/agents/WAVE-20261013-BRIEF.md. Branch star/brain-performance-20261013 (worktree worktrees/wt-brainperf).
 
-## Result (state 12:45Z)
+## Result (state 12:25Z)
 
 **No engine or flag change beat the live configuration on brain 1; the live service was not changed.** The 2026-10-11
 tuning (numactl --interleave=all, --numa distribute, -t 24 -tb 48, dio load, f16 KV, 2 slots) is still the best
@@ -48,7 +48,7 @@ quiet lock held, live slots idle at the start. "2 par" = two simultaneous 150-to
   (cold 1,438 tokens = 20.8 s today) instead of restored (1.3-1.6 s measured in first-token.md). Night school and
   agent evals add a new 200-360 MiB entry every few minutes, so a user's conversation falls out within ~2 hours.
 - Change: `cache-ram = 24576` in `[star-fast]` (repo `server/brain/models.ini`; the rest is identical to the live file).
-  `bash server/brain/apply.sh check` passed (12:40Z). Not applied because the router reads presets only at start
+  `bash server/brain/apply.sh check` passed (12:21Z). Not applied because the router reads presets only at start
   (checked in tools/server/server-models.cpp: reload happens only after a download), so it needs a 1-3 minute
   star-brain restart, and the W3 worked-example A/B (another agent) was using star-fast continuously.
 - Apply (Git Bash on the PC, from the worktree; takes the server lock, backs up, restarts, rolls back by itself if a
@@ -103,6 +103,8 @@ quiet lock held, live slots idle at the start. "2 par" = two simultaneous 150-to
   #179-#181 posted. Lesson: before a timing run check the live slots with /opt/star/bench/busylog.sh.
 - MISTAKE 12:03Z: polling `/slots?model=star-deep` made the router LOAD star-deep (23 GB, ~100 s). Unloaded at 12:07Z
   with POST /models/unload (memory back to 46 GB used). Never query /slots for an unloaded model.
+  Correction 12:24Z: the same polling had queued a SECOND star-deep load (spawned 12:05:33, port 39713) that stayed
+  loaded (23 GB) after the first unload; found at 12:23Z, unloaded again, verified 0 star-deep processes, 45 GB used.
 - 12:20Z brain 2 read-only check (studioctl status + studio-probe.py): ok, 30 tools, 1 Studio attached in 0.04 s, Edit
   mode, STAR Test Place 128074805767678, watchdog active. Lead direction 12:16Z: brain 2 = Studio testing only, no
   big model there. Nothing changed on brain 2.
@@ -113,3 +115,11 @@ quiet lock held, live slots idle at the start. "2 par" = two simultaneous 150-to
 - Repo: worktree has server/brain/{models.ini, star-brain.service, star-brain-prestart.sh, apply.sh, apply-remote.sh}
   and server/brain/bench/{validate.py, ab.sh, par.py, waitidle.sh, busylog.sh} (addresses removed; apply.sh needs
   STAR_SSH_HOST and STAR_BRAIN_URL from the environment). Not committed yet.
+- 12:22Z PR #225 (star/brain-performance-20261013 -> star/next, head 8d15158): server/brain config + bench scripts +
+  this file. pytest 4673 passed / 223 skipped. `apply.sh check` passed (12:21Z, stages files only).
+- 12:24Z server left clean: no temp server, busylog stopped, lock free, star-brain active/health ok, star-deep
+  unloaded (as before), 45 GB used. Build trees left in /opt/star/src (llama.cpp-b11583 292M, llama.cpp-b11541-noomp
+  292M, ik_llama.cpp 377M); results /opt/star/bench/ab-20261013/. Live config unchanged.
+- NEXT (lead): apply the staged cache-ram change when the W3 A/B is finished or paused (command in "Result"), then run
+  validate.py and check the eviction count. Optional: make star-deep resident (load-on-startup = true) - it costs
+  23 GB of the ~80 GB spare and removes its ~100 s first-use load (seen today), at +~100 s per router restart.
