@@ -8,6 +8,9 @@ After=network-online.target
 # The key file is operator material (/opt/star/secrets/worker_api_key, never in the repository).
 [Service]
 Type=simple
+# Studio first: start only with at least 3.5 GiB available (two Studios leave ~1.3 GiB at peak; measured by
+# studio-lab-v2 2026-10-13). Not started = the knowledge refresh embeds on brain 1 as before.
+ExecCondition=/usr/bin/awk '/^MemAvailable:/ {exit !($$2 > 3670016)}' /proc/meminfo
 User=star
 Group=star
 ExecStart=/opt/star/bin/llama-server --embeddings -m /opt/star/worker/models/embeddinggemma-300M-Q8_0.gguf --host 0.0.0.0 --port 8099 -t 4 -tb 4 -c 2048 -b 2048 -ub 2048 --api-key-file /opt/star/secrets/worker_api_key --log-disable
