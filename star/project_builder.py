@@ -336,10 +336,13 @@ def _imports(module: dict, by_name: dict) -> str:
     return "\n".join(lines) + "\n\n"
 
 
-def build_project(plan: dict | list, out: str | Path, generate: Callable[[str], str]) -> dict:
+def build_project(plan: dict | list, out: str | Path, generate: Callable[[str], str],
+                  *, formatter: Callable[[str], str] | None = None) -> dict:
     modules = ordered_modules(plan)
     if not callable(generate):
         raise TypeError("generate must be callable")
+    if formatter is not None and not callable(formatter):
+        raise TypeError("formatter must be callable")
     root = _preflight(out)
     root.mkdir(parents=True, exist_ok=True)
     for parts in _LOCATIONS.values():
@@ -371,6 +374,21 @@ def build_project(plan: dict | list, out: str | Path, generate: Callable[[str], 
                 code, error = None, "Model call failed; no usable response received"
             else:
                 code, error = validate_code(response, module["interface"])
+                if error is None and formatter is not None:
+                    assert code is not None
+                    try:
+                        formatted = formatter(code)
+                    except Exception:
+                        # External binaries can include local paths or sensitive text in errors.
+                        code, error = None, "StyLua could not format generated Luau"
+                    else:
+                        if not isinstance(formatted, str):
+                            code, error = None, "StyLua returned invalid output"
+                        else:
+                            code, error = validate_code(
+                                "```luau\n" + formatted.rstrip("\r\n") + "\n```", module["interface"])
+                            if error is not None:
+                                error = "StyLua output rejected: " + error
             if error is None:
                 break
             entry["errors"].append(error)
@@ -416,12 +434,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate a Rojo project from a module plan")
     parser.add_argument("--plan", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--stylua", action="store_true",
+                        help="Format model-generated Luau using already-installed StyLua (opt-in)")
     args = parser.parse_args(argv)
     try:
         plan = json.loads(args.plan.read_text(encoding="utf-8-sig"))
         ordered_modules(plan)
         _preflight(args.out)  # Reject invalid output before even loading provider settings.
-        manifest = build_project(plan, args.out, _configured_generator())
+        formatter = None
+        if args.stylua:
+            from .stylua_format import installed_formatter
+            formatter = installed_formatter()
+        manifest = build_project(plan, args.out, _configured_generator(), formatter=formatter)
     except (OSError, ValueError, TypeError, ImportError):
         print("Project builder could not start or write output. Check the plan, output folder, "
               "installed dependencies and STAR provider settings.", file=sys.stderr)
