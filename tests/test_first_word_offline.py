@@ -24,8 +24,12 @@ def test_real_first_visible_delta_includes_ten_stage_timings(monkeypatch):
 def test_first_short_stream_delta_arrives_before_the_second_chunk(monkeypatch, enabled):
     import asyncio
     from types import SimpleNamespace
+    import star.agent as agent
     from star.agent import read_stream
 
+    # Freeze only the stream flush clock; otherwise a busy CI runner could
+    # reach the old 75-ms threshold even before the first short chunk.
+    monkeypatch.setattr(agent, "monotonic", lambda: 100.0)
     monkeypatch.setenv("STAR_FAST_FIRST_DELTA", "1" if enabled else "0")
     received = []
 
