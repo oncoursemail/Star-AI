@@ -27,6 +27,16 @@ SOURCES = {
     "luau-typechecking": "https://luau.org/types/",
     "github-actions-security": "https://docs.github.com/en/actions/reference/security/secure-use",
     "github-build-attestations": "https://docs.github.com/en/actions/how-tos/secure-your-work/use-artifact-attestations",
+    # Opt-in ecosystem scout: official specifications and project-owned documentation only.
+    # Observations stay UNTRUSTED: a docs update cannot install, train or change a tool.
+    "mcp-specification": "https://modelcontextprotocol.io/specification/2026-07-28",
+    "openai-agents-sdk": "https://openai.github.io/openai-agents-python/",
+    "openhands-agent-sdk": "https://raw.githubusercontent.com/OpenHands/software-agent-sdk/main/README.md",
+    "dspy-optimizers": "https://raw.githubusercontent.com/stanfordnlp/dspy/main/docs/docs/learn/optimization/optimizers.md",
+    "agent-lightning": "https://raw.githubusercontent.com/microsoft/agent-lightning/main/README.md",
+    "langgraph-persistence": "https://raw.githubusercontent.com/langchain-ai/docs/main/src/oss/langgraph/persistence.mdx",
+    "rojo-source-sync": "https://rojo.space/docs/v7/",
+    "stylua-luau-formatter": "https://raw.githubusercontent.com/JohnnyMorganz/StyLua/main/README.md",
 }
 MAX_DOCUMENT_BYTES = 1_000_000
 MAX_EVIDENCE_CHARS = 16_000
@@ -178,32 +188,51 @@ class ResearchWatcher:
             "can_publish": False,
         }
 
-    def due_sources(self, *, interval_seconds: int = 86400, now_at=None) -> list[str]:
-        """Return reviewed IDs eligible for a scheduled refresh.
+    @staticmethod
+    def _checked_time(value: str | None) -> datetime | None:
+        """An invalid legacy cursor is 'never checked', not a scheduling crash."""
+        try:
+            checked = datetime.fromisoformat(value) if value else None
+            if checked is not None and checked.tzinfo is not None and checked.utcoffset() is not None:
+                return checked
+        except (ValueError, TypeError, OverflowError):
+            pass
+        return None
 
-        Exactly one observation per source per configured interval; errors are
-        also rate-limited to avoid repeated requests to an unavailable server.
-        Changing the application clock may delay refresh but never grants
-        privilege or causes unbounded retries.
+    def _oldest_first(self) -> list[tuple[str, datetime | None]]:
+        """Stable, fair ordering for a catalog larger than one request batch.
+
+        An unvisited source comes before every visited source. After every check
+        (including a failed one) its timestamp moves to the back of the queue.
+        Invalid legacy timestamps are treated as unvisited for recovery.
+        """
+        rows = (
+            (row["source_id"], self._checked_time(row["checked_at"]))
+            for row in self.db.execute(
+                "SELECT source_id,checked_at FROM research_sources"
+            )
+            if row["source_id"] in SOURCES
+        )
+        beginning = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(rows, key=lambda item: (item[1] is not None, item[1] or beginning, item[0]))
+
+    def due_sources(self, *, interval_seconds: int = 86400, now_at=None) -> list[str]:
+        """Return up to five oldest eligible sources; no source can starve.
+
+        Every source is rate-limited separately, including failed requests.
+        Invalid legacy cursors are retried once and then receive fresh timestamps.
+        The optional daily research setting remains off by default.
         """
         if (isinstance(interval_seconds, bool) or not isinstance(interval_seconds, int)
                 or not 3600 <= interval_seconds <= 604800):
             raise ValueError("Research poll interval must be 1 hour to 7 days")
-        stamp = now_at or datetime.now(timezone.utc)
+        stamp = now_at if now_at is not None else datetime.now(timezone.utc)
         if not isinstance(stamp, datetime) or stamp.tzinfo is None or stamp.utcoffset() is None:
             raise ValueError("Current time must be timezone-aware")
-        due = []
-        for row in self.db.execute("SELECT source_id,checked_at FROM research_sources ORDER BY source_id"):
-            checked = row["checked_at"]
-            try:
-                last = datetime.fromisoformat(checked) if checked else None
-                if last is not None and (last.tzinfo is None or last.utcoffset() is None):
-                    last = None
-            except (ValueError, TypeError):
-                last = None
-            if last is None or (stamp - last).total_seconds() >= interval_seconds:
-                if row["source_id"] in SOURCES:
-                    due.append(row["source_id"])
+        due = [
+            source_id for source_id, checked_at in self._oldest_first()
+            if checked_at is None or (stamp - checked_at).total_seconds() >= interval_seconds
+        ]
         return due[:MAX_SOURCES_PER_CHECK]
 
     def evidence(self, observation_id: int) -> dict:
@@ -270,7 +299,7 @@ class ResearchWatcher:
             "SELECT last_digest,etag,last_modified FROM research_sources WHERE source_id=?",
             (source_id,),
         ).fetchone()
-        headers = {"Accept": "text/html, text/plain;q=0.9",
+        headers = {"Accept": "text/html, text/markdown;q=0.9, text/plain;q=0.9",
                    "User-Agent": "STAR-Evolution-Research/1.0"}
         if row["last_digest"]:
             if row["etag"]:
@@ -357,7 +386,10 @@ class ResearchWatcher:
     def check_many(self, source_ids: list[str] | None = None,
                    *, client: httpx.Client | None = None) -> list[dict]:
         """Sequential by design: avoid GitHub/Roblox secondary rate-limit bursts."""
-        source_ids = list(SOURCES) if source_ids is None else source_ids
+        # A manual click checks one bounded oldest-first batch, not the same
+        # five alphabetical URLs forever. Repeated clicks cover the catalog.
+        source_ids = ([name for name, _ in self._oldest_first()][:MAX_SOURCES_PER_CHECK]
+                      if source_ids is None else source_ids)
         if (not isinstance(source_ids, list) or not source_ids
                 or len(source_ids) > MAX_SOURCES_PER_CHECK
                 or any(name not in SOURCES for name in source_ids)
