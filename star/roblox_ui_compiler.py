@@ -34,7 +34,9 @@ COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 FONTS = {"Gotham", "GothamBold", "GothamMedium", "SourceSans", "Arial", "Code",
          "Roboto", "Ubuntu", "Cartoon", "FredokaOne"}
-ALIGNMENTS = {"Left", "Center", "Right", "Top", "Bottom"}
+HALIGN = {"Left", "Center", "Right"}
+VALIGN = {"Top", "Center", "Bottom"}
+MAX_NODES = 150
 SORT_ORDERS = {"LayoutOrder", "Name"}
 
 @dataclass(frozen=True)
@@ -90,10 +92,10 @@ def _contrast(a: str, b: str) -> float:
 
 def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnostic, ...]]:
     """Validate a spec, raising SpecError for errors and returning contrast warnings."""
-    raw = spec if isinstance(spec, str) else json.dumps(spec)
     try:
+        raw = spec if isinstance(spec, str) else json.dumps(spec)
         data = json.loads(raw, object_pairs_hook=_unique_pairs)
-    except (ValueError, TypeError) as exc:
+    except (ValueError, TypeError, RecursionError) as exc:
         if isinstance(exc, json.JSONDecodeError):
             raise SpecError([Diagnostic("error", "$", exc.msg, exc.lineno, exc.colno)]) from exc
         raise SpecError([Diagnostic("error", "$", str(exc))]) from exc
@@ -109,11 +111,11 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
             return False
         for k in obj:
             if k not in allowed:
-                issue("error", path + "." + k, "unknown key")
+                issue("error", path + "." + str(k), "unknown key")
         return True
 
     def number(value: Any, path: str, lo: float, hi: float) -> bool:
-        if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not lo <= value <= hi:
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not lo <= value <= hi or not math.isfinite(value):
             issue("error", path, f"expected finite number from {lo:g} to {hi:g}")
             return False
         return True
@@ -140,7 +142,7 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
     palette = data.get("palette", {})
     if isinstance(palette, dict):
         for name, color in palette.items():
-            if not ID_RE.fullmatch(name) or not isinstance(color, str) or not COLOR_RE.fullmatch(color):
+            if not isinstance(name, str) or not ID_RE.fullmatch(name) or not isinstance(color, str) or not COLOR_RE.fullmatch(color):
                 issue("error", "$.palette." + str(name), "expected named #RRGGBB colour")
     else:
         issue("error", "$.palette", "expected object")
@@ -156,23 +158,47 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
             number(mobile["referenceWidth"], "$.mobile.referenceWidth", 320, 3840)
 
     def palette_color(value: Any, path: str) -> str | None:
-        if not isinstance(value, str) or value not in palette:
-            issue("error", path, "expected a defined palette colour name")
+        if (not isinstance(value, str) or value not in palette
+                or not isinstance(palette[value], str) or not COLOR_RE.fullmatch(palette[value])):
+            issue("error", path, "expected a defined, valid palette colour name")
             return None
         return palette[value]
 
     seen: set[str] = set()
+    node_count = 0
 
     def node(obj: Any, path: str, depth: int, inherited_bg: str | None) -> None:
+        nonlocal node_count
+        node_count += 1
+        if node_count > MAX_NODES:
+            if node_count == MAX_NODES + 1:
+                issue("error", path, f"node limit ({MAX_NODES}) exceeded")
+            return
         if depth > 32:
             issue("error", path, "tree depth limit (32) exceeded")
             return
         if not keys(obj, NODE_KEYS, path):
             return
         kind = obj.get("type")
-        if kind not in KINDS:
+        if not isinstance(kind, str) or kind not in KINDS:
             issue("error", path + ".type", "unknown or missing element type")
             return
+        screen_keys = {"type", "id", "name", "children", "enabled"}
+        gui_keys = {"type", "id", "name", "size", "position", "anchor",
+                    "background", "transparency", "visible", "padding", "corner",
+                    "stroke", "minSize", "maxSize", "aspectRatio"}
+        supported = (screen_keys if kind == "screen" else
+                     gui_keys
+                     | ({"children", "layout"} if kind in CONTAINERS else set())
+                     | ({"text", "font", "textSize", "textColor", "textWrapped"}
+                        if kind in TEXT_KINDS else set())
+                     | ({"image"} if kind == "image" else set())
+                     | ({"placeholder"} if kind == "input" else set())
+                     | ({"states", "enabled"} if kind in {"button", "toggle", "input"} else set())
+                     | ({"value"} if kind == "progress" else set()))
+        for key in obj:
+            if key not in supported:
+                issue("error", path + "." + key, f"property not supported on {kind}")
         ident = obj.get("id")
         if not isinstance(ident, str) or not ID_RE.fullmatch(ident):
             issue("error", path + ".id", "id must match [A-Za-z][A-Za-z0-9_]*")
@@ -192,15 +218,38 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
         for k in ("size", "position", "anchor", "minSize", "maxSize"):
             if k in obj:
                 vector(obj[k], path + "." + k)
+        for key in ("minSize", "maxSize"):
+            dims = obj.get(key)
+            if isinstance(dims, dict):
+                for axis in ("x", "y"):
+                    dim = dims.get(axis)
+                    if isinstance(dim, dict) and "scale" in dim:
+                        issue("error", path + "." + key + "." + axis + ".scale",
+                              "size constraints require pixel offsets")
         for k in ("padding", "corner", "textSize", "aspectRatio", "value", "transparency"):
             if k in obj:
                 bounds = {"padding": (0, 1000), "corner": (0, 1000), "textSize": (1, 200),
                           "aspectRatio": (.01, 100), "value": (0, 1), "transparency": (0, 1)}
                 number(obj[k], path + "." + k, *bounds[k])
+        if isinstance(obj.get("maxSize"), dict):
+            touch = mobile.get("minTouchSize", 44) if kind in {"button", "toggle", "input"} else 0
+            if not isinstance(touch, (int, float)):
+                touch = 44
+            for axis in ("x", "y"):
+                max_dim = obj["maxSize"].get(axis)
+                min_size = obj.get("minSize")
+                min_dim = min_size.get(axis) if isinstance(min_size, dict) else None
+                max_px = max_dim.get("offset") if isinstance(max_dim, dict) else None
+                min_px = min_dim.get("offset", 0) if isinstance(min_dim, dict) else 0
+                if (isinstance(max_px, (int, float)) and not isinstance(max_px, bool)
+                        and isinstance(min_px, (int, float)) and not isinstance(min_px, bool)
+                        and max_px < max(touch, min_px)):
+                    issue("error", path + ".maxSize." + axis + ".offset",
+                          "maximum size is smaller than minimum touch/element size")
         for k in ("visible", "textWrapped", "enabled"):
             if k in obj and not isinstance(obj[k], bool):
                 issue("error", path + "." + k, "expected boolean")
-        if "font" in obj and obj["font"] not in FONTS:
+        if "font" in obj and (not isinstance(obj["font"], str) or obj["font"] not in FONTS):
             issue("error", path + ".font", "unsupported font enum")
         background = inherited_bg
         if "background" in obj:
@@ -219,9 +268,11 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
         if layout is not None and keys(layout, LAYOUT_KEYS, path + ".layout"):
             if kind not in CONTAINERS:
                 issue("error", path + ".layout", "layout requires a container")
-            if layout.get("kind") not in {"list", "grid"}:
+            layout_kind = layout.get("kind")
+            if not isinstance(layout_kind, str) or layout_kind not in {"list", "grid"}:
                 issue("error", path + ".layout.kind", "expected list or grid")
-            if "direction" in layout and layout["direction"] not in {"Horizontal", "Vertical"}:
+            if "direction" in layout and (not isinstance(layout["direction"], str)
+                                          or layout["direction"] not in {"Horizontal", "Vertical"}):
                 issue("error", path + ".layout.direction", "expected Horizontal or Vertical")
             for k in ("spacing", "cellPadding"):
                 if k in layout:
@@ -230,10 +281,11 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
                 issue("error", path + ".layout.columns", "expected integer 1..50")
             if "cellSize" in layout:
                 vector(layout["cellSize"], path + ".layout.cellSize")
-            for k in ("horizontalAlignment", "verticalAlignment"):
-                if k in layout and layout[k] not in ALIGNMENTS:
+            for k, values in (("horizontalAlignment", HALIGN), ("verticalAlignment", VALIGN)):
+                if k in layout and (not isinstance(layout[k], str) or layout[k] not in values):
                     issue("error", path + ".layout." + k, "invalid alignment")
-            if "sortOrder" in layout and layout["sortOrder"] not in SORT_ORDERS:
+            if "sortOrder" in layout and (not isinstance(layout["sortOrder"], str)
+                                          or layout["sortOrder"] not in SORT_ORDERS):
                 issue("error", path + ".layout.sortOrder", "invalid sort order")
         states = obj.get("states", {})
         if keys(states, STATE_NAMES, path + ".states"):
@@ -246,9 +298,11 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
                     for k, lo, hi in (("transparency", 0, 1), ("duration", 0, 5)):
                         if k in settings:
                             number(settings[k], sp + "." + k, lo, hi)
-                    if settings.get("easing", "Quad") not in EASING:
+                    easing = settings.get("easing", "Quad")
+                    if not isinstance(easing, str) or easing not in EASING:
                         issue("error", sp + ".easing", "unsupported TweenService easing")
-                    if settings.get("direction", "Out") not in DIRECTIONS:
+                    direction = settings.get("direction", "Out")
+                    if not isinstance(direction, str) or direction not in DIRECTIONS:
                         issue("error", sp + ".direction", "unsupported easing direction")
             if states and kind not in {"button", "toggle", "input"}:
                 issue("error", path + ".states", "states require an interactive element")
@@ -280,7 +334,13 @@ def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _lua_string(value: str) -> str:
-    return json.dumps(value, ensure_ascii=False)
+    # Fixed-width decimal UTF-8 byte escapes, not unsupported JSON \\uXXXX.
+    return '"' + "".join(
+        chr(byte) if 32 <= byte < 127 and byte not in (34, 92)
+        else '\\' + chr(byte) if byte in (34, 92)
+        else f"\\{byte:03d}"
+        for byte in value.encode("utf-8")
+    ) + '"'
 
 
 def _udim(vec: dict[str, Any]) -> str:
@@ -340,6 +400,8 @@ def _emit(spec: dict[str, Any]) -> str:
         if kind == "screen":
             put(f"{var}.ResetOnSpawn = false")
             put(f"{var}.ScreenInsets = Enum.ScreenInsets.{('CoreUISafeInsets' if mobile.get('safeArea', True) else 'None')}")
+            if "enabled" in node:
+                put(f"{var}.Enabled = {str(node['enabled']).lower()}")
         else:
             put(f"{var}.BorderSizePixel = 0")
             if "size" in node:
@@ -402,14 +464,21 @@ def _emit(spec: dict[str, Any]) -> str:
             put(f"    aspect.AspectRatio = {node['aspectRatio']:g}")
             put(f"    aspect.Parent = {var}")
             put("end")
-        if "minSize" in node or "maxSize" in node:
+        # One constraint per node; merge minimum tap area and authored minimum.
+        if kind in {"button", "toggle", "input"} or "minSize" in node or "maxSize" in node:
             put('do')
             put('    local constraint = Instance.new("UISizeConstraint")')
-            for key, prop in (("minSize", "MinSize"), ("maxSize", "MaxSize")):
-                if key in node:
-                    x = node[key]["x"].get("offset", 0)
-                    y = node[key]["y"].get("offset", 0)
-                    put(f"    constraint.{prop} = Vector2.new({x:g}, {y:g})")
+            if kind in {"button", "toggle", "input"} or "minSize" in node:
+                touch = mobile.get("minTouchSize", 44) if kind in {"button", "toggle", "input"} else 0
+                minimum = node.get("minSize", {})
+                x = max(touch, minimum.get("x", {}).get("offset", 0))
+                y = max(touch, minimum.get("y", {}).get("offset", 0))
+                put(f"    constraint.MinSize = Vector2.new({x:g}, {y:g})")
+            if "maxSize" in node:
+                maximum = node["maxSize"]
+                x = maximum["x"].get("offset", 0)
+                y = maximum["y"].get("offset", 0)
+                put(f"    constraint.MaxSize = Vector2.new({x:g}, {y:g})")
             put(f"    constraint.Parent = {var}")
             put("end")
         layout = node.get("layout")
@@ -438,18 +507,26 @@ def _emit(spec: dict[str, Any]) -> str:
             if states:
                 put("do")
                 put("    local hovering, pressing, selected = false, false, false")
-                put(f"    local function refresh()")
+                put(f"    local baseBackground = {var}.BackgroundColor3")
+                put(f"    local baseText = {var}.TextColor3")
+                put(f"    local baseTransparency = {var}.BackgroundTransparency")
+                put("    local function refresh()")
                 put(f"        local state = not {var}.Interactable and 'disabled' or pressing and 'pressed' or selected and 'selected' or hovering and 'hover' or ''")
-                put("        if state == '' then return end")
-                put("        local goals = {}")
+                put("        local goals = {BackgroundColor3 = baseBackground, TextColor3 = baseText, BackgroundTransparency = baseTransparency}")
+                put("        local duration = 0.15")
+                put("        local easing = Enum.EasingStyle.Quad")
+                put("        local direction = Enum.EasingDirection.Out")
                 for state, style in states.items():
                     put(f"        if state == {_lua_string(state)} then")
                     for field, prop in (("background", "BackgroundColor3"), ("textColor", "TextColor3"), ("transparency", "BackgroundTransparency")):
                         if field in style:
                             val = color(style[field]) if field in {"background", "textColor"} else str(style[field])
                             put(f"            goals.{prop} = {val}")
-                    put(f"            if next(goals) then animate({var}, goals, {style.get('duration', .15):g}, Enum.EasingStyle.{style.get('easing', 'Quad')}, Enum.EasingDirection.{style.get('direction', 'Out')}) end")
+                    put(f"            duration = {style.get('duration', .15):g}")
+                    put(f"            easing = Enum.EasingStyle.{style.get('easing', 'Quad')}")
+                    put(f"            direction = Enum.EasingDirection.{style.get('direction', 'Out')}")
                     put("        end")
+                put(f"        animate({var}, goals, duration, easing, direction)")
                 put("    end")
                 put(f"    track({var}.MouseEnter:Connect(function() hovering = true; refresh() end))")
                 put(f"    track({var}.MouseLeave:Connect(function() hovering = false; pressing = false; refresh() end))")
@@ -470,12 +547,6 @@ def _emit(spec: dict[str, Any]) -> str:
             put("    fill.Parent = " + var)
             put("end")
         put(f'handles[{_lua_string(node["id"])}] = {var}')
-        if kind in {"button", "toggle", "input"} and mobile.get("minTouchSize", 44) >= 44:
-            put('do')
-            put('    local touch = Instance.new("UISizeConstraint")')
-            put(f"    touch.MinSize = Vector2.new({mobile.get('minTouchSize', 44):g}, {mobile.get('minTouchSize', 44):g})")
-            put(f"    touch.Parent = {var}")
-            put("end")
         # Set Parent after all local properties and decorations.
         put(f"{var}.Parent = {parent or 'playerGui'}")
         child_parent = var
@@ -495,7 +566,13 @@ def _emit(spec: dict[str, Any]) -> str:
         lines.extend([
             'local screenScale = Instance.new("UIScale")',
             "screenScale.Name = 'ViewportScale'",
-            f"local function rescale() local camera = workspace.CurrentCamera; if camera then screenScale.Scale = math.clamp(camera.ViewportSize.X / {ref_width:g}, 0.5, 2) end end",
+            "local function rescale()",
+            "    local camera = workspace.CurrentCamera",
+            "    if not camera then return end",
+            f"    local scale = math.clamp(camera.ViewportSize.X / {ref_width:g}, 0.5, 2)",
+            "    screenScale.Scale = scale",
+            "    host.Size = UDim2.fromScale(1 / scale, 1 / scale)",
+            "end",
             "screenScale.Parent = host",
             "rescale()",
             "local camera = workspace.CurrentCamera",
