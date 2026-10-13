@@ -981,3 +981,15 @@ def test_confined_adds_ram_cap_and_numa_pinning_when_the_tools_exist(monkeypatch
     assert cmd[:6] == ["systemd-run", "--scope", "--quiet", "-p", "MemoryMax=2G", "-p"]
     assert cmd[-4:] == ["numactl", "--cpunodebind=3", "--membind=3", "job"]
     assert pc.confined(["job"], memory_max="2G", numa_node=3, which=lambda name: None) == ["job"]
+
+
+def test_studio_processes_counts_studio_itself_not_its_webview_helpers(tmp_path):
+    def proc(pid, *argv):
+        (tmp_path / str(pid)).mkdir()
+        (tmp_path / str(pid) / "cmdline").write_bytes(b"\0".join(a.encode() for a in argv) + b"\0")
+    proc(10, "/home/star/v/RobloxStudioBeta.exe", "roblox-studio:1+placeId:128074805767678+universeId:10770312935")
+    proc(11, "C:\EdgeWebView\msedgewebview2.exe", "--webview-exe-name=RobloxStudioBeta.exe")
+    proc(12, "Z:\home\v\RobloxCrashHandler.exe", "--no-rate-limit")
+    proc(13, "vinegar", "roblox-studio:1+placeId:1")
+    found = probes.studio_processes(str(tmp_path))
+    assert found == [{"studio_id": "studio-10", "place_id": 128074805767678, "universe_id": 10770312935}]

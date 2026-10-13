@@ -109,7 +109,8 @@ def studio_processes(proc: str = "/proc") -> list[dict]:
         except OSError:
             continue
         line = raw.replace(b"\0", b" ").decode("utf-8", "replace")
-        if "RobloxStudioBeta.exe" not in line or "CrashHandler" in line:
+        program = raw.split(b"\0", 1)[0].decode("utf-8", "replace").replace("\\", "/").rsplit("/", 1)[-1]
+        if program != "RobloxStudioBeta.exe":       # WebView helpers name Studio in their arguments only
             continue
         place = re.search(r"placeId:(\d+)", line)
         universe = re.search(r"universeId:(\d+)", line)
