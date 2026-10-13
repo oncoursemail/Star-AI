@@ -150,7 +150,7 @@ def test_malformed_node_collections_report_errors_not_uncaught_crashes(tmp_path)
 def test_bounds_and_workspace_symlinks_are_enforced(tmp_path):
     save_json(tmp_path, gltf())
     ws = Workspace(tmp_path)
-    for args in ({"path": "../escape.gltf"},
+    for args in ({"path": ".."},
                  {"path": "mesh.gltf", "target": "nintendo"},
                  {"path": "mesh.gltf", "triangle_budget": 0},
                  {"path": "mesh.gltf", "triangle_budget": True},
