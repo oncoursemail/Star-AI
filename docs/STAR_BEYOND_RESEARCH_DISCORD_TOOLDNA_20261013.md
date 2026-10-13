@@ -35,6 +35,34 @@ Official references:
 - https://brave.com/search/api/
 - https://ai.google.dev/gemini-api/docs/pricing
 
+### SourceBus: research and creator-data API catalogue beyond chat models
+
+These are API **sources**, not free model inference. Each new adapter should be read-only and explicitly enabled, with a fixed trusted base URL, a bounded query language, cache hash/fetch timestamp, rate-limit and attribution rules, and provenance. Only use the user's own authorized resources. Never route secrets from STAR projects through these APIs, and **a public abstract/metadata record does not grant reproduction rights to an article, game or paid asset**.
+
+| Source | Public data it can actually supply | Budget/licensing detail and STAR application |
+| --- | --- | --- |
+| **OpenAlex** | Scholarly works, authors, citations, institutions, topics | Official Oct 2026 pricing: free-account API key has **$1/day** usage, keyless free limit **$0.10/day**; metadata search for STAR's research hypotheses, query-cost budgeting and author/DOI dedup. |
+| **Crossref** | DOI metadata, publication/version information, citation relationships | Public API no signup; optional polite identity improves limits. 2025 revised public/polite limits differ by single DOI vs list/search and per-request concurrency; cache DOI records and honor returned rate headers. |
+| **Wikimedia APIs** | Encylopedia and structured public information, revision timestamps | 2026 rate-limit rollout applies across wikis and REST/Action APIs; do not assume no quotas. Use source/revision URLs as evidence, avoid high-volume unauthenticated scraping. |
+| **Stack Exchange API** | Tagged software questions, community answers and accepted solution metadata | Shared quotas, backoff response fields and one-minute semantic-request dedup; community claims are leads, not definitive API docs. |
+| **GitHub REST** | Public source repositories, issues, CI results, releases and changelogs | Typical 60 public unauthenticated requests/hour, 5,000 authenticated/hour; endpoint/secondary limits still apply. For STAR private repo and actions use authorized GitHub app, never unauthenticated impersonation. |
+| **Hugging Face Hub API** | Model cards, dataset cards, revisions, licenses and Spaces metadata | Free public model/dataset discovery is not the same as free inference. Check exact model/dataset license and Hub rate limits before ingesting or training. |
+| **Poly Haven Public API** | Free CC0 HDRI, PBR textures and 3D model metadata | The July 2026 official API is free for commercial use; live API integrations must visibly credit "Powered by Poly Haven". Keep file-level provenance, sizes, and source hashes; don't claim AI-generated source assets are CC0 without evidence. |
+| **Roblox Open Cloud** | Official API/experience tools, own data stores, permitted inventory/asset access and webhooks | Per-endpoint and per-owner OAuth/API-key quotas, 429 Retry-After and possible undocumented ceilings; mutating game state requires a separately approved identity/permission and explicit user consent. |
+| **Official engine docs** | Roblox Creator Hub, Luau API dump, Unity manual, Godot class reference, Blender Python API, Khronos glTF Validator | Fetch with revision/hash and normalized symbols; prioritize native spec over Reddit/tutorial guesses; don't mass-copy licensed documentation into training datasets. |
+
+Sources:
+- https://help.openalex.org/access/pricing/ and https://help.openalex.org/access/example-costs/
+- https://www.crossref.org/documentation/retrieve-metadata/rest-api/access-and-authentication/
+- https://www.mediawiki.org/wiki/Wikimedia_APIs/Rate_limits
+- https://api.stackexchange.com/docs/throttle
+- https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+- https://huggingface.co/docs/hub/en/api
+- https://github.com/Poly-Haven/Public-API and https://polyhaven.com/af/our-api
+- https://create.roblox.com/docs/cloud/reference/rate-limits
+
+**Research broker design:** source type + quota manager -> permission/consent gate -> official API over fixed HTTPS host -> normalized content and citation -> independent freshness/provenance checksum -> sparse/full-text search -> only answer-relevant excerpts into the model. Logs are redacted and all content remains untrusted. Try multiple independent sources *only when verification is worth their latency*. Missing internet must degrade into honest local references, not hallucinated access.
+
 ### Verified self-learning: Experiment Ledger
 
 Record a structured, immutable evidence chain: task -> code/model/tool versions -> input and source rights -> proposed hypothesis -> build artifacts -> static checks -> test runs -> native Studio/engine screenshot evidence -> owner acceptance -> learning candidate. The model cannot mark its own answer "passed." Keep training, validation and sealed holdouts disjoint by game/project/problem family and have a separate evaluator/permission process that the model cannot modify.
