@@ -45,7 +45,8 @@ class BotConfig:
         vars = os.environ if env is None else env
         token = vars.get("STAR_DISCORD_BOT_TOKEN", "").strip()
         if not token or any(char.isspace() for char in token):
-            raise ValueError("STAR_DISCORD_BOT_TOKEN must be set outside the repository")
+            raise ValueError("No bot token: put DISCORD_BOT_TOKEN=... in ~/.star/discord.env "
+                             "(see docs/STAR_DISCORD_SETUP.md); never commit it")
         policy = AccessPolicy.from_env(vars)
         raw = vars.get("STAR_DISCORD_SYNC_GUILD_ID", "").strip()
         sync = vars.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip().lower()
