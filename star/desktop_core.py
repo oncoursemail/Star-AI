@@ -1,7 +1,7 @@
 """STAR Desktop's local-only backend. The Qt GUI calls this from worker threads."""
 from __future__ import annotations
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -305,6 +305,29 @@ class Conversations:
         )
         self.connection.commit()
 
+    def _next_chat_stamp(self, project: str) -> str:
+        """Make per-project chat activity order stable at coarse clock ticks.
+
+        Old SQLite databases have no sequence column. ISO UTC timestamps are
+        kept in the existing fields; ties in legacy rows sort by rowid.
+        """
+        stamp = datetime.now(timezone.utc)
+        newest = self.connection.execute(
+            'SELECT updated FROM chats WHERE project=? '
+            'ORDER BY updated DESC, rowid DESC LIMIT 1', (project,)
+        ).fetchone()
+        if newest:
+            try:
+                previous = datetime.fromisoformat(newest[0])
+                if previous.tzinfo is None:
+                    previous = previous.replace(tzinfo=timezone.utc)
+                if stamp <= previous:
+                    stamp = previous + timedelta(microseconds=1)
+            except (TypeError, ValueError, OverflowError):
+                # Older malformed dates are left untouched; new writes use UTC.
+                pass
+        return stamp.isoformat()
+
     def new_chat(self, project: str) -> str:
         import uuid
         # Reuse an already blank active thread instead of filling the history with
@@ -319,7 +342,7 @@ class Conversations:
         if current:
             return current[0]
         chat_id = uuid.uuid4().hex
-        created = datetime.now(timezone.utc).isoformat()
+        created = self._next_chat_stamp(project)
         with self.connection:
             self.connection.execute(
                 'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
@@ -341,7 +364,7 @@ class Conversations:
         if found:
             return found[0]
         newest = self.connection.execute(
-            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC LIMIT 1',
+            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC, rowid DESC LIMIT 1',
             (project,)
         ).fetchone()
         if newest:
@@ -367,7 +390,7 @@ class Conversations:
             {'id': chat_id, 'title': title, 'created': created, 'updated': updated}
             for chat_id, title, created, updated in self.connection.execute(
                 'SELECT id,title,created,updated FROM chats WHERE project=? '
-                'ORDER BY updated DESC LIMIT ?', (project, limit)
+                'ORDER BY updated DESC, rowid DESC LIMIT ?', (project, limit)
             )
         ]
 
@@ -379,7 +402,7 @@ class Conversations:
         if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
                                      or type(reply_to) is not int):
             raise ValueError('Only an event record that answers a user message can be failed or cancelled')
-        stamp = datetime.now(timezone.utc).isoformat()
+        stamp = self._next_chat_stamp(project)
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
             if chat_id is None:
