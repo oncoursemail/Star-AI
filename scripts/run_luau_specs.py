@@ -9,7 +9,9 @@ numbers unchanged so failure messages point at the real source line:
   ``script.Parent...``) become relative CLI requires.
 * ``local X = game:GetService(...)`` lines become comments (the CLI has no ``game``).
 * ``ArenaFactory.luau`` and its spec get a tiny in-memory Instance/workspace
-  stand-in. That stand-in approximates the engine; it is not Roblox itself.
+  stand-in. It creates only Model, Part, SpawnLocation and a Workspace singleton.
+  Inheritance is simulated; property validation, physics, replication and
+  Studio semantics are not covered. Unsupported classes fail closed.
 
 Specs execute, not merely parse, and a spec file that defines no cases fails.
 """
@@ -25,6 +27,9 @@ import sys
 import tempfile
 
 SPEC_TIMEOUT_SECONDS = 60
+ARENA_SPEC = pathlib.Path(
+    "roblox-templates/rounds/ServerScriptService/Tests/ArenaFactory.spec.luau"
+)
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 SERVICE = re.compile(r'game:GetService\("([^"]+)"\)')
@@ -35,12 +40,38 @@ ENGINE = """local Engine = {}
 local objects = {}
 local Node = {}
 Node.__index = Node
+-- Offline test-only class graph. These are the ancestors of the classes
+-- modeled by ArenaFactory, not a general Roblox class catalogue.
+local PARENT_CLASS = {
+    Object = false,
+    Instance = "Object",
+    PVInstance = "Instance",
+    Model = "PVInstance",
+    WorldRoot = "Model",
+    Workspace = "WorldRoot",
+    BasePart = "PVInstance",
+    FormFactorPart = "BasePart",
+    Part = "FormFactorPart",
+    SpawnLocation = "Part",
+}
+local CREATABLE = {Model = true, Part = true, SpawnLocation = true}
 function Node:FindFirstChild(name)
     for _, child in ipairs(objects) do
         if child.Parent == self and child.Name == name then return child end
     end
 end
-function Node:IsA(name) return self.ClassName == name end
+function Node:IsA(name)
+    -- Reject unmodeled names rather than validating arbitrary engine classes.
+    if type(name) ~= "string" or PARENT_CLASS[name] == nil then
+        error("unsupported headless IsA class: " .. tostring(name), 2)
+    end
+    local current = self.ClassName
+    while current do
+        if current == name then return true end
+        current = PARENT_CLASS[current]
+    end
+    return false
+end
 function Node:IsDescendantOf(ancestor)
     local parent = self.Parent
     while parent do
@@ -58,6 +89,9 @@ end
 Engine.workspace = setmetatable({Name="Workspace", ClassName="Workspace"}, Node)
 Engine.Instance = {}
 function Engine.Instance.new(name)
+    if type(name) ~= "string" or not CREATABLE[name] then
+        error("unsupported headless Instance.new class: " .. tostring(name), 2)
+    end
     local item = setmetatable({ClassName=name, Parent=nil}, Node)
     table.insert(objects, item)
     return item
@@ -192,7 +226,11 @@ def run(cli: str, root: pathlib.Path) -> int:
             staged = stage / spec.relative_to(root)
             driver = staged.with_name(staged.name + ".runner.luau")
             driver.write_text(driver_source(staged.stem), encoding="utf-8")
-            print(f"RUN {spec.relative_to(root)}", flush=True)
+            relative = spec.relative_to(root)
+            print(f"RUN {relative}", flush=True)
+            if relative == ARENA_SPEC:
+                print("  SIMULATED ROBLOX INSTANCE: native Luau CLI with limited doubles; "
+                      "not Roblox Studio", flush=True)
             try:
                 result = subprocess.run([cli, str(driver)], cwd=staged.parent, text=True,
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
