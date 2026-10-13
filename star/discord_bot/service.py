@@ -61,14 +61,19 @@ class DiscordService:
         except asyncio.TimeoutError as exc:
             raise ValueError("STAR is busy with another request. Try again shortly.") from exc
 
-    async def ask(self, key: tuple, prompt: str) -> str:
+    async def ask(self, key: tuple, prompt: str, *, on_delta=None, on_status=None) -> str:
+        """`on_delta(text_so_far)` / `on_status(note)`: optional async callbacks for a live reply.
+        Passed only to a brain that streams (`brain.streams`); others answer in one piece."""
         question = clean_text(prompt, max_chars=MAX_PROMPT)
         if not question:
             raise ValueError("Ask STAR a question")
         await self._lock_brain()
         try:
             history = self.memory.history(key)
-            answer = await self.brain.reply(question, history)
+            live = {}
+            if getattr(self.brain, "streams", False) is True and (on_delta or on_status):
+                live = {"on_delta": on_delta, "on_status": on_status}
+            answer = await self.brain.reply(question, history, **live)
             self.memory.remember(key, question, answer)
             return answer
         finally:

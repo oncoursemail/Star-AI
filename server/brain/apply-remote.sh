@@ -91,6 +91,11 @@ preflight() {
     [ -z "${src:-}" ] && continue
     [ -e "$dst" ] || [ -e "$src" ] || { say "neither $dst nor $src exists"; bad=1; }
   done < <(moves)
+  # chat templates: models.ini names /opt/star/config/templates/<name>; the file must be staged next to it
+  for f in $(grep -E '^chat-template-file *=' "$STAGE/models.ini" | sed -E 's/^[a-z-]+ *= *//'); do
+    case "$f" in /opt/star/config/templates/*) ;; *) say "chat-template-file must live in /opt/star/config/templates: $f"; bad=1; continue;; esac
+    [ -s "$STAGE/templates/$(basename "$f")" ] || { say "chat template not staged: $f"; bad=1; }
+  done
   for f in $(ini_paths "$STAGE/models.ini"); do
     [ -e "$f" ] || moves | awk '{print $2}' | grep -qx "$f" || { say "file referenced in models.ini does not exist: $f"; bad=1; }
   done
@@ -142,6 +147,8 @@ case "$MODE" in
       if [ -e "$dst" ]; then continue; fi
       mkdir -p "$(dirname "$dst")" && mv "$src" "$dst" && say "moved $(basename "$src") into $(dirname "$dst")"
     done < <(moves)
+    install -d -o star -g star -m 755 /opt/star/config/templates
+    for t in "$STAGE"/templates/*.jinja; do [ -f "$t" ] && install -o star -g star -m 644 "$t" /opt/star/config/templates/; done
     install -o star -g star -m 644 "$STAGE/models.ini" "$CONF"
     install -o star -g star -m 755 "$STAGE/star-brain-prestart.sh" "$PRE"
     install -o root -g root -m 644 "$STAGE/star-brain.service" "$UNIT"
