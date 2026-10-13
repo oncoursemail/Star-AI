@@ -83,6 +83,31 @@ def test_generated_tests_are_parsed_and_unsafe_ones_refused():
     assert parse_tests("```luau\nlocal M = load_answer()\ncheck('x', __SRC ~= nil)\ncheck('y', true)\n```") is None
     assert parse_tests("```luau\ncheck('a', true)\ncheck('b', true)\n```") is None     # never loads the answer
     assert parse_tests("```luau\nlocal M = load_answer()\ncheck('a', true)\n```") is None   # one assertion only
+    # Seen live (star-voice, LUA-01): checks that pass a function, and a test that brings its own module.
+    assert parse_tests("```luau\nlocal M = load_answer()\ncheck('a', function() assert(M.x) end)\n"
+                       "check('b', M.y == 1)\n```") is None
+    assert parse_tests("```luau\nlocal M = load_answer({Inventory = {new = function() return {} end}})\n"
+                       "check('a', M.Inventory ~= nil)\ncheck('b', true)\n```") is None
+    assert parse_tests("```luau\nlocal M = load_answer({game = mockGame({})})\ncheck('a', M.x == 1)\n"
+                       "check('b', M.y == 2)\n```") is not None                         # mocks are fine
+
+
+def test_assertions_that_pass_on_an_empty_module_are_not_counted():
+    class Runner:
+        def run(self, script):
+            vacuous = "@@T\tpass\tanything goes"
+            real = "@@T\t" + ("pass" if "return a + b" in script else "fail") + "\tadds"
+            return SimpleNamespace(stdout=f"{vacuous}\n{real}\n@@DONE", error="", timed_out=False)
+
+    async def go():
+        engine = BestOfN(plan_of(2), prompt="Write a Luau add module", sample=scripted({"m": [WRONG]}),
+                         checker=LuauChecker(luau_check=fake_luau_check, runner=Runner(), prelude="-- p"),
+                         targets=[Target("m", 1)], write_tests=lambda prompt: asyncio.sleep(0, TESTS))
+        engine.start()
+        return await engine.finish(GOOD, "m", wait_s=5)
+    outcome = run(go())
+    assert outcome.tests == 1 and outcome.suspect_tests == 1 and outcome.chosen.index == 1
+    assert outcome.chosen.unit == (1, 1) and outcome.tests_state == "ok"
 
 
 def test_a_test_that_fails_for_every_candidate_is_suspect_not_counted():
@@ -363,3 +388,18 @@ def test_desktop_mode_setting_and_env():
     off = SimpleNamespace(best_of_n="off", best_of_n_max=4)
     assert bon.turn_mode(off, {}) == (False, None, 4)
     assert bon.turn_mode(off, {"STAR_BEST_OF_N": "5"}) == (True, 5, 5)
+
+
+
+def test_pure_luau_is_checked_as_written_and_engine_code_non_strict():
+    sent = []
+
+    def check(code):
+        sent.append(code)
+        return {"ran": True, "ok": True, "errors": []}
+    checker = LuauChecker(luau_check=check, lints=False)
+    pure = "--!strict\nlocal M = {}\nreturn M\n"
+    engine = "--!strict\nlocal p = Instance.new('Part')\nreturn p\n"
+    checker.static(pure, f"```luau\n{pure}```")
+    checker.static(engine, f"```luau\n{engine}```")
+    assert sent[0].startswith("--!strict") and sent[1].startswith("--!nonstrict")

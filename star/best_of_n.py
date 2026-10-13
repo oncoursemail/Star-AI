@@ -298,6 +298,8 @@ def rank_key(c: Candidate):
 _FENCE = re.compile(r"```[ \t]*([A-Za-z0-9_+-]*)[^\n]*\n(.*?)```", re.S)
 _FENCE_LINE = re.compile(r"^[ \t]*```", re.M)
 _LOOKS_LIKE_LUAU = re.compile(r"\b(?:local|function|end|then|return)\b")
+_ROBLOX_CODE = re.compile(r"\b(?:game|workspace|script|plugin|Instance|Enum|Vector3|Vector2|CFrame|Color3|"
+                          r"BrickColor|UDim2?|TweenInfo|Ray|RaycastParams|NumberSequence|ColorSequence)\b")
 _LOOKS_LIKE_PY = re.compile(r"^\s*(?:def|class|import|from)\s", re.M)
 
 
@@ -334,21 +336,29 @@ def _clean(text, limit: int = MAX_DETAIL) -> str:
 # ------------------------------------------------------------------------------------------------ generated tests
 
 TEST_SYSTEM = (
-    "You write unit tests for a Luau ModuleScript BEFORE it exists, from the request alone. The tests run in a "
+    "You write unit tests for a Luau ModuleScript BEFORE it exists, from the request alone. Do NOT write the module "
+    "itself: another program writes it, and your tests decide whether that program is right. The tests run in a "
     "harness that already defines these helpers:\n"
-    "  local M = load_answer(extra)   -- loads the answer; returns what its chunk returns (the module table or "
-    "function). `extra` is an optional table of globals to inject, e.g. {game = mockGame({Players = ...})}\n"
-    "  check(name, condition)         -- one assertion; name is a short sentence\n"
+    "  local M = load_answer()        -- loads the answer; returns what its chunk returns (the module table or "
+    "function). load_answer({game = mockGame({...})}) injects mock globals for code that needs them\n"
+    "  check(name, condition)         -- one assertion: a short sentence and a BOOLEAN expression (not a function)\n"
     "  throws(fn, ...)                -- true when fn(...) raises an error\n"
     "  deepEqual(a, b), deepCopy(t), countKeys(t)\n"
     "  Signal.new() (with :Connect(fn) and :Fire(...)), mockGame(services), mockPlayer(name, userId, coins), "
     "mockCharacter(health), node(t)\n"
-    "Rules: plain Luau only, no Roblox engine; 3 to 8 check(...) calls on behaviour the request clearly asks for "
-    "(including one edge case); use the function and field names the request gives; never use print, require, "
-    "loadstring, getfenv, setfenv, debug, os.exit or names starting with two underscores. Reply with ONLY the test "
-    "code in one ```luau block. If the request cannot be tested without the Roblox engine (UI, physics, a "
-    "LocalScript, Studio building), reply exactly NO_TESTS."
+    "Example for 'a module Stack with new(), push(s, v) and pop(s) that returns nil when empty':\n"
+    "```luau\nlocal Stack = load_answer()\nlocal s = Stack.new()\nStack.push(s, 1)\nStack.push(s, 2)\n"
+    "check(\"pop returns the last pushed value\", Stack.pop(s) == 2)\n"
+    "check(\"pop then returns the earlier value\", Stack.pop(s) == 1)\n"
+    "check(\"pop on an empty stack returns nil\", Stack.pop(s) == nil)\n```\n"
+    "Rules: plain Luau, no Roblox engine; 3 to 8 check(...) calls on behaviour the request clearly asks for "
+    "(including one edge case); use exactly the module, function and field names the request gives; keep it under "
+    "40 lines; never use print, require, loadstring, getfenv, setfenv, debug or names starting with two underscores. "
+    "Reply with ONLY the test code in one ```luau block. If the request cannot be tested without the Roblox engine "
+    "(UI, physics, a LocalScript, Studio building) or does not name the functions to call, reply exactly NO_TESTS."
 )
+_CHECK_WITH_FUNCTION = re.compile(r"\bcheck\s*\([^,()]*,\s*function\b")
+_WRITES_THE_MODULE = re.compile(r"\bload_answer\s*\(\s*\{[^}]*\bfunction\b", re.S)
 _FORBIDDEN_TEST = re.compile(r"@@|\b__\w+|\b(?:print|require|loadstring|getfenv|setfenv|debug|dofile|loadfile)\b")
 
 
@@ -363,7 +373,13 @@ def parse_tests(reply: str) -> str | None:
     count = len(re.findall(r"\bcheck\s*\(", body))
     if not 2 <= count <= MAX_TESTS + 2 or "load_answer" not in body:
         return None
+    if _CHECK_WITH_FUNCTION.search(body) or _WRITES_THE_MODULE.search(body):
+        return None    # check(name, function() ... end) never fails; a test that brings its own module tests nothing
     return body
+
+
+# Run against a module that does nothing: an assertion that passes there says nothing about any candidate.
+STUB_MODULE = "return {}\n"
 
 
 def agreed_units(candidates: list[Candidate]) -> tuple[set[str], set[str]]:
@@ -399,7 +415,9 @@ class LuauChecker:
         if self.luau_check is not None:
             from .eval_checks import effective_errors, lenient_source
             try:
-                report = self.luau_check(lenient_source(code))
+                # Pure Luau is checked as written (its own --!strict counts); code that touches the engine is
+                # checked non-strict, because the service types Roblox classes as unknown (eval_checks rule).
+                report = self.luau_check(lenient_source(code) if _ROBLOX_CODE.search(code) else code)
                 if isinstance(report, dict) and report.get("ran") is True:
                     errors = effective_errors(report, self.prompt)
                     results.append(CheckResult("compiles and type-checks", "fail" if errors else "pass",
@@ -567,10 +585,11 @@ class Outcome:
     suspect_tests: int = 0
     footer: str = ""                 # the evidence paragraph to append
     changed: bool = False            # True when the answer differs from the main answer
+    tests_state: str = "none"
     state: str = "single"            # single | selected | repaired | none_passed | unavailable
 
     def record(self) -> dict:
-        return {"state": self.state, "n": len(self.candidates), "tests": self.tests,
+        return {"state": self.state, "n": len(self.candidates), "tests": self.tests, "tests_state": self.tests_state,
                 "suspect_tests": self.suspect_tests,
                 "chosen": self.chosen.index if self.chosen else None,
                 "candidates": [c.summary() for c in self.candidates]}
@@ -604,6 +623,7 @@ class BestOfN:
         self._tests_task: asyncio.Task | None = None
         self.candidates: list[Candidate] = []
         self.started = False
+        self.tests_state = "none"      # none | ok | refused (NO_TESTS or unsafe) | late (not written in time)
 
     @property
     def extra(self) -> int:
@@ -615,13 +635,14 @@ class BestOfN:
             return
         self.started = True
         _emit(self._on_event, {"event": "best_of_n_started", "n": 1 + self.extra, "kind": self.plan.kind})
+        # The test writer goes first: a short request that should get a slot before the long candidates queue.
+        if self._write_tests is not None and getattr(self.checker, "can_run_tests", False):
+            self._tests_task = asyncio.ensure_future(self._tests())
         for number, target in enumerate(self.targets, 2):
             temperature = TEMPERATURES[(number - 2) % len(TEMPERATURES)]
             candidate = Candidate(number, target.model, temperature)
             self.candidates.append(candidate)
             self._tasks.append(asyncio.ensure_future(self._run_one(candidate, target)))
-        if self._write_tests is not None and getattr(self.checker, "can_run_tests", False):
-            self._tests_task = asyncio.ensure_future(self._tests())
 
     async def _run_one(self, candidate: Candidate, target: Target) -> None:
         began = self._clock()
@@ -660,14 +681,14 @@ class BestOfN:
         main = Candidate(1, main_model, 0.0, answer=main_answer or "", error="" if (main_answer or "").strip() else "empty")
         if not self.started:
             return Outcome(main_answer, main, [main], state="single")
-        pending = [t for t in self._tasks if not t.done()]
+        pending = [t for t in [*self._tasks, self._tests_task] if t is not None and not t.done()]
         if pending:
             await asyncio.wait(pending, timeout=max(0.0, wait_s))
         tests = None
-        if self._tests_task is not None:
-            if not self._tests_task.done():
-                await asyncio.wait([self._tests_task], timeout=max(0.0, min(30.0, wait_s)))
-            tests = self._tests_task.result() if self._tests_task.done() and not self._tests_task.cancelled() else None
+        if self._tests_task is not None and self._tests_task.done() and not self._tests_task.cancelled():
+            tests = self._tests_task.result()
+        self.tests_state = ("none" if self._tests_task is None else "late" if not self._tests_task.done()
+                            else "ok" if tests else "refused")
         await self.cancel()
         candidates = [main, *self.candidates]
         return await self.evaluate(candidates, tests)
@@ -687,6 +708,11 @@ class BestOfN:
 
         await asyncio.gather(*(check(c) for c in candidates))
         valid, suspect = agreed_units(candidates) if tests else (set(), set())
+        if valid:
+            stub, _ = await asyncio.to_thread(self.checker.run_tests, STUB_MODULE, tests)
+            vacuous = {name for name, ok in (stub or {}).items() if ok}
+            valid -= vacuous
+            suspect |= vacuous & {n for c in candidates for n in (c.unit_raw or {})}
         for c in candidates:
             if not c.ok:
                 continue
@@ -717,7 +743,7 @@ class BestOfN:
         main = candidates[0]
         answer = best.answer if best.ok else main.answer
         outcome = Outcome(answer, best if best.ok else None, candidates, tests=len(valid),
-                          suspect_tests=len(suspect), changed=answer != main.answer,
+                          suspect_tests=len(suspect), changed=answer != main.answer, tests_state=self.tests_state,
                           state="repaired" if best.repaired and not best.hard_failures else state)
         outcome.footer = evidence(outcome, kind)
         _emit(self._on_event, {"event": "best_of_n_selected", "index": best.index, "n": len(candidates),
