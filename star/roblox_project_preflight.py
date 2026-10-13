@@ -18,6 +18,7 @@ MAX_API_DUMP_BYTES = 20_000_000
 MAX_PROJECT_ENTRIES = MAX_FILES * 3
 MAX_FILE_FINDINGS = 50
 MAX_UNSUPPORTED = 32
+MAX_NATIVE_FILES = 12  # 6 seconds per file; never scan an unbounded project
 LIMITATIONS = (
     "Static source checks only: Luau is not executed or typechecked.",
     "No Roblox Studio, game simulation, asset validation or gameplay verification.",
@@ -103,7 +104,8 @@ def _lint_report(source: str, script_class: str) -> list[dict]:
     return results
 
 
-def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict:
+def preflight(source: str | Path, *, api_dump: str | Path | None = None,
+              native_luau: bool = False) -> dict:
     """Inspect a bounded script-only Roblox place tree with explicit evidence.
 
     Return invalid for malformed structures or API dumps; never conflate missing
@@ -128,6 +130,10 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
         files: list[dict] = []
         total_findings = 0
         limited = False
+        native_attempted = 0
+        native_checked = 0
+        native_skipped = 0
+        native_counts: dict[str, int] = {}
         for relative in paths:
             code, script_class = _source_node(services, relative)
             scopes: list[str] = []
@@ -145,6 +151,50 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
                     findings.extend(_api_report(code, dump))
                 else:
                     warnings.append("API names unchecked: no validated dump supplied")
+            # Explicit native analyzer is separate from static-only checks.
+            # A missing, broken, timed-out or truncated tool must never pass.
+            if native_luau:
+                from .luau_analyze import analyze_evidence
+
+                oversized = len(code.encode("utf-8")) > MAX_CHECK_SOURCE_BYTES
+                if oversized or native_attempted >= MAX_NATIVE_FILES:
+                    native_status = "skipped"
+                    native_findings = ()
+                    engine_ignored = 0
+                    native_skipped += 1
+                    warnings.append(
+                        "Native Luau analysis skipped: source exceeds 20 KB budget"
+                        if oversized else "Native Luau analysis skipped: 12-file budget reached")
+                else:
+                    native_attempted += 1
+                    evidence = analyze_evidence(code)
+                    native_status = evidence.status
+                    native_findings = evidence.findings
+                    engine_ignored = evidence.engine_symbols_ignored
+                    if native_status in {"checked", "diagnostics"}:
+                        scopes.append("native-luau-syntax-limited-types")
+                    else:
+                        warnings.append("Native Luau analysis incomplete: " + native_status)
+                    if engine_ignored:
+                        warnings.append(
+                            "Native Luau cannot verify Roblox engine globals/types; "
+                            f"{engine_ignored} diagnostics excluded")
+                    for found in native_findings:
+                        findings.append({
+                            "line": found.line, "rule": found.rule_id,
+                            "severity": found.severity, "checker": "native-luau",
+                            "message": found.message[:240],
+                            "suggested_fix": found.suggested_fix[:240],
+                        })
+                native_counts[native_status] = native_counts.get(native_status, 0) + 1
+                native_checked += int(native_status in {"checked", "diagnostics"}
+                                      and engine_ignored == 0)
+                native_record = {
+                    "status": native_status,
+                    "diagnostic_count": len(native_findings),
+                    "engine_symbols_ignored": engine_ignored,
+                    "scope": "standalone-luau-no-roblox-engine-types",
+                }
             if script_class == "ModuleScript":
                 warnings.append("ModuleScript execution side is unknown; server trust is not verified")
             findings = sorted(findings, key=lambda f: (
@@ -154,12 +204,15 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
                 warnings.append("Findings truncated at 50 entries")
             limited = limited or bool(warnings)
             total_findings += len(findings)
-            files.append({
+            file_record = {
                 "file": relative, "script_class": script_class,
                 "status": "partial" if warnings else "checked",
                 "checked_scope": scopes, "findings": findings,
                 "unverified": warnings,
-            })
+            }
+            if native_luau:
+                file_record["native_luau"] = native_record
+            files.append(file_record)
     except BuildError as exc:
         return _invalid(str(exc))
     except (OSError, UnicodeError):
@@ -173,7 +226,7 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
         state = "partial"
     else:
         state = "checked"
-    return {
+    report = {
         "schema_version": 1, "status": state,
         "coverage": "partial" if limited or ignored else "static-only",
         "files": files, "unsupported_files": ignored,
@@ -184,14 +237,32 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
             "unsupported_files": len(ignored), "findings": total_findings,
         },
     }
+    if native_luau:
+        report["native_analysis"] = {
+            "requested": True, "checked_files": native_checked,
+            "unverified_files": len(files) - native_checked,
+            "attempted_files": native_attempted, "skipped_files": native_skipped,
+            "file_limit": MAX_NATIVE_FILES,
+            "statuses": {k: native_counts[k] for k in sorted(native_counts)},
+            "scope": "Standalone Luau source analyzer; NOT Roblox Studio or engine verification",
+        }
+        report["limitations"][0] = (
+            "Static checks plus explicitly requested native Luau source analysis "
+            "where shown; generated code was not executed.")
+        report["limitations"].insert(1, (
+            "Standalone Luau lacks Roblox engine type definitions; excluded engine "
+            "diagnostics and incomplete checks are disclosed per file."))
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Read-only Roblox place source preflight")
     parser.add_argument("source", type=Path, help="place source folder (not an .rbxlx file)")
     parser.add_argument("--api-dump", type=Path, help="local Studio --fullApi JSON dump")
+    parser.add_argument("--native-luau", action="store_true",
+                        help="explicitly run installed native Luau analyzer, never Studio")
     args = parser.parse_args(argv)
-    report = preflight(args.source, api_dump=args.api_dump)
+    report = preflight(args.source, api_dump=args.api_dump, native_luau=args.native_luau)
     print(json.dumps(report, sort_keys=True, ensure_ascii=True))
     if report["status"] == "invalid":
         return 2
