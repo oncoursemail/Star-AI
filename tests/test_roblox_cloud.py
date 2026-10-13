@@ -470,7 +470,8 @@ def test_the_example_place_builds_to_the_expected_tree():
         ("ServerScriptService", "ServerScriptService", [
             ("ModuleScript", "Shop", []), ("Folder", "Tests", [("ModuleScript", "Shop.spec", [])])])]
     source = root.find(".//Item[@class='ModuleScript']/Properties/ProtectedString[@name='Source']").text
-    assert source == (EXAMPLE / "ReplicatedStorage/Shared/Catalog.luau").read_text(encoding="utf-8")
+    # read_text() translates CRLF on Windows, but the XML builder now preserves exact source bytes.
+    assert source == (EXAMPLE / "ReplicatedStorage/Shared/Catalog.luau").read_bytes().decode("utf-8-sig")
     referents = [item.get("referent") for item in root.iter("Item")]
     assert len(referents) == len(set(referents)) == build.instances == 7
 
