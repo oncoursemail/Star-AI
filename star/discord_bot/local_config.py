@@ -41,6 +41,7 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_STATE", "STAR_DISCORD_LEARNING_DM_COOLDOWN_HOURS",
     "STAR_DISCORD_LEARNING_CHECK_MINUTES",
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
+    "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
 })
 # The token may only come from the secret file or the process environment.
 _SECRET_KEYS = frozenset({"STAR_DISCORD_BOT_TOKEN"})
@@ -125,6 +126,10 @@ STAR_DISCORD_DM_IMAGES=1
 STAR_DISCORD_DM_LEARNING_CANDIDATES=0
 # PC screenshots via /screen: each capture still needs a button press in Discord.
 STAR_DISCORD_SCREEN_CAPTURE=0
+# Read-only status/screenshot from a trusted locally staged Studio/Blender job receipt.
+# Never accepts Discord-supplied file paths; the producer must supply SHA-matched evidence.
+STAR_DISCORD_LAB_STATUS=0
+STAR_DISCORD_LAB_REPORT=
 # Requests per 10 minutes from the owner before STAR asks to slow down.
 STAR_DISCORD_RATE_LIMIT=30
 # Night School digest DMs: 1 = send a short DM when practice numbers really change.
