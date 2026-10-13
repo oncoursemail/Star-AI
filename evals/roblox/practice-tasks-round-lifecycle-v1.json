@@ -375,6 +375,12 @@
           "re": "onExpire\\s*\\(\\s*\\)",
           "why": "Notify expiration.",
           "scope": "code"
+        },
+        {
+          "id": "cancel_return",
+          "re": "return\\s+function\\s*\\(",
+          "why": "Expose a cancellation function for the listener.",
+          "scope": "code"
         }
       ],
       "forbid": [
@@ -395,6 +401,7 @@
         "Present: Never expose negative time.",
         "Present: Disconnect at expiration and cancellation.",
         "Present: Notify expiration.",
+        "Present: Expose a cancellation function for the listener.",
         "Absent: Do not extend the clock with a one-second loop."
       ]
     }
@@ -404,17 +411,17 @@
     "category": "round-time-cancellation",
     "difficulty": 3,
     "goal": "Invalidate delayed round callbacks when a match is cancelled",
-    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Round.scheduleFinish(seconds) and Round.cancel(). scheduleFinish() should use task.delay to end the current Playing round in Results after the requested time. Use a monotonically increasing generation counter and capture a token for each delayed callback. cancel() invalidates any pending callbacks and switches to Waiting. A delayed finish from an old round must not end a newer Playing round, even if cancellation and a fresh schedule occur rapidly. Return fenced Luau.",
+    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Round.begin(), Round.scheduleFinish(seconds) and Round.cancel(). begin() returns false if already Playing; otherwise it increments generation, enters Playing and returns true. scheduleFinish uses task.delay only during Playing, capturing the current generation token and ending the round in Results when due. cancel() invalidates pending callbacks and enters Waiting. A stale scheduled finish from round A must not end round B after cancel(), begin(), and scheduleFinish() for B. Return fenced Luau.",
     "run_mode": "automated",
     "fixture_status": "not_needed",
     "fixtures": [],
     "helps": [],
     "split": "development",
     "teaches": "Generation checks defend against stale asynchronous completions crossing round boundaries.",
-    "edge_case": "Schedule A, cancel it, then schedule B; A's delayed callback must never affect B.",
+    "edge_case": "Schedule A, cancel it, begin B, then schedule B; A's callback must not affect B.",
     "expected_behavior": [
-      "Only the callback holding the current generation may transition Playing to Results.",
-      "A cancelled callback leaves Waiting or a newer round untouched."
+      "A callback from an earlier generation cannot finish or alter a later Playing round.",
+      "Scheduling outside Playing returns false; duplicate begin while Playing changes no generation."
     ],
     "engine_symbols": [
       "task.delay"
@@ -483,6 +490,18 @@
           "re": "function\\s+Round\\.cancel\\s*\\(",
           "why": "Expose explicit cancellation.",
           "scope": "code"
+        },
+        {
+          "id": "begin",
+          "re": "function\\s+Round\\.begin\\s*\\(",
+          "why": "Expose begin() so a new round can start after cancellation.",
+          "scope": "code"
+        },
+        {
+          "id": "duplicate_begin",
+          "re": "if\\s+phase\\s*==\\s*[\"']Playing[\"']\\s+then\\s+return\\s+false",
+          "why": "Reject begin() while already Playing.",
+          "scope": "code"
         }
       ],
       "forbid": [
@@ -504,6 +523,8 @@
         "Present: Reject old scheduled callbacks.",
         "Present: Only Playing may complete.",
         "Present: Expose explicit cancellation.",
+        "Present: Expose begin() so a new round can start after cancellation.",
+        "Present: Reject begin() while already Playing.",
         "Absent: Do not block and then finish without checking a generation."
       ]
     }
@@ -721,7 +742,7 @@
     "category": "round-joins-leaves",
     "difficulty": 3,
     "goal": "Cancel intermission when a departing player breaks the minimum",
-    "prompt": "In my Roblox multiplayer game: write a server ModuleScript Lobby.start() using a minimum of two eligible players and a Players.PlayerRemoving listener. During Intermission, losing a player so fewer than two remain must cancel the countdown, bump countdownVersion to invalidate outstanding work, and revert to Waiting. PlayerRemoving fires before the player is gone: implement a countExcluding(exiting) helper iterating Players:GetPlayers() and omitting the departing Player, rather than comparing #Players:GetPlayers() inside that callback. No cancellation after the round is Playing. Return one fenced Luau module.",
+    "prompt": "In my Roblox multiplayer game: write a server ModuleScript Lobby.start(): number | false and Lobby.complete(token): boolean for an intermission with at least two players. start() returns a new countdownVersion token, or false if ineligible. complete(token) enters Playing only if phase is Intermission, token matches countdownVersion, and two players are still eligible; otherwise false. Players.PlayerRemoving fires BEFORE removal, so countExcluding(exiting) must iterate Players:GetPlayers() and skip that player. If a departure during Intermission leaves fewer than two, increment countdownVersion and return to Waiting. Do not count #Players:GetPlayers() directly in the departure callback. Return one fenced Luau module.",
     "run_mode": "automated",
     "fixture_status": "not_needed",
     "fixtures": [],
@@ -730,8 +751,8 @@
     "teaches": "PlayerRemoving is a pre-removal event, so eligibility counts must account for the departing member.",
     "edge_case": "Exactly two players in intermission: one leaves; the countdown must cancel immediately.",
     "expected_behavior": [
-      "With three players, one departure leaves intermission running.",
-      "With two players, one departure invalidates the countdown before a match can start."
+      "With three players, a departure can leave the countdown active.",
+      "With two players, a departure invalidates the token; complete(oldToken) must return false and cannot start Playing."
     ],
     "engine_symbols": [
       "Players:GetPlayers",
@@ -801,6 +822,18 @@
           "re": "phase\\s*=\\s*[\"']Waiting[\"']",
           "why": "Return to Waiting on cancellation.",
           "scope": "code"
+        },
+        {
+          "id": "completion_method",
+          "re": "function\\s+Lobby\\.complete\\s*\\(\\s*token\\s*\\)",
+          "why": "Expose the token-validated countdown completion.",
+          "scope": "code"
+        },
+        {
+          "id": "stale_countdown",
+          "re": "token\\s*~=\\s*countdownVersion",
+          "why": "Reject a stale countdown completion token.",
+          "scope": "code"
         }
       ],
       "forbid": [
@@ -822,6 +855,8 @@
         "Present: Only cancel during intermission.",
         "Present: Invalidate outstanding countdown work.",
         "Present: Return to Waiting on cancellation.",
+        "Present: Expose the token-validated countdown completion.",
+        "Present: Reject a stale countdown completion token.",
         "Absent: PlayerRemoving runs before the player leaves; counting live Players directly is wrong."
       ]
     }
@@ -831,7 +866,7 @@
     "category": "round-joins-leaves",
     "difficulty": 3,
     "goal": "Resolve departures without rewarding disconnected players",
-    "prompt": "In my Roblox multiplayer game: write a server ModuleScript Round that tracks an active alive table keyed by UserId and reacts to Players.PlayerRemoving while phase is Playing. Ignore repeated leave notifications for players already removed. Remove a departing player before counting survivors. If none remain, return to Waiting with no winner; if exactly one remains, enter Results and store that survivor's UserId as winnerId. A departing player must never become the winner just because their leave event ran last. Return fenced Luau.",
+    "prompt": "In my Roblox multiplayer game: implement a server ModuleScript Round.start(players) taking an array of participating Player objects, plus a Players.PlayerRemoving handler. start() resets a table alive keyed by UserId, inserts every initial participant, clears winnerId and enters Playing. On a leave while Playing, ignore duplicate leave events, remove the departing player, then recount alive. No survivors means Waiting and nil winnerId; exactly one means Results with that remaining UserId as winnerId. A leaver must never win merely because their leave callback ran last. Return one fenced Luau module.",
     "run_mode": "automated",
     "fixture_status": "not_needed",
     "fixtures": [],
@@ -840,8 +875,8 @@
     "teaches": "Recompute live contenders after removing a leaver and handle zero-contender rounds explicitly.",
     "edge_case": "Two players disconnect in quick succession; no winner may be a disconnected player.",
     "expected_behavior": [
-      "After a departure, exactly one remaining contender produces that contender as winner.",
-      "Zero contenders produce no winner; duplicate leave events do not finish twice."
+      "An initial array of three participants is tracked as the active roster.",
+      "Leaving one survivor selects that survivor; leaving none produces no winner and duplicate leave events do nothing."
     ],
     "engine_symbols": [
       "Players.PlayerRemoving",
@@ -913,6 +948,18 @@
           "re": "phase\\s*~=\\s*[\"']Playing[\"']",
           "why": "Do not modify finished rounds.",
           "scope": "code"
+        },
+        {
+          "id": "start_method",
+          "re": "function\\s+Round\\.start\\s*\\(",
+          "why": "Provide participant initialization at round start.",
+          "scope": "code"
+        },
+        {
+          "id": "seed_participants",
+          "re": "alive\\s*\\[\\s*player\\.UserId\\s*\\]\\s*=\\s*true",
+          "why": "Seed the alive snapshot before processing leaves.",
+          "scope": "code"
         }
       ],
       "forbid": [
@@ -934,6 +981,8 @@
         "Present: Handle no survivor.",
         "Present: Handle one survivor.",
         "Present: Do not modify finished rounds.",
+        "Present: Provide participant initialization at round start.",
+        "Present: Seed the alive snapshot before processing leaves.",
         "Absent: Do not select the player who just left."
       ]
     }
@@ -1045,7 +1094,7 @@
     "category": "round-results-cleanup",
     "difficulty": 3,
     "goal": "Award a round winner at most once despite duplicate completions",
-    "prompt": "In my Roblox multiplayer game: create a server ModuleScript Results.begin() returning a fresh increasing round token, and Results.finish(token, winnerId, award): boolean. begin starts Playing and clears a finished guard. finish accepts only the current token while Playing and only once; set finished before calling the injected award(winnerId) callback, then move to Results. If winnerId is nil, record the finish without an award. Old tokens, reentrant callbacks and duplicate finish calls must return false and never pay again. Return one fenced Luau module.",
+    "prompt": "In my Roblox multiplayer game: create server ModuleScript Results.begin() returning a new increasing round token (or false if Playing) and Results.finish(token, winnerId, award): boolean. begin() is allowed from Waiting or Results only; it resets finished, enters Playing and returns the token. finish accepts only the current token while Playing, and only once: set finished before calling the injected award(winnerId) callback, then move to Results. If winnerId is nil, finish without award. An old token, a callback that re-enters finish, or a duplicate finish must return false without paying twice. Return one fenced Luau module.",
     "run_mode": "automated",
     "fixture_status": "not_needed",
     "fixtures": [],
@@ -1055,7 +1104,8 @@
     "edge_case": "The award callback itself calls finish() again; it must not trigger a second award.",
     "expected_behavior": [
       "Two finish calls for the same round invoke award at most once.",
-      "A callback with an older round token cannot award the next round."
+      "A callback with an older round token cannot award the next round.",
+      "begin() during Playing returns false and cannot reset the idempotence guard."
     ],
     "engine_symbols": [],
     "expected_sources": [
@@ -1116,6 +1166,12 @@
           "re": "finished\\s*=\\s*true[\\s\\S]{0,150}\\baward\\s*\\(\\s*winnerId\\s*\\)",
           "why": "Mark completed before granting the reward.",
           "scope": "code"
+        },
+        {
+          "id": "start_guard",
+          "re": "if\\s+phase\\s*==\\s*[\"']Playing[\"']\\s+then\\s+return\\s+false",
+          "why": "A duplicate begin cannot reset finished during a live match.",
+          "scope": "code"
         }
       ],
       "forbid": [
@@ -1136,6 +1192,7 @@
         "Present: Reject a duplicate completion.",
         "Present: Clear idempotence when starting a new round.",
         "Present: Mark completed before granting the reward.",
+        "Present: A duplicate begin cannot reset finished during a live match.",
         "Absent: Never pay before setting finished."
       ]
     }
