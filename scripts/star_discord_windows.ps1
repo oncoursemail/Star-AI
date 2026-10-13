@@ -6,11 +6,15 @@
 param(
     [switch]$Setup,
     [switch]$Doctor,
-    [switch]$Run
+    [switch]$Run,
+    [switch]$Sync
 )
 $ErrorActionPreference = 'Stop'
 if ((@($Setup, $Doctor, $Run) | Where-Object { $_ }).Count -ne 1) {
     throw 'Choose exactly one of -Setup, -Doctor or -Run'
+}
+if ($Sync -and -not $Run) {
+    throw '-Sync must be used with -Run, only for explicitly refreshing test-guild slash commands'
 }
 if (-not $IsWindows -and $PSVersionTable.PSEdition -eq 'Core') {
     throw 'Use this helper only on Windows. Linux uses a private systemd environment file.'
@@ -108,7 +112,10 @@ try {
 }
 $env:STAR_DISCORD_OWNER_IDS = $ownerId
 $env:STAR_DISCORD_GUILD_IDS = $guildId
-$env:STAR_DISCORD_SYNC_COMMANDS = $(if ($guildId) { '1' } else { '0' })
+if ($Sync -and -not $guildId) {
+    throw 'Choose a test server ID in -Setup before using -Run -Sync'
+}
+$env:STAR_DISCORD_SYNC_COMMANDS = $(if ($Sync) { '1' } else { '0' })
 if ($guildId) { $env:STAR_DISCORD_SYNC_GUILD_ID = $guildId }
 $env:STAR_DISCORD_DM_CHAT = '1'
 $env:STAR_DISCORD_DM_IMAGES = $(if ($config.dm_images -eq $true) { '1' } else { '0' })
