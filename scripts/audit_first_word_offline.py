@@ -9,6 +9,7 @@ from collections import defaultdict
 from contextlib import ExitStack, asynccontextmanager
 from dataclasses import dataclass
 import json
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import perf_counter_ns
@@ -48,8 +49,15 @@ class FakeCompletions:
         self.requests.append(kwargs)
         if kwargs.get("stream"):
             async def chunks():
+                # A short first token should be visible *before* the next chunk.
+                # The artificial 90 ms second-chunk gap is deterministic test input,
+                # not a claim about inference, networking or the owner's hardware.
                 yield SimpleNamespace(model="offline-fake", choices=[
-                    SimpleNamespace(delta=SimpleNamespace(content="READY " * 20, tool_calls=None),
+                    SimpleNamespace(delta=SimpleNamespace(content="READY", tool_calls=None),
+                                    finish_reason=None)])
+                await asyncio.sleep(0.09)
+                yield SimpleNamespace(model="offline-fake", choices=[
+                    SimpleNamespace(delta=SimpleNamespace(content=(" READY" * 19) + " ", tool_calls=None),
                                     finish_reason="stop")])
             return chunks()
         return SimpleNamespace(choices=[SimpleNamespace(
