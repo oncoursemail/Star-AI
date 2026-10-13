@@ -13,7 +13,9 @@ The installer is designed to preserve `%APPDATA%\STAR`, including conversations,
 
 ### Administrator rights on Windows
 
-Setup defaults to installing STAR **just for your Windows account (per-user)**, with **no administrator rights required** for installation or upgrades. You may instead choose **all users** in the installer dialog; this needs administrator approval. If STAR was already installed for all users, a newer Setup upgrades that shared installation in the same mode, and Windows asks for administrator approval **on every upgrade**. That prompt is expected. Do not disable Windows UAC to avoid it.
+Setup defaults to installing STAR **just for your Windows account (per-user)**, with **no administrator rights required** for installation or upgrades. You may instead choose **all users** in the installer dialog; this needs administrator approval. If STAR was already installed for all users, a newer Setup upgrades that shared installation in the same mode, and Windows asks for administrator approval **on every upgrade**. That prompt is expected. Do not disable Windows UAC to avoid it. When you install an update from inside STAR, the update progress line says so before Setup starts if the running copy is an all-users installation. STAR finds this out by reading its own Windows uninstall entry, without changing it.
+
+Why the prompt cannot be removed: an all-users copy lives in a machine-wide folder and is registered for the whole machine, and only an administrator may change either one. Setup therefore upgrades it in the same administrative mode (Inno Setup's `UsePreviousPrivileges`). Choosing per-user instead would leave the all-users copy in place and install a second copy beside it. To stop the prompts for good, uninstall the all-users copy (Windows asks for approval one last time) and install STAR again with the default per-user choice. Your chats, models and settings in `%APPDATA%\STAR` are not part of the installation folder and stay where they are.
 
 To tell which kind of installation you have, open **Windows PowerShell** (no administrator rights needed) and run this **read-only** check:
 
