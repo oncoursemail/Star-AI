@@ -185,3 +185,34 @@ def test_discord_service_handles_vision_as_ephemeral_owner_dm_only(tmp_path):
         assert candidate.status == "candidate"
 
     asyncio.run(work())
+
+
+def test_cli_discord_doctor_survives_cp1252(monkeypatch):
+    """Windows legacy consoles must show setup instructions, not Unicode exceptions."""
+    import os
+    import subprocess
+    import sys
+
+    environment = {**os.environ, "PYTHONIOENCODING": "cp1252",
+                   "STAR_DISCORD_BOT_TOKEN": "", "STAR_DISCORD_OWNER_IDS": ""}
+    result = subprocess.run(
+        [sys.executable, "-m", "star.discord_bot", "doctor"],
+        text=True, capture_output=True, encoding="cp1252",
+        env=environment, timeout=20, check=False,
+    )
+    assert result.returncode == 2
+    assert "[SETUP] **Bot token:**" in result.stdout
+    assert "[SETUP] **Owner allowlist:**" in result.stdout
+    assert "Traceback" not in result.stderr
+
+
+def test_doctor_rich_discord_embeds_remain_distinct_from_ascii_console():
+    from star.discord_bot.health import Check, format_checks
+
+    checks = [Check("model", "ready", "ok"), Check("token", "setup", "missing"),
+              Check("voice", "optional", "not configured")]
+    rich = format_checks(checks)
+    terminal = format_checks(checks, ascii_only=True)
+    assert "✓" in rich and "✗" in rich and "•" in rich
+    assert "[OK]" in terminal and "[SETUP]" in terminal and "[OPTIONAL]" in terminal
+    assert terminal.isascii()
