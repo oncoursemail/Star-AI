@@ -142,3 +142,79 @@ def embed_parts(text: str, limit: int = MAX_EMBED_DESCRIPTION) -> list[str]:
 
 def session_key(guild_id: int | None, channel_id: int, user_id: int) -> SessionKey:
     return guild_id, channel_id, user_id
+
+
+MAX_MESSAGE = 2000
+
+
+class RateLimited(PermissionError):
+    """The owner is sending faster than the configured budget."""
+
+
+class RateLimiter:
+    """Sliding-window budget per Discord user; protects the local model and Discord's API."""
+
+    def __init__(self, *, limit: int = 30, window_seconds: float = 600.0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        if type(limit) is not int or not 1 <= limit <= 1000 or window_seconds <= 0:
+            raise ValueError("Invalid Discord rate limit")
+        self.limit, self.window, self._clock = limit, float(window_seconds), clock
+        self._hits: dict[int, list[float]] = {}
+
+    @classmethod
+    def from_env(cls, env: dict[str, str] | None = None) -> "RateLimiter":
+        source = os.environ if env is None else env
+        raw = str(source.get("STAR_DISCORD_RATE_LIMIT", "30")).strip() or "30"
+        if not raw.isdecimal() or not 1 <= int(raw) <= 1000:
+            raise ValueError("STAR_DISCORD_RATE_LIMIT must be a number from 1 to 1000")
+        return cls(limit=int(raw))
+
+    def hit(self, user_id: int) -> None:
+        now = self._clock()
+        recent = [t for t in self._hits.get(user_id, []) if now - t < self.window]
+        if len(recent) >= self.limit:
+            wait = int(self.window - (now - recent[0])) + 1
+            self._hits[user_id] = recent
+            raise RateLimited(f"Slow down a little: STAR takes {self.limit} requests per "
+                              f"{int(self.window // 60)} minutes. Try again in about {wait} s.")
+        recent.append(now)
+        self._hits[user_id] = recent
+
+
+def split_message(text: str, limit: int = 1990, *, max_parts: int = 6) -> tuple[list[str], str]:
+    """Split a reply into Discord-sized messages, keeping ``` code blocks valid.
+
+    Returns (parts, overflow). ``overflow`` is the untouched remainder when more than
+    ``max_parts`` messages would be needed; the caller attaches the full text as a file.
+    """
+    if not 200 <= limit <= MAX_MESSAGE or max_parts < 1:
+        raise ValueError("Invalid message split")
+    source = clean_text(text, max_chars=MAX_REPLY)
+    if not source:
+        return ["(No text returned)"], ""
+    parts: list[str] = []
+    fence = ""  # the opening fence line (e.g. "```lua") when a code block is open
+    while source:
+        if len(parts) == max_parts:
+            return parts, source
+        prefix = fence + "\n" if fence else ""
+        room = limit - len(prefix) - 4  # leave room to close an open fence
+        if len(source) <= room:
+            chunk, source = source, ""
+        else:
+            cut = source.rfind("\n", 0, room)
+            if cut < room // 2:
+                cut = source.rfind(" ", 0, room)
+            if cut < room // 2:
+                cut = room
+            chunk, source = source[:cut], source[cut:].lstrip("\n")
+        body = prefix + chunk
+        # Track whether this chunk leaves a code block open.
+        for line in chunk.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("```"):
+                fence = "" if fence else stripped
+        if fence and source:
+            body = body.rstrip() + "\n```"
+        parts.append(body.strip() or "​")
+    return parts, ""

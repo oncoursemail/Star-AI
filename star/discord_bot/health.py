@@ -33,9 +33,10 @@ def evaluate_readiness(*, bot_token: bool, owner_ids: bool, guild_ids: bool,
     """Pure diagnostic logic; messages describe capability rather than leaked config."""
     return [
         Check("Bot token", "ready" if bot_token else "setup",
-              "Configured outside the repository" if bot_token else "Set STAR_DISCORD_BOT_TOKEN"),
+              "Configured outside the repository" if bot_token
+              else "Put DISCORD_BOT_TOKEN=... in ~/.star/discord.env"),
         Check("Owner allowlist", "ready" if owner_ids else "setup",
-              "Configured" if owner_ids else "Set STAR_DISCORD_OWNER_IDS"),
+              "Configured" if owner_ids else "Put DISCORD_OWNER_ID=... in ~/.star/discord-settings.env"),
         Check("Guild allowlist", "ready" if guild_ids else "optional",
               "Configured" if guild_ids else "Guilds disabled; owner DMs only"),
         Check("Discord gateway", "ready" if is_dave_compatible(discord_version) else "setup",
@@ -60,6 +61,45 @@ def _installed(package: str) -> str | None:
         return metadata.version(package)
     except metadata.PackageNotFoundError:
         return None
+
+
+def _vision_configured() -> bool:
+    try:
+        from ..desktop_core import Settings, app_data
+        settings = Settings.load(app_data() / "settings.json")
+        return bool(str(getattr(settings, "vision_model", "") or "").strip())
+    except (ImportError, OSError, ValueError, TypeError, AttributeError):
+        return False
+
+
+def feature_checks(source) -> list[Check]:
+    """Opt-in switches; reports on/off and obvious gaps, never IDs or paths."""
+    try:
+        from .dm_mode import DMSettings
+        dm = DMSettings.from_env(source)
+    except ValueError as exc:
+        return [Check("DM chat", "setup", str(exc))]
+    checks = [Check("DM chat", "ready" if dm.enabled else "optional",
+                    "On: DM the bot like a normal chat" if dm.enabled else "Off (STAR_DISCORD_DM_CHAT=1)")]
+    if dm.images:
+        vision = _vision_configured()
+        checks.append(Check("Image analysis", "ready" if vision else "setup",
+                            "On; vision model selected (not contacted)" if vision
+                            else "On, but choose a vision model in STAR desktop Settings"))
+    else:
+        checks.append(Check("Image analysis", "optional", "Off (STAR_DISCORD_DM_IMAGES=1)"))
+    screen = str(source.get("STAR_DISCORD_SCREEN_CAPTURE", "0")).strip() == "1"
+    checks.append(Check("PC screenshots", "ready" if screen else "optional",
+                        "On; every capture needs a button press" if screen
+                        else "Off (STAR_DISCORD_SCREEN_CAPTURE=1)"))
+    try:
+        from .digest_task import DigestConfig
+        digest = DigestConfig.from_env(source)
+        checks.append(Check("Night School digests", "ready" if digest.enabled else "optional",
+                            digest.describe()))
+    except (ValueError, PermissionError) as exc:
+        checks.append(Check("Night School digests", "setup", str(exc)))
+    return checks
 
 
 def _model_configured() -> bool:
@@ -101,9 +141,18 @@ def doctor_snapshot(env=None) -> list[Check]:
         tts=(_installed("kokoro-onnx") is not None
              and _installed("onnxruntime") is not None and _voice_models_present()),
         asr=_installed("faster-whisper") is not None,
-    )
+    ) + feature_checks(source)
 
 
-def format_checks(checks: list[Check]) -> str:
-    symbols = {"ready": "✓", "setup": "✗", "optional": "•"}
+def format_checks(checks: list[Check], *, ascii_only: bool = False) -> str:
+    """Render rich Discord labels or a Windows-console-safe ASCII doctor.
+
+    Legacy Windows shells commonly use CP1252; printing the rich ✓/✗/•
+    symbols from a CLI under that encoding raises UnicodeEncodeError.
+    Keep the rich formatting for Discord embeds, but make terminal
+    diagnostics usable even before the user has configured Python UTF-8.
+    """
+    symbols = ({"ready": "[OK]", "setup": "[SETUP]", "optional": "[OPTIONAL]"}
+               if ascii_only else
+               {"ready": "✓", "setup": "✗", "optional": "•"})
     return "\n".join(f"{symbols[check.status]} **{check.name}:** {check.detail}" for check in checks)
