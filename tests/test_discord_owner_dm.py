@@ -79,8 +79,9 @@ def test_discord_image_is_bounded_normalized_and_strips_metadata():
         assert result.format == "JPEG"
         assert result.size == (28, 18)
         assert "exif" not in result.info
-    with pytest.raises(ValueError, match="PNG"):
-        prepare_discord_image("ui.png", "image/png", 10, b"not-an-png")
+    with pytest.raises(ValueError, match="decoded"):
+        invalid = b"not-an-png"
+        prepare_discord_image("ui.png", "image/png", len(invalid), invalid)
     with pytest.raises(ValueError, match="size|received"):
         prepare_discord_image("ui.png", "image/png", 5, payload)
     with pytest.raises(ValueError, match="PNG"):
