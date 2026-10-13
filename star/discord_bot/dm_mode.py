@@ -109,6 +109,27 @@ def classify_owner_dm(content: str, *, attachments: int,
     return DMAction("text", prompt)
 
 
+
+_VISUAL_CRITIQUE = re.compile(
+    r"^(?:i (?:don't|do not) like\b|"
+    r"(?:this|that|it) (?:doesn't|does not) (?:look|match|feel)\b|"
+    r"(?:this|that|it) looks? (?:bad|wrong|off)\b|"
+    r"you messed up\b|not what i (?:wanted|was going for)\b|"
+    r"(?:the )?(?:animation|vfx|ui|effect|lighting) (?:is|looks|doesn't)\b)",
+    re.IGNORECASE,
+)
+
+
+def is_visual_critique(text: str) -> bool:
+    """Owner feedback, never automatic acceptance or a generic dislike detector.
+
+    Only the Discord bot can promote this to a reviewable correction, and only
+    after checking that the immediate previous owner turn discussed an image.
+    """
+    return (isinstance(text, str) and 8 <= len(text.strip()) <= 500
+            and _VISUAL_CRITIQUE.search(text.strip()) is not None)
+
+
 def prepare_discord_image(filename: str, content_type: str | None,
                           declared_size: int, data: bytes) -> bytes:
     """Bounded, normalized JPEG: strip file metadata and reject malformed input."""
