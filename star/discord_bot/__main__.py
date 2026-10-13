@@ -15,7 +15,7 @@ def main() -> int:
             return 2
         from .health import doctor_snapshot, format_checks
         checks = doctor_snapshot()
-        print(format_checks(checks))
+        print(format_checks(checks, ascii_only=True))
         # Optional voice/research capabilities do not block chat-only startup.
         return 2 if any(c.status == "setup" for c in checks) else 0
     try:
