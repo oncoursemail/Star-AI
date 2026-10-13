@@ -918,3 +918,26 @@ def test_planned_sandbox_uses_the_machine_the_planner_picked():
     assert box.run("print(1)") == "b2" and box.placed == {"brain2": 1}
     out = er.PlannedSandbox({"brain2": Box("b2")}, FakeClient(admits=("fallback",)), Box("default"))
     assert out.run("print(1)") == "default" and out.lock_present() is False
+
+
+def test_embedding_job_uses_the_brain2_worker_and_falls_back_to_the_brain(monkeypatch):
+    embed, _quiet, _ = _starkb()
+    made = []
+
+    class Brain:
+        def __init__(self, url="brain", key_file="", retries=3, timeout=300.0):
+            self.url = url
+            made.append(url)
+
+        def embed(self, texts):
+            if self.url == "http://worker:8099" and fail["on"]:
+                raise RuntimeError("down")
+            return [[1.0]], 1
+    fail = {"on": False}
+    monkeypatch.setattr(embed, "Brain", Brain)
+    monkeypatch.setenv("STAR_KB_EMBED_URL", "http://worker:8099")
+    brain, where = embed.embedding_brain(log=lambda m: None)
+    assert where == "worker" and brain.url == "http://worker:8099"
+    fail["on"] = True
+    brain, where = embed.embedding_brain(log=lambda m: None)
+    assert where == "brain" and brain.url == "brain"

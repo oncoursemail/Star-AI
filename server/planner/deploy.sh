@@ -5,6 +5,7 @@
 #   STAR_SERVER2_SSH=<user@brain 2 LXD host> STAR_PLANNER_REPORT_TO=http://<brain 1 container>:8098 \
 #       bash server/planner/deploy.sh --agent [--start]
 #   STAR_SERVER_SSH=... bash server/planner/deploy.sh --status
+#   STAR_SERVER_SSH=... STAR_SERVER2_SSH=... STAR_WORKER_EMBED_URL=http://<brain 2 container>:8099 #       bash server/planner/deploy.sh --worker      (brain 2 embedding worker for the knowledge re-index)
 #
 # Brain 1: copies the planner's few stdlib-only modules to /opt/star/planner/app, creates the report token
 # /opt/star/secrets/planner_report_token (never printed), installs star-planner.service; --start enables and
@@ -15,10 +16,11 @@
 set -euo pipefail
 
 container="${STAR_LXC_CONTAINER:-starai}"
-start=0 agent=0 status=0
+start=0 agent=0 status=0 worker=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --start) start=1; shift ;;
+    --worker) worker=1; shift ;;
     --agent) agent=1; shift ;;
     --status) status=1; shift ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
@@ -45,8 +47,28 @@ if [ "$status" = 1 ]; then
   exit 0
 fi
 
+if [ "$worker" = 1 ]; then
+  # Brain 2 embedding worker for the knowledge re-index: units on brain 2, a worker key created there and copied to
+  # brain 1 (pipes only, never printed), and a drop-in on brain 1's refresh unit with the worker's address.
+  target1="${STAR_SERVER_SSH:?set STAR_SERVER_SSH}"
+  target2="${STAR_SERVER2_SSH:?set STAR_SERVER2_SSH}"
+  url="${STAR_WORKER_EMBED_URL:?set STAR_WORKER_EMBED_URL to http://<brain 2 container>:8099}"
+  ssh -o BatchMode=yes "$target2" "lxc exec $container -- bash -c 'install -d -o star -g star -m 700 /opt/star/secrets; umask 077; \
+    f=/opt/star/secrets/worker_api_key; if [ ! -s \$f ]; then python3 -c \"import secrets; print(secrets.token_hex(24))\" > \$f; chown star:star \$f; fi'"
+  ssh -o BatchMode=yes "$target2" "lxc exec $container -- cat /opt/star/secrets/worker_api_key" |
+    ssh -o BatchMode=yes "$target1" "lxc exec $container -- bash -c 'umask 077; cat > /opt/star/secrets/worker_api_key; chown star:star /opt/star/secrets/worker_api_key'"
+  for unit in star-worker-embed.service star-worker-embed.timer; do
+    ssh -o BatchMode=yes "$target2" "lxc exec $container -- tee /etc/systemd/system/$unit >/dev/null" < "server/planner/$unit"
+  done
+  ssh -o BatchMode=yes "$target2" "lxc exec $container -- bash -c 'systemctl daemon-reload; systemctl enable --now star-worker-embed.timer'"
+  printf '[Service]\nEnvironment=STAR_KB_EMBED_URL=%s\nEnvironment=STAR_KB_EMBED_KEY_FILE=/opt/star/secrets/worker_api_key\n' "$url" |
+    ssh -o BatchMode=yes "$target1" "lxc exec $container -- bash -c 'mkdir -p /etc/systemd/system/star-knowledge-refresh.service.d; cat > /etc/systemd/system/star-knowledge-refresh.service.d/worker.conf; systemctl daemon-reload'"
+  echo "worker installed (timer 09:50 UTC); rollback: rm the drop-in on brain 1, disable star-worker-embed.timer on brain 2"
+  exit 0
+fi
+
 if [ "$agent" = 0 ]; then
-  target="${STAR_SERVER_SSH:?set STAR_SERVER_SSH to user@address of brain 1's LXD host}"
+  target="${STAR_SERVER_SSH:?set STAR_SERVER_SSH to user@address of the brain 1 LXD host}"
   echo "== brain 1: code (git HEAD $(git rev-parse --short HEAD))"
   ship "$target"
   ssh -o BatchMode=yes "$target" "lxc exec $container -- bash -c 'umask 077; f=/opt/star/secrets/planner_report_token; \

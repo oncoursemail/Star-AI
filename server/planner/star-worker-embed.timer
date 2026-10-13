@@ -1,0 +1,10 @@
+[Unit]
+Description=Start brain 2's embedding worker before the nightly knowledge refresh (brain 1, 10:00 UTC)
+
+[Timer]
+OnCalendar=*-*-* 09:50:00 UTC
+Persistent=false
+Unit=star-worker-embed.service
+
+[Install]
+WantedBy=timers.target

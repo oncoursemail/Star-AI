@@ -80,7 +80,7 @@ def wait_while_locked(log=print, stop=lambda: False, poll: float = 5.0, lock_dir
     return waited
 
 
-def planner_pacer(job: str, *, holder: str = "knowledge", log=print, stop=lambda: False):
+def planner_pacer(job: str, *, holder: str = "knowledge", log=print, stop=lambda: False, job_class: str = "reindex"):
     """A lease + pacing helper from STAR's resource planner for a long knowledge batch job ("reindex" class), or None.
 
     Only when $STAR_PLANNER_URL is set (the refresh unit sets it to the planner on this machine). The planner admits
@@ -98,7 +98,7 @@ def planner_pacer(job: str, *, holder: str = "knowledge", log=print, stop=lambda
             return None
     client = client_module.PlannerClient(url, key_file=os.environ.get("STAR_BRAIN_KEY_FILE",
                                                                       "/opt/star/secrets/api_keys"), timeout=2.0)
-    return client_module.Pacer(client, "reindex", holder, job, log=log, stop=stop)
+    return client_module.Pacer(client, job_class, holder, job, log=log, stop=stop)
 
 
 if __name__ == "__main__":

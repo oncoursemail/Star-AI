@@ -1,0 +1,23 @@
+[Unit]
+Description=STAR CPU worker on brain 2: EmbeddingGemma embeddings for the knowledge re-index (same GGUF as brain 1's star-embed)
+After=network-online.target
+
+# Started by star-worker-embed.timer shortly before the nightly knowledge refresh and stopped after 3 hours, so the
+# ~0.9 GiB it needs is taken from Studio's headroom only while the re-index can use it. Measured 2026-10-13: 700-750
+# tokens/s with 4 threads beside an open Studio (brain 1's star-embed: 570 tokens/s), vectors identical to brain 1's.
+# The key file is operator material (/opt/star/secrets/worker_api_key, never in the repository).
+[Service]
+Type=simple
+User=star
+Group=star
+ExecStart=/opt/star/bin/llama-server --embeddings -m /opt/star/worker/models/embeddinggemma-300M-Q8_0.gguf --host 0.0.0.0 --port 8099 -t 4 -tb 4 -c 2048 -b 2048 -ub 2048 --api-key-file /opt/star/secrets/worker_api_key --log-disable
+Environment=LD_LIBRARY_PATH=/opt/star/bin
+RuntimeMaxSec=3h
+Nice=10
+MemoryMax=1G
+CPUQuota=400%
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes

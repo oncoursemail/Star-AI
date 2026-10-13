@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from array import array
+import os
 from pathlib import Path
 import time
 
@@ -61,11 +62,28 @@ def embed_batch(brain: Brain, texts: list[str], stats: dict, gate=None) -> tuple
     return vectors, used
 
 
+def embedding_brain(log=print):
+    """(Brain, where) for the embedding job. $STAR_KB_EMBED_URL names an embedding worker on another STAR machine
+    (brain 2 runs the same EmbeddingGemma GGUF: identical vectors, measured cosine 1.000000 on 2026-10-13), so the
+    re-index does not use brain 1's CPU and memory bandwidth. Worker missing or failing: brain 1, as before."""
+    url = os.environ.get("STAR_KB_EMBED_URL", "")
+    if url:
+        try:
+            worker = Brain(url=url, key_file=os.environ.get("STAR_KB_EMBED_KEY_FILE", "/opt/star/secrets/worker_api_key"),
+                           retries=1, timeout=120.0)
+            worker.embed(["worker check"])
+            log("embed: using the embedding worker on another machine")
+            return worker, "worker"
+        except Exception as exc:          # noqa: BLE001 - any failure: fall back to the brain
+            log(f"embed: embedding worker not usable ({type(exc).__name__}); using the brain")
+    return Brain(), "brain"
+
+
 def run(db_path: Path, *, batch: int = 16, limit: int | None = None, where: str = "", params: tuple = (),
         sha_file: Path | None = None, max_seconds: float | None = None, pause: float = 0.0,
         duty: float = 1.0, log=print, stop=None) -> dict:
     db = connect(db_path)
-    brain = Brain()
+    brain, where_from = embedding_brain(log) if os.environ.get("STAR_KB_EMBED_URL") else (Brain(), "brain")
     todo = pending(db, EMBED_MODEL, where, params)
     if sha_file is not None:
         wanted = {line.strip() for line in sha_file.read_text().splitlines() if line.strip()}
@@ -85,7 +103,8 @@ def run(db_path: Path, *, batch: int = 16, limit: int | None = None, where: str 
 
     # STAR's resource planner (optional): admits the job, keeps it at a quarter duty while chat is active and pauses
     # it for timing windows. None (not configured) or unreachable: the quiet lock and --duty below, as before.
-    pacer = planner_pacer("embed", log=log, stop=stop) if total else None
+    pacer = (planner_pacer("embed", log=log, stop=stop, job_class="cpu-work" if where_from == "worker" else "reindex")
+             if total else None)
     if pacer is not None:
         pacer.wait()
 
