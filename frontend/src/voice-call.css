@@ -1,0 +1,133 @@
+/* Voice call window (VoiceCall.tsx). Builds on the consent dialog in redesign.css; tokens only. */
+.star-layer.consent-dialog.voice-call {
+  width: min(520px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.voice-call-close {
+  position: absolute;
+  top: var(--star-4);
+  right: var(--star-4);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-muted);
+}
+.voice-call-close:hover { background: var(--star-surface-3); color: var(--star-text); }
+.voice-call-modes {
+  display: grid;
+  gap: var(--star-2);
+  margin: 0 0 var(--star-4);
+  padding: 0;
+  border: 0;
+}
+.voice-call-modes legend {
+  margin-bottom: var(--star-2);
+  color: var(--star-text);
+  font-weight: 600;
+}
+.voice-call-modes label {
+  display: flex;
+  gap: var(--star-3);
+  align-items: flex-start;
+  padding: var(--star-3);
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-md);
+  cursor: pointer;
+}
+.voice-call-modes label:has(input:checked) { border-color: var(--star-gold-line); background: var(--star-gold-wash); }
+.voice-call-modes input { margin-top: 4px; accent-color: var(--star-gold); }
+.voice-call-modes small { display: block; color: var(--star-muted); font-size: var(--star-fs-meta); }
+.voice-call-state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+  align-items: center;
+  margin: 0 0 var(--star-2);
+  color: var(--star-text);
+  font-weight: 600;
+}
+.voice-call-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--star-faint);
+}
+.voice-call-dot.is-listening { background: var(--star-success); }
+.voice-call-dot.is-user_speaking { background: var(--star-gold); }
+.voice-call-dot.is-thinking { background: var(--star-gold-soft); }
+.voice-call-dot.is-speaking { background: var(--star-gold); box-shadow: 0 0 0 4px var(--star-gold-wash); }
+.voice-call-mode-tag {
+  margin-left: auto;
+  padding: 2px var(--star-2);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 500;
+}
+.voice-call-level {
+  height: 4px;
+  margin-bottom: var(--star-4);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--star-surface-3);
+}
+.voice-call-level > span {
+  display: block;
+  height: 100%;
+  background: var(--star-gold);
+  transform-origin: left center;
+  transition: transform 80ms linear;
+}
+.voice-call-lines {
+  display: grid;
+  gap: var(--star-2);
+  max-height: 240px;
+  margin: 0 0 var(--star-3);
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.voice-call-lines li { line-height: 1.5; overflow-wrap: anywhere; }
+.voice-call-lines strong { color: var(--star-text); }
+.voice-call-lines .is-star strong { color: var(--star-gold); }
+.voice-call-lines .is-partial { color: var(--star-muted); }
+.voice-call-latency { margin: 0 0 var(--star-3); color: var(--star-muted); font-size: var(--star-fs-meta); }
+.voice-call-talk {
+  display: flex;
+  gap: var(--star-2);
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 64px;
+  margin-bottom: var(--star-4);
+  border: 1px solid var(--star-gold-line);
+  border-radius: var(--star-r-lg);
+  background: var(--star-gold-wash);
+  color: var(--star-text);
+  font: inherit;
+  font-weight: 600;
+  touch-action: none;
+  user-select: none;
+  transition: background-color var(--star-dur-hover) var(--star-ease), transform var(--star-dur-press) var(--star-ease);
+}
+.voice-call-talk.is-held { background: var(--star-gold); color: var(--star-on-gold); transform: scale(0.98); }
+.voice-call-talk:focus-visible { outline: 2px solid var(--star-gold); outline-offset: 2px; }
+.consent-button.is-danger { background: var(--star-danger-wash); color: var(--star-danger); }
+.consent-button { display: inline-flex; gap: var(--star-2); align-items: center; }
+.msg-action.is-speaking { color: var(--star-gold); }
+@media (prefers-reduced-motion: reduce) {
+  .voice-call-level > span, .voice-call-talk { transition: none; }
+  .voice-call-talk.is-held { transform: none; }
+}
+.voice-habit-select { display: flex; gap: var(--star-4); align-items: center; justify-content: space-between; margin-top: var(--star-3); }
+.voice-habit-select small { display: block; color: var(--star-muted); font-size: var(--star-fs-meta); }
+.voice-habit-select select { flex: 0 0 auto; }
+.voice-habits { display: grid; gap: var(--star-2); }
+.cmp-call:not(:disabled):hover { color: var(--star-gold); }
+.voice-call-lines .is-you strong { color: var(--star-text); }
