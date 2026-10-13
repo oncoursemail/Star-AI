@@ -234,6 +234,13 @@ export function Message(props: MessageProps) {
       aria-label={isUser ? 'You said' : 'STAR said'}
       aria-busy={partial || undefined}
     >
+      {isUser && entry.previews?.length ? (
+        <div className="msg-thumbs" aria-label="Attached screenshots">
+          {entry.previews.filter(src => /^data:image\/(png|jpeg|webp);base64,/.test(src)).map((src, index) => (
+            <img key={index} src={src} alt="Screenshot you attached" />
+          ))}
+        </div>
+      ) : null}
       {isUser && entry.attachments?.length ? (
         <ul className="msg-files" aria-label="Attached files">
           {entry.attachments.map(name => (

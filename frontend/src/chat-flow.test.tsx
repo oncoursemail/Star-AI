@@ -467,6 +467,7 @@ describe('connection status with a STAR Server', () => {
     const id = await waitFor(() => desktop.requestOf('testModel'))
     desktop.host({server: check(true)})
     desktop.emitRaw(id, 'result', {ok: true, model: 'star-fast', sample: 'STAR is ready.'})
+    await user.click(screen.getByRole('button', {name: 'More'}))
     await user.click(screen.getByRole('button', {name: 'Model'}))
     expect(await screen.findByText(/Status: ready/)).toBeTruthy()
   })
@@ -492,6 +493,7 @@ describe('Team and Research are composable', () => {
   it('lets Research be enabled while Team is active and sends an explicit boolean', async () => {
     const user = await openChat([], null, {credentials: {brave: true, tavily: false}})
     await user.click(screen.getByRole('button', {name: /add files and tools/i}))
+    await user.click(screen.getByRole('menuitem', {name: 'More'}))  // redesign: Team is under More
     await user.click(screen.getByRole('menuitemcheckbox', {name: /use a team/i}))
     await user.click(screen.getByRole('button', {name: /add files and tools/i}))
     const search = screen.getByRole('menuitemcheckbox', {name: /search the web/i})

@@ -1,7 +1,7 @@
 import {useEffect, useRef, useState} from 'react'
 import type {KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject} from 'react'
 import {AnimatePresence, motion} from 'motion/react'
-import {ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, File as FileIcon, Globe, ImagePlus, Mic, Paperclip, Plus, Square, Users, X} from 'lucide-react'
+import {ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, File as FileIcon, Globe, ImagePlus, Mic, MonitorUp, Paperclip, Plus, Square, Users, X} from 'lucide-react'
 import type {Connection} from './connection'
 import {menuIn} from './motion'
 import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
@@ -19,7 +19,7 @@ const MODES: Array<{id: ChatMode; label: string; hint: string}> = [
 const fileName = (path: string) => path.split(/[\\/]/).pop() || path
 
 /** Close a floating layer on outside press or Escape, and hand focus back to its trigger. */
-function useDismiss(open: boolean, close: () => void, wrap: RefObject<HTMLElement | null>, trigger: RefObject<HTMLElement | null>) {
+export function useDismiss(open: boolean, close: () => void, wrap: RefObject<HTMLElement | null>, trigger: RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!open) return
     const onPointer = (event: PointerEvent) => {
@@ -49,7 +49,7 @@ function sideFor(trigger: HTMLElement | null, needed: number): 'above' | 'below'
   return above < needed && below > above ? 'below' : 'above'
 }
 
-function ModeControl({value, onChange, disabled}: {value: ChatMode; onChange: (mode: ChatMode) => void; disabled: boolean}) {
+function ModeControl({value, onChange, disabled, onDone}: {value: ChatMode; onChange: (mode: ChatMode) => void; disabled: boolean; onDone?: () => void}) {
   const onKey = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0
     if (!step) return
@@ -68,13 +68,21 @@ function ModeControl({value, onChange, disabled}: {value: ChatMode; onChange: (m
           role="radio"
           data-mode={mode.id}
           aria-checked={value === mode.id}
+          aria-label={mode.label}
+          aria-describedby={'cmp-mode-hint-' + mode.id}
           tabIndex={value === mode.id ? 0 : -1}
           className={'cmp-mode' + (value === mode.id ? ' is-on' : '')}
-          title={mode.hint}
           disabled={disabled}
-          onClick={() => onChange(mode.id)}
+          onClick={() => {
+            onChange(mode.id)
+            onDone?.()
+          }}
         >
-          {mode.label}
+          <span className="cmp-mode-text">
+            <span className="cmp-mode-label">{mode.label}</span>
+            <small id={'cmp-mode-hint-' + mode.id}>{mode.hint}</small>
+          </span>
+          {value === mode.id && <Check size={15} className="cmp-mode-check" aria-hidden="true" />}
         </button>
       ))}
     </div>
@@ -131,6 +139,10 @@ export type ComposerProps = {
   onGithubSource: (on: boolean) => void
   connection: Connection
   onOpenConnection: () => void
+  /** "Look at my screen": asks first (ScreenConsent), then attaches one screenshot. Absent where it cannot work. */
+  onLookAtScreen?: () => void
+  /** Small thumbnails for attachments that have one (a screenshot), keyed by path. */
+  previews?: Record<string, string>
 }
 
 /** The sizes the host offers (star/image_gen.py SIZES). An attached picture keeps its own shape; Draft makes it small and fast. */
@@ -147,13 +159,26 @@ export function Composer(props: ComposerProps) {
   const menuVariants = useMotionVariants(menuIn)
   const {inputRef, value, onChange, onSend, onStop, busy, stopping, files, mode, imageMode, teamMode, research, githubSource, connection} = props
   const [composerMenu, setComposerMenu] = useState(false)
+  const [moreTools, setMoreTools] = useState(false)
+  const [modeOpen, setModeOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [side, setSide] = useState<'above' | 'below' | 'aside'>('above')
   const menuWrap = useRef<HTMLDivElement>(null)
   const menuTrigger = useRef<HTMLButtonElement>(null)
   const statusWrap = useRef<HTMLDivElement>(null)
   const statusTrigger = useRef<HTMLButtonElement>(null)
+  const modeWrap = useRef<HTMLDivElement>(null)
+  const modeTrigger = useRef<HTMLButtonElement>(null)
   useDismiss(composerMenu, () => setComposerMenu(false), menuWrap, menuTrigger)
+  useDismiss(modeOpen, () => setModeOpen(false), modeWrap, modeTrigger)
+  // The extra tools fold away again each time the menu closes, so the menu always opens short.
+  useEffect(() => {
+    if (!composerMenu) setMoreTools(false)
+  }, [composerMenu])
+  // The chosen mode takes focus when the picker opens, so arrow keys work at once.
+  useEffect(() => {
+    if (modeOpen) modeWrap.current?.querySelector<HTMLButtonElement>('[role="radio"][aria-checked="true"]')?.focus()
+  }, [modeOpen])
   useDismiss(statusOpen, () => setStatusOpen(false), statusWrap, statusTrigger)
 
   // Grow with the text up to a comfortable limit, then scroll inside.
@@ -188,8 +213,8 @@ export function Composer(props: ComposerProps) {
       {files.length > 0 && (
         <ul className="cmp-files" aria-label="Attachments">
           {files.map((path, index) => (
-            <li key={path} className="cmp-file">
-              <FileIcon size={14} aria-hidden="true" />
+            <li key={path} className={'cmp-file' + (props.previews?.[path] ? ' has-preview' : '')}>
+              {props.previews?.[path] ? <img className="cmp-file-thumb" src={props.previews[path]} alt="" /> : <FileIcon size={14} aria-hidden="true" />}
               <span title={fileName(path)}>{fileName(path)}</span>
               <button type="button" aria-label={'Remove ' + fileName(path)} onClick={() => props.onRemoveFile(index)}>
                 <X size={13} />
@@ -232,6 +257,7 @@ export function Composer(props: ComposerProps) {
               onClick={() => {
                 setSide(sideFor(menuTrigger.current, 264))
                 setStatusOpen(false)
+                setModeOpen(false)
                 setComposerMenu(open => !open)
               }}
             >
@@ -240,18 +266,48 @@ export function Composer(props: ComposerProps) {
             <AnimatePresence>
               {composerMenu && (
                 <motion.div className="composer-menu cmp-menu" data-side={side} role="menu" aria-label="Add to this message" variants={menuVariants} initial={reducedMotion?false:'hidden'} animate="shown" exit="exit" onKeyDown={onMenuKey}>
-                  <MenuItem icon={<Paperclip size={16} />} label="Attach files" hint="Media, documents and data" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
-                  <MenuItem icon={<Mic size={16} />} label="Transcribe audio" hint="Adds the transcript" onSelect={() => pick(props.onTranscribe)} />
-                  <MenuItem icon={<ImagePlus size={16} />} label="Create image" hint="On this PC" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
+                  <MenuItem icon={<Paperclip size={16} />} label="Add photos and files" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
+                  {props.onLookAtScreen && <MenuItem icon={<MonitorUp size={16} />} label="Look at my screen" hint="Asks first" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onLookAtScreen!)} />}
+                  <MenuItem icon={<ImagePlus size={16} />} label="Create image" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
+                  <MenuItem icon={<Globe size={16} />} label="Search the web" checked={research} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
                   <div className="cmp-menu-rule" role="separator" />
-                  <MenuItem icon={<Globe size={16} />} label="Search the web" hint="Grounds chat and Teams with bounded sources" checked={research} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
-                  <MenuItem icon={<Users size={16} />} label="Use a team" hint="4 read-only stages" checked={teamMode} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.team} onSelect={() => pick(() => props.onTeamMode(!teamMode))} />
-                  <MenuItem icon={<BookOpen size={16} />} label="Read STAR source" hint="Read only" checked={githubSource} availability={special ? {ok: false, reason: 'Not in this mode'} : mode === 'agent' ? undefined : {ok: false, reason: 'Agent mode only'}} onSelect={() => pick(() => props.onGithubSource(!githubSource))} />
+                  <button type="button" role="menuitem" className="cmp-menu-item cmp-menu-more" aria-expanded={moreTools} onClick={() => setMoreTools(open => !open)}>
+                    <span className="cmp-menu-icon"><ChevronDown size={16} className={moreTools ? 'is-open' : undefined} /></span>
+                    <span className="cmp-menu-text">More</span>
+                  </button>
+                  {moreTools && <>
+                    <MenuItem icon={<Mic size={16} />} label="Transcribe audio" hint="Adds the transcript" onSelect={() => pick(props.onTranscribe)} />
+                    <MenuItem icon={<Users size={16} />} label="Use a team" hint="4 read-only stages" checked={teamMode} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.team} onSelect={() => pick(() => props.onTeamMode(!teamMode))} />
+                    <MenuItem icon={<BookOpen size={16} />} label="Read STAR source" hint="Read only" checked={githubSource} availability={special ? {ok: false, reason: 'Not in this mode'} : mode === 'agent' ? undefined : {ok: false, reason: 'Agent mode only'}} onSelect={() => pick(() => props.onGithubSource(!githubSource))} />
+                  </>}
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-          {!special && <ModeControl value={mode} onChange={props.onMode} disabled={busy} />}
+          {!special && (
+            <div className="cmp-pop-wrap" ref={modeWrap}>
+              <button ref={modeTrigger} type="button" className={'cmp-mode-trigger' + (modeOpen ? ' is-open' : '')} aria-haspopup="dialog" aria-expanded={modeOpen} aria-label={'Mode: ' + (MODES.find(item => item.id === mode)?.label ?? mode)} title="How STAR should work" disabled={busy}
+                onClick={() => {
+                  setSide(sideFor(modeTrigger.current, 200))
+                  setComposerMenu(false)
+                  setStatusOpen(false)
+                  setModeOpen(open => !open)
+                }}>
+                {MODES.find(item => item.id === mode)?.label}
+                <ChevronDown size={13} aria-hidden="true" />
+              </button>
+              <AnimatePresence>
+                {modeOpen && (
+                  <motion.div className="cmp-mode-pop" data-side={side} role="dialog" aria-label="Choose how STAR works" variants={menuVariants} initial={reducedMotion?false:'hidden'} animate="shown" exit="exit">
+                    <ModeControl value={mode} onChange={props.onMode} disabled={busy} onDone={() => {
+                      setModeOpen(false)
+                      modeTrigger.current?.focus()
+                    }} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
           {imageMode && (
             <button type="button" className="composer-image-chip cmp-chip" aria-label="Stop creating an image" disabled={busy} onClick={() => props.onImageMode(false)}>
               <ImagePlus size={14} aria-hidden="true" /> Image <X size={13} aria-hidden="true" />
@@ -293,6 +349,7 @@ export function Composer(props: ComposerProps) {
             <button ref={statusTrigger} type="button" className={'cmp-status is-' + connection.tone} aria-haspopup="dialog" aria-expanded={statusOpen} title={`${connection.label} — ${connection.state}`} onClick={() => {
               setSide(statusTrigger.current?.closest('.thread.is-empty') ? 'aside' : sideFor(statusTrigger.current, 260))
               setComposerMenu(false)
+              setModeOpen(false)
               setStatusOpen(open => !open)
             }}>
               <span className="cmp-dot" aria-hidden="true" />

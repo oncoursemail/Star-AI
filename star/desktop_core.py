@@ -567,6 +567,50 @@ class Conversations:
             raise ValueError('The question is no longer available for Retry')
         return message_id
 
+    def rename_chat(self, project: str, chat_id: str, title: str) -> str:
+        """Give one conversation of this project a title the owner chose. Returns the stored title."""
+        clean = ' '.join(str(title or '').split())
+        if not clean:
+            raise ValueError('A chat name cannot be empty')
+        if len(clean) > 80:
+            clean = clean[:79].rstrip() + '…'
+        if any(ord(ch) < 32 for ch in clean):
+            raise ValueError('A chat name cannot contain control characters')
+        with self.connection:
+            changed = self.connection.execute(
+                'UPDATE chats SET title=? WHERE project=? AND id=?', (clean, project, chat_id)
+            ).rowcount
+        if not changed:
+            raise ValueError('Conversation not found in this workspace')
+        return clean
+
+    def delete_chat(self, project: str, chat_id: str) -> str:
+        """Remove one conversation of this project: its messages, thumbs and context checkpoint.
+
+        Generated image files are not touched (they stay in the STAR data folder). When the
+        deleted chat was the open one, the newest remaining chat opens (or a new blank one).
+        Returns the chat that is open afterwards.
+        """
+        if not self.connection.execute(
+            'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
+        ).fetchone():
+            raise ValueError('Conversation not found in this workspace')
+        with self.connection:
+            self.connection.execute(
+                'DELETE FROM message_feedback WHERE project=? AND chat_id=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM messages WHERE project=? AND chat_id=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM chats WHERE project=? AND id=?', (project, chat_id))
+            if self.connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversation_checkpoints'"
+            ).fetchone():
+                self.connection.execute(
+                    'DELETE FROM conversation_checkpoints WHERE project=? AND chat=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM active_chats WHERE project=? AND chat_id=?', (project, chat_id))
+        return self.active_chat(project)
+
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
 

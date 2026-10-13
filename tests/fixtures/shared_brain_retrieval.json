@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "suite_id": "star-shared-brain-retrieval-v1",
+  "controlled_by": "independent-fixtures; outside proposal and candidate edit scopes",
+  "created_date": "2026-10-11",
+  "source_commit_observed": "a0db19b1d1d784dc00e06559c4eb3f58c07cac75",
+  "historical_graph_commit": "938050740754e4419c1464267639769c7a449803",
+  "source_pin": "Exact file bytes SHA256 per case; abort comparison if they change. The observed commit is context, not a substitute for file hashes.",
+  "query_contract": {"limit": 8, "budget_chars": 6000},
+  "correctness": "At least one of the first eight returned nodes must have BOTH the expected project-relative source_file and exact normalized graph symbol. Normalize label by stripping one leading dot and trailing (). A source-only hit, rationale sentence, neighboring edge or symbol from a different file does not pass.",
+  "holdout_rule": "Five holdout cases are evaluator-only until candidate implementation, configuration, corpus and development report hashes have been frozen. Any tuning after holdout disclosure requires a new independently authored holdout; do not keep this score as unseen performance.",
+  "cases": [
+    {
+      "id": "retrieval-01", "split": "development", "wording": "exact_symbol",
+      "question": "GraphifyGraph.query()",
+      "expected_source_file": "star/graphify_bridge.py", "expected_symbol": "query", "expected_qualified_symbol": "GraphifyGraph.query", "expected_graph_label": ".query()", "expected_source_location": "L145",
+      "grounding_sha256": "4bf0a0c962f7e9ac7672b683034afe855a83c6c1dd55fa2cc822fff7361a8cf5",
+      "grounding_excerpt": "def query(self, question: str, *, limit: int = 8) -> dict:",
+      "task_intent": "Find the bounded read-only project graph query interface."
+    },
+    {
+      "id": "retrieval-02", "split": "development", "wording": "natural",
+      "question": "Which Graphify bridge routine traces a path between two concepts and bounds how many graph nodes it visits?",
+      "expected_source_file": "star/graphify_bridge.py", "expected_symbol": "path_between", "expected_qualified_symbol": "GraphifyGraph.path_between", "expected_graph_label": ".path_between()", "expected_source_location": "L171",
+      "grounding_sha256": "4bf0a0c962f7e9ac7672b683034afe855a83c6c1dd55fa2cc822fff7361a8cf5",
+      "grounding_excerpt": "while queue and len(prev) <= 8000:",
+      "task_intent": "Find bounded graph traversal without rebuilding the graph."
+    },
+    {
+      "id": "retrieval-03", "split": "development", "wording": "exact_symbol",
+      "question": "KnowledgeStore.find_contextual()",
+      "expected_source_file": "star/knowledge.py", "expected_symbol": "find_contextual", "expected_qualified_symbol": "KnowledgeStore.find_contextual", "expected_graph_label": ".find_contextual()", "expected_source_location": "L251",
+      "grounding_sha256": "9904e65aa29a0954cbf90c444fd2dc6fc04616fef0d88fb233dc0bac0133e4e0",
+      "grounding_excerpt": "Read only reviewed facts, with recall-intent fallback for implicit queries.",
+      "task_intent": "Find recall-intent fallback that stays reviewed and project-scoped."
+    },
+    {
+      "id": "retrieval-04", "split": "development", "wording": "natural",
+      "question": "Where are original reference artifact bytes stored by SHA256 while recording their project and origin?",
+      "expected_source_file": "star/knowledge.py", "expected_symbol": "ingest_artifact", "expected_qualified_symbol": "KnowledgeStore.ingest_artifact", "expected_graph_label": ".ingest_artifact()", "expected_source_location": "L297",
+      "grounding_sha256": "9904e65aa29a0954cbf90c444fd2dc6fc04616fef0d88fb233dc0bac0133e4e0",
+      "grounding_excerpt": "Store original bytes by SHA256; never treat file content as executable instructions.",
+      "task_intent": "Locate immutable artifact storage and provenance."
+    },
+    {
+      "id": "retrieval-05", "split": "development", "wording": "exact_symbol",
+      "question": "Memory.put()",
+      "expected_source_file": "star/memory.py", "expected_symbol": "put", "expected_qualified_symbol": "Memory.put", "expected_graph_label": ".put()", "expected_source_location": "L24",
+      "grounding_sha256": "5efce497d5b03029972cefc1c4d7c82ebdb75f47e6af0516d8f135b3eb9e2a73",
+      "grounding_excerpt": "raise ValueError(\"Refusing empty checkpoint\")",
+      "task_intent": "Find project checkpoint persistence that refuses empty summaries."
+    },
+    {
+      "id": "retrieval-06", "split": "development", "wording": "exact_symbol",
+      "question": "approve_learning()",
+      "expected_source_file": "star/learning.py", "expected_symbol": "approve_learning", "expected_qualified_symbol": "approve_learning", "expected_graph_label": "approve_learning()", "expected_source_location": "L27",
+      "grounding_sha256": "1f7006a207378026a493e8582fb4a1ae9fb3478ed8554a4519cd051540de152d",
+      "grounding_excerpt": "raise PermissionError(\"A human must explicitly approve the learning\")",
+      "task_intent": "Find explicit reviewed-fact approval and auditable supersession."
+    },
+    {
+      "id": "retrieval-07", "split": "development", "wording": "natural",
+      "question": "Which learning routine puts only reviewed relevant facts into a bounded model context section with source and revision labels?",
+      "expected_source_file": "star/learning.py", "expected_symbol": "learned_context", "expected_qualified_symbol": "learned_context", "expected_graph_label": "learned_context()", "expected_source_location": "L108",
+      "grounding_sha256": "1f7006a207378026a493e8582fb4a1ae9fb3478ed8554a4519cd051540de152d",
+      "grounding_excerpt": "Select only reviewed, relevant facts into a bounded model-context section.",
+      "task_intent": "Locate source-labeled reviewed knowledge context."
+    },
+    {
+      "id": "retrieval-08", "split": "development", "wording": "exact_symbol",
+      "question": "LessonStore.capture_inferred()",
+      "expected_source_file": "star/lessons.py", "expected_symbol": "capture_inferred", "expected_qualified_symbol": "LessonStore.capture_inferred", "expected_graph_label": ".capture_inferred()", "expected_source_location": "L527",
+      "grounding_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
+      "grounding_excerpt": "Always a candidate: there is no argument that makes this path trusted.",
+      "task_intent": "Find the untrusted model/tool/page lesson capture boundary."
+    },
+    {
+      "id": "retrieval-09", "split": "development", "wording": "natural",
+      "question": "Where are accepted lessons for one project ranked by prompt overlap and standing preferences, without repeats and within a character budget?",
+      "expected_source_file": "star/lessons.py", "expected_symbol": "recall", "expected_qualified_symbol": "LessonStore.recall", "expected_graph_label": ".recall()", "expected_source_location": "L657",
+      "grounding_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
+      "grounding_excerpt": "standing preferences and corrections, newest first, without repeats, within a budget.",
+      "task_intent": "Find project-local accepted lesson recall."
+    },
+    {
+      "id": "retrieval-10", "split": "development", "wording": "exact_symbol",
+      "question": "ToolWorkshop.propose()",
+      "expected_source_file": "star/tool_workshop.py", "expected_symbol": "propose", "expected_qualified_symbol": "ToolWorkshop.propose", "expected_graph_label": ".propose()", "expected_source_location": "L163",
+      "grounding_sha256": "874e4fa31864442ed528ea49996cdb633c2ad530db99640141d52d690a1a4cbe",
+      "grounding_excerpt": "raise RuntimeError(\"Maximum two tool proposals per model task\")",
+      "task_intent": "Locate project-scoped pending declarative tool proposals."
+    },
+    {
+      "id": "retrieval-11", "split": "development", "wording": "natural",
+      "question": "Where does the tool workshop require a successful preview test before a pending recipe can be human approved?",
+      "expected_source_file": "star/tool_workshop.py", "expected_symbol": "approve", "expected_qualified_symbol": "ToolWorkshop.approve", "expected_graph_label": ".approve()", "expected_source_location": "L271",
+      "grounding_sha256": "874e4fa31864442ed528ea49996cdb633c2ad530db99640141d52d690a1a4cbe",
+      "grounding_excerpt": "raise PermissionError(\"Preview test must succeed before human approval\")",
+      "task_intent": "Find recipe approval after independently observed preview success."
+    },
+    {
+      "id": "retrieval-12", "split": "development", "wording": "exact_symbol",
+      "question": "skill_path()",
+      "expected_source_file": "star/selfbuild.py", "expected_symbol": "skill_path", "expected_qualified_symbol": "skill_path", "expected_graph_label": "skill_path()", "expected_source_location": "L19",
+      "grounding_sha256": "94358c8e10e839ebbc976946e6d5d027c13a844860a77cda54ee8bff90537994",
+      "grounding_excerpt": "if path == \"star/skills/__init__.py\":",
+      "task_intent": "Locate restricted self-build paths and protected auto-import registration."
+    },
+    {
+      "id": "retrieval-13", "split": "development", "wording": "natural",
+      "question": "Which selfbuild routine writes a proposed Python skill only after a syntax check, without executing the generated code?",
+      "expected_source_file": "star/selfbuild.py", "expected_symbol": "write_source", "expected_qualified_symbol": "write_source", "expected_graph_label": "write_source()", "expected_source_location": "L50",
+      "grounding_sha256": "94358c8e10e839ebbc976946e6d5d027c13a844860a77cda54ee8bff90537994",
+      "grounding_excerpt": "compile(source, str(p), \"exec\")  # syntax verification, NOT execution",
+      "task_intent": "Locate syntax-only generated skill writing."
+    },
+    {
+      "id": "retrieval-14", "split": "development", "wording": "exact_symbol",
+      "question": "overlaps()",
+      "expected_source_file": "star/orchestration.py", "expected_symbol": "overlaps", "expected_qualified_symbol": "overlaps", "expected_graph_label": "overlaps()", "expected_source_location": "L22",
+      "grounding_sha256": "c131e17eabc7d35813af05f764364a959b8fca3940e7565b95e766bc37b8e5d6",
+      "grounding_excerpt": "return a == b or a.startswith(b + \"/\") or b.startswith(a + \"/\")",
+      "task_intent": "Find parent-child resource ownership overlap detection."
+    },
+    {
+      "id": "retrieval-15", "split": "development", "wording": "exact_symbol",
+      "question": "validate_model_roles()",
+      "expected_source_file": "star/agent.py", "expected_symbol": "validate_model_roles", "expected_qualified_symbol": "validate_model_roles", "expected_graph_label": "validate_model_roles()", "expected_source_location": "L112",
+      "grounding_sha256": "18f4c3cd2f93df2167525332a3ebdcaa26ab27a4540a6fc8384da2fe94068d9b",
+      "grounding_excerpt": "STAR requires exactly one system message, at the start of each model request",
+      "task_intent": "Locate model request role validation."
+    },
+    {
+      "id": "retrieval-16", "split": "development", "wording": "exact_symbol",
+      "question": "load_catalog()",
+      "expected_source_file": "star/evals.py", "expected_symbol": "load_catalog", "expected_qualified_symbol": "load_catalog", "expected_graph_label": "load_catalog()", "expected_source_location": "L19",
+      "grounding_sha256": "8b0e2f2d70642801070ebec6bf83b8b938fc73c027b3b4065679d1e26cff90c1",
+      "grounding_excerpt": "raise ValueError(\"Evaluation case needs a unique ID\")",
+      "task_intent": "Find catalog loading that validates case IDs and evidence definitions."
+    },
+    {
+      "id": "retrieval-17", "split": "development", "wording": "natural",
+      "question": "Which evaluation routine counts supplied passed failed blocked and not-run verdicts while explicitly saying it does not run tests or validate proof?",
+      "expected_source_file": "star/evals.py", "expected_symbol": "summarize_verdicts", "expected_qualified_symbol": "summarize_verdicts", "expected_graph_label": "summarize_verdicts()", "expected_source_location": "L42",
+      "grounding_sha256": "8b0e2f2d70642801070ebec6bf83b8b938fc73c027b3b4065679d1e26cff90c1",
+      "grounding_excerpt": "Catalog verdicts are externally supplied; this module does NOT run Roblox tests or validate proof.",
+      "task_intent": "Locate honest externally supplied verdict reporting."
+    },
+    {
+      "id": "retrieval-18", "split": "development", "wording": "exact_symbol",
+      "question": "select_route()",
+      "expected_source_file": "star/brain_router.py", "expected_symbol": "select_route", "expected_qualified_symbol": "select_route", "expected_graph_label": "select_route()", "expected_source_location": "L269",
+      "grounding_sha256": "5312ec705d0182adf8a6c3fc740fe8a86b9b2f1cbfade0b097d4ef62a8769914",
+      "grounding_excerpt": "Select a capability profile, not a different privacy or permission policy.",
+      "task_intent": "Locate deterministic configured model capability routing."
+    },
+    {
+      "id": "retrieval-19", "split": "development", "wording": "exact_symbol",
+      "question": "MCPGateway.search()",
+      "expected_source_file": "star/mcp_connections.py", "expected_symbol": "search", "expected_qualified_symbol": "MCPGateway.search", "expected_graph_label": ".search()", "expected_source_location": "L370",
+      "grounding_sha256": "c69f5cbac6e23faabce9790506ffc3831d0b912434bc8b967e9475a6c95f4b1f",
+      "grounding_excerpt": "self.disclosed.update((entry[\"server\"], entry[\"tool\"]) for entry in picked)",
+      "task_intent": "Find MCP search that discloses a bounded set of discovered tools."
+    },
+    {
+      "id": "retrieval-20", "split": "holdout", "wording": "natural",
+      "question": "Where is a lossy factual project checkpoint made from a transcript while encoded image data is replaced by an original-image-retained marker?",
+      "expected_source_file": "star/memory.py", "expected_symbol": "compact", "expected_qualified_symbol": "compact", "expected_graph_label": "compact()", "expected_source_location": "L38",
+      "grounding_sha256": "5efce497d5b03029972cefc1c4d7c82ebdb75f47e6af0516d8f135b3eb9e2a73",
+      "grounding_excerpt": "[original image retained separately in active context]",
+      "task_intent": "Locate loss-aware checkpoint compaction without treating summaries as unlimited context."
+    },
+    {
+      "id": "retrieval-21", "split": "holdout", "wording": "natural",
+      "question": "Which task planner selects dependency-ready tasks only when parallel slots and read-write resource ownership permit them?",
+      "expected_source_file": "star/orchestration.py", "expected_symbol": "ready", "expected_qualified_symbol": "TaskPlan.ready", "expected_graph_label": ".ready()", "expected_source_location": "L68",
+      "grounding_sha256": "c131e17eabc7d35813af05f764364a959b8fca3940e7565b95e766bc37b8e5d6",
+      "grounding_excerpt": "slots = max(0, self.max_parallel - len(running))",
+      "task_intent": "Find the non-executing ownership and dependency scheduler."
+    },
+    {
+      "id": "retrieval-22", "split": "holdout", "wording": "natural",
+      "question": "Where are text and structured tool results capped before entering model context, with a truncation notice asking for a narrower query?",
+      "expected_source_file": "star/agent.py", "expected_symbol": "tool_payload", "expected_qualified_symbol": "tool_payload", "expected_graph_label": "tool_payload()", "expected_source_location": "L32",
+      "grounding_sha256": "18f4c3cd2f93df2167525332a3ebdcaa26ab27a4540a6fc8384da2fe94068d9b",
+      "grounding_excerpt": "Tool results returned to model are capped to prevent runaway context.",
+      "task_intent": "Find bounded tool result serialization."
+    },
+    {
+      "id": "retrieval-23", "split": "holdout", "wording": "natural",
+      "question": "Which documentation search preparation function removes formatting instructions and generic script-writing lead-ins but keeps the original prompt if too little remains?",
+      "expected_source_file": "star/brain_router.py", "expected_symbol": "retrieval_query", "expected_qualified_symbol": "retrieval_query", "expected_graph_label": "retrieval_query()", "expected_source_location": "L192",
+      "grounding_sha256": "5312ec705d0182adf8a6c3fc740fe8a86b9b2f1cbfade0b097d4ef62a8769914",
+      "grounding_excerpt": "original prompt is returned whenever too little would be left.",
+      "task_intent": "Find deterministic topic-only documentation query preparation."
+    },
+    {
+      "id": "retrieval-24", "split": "holdout", "wording": "natural",
+      "question": "Where does the MCP gateway refuse tool calls until search disclosed the exact server-tool pair, then enforce its eight read-call budget?",
+      "expected_source_file": "star/mcp_connections.py", "expected_symbol": "call", "expected_qualified_symbol": "MCPGateway.call", "expected_graph_label": ".call()", "expected_source_location": "L393",
+      "grounding_sha256": "c69f5cbac6e23faabce9790506ffc3831d0b912434bc8b967e9475a6c95f4b1f",
+      "grounding_excerpt": "raise PermissionError(\"Call star_mcp_search first and use a disclosed read-only tool\")",
+      "task_intent": "Find disclosed read-only MCP invocation and budget enforcement."
+    }
+  ],
+  "variants": [
+    {
+      "id": "freshness-changed-source", "category": "freshness", "case_ids": ["retrieval-04", "retrieval-08"],
+      "setup": "In a disposable copied corpus only, ingest the clean attested graph, then append a harmless comment to the selected expected_source_file without rebuilding. Do not change the fixed case definition or expected hash.",
+      "pass_condition": "A source whose current bytes differ from its attested hash is reported stale or excluded; no returned evidence for that source is labeled fresh. The stale report names the affected project-relative file.",
+      "after_update_condition": "After an official deterministic incremental extraction and store synchronization, the new attested hash equals current file bytes, the stale marker clears, and the unchanged expected symbol remains queryable.",
+      "ranking_score": false
+    },
+    {
+      "id": "freshness-missing-source", "category": "freshness", "case_ids": ["retrieval-04"],
+      "setup": "In a disposable copied corpus only, ingest the clean graph then remove the selected expected_source_file. Never remove the integration worktree source.",
+      "pass_condition": "The missing source is reported missing or excluded; neither a historical citation nor a neighboring node can masquerade as current evidence from that file.",
+      "ranking_score": false
+    },
+    {
+      "id": "noise-decoy-symbols", "category": "noise", "case_ids": ["retrieval-01", "retrieval-10"],
+      "setup": "In a disposable graph copy only, add 25 synthetic decoy nodes with the same expected_graph_label and unique fixture-noise IDs, each attributed to an unattested fixtures/noise/decoy-N.py file. Preserve the original source nodes and source manifest bytes.",
+      "pass_condition": "The input is rejected as unattested or decoys remain explicitly untrusted and never satisfy the expected source-plus-symbol matcher. No decoy is promoted to an approved rule or tool.",
+      "ranking_score": false
+    },
+    {
+      "id": "noise-irrelevant-question-suffix", "category": "noise", "case_ids": ["retrieval-04", "retrieval-07", "retrieval-17"],
+      "question_suffix": " Also consider weather bicycle recipes.",
+      "setup": "Use the exact original question plus the fixed suffix; do not change the graph or expected source/symbol.",
+      "pass_condition": "The same strict source-plus-symbol appears within the first eight nodes, within the serialized character budget. Report separately from clean ranking and freshness.",
+      "ranking_score": "separate_noise_subset"
+    }
+  ]
+}

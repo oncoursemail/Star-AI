@@ -58,6 +58,8 @@ describe('composer controls used by the desktop chat',()=>{
  })
  it('switches modes with arrow keys and exposes the requested mode to assistive technology',()=>{
   launch()
+  // The mode is one small pill; its choices open in a picker.
+  fireEvent.click(screen.getByRole('button',{name:'Mode: Auto'}))
   const modes=screen.getByRole('radiogroup',{name:'How STAR should work'})
   const selected=within(modes).getByRole('radio',{name:'Auto'})
   expect(selected.getAttribute('aria-checked')).toBe('true')

@@ -6,6 +6,7 @@ import type {ActivityRun, ActivityStep, StepState} from './activity'
 import {collapse, rowIn} from './motion'
 import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
 import {MotionSurface} from './MotionSurface'
+import {StarFace} from './StarFace'
 
 /** Re-render once a second while something is running, so elapsed times are live. */
 export function useNow(active: boolean): number {
@@ -133,9 +134,9 @@ export function RunStatus({run, label}: {run: ActivityRun; label?: string}) {
   const now = useNow(run.outcome === 'running')
   return (
     <div className="thread-status">
-      <LoaderCircle size={15} className="act-spin" aria-hidden="true" />
+      <StarFace mood={label === 'Stopping' ? 'stopped' : run.mode === 'image' ? 'writing' : 'thinking'} size={40} className="thread-status-star" />
       {/* Only the phase is a live region; a ticking clock must not be re-announced every second. */}
-      <span role="status">{label || run.phase}</span>
+      <span role="status" className="thread-status-phase">{label || run.phase}</span>
       <span className="thread-status-time" aria-hidden="true">{formatElapsed(runElapsed(run, now), true)}</span>
     </div>
   )
