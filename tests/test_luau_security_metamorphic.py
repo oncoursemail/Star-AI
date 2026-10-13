@@ -254,3 +254,16 @@ def test_security_extensions_remain_default_off_and_do_not_run_external_analyzer
     assert "loop-without-yield" in {f.rule_id for f in lint(
         source, external=False, safety_checks=True,
     )}
+
+
+@pytest.mark.parametrize(("rule", "unsafe", "safe"), TRUST_CASES,
+                         ids=[f"rename-{i}" for i in range(len(TRUST_CASES))])
+def test_renaming_a_genuinely_unrelated_local_does_not_change_trust_verdict(rule, unsafe, safe):
+    for source in (unsafe, safe):
+        original = "local extraDebugFlag = 1\n" + source
+        renamed = "local extraDebugFlagRenamed = 1\n" + source
+        assert _evidence(lint_server_trust(original)) == _evidence(lint_server_trust(renamed))
+        assert _evidence(lint(original, external=False, server_security=True),
+                         only_security=True) == _evidence(
+                             lint(renamed, external=False, server_security=True),
+                             only_security=True)
