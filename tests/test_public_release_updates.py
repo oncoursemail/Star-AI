@@ -117,12 +117,13 @@ def test_old_update_cleanup_only_removes_outdated_versioned_downloads(tmp_path):
 def test_windows_installer_replaces_old_dependencies_and_restarts_silently():
     script=(Path(__file__).resolve().parents[1]/'installer/STAR.iss').read_text()
     assert 'AppId={{E2B5518B-30A1-409D-AF44-6F773BF05C97}' in script
-    assert '[InstallDelete]' in script
-    assert 'Type: filesandordirs; Name: "{app}\\_internal"' in script
+    # The old runtime is replaced as a whole: moved aside before the copy, restored if Setup fails
+    # (issue 120; tests/test_installer_upgrade_rollback.py checks the [Code] in detail).
+    assert "MoveAside(RuntimeDir)" in script and "RuntimeDir = '_internal';" in script
     assert 'Flags: nowait skipifnotsilent' in script
     assert 'Flags: nowait postinstall skipifsilent' in script
-    guarded=script.split('[InstallDelete]',1)[1].split('[Files]',1)[0]
-    assert '{userappdata}\\STAR' not in guarded.splitlines()[1:]
+    code=script.replace('\r\n','\n').split('\n[Code]\n',1)[1]
+    assert 'userappdata' not in code.lower()
 
 
 def test_site_downloads_match_an_existing_release_channel():
