@@ -1,0 +1,1703 @@
+[
+  {
+    "id": "SEC-01",
+    "topic": "remote-validation",
+    "category": "security-fixed-reward",
+    "difficulty": 3,
+    "goal": "End-of-round coin grants use a one-time server completion record and a fixed reward",
+    "prompt": "In my Roblox obstacle race, a FinishRound RemoteEvent currently gets FireServer(clientAmount), and exploiters ask for huge prizes. Write the Script in ServerScriptService. My race controller already sets qualified[player.UserId] = true after it verifies a real finish; pay exactly ROUND_REWARD = 40 Coins only when that server record exists, clear the record before paying so repeated fires do nothing, and ignore clientAmount. Show the OnServerEvent connection.",
+    "teaches": "A client can request a payout, but only a verified server completion and fixed server-owned amount authorize it.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "earned",
+          "re": "qualified\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "checks the server completion record",
+          "scope": "code"
+        },
+        {
+          "id": "fixed_amount",
+          "re": "Coins\\.Value\\s*\\+=\\s*ROUND_REWARD\\b",
+          "why": "adds the server reward rather than the packet amount",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_amount",
+          "re": "Coins\\.Value\\s*\\+=\\s*clientAmount\\b",
+          "why": "never credits a client-sent amount",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: checks the server completion record",
+        "Present: adds the server reward rather than the packet amount",
+        "Absent: never credits a client-sent amount"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-02",
+    "topic": "remote-validation",
+    "category": "security-teleport-destinations",
+    "difficulty": 3,
+    "goal": "A teleport request resolves a server-listed pad and checks the caller is near the entry",
+    "prompt": "In my Roblox maze, players press a TeleportPad UI button and send padId, but hackers can invent coordinates. Please write a server Script for PadTravel.OnServerEvent. Use the server's DESTINATIONS table keyed by padId; each record holds entry and exit Parts. Confirm padId is a string, check the player's HumanoidRootPart is within 10 studs of entry, then PivotTo the exit CFrame. Never accept requestedCFrame from the client.",
+    "teaches": "Server-chosen destinations and entry proximity prevent arbitrary position injection.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml",
+      "content/en-us/reference/engine/classes/Model.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "whitelist",
+          "re": "DESTINATIONS\\s*\\[\\s*padId\\s*\\]",
+          "why": "reads a server-maintained pad map",
+          "scope": "code"
+        },
+        {
+          "id": "distance",
+          "re": "\\.Magnitude\\s*[<>]=?\\s*10\\b",
+          "why": "enforces an entry distance bound",
+          "scope": "code"
+        },
+        {
+          "id": "pivot",
+          "re": ":\\s*PivotTo\\s*\\(",
+          "why": "moves the character from an authorized destination",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_cframe",
+          "re": ":\\s*PivotTo\\s*\\(\\s*requestedCFrame\\s*\\)",
+          "why": "never teleports to the client-provided CFrame",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: reads a server-maintained pad map",
+        "Present: enforces an entry distance bound",
+        "Present: moves the character from an authorized destination",
+        "Absent: never teleports to the client-provided CFrame"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-03",
+    "topic": "economy-receipts",
+    "category": "security-shop-coupons",
+    "difficulty": 3,
+    "goal": "Coupon-priced purchases compute the final charge using server catalog and entitlement",
+    "prompt": "In my Roblox festival shop, a BuyLantern RemoteEvent sends itemId and clientPrice. The server's Catalog has {lantern = {price = 120}} and Coupons[player.UserId] is true only when a quest genuinely awarded a ten-coin discount. Write the server handler: only lantern may be bought, derive local charge = math.max(0, item.price - discount), verify the player's Coins cover it, subtract charge and grant a lantern once. clientPrice must never determine the charge.",
+    "teaches": "Client-reported prices and discounts cannot replace the authoritative catalog and server-earned coupon.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "catalog",
+          "re": "Catalog\\s*\\[\\s*itemId\\s*\\]",
+          "why": "looks up price server-side",
+          "scope": "code"
+        },
+        {
+          "id": "entitlement",
+          "re": "Coupons\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "uses server-issued coupon eligibility",
+          "scope": "code"
+        },
+        {
+          "id": "charge",
+          "re": "Coins\\.Value\\s*-=\\s*charge\\b",
+          "why": "deducts a computed charge",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_price",
+          "re": "Coins\\.Value\\s*-=\\s*clientPrice\\b",
+          "why": "never deducts a client-submitted price",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: looks up price server-side",
+        "Present: uses server-issued coupon eligibility",
+        "Present: deducts a computed charge",
+        "Absent: never deducts a client-submitted price"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-04",
+    "topic": "remote-validation",
+    "category": "security-projectile-raycast",
+    "difficulty": 3,
+    "goal": "A projectile hit uses a server raycast rather than client-sent target or damage",
+    "prompt": "In my Roblox blaster arena, the client sends targetModel, clientDamage and aimDirection to FireProjectile. An exploiter can spoof the enemy and damage. Write its server handler: validate aimDirection as a Vector3, find the muzzle position from the shooter's own equipped tool, raycast from there using workspace:Raycast, identify the hit's Humanoid from result.Instance, and deal the constant DAMAGE = 8 only on a legal enemy in range. Ignore targetModel and clientDamage.",
+    "teaches": "The server must resolve who was hit from its own world query, never from the client target claim.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml",
+      "content/en-us/workspace/raycasting.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "type",
+          "re": "typeof\\s*\\(\\s*aimDirection\\s*\\)",
+          "why": "validates the direction type",
+          "scope": "code"
+        },
+        {
+          "id": "raycast",
+          "re": "workspace\\s*:\\s*Raycast\\s*\\(",
+          "why": "uses server-side physics",
+          "scope": "code"
+        },
+        {
+          "id": "actual_hit",
+          "re": "result\\.Instance",
+          "why": "uses the server raycast result",
+          "scope": "code"
+        },
+        {
+          "id": "fixed_damage",
+          "re": ":\\s*TakeDamage\\s*\\(\\s*DAMAGE\\s*\\)",
+          "why": "applies the server damage constant",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "spoofed_damage",
+          "re": ":\\s*TakeDamage\\s*\\(\\s*clientDamage\\s*\\)",
+          "why": "never applies the client damage parameter",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: validates the direction type",
+        "Present: uses server-side physics",
+        "Present: uses the server raycast result",
+        "Present: applies the server damage constant",
+        "Absent: never applies the client damage parameter"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-05",
+    "topic": "remote-validation",
+    "category": "security-fixed-window-throttle",
+    "difficulty": 3,
+    "goal": "Limit a ping RemoteEvent by a server-clock fixed window and clear departure state",
+    "prompt": "In my Roblox rhythm lobby, users can spam the SendPing RemoteEvent enough to flood the game. Write a server Script with at most MAX_CALLS = 4 pings per player per WINDOW = 1 second, using os.clock() on the server and a count/start timestamp per UserId. Reject excess calls without yielding inside the callback, reset the window on time, and clear the entry on Players.PlayerRemoving. This is a fixed-window limiter, not a token bucket or an ability cooldown.",
+    "teaches": "Per-user quotas based on server time prevent burst abuse without yielding or stale player entries.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "clock",
+          "re": "os\\.clock\\s*\\(",
+          "why": "uses server time",
+          "scope": "code"
+        },
+        {
+          "id": "quota",
+          "re": "state\\.count\\s*>=\\s*MAX_CALLS\\b",
+          "why": "rejects too many events in the window",
+          "scope": "code"
+        },
+        {
+          "id": "forget",
+          "re": "Players\\.PlayerRemoving\\s*:\\s*Connect\\s*\\(",
+          "why": "cleans per-player tracking",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_yield",
+          "re": "task\\.wait\\s*\\(",
+          "why": "must not yield inside a spam-prone handler",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: uses server time",
+        "Present: rejects too many events in the window",
+        "Present: cleans per-player tracking",
+        "Absent: must not yield inside a spam-prone handler"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-06",
+    "topic": "data-boundaries",
+    "category": "security-account-store-key",
+    "difficulty": 3,
+    "goal": "DataStore account keys derive from authenticated UserId rather than user-entered slot labels",
+    "prompt": "In my Roblox save-slot menu, a LoadSlot RemoteEvent passes slotName. I accidentally used slotName as a DataStore key, letting clients ask for another account's record. Write a server-only handler that ignores arbitrary slotName and loads the single account key 'Account_' .. tostring(player.UserId), using store:GetAsync inside pcall. Return data only to that same player. Never pass slotName to GetAsync or SetAsync.",
+    "teaches": "The engine-authenticated Player is the identity authority for persistent record keys.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-datastore-safety"
+    ],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/index.md",
+      "content/en-us/reference/engine/classes/GlobalDataStore.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "identity",
+          "re": "tostring\\s*\\(\\s*player\\.UserId\\s*\\)",
+          "why": "derives the key from the authenticated sender",
+          "scope": "code"
+        },
+        {
+          "id": "read_key",
+          "re": ":\\s*GetAsync\\s*\\(\\s*key\\s*\\)",
+          "why": "reads using the derived key",
+          "scope": "code"
+        },
+        {
+          "id": "pcall",
+          "re": "pcall\\s*\\(",
+          "why": "handles failed store reads",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_get",
+          "re": ":\\s*GetAsync\\s*\\(\\s*slotName\\b",
+          "why": "does not use submitted slotName as a read key",
+          "scope": "code"
+        },
+        {
+          "id": "client_set",
+          "re": ":\\s*SetAsync\\s*\\(\\s*slotName\\b",
+          "why": "does not use submitted slotName as a write key",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: derives the key from the authenticated sender",
+        "Present: reads using the derived key",
+        "Present: handles failed store reads",
+        "Absent: does not use submitted slotName as a read key",
+        "Absent: does not use submitted slotName as a write key"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-07",
+    "topic": "economy-receipts",
+    "category": "security-receipt-decisions",
+    "difficulty": 3,
+    "goal": "ProcessReceipt returns the actual ProductPurchaseDecision enum for deferred and acknowledged states",
+    "prompt": "In my Roblox developer-product sticker store, the receipt callback sometimes returns true or nil and purchases stay unresolved. Write a Script assigning MarketplaceService.ProcessReceipt = function(receiptInfo). Look up Players:GetPlayerByUserId(receiptInfo.PlayerId); if the player is gone, product ID is not in PRODUCT_GRANTS, or the server's idempotent grant-and-persist function fails, return Enum.ProductPurchaseDecision.NotProcessedYet. Only after that server function confirms a durable grant return Enum.ProductPurchaseDecision.PurchaseGranted. This task is about the return contract and failure branches, not implementing the ledger.",
+    "teaches": "Roblox retries unacknowledged receipts; correct enum responses prevent silent lost grants.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/MarketplaceService.yaml",
+      "content/en-us/reference/engine/enums/ProductPurchaseDecision.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "callback",
+          "re": "\\.ProcessReceipt\\s*=\\s*function\\s*\\(",
+          "why": "assigns the actual receipt callback",
+          "scope": "code"
+        },
+        {
+          "id": "player_lookup",
+          "re": ":\\s*GetPlayerByUserId\\s*\\(",
+          "why": "looks up the receipt owner",
+          "scope": "code"
+        },
+        {
+          "id": "pending",
+          "re": "Enum\\.ProductPurchaseDecision\\.NotProcessedYet",
+          "why": "defers unknown or failed receipts",
+          "scope": "code"
+        },
+        {
+          "id": "purchased",
+          "re": "Enum\\.ProductPurchaseDecision\\.PurchaseGranted",
+          "why": "acknowledges a durable grant",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "not_boolean",
+          "re": "\\breturn\\s+(?:true|false|nil)\\b",
+          "why": "does not return a boolean or nil from this callback",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: assigns the actual receipt callback",
+        "Present: looks up the receipt owner",
+        "Present: defers unknown or failed receipts",
+        "Present: acknowledges a durable grant",
+        "Absent: does not return a boolean or nil from this callback"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-08",
+    "topic": "data-boundaries",
+    "category": "security-profile-subject",
+    "difficulty": 3,
+    "goal": "Profile title edits are scoped to the firing player, never a requested target UserId",
+    "prompt": "In my Roblox profile screen, RenameTitle sends targetUserId and titleId over ChangeTitle. Friends should not be able to overwrite each other's selected title. Write the server OnServerEvent handler. Only titles in TITLES are accepted, edit profileCache[player.UserId] (the server-owned cache), and save the sender's own record. Never index profileCache by targetUserId from the packet.",
+    "teaches": "A target identity supplied by the client must not authorize cross-account writes.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-datastore-safety"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "self",
+          "re": "profileCache\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "updates the authenticated account",
+          "scope": "code"
+        },
+        {
+          "id": "allowed",
+          "re": "TITLES\\s*\\[\\s*titleId\\s*\\]",
+          "why": "restricts title IDs to a server allowlist",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "other_account",
+          "re": "profileCache\\s*\\[\\s*targetUserId\\s*\\]",
+          "why": "refuses a client-selected profile owner",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: updates the authenticated account",
+        "Present: restricts title IDs to a server allowlist",
+        "Absent: refuses a client-selected profile owner"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-09",
+    "topic": "remote-validation",
+    "category": "security-inventory-equip",
+    "difficulty": 3,
+    "goal": "Equip requests accept only a string ID in the player's server-owned inventory",
+    "prompt": "In my Roblox castle game, EquipBlade used to receive a Tool Instance and clone it directly. Change the protocol to a client-sent itemId string. The server stores inventories[player.UserId] as owned item IDs and EQUIPPABLE[itemId] as approved Tool templates. Write the server handler that rejects non-string IDs or unowned items, then clones only an approved server template into the player's Backpack. Never clone an Instance delivered in the request.",
+    "teaches": "Client-controlled Instances cannot stand in for verified ownership and server templates.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml",
+      "content/en-us/players/tools.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "type",
+          "re": "typeof\\s*\\(\\s*itemId\\s*\\)",
+          "why": "ensures the ID is a primitive string",
+          "scope": "code"
+        },
+        {
+          "id": "owned",
+          "re": "inventories\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "uses server-held ownership",
+          "scope": "code"
+        },
+        {
+          "id": "template",
+          "re": "EQUIPPABLE\\s*\\[\\s*itemId\\s*\\]",
+          "why": "clones a server-listed template",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "instance_clone",
+          "re": "itemId\\s*:\\s*Clone\\s*\\(",
+          "why": "does not clone an untrusted instance",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: ensures the ID is a primitive string",
+        "Present: uses server-held ownership",
+        "Present: clones a server-listed template",
+        "Absent: does not clone an untrusted instance"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-10",
+    "topic": "remote-validation",
+    "category": "security-team-capacity",
+    "difficulty": 3,
+    "goal": "Team-change requests obey an approved team map and live team capacity",
+    "prompt": "In my Roblox minigame, the ChooseTeam button sends teamId and a forged clientTeam Instance. Write the server handler using ALLOWED_TEAMS[teamId] containing actual Team Instances. Confirm teamId is a string, reject missing teams, reject a team when #team:GetPlayers() >= MAX_TEAM_SIZE, and only then set player.Team. Never assign the clientTeam Instance directly.",
+    "teaches": "Team assignments depend on server-approved teams and authoritative live capacity.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml",
+      "content/en-us/reference/engine/classes/Team.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "whitelist",
+          "re": "ALLOWED_TEAMS\\s*\\[\\s*teamId\\s*\\]",
+          "why": "selects an approved team",
+          "scope": "code"
+        },
+        {
+          "id": "capacity",
+          "re": "#\\s*team\\s*:\\s*GetPlayers\\s*\\(\\s*\\)",
+          "why": "counts current team members",
+          "scope": "code"
+        },
+        {
+          "id": "assignment",
+          "re": "player\\.Team\\s*=\\s*team\\b",
+          "why": "assigns the validated team",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "raw_team",
+          "re": "player\\.Team\\s*=\\s*clientTeam\\b",
+          "why": "does not trust an instance supplied by the sender",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: selects an approved team",
+        "Present: counts current team members",
+        "Present: assigns the validated team",
+        "Absent: does not trust an instance supplied by the sender"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-11",
+    "topic": "remote-validation",
+    "category": "security-world-pickup",
+    "difficulty": 3,
+    "goal": "Collectible pickup requests check world membership, Instance type and physical reach",
+    "prompt": "In my Roblox treasure beach, clients fire CollectShell(pickup, clientCollected) whenever they see a shell. Write its server handler: pickup must be an Instance descended from workspace.Pickups, it must still be present, and the player's HumanoidRootPart must be within 10 studs of it. Only after those checks claim or destroy it once and award the item. Ignore the clientCollected flag.",
+    "teaches": "A visible pickup is not proof that the requester actually reached a real available world item.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "instance",
+          "re": "typeof\\s*\\(\\s*pickup\\s*\\)",
+          "why": "validates Instance arguments",
+          "scope": "code"
+        },
+        {
+          "id": "world",
+          "re": "pickup\\s*:\\s*IsDescendantOf\\s*\\(\\s*workspace\\.Pickups\\s*\\)",
+          "why": "restricts requests to real pickup container",
+          "scope": "code"
+        },
+        {
+          "id": "range",
+          "re": "\\.Magnitude\\s*>\\s*10\\b",
+          "why": "rejects collection from a distance",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_flag",
+          "re": "if\\s+clientCollected\\s+then",
+          "why": "does not trust the client-collected boolean",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: validates Instance arguments",
+        "Present: restricts requests to real pickup container",
+        "Present: rejects collection from a distance",
+        "Absent: does not trust the client-collected boolean"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-12",
+    "topic": "economy-receipts",
+    "category": "security-server-loot-roll",
+    "difficulty": 3,
+    "goal": "A loot crate opening consumes an owned crate and rolls a reward entirely on the server",
+    "prompt": "In my Roblox treasure room, OpenCrate gets crateId and wishedRarity. Exploiters choose the legendary rarity. Write a server handler using playerCrates[player.UserId] as the owned, unspent crate state. Validate and consume that crate once, roll 1..100 with Random.new():NextInteger, choose the reward from the server REWARDS table, then grant it. Never use wishedRarity as an index into REWARDS.",
+    "teaches": "Client-supplied luck and rarity cannot replace server-owned inventory consumption and randomness.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "owned",
+          "re": "playerCrates\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "verifies a real crate owner",
+          "scope": "code"
+        },
+        {
+          "id": "rng",
+          "re": "Random\\.new\\s*\\(\\s*\\)\\s*:\\s*NextInteger\\s*\\(",
+          "why": "randomness is generated on the server",
+          "scope": "code"
+        },
+        {
+          "id": "pool",
+          "re": "REWARDS\\s*\\[",
+          "why": "selects from the server reward table",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_roll",
+          "re": "REWARDS\\s*\\[\\s*wishedRarity\\s*\\]",
+          "why": "never indexes the prize table with requested rarity",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: verifies a real crate owner",
+        "Present: randomness is generated on the server",
+        "Present: selects from the server reward table",
+        "Absent: never indexes the prize table with requested rarity"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-13",
+    "topic": "authorization-trust",
+    "category": "security-quest-claim",
+    "difficulty": 3,
+    "goal": "Quest rewards depend on server-recorded kill counts and a one-time claim marker",
+    "prompt": "In my Roblox monster hunt, ClaimQuest sends questId and clientProgress. A cheater says they defeated 50 monsters without fighting. Write the server handler: use QuestState[player.UserId] that the server increments on genuine monster deaths, demand record.kills >= KILLS_REQUIRED, refuse record.claimed, and set record.claimed before awarding the quest chest. Do not consult clientProgress to decide eligibility.",
+    "teaches": "Quest completion and one-time claim status must be recorded by the server.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "progress",
+          "re": "record\\.kills\\s*[<>]=?\\s*KILLS_REQUIRED\\b",
+          "why": "checks trusted server kill count",
+          "scope": "code"
+        },
+        {
+          "id": "claimed",
+          "re": "record\\.claimed",
+          "why": "requires a one-time claim guard",
+          "scope": "code"
+        },
+        {
+          "id": "owner",
+          "re": "QuestState\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "reads only the caller's server progress",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "packet_progress",
+          "re": "clientProgress\\s*>=\\s*KILLS_REQUIRED\\b",
+          "why": "does not treat client progress as proof",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: checks trusted server kill count",
+        "Present: requires a one-time claim guard",
+        "Present: reads only the caller's server progress",
+        "Absent: does not treat client progress as proof"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-14",
+    "topic": "authorization-trust",
+    "category": "security-admin-allowlist",
+    "difficulty": 3,
+    "goal": "Moderator remote actions authorize the authenticated caller through a server UserId allowlist",
+    "prompt": "In my Roblox round manager, AdminAction(player, action, clientIsAdmin) has let exploiters reset rounds. Write an OnServerEvent handler that checks ADMIN_USER_IDS[player.UserId] == true, limits action to the single string 'resetRound', and refuses every other command. clientIsAdmin is untrusted even when true. The allowlist lives in ServerScriptService, never in a replicated client flag.",
+    "teaches": "Privilege is established by the server's allowlist, not the caller's claimed role.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "admin",
+          "re": "ADMIN_USER_IDS\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "uses server-set permissions",
+          "scope": "code"
+        },
+        {
+          "id": "command",
+          "re": "action\\s*==\\s*[\"']resetRound[\"']",
+          "why": "authorizes only the named action",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forged_role",
+          "re": "if\\s+clientIsAdmin\\s+then",
+          "why": "never grants access because the packet says admin",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: uses server-set permissions",
+        "Present: authorizes only the named action",
+        "Absent: never grants access because the packet says admin"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-15",
+    "topic": "authorization-trust",
+    "category": "security-unique-vote",
+    "difficulty": 3,
+    "goal": "Vote-to-skip counts each authenticated UserId at most once per round",
+    "prompt": "In my Roblox cinematic, a SkipVote RemoteEvent currently trusts clientVotes and someone sends 999 votes. Write a server handler that ignores clientVotes; use voted[player.UserId] to refuse repeat requests, record this voter once, and compute the skip threshold with math.ceil(#Players:GetPlayers() / 2). The round controller resets voted when a new cinematic begins.",
+    "teaches": "Vote totals must come from unique authenticated players rather than packet-provided counts.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "unique",
+          "re": "voted\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "identifies votes by authenticated UserId",
+          "scope": "code"
+        },
+        {
+          "id": "threshold",
+          "re": "math\\.ceil\\s*\\(\\s*#\\s*Players\\s*:\\s*GetPlayers\\s*\\(\\s*\\)",
+          "why": "derives the threshold from connected players",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forged_total",
+          "re": "votes\\s*\\+=\\s*clientVotes\\b",
+          "why": "does not add caller-supplied vote totals",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: identifies votes by authenticated UserId",
+        "Present: derives the threshold from connected players",
+        "Absent: does not add caller-supplied vote totals"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-16",
+    "topic": "economy-receipts",
+    "category": "security-gamepass-entitlement",
+    "difficulty": 3,
+    "goal": "VIP emote use verifies gamepass ownership through MarketplaceService on the server",
+    "prompt": "In my Roblox dance hall, SelectVIPEmote fires a RemoteEvent with clientOwns. Exploiters can set it to true without buying a pass. Write the server handler using the server-known VIP_GAMEPASS_ID and MarketplaceService:UserOwnsGamePassAsync(player.UserId, VIP_GAMEPASS_ID) inside pcall; fail closed on errors or not owning the pass, and play the emote only on success. Ignore clientOwns entirely.",
+    "teaches": "Purchase entitlements must be verified by an authoritative service, with errors denying access.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/MarketplaceService.yaml",
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "official_api",
+          "re": ":\\s*UserOwnsGamePassAsync\\s*\\(\\s*player\\.UserId\\s*,\\s*VIP_GAMEPASS_ID\\s*\\)",
+          "why": "verifies server-known pass ID",
+          "scope": "code"
+        },
+        {
+          "id": "pcall",
+          "re": "pcall\\s*\\(",
+          "why": "contains entitlement query failures",
+          "scope": "code"
+        },
+        {
+          "id": "fail_closed",
+          "re": "not\\s+ok\\s+or\\s+not\\s+owns",
+          "why": "does not grant on errors or nonownership",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_entitlement",
+          "re": "if\\s+clientOwns\\s+then",
+          "why": "does not authorize from clientOwns",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: verifies server-known pass ID",
+        "Present: contains entitlement query failures",
+        "Present: does not grant on errors or nonownership",
+        "Absent: does not authorize from clientOwns"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-17",
+    "topic": "remote-validation",
+    "category": "security-door-key-and-range",
+    "difficulty": 3,
+    "goal": "A locked gate checks server keyring ownership, world membership and reach before opening",
+    "prompt": "In my Roblox underground dungeon, an OpenGate RemoteEvent sends gate, clientHasKey and clientOpen. Write a server handler: gate must be under workspace.Gates, the player's server Keyrings[player.UserId] must contain the Copper key, and their root must be within 12 studs of the gate. Only then set its Open attribute true on the server. Never act just because clientHasKey or clientOpen is true.",
+    "teaches": "World-state changes require server-owned inventory authorization and proximity proof.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "real_gate",
+          "re": "gate\\s*:\\s*IsDescendantOf\\s*\\(\\s*workspace\\.Gates\\s*\\)",
+          "why": "restricts to real gates",
+          "scope": "code"
+        },
+        {
+          "id": "keyring",
+          "re": "Keyrings\\s*\\[\\s*player\\.UserId\\s*\\]",
+          "why": "checks server-held key ownership",
+          "scope": "code"
+        },
+        {
+          "id": "distance",
+          "re": "\\.Magnitude\\s*>\\s*12\\b",
+          "why": "rejects faraway unlock attempts",
+          "scope": "code"
+        },
+        {
+          "id": "open",
+          "re": ":\\s*SetAttribute\\s*\\(\\s*[\"']Open[\"']\\s*,\\s*true\\s*\\)",
+          "why": "opens only after checks",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "claimed_key",
+          "re": "if\\s+clientHasKey\\s+then",
+          "why": "does not trust client-supplied key claim",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: restricts to real gates",
+        "Present: checks server-held key ownership",
+        "Present: rejects faraway unlock attempts",
+        "Present: opens only after checks",
+        "Absent: does not trust client-supplied key claim"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-18",
+    "topic": "remote-validation",
+    "category": "security-finite-impulse",
+    "difficulty": 3,
+    "goal": "A dash remote rejects NaN input, clamps magnitude, and applies velocity only to the caller",
+    "prompt": "In my Roblox hover-parkour game, Dash sends a numeric requestedSpeed and hackers send NaN, infinity or extreme values. Write the server handler: reject values whose typeof is not number or that are NaN (requestedSpeed ~= requestedSpeed), clamp speed to [0, DASH_CAP] with math.clamp, then modify only the requester's HumanoidRootPart.AssemblyLinearVelocity in the character's LookVector direction. Never use a client-sent requestedVelocity vector or a different target.",
+    "teaches": "Numeric payloads need finite bounds and the server must control which character is affected.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml",
+      "content/en-us/reference/engine/classes/BasePart.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "type",
+          "re": "typeof\\s*\\(\\s*requestedSpeed\\s*\\)",
+          "why": "guards numeric input",
+          "scope": "code"
+        },
+        {
+          "id": "nan",
+          "re": "requestedSpeed\\s*~=\\s*requestedSpeed",
+          "why": "rejects NaN",
+          "scope": "code"
+        },
+        {
+          "id": "clamp",
+          "re": "math\\.clamp\\s*\\(\\s*requestedSpeed\\s*,\\s*0\\s*,\\s*DASH_CAP\\s*\\)",
+          "why": "bounds speed on server",
+          "scope": "code"
+        },
+        {
+          "id": "velocity",
+          "re": "AssemblyLinearVelocity\\s*=",
+          "why": "sets velocity of validated caller's root",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "client_velocity",
+          "re": "AssemblyLinearVelocity\\s*=\\s*requestedVelocity\\b",
+          "why": "must not apply an arbitrary client-selected velocity",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: guards numeric input",
+        "Present: rejects NaN",
+        "Present: bounds speed on server",
+        "Present: sets velocity of validated caller's root",
+        "Absent: must not apply an arbitrary client-selected velocity"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-19",
+    "topic": "data-boundaries",
+    "category": "security-settings-write-allowlist",
+    "difficulty": 3,
+    "goal": "A preference update validates the field and type before persisting on the sender's key",
+    "prompt": "In my Roblox settings menu, SavePreference sends key, value and a full payload table. Clients should only change server-approved boolean preferences, not replace their whole DataStore profile. Write a server Script with ALLOWED_SETTINGS[key], require typeof(value) == 'boolean', build 'Prefs_' .. tostring(player.UserId), and use store:UpdateAsync inside pcall to update just that field while preserving other stored fields. Do not SetAsync the client payload.",
+    "teaches": "Whitelisting patch fields and preserving server-held records prevents mass-assignment writes.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-datastore-safety"
+    ],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/index.md",
+      "content/en-us/reference/engine/classes/GlobalDataStore.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "fields",
+          "re": "ALLOWED_SETTINGS\\s*\\[\\s*key\\s*\\]",
+          "why": "whitelists editable fields",
+          "scope": "code"
+        },
+        {
+          "id": "type",
+          "re": "typeof\\s*\\(\\s*value\\s*\\)",
+          "why": "validates the value type",
+          "scope": "code"
+        },
+        {
+          "id": "identity",
+          "re": "tostring\\s*\\(\\s*player\\.UserId\\s*\\)",
+          "why": "keys storage to authenticated player",
+          "scope": "code"
+        },
+        {
+          "id": "patch",
+          "re": ":\\s*UpdateAsync\\s*\\(",
+          "why": "patches rather than replacing all data",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "packet_replace",
+          "re": ":\\s*SetAsync\\s*\\(\\s*[^,\\n]+\\s*,\\s*payload\\s*\\)",
+          "why": "does not persist the untrusted entire payload",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: whitelists editable fields",
+        "Present: validates the value type",
+        "Present: keys storage to authenticated player",
+        "Present: patches rather than replacing all data",
+        "Absent: does not persist the untrusted entire payload"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "SEC-20",
+    "topic": "authorization-trust",
+    "category": "security-user-text-filter",
+    "difficulty": 3,
+    "goal": "Public sign text is filtered on the server before replication to other players",
+    "prompt": "In my Roblox town, players write signs through PostSign(rawText), which currently broadcasts raw messages to everyone. Write a server RemoteEvent handler: reject non-string or over-100-character text, call TextService:FilterStringAsync(rawText, player.UserId) safely within pcall and then GetNonChatStringForBroadcastAsync on the result; on failure do not publish. Only FireAllClients(player, filtered), never rawText. This is a public sign (non-chat text), not a chat message.",
+    "teaches": "Untrusted user-generated text must be filtered for its audience before public replication.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-secure-remotes"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TextService.yaml",
+      "content/en-us/scripting/events/remote.md",
+      "content/en-us/reference/engine/classes/RemoteEvent.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1200,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Server-side verification is missing or client-controlled data authorizes the action"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "compile": true,
+      "require": [
+        {
+          "id": "server_listener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles the request on the server",
+          "scope": "code"
+        },
+        {
+          "id": "filter",
+          "re": ":\\s*FilterStringAsync\\s*\\(",
+          "why": "runs Roblox server text filtering",
+          "scope": "code"
+        },
+        {
+          "id": "nonchat",
+          "re": ":\\s*GetNonChatStringForBroadcastAsync\\s*\\(",
+          "why": "obtains safe public non-chat text",
+          "scope": "code"
+        },
+        {
+          "id": "pcall",
+          "re": "pcall\\s*\\(",
+          "why": "handles text-filter errors",
+          "scope": "code"
+        },
+        {
+          "id": "filtered",
+          "re": ":\\s*FireAllClients\\s*\\(\\s*player\\s*,\\s*filtered\\s*\\)",
+          "why": "replicates only the filtered result",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "raw_broadcast",
+          "re": ":\\s*FireAllClients\\s*\\(\\s*player\\s*,\\s*rawText\\s*\\)",
+          "why": "does not broadcast the user's raw text",
+          "scope": "code"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: handles the request on the server",
+        "Present: runs Roblox server text filtering",
+        "Present: obtains safe public non-chat text",
+        "Present: handles text-filter errors",
+        "Present: replicates only the filtered result",
+        "Absent: does not broadcast the user's raw text"
+      ]
+    },
+    "split": "development"
+  }
+]
