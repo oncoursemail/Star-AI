@@ -82,11 +82,10 @@ def plan_route(settings, prompt: str, *, research: bool = False) -> ChatRoute:
 
 
 def can_downgrade(prompt: str, route: ChatRoute) -> bool:
-    """A main-model route that the quick model may answer when the main model is fully busy:
-    only general 'reasoning' chat, never Roblox, code, documentation or research questions."""
-    from ..brain_router import _CODING, grounding_plan, is_roblox_dev_prompt, is_roblox_task
-    return (route.reason == "reasoning" and not _CODING.search(prompt) and not is_roblox_task(prompt)
-            and not is_roblox_dev_prompt(prompt) and grounding_plan(prompt, mode="auto").retrieve == "none")
+    """A main-model route that the quick model may answer when the main model is fully busy
+    (brain_router.busy_downgrade_allowed: general chat only, never Roblox, code, docs or research)."""
+    from ..brain_router import busy_downgrade_allowed
+    return busy_downgrade_allowed(prompt, route.reason)
 
 
 def _request_extras(settings, model: str, *, quick: bool) -> dict:
@@ -134,13 +133,8 @@ class DiscordBrain:
 
     async def _main_model_full(self, settings, model: str) -> bool:
         """True when every slot of `model` is generating right now (one short GET, <= 0.4 s)."""
-        from ..providers import look_for_busy_slots, server_slots
-        try:
-            busy = await (self._busy_probe or look_for_busy_slots)(settings, model, conversation="discord")
-            slots = server_slots(settings, model)
-        except Exception:
-            return False
-        return bool(slots) and len(busy) >= slots
+        from ..providers import model_slots_full
+        return await model_slots_full(settings, model, probe=self._busy_probe)
 
     async def reply(self, prompt: str, history: list[dict[str, str]], *, evidence: str = "", live: str = "",
                     on_delta=None, on_status=None) -> str:

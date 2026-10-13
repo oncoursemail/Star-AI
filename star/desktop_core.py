@@ -23,10 +23,11 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
-                        look_for_busy_slots,
+                        look_for_busy_slots, model_slots_full,
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
-from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
+from .brain_router import (select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES,
+                           busy_downgrade_allowed)
 from .instant_route import decide_instant_route, loaded_local_model, answer_on_pc
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
@@ -1245,15 +1246,25 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                         prepared_conversation = candidate
                         return result
                 used = route
+                # Interactive chat must not queue behind background answers (evals, night school) that hold
+                # every slot of the main model: general chat (no tools, images, documents or code) is answered
+                # by the quick model instead (brain_router.busy_downgrade_allowed; one probe, <0.5 s).
+                quick_name = str(getattr(server_roles.effective(settings), 'fast_model', '') or '')
+                if (kind == 'lan' and not use_tools and not images and document_tools is None
+                        and not document_block and quick_name and quick_name != route.model
+                        and busy_downgrade_allowed(prompt, route.profile)
+                        and await model_slots_full(settings, route.model)):
+                    used = replace(route, model=quick_name)
+                    audited_event({'event': 'route_busy_quick', 'model': quick_name})
                 try:
-                    result = await answer_with(route.model)
+                    result = await answer_with(used.model)
                 except Exception as exc:
                     # A role's model that is missing or will not load: answer with the single
                     # configured model instead, once, and only if nothing was shown or run yet.
-                    if (kind != 'lan' or route.model == settings.model or first_visible_token
+                    if (kind != 'lan' or used.model == settings.model or first_visible_token
                             or tools_ran or not model_unavailable(exc)):
                         raise
-                    server_roles.mark_failed(settings, route.model)
+                    server_roles.mark_failed(settings, used.model)
                     used = replace(route, model=settings.model, subagent_model=(
                         settings.model if route.subagent_model == route.model else route.subagent_model))
                     if specialists is not None:
