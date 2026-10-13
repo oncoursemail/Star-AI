@@ -55,7 +55,7 @@ return empty
 def test_keyword_alone_or_api_alone_is_not_enough():
     rule = required_features("shop")
     just_keyword = '```luau\nlocal shop = {}\nreturn shop\n```'
-    just_api = '```luau\nlocal remote = game.ReplicatedStorage.Buy\nremote.OnServerEvent:Connect(function() end)\n```'
+    just_api = '```luau\nlocal remote = game.ReplicatedStorage.Action\nremote.OnServerEvent:Connect(function() end)\n```'
     assert check_answer(just_keyword, rule)[0].keyword_found
     assert not check_answer(just_keyword, rule)[0].present
     assert check_answer(just_api, rule)[0].api_found
