@@ -749,8 +749,11 @@ def test_incomplete_validation_does_not_promote_and_resumes_without_duplicate_re
     lesson = store.state["lessons"]["L1"]
     assert lesson["status"] == "candidate" and lesson["gated_at_fixes"] == 2
     assert lesson["gates"][-1]["gate"]["decision"] == "INCONCLUSIVE"
-    assert [row["passed"] for row in store.state["validation"]] == [2, 2]
-    assert [call for call in script.calls if call == ("V-1", ())] == [("V-1", ())]
+    # Two validation tasks x two samples = four passes in each paired arm.
+    assert [row["passed"] for row in store.state["validation"]] == [4, 4]
+    # The completed first sample is reused on resume; each arm runs V-1 exactly k times.
+    assert script.calls.count(("V-1", ())) == settings.samples
+    assert script.calls.count(("V-1", ("L1",))) == settings.samples
     engine.consider_promotions()
     assert len(store.state["validation"]) == 2
     assert [json.loads(row)["task"] for row in
