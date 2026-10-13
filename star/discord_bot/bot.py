@@ -24,6 +24,7 @@ DM_HELP = (
     "**Talk to STAR here like a normal chat.**\n"
     "- Type a question: STAR answers (it remembers the last few turns for an hour).\n"
     "- Attach one screenshot (PNG/JPG/WebP) with a question: STAR looks at it (if images are on).\n"
+    "- Attach two images: desired reference first and STAR result second, to ask what to improve.\n"
     "- `remember: ...` proposes a lesson you approve later in STAR Desktop (if switched on).\n"
     "- `wrong: ...` right after an answer saves a correction; approved in STAR Desktop, it becomes a regression test.\n"
     "- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, `/star reset`.\n"
@@ -272,6 +273,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         result = embed("✦ STAR · Command Center",
             "**Quick**\n`/ask` — ask STAR · `/image` — STAR looks at an image you attach\n"
+            "`/compare` — privately critique two images: reference vs STAR result\n"
             "`/status` — what is switched on · `/digest` — latest Night School numbers\n"
             "`/screen` — STAR looks at this PC's screen (asks you to confirm every time)\n"
             "Or just **DM the bot** like a normal chat (text or one screenshot).\n"
@@ -575,6 +577,35 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         except Exception as exc:
             await handle_failure(interaction, exc)
 
+    @owner_contexts
+    @bot.tree.command(name="compare", description="Compare a reference with STAR's result (private)")
+    @app_commands.describe(reference="Desired reference PNG/JPG/WebP",
+                           result="STAR's current result PNG/JPG/WebP",
+                           instruction="What should STAR change or preserve?")
+    async def compare_top(interaction: discord.Interaction, reference: discord.Attachment,
+                          result: discord.Attachment, instruction: str = ""):
+        key = await permit(interaction)
+        if key is None:
+            return
+        if not config.dm.images:
+            await problem(interaction, "Private image analysis is off; enable STAR_DISCORD_DM_IMAGES first.")
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            photos = []
+            for attachment in (reference, result):
+                if not 0 < (attachment.size or 0) <= MAX_IMAGE_BYTES:
+                    raise ValueError("Each comparison image must be nonempty and at most 6 MiB")
+                payload = await attachment.read()
+                photos.append(prepare_discord_image(
+                    attachment.filename, attachment.content_type, attachment.size, payload))
+            answer = await service.compare_images(
+                key, instruction or "Identify mismatches and propose a reference-guided revision.",
+                photos[0], photos[1])
+            await publish_answer(interaction, answer, ephemeral=True, key=key)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
     class ScreenConfirm(discord.ui.View):
         """Per-request confirmation: one capture per button press, owner only, expires in 60 s."""
 
@@ -754,6 +785,16 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                     photo = prepare_discord_image(
                         attachment.filename, attachment.content_type, attachment.size, payload)
                     reply_text = await service.inspect_image(key, action.prompt, photo)
+                elif action.kind == "compare":
+                    photos = []
+                    for attachment in message.attachments:
+                        if not 0 < (attachment.size or 0) <= MAX_IMAGE_BYTES:
+                            raise ValueError("Each comparison image must be at most 6 MiB")
+                        payload = await attachment.read()
+                        photos.append(prepare_discord_image(
+                            attachment.filename, attachment.content_type, attachment.size, payload))
+                    reply_text = await service.compare_images(
+                        key, action.prompt, photos[0], photos[1])
                 elif action.kind == "remember":
                     receipt = await service.propose_dm_lesson(
                         key, message_id=message.id, text=action.prompt,
