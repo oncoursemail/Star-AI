@@ -9,7 +9,7 @@ This is a **standalone source example**, not activated in STAR or placed in a li
 - After death, CharacterAdded moves the new character above the last reached checkpoint. Server kills use a short per-player debounce.
 - No persistence is implemented: leave/rejoin resets the stage and wins. Add audited DataStore logic separately before claiming persistent gameplay. Test R6 and R15 respawns in Studio.
 - `Tests/StageCore.spec.luau` (12 cases) and `Tests/StageSequence.spec.luau` (7 additional cases) run the **actual pure Luau StageCore** on the pinned native CLI. The added cases check interleaved checkpoint touches, independent players, rejoining/reset, exactly-once awards, monotonic hazard cooldown and a fixed-seed 144-action three-player state-machine trace. The ordered-checkpoint invariant is also run against a deliberately incorrect implementation that allows skipping stage 2; the test verifies it fails.
-- Headless cases do **not** simulate Roblox Touched, replication, real physics, leaderstats or character spawning. The tests include an explicitly corrupted internal stage to distinguish impossible server state from invalid input; they do not claim Studio verification.
+- Headless cases do not simulate Roblox Touched, replication, real physics, leaderstats or character spawning. The tests include an explicitly corrupted internal stage to distinguish impossible server state from invalid input; they do not claim Studio verification.
 
 ## Official Roblox references
 
