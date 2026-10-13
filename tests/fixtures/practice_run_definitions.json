@@ -638,5 +638,325 @@
         "expected": "nil"
       }
     ]
+  },
+  {
+    "slug": "upgrade-price-growth",
+    "contract": "Upgrade price is floor(basePrice * 1.25^tier) for nonnegative whole-number tier and positive whole base price; otherwise nil.",
+    "reference": "--!strict\nreturn function(base: number, tier: number): number?\n  if base <= 0 or base % 1 ~= 0 or tier < 0 or tier % 1 ~= 0 then return nil end\n  return math.floor(base * (1.25 ^ tier))\nend\n",
+    "wrong": "--!strict\nreturn function(base: number, tier: number): number?\n  if base <= 0 or base % 1 ~= 0 or tier < 0 or tier % 1 ~= 0 then return nil end\n  return math.floor(base * (1 + 0.25 * tier))\nend\n",
+    "cases": [
+      {
+        "args": "100,0",
+        "expected": "100"
+      },
+      {
+        "args": "100,1",
+        "expected": "125"
+      },
+      {
+        "args": "100,2",
+        "expected": "156"
+      },
+      {
+        "args": "80,3",
+        "expected": "156"
+      },
+      {
+        "args": "5,1",
+        "expected": "6"
+      },
+      {
+        "args": "40,-1",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "purchase-affordability",
+    "contract": "Return true if nonnegative integer wallet balance is at least positive integer price; invalid or fractional inputs reject.",
+    "reference": "--!strict\nreturn function(balance: number, price: number): boolean\n  if balance < 0 or price <= 0 or balance % 1 ~= 0 or price % 1 ~= 0 then return false end\n  return balance >= price\nend\n",
+    "wrong": "--!strict\nreturn function(balance: number, price: number): boolean\n  if balance < 0 or price <= 0 or balance % 1 ~= 0 or price % 1 ~= 0 then return false end\n  return balance > price\nend\n",
+    "cases": [
+      {
+        "args": "10,10",
+        "expected": "true"
+      },
+      {
+        "args": "20,10",
+        "expected": "true"
+      },
+      {
+        "args": "9,10",
+        "expected": "false"
+      },
+      {
+        "args": "0,0",
+        "expected": "false"
+      },
+      {
+        "args": "15.5,10",
+        "expected": "false"
+      },
+      {
+        "args": "10,4.5",
+        "expected": "false"
+      }
+    ]
+  },
+  {
+    "slug": "wallet-cap-after-grant",
+    "contract": "Return integer wallet balance after a nonnegative grant, capped by server wallet cap; negative grants are ignored.",
+    "reference": "--!strict\nreturn function(balance: number, grant: number, cap: number): number\n  if grant < 0 then return balance end\n  return math.min(cap, balance + grant)\nend\n",
+    "wrong": "--!strict\nreturn function(balance: number, grant: number, cap: number): number\n  if grant < -100 then return balance end\n  return math.min(cap, balance + grant)\nend\n",
+    "cases": [
+      {
+        "args": "20,5,100",
+        "expected": "25"
+      },
+      {
+        "args": "95,10,100",
+        "expected": "100"
+      },
+      {
+        "args": "100,1,100",
+        "expected": "100"
+      },
+      {
+        "args": "10,-5,100",
+        "expected": "10"
+      },
+      {
+        "args": "0,0,50",
+        "expected": "0"
+      },
+      {
+        "args": "70,20,90",
+        "expected": "90"
+      }
+    ]
+  },
+  {
+    "slug": "shop-sell-floor",
+    "contract": "Sell count items of the same type for exactly floor(unitPrice * count * 0.6) server currency; invalid count returns nil.",
+    "reference": "--!strict\nreturn function(price: number, count: number): number?\n  if price < 0 or count <= 0 or count % 1 ~= 0 then return nil end\n  return math.floor(price * count * 0.6)\nend\n",
+    "wrong": "--!strict\nreturn function(price: number, count: number): number?\n  if price < 0 or count <= 0 or count % 1 ~= 0 then return nil end\n  return math.floor(price * count * 0.7)\nend\n",
+    "cases": [
+      {
+        "args": "10,1",
+        "expected": "6"
+      },
+      {
+        "args": "9,1",
+        "expected": "5"
+      },
+      {
+        "args": "9,2",
+        "expected": "10"
+      },
+      {
+        "args": "100,3",
+        "expected": "180"
+      },
+      {
+        "args": "4,3",
+        "expected": "7"
+      },
+      {
+        "args": "10,0",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "discounted-bundle-price",
+    "contract": "Sum nonnegative integer item prices, apply integer discount percent between 0 and 50 inclusive, then floor once after the full sum; invalid percent returns nil.",
+    "reference": "--!strict\nreturn function(prices, discount: number): number?\n  if discount < 0 or discount > 50 or discount % 1 ~= 0 then return nil end\n  local total = 0\n  for _, cost in prices do\n    if cost < 0 or cost % 1 ~= 0 then return nil end\n    total += cost\n  end\n  return math.floor(total * (100 - discount) / 100)\nend\n",
+    "wrong": "--!strict\nreturn function(prices, discount: number): number?\n  if discount < 0 or discount > 50 or discount % 1 ~= 0 then return nil end\n  local total = 0\n  for _, cost in prices do\n    if cost < 0 or cost % 1 ~= 0 then return nil end\n    total += cost\n  end\n  return math.ceil(total * (100 - discount) / 100)\nend\n",
+    "cases": [
+      {
+        "args": "{10,20},0",
+        "expected": "30"
+      },
+      {
+        "args": "{10,20},10",
+        "expected": "27"
+      },
+      {
+        "args": "{1,2},25",
+        "expected": "2"
+      },
+      {
+        "args": "{11,11},50",
+        "expected": "11"
+      },
+      {
+        "args": "{},50",
+        "expected": "0"
+      },
+      {
+        "args": "{10},51",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "weighted-loot-selection",
+    "contract": "From positive integer rarity weights and a 1-based integer roll, return the 1-based bucket index whose cumulative weight includes the roll; invalid rolls return nil.",
+    "reference": "--!strict\nreturn function(weights, roll: number): number?\n  if roll < 1 or roll % 1 ~= 0 then return nil end\n  local total = 0\n  for _, weight in weights do\n    total += weight\n    if roll <= total then return _ end\n  end\n  return nil\nend\n",
+    "wrong": "--!strict\nreturn function(weights, roll: number): number?\n  if roll < 1 or roll % 1 ~= 0 then return nil end\n  local total = 0\n  for _, weight in weights do\n    total += weight\n    if roll < total then return _ end\n  end\n  return nil\nend\n",
+    "cases": [
+      {
+        "args": "{2,3,1},1",
+        "expected": "1"
+      },
+      {
+        "args": "{2,3,1},2",
+        "expected": "1"
+      },
+      {
+        "args": "{2,3,1},3",
+        "expected": "2"
+      },
+      {
+        "args": "{2,3,1},5",
+        "expected": "2"
+      },
+      {
+        "args": "{2,3,1},6",
+        "expected": "3"
+      },
+      {
+        "args": "{2,3,1},7",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "craft-atomic-recipe",
+    "contract": "Return a new inventory with all recipe material counts deducted when every material is available; otherwise nil without changing inputs.",
+    "reference": "--!strict\nreturn function(inventory, recipe)\n  for item, amount in recipe do\n    if amount <= 0 or (inventory[item] or 0) < amount then return nil end\n  end\n  local result = {}\n  for item, count in inventory do result[item] = count end\n  for item, amount in recipe do result[item] -= amount end\n  return result\nend\n",
+    "wrong": "--!strict\nreturn function(inventory, recipe)\n  for item, amount in recipe do\n    if amount <= 0 or (inventory[item] or 0) <= amount then return nil end\n  end\n  local result = {}\n  for item, count in inventory do result[item] = count end\n  for item, amount in recipe do result[item] -= amount end\n  return result\nend\n",
+    "cases": [
+      {
+        "args": "{wood=2,iron=1},{wood=2,iron=1}",
+        "expected": "{wood=0,iron=0}"
+      },
+      {
+        "args": "{wood=5,iron=1},{wood=2,iron=1}",
+        "expected": "{wood=3,iron=0}"
+      },
+      {
+        "args": "{wood=1},{wood=2}",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=3},{iron=1}",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=3},{wood=1}",
+        "expected": "{wood=2}"
+      },
+      {
+        "args": "{wood=4,stone=2},{wood=2}",
+        "expected": "{wood=2,stone=2}"
+      }
+    ]
+  },
+  {
+    "slug": "stack-capacity-limit",
+    "contract": "Add nonnegative item count to a stack, capping the stack at limit; negative additions are ignored.",
+    "reference": "--!strict\nreturn function(current: number, amount: number, limit: number): number\n  if amount < 0 then return current end\n  return math.min(limit, current + amount)\nend\n",
+    "wrong": "--!strict\nreturn function(current: number, amount: number, limit: number): number\n  if amount < 0 then return current end\n  return math.min(limit - 1, current + amount)\nend\n",
+    "cases": [
+      {
+        "args": "0,1,5",
+        "expected": "1"
+      },
+      {
+        "args": "4,1,5",
+        "expected": "5"
+      },
+      {
+        "args": "4,5,5",
+        "expected": "5"
+      },
+      {
+        "args": "5,1,5",
+        "expected": "5"
+      },
+      {
+        "args": "3,-2,5",
+        "expected": "3"
+      },
+      {
+        "args": "1,0,2",
+        "expected": "1"
+      }
+    ]
+  },
+  {
+    "slug": "trade-preserves-item-count",
+    "contract": "Transfer exactly one unit of named inventory item from source to destination, returning {from=...,to=...}; return nil if source has none. Never duplicate counts.",
+    "reference": "--!strict\nreturn function(source, dest, item: string)\n  if (source[item] or 0) < 1 then return nil end\n  local from = {}\n  local to = {}\n  for name, amount in source do from[name] = amount end\n  for name, amount in dest do to[name] = amount end\n  from[item] = from[item] - 1\n  to[item] = (to[item] or 0) + 1\n  return {from=from,to=to}\nend\n",
+    "wrong": "--!strict\nreturn function(source, dest, item: string)\n  if (source[item] or 0) < 1 then return nil end\n  local from = {}\n  local to = {}\n  for name, amount in source do from[name] = amount end\n  for name, amount in dest do to[name] = amount end\n  from[item] = from[item] - 0\n  to[item] = (to[item] or 0) + 1\n  return {from=from,to=to}\nend\n",
+    "cases": [
+      {
+        "args": "{wood=1},{},'wood'",
+        "expected": "{from={wood=0},to={wood=1}}"
+      },
+      {
+        "args": "{wood=4},{wood=2},'wood'",
+        "expected": "{from={wood=3},to={wood=3}}"
+      },
+      {
+        "args": "{}, {}, 'wood'",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=2,iron=1},{gold=5},'wood'",
+        "expected": "{from={wood=1,iron=1},to={gold=5,wood=1}}"
+      },
+      {
+        "args": "{iron=1},{wood=1},'wood'",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=2},{wood=3},'wood'",
+        "expected": "{from={wood=1},to={wood=4}}"
+      }
+    ]
+  },
+  {
+    "slug": "escrow-conservation",
+    "contract": "Split nonnegative integer escrow total into buyer payment and seller remainder with no currency creation or loss; invalid or overspending portions return nil.",
+    "reference": "--!strict\nreturn function(total: number, buyerPortion: number)\n  if total < 0 or buyerPortion < 0 or buyerPortion > total then return nil end\n  if total % 1 ~= 0 or buyerPortion % 1 ~= 0 then return nil end\n  return {buyer=buyerPortion,seller=total-buyerPortion}\nend\n",
+    "wrong": "--!strict\nreturn function(total: number, buyerPortion: number)\n  if total < 0 or buyerPortion < 0 or buyerPortion >= total then return nil end\n  if total % 1 ~= 0 or buyerPortion % 1 ~= 0 then return nil end\n  return {buyer=buyerPortion,seller=total-buyerPortion}\nend\n",
+    "cases": [
+      {
+        "args": "100,20",
+        "expected": "{buyer=20,seller=80}"
+      },
+      {
+        "args": "100,100",
+        "expected": "{buyer=100,seller=0}"
+      },
+      {
+        "args": "0,0",
+        "expected": "{buyer=0,seller=0}"
+      },
+      {
+        "args": "1,0",
+        "expected": "{buyer=0,seller=1}"
+      },
+      {
+        "args": "50,51",
+        "expected": "nil"
+      },
+      {
+        "args": "100,-1",
+        "expected": "nil"
+      }
+    ]
   }
 ]
