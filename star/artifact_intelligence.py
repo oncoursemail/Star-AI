@@ -113,7 +113,11 @@ def audit(workspace, path: str, *, target: str = "general", triangle_budget: int
             children_by_node.append([])
             continue
         valid_children = []
-        for child in node.get("children", []):
+        children = node.get("children", [])
+        if not isinstance(children, list) or len(children) > MAX_ENTRIES:
+            error(f"node {node_id}: invalid children array")
+            children = []
+        for child in children:
             if index(child, "nodes", f"node {node_id} child"):
                 valid_children.append(child)
                 parents[child] += 1
@@ -151,7 +155,11 @@ def audit(workspace, path: str, *, target: str = "general", triangle_budget: int
             state[vertex] = 2
     for scene_id, scene in enumerate(arrays["scenes"]):
         if isinstance(scene, dict):
-            for node in scene.get("nodes", []):
+            roots = scene.get("nodes", [])
+            if not isinstance(roots, list) or len(roots) > MAX_ENTRIES:
+                error(f"scene {scene_id}: invalid root nodes array")
+                continue
+            for node in roots:
                 index(node, "nodes", f"scene {scene_id} root")
     if "scene" in data:
         index(data["scene"], "scenes", "default scene")
