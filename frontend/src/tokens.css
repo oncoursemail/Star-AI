@@ -94,7 +94,7 @@
   --star-dur-menu: 160ms;
   --star-dur-message: 170ms;
   --star-dur-page: 200ms;
-  --star-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --star-ease: cubic-bezier(0.23, 1, 0.32, 1); /* strong ease-out: instant response, soft landing */
   --star-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /* Elevation: on OLED a shadow is nearly invisible, so it is used once (floating layers). */

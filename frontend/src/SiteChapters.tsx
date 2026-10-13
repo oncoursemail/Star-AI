@@ -3,7 +3,7 @@ import {
 } from 'lucide-react'
 import media from './siteMedia.json'
 import {
- LINKS,brainRoutes,capabilities,connections,dataFolder,evalResults,faqs,formatBytes,limits,requirements,steps,studioScopes
+ LINKS,brainRoutes,capabilities,dataFolder,evalResults,faqs,formatBytes,limits,requirements,steps,studioScopes
 } from './siteContent'
 import {availability} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
@@ -40,8 +40,6 @@ const routeIcons={pc:Monitor,server:Server,cloud:Cloud} as const
 const scopeIcons=[Eye,PencilLine,ShieldCheck] as const
 
 export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSize:number|null}){
- const shipped=connections.filter(item=>availability(item.since,latest)==='released')
- const pending=connections.filter(item=>availability(item.since,latest)!=='released')
  return <>
   <section className="sw-chapter" id="brain" aria-labelledby="sw-brain-title">
    <div className="sw-wrap sw-chapter-grid">
@@ -149,8 +147,8 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
       </tbody>
      </table>
     </div>
-    <div className="sw-ledger" data-reveal>
-     <h3>Measured Roblox evaluation, not gameplay quality</h3>
+    <details className="sw-ledger sw-eval" data-reveal>
+     <summary><h3>Measured Roblox evaluation, not gameplay quality</h3><span>Automated task results, dated, with their limits</span></summary>
      <p>The packs-off Roblox task results include runs from October 11–12, 2026, on a real STAR Server in Auto mode with knowledge enabled.
       Results varied between runs; the 16 Studio-only tasks in v2 were not run.</p>
      <table>
@@ -167,29 +165,7 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
       reruns flipped result (17%). Pattern checks, Luau mocks and citations do not measure appearance, playtesting,
       voice, vision or real Studio behaviour. <a href={LINKS.evals} target="_blank" rel="noopener noreferrer">Read the gate,
       methodology and limitations<span className="sw-sr"> (opens in a new tab)</span></a>.</p>
-    </div>
-   </div>
-  </section>
-
-  <section className="sw-chapter sw-chapter-wide" id="connections" aria-labelledby="sw-connections-title">
-   <div className="sw-wrap">
-    <div className="sw-chapter-head" data-reveal>
-     <p className="sw-kicker">Connections</p>
-     <h2 id="sw-connections-title">Connect what you already use.</h2>
-     <p>These integrations use separate permissions or setup. Their release badges track published stable tags;
-      source code alone is not a shipped download.</p>
-    </div>
-    <div className="sw-ledger" data-reveal style={delay(80)}>
-     <table>
-      <caption className="sw-sr">STAR connections and whether each is in the current download</caption>
-      <thead><tr><th scope="col">Connection</th><th scope="col">What it does</th><th scope="col">Status</th></tr></thead>
-      <tbody>
-       {[...shipped,...pending].map(item=><tr key={item.name}>
-        <th scope="row">{item.name}</th><td>{item.what}</td><td><Status since={item.since} latest={latest}/></td>
-       </tr>)}
-      </tbody>
-     </table>
-    </div>
+    </details>
    </div>
   </section>
 

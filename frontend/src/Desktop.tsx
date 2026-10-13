@@ -1,6 +1,6 @@
 import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
-import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,ExternalLink,Folder,FolderOpen,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Workflow,X,Zap} from 'lucide-react'
+import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,Ellipsis,ExternalLink,Folder,FolderOpen,Gauge,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Pencil,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Trash2,Undo2,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
 import {BrainOverview} from './BrainOverview'
 import {Message,Panel,StarMark,Tag} from './components'
@@ -26,6 +26,11 @@ import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
 import {StarPet,type PetState} from './StarPet'
+import {StarFace,type StarMood} from './StarFace'
+import {ChatRow} from './ChatRow'
+import {ScreenConsent} from './ScreenConsent'
+import {useDismiss} from './Composer'
+import './redesign.css'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -36,7 +41,7 @@ import type {Fixture,FixtureScript} from './previewFixtures'
 
 type Tab='chat'|'projects'|'brain'|'brain-overview'|'analytics'|'tools'|'library'|'settings'
 type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:boolean;explanation?:string}
-const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['library','Library',BookOpen],['tools','Tools',Workflow],['analytics','Analytics',Activity],['brain-overview','Brain',BrainCircuit],['brain','Model & connection',BrainCircuit],['settings','Settings',Settings2]]
+const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['library','Library',BookOpen],['tools','Tools',Workflow],['analytics','Analytics',Activity],['brain-overview','Brain',BrainCircuit],['brain','Model & connection',Gauge],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const fileName=(path:string)=>path.split(/[\\/]/).pop()||path
 const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_target:'local_pc',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,blender_enabled:false,blender_edit:false,blender_executable:'',roblox_research_enabled:true,asset_forge_enabled:false,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
@@ -123,6 +128,18 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [historySearchOpen,setHistorySearchOpen]=useState(false)
  const [historyQuery,setHistoryQuery]=useState('')
  const [modelList,setModelList]=useState<string[]>([])
+ // Sidebar extras (Library, Analytics, Brain, Model) stay folded away unless the owner opens them.
+ const [moreOpen,setMoreOpen]=useState(()=>readPreference('star.sidebar.more')==='open')
+ // A deleted chat disappears at once and is only removed for good when Undo is not pressed in time.
+ const [pendingDelete,setPendingDelete]=useState<ChatThread|null>(null)
+ const deleteTimer=useRef<number|null>(null)
+ const [chatMenu,setChatMenu]=useState(false)
+ const [renamingTitle,setRenamingTitle]=useState(false)
+ const chatMenuWrap=useRef<HTMLDivElement>(null)
+ const chatMenuTrigger=useRef<HTMLButtonElement>(null)
+ const [screenAsk,setScreenAsk]=useState(false)
+ const [capturing,setCapturing]=useState(false)
+ const [previews,setPreviews]=useState<Record<string,string>>({})
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const reducedMotion=useEffectiveReducedMotion(!themeMotion)
  const [fixture]=useState(()=>requestedFixture(preview))
@@ -149,6 +166,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
+ useEffect(()=>writePreference('star.sidebar.more',moreOpen?'open':'closed'),[moreOpen])
+ useDismiss(chatMenu,()=>setChatMenu(false),chatMenuWrap,chatMenuTrigger)
  chatRef.current=data.active_chat
  // What a request sent now would talk to. An answer or a failure is only evidence about that target.
  targetRef.current=connectionTarget(data.settings as AppSettings&Record<string,unknown>)
@@ -345,11 +364,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setRetryText('');setStreamingText('');setChatSearch('');setShowChatSearch(false);setStopping(false)
    setPetTerminal(null)
    const mine=makeMsg('user',value,attachments.map(fileName))
+   const thumbs=attachments.map(path=>previews[path]).filter(Boolean)
+   if(thumbs.length)mine.previews=thumbs
    fresh.current.add(mine.id)
    setBusy(true);setNotice('');setTab('chat');setLastRun(null)
    updateRun(startRun(crypto.randomUUID(),mode,Date.now()))
    return mine
- },[updateRun])
+ },[updateRun,previews])
 
  const send=useCallback(async(text=prompt,attachments=files,retryMessageId?:number)=>{
    // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
@@ -399,7 +420,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      running.current.set(requestId,script.action)
      if(script.mode)setChatMode(script.mode)
      setTeamMode(script.action==='runTeam')
-     const mine=beginRun(script.prompt,[],script.action==='runTeam'?'team':'chat')
+     const mine=beginRun(script.prompt,[],script.action==='runTeam'?'team':script.action==='generateImage'?'image':'chat')
      setMessages([...base,mine])
      let delay=0
      const events=hold>0?script.events.slice(0,hold):script.events
@@ -417,6 +438,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      const chosen:Fixture|undefined=module.FIXTURES[fixture]
      if(!chosen)return
      setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
+     // The scripted turn belongs to the fixture chat from its first event (React has not re-rendered yet).
+     chatRef.current='fx-1'
      setDraft(d=>({...d,...module.fixtureSettings,...chosen.settings}))
      setMessages(chosen.messages)
      if(chosen.finishedRun)setLastRun({chat:'fx-1',run:chosen.finishedRun})
@@ -451,8 +474,60 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
  const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
  const openChat=async(id:string)=>{if(id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ /** Rename: the sidebar shows the new title at once; a refusal puts the old one back. */
+ const renameChat=async(id:string,title:string)=>{
+   const before=data.chats.find(c=>c.id===id)?.title
+   setData(d=>({...d,chats:d.chats.map(c=>c.id===id?{...c,title}:c)}))
+   if(inactive)return
+   const v=await act('renameChat',{chatId:id,title}) as {title?:string}|null
+   if(!v){if(before!==undefined)setData(d=>({...d,chats:d.chats.map(c=>c.id===id?{...c,title:before}:c)}));return}
+   if(v.title&&v.title!==title)setData(d=>({...d,chats:d.chats.map(c=>c.id===id?{...c,title:v.title as string}:c)}))
+ }
+ const commitDelete=useCallback(async(chat:ChatThread)=>{
+   if(deleteTimer.current!==null){window.clearTimeout(deleteTimer.current);deleteTimer.current=null}
+   setPendingDelete(current=>current?.id===chat.id?null:current)
+   if(inactive){setData(d=>({...d,chats:d.chats.filter(c=>c.id!==chat.id)}));return}
+   const v=await act('deleteChat',{chatId:chat.id}) as BootData|null
+   if(!v)return
+   // Only the list changes, unless the host had to open another chat.
+   if(v.active_chat!==chatRef.current)applyBoot(v)
+   else setData(d=>({...d,chats:v.chats}))
+ // eslint-disable-next-line react-hooks/exhaustive-deps
+ },[inactive,act])
+ const deleteChat=async(chat:ChatThread)=>{
+   if(busy&&answeringChat.current===chat.id){setNotice('Stop the answer in this chat before deleting it.');return}
+   if(pendingDelete)void commitDelete(pendingDelete)
+   setPendingDelete(chat)
+   deleteTimer.current=window.setTimeout(()=>void commitDelete(chat),6000)
+   // The row that held focus is gone; keep the keyboard somewhere useful.
+   window.requestAnimationFrame(()=>composerRef.current?.focus())
+   // Like ChatGPT: deleting the open chat leaves you on a fresh one straight away.
+   if(chat.id===data.active_chat&&!busy){
+     if(inactive){setMessages([]);setData(d=>({...d,active_chat:''}))}
+     else{const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('')}}
+   }
+ }
+ const undoDelete=()=>{
+   const chat=pendingDelete
+   if(deleteTimer.current!==null){window.clearTimeout(deleteTimer.current);deleteTimer.current=null}
+   setPendingDelete(null)
+   if(chat&&inactive&&!data.active_chat)setData(d=>({...d,active_chat:chat.id}))
+ }
+ useEffect(()=>()=>{if(deleteTimer.current!==null)window.clearTimeout(deleteTimer.current)},[])
+ /** "Look at my screen": only after the owner says yes in ScreenConsent, one screenshot is attached. */
+ const lookAtScreen=async()=>{
+   if(capturing)return
+   setCapturing(true)
+   const shot=await act('captureScreen',{consent:true}) as {path?:string;preview?:string}|null
+   setCapturing(false);setScreenAsk(false)
+   if(!shot?.path)return
+   const path=shot.path
+   setFiles(list=>[...list.filter(item=>item!==path),path].slice(0,8))
+   if(shot.preview)setPreviews(map=>({...map,[path]:shot.preview as string}))
+   if(!prompt.trim())setPrompt('What do you see on my screen?')
+ }
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
- const filteredChats=data.chats.filter(c=>c.title.toLowerCase().includes(historyQuery.toLowerCase()))
+ const filteredChats=data.chats.filter(c=>c.id!==pendingDelete?.id&&c.title.toLowerCase().includes(historyQuery.toLowerCase()))
  const chatGroups=groupChats(filteredChats.slice(0,60))
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
  /** Reduced motion applies at once and is stored straight away, not only on Save. */
@@ -536,6 +611,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  // A notice belongs to the page where the action happened: it must not follow to another page and cover it.
  const nav=(id:Tab)=>{if(id!==tab)setNotice('');setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
+ const extraPages:Tab[]=['library','analytics','brain-overview','brain']
+ const showMore=moreOpen||extraPages.includes(tab)
  const fillComposer=(text:string)=>{
    setPrompt(text);setTab('chat')
    window.requestAnimationFrame(()=>{const node=composerRef.current;if(node){node.focus();node.setSelectionRange(text.length,text.length)}})
@@ -544,7 +621,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const wrapper='shell '+(!leftOpen?'':'shell-open')+(sidebarCollapsed?' shell-sidebar-collapsed':'')
  const query=chatSearch.trim().toLowerCase()
  const matchingMessages=query?messages.filter(m=>m.text.toLowerCase().includes(query)):messages
- const chatTitle=data.chats.find(c=>c.id===data.active_chat)?.title||'New chat'
+ const currentChat=data.chats.find(c=>c.id===data.active_chat&&c.id!==pendingDelete?.id)
+ const chatTitle=currentChat?.title||'New chat'
  const serverMode=usesStarServer(data.settings)
  const serverDraft=usesStarServer(draft)
  const brain=brainStatus(data)
@@ -569,6 +647,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // Nothing at all was recorded after the newest question (for example STAR was closed mid-reply).
  const interrupted=!busy&&!query&&!retryText&&pending?.status==='interrupted'&&lastMessage?.role==='user'?pending:null
  const retryNow=()=>void send(retryPrompt,retryText?lastFiles.current:[],!retryText&&pending?pending.message_id:undefined)
+ // Star in the empty chat listens while you type and looks up when an answer has just finished.
+ const faceMood:StarMood=capturing?'looking':prompt.trim()?'listening':petTerminal?.kind==='error'?'oops':'idle'
+ // A Studio question gets the Studio shortcut; everything else keeps the dock quiet.
+ const studioReady=data.studio?.state==='connected'&&!!data.studio.selected_valid
+ const mentionsStudio=/\b(studio|roblox|place|luau|workspace|playtest)\b/i.test(prompt)
  const petState:PetState=update?.available?'update':busy?(streamingText?'streaming':'thinking'):petTerminal?.kind??(prompt.trim()?'typing':'idle')
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
@@ -584,14 +667,23 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        {historySearchOpen&&<div className="rail-search"><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setHistorySearchOpen(false);setHistoryQuery('')}}}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={14}/></button></div>}
      </div>
      <nav className="rail-group" aria-label="Workspace">
-       <div className="rail-label">Workspace</div>
-       {sections.filter(([id])=>id!=='chat'&&id!=='settings').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{id==='brain'?'Model':name}</span>{id==='projects'&&<small title={'Current project: '+data.project}>{data.project}</small>}</button>)}
+       {sections.filter(([id])=>id==='projects'||id==='tools').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{name}</span>{id==='projects'&&<small title={'Current project: '+data.project}>{data.project}</small>}</button>)}
+       <button className="rail-item rail-more" type="button" aria-expanded={showMore} onClick={()=>setMoreOpen(v=>!v)}><ChevronRight size={16} className={showMore?'is-open':undefined}/><span>More</span></button>
+       {showMore&&<div className="rail-more-group">
+         {sections.filter(([id])=>extraPages.includes(id)).map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{id==='brain'?'Model':name}</span></button>)}
+       </div>}
      </nav>
      <div className="rail-chats" aria-label="Saved conversations">
-       <div className="rail-label">Chats</div>
+       {chatGroups.length<=1&&<div className="rail-label">Chats</div>}
        {chatGroups.map(group=><Fragment key={group.label}>
          {chatGroups.length>1&&<div className="rail-sublabel">{group.label}</div>}
-         {group.chats.map(chat=><button type="button" key={chat.id} title={chat.title} className={'rail-item rail-chat '+(data.active_chat===chat.id&&tab==='chat'?'is-current':'')} aria-current={data.active_chat===chat.id&&tab==='chat'?'page':undefined} onClick={()=>void openChat(chat.id)}><span>{chat.title}</span></button>)}
+         <AnimatePresence initial={false}>
+         {group.chats.map(chat=><motion.div key={chat.id} className="rail-chat-slot" layout={reducedMotion?false:'position'}
+           initial={reducedMotion?false:{opacity:0,height:0}} animate={{opacity:1,height:'auto'}} exit={reducedMotion?{opacity:0}:{opacity:0,height:0}} transition={reducedMotion?instant:{duration:.18,ease:[0.23,1,0.32,1]}}>
+           <ChatRow chat={chat} current={data.active_chat===chat.id&&tab==='chat'} disabled={busy&&answeringChat.current===chat.id}
+             onOpen={()=>void openChat(chat.id)} onRename={title=>void renameChat(chat.id,title)} onDelete={()=>void deleteChat(chat)}/>
+         </motion.div>)}
+         </AnimatePresence>
        </Fragment>)}
        {!filteredChats.length&&<p className="rail-empty">{historyQuery?'No chats match that search.':'Chats you start are saved here.'}</p>}
      </div>
@@ -603,14 +695,26 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      <header className="bar">
        <div className="bar-left">
          <button className="bar-action bar-reveal" type="button" aria-label="Show sidebar" title="Show sidebar" onClick={()=>{if(narrow())setLeftOpen(true);else setSidebarCollapsed(false)}}><PanelLeftOpen size={18}/></button>
-         {tab==='chat'?<div className="bar-title"><span className="bar-crumb">{data.project}</span><span className="bar-sep" aria-hidden="true">/</span><h1 title={chatTitle}>{chatTitle}</h1></div>
+         {tab==='chat'?<div className="bar-title"><span className="bar-crumb">{data.project}</span><span className="bar-sep" aria-hidden="true">/</span>{renamingTitle&&currentChat?<input className="bar-rename" aria-label="Chat name" autoFocus defaultValue={chatTitle} maxLength={80}
+             onBlur={event=>{const next=event.currentTarget.value.trim();setRenamingTitle(false);if(next&&next!==chatTitle)void renameChat(currentChat.id,next)}}
+             onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.currentTarget.value=chatTitle;setRenamingTitle(false)}}}/>
+           :<h1 title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
            :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
        </div>
        <div className="bar-right">
          {tab==='chat'&&<>
            {showChatSearch&&<input className="bar-find" type="search" aria-label="Search messages in this chat" placeholder="Find in this chat" autoFocus value={chatSearch} onChange={e=>setChatSearch(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setShowChatSearch(false);setChatSearch('')}}}/>}
            <button className="bar-action" type="button" title="Find in this chat" aria-label="Find in this chat" aria-pressed={showChatSearch} disabled={!messages.length} onClick={()=>{setShowChatSearch(v=>!v);setChatSearch('')}}><Search size={17}/></button>
-           <button className="bar-action" type="button" title="Copy conversation" aria-label="Copy conversation" disabled={!messages.length} onClick={()=>void copyConversation()}><Copy size={16}/></button>
+           <div className="bar-menu-wrap" ref={chatMenuWrap}>
+             <button ref={chatMenuTrigger} className="bar-action" type="button" title="Chat options" aria-label="Chat options" aria-haspopup="menu" aria-expanded={chatMenu} disabled={!messages.length&&!currentChat} onClick={()=>setChatMenu(v=>!v)}><Ellipsis size={17}/></button>
+             <AnimatePresence>
+               {chatMenu&&<motion.div className="bar-menu" role="menu" aria-label="Chat options" initial={reducedMotion?false:{opacity:0,scale:.97,y:-4}} animate={{opacity:1,scale:1,y:0}} exit={{opacity:0,scale:.98,y:-2}} transition={reducedMotion?instant:{duration:.16,ease:[0.23,1,0.32,1]}}>
+                 <button type="button" role="menuitem" className="bar-menu-item" disabled={!currentChat} onClick={()=>{setChatMenu(false);setRenamingTitle(true)}}><Pencil size={15} aria-hidden="true"/> Rename</button>
+                 <button type="button" role="menuitem" className="bar-menu-item" disabled={!messages.length} onClick={()=>{setChatMenu(false);void copyConversation()}}><Copy size={15} aria-hidden="true"/> Copy conversation</button>
+                 <button type="button" role="menuitem" className="bar-menu-item is-danger" disabled={!currentChat||busy} onClick={()=>{setChatMenu(false);if(currentChat)void deleteChat(currentChat)}}><Trash2 size={15} aria-hidden="true"/> Delete</button>
+               </motion.div>}
+             </AnimatePresence>
+           </div>
            <button className="bar-action bar-reveal" type="button" title="New chat" aria-label="New chat" onClick={()=>void startNewChat()}><SquarePen size={17}/></button>
          </>}
        </div>
@@ -621,7 +725,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
-               {empty?<div className="thread-hello"><StarMark size={26}/><h2>What are we making?</h2></div>
+               {empty?<div className="thread-hello"><StarFace mood={faceMood} size={104} follow className="thread-hello-star" label="Star, STAR's mascot"/><h2>What are we making?</h2></div>
                :<section className="thread-turns" role="log" aria-live="off" aria-label="Conversation">
                  {turns.map((m,index)=>{
                    const live=m.id==='stream-live'
@@ -641,6 +745,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                  })}
                  {query&&!matchingMessages.length&&<div className="thread-none"><Search size={18} aria-hidden="true"/><span>No messages match “{chatSearch.trim()}”.</span></div>}
                  {busy&&run&&!timeline&&!streamingText&&<RunStatus run={run} label={stopping?'Stopping':undefined}/>}
+                 {busy&&run?.mode==='image'&&viewingAnswer&&!stopping&&<div className={'image-pending is-'+imageSize} role="img" aria-label="Image being created"><span className="image-pending-sheen" aria-hidden="true"/><span className="image-pending-label"><ImagePlus size={15} aria-hidden="true"/> Your image will appear here</span></div>}
                  {interrupted&&<Message entry={{id:'interrupted',role:'event',text:interrupted.detail,status:'cancelled'}} animated={false} pinned onRetry={retryNow} onEdit={()=>fillComposer(interrupted.prompt)}/>}
                </section>}
              </div>
@@ -648,14 +753,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <div className="dock">
              {showJump&&messages.length>0&&<button className="chat-jump" type="button" onClick={jumpToLatest}><ChevronDown size={15} aria-hidden="true"/> Latest</button>}
              {(!inactive||!!fixture)&&!failedLast&&(connection.tone==='offline'||connection.tone==='attention')&&<div className={'dock-banner is-'+connection.tone} role="status"><CircleAlert size={15} aria-hidden="true"/><span><strong>{connection.state}.</strong> {connection.note}</span><button type="button" onClick={()=>nav('brain')}>Model &amp; connection</button></div>}
-             <div className="dock-hint"><button type="button" className="starter" onClick={()=>nav('tools')}><Workflow size={14} aria-hidden="true"/> Studio: {data.settings.studio_target==='host_launcher'?'practice host':'this PC'} · {data.studio?.state==='connected'&&data.studio.selected_valid?'selected':data.studio?.state==='connected'?'choose a place':data.studio?.state==='unavailable'?'unavailable':'connect & check MCP'}</button></div>
+             {mentionsStudio&&!studioReady&&<div className="dock-hint"><button type="button" className="starter" onClick={()=>nav('tools')}><Workflow size={14} aria-hidden="true"/> Studio: {data.settings.studio_target==='host_launcher'?'practice host':'this PC'} · {data.studio?.state==='connected'&&data.studio.selected_valid?'selected':data.studio?.state==='connected'?'choose a place':data.studio?.state==='unavailable'?'unavailable':'connect & check MCP'}</button></div>}
              <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
                files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>void attach()} onTranscribe={()=>void transcribe()}
                mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
                imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles(f=>f.filter(p=>/\.(png|jpe?g|webp)$/i.test(p)).slice(0,2));setTeamMode(false)}composerRef.current?.focus()}} imageReady={true} onImageSetup={()=>nav('settings')} imageSize={imageSize} onImageSize={setImageSize}
                teamMode={teamMode} onTeamMode={on=>{setTeamMode(on);composerRef.current?.focus()}} team={team}
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
-               connection={connection} onOpenConnection={()=>nav('brain')}/>
+               connection={connection} onOpenConnection={()=>nav('brain')}
+               onLookAtScreen={()=>setScreenAsk(true)} previews={previews}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
                :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
@@ -768,10 +874,19 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            </Panel><button className="primary-button save-button" onClick={saveSettings}><Check size={17}/> Save settings</button></div></div>}
        </MotionSurface>
      </AnimatePresence>
+     <AnimatePresence>
+       {pendingDelete&&<motion.div key={'undo-'+pendingDelete.id} role="status" className="undo-toast" initial={reducedMotion?false:{opacity:0,y:12,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8}} transition={reducedMotion?instant:{duration:.2,ease:[0.23,1,0.32,1]}}>
+         <Trash2 size={15} aria-hidden="true"/><span>Deleted <strong>{pendingDelete.title}</strong></span>
+         <button type="button" onClick={undoDelete}><Undo2 size={14} aria-hidden="true"/> Undo</button>
+       </motion.div>}
+     </AnimatePresence>
+     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>void lookAtScreen()} onClosed={()=>composerRef.current?.focus()}/>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {tab==='chat'&&showStar&&<StarPet state={petState} reducedMotion={reducedMotion} idleEnabled={!inactive}/>}
    {leftOpen&&<button className="mobile-scrim" onClick={()=>setLeftOpen(false)} aria-label="Close navigation"/>}
  </div></MotionPolicy>
 }
-function PageTitle({eyebrow,title,description}:{eyebrow:string;title:string;description:string}) {return <div className="page-intro"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>}
+/** Page heading. The old uppercase eyebrow ("PREFERENCES", "DEVELOPER WORKSPACE") read as template chrome; it is kept
+ * only as the accessible description's lead-in, not drawn. */
+function PageTitle({title,description}:{eyebrow:string;title:string;description:string}) {return <div className="page-intro"><h1>{title}</h1><p>{description}</p></div>}

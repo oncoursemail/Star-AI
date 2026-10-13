@@ -139,7 +139,10 @@ export function SiteProgress({progress}:{progress:ProgressState}){
    {snapshot&&<>
     <div data-reveal><ReleaseRail board={board}/></div>
 
-    <div className="sw-lanes" data-reveal style={delay(60)}>
+    {/* The full board is for people following development; visitors get the release line first. */}
+    <details className="sw-progress-more" data-reveal style={delay(60)}>
+     <summary><span>Open work on GitHub</span><span className="sw-progress-counts">{board.active.length+board.activeMaintenance} in progress · {board.unreleased.length+board.unreleasedMaintenance} merged, not released · {openCount} open {openCount===1?'issue':'issues'}</span></summary>
+    <div className="sw-lanes">
      <Lane id="sw-lane-active" title="In progress" count={board.active.length+board.activeMaintenance} capped={snapshot.pullsCapped}
       unavailable={!snapshot.pulls} empty="No open pull requests right now."
       hint="Open pull requests. A draft is unfinished work, not a feature you can download."
@@ -189,6 +192,7 @@ export function SiteProgress({progress}:{progress:ProgressState}){
       </li>)}
      </ul>:<p className="sw-lane-empty">Commits could not be loaded. <a href={LINKS.commits} target="_blank" rel="noopener noreferrer">See them on GitHub</a>.</p>}
     </div>
+    </details>
    </>}
   </div>
  </section>
