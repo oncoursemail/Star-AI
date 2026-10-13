@@ -259,7 +259,7 @@
     "slug": "daily-streak-update",
     "contract": "For integer calendar days, preserve streak if today==lastDay, increment only if today==lastDay+1, otherwise reset streak to 1; disallow future lastDay by leaving streak unchanged.",
     "reference": "--!strict\nreturn function(lastDay: number, today: number, streak: number): number\n  if today <= lastDay then return streak end\n  if today == lastDay + 1 then return streak + 1 end\n  return 1\nend\n",
-    "wrong": "--!strict\nreturn function(lastDay: number, today: number, streak: number): number\n  if today <= lastDay then return streak end\n  if today <= lastDay + 1 then return streak + 1 end\n  return 1\nend\n",
+    "wrong": "--!strict\nreturn function(lastDay: number, today: number, streak: number): number\n  if today <= lastDay then return streak end\n  if today >= lastDay + 1 then return streak + 1 end\n  return 1\nend\n",
     "cases": [
       {
         "args": "10,10,5",
@@ -316,6 +316,326 @@
       {
         "args": "{version=8,coins=0},{version=9,coins=40}",
         "expected": "{version=9,coins=40}"
+      }
+    ]
+  },
+  {
+    "slug": "round-phase-transitions",
+    "contract": "Given a round phase and event, accept Lobby/start=>Playing, Playing/finish=>Results, Results/reset=>Lobby; all other combinations leave phase unchanged.",
+    "reference": "--!strict\nreturn function(phase: string, event: string): string\n  if phase == \"Lobby\" and event == \"start\" then return \"Playing\" end\n  if phase == \"Playing\" and event == \"finish\" then return \"Results\" end\n  if phase == \"Results\" and event == \"reset\" then return \"Lobby\" end\n  return phase\nend\n",
+    "wrong": "--!strict\nreturn function(phase: string, event: string): string\n  if phase == \"Lobby\" and event == \"start\" then return \"Playing\" end\n  if phase == \"Playing\" and event == \"stop\" then return \"Results\" end\n  if phase == \"Results\" and event == \"reset\" then return \"Lobby\" end\n  return phase\nend\n",
+    "cases": [
+      {
+        "args": "\"Lobby\",\"start\"",
+        "expected": "\"Playing\""
+      },
+      {
+        "args": "\"Playing\",\"finish\"",
+        "expected": "\"Results\""
+      },
+      {
+        "args": "\"Results\",\"reset\"",
+        "expected": "\"Lobby\""
+      },
+      {
+        "args": "\"Lobby\",\"finish\"",
+        "expected": "\"Lobby\""
+      },
+      {
+        "args": "\"Playing\",\"start\"",
+        "expected": "\"Playing\""
+      },
+      {
+        "args": "\"Results\",\"start\"",
+        "expected": "\"Results\""
+      }
+    ]
+  },
+  {
+    "slug": "countdown-clamping",
+    "contract": "Advance remaining round seconds by nonnegative dt, clamping remaining at zero; a negative dt must leave remaining unchanged.",
+    "reference": "--!strict\nreturn function(remaining: number, dt: number): number\n  if dt < 0 then return remaining end\n  return math.max(0, remaining - dt)\nend\n",
+    "wrong": "--!strict\nreturn function(remaining: number, dt: number): number\n  if dt < 0 then return remaining end\n  return math.max(0, remaining + dt)\nend\n",
+    "cases": [
+      {
+        "args": "10,2",
+        "expected": "8"
+      },
+      {
+        "args": "5,5",
+        "expected": "0"
+      },
+      {
+        "args": "3,8",
+        "expected": "0"
+      },
+      {
+        "args": "0,2",
+        "expected": "0"
+      },
+      {
+        "args": "12,0",
+        "expected": "12"
+      },
+      {
+        "args": "8,-1",
+        "expected": "8"
+      }
+    ]
+  },
+  {
+    "slug": "deterministic-score-winner",
+    "contract": "For a map of player labels to numeric scores, choose highest-scoring label and break ties lexicographically smallest; return nil for empty.",
+    "reference": "--!strict\nreturn function(scores)\n  local winner = nil\n  local high = -math.huge\n  for player, score in scores do\n    if score > high or (score == high and (winner == nil or player < winner)) then\n      winner = player\n      high = score\n    end\n  end\n  return winner\nend\n",
+    "wrong": "--!strict\nreturn function(scores)\n  local winner = nil\n  local high = -math.huge\n  for player, score in scores do\n    if score > high or (score == high and (winner == nil or player > winner)) then\n      winner = player\n      high = score\n    end\n  end\n  return winner\nend\n",
+    "cases": [
+      {
+        "args": "{}",
+        "expected": "nil"
+      },
+      {
+        "args": "{A=1}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{A=2,B=5}",
+        "expected": "\"B\""
+      },
+      {
+        "args": "{Z=6,A=6}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{A=0,B=0}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{C=-3,B=-1}",
+        "expected": "\"B\""
+      }
+    ]
+  },
+  {
+    "slug": "round-minimum-population",
+    "contract": "Return true only if player count is a whole number between 2 and 12 inclusive.",
+    "reference": "--!strict\nreturn function(count: number): boolean\n  return count % 1 == 0 and count >= 2 and count <= 12\nend\n",
+    "wrong": "--!strict\nreturn function(count: number): boolean\n  return count % 1 == 0 and count >= 3 and count <= 12\nend\n",
+    "cases": [
+      {
+        "args": "2",
+        "expected": "true"
+      },
+      {
+        "args": "12",
+        "expected": "true"
+      },
+      {
+        "args": "1",
+        "expected": "false"
+      },
+      {
+        "args": "13",
+        "expected": "false"
+      },
+      {
+        "args": "4.5",
+        "expected": "false"
+      },
+      {
+        "args": "8",
+        "expected": "true"
+      }
+    ]
+  },
+  {
+    "slug": "round-combo-score",
+    "contract": "Award nonnegative integer base * combo with combo clamped 1..5; return 0 for a negative or fractional base.",
+    "reference": "--!strict\nreturn function(base: number, combo: number): number\n  if base < 0 or base % 1 ~= 0 then return 0 end\n  return base * math.clamp(combo, 1, 5)\nend\n",
+    "wrong": "--!strict\nreturn function(base: number, combo: number): number\n  if base < 0 or base % 1 ~= 0 then return 0 end\n  return base * math.clamp(combo, 1, 6)\nend\n",
+    "cases": [
+      {
+        "args": "10,1",
+        "expected": "10"
+      },
+      {
+        "args": "10,3",
+        "expected": "30"
+      },
+      {
+        "args": "10,9",
+        "expected": "50"
+      },
+      {
+        "args": "10,0",
+        "expected": "10"
+      },
+      {
+        "args": "-1,4",
+        "expected": "0"
+      },
+      {
+        "args": "1.5,2",
+        "expected": "0"
+      }
+    ]
+  },
+  {
+    "slug": "lobby-only-join",
+    "contract": "Return a fresh ordered list with new player ID appended once only during Lobby; any other phase or duplicate ID leaves list unchanged.",
+    "reference": "--!strict\nreturn function(phase: string, participants, playerId: number)\n  local result = {}\n  for _, id in participants do table.insert(result, id) end\n  if phase ~= \"Lobby\" then return result end\n  for _, id in result do if id == playerId then return result end end\n  table.insert(result, playerId)\n  return result\nend\n",
+    "wrong": "--!strict\nreturn function(phase: string, participants, playerId: number)\n  local result = {}\n  for _, id in participants do table.insert(result, id) end\n  if phase ~= \"Playing\" then return result end\n  for _, id in result do if id == playerId then return result end end\n  table.insert(result, playerId)\n  return result\nend\n",
+    "cases": [
+      {
+        "args": "\"Lobby\",{},1",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Lobby\",{1,2},3",
+        "expected": "{1,2,3}"
+      },
+      {
+        "args": "\"Lobby\",{1,2},1",
+        "expected": "{1,2}"
+      },
+      {
+        "args": "\"Playing\",{1},2",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Results\",{1},2",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Lobby\",{4},5",
+        "expected": "{4,5}"
+      }
+    ]
+  },
+  {
+    "slug": "friendly-fire-protection",
+    "contract": "Damage is permitted only when round is active, both teams are nonempty and attacker team differs from victim team.",
+    "reference": "--!strict\nreturn function(attacker: string, victim: string, active: boolean): boolean\n  return active and attacker ~= \"\" and victim ~= \"\" and attacker ~= victim\nend\n",
+    "wrong": "--!strict\nreturn function(attacker: string, victim: string, active: boolean): boolean\n  return active and attacker ~= \"\" and victim ~= \"\" and attacker == victim\nend\n",
+    "cases": [
+      {
+        "args": "\"red\",\"blue\",true",
+        "expected": "true"
+      },
+      {
+        "args": "\"red\",\"red\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"red\",\"blue\",false",
+        "expected": "false"
+      },
+      {
+        "args": "\"\",\"blue\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"red\",\"\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"blue\",\"red\",true",
+        "expected": "true"
+      }
+    ]
+  },
+  {
+    "slug": "idempotent-round-reward",
+    "contract": "Return a new {coins, claimed} record awarding exactly 25 coins only if roundId is not in claimed map; preserve previous claims.",
+    "reference": "--!strict\nreturn function(coins: number, claimed, roundId: string)\n  local flags = {}\n  for id, yes in claimed do flags[id] = yes end\n  if not flags[roundId] then\n    flags[roundId] = true\n    coins += 25\n  end\n  return {coins=coins,claimed=flags}\nend\n",
+    "wrong": "--!strict\nreturn function(coins: number, claimed, roundId: string)\n  local flags = {}\n  for id, yes in claimed do flags[id] = yes end\n  if flags[roundId] then\n    flags[roundId] = true\n    coins += 25\n  end\n  return {coins=coins,claimed=flags}\nend\n",
+    "cases": [
+      {
+        "args": "0,{},'r1'",
+        "expected": "{coins=25,claimed={r1=true}}"
+      },
+      {
+        "args": "50,{r1=true},'r1'",
+        "expected": "{coins=50,claimed={r1=true}}"
+      },
+      {
+        "args": "75,{r1=true},'r2'",
+        "expected": "{coins=100,claimed={r1=true,r2=true}}"
+      },
+      {
+        "args": "0,{r2=true},'r3'",
+        "expected": "{coins=25,claimed={r2=true,r3=true}}"
+      },
+      {
+        "args": "10,{},'x'",
+        "expected": "{coins=35,claimed={x=true}}"
+      },
+      {
+        "args": "100,{a=true,b=true},'b'",
+        "expected": "{coins=100,claimed={a=true,b=true}}"
+      }
+    ]
+  },
+  {
+    "slug": "rotating-spawn-index",
+    "contract": "Given a zero-based spawn slot cursor and a positive integer number of spawns, return the next 1-based slot (round robin); invalid count returns nil.",
+    "reference": "--!strict\nreturn function(cursor: number, count: number): number?\n  if count <= 0 or count % 1 ~= 0 then return nil end\n  return (cursor % count) + 1\nend\n",
+    "wrong": "--!strict\nreturn function(cursor: number, count: number): number?\n  if count <= 0 or count % 1 ~= 0 then return nil end\n  return ((cursor + 1) % count) + 1\nend\n",
+    "cases": [
+      {
+        "args": "0,3",
+        "expected": "1"
+      },
+      {
+        "args": "1,3",
+        "expected": "2"
+      },
+      {
+        "args": "2,3",
+        "expected": "3"
+      },
+      {
+        "args": "3,3",
+        "expected": "1"
+      },
+      {
+        "args": "10,2",
+        "expected": "1"
+      },
+      {
+        "args": "0,0",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "overtime-winner",
+    "contract": "If remaining seconds are positive return nil; at time zero return 'red', 'blue', or 'draw' by comparing team scores.",
+    "reference": "--!strict\nreturn function(redScore: number, blueScore: number, remaining: number): string?\n  if remaining > 0 then return nil end\n  if redScore > blueScore then return \"red\" end\n  if blueScore > redScore then return \"blue\" end\n  return \"draw\"\nend\n",
+    "wrong": "--!strict\nreturn function(redScore: number, blueScore: number, remaining: number): string?\n  if remaining >= 0 then return nil end\n  if redScore > blueScore then return \"red\" end\n  if blueScore > redScore then return \"blue\" end\n  return \"draw\"\nend\n",
+    "cases": [
+      {
+        "args": "3,2,10",
+        "expected": "nil"
+      },
+      {
+        "args": "3,2,0",
+        "expected": "\"red\""
+      },
+      {
+        "args": "2,3,0",
+        "expected": "\"blue\""
+      },
+      {
+        "args": "4,4,0",
+        "expected": "\"draw\""
+      },
+      {
+        "args": "0,0,0",
+        "expected": "\"draw\""
+      },
+      {
+        "args": "2,3,1",
+        "expected": "nil"
       }
     ]
   }
