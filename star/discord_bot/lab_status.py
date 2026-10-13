@@ -152,6 +152,32 @@ def parse_receipt(data: bytes) -> LabReceipt:
                       record["evidence"], updated, kind, name, digest)
 
 
+def classify_lab_question(text: str) -> str:
+    """A tiny owner-DM intent gate; only questions explicitly naming the lab.
+
+    Return a read-only action. Normal chat never sees the receipt, and no user
+    phrase can specify a file path, a host, or an operation to execute.
+    """
+    if not isinstance(text, str) or not 1 <= len(text) <= 180:
+        return ""
+    question = re.sub(r"\s+", " ", text.strip().lower()).rstrip("?.!")
+    if question in {"lab", "lab status", "studio status", "test studio status",
+                    "brain 2 studio status", "blender status", "what is star working on",
+                    "what are you working on in the test studio",
+                    "what are you working on in studio",
+                    "what are you doing in test studio",
+                    "what are you working on in blender",
+                    "what is star testing in studio"}:
+        return "status"
+    if question in {"lab screenshot", "studio screenshot", "blender render",
+                    "send lab screenshot", "send studio screenshot",
+                    "show lab screenshot", "show studio screenshot",
+                    "show blender render", "send blender render",
+                    "send screenshot from brain 2", "show screenshot from brain 2"}:
+        return "screenshot"
+    return ""
+
+
 def read_receipt(config: LabSettings) -> LabReceipt:
     if not config.enabled or config.report_path is None:
         raise ValueError("Lab reports are disabled; configure them on the bot host first")
