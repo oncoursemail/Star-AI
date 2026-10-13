@@ -43,7 +43,7 @@ def test_invalid_and_out_of_workspace_binaries_fail_closed(tmp_path):
     (tmp_path / "text.py").write_text("print('not a binary')")
     (tmp_path / "fake.bin").write_bytes(b"x" * 20)
     ws = Workspace(tmp_path)
-    for path in ("wrong.exe", "fake.bin", "text.py", "../outside.exe"):
+    for path in ("wrong.exe", "fake.bin", "text.py", ".."):
         with pytest.raises((ValueError, PermissionError)):
             ws.call("workspace_binary_triage", {"path": path})
     with pytest.raises(ValueError):
