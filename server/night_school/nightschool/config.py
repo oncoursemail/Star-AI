@@ -30,6 +30,9 @@ class Settings:
     # STAR's resource planner (star/resource_planner_service.py) on this machine; "off" = only the idle gate above.
     # Planner down or without fresh data: the idle gate decides, exactly as before.
     planner_url: str = field(default_factory=lambda: _env("STAR_NS_PLANNER_URL", "http://127.0.0.1:8098"))
+    # Parallel practice lanes (each its own planner lease and its own slot: slot, slot + 1, ...). Lanes 2..N run only
+    # while the planner admits them; with the planner off or down night school is single-lane, as before.
+    lanes: int = field(default_factory=lambda: max(1, min(4, int(_env("STAR_NS_LANES", "1")))))
     # Learning rules.
     validation_percent: int = field(default_factory=lambda: int(_env("STAR_NS_VALIDATION_PERCENT", "20")))
     # W1 paired gate (star/eval_stats.py): 24 validation tasks, k samples per arm, both arms interleaved in one

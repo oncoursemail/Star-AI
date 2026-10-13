@@ -19,7 +19,7 @@ import time
 
 from . import report
 from .config import Settings
-from .engine import Engine, Store, Yielded
+from .engine import Engine, Result, Store, Yielded
 from .idle import BrainWatch, IdleGate, PlannedGate, make_planner
 
 
@@ -61,10 +61,16 @@ def run(settings: Settings) -> int:
             pass
     # The resource planner admits night school while chat is quiet and asks it to yield otherwise; when the planner
     # is off or unreachable this is exactly the old idle gate.
-    gate = PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=make_planner(settings, key), log=gate_log)
+    planner = make_planner(settings, key)
+    gate = PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner, log=gate_log)
     pool = load_pool(settings.pool)
-    log("night school started; " + pool.summary())
+    log("night school started; " + pool.summary() + f"; lanes {settings.lanes}")
     model = RealModel(settings, gate, stop=stop)
+    for k in range(1, settings.lanes):
+        model.add_lane(PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner,
+                                   holder=f"nightschool-{k}", slot=settings.slot + k, extra_lane=True,
+                                   log=lambda text, k=k: log(f"lane {k + 1}: {text}")), settings.slot + k)
+    lanes = [lambda work, k=k: model.in_lane(k, work) for k in range(settings.lanes)] if settings.lanes > 1 else None
     engine = Engine(settings, pool, store, solve=model.solve, diagnose=model.diagnose,
                     check_lesson=model.check_lesson, log=log)
     store.save()
@@ -85,7 +91,7 @@ def run(settings: Settings) -> int:
             break
         status = "working"
         try:
-            outcomes = engine.run_batch(before_item=lambda: not stop())
+            outcomes = engine.run_batch(before_item=lambda: not stop(), lanes=lanes)
             log("batch done: " + (", ".join(f"{k} {v}" for k, v in sorted(outcomes.items())) or "nothing"))
         except Yielded as yielded:
             store.count("backed_off")
@@ -103,7 +109,8 @@ def run(settings: Settings) -> int:
             export_outbox(settings, store.state)
         except Exception as exc:
             log("report or outbox could not be written (" + type(exc).__name__ + ")")
-    gate.close()
+    for lane_gate in model.gates:
+        lane_gate.close()
     log("night school stopped")
     return 0
 
@@ -161,6 +168,38 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
         return 0 if ok else 1
 
 
+def lane_solve(settings: Settings) -> int:
+    """Child process of a parallel lane: one answer + its checks. Request on stdin, Result as one JSON line."""
+    from dataclasses import asdict
+    from .real import RealModel, bootstrap
+    request = json.loads(sys.stdin.read())
+    settings.slot = int(request["slot"])
+    bootstrap(settings)
+
+    class Gate:                       # the parent lane watches and kills this process; here nothing waits
+        class watch:
+            @staticmethod
+            def slot_for(_wanted):
+                return {}
+
+        def wait(self, _stop):
+            return True
+
+        def intruder(self, _slot):
+            return ""
+
+        def own_work_done(self):
+            pass
+    model = RealModel(settings, Gate(), wait=False)
+    model.prelude = request.get("prelude", "")
+    try:
+        result = model.solve(request["task"], request.get("lessons", []))
+    except Yielded as exc:
+        result = Result(error=f"yielded ({exc})")
+    print(json.dumps(asdict(result)))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="nightschool", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +213,7 @@ def main(argv=None) -> int:
     guard.add_argument("--out", required=True, type=Path)
     sub.add_parser("look")
     sub.add_parser("report")
+    sub.add_parser("lane-solve", help="(internal) one answer for a parallel lane; request on stdin")
     args = parser.parse_args(argv)
     settings = Settings()
     if args.command == "guard":
@@ -200,6 +240,8 @@ def main(argv=None) -> int:
         return 0 if pool.tasks else 1
     if args.command == "dry-run":
         return dry_run(settings, args.items, args.real_checks)
+    if args.command == "lane-solve":
+        return lane_solve(settings)
     return run(settings)
 
 

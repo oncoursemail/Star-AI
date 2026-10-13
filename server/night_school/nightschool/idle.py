@@ -203,9 +203,12 @@ class PlannedGate(IdleGate):
     With the planner down, slow, or without fresh data ("fallback"), every call is exactly the old IdleGate.
     """
 
-    def __init__(self, settings, watch: BrainWatch, *, planner=None, holder: str = "nightschool", **kwargs):
+    def __init__(self, settings, watch: BrainWatch, *, planner=None, holder: str = "nightschool",
+                 slot: int | None = None, extra_lane: bool = False, **kwargs):
         super().__init__(settings, watch, **kwargs)
         self.planner, self.holder = planner, holder
+        self.slot = int(settings.slot if slot is None else slot)
+        self.extra_lane = extra_lane         # lanes 2..N exist only by the planner's leave: no idle-gate fallback
         self.grant = None
         self.mode = "idle-gate"
 
@@ -222,11 +225,11 @@ class PlannedGate(IdleGate):
             grant = self.planner.renew(self.grant)
             if grant.action != "refuse":
                 return grant
-        return self.planner.admit("nightschool", self.holder, "practice", slot=int(self.settings.slot))
+        return self.planner.admit("nightschool", self.holder, "practice", slot=self.slot)
 
     def look(self) -> str:
         if self.planner is None or not getattr(self.planner, "enabled", False):
-            return super().look()
+            return "extra lanes run only with the resource planner" if self.extra_lane else super().look()
         local = self._local_stop()
         if local:
             self._quiet_since = None
@@ -238,6 +241,9 @@ class PlannedGate(IdleGate):
             return ""
         if grant.action == "fallback":
             self.grant = grant if grant.lease_id else None
+            if self.extra_lane:
+                self.grant, self.mode = None, "planner"
+                return "extra lanes run only with the resource planner (" + (grant.reason or "fallback") + ")"
             self.mode = "idle-gate"
             return super().look()
         self.grant, self.mode = None, "planner"
@@ -265,6 +271,9 @@ class PlannedGate(IdleGate):
             self.grant = grant
             return ""
         if grant.action == "fallback":          # the planner went away mid-request: the old watch decides
+            if self.extra_lane:
+                self.grant = None
+                return "planner gone (extra lane stops)"
             self.mode = "idle-gate"
             return super().intruder(own_slot)
         self.grant = None

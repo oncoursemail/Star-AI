@@ -504,6 +504,7 @@ def test_owner_busy_signals():
 # --- wiring: night school ----------------------------------------------------------------------------------------
 
 sys.path.insert(0, str(ROOT / "server" / "night_school"))
+sys.path.insert(0, str(ROOT / "tests"))
 from nightschool.config import Settings as NsSettings          # noqa: E402
 from nightschool.idle import IdleGate, PlannedGate, make_planner   # noqa: E402
 
@@ -741,3 +742,129 @@ def test_knowledge_embedding_is_paced_and_paused_by_the_planner(tmp_path, monkey
     result = embed.run(index, batch=1, duty=0.5, log=lambda m: None, stop=lambda: False)
     assert result["embedded_now"] == 2
     assert pacer.events == ["wait", ("step", 0.5), "wait", ("step", 0.5), "close"]
+
+
+# --- night school parallel lanes ------------------------------------------------------------------------------------
+
+def test_parallel_lanes_overlap_model_calls_and_keep_state_consistent(tmp_path):
+    from test_night_school import Script, engine_for
+    script = Script()
+    active, peak, lock = [0], [0], threading.Lock()
+    original = script.solve
+
+    def slow_solve(task, lessons):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.05)
+        try:
+            return original(task, lessons)
+        finally:
+            with lock:
+                active[0] -= 1
+    ids = ["E-1", "E-2", "E-3", "H-1", "X-1", "E-4", "V-1", "V-2"]
+    settings, store, engine = engine_for(tmp_path, ids, script, batch=6)
+    engine._solve = slow_solve
+    lane_log = []
+
+    def lane(k):
+        def run(work):
+            lane_log.append(k)
+            work()
+            return True
+        return run
+    outcomes = engine.run_batch(lanes=[lane(0), lane(1)])
+    assert sum(outcomes.values()) == 6 and peak[0] == 2                 # two answers in flight at once
+    tried = [t for t, seen in store.state["tasks"].items() if seen["tries"]]
+    assert sorted(tried) == ["E-1", "E-2", "E-3", "E-4", "H-1", "X-1"]  # six distinct tasks, none twice
+    assert set(lane_log) == {0, 1}
+    c = store.state["counters"]
+    assert c["tasks_tried"] == 6 and c["passed_first"] == 4 and engine._in_flight == set() and not engine._parallel
+
+
+def test_a_lane_that_yields_ends_the_batch_without_losing_counts(tmp_path):
+    from nightschool.engine import Yielded as NsYielded
+    from test_night_school import Script, engine_for
+    script = Script()
+    script.interrupt_on = "E-2"
+    settings, store, engine = engine_for(tmp_path, ["E-1", "E-2", "E-3", "V-1"], script, batch=3)
+    with pytest.raises(NsYielded):
+        engine.run_batch(lanes=[lambda w: (w(), True)[1], lambda w: (w(), True)[1]])
+    assert "E-2" not in [t for t, s in store.state["tasks"].items() if s.get("tries")]
+    assert engine._in_flight == set() and not engine._parallel
+
+
+def test_extra_lanes_need_the_planner(tmp_path):
+    settings = ns_settings(tmp_path)
+    off = PlannedGate(settings, FakeWatch(), planner=None, extra_lane=True, slot=2, log=lambda m: None)
+    assert "planner" in off.look()
+    out = PlannedGate(settings, FakeWatch(), planner=FakeClient(admits=("fallback",)), extra_lane=True, slot=2,
+                      log=lambda m: None)
+    assert "planner" in out.look()
+    client = FakeClient(admits=("run",), renews=("fallback",))
+    lane = PlannedGate(settings, FakeWatch(), planner=client, holder="nightschool-1", extra_lane=True, slot=2,
+                       log=lambda m: None)
+    assert lane.look() == "" and client.calls[0][2:] == ("nightschool-1", "practice", {"slot": 2})
+    assert lane.intruder(2).startswith("planner gone")
+
+
+def test_planner_gives_night_school_two_lanes_only_with_three_slots():
+    three = arp.MachineSnapshot("brain1", NOW, 48, 0.5, 128_000, 70_000,
+                                models={"star-fast": tuple(arp.SlotState(i, False) for i in range(3))})
+    lane1 = lease("nightschool", "nightschool", slot=1)
+    assert admit("nightschool", three, [lane1], holder="nightschool-1", slot=2).action == "run"
+    lane2 = lease("nightschool", "nightschool-1", slot=2)
+    assert admit("nightschool", three, [lane1, lane2], holder="nightschool-2", slot=3).action == "wait"
+    assert admit("nightschool", brain1(), [lane1], holder="nightschool-1", slot=2).action == "wait"   # 2 slots
+
+
+def test_lane_answers_run_in_a_child_process_that_a_yield_kills(tmp_path, monkeypatch):
+    import threading as th
+    from nightschool import real
+    from nightschool.engine import Yielded as NsYielded
+
+    class Child:
+        killed = False
+
+        def __init__(self, argv, **kw):
+            self.argv, self.env, self.returncode = argv, kw.get("env"), 0
+            self._done = th.Event()
+
+        def communicate(self, data):
+            request = json.loads(data)
+            if request["task"]["id"] == "slow":
+                self._done.wait(5)
+                return b"", b""
+            return (json.dumps({"passed": True, "reasons": [], "answer": "x", "seconds": 1.0,
+                                "slot_seen": request["slot"]}) + "\n").encode(), b""
+
+        def kill(self):
+            Child.killed = True
+            self._done.set()
+    monkeypatch.setattr(real.subprocess, "Popen", Child)
+
+    class Gate:
+        def __init__(self, reasons):
+            self.reasons = list(reasons)
+
+        def wait(self, stop):
+            return True
+
+        def intruder(self, slot):
+            return self.reasons.pop(0) if self.reasons else ""
+
+        def own_work_done(self):
+            pass
+    model = object.__new__(real.RealModel)
+    model.settings = SimpleNamespace(watch_s=0.01, slot=1)
+    model.stop, model._wait, model.prelude = (lambda: False), True, ""
+    model._lane = th.local()
+    model.gates, model.lane_slots, model.child_env = [Gate([])], [1], {"X": "1"}
+    model.add_lane(Gate([]), 2)
+    model._lane.index = 1
+    result = model.solve({"id": "t1", "prompt": "p"}, [])
+    assert result.passed and result.answer == "x"
+    model.gates[1] = Gate(["planner: chat is active"])
+    with pytest.raises(NsYielded):
+        model.solve({"id": "slow", "prompt": "p"}, [])
+    assert Child.killed

@@ -162,10 +162,39 @@ class RealModel:
         self._knowledge = client_for(self.app_settings)
         self._luau_check = luau_check
         self._sandbox = sandbox or LocalSandbox(settings.luau_vm)
+        # Parallel lanes: lane 0 is this process (the old path, unchanged); lane k >= 1 has its own gate (its own
+        # planner lease) and its own slot, and runs each answer in a child process (`python -m nightschool
+        # lane-solve`), because the application keeps its data folder in process-wide environment variables.
+        self._lane = threading.local()
+        self.gates = [gate]
+        self.lane_slots = [int(settings.slot)]
+        self.child_env = dict(os.environ)
         self.close = pin_slots(self.slot_of)      # close() gives the application its own client factory back
+
+    def add_lane(self, gate, slot: int) -> int:
+        self.gates.append(gate)
+        self.lane_slots.append(int(slot))
+        return len(self.gates) - 1
+
+    @property
+    def lane(self) -> int:
+        return getattr(self._lane, "index", 0)
+
+    def in_lane(self, index: int, work):
+        """Run `work()` as lane `index` (its slot, its gate). False when the lane's gate says stop."""
+        self._lane.index = index
+        try:
+            if not self.gates[index].wait(self.stop):
+                return False
+            work()
+            return True
+        finally:
+            self._lane.index = 0
 
     # --- slot and politeness ----------------------------------------------------------------------------
     def slot_of(self, model: str) -> int:
+        if self.lane:
+            return self.lane_slots[self.lane]
         if time.monotonic() - self._slots_at > 600:
             try:
                 self._slots = self.gate.watch.slot_for(self.settings.slot)
@@ -179,7 +208,7 @@ class RealModel:
         return slot
 
     def _ready(self) -> None:
-        if self._wait and not self.gate.wait(self.stop):
+        if self._wait and not self.gates[self.lane].wait(self.stop):
             raise Yielded("stopping")
         if self.stop():
             raise Yielded("stopping")
@@ -187,10 +216,11 @@ class RealModel:
     def _watched(self, work):
         """Run `work(cancel)` while a watcher looks for another client every `watch_s` seconds."""
         cancel, done, why = threading.Event(), threading.Event(), {"text": ""}
+        gate, slot = self.gates[self.lane], self.lane_slots[self.lane]
 
         def watch():
             while not done.wait(self.settings.watch_s):
-                reason = "stopping" if self.stop() else self.gate.intruder(self.settings.slot)
+                reason = "stopping" if self.stop() else gate.intruder(slot)
                 if reason:
                     why["text"] = reason
                     cancel.set()
@@ -208,7 +238,7 @@ class RealModel:
         finally:
             done.set()
             watcher.join(self.settings.watch_s + 8)
-            self.gate.own_work_done()
+            gate.own_work_done()
             if cancel.is_set():
                 raise Yielded(why["text"])
 
@@ -241,7 +271,40 @@ class RealModel:
                                    prelude=self.prelude, test_body=task.get("_test_body", ""))
 
     # --- the two calls the engine needs --------------------------------------------------------------------
+    def _solve_in_child(self, task: dict, lessons: list[dict]) -> Result:
+        """Lane k >= 1: the answer and its checks run in a child process; a yield of this lane kills it."""
+        self._ready()
+        started = time.monotonic()
+        gate, slot = self.gates[self.lane], self.lane_slots[self.lane]
+        request = json.dumps({"task": task, "lessons": lessons, "slot": slot, "prelude": self.prelude}).encode("utf-8")
+        child = subprocess.Popen([sys.executable, "-m", "nightschool", "lane-solve"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=dict(self.child_env))
+        out: list[bytes] = []
+        reader = threading.Thread(target=lambda: out.append(child.communicate(request)[0]), daemon=True)
+        reader.start()
+        try:
+            while reader.is_alive():
+                reader.join(self.settings.watch_s)
+                if not reader.is_alive():
+                    break
+                reason = "stopping" if self.stop() else gate.intruder(slot)
+                if reason:
+                    child.kill()
+                    reader.join(10)
+                    raise Yielded(reason)
+        finally:
+            gate.own_work_done()
+        text = (out[0] if out else b"").decode("utf-8", "replace").strip().splitlines()
+        try:
+            data = json.loads(text[-1]) if text else {}
+            return Result(**{k: v for k, v in data.items() if k in Result.__dataclass_fields__})
+        except (ValueError, TypeError):
+            return Result(error=f"lane worker gave no answer (exit {child.returncode})",
+                          seconds=time.monotonic() - started)
+
     def solve(self, task: dict, lessons: list[dict]) -> Result:
+        if self.lane:
+            return self._solve_in_child(task, lessons)
         from star import eval_checks as checks
         from star.desktop_core import Settings as AppSettings, app_data, run_task
         from star.eval_runner import PRODUCT_FAILURES, isolated_appdata
