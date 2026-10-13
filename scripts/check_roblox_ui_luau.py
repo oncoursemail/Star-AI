@@ -27,7 +27,7 @@ def main() -> int:
         if kind == "image":
             child["image"] = "rbxassetid://12345"
         if kind == "input":
-            child["placeholder"] = "Enter\\x01☃"
+            child["placeholder"] = "Enter" + chr(1) + "☃"
             child["states"] = {"pressed": {"transparency": 0.2}}
         if kind == "button":
             child["states"] = {"hover": {"background": "dark"}}
@@ -35,6 +35,10 @@ def main() -> int:
             child["layout"] = {"kind": "grid", "columns": 2}
         cases[kind] = {"palette": {"dark": "#111111"}, "root": {
             "type": "screen", "id": "root", "children": [child]}}
+    cases["escape-string"] = {"root": {"type": "screen", "id": "root", "children": [
+        {"type": "text", "id": "escape", "name": '"' + chr(92) + chr(1),
+         "text": 'Quote " slash ' + chr(92) + ' snow ☃ ' + chr(1)}
+    ]}}
     cases["minimal"] = {"root": {"type": "screen", "id": "root"}}
     cases["local-limit"] = {"root": {"type": "screen", "id": "root", "children": [
         {"type": "text", "id": f"n{i}", "text": "Snow ☃"} for i in range(149)
