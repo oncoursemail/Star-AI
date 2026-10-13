@@ -148,7 +148,7 @@ def test_driver_runs_every_case_and_rejects_an_empty_spec():
     ("a" * (runner.MAX_SPEC_OUTPUT_BYTES + 1), 0),
     (_fake_evidence(("ok", True)) +
      "@@STAR_LUAU_SUMMARY_V1\t1\t0\n", 0),
-])
+], ids=[f"false-success-{index:02d}" for index in range(14)])
 def test_false_success_evidence_is_rejected(stdout, exit_status):
     verdict = runner.parse_case_evidence(stdout, exit_status)
     assert verdict.reason
