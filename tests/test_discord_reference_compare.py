@@ -130,7 +130,7 @@ def test_compare_command_is_registered_but_owner_only_and_always_private():
 
 
 def test_visual_dissatisfaction_is_narrowly_classified_and_review_only():
-    for phrase in ("I don't like that", "It doesn't look like my reference",
+    for phrase in ("I don't like that", "I don’t like that", "It doesn't look like my reference",
                    "You messed up the animation", "That looks wrong",
                    "Not what I was going for", "The VFX is too big"):
         assert is_visual_critique(phrase), phrase
