@@ -58,6 +58,19 @@ def multi_command(home) -> list[str] | None:
         return None
 
 
+def configured_account(home) -> int | None:
+    """STAR's own Roblox account id as the operator wrote it in <home>/studio/lab-multi.json ("own_account_id"), for
+    a Studio machine that holds no Open Cloud key (the key never leaves the PC). Only used when the key-backed check
+    (studio_loop.own_account_id) has no answer; the place must still be STAR Test Place or a blank place (pin check,
+    sandbox rule and #207's approved places), so this cannot widen what the lab may edit."""
+    try:
+        saved = json.loads((Path(home) / "studio" / "lab-multi.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = saved.get("own_account_id") if isinstance(saved, dict) else None
+    return value if type(value) is int and value > 0 else None
+
+
 def slot_root(slot: int) -> str:
     return f"{map_plan.MANAGED_ROOT}/Slot{int(slot)}"
 
@@ -344,7 +357,7 @@ async def list_instances(session, *, expect: int = 1, seconds: float = 90.0) -> 
 
 
 async def run_cli(specs: list[dict], connect, out_root: Path, *, home, studios: int, keep_drafts: bool,
-                  log, max_seconds: float | None = None, prefix: str = "suite") -> dict:
+                  log, max_seconds: float | None = None, prefix: str = "suite", own_account_id=None) -> dict:
     """Open the anchor session (the connector host), find the Studios, run the suite while the anchor stays open."""
     async with connect() as anchor:
         listed = await list_instances(anchor, expect=max(studios, 1))
@@ -354,7 +367,7 @@ async def run_cli(specs: list[dict], connect, out_root: Path, *, home, studios: 
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
         out = Path(out_root) / f"{prefix}-{len(ids)}studio-{stamp}"
         report = await run_suite(specs, ids, connect, out, home=home, log=log, keep_drafts=keep_drafts,
-                                 anchored=True, max_seconds=max_seconds)
+                                 anchored=True, max_seconds=max_seconds, own_account_id=own_account_id)
         report["out"] = str(out)
         return report
 
@@ -455,9 +468,13 @@ def nightly(spec_folder: Path, *, home, out: Path, outbox: Path | None, studios:
         result["problem"] = f"no multi-Studio connector command ({MULTI_COMMAND_ENV} or <home>/studio/lab-multi.json)"
         return result
     studios = max(1, min(int(studios), NIGHTLY_MAX_STUDIOS))
+    account = None
+    if run is None:
+        from . import studio_loop
+        account = studio_loop.own_account_id(home) or configured_account(home)
     runner = run or (lambda: asyncio.run(run_cli(chosen, connector(command), out, home=home, studios=studios,
                                                  keep_drafts=False, log=log, max_seconds=max_minutes * 60,
-                                                 prefix="nightly")))
+                                                 prefix="nightly", own_account_id=account)))
     report = runner()
     if "summary" not in report:
         result["problem"] = report.get("problem", "the suite did not run")

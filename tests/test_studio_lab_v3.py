@@ -330,3 +330,14 @@ def test_cli_nightly_with_studios_uses_the_parallel_runner(tmp_path, monkeypatch
                             "--max-minutes", "45", "--keep", "14"])
     assert code == 0 and called["studios"] == 2 and called["rotate"] == 16 and called["max_minutes"] == 45.0
     assert called["keep"] == 14 and json.loads(capsys.readouterr().out)["invalid"] == 0
+
+
+def test_configured_account_is_read_only_from_the_lab_home_and_must_be_a_positive_int(tmp_path):
+    assert studio_lab_parallel.configured_account(tmp_path) is None
+    (tmp_path / "studio").mkdir()
+    target = tmp_path / "studio" / "lab-multi.json"
+    target.write_text(json.dumps({"command": ["x"], "own_account_id": 123}), encoding="utf-8")
+    assert studio_lab_parallel.configured_account(tmp_path) == 123
+    for bad in ("123", -5, True, 1.5):
+        target.write_text(json.dumps({"command": ["x"], "own_account_id": bad}), encoding="utf-8")
+        assert studio_lab_parallel.configured_account(tmp_path) is None

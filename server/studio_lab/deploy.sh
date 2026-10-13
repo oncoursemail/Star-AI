@@ -37,7 +37,14 @@ remote "install -d -o star -g star $lab $lab/app $lab/home $lab/home/studio $lab
 remote "chown star:star /opt/star/learning /opt/star/learning/outbox"
 remote "rm -rf $lab/app/star $lab/app/server"
 git archive HEAD star server/studio_lab | ssh -o BatchMode=yes "$target" "lxc exec $container -- runuser -u star -- tar -x -C $lab/app"
-echo '{"command": ["/home/star/bin/studio-mcp-multi.sh"]}' |
+# STAR's own Roblox account id (not a secret; the Open Cloud key stays on the PC): from STAR_LAB_OWN_ACCOUNT or the
+# PC lab home's last key check. The Studio machine's lab only edits STAR Test Place or a blank place either way.
+account="${STAR_LAB_OWN_ACCOUNT:-$("${STAR_PYTHON:-python}" -c 'import json,os,sys
+p=os.path.expanduser("~/.star/roblox-lab-home/roblox/access.json")
+try: print(int(json.load(open(p))["last_check"]["account"]["user_id"]))
+except Exception: print("")' 2>/dev/null)}"
+case "$account" in ''|*[!0-9]*) account_json="";; *) account_json=", \"own_account_id\": $account";; esac
+echo "{\"command\": [\"/home/star/bin/studio-mcp-multi.sh\"]$account_json}" |
   ssh -o BatchMode=yes "$target" "lxc exec $container -- runuser -u star -- tee $lab/home/studio/lab-multi.json >/dev/null"
 remote "cd /tmp && runuser -u star -- env PYTHONPATH=$lab/app:$lab/site-packages python3 -c 'import star.studio_lab, star.studio_lab_parallel, mcp; print(\"imports ok\")'"
 echo "== user units"
