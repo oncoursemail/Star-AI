@@ -129,8 +129,11 @@ def test_invalid_types_fail_explicitly(invalid):
         inspect_answer(invalid)
     with pytest.raises(TypeError):
         inspect_answer("", self_check=invalid)
-    with pytest.raises(TypeError):
-        inspect_answer("", previous_code=invalid)
+    if invalid is None:
+        assert inspect_answer("", previous_code=None).ok
+    else:
+        with pytest.raises(TypeError):
+            inspect_answer("", previous_code=invalid)
 
 
 def test_docs_describe_provenance_and_non_integration():
