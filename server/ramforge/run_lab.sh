@@ -48,8 +48,13 @@ case "${1:-}" in
     busy; drop_model_cache
     numastat -m | grep MemFree > "$OUT/$L.memfree"
     rm -f "$OUT/$L.prof"
-    env GGML_RF_PROFILE="$OUT/$L.prof" "$@" numactl --interleave=all "$BIN/llama-bench" -m "$M" -lm dio --numa distribute \
-      -t 24 -fa 1 -p 512 -n 128 -r 3 -o json > "$OUT/$L.bench.json" 2> "$OUT/$L.bench.err"
+    BGPID=""
+    if [ -n "${BG:-}" ]; then   # heavy background job pinned to node $BG (6 threads streaming that node's memory)
+      "$RF/numa_bw" "node:$BG:$BG" 900 > "$OUT/$L.bg.json" 2>&1 & BGPID=$!; sleep 2
+    fi
+    env GGML_RF_PROFILE="$OUT/$L.prof" "$@" ${NUMACMD:-numactl --interleave=all} "$BIN/llama-bench" -m "$M" -lm dio ${NUMAFLAG:---numa distribute} \
+      -t ${T:-24} -fa 1 -p ${PP:-512} -n 128 -r ${R:-3} -o json > "$OUT/$L.bench.json" 2> "$OUT/$L.bench.err"
+    [ -n "$BGPID" ] && kill $BGPID 2>/dev/null
     grep -E "ramforge:" "$OUT/$L.bench.err"
     python3 - "$OUT/$L.bench.json" <<'PY'
 import json, sys
