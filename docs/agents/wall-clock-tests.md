@@ -17,6 +17,15 @@ deadline tests belong to their own PR and are not modified here.
 | test_workbench_core.py::test_memory_limit_actually_prevents_allocation | 3s child timeout | Slow interpreter startup | M | Leave: relies on OS address-space limit |
 | test_voice_filecall.py::test_scripted_call_runs_turns_and_a_barge_in_and_saves_everything | Per-turn stage total <2s | Host audio/stream scheduling | M | Leave full threaded call scenario |
 | test_voice_filecall.py::test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording | Sleeps 250ms, then 500ms; asserts 200–450ms heard (50ms lower margin) | Sleep overshoot affects recorded length | H | FIX injected clock: playback, stop, silent tail and audio length still checked |
+| test_voice_filecall.py::test_loudspeaker_echo_makes_star_interrupt_herself_unless_the_echo_gate_is_on | FileCall two scenarios; step deadlines 20s | Fake stream/audio pacing | M | Leave: verifies echo gating across real async call path |
+| test_voice_call.py::test_one_turn_runs_every_stage_and_measures_them | wait_idle(5s) | Threaded ASR/TTS worker scheduling | M | Leave: full stream, transcript, latency and state order |
+| test_voice_call.py::test_user_who_keeps_talking_before_star_speaks_gets_one_merged_turn | wait_for state and wait_idle(5s) | Brain state transition scheduling | M | Leave: merged utterance despite overlap |
+| test_voice_call.py::test_short_noise_during_a_reply_does_not_interrupt_it | pace 2ms frames; wait_idle(10s) | Playback and VAD scheduling | M | Leave: noninterruption for short noise |
+| test_voice_call.py::test_brain_failure_is_reported_and_the_call_keeps_listening | wait_idle(5s) | Asynchronous failure delivery | M | Leave: error reported without ending session |
+| test_voice_call.py::test_voice_engine_failure_is_reported_and_stops_the_brain | wait_idle(5s) | TTS failure callback ordering | M | Leave: closes brain stream on audio error |
+| test_voice_call.py::test_empty_transcript_mute_manual_interrupt_and_stop | wait_for busy states and wait_idle(5s) | Multiple asynchronous state switches | M | Leave: manual stop and mute boundaries |
+| test_voice_call.py::test_history_is_trimmed_in_blocks_so_the_server_prompt_cache_keeps_working | wait_idle(5s) | Turn processing scheduling | M | Leave: retained complete history chunks |
+| test_voice_call.py::test_live_transcript_and_level_events_reach_the_listener | pace 4ms x 40; wait_idle(5s) | Fake microphone frame pacing | M | Leave: listener gets live transcript and volume events |
 | test_voice_call.py::test_speech_starts_on_the_first_sentence_not_after_the_whole_reply | First audio <25% of generation duration | Relative times shift with thread scheduling | H | Leave until scripted token scheduler can be injected |
 | test_voice_call.py::test_barge_in_stops_speech_cancels_the_brain_and_keeps_only_what_was_heard | Must play >300ms before interruption, polls to 5s idle | Speaker/brain pacing | M | Leave: still proves cancellation and cut heard-text |
 | test_voice_brain.py::test_close_from_another_thread_ends_a_stream_cleanly | 120ms Timer, total <400ms (280ms slack) | Timer callback runs late | H | FIX synchronization Events: close still terminates blocked iterator from other thread |
@@ -34,7 +43,7 @@ deadline tests belong to their own PR and are not modified here.
 | test_redact.py::test_long_input_is_handled_in_linear_time | 2s perf_counter cap on hostile text | CPU contention can cause false red | H | Leave: a fake clock would invalidate the actual regex worst-case time guard |
 | test_single_instance.py::test_unreachable_owner_fails_closed | time.sleep monkeypatched to no-op | None: already mocked | L | Leave: existing deterministic test |
 
-**Inventory:** 22 entries, **9 high / 7 medium / 6 low**. The
+**Inventory:** 31 entries, **9 high / 16 medium / 6 low**. The
 tests/voice_fakes.py delay, Event.wait, fake playback and polling mechanisms
 are shared helpers, not standalone cases. tests/conftest.py contributes no
 real-time pass/fail assertion. This lists the timing cases found in the
