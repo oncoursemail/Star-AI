@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "kind": "development_source_validation",
+  "validation_id": "shared-brain-runtime-development-source-maintenance-v4",
+  "supersedes_validation_semantic_sha256": "14beaa290256e84e2005323a6bd74eb6ea5e6eb5444b17f15a64f55d6d6fd320",
+  "purpose": "Current development-only variant controls, separate from the original frozen retrieval comparison.",
+  "historical_fixture": "tests/fixtures/shared_brain_retrieval.json",
+  "historical_fixture_sha256": "516cce6357a4d0796c805d7b03dd53df3a965bb5a70cba1c7f388b5485135696",
+  "observed_parent_commit": "d01342612bada61c7d95d582478a2c0f288d3636",
+  "observed_source_tree_revision": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+  "observed_integration_merge_head": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+  "reviewed_retention_head": "42f5e3e1483c98008b0c1a15e138fcf0436cf156",
+  "reviewed_corpus_head": "384409868dadb54d8dd76d207c230299595dc068",
+  "reviewed_dependency_commits": [
+    "52a7b5147297230c265a8c5b65f5221c1395bdd4",
+    "c8c303232851d0c028b72f1047421a8a650e217a",
+    "39377e7148d93fb3813df9af73e5782c8decbb11",
+    "6467ee5f8447204a167e0881f308d648f87b5b53",
+    "54ef0b2c606a9524ca14ce60434cc6b3a3d6caa2"
+  ],
+  "provenance": "Independent audit of all 12 development expected-source files against exact integration 77f7e4e found four historical source differences. Agent now equals the retention/media merge 6467ee5: image_max_side is added and forwarded to image_part, while preserve_history remains; validate_model_roles and its grounding stay at L121. Memory and lessons retain their exact previously reviewed PR45/PR41 blobs and hashes. Selfbuild security change 54ef0b2 adds a work-branch preflight before model calls and clarifies draft-PR work-branch targeting; the development skill_path L19 and write_source L50 declarations/excerpts are unchanged. All canonical LF bytes equal the named integration Git blobs. The other eight historical source pins are unchanged. This source/declaration audit is not a complete security approval or a new performance measurement; intelligence.py is not an expected-source pin in this suite.",
+  "transport_rule": "Restore exact canonical CRLF bytes in disposable test copies only; pure LF is accepted only if reconstruction matches the explicit SHA256. Other content drift remains an error.",
+  "measurement_limits": "No holdout cases, queries, grading expectations, original source pins, archive or measurements changed. This overlay is not accepted by the benchmark and creates no new unseen-performance claim.",
+  "changed_sources": {
+    "star/agent.py": {
+      "source_revision_commit": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+      "source_change_commit": "6467ee5f8447204a167e0881f308d648f87b5b53",
+      "git_blob_sha1": "97f3e2136b6de2387537eb06befd8b98970e4384",
+      "historical_crlf_sha256": "18f4c3cd2f93df2167525332a3ebdcaa26ab27a4540a6fc8384da2fe94068d9b",
+      "current_crlf_sha256": "b2da787923a54871aae44814607cefb0e56b60b58eceee2add5eac73466781fe",
+      "current_lf_sha256": "42575481ce73df7280c8d350a94c0f60ff8854d7971f4e316a14df3dca793207",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-15",
+          "qualified_symbol": "validate_model_roles",
+          "historical_source_location": "L112",
+          "current_declaration_line": 121,
+          "unchanged_grounding_excerpt": "STAR requires exactly one system message, at the start of each model request"
+        }
+      ]
+    },
+    "star/lessons.py": {
+      "source_revision_commit": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+      "source_change_commit": "52a7b5147297230c265a8c5b65f5221c1395bdd4",
+      "git_blob_sha1": "013ac8fc20e86ec4f30126fdcc7f8e5f52b2a061",
+      "historical_crlf_sha256": "8de4aa496f60bcf9c803a5d416e6be0039ed68219541d5ab2b436fd2d07bdc59",
+      "current_crlf_sha256": "8960237feeea5daef4b56067601b63f00337d1aa7050920e04d5c0e9707740e6",
+      "current_lf_sha256": "4c9ffc8a9a1f0188cbe8a096c6fb08b80ba5e63fd888350b25b1602e42d32c4e",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-08",
+          "qualified_symbol": "LessonStore.capture_inferred",
+          "historical_source_location": "L527",
+          "current_declaration_line": 527,
+          "unchanged_grounding_excerpt": "Always a candidate: there is no argument that makes this path trusted."
+        },
+        {
+          "case_id": "retrieval-09",
+          "qualified_symbol": "LessonStore.recall",
+          "historical_source_location": "L657",
+          "current_declaration_line": 657,
+          "unchanged_grounding_excerpt": "standing preferences and corrections, newest first, without repeats, within a budget."
+        }
+      ]
+    },
+    "star/memory.py": {
+      "source_revision_commit": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+      "source_change_commit": "c8c303232851d0c028b72f1047421a8a650e217a",
+      "git_blob_sha1": "afd78961951ad1bb5cf66336367370343637e7b7",
+      "historical_crlf_sha256": "5efce497d5b03029972cefc1c4d7c82ebdb75f47e6af0516d8f135b3eb9e2a73",
+      "current_crlf_sha256": "1f37995036ccd7431a7c255af36c8be4816559fc5ccb9592fd52437eba297a08",
+      "current_lf_sha256": "0f930bbbcd120abdf32847651c6aed4fc085268546e89774c2ea362fbc74d7a8",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-05",
+          "qualified_symbol": "Memory.put",
+          "historical_source_location": "L24",
+          "current_declaration_line": 25,
+          "unchanged_grounding_excerpt": "raise ValueError(\"Refusing empty checkpoint\")"
+        }
+      ]
+    },
+    "star/selfbuild.py": {
+      "source_revision_commit": "77f7e4e7e118a82f72ded480a5ed5b7519731ec7",
+      "source_change_commit": "54ef0b2c606a9524ca14ce60434cc6b3a3d6caa2",
+      "git_blob_sha1": "d7f64cb1a4711856f4141fb72481847e1ca1da1d",
+      "historical_crlf_sha256": "94358c8e10e839ebbc976946e6d5d027c13a844860a77cda54ee8bff90537994",
+      "current_crlf_sha256": "238fd15a0c5e6a490959b01042b0628538bc6bec8a620c8f45e231a221750dc1",
+      "current_lf_sha256": "fab9bd5002916d9a185393120af9b8eea3ac8e758050f76188abc423ebad3413",
+      "development_grounding": [
+        {
+          "case_id": "retrieval-12",
+          "qualified_symbol": "skill_path",
+          "historical_source_location": "L19",
+          "current_declaration_line": 19,
+          "unchanged_grounding_excerpt": "if path == \"star/skills/__init__.py\":"
+        },
+        {
+          "case_id": "retrieval-13",
+          "qualified_symbol": "write_source",
+          "historical_source_location": "L50",
+          "current_declaration_line": 50,
+          "unchanged_grounding_excerpt": "compile(source, str(p), \"exec\")  # syntax verification, NOT execution"
+        }
+      ]
+    }
+  }
+}
