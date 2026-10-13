@@ -125,21 +125,21 @@ def test_unknown_state_key_and_nested_dimension():
 
 
 @pytest.mark.parametrize("field,kind,value,prop", [
-    ("name", "text", "a\\x01é9", "Name"),
-    ("text", "text", "Hello\\x01x", "Text"),
-    ("placeholder", "input", "x\\n☃", "PlaceholderText"),
+    ("name", "text", "a" + chr(1) + "é9", "Name"),
+    ("text", "text", "Hello" + chr(1) + "x", "Text"),
+    ("placeholder", "input", "x" + chr(10) + "☃", "PlaceholderText"),
 ])
 def test_luau_string_escaping(field, kind, value, prop):
     child = {"type": kind, "id": "child", field: value}
     code = compile_ui({"root": {"type": "screen", "id": "root", "children": [child]}}).source
     encoded = '"' + "".join(
         chr(byte) if 32 <= byte < 127 and byte not in (34, 92)
-        else "\\\\" + chr(byte) if byte in (34, 92)
-        else f"\\\\{byte:03d}"
+        else "\\" + chr(byte) if byte in (34, 92)
+        else f"\\{byte:03d}"
         for byte in value.encode("utf-8")
     ) + '"'
     assert f"n2.{prop} = {encoded}" in code
-    assert "\\\\u0001" not in code
+    assert r"\u0001" not in code
 
 
 def test_local_variable_limit():
@@ -331,4 +331,10 @@ end
 return {handles = handles, destroy = destroy}
 """
     assert source == expected
+    disabled = compile_ui({"root": {"type": "screen", "id": "root", "enabled": False},
+                           "mobile": {"safeArea": False, "scaleByViewport": False}}).source
+    assert disabled == expected.replace(
+        "n1.ScreenInsets = Enum.ScreenInsets.None\\n",
+        "n1.ScreenInsets = Enum.ScreenInsets.None\\nn1.Enabled = false\\n",
+    )
 
