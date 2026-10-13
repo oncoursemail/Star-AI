@@ -26,6 +26,9 @@ _REMEMBER = re.compile(
     r"^remember(?:\s+(preference|correction))?\s*:\s*(.{1,1000})$",
     re.I | re.S,
 )
+# "wrong: ..." / "correction: ..." right after STAR's answer: the owner says what was wrong (W8). It becomes a
+# regression-test candidate and a lesson candidate in STAR Desktop, both waiting for the owner's review.
+_CORRECTION = re.compile(r"^(?:wrong|correction|that'?s wrong|incorrect)\s*[:\-]\s*(.{1,1000})$", re.I | re.S)
 _PROJECT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 
 
@@ -61,7 +64,7 @@ class DMSettings:
 
 @dataclass(frozen=True)
 class DMAction:
-    kind: str  # text | image | remember | ignored
+    kind: str  # text | image | remember | correct | ignored
     prompt: str = ""
     lesson_kind: str = ""
     error: str = ""
@@ -89,6 +92,14 @@ def classify_owner_dm(content: str, *, attachments: int,
         if not 8 <= len(statement) <= 500:
             return DMAction("ignored", error="A reviewed lesson needs 8 to 500 characters")
         return DMAction("remember", statement, lesson.group(1) or "preference")
+    corrected = _CORRECTION.fullmatch(prompt)
+    if corrected:
+        if not options.learning_candidates:
+            return DMAction("ignored", error="Discord corrections are part of lesson candidates, which are disabled")
+        statement = corrected.group(1).strip()
+        if not 8 <= len(statement) <= 1000:
+            return DMAction("ignored", error="Say what was wrong in 8 to 1000 characters")
+        return DMAction("correct", statement, "correction")
     if not prompt:
         return DMAction("ignored")
     return DMAction("text", prompt)
@@ -235,3 +246,35 @@ def capture_discord_lesson_candidate(*, owner_id: int, allowed_owners: frozenset
                                    auto_accept=False)
     finally:
         store.close()
+
+
+def capture_discord_correction(*, owner_id: int, allowed_owners: frozenset[int], message_id: int, text: str,
+                               question: str, answer: str, project: str, home: Path):
+    """The owner corrected STAR's last DM answer: a regression-test candidate (star/corrections.py) and a lesson
+    candidate in the owner's words. Neither is trusted or used until approved in STAR Desktop.
+
+    Must only be called after the bot's AccessPolicy checks."""
+    if (type(owner_id) is not int or owner_id not in allowed_owners
+            or type(message_id) is not int or not 1 <= message_id <= _MAX_SNOWFLAKE):
+        raise PermissionError("Unapproved Discord correction origin")
+    if not _PROJECT.fullmatch(project):
+        raise ValueError("Invalid project scope")
+    if not isinstance(text, str) or not 8 <= len(text.strip()) <= 1000:
+        raise ValueError("A correction needs a clear, bounded statement")
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("There is no recent STAR answer in this DM to correct (answers are kept for one hour)")
+    from ..corrections import CorrectionStore
+    from ..lessons import LessonStore
+    corrections = CorrectionStore(home)
+    try:
+        item = corrections.record(project=project, source="discord", ref=str(message_id), prompt=question,
+                                  answer=answer, correction=text.strip())
+    finally:
+        corrections.close()
+    store = LessonStore(home)
+    try:
+        lesson = store.capture_owner(project=project, kind="correction", text=text.strip(), message=text,
+                                     source=f"discord-owner-dm:{message_id}", auto_accept=False)
+    finally:
+        store.close()
+    return item, lesson

@@ -119,6 +119,9 @@ class Settings:
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
     practice_lessons_enabled: bool = False  # off until the owner opts in
     worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
+    # Owner default (O1): night school's text lessons that won the paired gate go live for 14 days, visibly, with undo
+    # (star/learned_week.py). False = bundles only add candidates that wait for review.
+    learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
@@ -152,7 +155,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():

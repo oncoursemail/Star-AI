@@ -23,6 +23,7 @@ DM_HELP = (
     "- Type a question: STAR answers (it remembers the last few turns for an hour).\n"
     "- Attach one screenshot (PNG/JPG/WebP) with a question: STAR looks at it (if images are on).\n"
     "- `remember: ...` proposes a lesson you approve later in STAR Desktop (if switched on).\n"
+    "- `wrong: ...` right after an answer saves a correction; approved in STAR Desktop, it becomes a regression test.\n"
     "- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, `/star reset`.\n"
     "STAR cannot touch your files, Roblox Studio, GitHub or a shell from Discord."
 )
@@ -687,6 +688,14 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                             "STAR did not save this statement as a lesson. "
                             "Check for sensitive data or a permission request."
                         )
+                elif action.kind == "correct":
+                    item, _lesson = await service.propose_dm_correction(
+                        key, message_id=message.id, text=action.prompt, project=config.dm.project)
+                    reply_text = (
+                        f"Correction #{item['id']} saved for the STAR desktop review panel, with your last "
+                        "question and STAR's answer. If you approve it there, it becomes a regression test in "
+                        "STAR's corrections suite (never the blind exam). Nothing changes until then."
+                    )
                 else:
                     return
         except (ValueError, PermissionError) as exc:
