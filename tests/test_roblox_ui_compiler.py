@@ -361,15 +361,15 @@ def test_native_luau_spec_is_the_compilers_actual_output():
 
     def wrap(name, spec):
         body = compile_ui(spec).source
-        return "local function " + name + "()\\n" + "".join(
-            "    " + line + "\\n" for line in body.splitlines()
-        ) + "end\\n"
+        return "local function " + name + "()\n" + "".join(
+            "    " + line + "\n" for line in body.splitlines()
+        ) + "end\n"
 
     fixture = (Path(__file__).resolve().parents[1] /
                "examples/roblox-templates/ui/ServerScriptService/Tests/UICompilerSyntax.spec.luau").read_text(encoding="utf-8")
     expected = (
         wrap("compiledMinimal", minimal)
-        + "\\n" + wrap("compiledEscapedText", escaped)
+        + "\n" + wrap("compiledEscapedText", escaped)
         + """
 return {
     ["minimal generated UI parses"] = function()
