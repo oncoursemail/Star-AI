@@ -169,8 +169,12 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
     last_flush = monotonic()
     responding = False
     async for chunk in stream:
-        if seen is not None and isinstance(getattr(chunk, 'model', None), str) and chunk.model:
-            seen['model'] = chunk.model
+        if seen is not None:
+            if isinstance(getattr(chunk, 'model', None), str) and chunk.model:
+                seen['model'] = chunk.model
+            count = getattr(getattr(chunk, 'usage', None), 'completion_tokens', None)
+            if type(count) is int and count > 0:
+                seen['usage_tokens'] = count
         if not getattr(chunk, 'choices', None):
             continue
         if seen is not None and getattr(chunk.choices[0], 'finish_reason', None) is not None:
@@ -217,6 +221,11 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
         if not chunks and lead:
             pending += lead
         chunks.append(text)
+        if seen is not None:
+            now = monotonic()
+            seen.setdefault('first_text_at', now)
+            seen['last_text_at'] = now
+            seen['text_chars'] = seen.get('text_chars', 0) + len(text)
         pending += text
         if len(pending) >= 90 or monotonic() - last_flush >= .075:
             event({'event': 'assistant_delta', 'text': pending})
@@ -541,6 +550,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
 
         # One real model request is about to start; the UI shows it as a stage.
         event({'event': 'model_turn', 'step': step + 1, 'max_steps': max_calls})
+        model_requested_at = monotonic()
+        for key in ('first_text_at', 'last_text_at', 'text_chars', 'usage_tokens'):
+            answered.pop(key, None)
         response = None
         streamed = False
         answer_text, tool_calls = '', []
@@ -691,7 +703,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             data = {"isError":False,"content":[{"type":"text","text":json.dumps(
                                 {"status":"unverified drafts; review before use","results":pieces},ensure_ascii=False)}]}
                         except Exception as exc:
-                            data = {"isError":True,"content":[{"type":"text","text":f"Delegation failed: {type(exc).__name__}: {str(exc)[:180]}"}]}
+                            data = {"isError":True,"content":[{"type":"text","text":f"Delegation failed: {type(exc).__name__}"}]}
                     elif name == 'star_web_search':
                         try:
                             from .web_search import search_web, source_context
@@ -772,7 +784,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                                     "content": [{"type": "text", "text": json.dumps(local_output, ensure_ascii=False)}]}
                         except Exception as exc:
                             # Never relay external bearer tokens, response bodies or server errors.
-                            data = {"isError": True, "content": [{"type": "text",
+                            data = {"isError": True, "content": [{"type":"text",
                                     "text": f"MCP tool unavailable: {type(exc).__name__}"}]}
                     elif mcp_registry is not None and mcp_registry.owns(name):
                         try:
@@ -821,8 +833,15 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     event({'event': 'assistant_delta', 'text': ('\n\n' if shown_before else '') + answer})
                 messages.append({'role': 'assistant', 'content': answer})
             # The name the server reported, else the one that was asked for.
-            event({"event": "model_answered", "model": str(answered.get('model') or model)[:180],
-                   "requested": str(model)[:180]})
+            finished = {"event": "model_answered", "model": str(answered.get('model') or model)[:180],
+                        "requested": str(model)[:180]}
+            if 'first_text_at' in answered:
+                finished['first_token_ms'] = max(0, int((answered['first_text_at'] - model_requested_at) * 1000))
+                tokens = answered.get('usage_tokens') or max(1, round(answered.get('text_chars', 0) / 4))
+                elapsed = max(0.001, answered.get('last_text_at', model_requested_at) - model_requested_at)
+                finished['tokens_per_second'] = round(tokens / elapsed, 1)
+                finished['estimated_tokens'] = not bool(answered.get('usage_tokens'))
+            event(finished)
             event({"event": "finished", "model_calls": step + 1, "tool_calls": calls_count})
             return answer, messages, archive
     raise RuntimeError("Model-call limit exceeded; results are not considered complete")

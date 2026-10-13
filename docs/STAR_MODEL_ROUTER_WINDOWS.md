@@ -54,6 +54,40 @@ Official source for router flags, model folders, model autoload and `/models`: h
 
 Other project docs: [STAR Ultimate Brain v1](STAR_ULTIMATE_BRAIN_V1.md), [Fast Brain Windows review](STAR_FAST_BRAIN_WINDOWS_REVIEW.md).
 
+## Instant answers while STAR Server is selected
+
+When STAR Server (LAN) is the selected chat provider, short standalone text questions in
+Fast or Auto mode can use an already-installed **and already-loaded** on-device model.
+The pure eligibility check excludes Agent mode, attachments, tools, Roblox/Luau and
+other coding, documentation lookup, research, deep requests, and complex follow-ups.
+The normal STAR Server route remains unchanged for all excluded requests.
+
+**Instant answers do not use the conversation, lessons or memory.** Personal questions,
+questions about STAR, and requests to remember or recall earlier information stay on
+the ordinary server path, where STAR's instructions and context remain available.
+
+STAR sends a short GET to the configured loopback `/v1/models` endpoint and only
+considers a model explicitly marked loaded (or the sole model on a single-model
+endpoint without status). It does **not** start, install, download, swap, or preload
+models. For qualifying questions, the local reply is buffered rather than streamed
+to the UI. If it fails, produces no first visible text within 1.75 seconds, or
+cannot finish within 12 seconds, the buffered text is discarded and the ordinary
+STAR Server answer is tried once. Only one completed assistant message is stored.
+
+**Settings → Advanced settings → Interface & performance → Instant answers on
+this PC** is explicitly OFF by default. Enabling it allows instant answers only
+when a local model is configured and already loaded. A legacy null setting is also
+off; there is no automatic setting value.
+
+The activity line reports which brain answered and first-token/throughput observations
+for every answer, including when instant routing is off. Token rates without
+provider-reported usage are marked approximate. After an instant answer, the server
+warm-up and idle lesson digest wait for the next ordinary server turn.
+
+The existing endpoint validation keeps requests on loopback or the selected,
+validated private LAN server. Hardware speed and quality must still be measured on
+the owner's PC; no specific latency claim is made by these tests.
+
 ## Required verification before production
 
 - Python pytest and compileall, React TypeScript/Vitest/Vite, Windows packaged Qt WebChannel and Inno Setup smoke tests.
