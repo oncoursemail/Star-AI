@@ -286,16 +286,16 @@ def test_debugging_strict_luau_pack_is_opt_in_bounded_and_source_backed(monkeypa
     assert name not in skill_packs.DEFAULT_ENABLED
     assert len(pack.body) <= skill_packs.MAX_BODY_CHARS
     assert "Unknown type NPC" in pack.body and "type NPC = Model" in pack.body
-    rows = findall(r"^\\| (\\d+) \\| \\x60(.+?)\\x60.*?\\| \\x60(.+?)\\x60 \\| ([S\\d,]+) \\|$",
+    rows = findall(r"^\| (\d+) \| \x60(.+?)\x60.*?\| \x60(.+?)\x60 \| ([S\d,]+) \|$",
                    pack.body, flags=__import__("re").MULTILINE)
     assert [int(number) for number, _, _, _ in rows] == list(range(1, 13))
     assert all(wrong != correct and wrong and correct for _, wrong, correct, _ in rows)
     source_text = (pack.file.parent / "references" / "type_sources.md").read_text(encoding="utf-8")
     import re
-    ids = set(re.findall(r"^- (S\\d+) — ", source_text, re.MULTILINE))
+    ids = set(re.findall(r"^- (S\d+) — ", source_text, re.MULTILINE))
     assert ids == {f"S{i}" for i in range(1, 7)}
-    assert all(set(re.findall(r"S\\d+", sources)) <= ids for _, _, _, sources in rows)
-    links = re.findall(r"https://[^\\s)]+", source_text)
+    assert all(set(re.findall(r"S\d+", sources)) <= ids for _, _, _, sources in rows)
+    links = re.findall(r"https://[^\s)]+", source_text)
     assert len(links) == 6
     assert all(urlparse(url).hostname in {"luau.org", "create.roblox.com"} for url in links)
 
