@@ -335,6 +335,6 @@ return {handles = handles, destroy = destroy}
                            "mobile": {"safeArea": False, "scaleByViewport": False}}).source
     assert disabled == expected.replace(
         "n1.ScreenInsets = Enum.ScreenInsets.None\n",
-        "n1.ScreenInsets = Enum.ScreenInsets.None\nn1.Enabled = false\\n",
+        "n1.ScreenInsets = Enum.ScreenInsets.None\nn1.Enabled = false\n",
     )
 
