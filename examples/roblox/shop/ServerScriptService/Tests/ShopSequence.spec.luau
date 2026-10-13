@@ -117,6 +117,27 @@ return {
         assert(not Core.rollback(state, 11, "WoodenSword"))
     end,
 
+    ["corrupted pending price and wallet are internal errors before mutation"] = function()
+        local state = assert(Core.new(Catalog))
+        assert(Core.seed(state, 11, 250))
+        assert(Core.purchase(state, 11, "WoodenSword", 1))
+        local before = Core.balance(state, 11)
+        state.pending[11].WoodenSword = 999
+        assert(not pcall(function() Core.rollback(state, 11, "WoodenSword") end))
+        assert(Core.balance(state, 11) == before)
+        assert(state.pending[11].WoodenSword == 999)
+        assert(Core.has(state, 11, "WoodenSword"))
+        state.pending[11].WoodenSword = 75
+        state.wallets[11] = "corrupted"
+        assert(not pcall(function() Core.rollback(state, 11, "WoodenSword") end))
+        assert(state.pending[11].WoodenSword == 75)
+        assert(Core.has(state, 11, "WoodenSword"))
+        state.wallets[11] = before
+        assert(Core.rollback(state, 11, "WoodenSword"))
+        assert(Core.balance(state, 11) == 250)
+        assert(not Core.has(state, 11, "WoodenSword"))
+    end,
+
     ["fixed-seed three-player request history matches state machine"] = function()
         local state = assert(Core.new(Catalog))
         local players = {11, 12, 13}
