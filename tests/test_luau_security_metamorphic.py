@@ -249,7 +249,9 @@ def test_security_extensions_remain_default_off_and_do_not_run_external_analyzer
     assert "SEC-CLIENT-AMOUNT" in {
         finding.rule_id for finding in lint(code, external=False, server_security=True)
     }
-    source = "while true do expensive() end"
+    # The legacy lint already flags plain busy loops; use a nested spawned wait,
+    # which only the opt-in lifetime inspector correctly treats as non-yielding.
+    source = "while true do task.spawn(function() task.wait() end) end"
     assert not any(f.rule_id == "loop-without-yield" for f in lint(source, external=False))
     assert "loop-without-yield" in {f.rule_id for f in lint(
         source, external=False, safety_checks=True,
