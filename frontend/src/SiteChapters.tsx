@@ -114,7 +114,7 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
      <p>Chats, project notes, references and downloaded models live in your app-data folder. The on-device brain
       processes prompts on this PC. Choosing a LAN server or an optional hosted provider sends the prompt to that
       service instead; neither is selected as an automatic fallback.</p>
-     <p>Installing a new version replaces the app and leaves this folder alone.</p>
+     <p>The tested v0.8.0-to-v0.9.0 upgrade preserved this folder; keep backups before later updates.</p>
     </div>
     <div className="sw-tree" data-reveal style={delay(80)} role="group" aria-label="What STAR stores, and where">
      <p className="sw-tree-root"><Folder size={16} aria-hidden="true"/> %APPDATA%\STAR\</p>
@@ -151,8 +151,8 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
     </div>
     <div className="sw-ledger" data-reveal>
      <h3>Measured Roblox evaluation, not gameplay quality</h3>
-     <p>These are the packs-off baselines measured on October 11, 2026, on the real STAR Server in Auto mode with knowledge enabled.
-      The 16 Studio-only tasks in v2 were not run.</p>
+     <p>The packs-off Roblox task results include runs from October 11–12, 2026, on a real STAR Server in Auto mode with knowledge enabled.
+      Results varied between runs; the 16 Studio-only tasks in v2 were not run.</p>
      <table>
       <caption className="sw-sr">Baseline automated task results recorded in docs/evals.md</caption>
       <thead><tr><th scope="col">Suite</th><th scope="col">Tasks passed</th><th scope="col">Pass rate</th></tr></thead>
@@ -162,8 +162,8 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
        </tr>)}
       </tbody>
      </table>
-     <p className="sw-note">Five skill packs are enabled by default. Tested one pack at a time, v2 went from 18 to 19 of 34
-      and creation-v1 from 11 to 15 of 23; that is not a combined production benchmark. Three of 18 unchanged
+     <p className="sw-note">Five skill packs are enabled by default. In pack-by-pack experiments recorded October 11, 2026, v2 went from 18 to 19 of 34
+      and creation-v1 from 11 to 15 of 23 automated tasks; these were not a combined production benchmark. Three of 18 unchanged
       reruns flipped result (17%). Pattern checks, Luau mocks and citations do not measure appearance, playtesting,
       voice, vision or real Studio behaviour. <a href={LINKS.evals} target="_blank" rel="noopener noreferrer">Read the gate,
       methodology and limitations<span className="sw-sr"> (opens in a new tab)</span></a>.</p>

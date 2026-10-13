@@ -244,7 +244,7 @@ export function Composer(props: ComposerProps) {
                   <MenuItem icon={<Mic size={16} />} label="Transcribe audio" hint="Adds the transcript" onSelect={() => pick(props.onTranscribe)} />
                   <MenuItem icon={<ImagePlus size={16} />} label="Create image" hint="On this PC" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
                   <div className="cmp-menu-rule" role="separator" />
-                  <MenuItem icon={<Globe size={16} />} label="Search the web" hint="Adds sources" checked={research} availability={special ? {ok: false, reason: 'Not in this mode'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
+                  <MenuItem icon={<Globe size={16} />} label="Search the web" hint="Grounds chat and Teams with bounded sources" checked={research} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
                   <MenuItem icon={<Users size={16} />} label="Use a team" hint="4 read-only stages" checked={teamMode} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.team} onSelect={() => pick(() => props.onTeamMode(!teamMode))} />
                   <MenuItem icon={<BookOpen size={16} />} label="Read STAR source" hint="Read only" checked={githubSource} availability={special ? {ok: false, reason: 'Not in this mode'} : mode === 'agent' ? undefined : {ok: false, reason: 'Agent mode only'}} onSelect={() => pick(() => props.onGithubSource(!githubSource))} />
                 </motion.div>
@@ -277,7 +277,7 @@ export function Composer(props: ComposerProps) {
               <Users size={14} aria-hidden="true" /> Team <X size={13} aria-hidden="true" />
             </button>
           )}
-          {research && !special && (
+          {research && !imageMode && (
             <button type="button" className="cmp-chip" aria-label="Stop searching the web" disabled={busy} onClick={() => props.onResearch(false)}>
               <Globe size={14} aria-hidden="true" /> Web <X size={13} aria-hidden="true" />
             </button>

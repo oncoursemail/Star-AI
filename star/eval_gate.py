@@ -10,6 +10,16 @@ Exit status:
     1  blocked: the pass count dropped, or a previously passing task now fails
     2  unusable input: different suite, unreadable file, nothing to compare
     3  incomplete: tasks are missing or errored in the candidate run, so no verdict can be given
+    4  inconclusive (paired mode only): the difference is below what the task count can resolve; never allowed
+
+Paired-session mode (W1, `star/eval_stats.py`) is the honest gate: baseline and candidate are run in the SAME session,
+interleaved, k times each (k >= 2 recommended), and compared pair by pair with an exact sign test; the minimum
+detectable effect is printed next to the verdict. Only a significant improvement is ALLOWED (PROMOTE); a significant
+loss or a reproducible canary failure is BLOCKED (REJECT); anything else is INCONCLUSIVE (exit 4) and never promotes:
+
+    python -m star.evals gate --paired-session --baseline base-1.json base-2.json --candidate cand-1.json cand-2.json
+
+Stored baselines from another day are refused in paired mode. The single-file mode below is kept for legacy files.
 
 Only tasks scored (`pass` or `fail`) in the baseline take part. Tasks that errored (server down) are
 never counted as failures, but they also never count as passes: the gate says "incomplete" instead.
@@ -21,10 +31,17 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
+from datetime import datetime
 import json
 from pathlib import Path
 
-ALLOWED, BLOCKED, UNUSABLE, INCOMPLETE = 0, 1, 2, 3
+from . import eval_stats
+
+ALLOWED, BLOCKED, UNUSABLE, INCOMPLETE, INCONCLUSIVE = 0, 1, 2, 3, 4
+_HEADS = {ALLOWED: "ALLOWED", BLOCKED: "BLOCKED", UNUSABLE: "UNUSABLE INPUT", INCOMPLETE: "INCOMPLETE",
+          INCONCLUSIVE: "INCONCLUSIVE"}
+_PAIRED_CODE = {eval_stats.PROMOTE: ALLOWED, eval_stats.REJECT: BLOCKED, eval_stats.INCONCLUSIVE: INCONCLUSIVE,
+                eval_stats.INCOMPLETE: INCOMPLETE}
 _LEGACY = {"baseline-v2.json", "baseline-creation-v1.json"}
 _VALID_STATUS = {"pass", "fail", "error", "skipped"}
 _SCORED = ("pass", "fail")
@@ -50,6 +67,8 @@ class Verdict:
     not_covered: list[str] = field(default_factory=list)      # not run at all (allowed for a targeted run)
     flaky: list[str] = field(default_factory=list)            # failed once, passed on the confirming re-run
     notes: list[str] = field(default_factory=list)
+    paired: dict = field(default_factory=dict)                # paired-session statistics (eval_stats.PairedReport)
+    paired_text: str = ""
 
     @property
     def allowed(self) -> bool:
@@ -60,10 +79,14 @@ class Verdict:
                 "candidate_pass": self.candidate_pass, "compared": self.compared,
                 "regressions": self.regressions, "improvements": self.improvements,
                 "incomplete": self.incomplete, "not_covered": self.not_covered, "flaky": self.flaky,
-                "notes": self.notes}
+                "notes": self.notes, **({"paired": self.paired} if self.paired else {})}
 
     def text(self) -> str:
-        head = {ALLOWED: "ALLOWED", BLOCKED: "BLOCKED", UNUSABLE: "UNUSABLE INPUT", INCOMPLETE: "INCOMPLETE"}[self.code]
+        head = _HEADS[self.code]
+        if self.paired_text:
+            lines = [f"gate: {head} (paired session)", self.paired_text]
+            lines.extend("  note: " + n for n in self.notes)
+            return "\n".join(lines)
         lines = [f"gate: {head} - {self.candidate_pass}/{self.compared} pass vs baseline {self.baseline_pass}/{self.compared} "
                  f"on the {self.compared} tasks scored in both"]
         for label, ids in (("regressions (passed before, fail now)", self.regressions),
@@ -279,18 +302,156 @@ def gate_change(baseline, run_candidate, *, rerun=None, allow_partial: bool = Fa
     return verdict
 
 
+# --- paired-session mode (W1) ---------------------------------------------------------------------------------
+
+_SAMPLE = {"pass": True, "fail": False}
+MAX_SESSION_HOURS = 36.0
+
+
+def _when(value) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else None
+
+
+def compare_paired(baseline_runs: list, candidate_runs: list, *, alpha: float = eval_stats.DEFAULT_ALPHA,
+                   method: str = "sign", canary=(), seed: int = 0, allow_partial: bool = False,
+                   max_session_hours: float = MAX_SESSION_HOURS) -> Verdict:
+    """Paired verdict from k result files per arm that were run in the same session.
+
+    Sample j of the baseline (the j-th run by start time) is paired with sample j of the candidate. All runs must be
+    the same suite, identity, grader, model and mode, carry `run.started_at`, and fall inside `max_session_hours`.
+    Stored legacy baselines are refused: the point of this mode is a baseline measured next to the candidate."""
+    if not isinstance(baseline_runs, list) or not isinstance(candidate_runs, list) or not baseline_runs or not candidate_runs:
+        return Verdict(UNUSABLE, notes=["paired mode needs at least one run per arm"])
+    problems: list[str] = []
+    runs = ([("baseline", i, r) for i, r in enumerate(baseline_runs)]
+            + [("candidate", i, r) for i, r in enumerate(candidate_runs)])
+    for arm, index, run in runs:
+        label = f"{arm} run {index + 1}"
+        if _trusted_legacy(run):
+            problems.append(f"{label}: a stored legacy baseline cannot be one arm of a paired session")
+            continue
+        errors, legacy = _errors(run, label)
+        problems.extend(errors + legacy)
+    if problems:
+        return Verdict(UNUSABLE, notes=problems)
+    first = baseline_runs[0]
+    for arm, index, run in runs:
+        for key in ("sha256", "file", "tasks_total", "automated", "identity_sha256"):
+            if run["suite"].get(key) != first["suite"].get(key):
+                return Verdict(UNUSABLE, notes=[f"{arm} run {index + 1}: suite {key} differs: not a like-for-like comparison"])
+        for key in ("model", "mode", "grader_sha256"):
+            if run["run"].get(key) != first["run"].get(key):
+                return Verdict(UNUSABLE, notes=[f"{arm} run {index + 1}: {key} differs: not a like-for-like comparison"])
+    starts = {}
+    for arm, index, run in runs:
+        when = _when(run["run"].get("started_at"))
+        if when is None:
+            return Verdict(UNUSABLE, notes=[f"{arm} run {index + 1}: paired mode needs run.started_at (with a time zone)"])
+        starts[(arm, index)] = when
+    ends = [(_when(run["run"].get("finished_at")) or starts[(arm, index)]) for arm, index, run in runs]
+    span = (max(ends + list(starts.values())) - min(starts.values())).total_seconds() / 3600
+    if span > max_session_hours:
+        return Verdict(UNUSABLE, notes=[f"the runs span {span:.1f} h, more than one session ({max_session_hours:g} h): "
+                                        "run both arms again, interleaved"])
+    base_order = [baseline_runs[i] for i in sorted(range(len(baseline_runs)), key=lambda i: starts[("baseline", i)])]
+    cand_order = [candidate_runs[i] for i in sorted(range(len(candidate_runs)), key=lambda i: starts[("candidate", i)])]
+    notes = []
+    arms_in_order = [arm for arm, _ in sorted(starts, key=lambda key: starts[key])]
+    switches = sum(1 for a, b in zip(arms_in_order, arms_in_order[1:]) if a != b)
+    if len(baseline_runs) >= 2 and len(candidate_runs) >= 2 and switches <= 1:
+        notes.append("the arms were run in blocks, not interleaved: drift between the blocks is not cancelled")
+    commits = {run["run"].get("app_commit") for run in base_order + cand_order}
+    if len(commits) > 1:
+        notes.append("app commits differ between the runs (expected when the change is code): "
+                     + ", ".join(sorted(str(c) for c in commits)))
+    scored = sorted({tid for run in base_order for tid, row in run["tasks"].items()
+                     if isinstance(row, dict) and row.get("status") in _SCORED})
+    if not scored:
+        return Verdict(UNUSABLE, notes=["the baseline runs have no scored tasks"])
+    not_covered = [tid for tid in scored if all(_status(run, tid) == "missing" for run in cand_order)]
+    if not_covered and allow_partial:
+        notes.append(f"targeted run: {len(not_covered)} baseline tasks were not run by the candidate")
+        scored = [tid for tid in scored if tid not in not_covered]
+    base_samples = {tid: [_SAMPLE.get(_status(run, tid)) for run in base_order] for tid in scored}
+    cand_samples = {tid: [_SAMPLE.get(_status(run, tid)) for run in cand_order] for tid in scored}
+    report = eval_stats.paired_decision(base_samples, cand_samples, alpha=alpha, method=method, canary=canary, seed=seed)
+    code = _PAIRED_CODE[report.decision]
+    if not_covered and not allow_partial and code != BLOCKED:
+        code = INCOMPLETE
+        notes.append("tasks not run by the candidate: no verdict")
+    return Verdict(code, baseline_pass=report.baseline_pass, candidate_pass=report.candidate_pass,
+                   compared=report.n_tasks, regressions=list(report.regressions),
+                   improvements=list(report.improvements), incomplete=list(report.incomplete),
+                   not_covered=[] if allow_partial else not_covered, notes=notes, paired=report.to_dict(),
+                   paired_text=report.text())
+
+
+def evaluate_paired(baseline_files, candidate_files, **options) -> Verdict:
+    """compare_paired on result files (paths) or dicts; unreadable input gives code 2 instead of raising."""
+    try:
+        base = [f if isinstance(f, dict) else load_result(f) for f in baseline_files]
+        cand = [f if isinstance(f, dict) else load_result(f) for f in candidate_files]
+    except (OSError, ValueError, TypeError) as exc:
+        return Verdict(UNUSABLE, notes=[f"cannot read results: {exc}"])
+    return compare_paired(base, cand, **options)
+
+
+def gate_paired(run_baseline, run_candidate, *, samples: int = 2, **options) -> Verdict:
+    """Run both arms in this session, interleaved, and decide with the paired statistics.
+
+    `run_baseline(j)` / `run_candidate(j)` return the result dict of sample j (the suite run without / with the
+    change). The order alternates (B C, C B, B C, ...) so slow drift of the server hits both arms alike.
+    Self-improvement code must refuse to enable a change unless `Verdict.allowed` (PROMOTE)."""
+    if samples < 1:
+        return Verdict(UNUSABLE, notes=["samples must be at least 1"])
+    base, cand = [], []
+    try:
+        for j in range(samples):
+            if j % 2 == 0:
+                base.append(run_baseline(j))
+                cand.append(run_candidate(j))
+            else:
+                cand.append(run_candidate(j))
+                base.append(run_baseline(j))
+    except (OSError, ValueError, TypeError) as exc:
+        return Verdict(UNUSABLE, notes=[f"unusable input: {exc}"])
+    return compare_paired(base, cand, **options)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m star.evals gate")
-    parser.add_argument("--baseline", required=True, type=Path)
-    parser.add_argument("--candidate", required=True, type=Path, help="result file of the run with the change enabled")
+    parser.add_argument("--baseline", required=True, type=Path, nargs="+",
+                        help="baseline result file (paired mode: one file per sample)")
+    parser.add_argument("--candidate", required=True, type=Path, nargs="+",
+                        help="result file of the run with the change enabled (paired mode: one per sample)")
     parser.add_argument("--allow-partial", action="store_true",
                         help="the candidate run covered only the tasks the change can affect")
+    parser.add_argument("--paired-session", action="store_true",
+                        help="both arms were run in this session, interleaved: decide with the paired sign test")
+    parser.add_argument("--alpha", type=float, default=eval_stats.DEFAULT_ALPHA)
+    parser.add_argument("--method", choices=["sign", "bootstrap"], default="sign")
+    parser.add_argument("--canary", default="", help="comma list of canary task ids (a reproducible failure vetoes)")
+    parser.add_argument("--seed", type=int, default=0, help="bootstrap seed (the verdict is deterministic for a seed)")
+    parser.add_argument("--max-session-hours", type=float, default=MAX_SESSION_HOURS)
     parser.add_argument("--json", action="store_true", help="print the verdict as JSON")
     args = parser.parse_args(argv)
-    verdict = evaluate_change(args.baseline, args.candidate, allow_partial=args.allow_partial)
+    if args.paired_session:
+        verdict = evaluate_paired(args.baseline, args.candidate, alpha=args.alpha, method=args.method,
+                                  canary=[c.strip() for c in args.canary.split(",") if c.strip()], seed=args.seed,
+                                  allow_partial=args.allow_partial, max_session_hours=args.max_session_hours)
+    elif len(args.baseline) != 1 or len(args.candidate) != 1:
+        parser.error("several files per arm need --paired-session")
+    else:
+        verdict = evaluate_change(args.baseline[0], args.candidate[0], allow_partial=args.allow_partial)
+        verdict.notes.append("legacy single-run gate (no statistics): use --paired-session for promotion decisions")
     print(json.dumps(verdict.to_dict()) if args.json else verdict.text())
     return verdict.code
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

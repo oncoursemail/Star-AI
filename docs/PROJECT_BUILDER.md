@@ -193,3 +193,34 @@ build, and rejection of every forbidden module/interface name before generation.
 The workflow regression executes the actual offline-test step in PowerShell with
 stubbed command results to prove that failed pytest cannot be hidden by compileall;
 it skips only when PowerShell is unavailable on a non-Windows host.
+
+
+## Optional StyLua parsing and formatting (off by default)
+
+The project builder can pass generated Luau through an **already-installed**
+[StyLua](https://github.com/JohnnyMorganz/StyLua/blob/main/README.md) executable:
+
+```console
+python -m star.project_builder --plan plan.json --out generated-project --stylua
+```
+
+Without `--stylua`, the original generation path is unchanged, and no formatter
+is resolved or run. With the flag, STAR checks for the `stylua` executable
+before loading provider settings or writing output. STAR does **not** install or
+download StyLua. The released upstream tool is [MPL-2.0](https://github.com/JohnnyMorganz/StyLua/blob/main/LICENSE.md);
+check its installed version and licence terms independently.
+
+For each generated module, STAR sends **only** the model-produced code (not
+STAR's trusted `--!strict` or dependency prefix) to StyLua via stdin with
+`--syntax Luau`, spaces, LF line endings and a 10-second timeout. It formats
+only the new generated source; existing workspaces are not traversed. Nonzero
+exit, timeout or invalid output counts as a failed validation attempt, with
+the existing maximum of two attempts. The formatted code must pass STAR's
+safety and public-interface validator again before it can be written. Raw
+external stderr is never shown to the model or stored in the manifest.
+
+The **CI regression tests use fake StyLua processes**, not an installed
+formatter, so their success does not establish actual version-specific parsing
+coverage or Luau runtime correctness. Use an explicitly approved operator
+smoke test with StyLua v2.6.0 and a real Studio/Luau run before treating
+formatting as a full code-quality gate.

@@ -132,6 +132,16 @@ TRIGGERS: dict[str, re.Pattern] = {
     "design-ui-ux-for-games": re.compile(
         r"\b(?:game UX|UI hierarchy|information hierarchy|thumb zones?|mobile[- ]first|readable text|colou?r[- ]blind)\b",
         re.IGNORECASE),
+    # Service implementation recipes. Default OFF until an independent evaluation passes.
+    "roblox-datastore-service-patterns": re.compile(
+        r"\b(?:DataStoreService|GetRequestBudgetForRequestType|StandardRead|StandardWrite|UpdateAsync|session[- ]locks?)\b",
+        re.IGNORECASE),
+    "roblox-remote-event-function-patterns": re.compile(
+        r"\b(?:RemoteFunction|OnServerInvoke|InvokeServer|RemoteEvent|OnServerEvent|FireClient|remote rate limits?)\b",
+        re.IGNORECASE),
+    "roblox-tweenservice-easing": re.compile(
+        r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
+        re.IGNORECASE),
 }
 
 
