@@ -21,6 +21,7 @@ import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
 import {VoiceSettings} from './VoiceSettings'
+import {DiscordSettings} from './DiscordSettings'
 import {StudioTargetSettings} from './StudioTargetSettings'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
@@ -847,6 +848,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <label className="setting-switch"><span><strong>Describe session capabilities to the model</strong><small>Experimental prompt addition; off until evaluated.</small></span><input type="checkbox" checked={draft.session_capabilities_prompt===true} onChange={e=>setDraft(d=>({...d,session_capabilities_prompt:e.target.checked}))}/></label>
            <MediaPlaces settings={data.settings} invoke={act} disabled={inactive} refresh={()=>void sync()}/>
            <VoiceSettings disabled={inactive}/>
+           <DiscordSettings disabled={inactive}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Advanced: use your own ComfyUI workflow</small></span><ChevronDown size={18}/></summary>
              <div className="settings-expander-body">
