@@ -183,9 +183,17 @@ def test_brain_builds_chat_only_messages_and_never_offers_tools(monkeypatch):
 
 def test_sync_requires_explicit_guild_not_implicit_global_overwrite():
     configured = {"STAR_DISCORD_BOT_TOKEN": "secret", "STAR_DISCORD_OWNER_IDS": "123",
-                  "STAR_DISCORD_GUILD_IDS": "456"}
+                  "STAR_DISCORD_GUILD_IDS": "456,789"}
+    # With several approved servers the target must be named explicitly.
     with pytest.raises(ValueError, match="SYNC_GUILD_ID"):
         BotConfig.from_env({**configured, "STAR_DISCORD_SYNC_COMMANDS": "1"})
+    # With exactly one approved server, that server is the sync target.
+    single = BotConfig.from_env({**configured, "STAR_DISCORD_GUILD_IDS": "456",
+                                 "STAR_DISCORD_SYNC_COMMANDS": "1"})
+    assert single.sync_commands and single.sync_guild_id == 456 and not single.sync_global
+    # Global sync (needed for slash commands in the owner's DM) is a separate explicit value.
+    everywhere = BotConfig.from_env({**configured, "STAR_DISCORD_SYNC_COMMANDS": "global"})
+    assert everywhere.sync_global and not everywhere.sync_commands
     with pytest.raises(ValueError, match="0 or 1"):
         BotConfig.from_env({**configured, "STAR_DISCORD_SYNC_COMMANDS": "yes"})
     assert BotConfig.from_env({**configured, "STAR_DISCORD_SYNC_COMMANDS": "1",
@@ -265,7 +273,7 @@ def test_health_reports_are_nonsecret_and_identify_missing_dave_support():
     checks = evaluate_readiness(bot_token=False, owner_ids=False, guild_ids=False,
                discord_version="2.7.1", davey=False, ffmpeg=False, model=False, tts=False, asr=False)
     lines = format_checks(checks)
-    assert "STAR_DISCORD_BOT_TOKEN" in lines and "DAVE" in lines
+    assert "DISCORD_BOT_TOKEN" in lines and "discord.env" in lines and "DAVE" in lines
     assert "Voice encryption" in lines and "Live voice listening" in lines
     assert all(c.status in {"ready", "setup", "optional"} for c in checks)
     assert not any("secret" in c.detail.lower() for c in checks)

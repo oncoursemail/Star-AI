@@ -1,0 +1,3 @@
+# Vendored data: keep the exact upstream bytes so the SHA-256 values in PROVENANCE.json stay valid.
+* -text
+.gitattributes text eol=lf
