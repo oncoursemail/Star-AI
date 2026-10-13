@@ -550,3 +550,41 @@ two-server lock contention, departure during a stalled/retried acquire,
 lock release failure, autosave during concurrent joins, rapid rejoining,
 shutdown expiry, and surviving actual server restarts. Never treat a Python
 substring check or a generated spec as proof of safe live player persistence.
+
+
+## Declarative UI compiler (offline)
+
+`from star.roblox_ui_compiler import compile_ui, validate, SpecError` compiles
+strict JSON into client-side Roblox Luau. It is standalone and opt-in, not wired
+into the app; no network, write operations or submitted executable source.
+
+`compile_ui(spec)` returns `Compilation(source, warnings)`. A spec has
+`palette` (symbolic names mapped to `#RRGGBB`), required `root` of type
+`screen`, and optional `mobile` flags: `safeArea`, `minTouchSize`
+(44–200), `referenceWidth` (320–3840), `scaleByViewport`. Every node
+requires unique `id` and one of screen/frame/scroll/grid/text/button/image/
+input/toggle/progress. The screen supports `name`, `enabled` and `children`;
+GuiObjects accept only properties applicable to their class. Images only
+accept `image` on image nodes; placeholders only on inputs, layouts on
+containers, states on interactive elements. Horizontal and vertical alignment
+enums are checked independently. Size constraints use pixel offsets and touch
+targets are combined into one UISizeConstraint. Limits: 150 nodes, depth 32.
+
+```json
+{"palette":{"white":"#FFFFFF","dark":"#111111"},
+ "root":{"type":"screen","id":"ui","children":[
+    {"type":"button","id":"buy","text":"Buy","textColor":"white",
+     "background":"dark","states":{"hover":{"background":"white"}}}
+ ]}}
+```
+
+Luau string literals use UTF-8 decimal byte escapes (including controls).
+The native syntax gate uses the official checksum-pinned Luau compiler in
+GitHub Actions; this is **syntax-only**, not Roblox Studio or GUI runtime
+verification. The returned client-side module exports `{handles, destroy}`.
+Calling `destroy()` disconnects events and cancels tweens. Never use GUI
+state as server authority for purchases or gameplay.
+
+See the [ScreenGui](https://create.roblox.com/docs/reference/engine/classes/ScreenGui)
+and [GuiObject](https://create.roblox.com/docs/reference/engine/classes/GuiObject)
+property references.

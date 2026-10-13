@@ -13,6 +13,8 @@ on:
       - 'star/luau_lint.py'
       - 'star/luau_analyze.py'
       - 'star/roblox_craft.py'
+      - 'star/roblox_ui_compiler.py'
+      - 'tests/test_roblox_ui_compiler.py'
       - 'tests/test_luau_analyze.py'
       - '.github/workflows/luau-specs.yml'
   pull_request:
@@ -23,6 +25,8 @@ on:
       - 'star/luau_lint.py'
       - 'star/luau_analyze.py'
       - 'star/roblox_craft.py'
+      - 'star/roblox_ui_compiler.py'
+      - 'tests/test_roblox_ui_compiler.py'
       - 'tests/test_luau_analyze.py'
       - '.github/workflows/luau-specs.yml'
   workflow_dispatch:
@@ -53,10 +57,12 @@ jobs:
           echo "${LUAU_ZIP_SHA256}  ${zip}" | sha256sum --check
           mkdir -p "$RUNNER_TEMP/luau"
           unzip -q "$zip" -d "$RUNNER_TEMP/luau"
-          chmod +x "$RUNNER_TEMP/luau/luau"
+          chmod +x "$RUNNER_TEMP/luau/luau" "$RUNNER_TEMP/luau/luau-compile"
           echo "$RUNNER_TEMP/luau" >> "$GITHUB_PATH"
       - name: Run every Luau spec
         run: python3 scripts/run_luau_specs.py
+      - name: Parse generated UI with the native Luau compiler
+        run: python3 scripts/check_roblox_ui_luau.py
 
   luau-quality-smoke:
     name: Pinned Luau analyzer smoke
