@@ -3,13 +3,14 @@
 No message-content intent, self-bot account, autonomous actions, or background
 recording is used. The gateway is strictly opt-in and owner-scoped.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import io
 import logging
 import os
 
 from .audio import MAX_ATTACHMENT_BYTES, ffmpeg_path, post_voice_message, validate_attachment, pcm_to_wav
 from .core import AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, embed_parts
+from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
 from .service import DiscordService
 
 _LOG = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class BotConfig:
     policy: AccessPolicy
     sync_commands: bool = False
     sync_guild_id: int | None = None
+    dm: DMSettings = field(default_factory=DMSettings)
 
     @classmethod
     def from_env(cls, env=None) -> "BotConfig":
@@ -38,7 +40,8 @@ class BotConfig:
             raise ValueError("Command-sync test guild must be in STAR_DISCORD_GUILD_IDS")
         if sync == "1" and not raw:
             raise ValueError("Supply an approved STAR_DISCORD_SYNC_GUILD_ID before syncing commands")
-        return cls(token, policy, sync == "1", int(raw) if raw else None)
+        return cls(token, policy, sync == "1", int(raw) if raw else None,
+                   DMSettings.from_env(vars))
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None):
@@ -52,6 +55,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
     intents.message_content = False
     intents.members = False
     intents.presences = False
+    # DMs addressed directly to this bot do not require privileged MESSAGE_CONTENT.
+    # Guild message text and attachments remain inaccessible.
+    intents.dm_messages = config.dm.enabled
 
     class StarBot(commands.Bot):
         async def setup_hook(self):
@@ -402,6 +408,70 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
 
     # Context menus are root application commands, not nested /star subcommands.
     bot.tree.add_command(ask_about_message)
+
+    @bot.event
+    async def on_message(message: discord.Message):
+        """Private owner DM conversation; never capture arbitrary guild traffic.
+
+        Text is ephemeral, image bytes are inspected only for this request, and
+        an explicit remember command proposes (never approves) a lesson.
+        """
+        if not config.dm.enabled or message.guild is not None or message.author.bot:
+            return
+        try:
+            key = service.authorized(message.author.id, None, message.channel.id)
+        except PermissionError:
+            return  # No response or information to unapproved users.
+        action = classify_owner_dm(
+            message.content or "", attachments=len(message.attachments), options=config.dm)
+        if action.error:
+            await message.channel.send(action.error, allowed_mentions=discord.AllowedMentions.none())
+            return
+        if action.kind == "ignored":
+            return
+        try:
+            async with message.channel.typing():
+                if action.kind == "text":
+                    reply_text = await service.ask(key, action.prompt)
+                elif action.kind == "image":
+                    attachment = message.attachments[0]
+                    if attachment.size > MAX_IMAGE_BYTES:
+                        raise ValueError("Image exceeds the 6 MiB limit")
+                    payload = await attachment.read()
+                    photo = prepare_discord_image(
+                        attachment.filename, attachment.content_type, attachment.size, payload)
+                    reply_text = await service.inspect_image(key, action.prompt, photo)
+                elif action.kind == "remember":
+                    receipt = await service.propose_dm_lesson(
+                        key, message_id=message.id, text=action.prompt,
+                        kind=action.lesson_kind, project=config.dm.project)
+                    if receipt.status == "candidate":
+                        reply_text = (
+                            f"Learning candidate #{receipt.lesson_id} saved for the "
+                            "STAR desktop review panel. It is not trusted or applied "
+                            "until you approve it there."
+                        )
+                    elif receipt.status == "duplicate":
+                        reply_text = "This learning statement is already in STAR's review records."
+                    else:
+                        reply_text = (
+                            "STAR did not save this statement as a lesson. "
+                            "Check for sensitive data or a permission request."
+                        )
+                else:
+                    return
+        except (ValueError, PermissionError) as exc:
+            reply_text = str(exc)[:400]
+        except Exception as exc:
+            # Never write prompts, screenshots, credentials, or model outputs to logs.
+            _LOG.warning("STAR owner DM failed: %s", type(exc).__name__)
+            reply_text = "STAR could not process this DM. Check its configured model and image settings."
+        options = {"allowed_mentions": discord.AllowedMentions.none()}
+        if len(reply_text) > 1900:
+            options["file"] = discord.File(
+                io.BytesIO(reply_text.encode("utf-8")), filename="star-dm-answer.txt")
+            reply_text = reply_text[:1700] + "\n\nFull answer attached."
+        await message.channel.send(content=reply_text, **options)
 
     @bot.event
     async def on_ready():
