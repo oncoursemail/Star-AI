@@ -78,7 +78,7 @@ def _tokens(code: str) -> list[_Token]:
     return out
 
 
-def lint(code: str) -> list[Finding]:
+def lint(code: str, *, server_security: bool = False) -> list[Finding]:
     """Return sorted findings; no evaluation, execution, filesystem or network calls."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
@@ -227,4 +227,8 @@ def lint(code: str) -> list[Finding]:
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")
                         break
+    if server_security:
+        # Opt in explicitly; default lint behavior remains unchanged.
+        from star.luau_server_security import lint_server_trust
+        findings.extend(lint_server_trust(code))
     return sorted(set(findings), key=lambda f: (f.line, f.rule_id, f.message))
