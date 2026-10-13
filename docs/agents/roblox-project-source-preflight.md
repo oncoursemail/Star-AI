@@ -64,3 +64,52 @@ Tests: tests/test_roblox_project_preflight.py exercises main()
 and preflight() with valid trees, three injected problem categories, bad
 API dumps, unmatched assets, missing inputs, init modules, resource limits and
 side-effect guards. GitHub CI, not local Studio execution, is the test run.
+
+
+## Optional API-confusion corpus suggestions (default OFF)
+
+~~~sh
+python -m star.roblox_project_preflight path/to/project --api-confusions
+python -m star.roblox_project_preflight path/to/project --api-dump path/to/local-fullApi.json --api-confusions
+~~~
+
+Only the explicit --api-confusions flag reads the existing offline reviewed
+80-entry corpus in data/roblox_api_confusions.json. Without it, the command and
+JSON schema are unchanged. With the flag, already admitted Luau source
+(20 KB per file maximum) is scanned after existing static checks; it adds
+"api-confusion:possible-method-spelling" records with category "advisory",
+severity "info", 1-based line and column, exact wrong/right spellings,
+source_url pointing to the official Creator Hub class reference, and
+receiver_evidence ("unverified" or "api-dump-inferred-class", plus an optional
+receiver_class). A suggestion is **never a confirmed Roblox engine error**.
+A Lua table or other custom object may intentionally define the same method.
+Unterminated or otherwise malformed Luau is not parsed or validated by this
+scanner; a hit still needs manual review.
+
+If a validated local dump is supplied, its *existing* conservative
+check_luau_api inference may provide additional context for a uniquely
+matched same-line method call when the class inherits from the cited official
+reference class and the replacement appears in the dump's member set. This
+is still not a typechecker, class proof or Studio validation; conflicting or
+ambiguous matches remain "unverified." The pre-existing API-dump findings
+stay separate from these low-severity suggestions.
+
+No additional files, project assets, or oversized scripts are scanned; the
+advisories share the existing 50-total-findings-per-file cap with other
+checkers and cannot evict existing security/API findings. A truncation warning
+is emitted if candidates exceed the remaining output budget. Opt-in output
+adds summary fields api_confusion_candidates (all scanned lexical matches),
+api_confusion_advisories (reported subset), and
+api_confusion_confirmed_engine_errors (always 0: no Studio test).
+A report containing suggestions is partial as to receiver verification and
+has status "findings"/exit 1; malformed corpus/dump data is invalid/exit 2.
+It does not rewrite code, call a model or network, or run automatically in chat.
+
+Implementation options compared: (1) reuse the current original offline
+Python corpus, stdlib scanner and existing API-dump checker (PSF-2.0 Python
+runtime; no API cost, low maintenance; selected); (2) require a native Luau
+analyzer (MIT, free, but installation/version tracking and incomplete Roblox
+class context); (3) depend on Lune (MPL-2.0, free, extra runtime upkeep and no
+Studio engine proof). A web API name lookup adds network costs and changing
+content without solving the unknown-receiver problem. This is static evidence,
+not a measured improvement in generated Roblox code quality.

@@ -164,3 +164,186 @@ def test_identical_source_has_deterministic_json_report(tmp_path, capsys):
     first = capsys.readouterr().out
     assert main([str(root), "--api-dump", str(DUMP)]) == 0
     assert capsys.readouterr().out == first
+
+
+def test_api_confusions_cli_optin_reports_twelve_diverse_source_linked_candidates(
+        tmp_path, capsys):
+    from star.roblox_api_confusions import load_confusions
+
+    root = _project(tmp_path)
+    examples = load_confusions()
+    chosen = [examples[i] for i in (0, 10, 22, 33, 37, 41, 47, 53, 57, 65, 72, 79)]
+    source = root / "ServerScriptService/Main.server.luau"
+    source.write_text(
+        "local custom = {}\n" +
+        "".join("custom" + entry["wrong"] + "nil)\n" for entry in chosen),
+        encoding="utf-8")
+
+    assert main([str(root), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    records = _files(report)["ServerScriptService/Main.server.luau"]
+    advisory = [f for f in records["findings"]
+                if f["checker"] == "roblox-api-confusions"]
+    assert len(advisory) == 12
+    assert [(f["line"], f["column"], f["wrong"], f["right"], f["source_url"])
+            for f in advisory] == [
+        (i + 2, 7, entry["wrong"], entry["right"], entry["source_url"])
+        for i, entry in enumerate(chosen)
+    ]
+    assert all(f["rule"] == "api-confusion:possible-method-spelling"
+               and f["category"] == "advisory" and f["severity"] == "info"
+               and f["receiver_evidence"] == "unverified"
+               and f["receiver_class"] is None
+               and "custom methods may be valid" in f["message"]
+               for f in advisory)
+    assert records["status"] == "partial"
+    assert "api-confusion-spellings-advisory" in records["checked_scope"]
+    assert report["summary"]["api_confusion_candidates"] == 12
+    assert report["summary"]["api_confusion_advisories"] == 12
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert "receiver types" in " ".join(records["unverified"])
+    assert report["coverage"] == "partial"
+    assert "Studio verification" in " ".join(report["limitations"])
+
+
+def test_optin_reuses_api_dump_only_for_unambiguous_inferred_class(
+        tmp_path, capsys):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\n'
+        'part:GetAllChildren()\n'
+        'local custom = {}\n'
+        'function custom:GetAllChildren() return {} end\n'
+        'custom:GetAllChildren()\n'
+        'local ws = game:GetService("Workspace")\n'
+        'ws:RayCast(Vector3.zero, Vector3.yAxis)\n'
+        'ws:Raycast(Vector3.zero, Vector3.yAxis)\n'
+        'part:GetChildren()\n'
+        'local quoted = "part:GetAllChildren()"\n'
+        'local long = [=[\npart:GetAllChildren()\n]=]\n'
+        'local tick = ' + chr(96) + 'part:GetAllChildren()' + chr(96) + '\n'
+        '-- part:GetAllChildren()\n'
+        '--[=[ ws:RayCast() ]=]\n',
+        encoding="utf-8")
+
+    assert main([str(root), "--api-dump", str(DUMP), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    all_findings = _files(report)["ServerScriptService/Main.server.luau"]["findings"]
+    advisory = [f for f in all_findings if f.get("category") == "advisory"]
+    assert [(f["line"], f["wrong"]) for f in advisory] == [
+        (2, ":GetAllChildren("), (4, ":GetAllChildren("),
+        (5, ":GetAllChildren("), (7, ":RayCast("),
+    ]
+    assert [(f["receiver_evidence"], f["receiver_class"]) for f in advisory] == [
+        ("api-dump-inferred-class", "Part"),
+        ("unverified", None), ("unverified", None),
+        ("api-dump-inferred-class", "Workspace"),
+    ]
+    assert all(f["severity"] == "info" and "custom methods" in f["message"]
+               for f in advisory)
+    assert sum(f["rule"] == "api:unknown-member" for f in all_findings) == 2
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+
+
+def test_optin_does_not_change_default_cli_json(tmp_path, capsys):
+    root = _project(tmp_path)
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    baseline = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    assert capsys.readouterr().out == baseline
+    assert json.loads(baseline) == preflight(root, api_dump=DUMP, api_confusions=False)
+    assert "api_confusion_candidates" not in json.loads(baseline)["summary"]
+    assert not any("api-confusion" in scope for f in json.loads(baseline)["files"]
+                   for scope in f["checked_scope"])
+
+
+def test_optin_caps_advisories_and_marks_omitted_candidates(tmp_path, capsys):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        "local custom = {}\n" + "custom:FindChild()\n" * 60,
+        encoding="utf-8")
+    assert main([str(root), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    source = _files(report)["ServerScriptService/Main.server.luau"]
+    assert len(source["findings"]) == 50
+    assert all(f["category"] == "advisory" for f in source["findings"])
+    assert report["summary"]["api_confusion_candidates"] == 60
+    assert report["summary"]["api_confusion_advisories"] == 50
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert any("truncated" in warning for warning in source["unverified"])
+    assert len(json.dumps(report)) < 30_000
+
+
+def test_optin_does_not_scan_source_above_existing_budget(tmp_path):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        "-- " + "x" * (MAX_CHECK_SOURCE_BYTES + 2) + "\n"
+        + "custom:FindChild()\n", encoding="utf-8")
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    assert file["checked_scope"] == []
+    assert file["findings"] == []
+    assert report["summary"]["api_confusion_candidates"] == 0
+
+
+def test_optin_keeps_malformed_luau_corpus_hits_advisory(tmp_path):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\npart:GetAllChildren(\n',
+        encoding="utf-8")
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    hits = [f for f in _files(report)["ServerScriptService/Main.server.luau"]["findings"]
+            if f.get("category") == "advisory"]
+    assert len(hits) == 1 and hits[0]["line"] == 2
+    assert hits[0]["receiver_evidence"] == "api-dump-inferred-class"
+    assert hits[0]["category"] == "advisory"
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert "Luau is not executed or typechecked" in " ".join(report["limitations"])
+
+
+def test_optin_bad_dump_and_missing_corpus_fail_closed(tmp_path, capsys, monkeypatch):
+    from star import roblox_api_confusions as api
+
+    root = _project(tmp_path)
+    bad = tmp_path / "api.json"
+    bad.write_text("{}", encoding="utf-8")
+    assert main([str(root), "--api-dump", str(bad), "--api-confusions"]) == 2
+    assert json.loads(capsys.readouterr().out)["status"] == "invalid"
+
+    original = api.DATA
+    monkeypatch.setattr(api, "DATA", tmp_path / "absent-corpus.json")
+    api.load_confusions.cache_clear()
+    try:
+        assert main([str(root), "--api-dump", str(DUMP)]) == 0
+        assert json.loads(capsys.readouterr().out)["status"] == "checked"
+        assert main([str(root), "--api-dump", str(DUMP), "--api-confusions"]) == 2
+        invalid = json.loads(capsys.readouterr().out)
+        assert invalid["status"] == "invalid"
+        assert invalid["files"] == [] and invalid["coverage"] == "none"
+        assert "corpus" in invalid["error"].lower()
+    finally:
+        monkeypatch.setattr(api, "DATA", original)
+        api.load_confusions.cache_clear()
+
+
+def test_optin_never_writes_project_runs_code_or_calls_network(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\npart:GetAllChildren()\n',
+        encoding="utf-8")
+    before = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.rglob("*") if p.is_file()}
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("optional preflight attempted side effects")
+
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr("subprocess.run", forbidden)
+    monkeypatch.setattr("socket.create_connection", forbidden)
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    assert report["summary"]["api_confusion_advisories"] == 1
+    assert before == {
+        p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in root.rglob("*") if p.is_file()
+    }

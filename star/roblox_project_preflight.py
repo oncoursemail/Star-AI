@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 from .luau_lint import lint
+from .roblox_api_confusion_preflight import confusion_advisories
 from .roblox_api_checker import ApiDump, check_luau_api, load_api_dump
 from .roblox_place import BuildError, MAX_FILES, Node, _script, read_tree
 
@@ -103,7 +104,8 @@ def _lint_report(source: str, script_class: str) -> list[dict]:
     return results
 
 
-def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict:
+def preflight(source: str | Path, *, api_dump: str | Path | None = None,
+              api_confusions: bool = False) -> dict:
     """Inspect a bounded script-only Roblox place tree with explicit evidence.
 
     Return invalid for malformed structures or API dumps; never conflate missing
@@ -127,6 +129,8 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
             return _invalid("Project file enumeration exceeds the preflight limit")
         files: list[dict] = []
         total_findings = 0
+        confusion_candidates = 0
+        confusion_reported = 0
         limited = False
         for relative in paths:
             code, script_class = _source_node(services, relative)
@@ -145,6 +149,23 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
                     findings.extend(_api_report(code, dump))
                 else:
                     warnings.append("API names unchecked: no validated dump supplied")
+                if api_confusions:
+                    scopes.append("api-confusion-spellings-advisory")
+                    try:
+                        advisories, candidate_count = confusion_advisories(
+                            code, dump, limit=max(0, MAX_FILE_FINDINGS - len(findings)))
+                    except (OSError, UnicodeError, ValueError):
+                        return _invalid("API confusion corpus missing or invalid")
+                    confusion_candidates += candidate_count
+                    confusion_reported += len(advisories)
+                    findings.extend(advisories)
+                    if candidate_count:
+                        warnings.append(
+                            "Possible API-confusion spellings are not confirmed errors; "
+                            "custom methods and receiver types need manual review")
+                    if candidate_count > len(advisories):
+                        warnings.append(
+                            "API-confusion advisories truncated by per-file finding limit")
             if script_class == "ModuleScript":
                 warnings.append("ModuleScript execution side is unknown; server trust is not verified")
             findings = sorted(findings, key=lambda f: (
@@ -173,7 +194,7 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
         state = "partial"
     else:
         state = "checked"
-    return {
+    report = {
         "schema_version": 1, "status": state,
         "coverage": "partial" if limited or ignored else "static-only",
         "files": files, "unsupported_files": ignored,
@@ -184,14 +205,28 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
             "unsupported_files": len(ignored), "findings": total_findings,
         },
     }
+    if api_confusions:
+        report["summary"].update({
+            "api_confusion_candidates": confusion_candidates,
+            "api_confusion_advisories": confusion_reported,
+            "api_confusion_confirmed_engine_errors": 0,
+        })
+        report["limitations"].append(
+            "API-confusion matches are lexical suggestions, not Roblox errors; "
+            "even API-dump-inferred receiver types need human or Studio verification.")
+    return report
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Read-only Roblox place source preflight")
     parser.add_argument("source", type=Path, help="place source folder (not an .rbxlx file)")
     parser.add_argument("--api-dump", type=Path, help="local Studio --fullApi JSON dump")
+    parser.add_argument(
+        "--api-confusions", action="store_true",
+        help="opt in to source-linked possible Roblox method spelling advisories")
     args = parser.parse_args(argv)
-    report = preflight(args.source, api_dump=args.api_dump)
+    report = preflight(args.source, api_dump=args.api_dump,
+                       api_confusions=args.api_confusions)
     print(json.dumps(report, sort_keys=True, ensure_ascii=True))
     if report["status"] == "invalid":
         return 2
