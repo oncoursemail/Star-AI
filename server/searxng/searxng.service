@@ -1,0 +1,31 @@
+[Unit]
+Description=SearXNG metasearch for STAR (127.0.0.1:8888, container only)
+Documentation=https://docs.searxng.org/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=searxng
+Group=searxng
+WorkingDirectory=/usr/local/searxng/searxng-src
+Environment=SEARXNG_SETTINGS_PATH=/etc/searxng/settings.yml
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/local/searxng/searx-pyenv/bin/granian --interface wsgi --host 127.0.0.1 --port 8888 --workers 1 --blocking-threads 4 searx.webapp:app
+Restart=on-failure
+RestartSec=5
+# Keep it out of the brain's way: low CPU priority, bounded memory.
+Nice=10
+CPUWeight=20
+MemoryMax=1G
+TasksMax=256
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/usr/local/searxng
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,37 @@
+# STAR's SearXNG instance (server 1, inside the starai container). Installed as /etc/searxng/settings.yml
+# by install.sh, which replaces __SECRET__ with a random key (never committed).
+# Only reachable from inside the container (127.0.0.1); STAR reaches it through star-search-gateway
+# (port 8093, STAR Server key required, rate limited). See README.md.
+use_default_settings: true
+
+general:
+  instance_name: "STAR search"
+  enable_metrics: false
+
+search:
+  safe_search: 1
+  autocomplete: ""
+  # json is what STAR reads; html stays for a person debugging with curl inside the container.
+  formats:
+    - html
+    - json
+
+server:
+  port: 8888
+  bind_address: "127.0.0.1"
+  base_url: false
+  # The gateway rate-limits (one client: STAR). SearXNG's own limiter needs valkey and is off.
+  limiter: false
+  public_instance: false
+  secret_key: "__SECRET__"
+  image_proxy: false
+  method: "GET"
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  pool_connections: 50
+  pool_maxsize: 10
+
+valkey:
+  url: false
