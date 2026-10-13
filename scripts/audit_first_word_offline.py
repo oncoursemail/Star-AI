@@ -138,7 +138,7 @@ def report(rows: list[Row]) -> str:
     for row in rows:
         lines.append(f"{row.index:>4} | {row.prompt_chars:>12} | {row.elapsed_ms:>14.2f} | " +
                      " | ".join(f"{row.stages_ms.get(k, 0):.2f}" for k in keys))
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
