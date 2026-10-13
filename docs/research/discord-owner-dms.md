@@ -9,6 +9,39 @@ This integrates with STAR's existing opt-in Discord bot, not a new bot, self-bot
 - Owner-only **lesson candidates**: a message beginning with "remember: ..." or "remember correction: ..." proposes a local preference/correction candidate to STAR's existing desktop LessonStore. The user still reviews it before STAR trusts it across sessions.
 - Fail-closed errors: no image-capable local model => no image analysis; no permissions to execute Roblox Studio or modify GitHub from Discord. The bot does not claim a UI was playtested merely because it saw a screenshot.
 
+## Quick private Discord setup for Windows (after review/integration)
+
+1. Create an app at https://discord.com/developers/applications. On **Bot**, generate the secret token and keep it private. On **Installation**, enable Guild Install and the bot plus applications.commands scopes, allowing Send Messages, Embed Links and Attach Files. Add the bot to a private test server. Privileged MESSAGE_CONTENT, SERVER_MEMBERS and PRESENCE intents are **not needed** for owner-only DMs.
+2. In Discord go to **User Settings > Advanced > Developer Mode**. Right-click your own account and **Copy User ID**. Right-click your private test server and **Copy Server ID**.
+3. In a **reviewed STAR checkout containing this PR**, ensure Python 3.11 or 3.12 is installed, then create an isolated environment and install the normal STAR/Discord dependencies. On Windows, from the repository root:
+
+   ~~~powershell
+   py -3.12 -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-discord.txt
+   ~~~
+
+   If the Python 3.12 launcher isn't installed, first install Python 3.12 from python.org. Do not run the bot with an incompatible global Python 3.15 installation.
+
+4. Run the local Windows configuration wizard and enter your own Discord ID, test server ID and bot token. Only paste the token into the hidden PowerShell prompt; it is encrypted to your Windows account with DPAPI:
+
+   ~~~powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\star_discord_windows.ps1 -Setup
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\star_discord_windows.ps1 -Doctor
+   ~~~
+
+5. Once the doctor shows the bot is configured, perform guild command synchronization **once**; stop with Ctrl+C. Future launches omit the Sync switch:
+
+   ~~~powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\star_discord_windows.ps1 -Run -Sync
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\star_discord_windows.ps1 -Run
+   ~~~
+
+   The bot can then receive direct messages from the allowlisted owner and the private test server's slash commands. To request a reviewable memory, send a DM beginning with "remember:". Screenshots require the image option and a configured local vision-capable model.
+
+**Limitations:** The helper does not install a background Windows service; bot access stays online only while the Run command is active. Permanent startup should be added after testing its permissions and first DM. DPAPI encryption binds the settings to that Windows user, and the bot must not be run as SYSTEM or another user. Do not deploy an unreviewed draft branch.
+
+Draft PR #210 handles **separate** one-shot opt-in learning digests with counters and approved screenshots; it requires its own configuration and is not automatically enabled by this helper.
+
 ## Default-off host configuration
 
 Set these only in the trusted host environment, not in a GitHub commit or Discord message:
