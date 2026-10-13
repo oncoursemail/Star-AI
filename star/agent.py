@@ -1,6 +1,7 @@
 """A working local vision + tool-calling agent loop with bounded autonomy."""
 import json
 import asyncio
+import os
 from datetime import datetime
 from time import monotonic
 from types import SimpleNamespace
@@ -227,7 +228,10 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             seen['last_text_at'] = now
             seen['text_chars'] = seen.get('text_chars', 0) + len(text)
         pending += text
-        if len(chunks) == 1 or len(pending) >= 90 or monotonic() - last_flush >= .075:
+        # The early first-delta fast path is opt-in until comparative evaluation.
+        # Without it, preserve the existing batching cadence exactly.
+        if (len(pending) >= 90 or monotonic() - last_flush >= .075
+                or (len(chunks) == 1 and os.environ.get('STAR_FAST_FIRST_DELTA') == '1')):
             event({'event': 'assistant_delta', 'text': pending})
             pending = ''
             last_flush = monotonic()
