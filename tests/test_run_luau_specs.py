@@ -203,7 +203,8 @@ def test_all_repository_specs_pass_with_a_real_interpreter(capsys):
     ):
         assert f"PASS {case}" in output
     assert "SIMULATED ROBLOX INSTANCE:" in output
-    assert "13/13 spec files passed" in output
+    count = len(list(EXAMPLES.rglob("*.spec.luau")))
+    assert f"{count}/{count} spec files passed" in output
 
 
 def test_workflow_pins_luau_by_version_and_checksum_before_using_it():

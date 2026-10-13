@@ -48,14 +48,16 @@ return {
     ["headless IsA rejects unsupported and malformed queries"] = function()
         local block = Instance.new("Part")
         assert(not pcall(function() block:IsA("UnsupportedFutureClass") end))
+        assert(not pcall(function() block:IsA("") end))
         assert(not pcall(function() block:IsA(nil) end))
         assert(not pcall(function() block:IsA(123) end))
         assert(not pcall(function() block:IsA({}) end))
     end,
     ["headless Instance.new rejects unsupported classes"] = function()
-        for _, className in ipairs({ "UnmodeledService", "Instance", "BasePart", "Workspace" }) do
+        for _, className in ipairs({ "UnmodeledService", "Object", "Instance", "PVInstance", "BasePart", "FormFactorPart", "WorldRoot", "Workspace" }) do
             assert(not pcall(function() Instance.new(className) end), className)
         end
+        assert(not pcall(function() Instance.new("") end))
         assert(not pcall(function() Instance.new(nil) end))
         assert(not pcall(function() Instance.new(123) end))
     end,

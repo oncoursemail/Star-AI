@@ -27,7 +27,9 @@ import sys
 import tempfile
 
 SPEC_TIMEOUT_SECONDS = 60
-ARENA_SPEC = pathlib.Path("roblox-templates/rounds/ServerScriptService/Tests/ArenaFactory.spec.luau")
+ARENA_SPEC = pathlib.Path(
+    "roblox-templates/rounds/ServerScriptService/Tests/ArenaFactory.spec.luau"
+)
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 EXAMPLES = ROOT / "examples"
 SERVICE = re.compile(r'game:GetService\("([^"]+)"\)')
