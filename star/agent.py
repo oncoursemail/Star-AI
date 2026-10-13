@@ -264,7 +264,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
                   preserve_history=False, complete_code_answers=None,
                   tool_discovery_enabled=False, candidate_code_team_enabled=False, now=None,
-                  web_settings=None):
+                  web_settings=None, on_first_request=None):
     """Run one user turn.
 
     Request layout (see star/context_layout.py): one system message holding the
@@ -274,6 +274,9 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
     `now` is the current-time line appended last to this turn's context (default
     star.clock.now_line(); "" leaves it out). `web_settings` are the Settings the
     web search/fetch tools read (search gateway address); None loads the saved ones.
+    `on_first_request({"messages", "tools", "max_tokens"})` is called once, just before the
+    first model request, with that request's messages and tool list (star/best_of_n.py samples
+    extra candidates of the same request while this one is written). It cannot fail the turn.
     `request_extras` are provider-specific body fields from
     `providers.llama_request_fields`; they are empty for cloud providers.
     `tool_memory` (star/turn_memory.py) keeps the prompt-selected tools of a
@@ -556,6 +559,12 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         # Some local model servers do not accept null tools/tool_choice values.
         kwargs = {k:v for k,v in kwargs.items() if v is not None}
         validate_model_roles(messages)
+        if on_first_request is not None and step == 0:
+            try:
+                on_first_request({"messages": [dict(m) for m in messages], "tools": definitions or None,
+                                  "max_tokens": response_tokens})
+            except Exception:
+                pass   # an observer only: the turn goes on exactly as before
 
         async def request(*, override=None, **more):
             nonlocal extras

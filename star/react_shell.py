@@ -113,6 +113,7 @@ PERMITTED_SETTINGS = frozenset({
     'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
+    'best_of_n','best_of_n_max',
 })
 
 
@@ -399,6 +400,27 @@ def sanitize_event(event: dict) -> dict:
             activity['repair']=True
         return {'phase':'Fixing the Luau code' if kind == 'luau_repair_started' else 'Checking the Luau code'
                 if kind == 'luau_check_started' else 'Luau check finished','activity':activity}
+    if kind.startswith('best_of_n_'):
+        # Generate several, test, keep what works (star/best_of_n.py): numbers only, never answer text.
+        n = _bounded_int(event.get('n'), 8)
+        index = _bounded_int(event.get('index'), 8)
+        passed, ran = _bounded_int(event.get('passed'), 20), _bounded_int(event.get('ran'), 20)
+        score = f' ({passed}/{ran} checks)' if passed is not None and ran else ''
+        if kind == 'best_of_n_started' and n:
+            return {'phase': f'Writing {n} versions to test'}
+        if kind == 'best_of_n_candidate' and index:
+            return {'phase': f'Version {index} ' + ('written' if event.get('state') == 'written' else 'did not finish')}
+        if kind == 'best_of_n_checked' and index:
+            return {'phase': f'Checked version {index}{score}'}
+        if kind == 'best_of_n_judging':
+            return {'phase': 'Comparing the versions that passed'}
+        if kind == 'best_of_n_repair':
+            return {'phase': 'No version passed every check: fixing the best one'}
+        if kind == 'best_of_n_selected' and index:
+            return {'phase': f'Keeping version {index}{score}'}
+        if kind == 'best_of_n_skipped':
+            return {'phase': 'Model slots busy: writing one version'}
+        return {'phase': 'Testing versions'}
     if kind == 'model_turn':
         activity={'type':'turn'}
         for key in ('step','max_steps'):

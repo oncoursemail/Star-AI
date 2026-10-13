@@ -32,6 +32,7 @@ from .instant_route import decide_instant_route, loaded_local_model, answer_on_p
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs, roblox_errors
+from . import best_of_n
 from . import studio_loop
 from .studio_connections import default_target, validate_target
 
@@ -129,6 +130,10 @@ class Settings:
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    # Generate several, test, keep what works (star/best_of_n.py): 'off' or 'auto' (2 to best_of_n_max candidates
+    # for code requests on STAR Server, as many as the free model slots allow). Off until the owner opts in.
+    best_of_n: str = 'off'
+    best_of_n_max: int = 4
 
     @classmethod
     def load(cls, file: Path):
@@ -170,6 +175,8 @@ class Settings:
             raise ValueError('Select an Obsidian vault before enabling read access')
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
+        if self.best_of_n not in ('off', 'auto') or type(self.best_of_n_max) is not int                 or not 2 <= self.best_of_n_max <= 8:
+            raise ValueError('Best-of-N must be off or auto, with 2 to 8 candidates')
         if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1,2):
             raise ValueError('Limit specialists to 1 or 2 concurrent model calls')
         if (type(self.team_timeout_min) is not int or type(self.team_timeout_max) is not int
@@ -1243,6 +1250,18 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
+                # Generate several, test, keep what works (star/best_of_n.py): only for a code request on STAR Server
+                # (not Agent mode, no Studio, Blender, pictures or documents), with the owner's setting on. A candidate
+                # that asks for a tool is dropped, and a main answer that used tools is kept as it is.
+                # None = the turn runs exactly as before.
+                several = await best_of_n.for_turn(
+                    settings, route, prompt, client=helper, knowledge=docs.client,
+                    eligible=(kind == 'lan' and mode != 'agent' and not images and document_tools is None
+                              and not document_block and not allow_studio and not allow_blender),
+                    quick_model=str(getattr(server_roles.effective(settings), 'fast_model', '') or ''),
+                    on_event=audited_event)
+                if several is not None:
+                    kwargs['on_first_request'] = several.on_first_request
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
                     nonlocal prepared_conversation
@@ -1331,9 +1350,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     kwargs.update(subagent_model=used.subagent_model)
                     audited_event({'event': 'route_fallback', 'model': settings.model})
                     result = await answer_with(settings.model)
+                if several is not None:
+                    # The best of the candidates (the main answer above is candidate 1) replaces the answer.
+                    result = await several.apply(result, used.model, started=started, budget=route.task_timeout,
+                                                 tools_ran=tools_ran)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
-                return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
-                                                    started=started, on_event=audited_event)
+                result = await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
+                                                      started=started, on_event=audited_event)
+                return several.footer(result) if several is not None else result
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
