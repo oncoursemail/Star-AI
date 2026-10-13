@@ -89,6 +89,11 @@ def test_stage_sources_translates_every_real_file_without_touching_the_repo(tmp_
     spec = (engine_dir / "Tests/ArenaFactory.spec.luau").read_text(encoding="utf-8")
     assert factory.startswith('local __engine = require("./__headless_engine"); ')
     assert spec.startswith('local __engine = require("../__headless_engine"); ')
+    engine = (engine_dir / "__headless_engine.luau").read_text(encoding="utf-8")
+    assert 'Part = "FormFactorPart"' in engine
+    assert 'SpawnLocation = "Part"' in engine
+    assert 'Workspace = "WorldRoot"' in engine
+    assert 'error("unsupported headless Instance.new class:' in engine
 
 
 def test_every_spec_is_found_and_has_a_template_root():
@@ -136,6 +141,30 @@ def test_run_counts_failures_and_timeouts(tmp_path, monkeypatch, capsys):
     assert runner.run("luau", root) == 0
 
 
+def test_run_marks_staged_arena_as_simulated(monkeypatch, capsys):
+    """Use the real stage-and-run path, even when Luau is absent locally."""
+    inspected: list[str] = []
+
+    def fake_run(command, **kwargs):
+        driver = pathlib.Path(command[1])
+        if driver.name == "ArenaFactory.spec.luau.runner.luau":
+            engine = driver.parent.parent / "__headless_engine.luau"
+            text = engine.read_text(encoding="utf-8")
+            assert "function Node:IsA(name)" in text
+            assert "local PARENT_CLASS = {" in text
+            assert 'SpawnLocation = "Part"' in text
+            inspected.append(driver.name)
+        return subprocess.CompletedProcess(command, 0, stdout="  PASS fixture\\n")
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    assert runner.run("luau", EXAMPLES) == 0
+    output = capsys.readouterr().out
+    assert inspected == ["ArenaFactory.spec.luau.runner.luau"]
+    assert output.count("SIMULATED ROBLOX INSTANCE:") == 1
+    assert "not Roblox Studio" in output
+    assert output.count("RUN ") == len(list(EXAMPLES.rglob("*.spec.luau")))
+
+
 def test_run_fails_when_there_are_no_specs(tmp_path, capsys):
     root = tmp_path / "examples"
     root.mkdir()
@@ -162,8 +191,19 @@ def test_runner_reports_pass_fail_and_empty_specs_with_a_real_interpreter(tmp_pa
 
 
 @pytest.mark.skipif(LUAU is None, reason="needs the Luau CLI; the Luau template specs workflow runs it")
-def test_all_repository_specs_pass_with_a_real_interpreter():
+def test_all_repository_specs_pass_with_a_real_interpreter(capsys):
     assert runner.run(LUAU, EXAMPLES) == 0
+    output = capsys.readouterr().out
+    for case in (
+        "headless IsA recognizes Part ancestors",
+        "headless IsA recognizes SpawnLocation and Model ancestors",
+        "headless IsA recognizes Workspace ancestors",
+        "headless IsA rejects unsupported and malformed queries",
+        "headless Instance.new rejects unsupported classes",
+    ):
+        assert f"PASS {case}" in output
+    assert "SIMULATED ROBLOX INSTANCE:" in output
+    assert "13/13 spec files passed" in output
 
 
 def test_workflow_pins_luau_by_version_and_checksum_before_using_it():
