@@ -13,6 +13,20 @@ STAR already primes byte-stable conversational prefixes through star/context_lay
 
 This is a **warm-up accelerator**, not an automatic restore before every real chat. For changing history, the model must still verify the current prompt and process the divergent suffix. Warm-up plus native cache-ram may already outperform save/restore. A speed gain has not been measured.
 
+## Second stage now implemented: bounded, owner-approved knowledge prefixes
+
+After the initial KV snapshot prototype, this draft now also includes \`star/knowledge_bank.py\`, wiring into \`star/desktop_core.py\`, and \`tests/test_knowledge_bank.py\`. STAR can preload a **small, finite, explicitly owner-approved reference packet** into the **byte-stable system prefix shared by actual turns and the existing background warm-up**. This packet is ordinary untrusted reference data; the model cannot edit it or gain new permissions from it. The byte-stable prefix allows llama.cpp to reuse its normal prompt cache, even without enabling experimental disk KV snapshots. It does not load all official Roblox docs.
+
+**Separate opt-in:** set \`STAR_APPROVED_KNOWLEDGE_BANKS=on\` on STAR's own local/owner-run LAN model process. The operator must first provision a private JSON manifest at \`<STAR_APP_DATA>/knowledge-banks/<SHA256(project name)[:32]>.json\`. Do not put that manifest into the public repository or in a shared home directory. Set:
+- \`format\` to \`star-reference-bank-v1\`, \`project\` to the exact STAR project name and \`approved_by_owner\` to \`true\`.
+- \`sources\` to between 1 and 8 approved records, each with **only** \`id\`, \`type\`, \`revision\`, \`license\`, \`sha256\` (SHA-256 of exact UTF-8 \`text\`), and \`text\`.
+- Source types are \`roblox-doc\`, \`luau-doc\`, \`reviewed-skill\` or \`owner-project\`. Allowed rights metadata depends on type (Roblox CC-BY-4.0/MIT, Luau MIT, or owner-authorized). The operator must actually review legal terms; enumerating a license does not establish permission.
+- Each excerpt is capped at 1,200 characters; the complete packet at 5,000 characters, to preserve model context and avoid slower prefill. References that attempt to forge delimiters are sanitized. Changed content with a stale hash fails closed to ordinary retrieval.
+
+It remains **default off**; an invalid or changed-source manifest yields no bank and the pre-existing retrieval remains available. The manifest's approved text still takes real context capacity. There is no automatic documentation crawler, full corpus ingest, automatic bank construction, 80 GB RAM disk, model-weight change, or measured performance gain in this PR. Prefix caching and optional persistent KV slot snapshots are independent opt-ins.
+
+The project-specific prefix is stable across turns, but a **per-conversation bank of confidential project notes requires extra review before broad team deployment**. The bank does not do freshness checks against live Roblox documentation; the operator must refresh approved revisions. For now use retrieved current docs on requests that require up-to-date grounding.
+
 ## Owner-run setup and safety
 
 1. Use an **owner-operated, access-restricted** llama.cpp LAN server with the slot API. Never expose the slot API on a public or shared inference service: its snapshots can include sensitive conversation context.
@@ -27,7 +41,7 @@ Only one snapshot filename per project/chat/model/revision is reused to prevent 
 
 ## What cache-augmented generation still needs
 
-True pre-read documentation requires a separate, verified integration: choose small, licensed, version-pinned Roblox docs, reviewed skills and user-approved project reference extracts; insert **clearly delimited untrusted data** in a byte-stable shared prefix; hash source revisions and scope; verify references and invalidate when they change. Preserve context for new user questions. Keep ordinary retrieval available for updated docs, rare topics and larger knowledge sets. Run the eval gate before any default enablement.
+A small owner-provisioned reference-prefix prototype is now present (see second stage above). A production-ready content crawler and citation-validating refresh loop still need a separate integration: choose a licensed, version-pinned subset of Roblox documentation, track authoritative source revisions, invalidate stale citations, protect per-user/project boundaries and independently benchmark latency and answer quality. Keep ordinary retrieval available for current docs and larger knowledge sets.
 
 The cache is not universal transferable knowledge. Model weights, tokenizer, LoRA settings, prompt templates and actual preceding tokens must be compatible. Token-limited models cannot simply hold all Roblox documentation just because the machine has spare RAM.
 
