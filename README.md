@@ -51,6 +51,20 @@ STAR does not silently fall back to a hosted model. Studio writes require scoped
 
 The public-facing React website builds from `frontend/` and is intended for **https://oncoursemail.github.io/Star-AI/**. Pages deployment requires one-time GitHub setup: **Settings → Pages → Build and deployment → Source: GitHub Actions**. A passing website-build artifact does not by itself prove the live Pages domain has been enabled or deployed.
 
+### Experimental building and Blender kit (source checkout only, off by default)
+
+STAR also provides a distinct, **read-only architecture planning prototype** (`star_architecture_preview` and `star_architecture_compare_styles`) and a bounded Blender exterior generator described in the [architecture research and QA guide](docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md). Eight starter grammars support plans, editable source `.blend` and `.glb` exports, geometry audits and candidate collision hints. This does **not** prove production-quality environments, Roblox Studio import, validated collisions, device FPS, or inclusion in the published installer.
+
+**Explicit opt-in:** architecture chat tools are offered only when `STAR_ARCHITECTURE_TOOLS=1` is set and the prompt matches a Roblox building/Blender request. The `roblox-architecture-blender` skill pack stays off by default until an independent evaluation passes. Blender export is a separate owner-run command line **from a STAR source checkout**; the installed app does not include this specific exporter script. The kit is distinct from the optional Blender MCP integration described below.
+
+From a source checkout, with Blender installed locally:
+
+```powershell
+python -m star.architecture_pipeline examples/architecture/storybook_shop.json --out out/storybook-v1 --blender "C:\Path\To\blender.exe" --preview
+```
+
+Omit `--blender` and `--preview` for a plan-only run. The [Blender smoke workflow](.github/workflows/architecture-blender-smoke.yml) checks headless export, not screenshot quality or Roblox Studio acceptance.
+
 ## STAR's new interface
 
 - **React 19 + TypeScript + Vite** shipped offline inside Qt WebEngine as part of the Windows application; not a website wrapping a remote service.

@@ -142,6 +142,9 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    "roblox-architecture-blender": re.compile(
+        r"\b(?:Blender|architecture|architectural|facades?|rooflines?|gables?|glTF|GLB|FBX|3D Importer|"
+        r"UV unwrap\w*|modelling|modeling)\b", re.IGNORECASE),
 }
 
 

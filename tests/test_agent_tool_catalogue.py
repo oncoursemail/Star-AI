@@ -53,6 +53,8 @@ ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_
 CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
 # Experimental Asset Forge (star/intelligence.py ASSET_TOOLS); owner opt-in required.
 ASSET = ["star_asset_search", "star_building_plan", "star_terrain_preview"]
+# Optional architectural planning tools; STAR_ARCHITECTURE_TOOLS=1 only.
+ARCHITECTURE = ["star_architecture_preview", "star_architecture_compare_styles"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
 WORKSPACE_WRITE = ["workspace_write"]
@@ -247,7 +249,8 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
                                              + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
-                                             + CRAFT + ASSET)
+                                             + CRAFT + ASSET + ARCHITECTURE)
+    assert [tool["name"] for tool in intelligence.ARCHITECTURE_TOOLS] == ARCHITECTURE
     assert [tool["name"] for tool in intelligence.ASSET_TOOLS] == ASSET
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN

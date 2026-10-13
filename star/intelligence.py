@@ -7,11 +7,14 @@ or user-supplied MCP server is exposed here.
 from __future__ import annotations
 
 from pathlib import Path
+import os
 import re
 
 from jsonschema import Draft202012Validator
 
 from .asset_forge import PolyHavenCatalog, plan_building, preview_terrain
+from .architecture_pipeline import PALETTES, make_plan, validate_brief
+from .architecture_quality import design_summary
 from .agent_skills import SkillLibrary, install_starters
 from .skill_packs import PACKS_DIR
 from .brain_router import is_roblox_dev_prompt
@@ -129,6 +132,36 @@ ROBLOX_VIDEO_TOOLS = (
     _tool("star_roblox_youtube_search", "Find Roblox-related public YouTube video metadata using a locally configured API key; otherwise return an explicit YouTube search link.", {"query": _s(140), "limit": _limit(10, 6)}, ("query",)),
     _tool("star_roblox_youtube_video", "Inspect one YouTube video's public metadata, thumbnail and statistics if available. This does NOT watch the footage or download captions.", {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}, ("video_id",)),
 )
+ARCHITECTURE_TOOLS = (
+    _tool("star_architecture_preview",
+          "Create a deterministic, read-only architectural shell plan for a Roblox building. "
+          "Returns real facade/roof metrics, palette, opening counts and validation warnings. "
+          "Does NOT use Blender, upload assets or edit Studio. Styles are prototypes, not AAA renders.",
+          {
+              "name": _s(48),
+              "style": {"type": "string", "enum": list(PALETTES)},
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+          },
+          ("name", "style", "width_studs", "depth_studs", "floors", "bays")),
+    _tool("star_architecture_compare_styles",
+          "Compare 2-8 procedural architectural art grammars for one Roblox building brief. "
+          "Runs only deterministic local geometry. Does not render or claim visual acceptance.",
+          {
+              "name": _s(48),
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+              "styles": {"type": "array", "items": {"type": "string", "enum": list(PALETTES)},
+                         "minItems": 2, "maxItems": 8, "uniqueItems": True},
+          },
+          ("name", "width_studs", "depth_studs", "floors", "bays")),
+)
 _ID = {"type": "integer", "minimum": 1}
 # Roblox Open Cloud with the owner's API key (star/roblox_cloud.py). The first five only read. The two
 # "request" tools never touch Roblox: they queue an action the owner approves or rejects in Settings.
@@ -146,8 +179,18 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *ARCHITECTURE_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
+
+_ARCHITECTURE_TRIGGER = re.compile(
+    r"\b(?:blender|buildings?|facades?|floorplans?|gables?|"
+    r"warehouses?|roofs?|shopfronts?|3d.meshes|gltf|glb)\b", re.I)
+
+
+def _architecture_tools_on() -> bool:
+    """Keep architecture tool schemas off unless the owner explicitly opts in."""
+    return os.environ.get("STAR_ARCHITECTURE_TOOLS", "").strip().lower() in {"1", "on", "true", "yes"}
+
 
 _ASSET_TRIGGER = re.compile(r"\b(assets?|meshes?|textures?|pbr|blender|terrain|biomes?|poly.?haven)\b|"
                             r"\b(?:building|floor|house)\s+plan\b|"
@@ -239,8 +282,11 @@ class LocalIntelligence:
             if _CLOUD_TRIGGER.search(prompt):
                 if self.cloud is not None and self.cloud.status()["key_present"]:
                     result.extend(ROBLOX_CLOUD_TOOLS)
-                elif __import__("os").environ.get("STAR_ROBLOX_READ_API_KEY"):
+                elif os.environ.get("STAR_ROBLOX_READ_API_KEY"):
                     result.extend(ROBLOX_CLOUD_TOOLS[:1])
+        if _architecture_tools_on() and _ARCHITECTURE_TRIGGER.search(prompt) and (
+                _ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)):
+            result.extend(ARCHITECTURE_TOOLS)
         return result
 
     @staticmethod
@@ -251,6 +297,27 @@ class LocalIntelligence:
         if name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
             raise PermissionError("Intelligence tool is not enabled for this task")
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
+        if name == "star_architecture_preview":
+            return design_summary(make_plan(validate_brief(args)))
+        if name == "star_architecture_compare_styles":
+            names = args.get("styles", list(PALETTES))
+            variants = []
+            for style in names:
+                brief = {key: value for key, value in args.items() if key != "styles"}
+                brief["style"] = style
+                summary = design_summary(make_plan(validate_brief(brief)))
+                variants.append({
+                    "style": style, "roof": summary["roof"],
+                    "grammar": summary["style_grammar"],
+                    "estimated_triangles": summary["audit"]["metrics"]["triangles"],
+                    "prototype_parts": summary["audit"]["metrics"]["parts"],
+                    "static_valid": summary["audit"]["valid"],
+                })
+            return {
+                "variants": variants,
+                "rendered": False, "studio_imported": False,
+                "note": "These are deterministic design prototypes, not ranked visual-quality results.",
+            }
         if name in _ASSET_TOOL_NAMES:
             if not self.asset_forge_enabled:
                 raise PermissionError("Enable Asset Forge in Tools before using its tools")

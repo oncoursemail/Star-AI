@@ -19,7 +19,7 @@ NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing"]
+         "roblox-tweenservice-easing", "roblox-architecture-blender"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}
@@ -51,7 +51,12 @@ def test_implementation_packs_cite_official_documentation_and_list_the_api_names
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
-        assert "verified with the knowledge service /api-lookup" in sources, pack.name
+        if pack.name == "roblox-architecture-blender":
+            # Experimental pack is OFF until API lookup and independent evaluation.
+            assert pack.name not in skill_packs.DEFAULT_ENABLED
+            assert "API names not yet verified by STAR Knowledge /api-lookup" in sources
+        else:
+            assert "verified with the knowledge service /api-lookup" in sources, pack.name
         assert "http://" not in sources and "10.17" not in sources
 
 
@@ -258,3 +263,11 @@ def test_run_task_delivers_service_pack_only_when_enabled(monkeypatch, tmp_path,
     assert skill_packs.BLOCK_HEADING not in off_text
     assert not any(e["event"] == "skill_packs" for e in off_events)
     assert messages[0] == off_messages[0]
+
+
+def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
+    prompt = "In my Roblox project design an architectural facade in Blender and import a glTF."
+    assert skill_packs.matching_names(prompt, enabled={"roblox-architecture-blender"}) == ["roblox-architecture-blender"]
+    assert "roblox-architecture-blender" not in skill_packs.matching_names(prompt)
+    assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
+    assert skill_packs.enabled_names({skill_packs.ENV_VAR: "roblox-architecture-blender"}) == {"roblox-architecture-blender"}
