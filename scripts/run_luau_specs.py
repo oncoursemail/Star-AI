@@ -287,7 +287,7 @@ def stage_sources(root: pathlib.Path, stage: pathlib.Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
         template = next(
             (parent for parent in [source.parent, *source.parents]
-             if parent.parent == root / "roblox-templates"
+             if parent.parent in (root / "roblox-templates", root / "roblox")
              or parent == root / "roblox-test-place"),
             None,
         )

@@ -101,8 +101,8 @@ def test_every_spec_is_found_and_has_a_template_root():
     specs = sorted(EXAMPLES.rglob("*.spec.luau"))
     assert len(specs) >= 13
     for spec in specs:
-        assert any(p.parent == EXAMPLES / "roblox-templates" or p == EXAMPLES / "roblox-test-place"
-                   for p in spec.parents), spec
+        assert any(p.parent in (EXAMPLES / "roblox-templates", EXAMPLES / "roblox")
+                   or p == EXAMPLES / "roblox-test-place" for p in spec.parents), spec
 
 
 def _fake_evidence(*cases: tuple[str, bool]) -> str:
