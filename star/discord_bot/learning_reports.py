@@ -71,6 +71,9 @@ def parse_night_school_report(text: str) -> LearningSnapshot:
     """Read the *format*, not untrusted model narrative or suggested lessons."""
     if not isinstance(text, str) or not 1 <= len(text.encode("utf-8")) <= MAX_REPORT_BYTES:
         raise ValueError("Night School report is empty or too large")
+    # Path.write_text uses CRLF on Windows. Normalize platform line endings
+    # before matching the fixed report format; never alter extracted data.
+    text = text.replace("\r\n", "\n")
     if not text.startswith("# STAR night school: latest numbers\n"):
         raise ValueError("Not a STAR Night School report")
     timestamp = re.findall(r"^written (\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) \|", text, re.M)
