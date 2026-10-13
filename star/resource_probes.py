@@ -303,8 +303,17 @@ def fullscreen_foreground() -> str:
         user32.GetClassNameW(hwnd, name, 256)
         if name.value in ("WorkerW", "Progman", "Shell_TrayWnd"):
             return ""
-        if user32.GetWindowLongW(hwnd, -16) & 0x00C00000 == 0x00C00000:   # has a title bar: a maximised window
-            return ""
+        # Windows' own answer first: 2 = a full-screen app is running, 3 = exclusive Direct3D full screen,
+        # 4 = presentation mode. A maximised window (5, "accepts notifications") is not full screen, even when it
+        # draws its own title bar (Chrome, Electron apps) and so covers the monitor.
+        state = ctypes.c_int(0)
+        fullscreen_app = (ctypes.windll.shell32.SHQueryUserNotificationState(ctypes.byref(state)) == 0
+                          and state.value in (2, 3, 4))
+        if not fullscreen_app:
+            if user32.IsZoomed(hwnd):
+                return ""
+            if user32.GetWindowLongW(hwnd, -16) & 0x00C00000 == 0x00C00000:   # has a title bar
+                return ""
         rect = wintypes.RECT()
         user32.GetWindowRect(hwnd, ctypes.byref(rect))
 
@@ -317,7 +326,8 @@ def fullscreen_foreground() -> str:
         if not monitor or not user32.GetMonitorInfoW(monitor, ctypes.byref(info)):
             return ""
         m = info.rcMonitor
-        if not (rect.left <= m.left and rect.top <= m.top and rect.right >= m.right and rect.bottom >= m.bottom):
+        if not fullscreen_app and not (rect.left <= m.left and rect.top <= m.top and rect.right >= m.right
+                                       and rect.bottom >= m.bottom):
             return ""
         pid = wintypes.DWORD()
         user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
