@@ -483,3 +483,215 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
         assert "next release" in (settings.outbox / "README.txt").read_text(encoding="utf-8")
         model.close()
         assert not providers.open_client.__qualname__.startswith("pin_slots")      # the app's own factory is back
+
+
+# --- incomplete model answers and unavailable checks: the actual Engine paths ----------------------------
+
+@pytest.mark.parametrize(
+    ("answer", "expected_cause"),
+    [
+        ("", "no answer"),
+        (" \n\t ", "no answer"),
+        ("I cannot finish the requested code.", "no Luau code block in the answer"),
+        ("```lua\n  \n```", "no Luau code block in the answer"),
+    ],
+    ids=["empty", "whitespace", "prose-only", "empty-code-fence"],
+)
+def test_unusable_answers_cannot_pass_or_enter_validation_as_lessons(tmp_path, answer, expected_cause):
+    from star.eval_checks import score_answer
+
+    settings, store, engine = engine_for(tmp_path, ["X-1", "V-1"], Script())
+
+    def solve(task, _lessons):
+        score = score_answer(task, answer, luau_check=fake.luau_ok)
+        return Result(score.passed, score.reasons, [check.record() for check in score.checks], answer)
+
+    engine._solve = solve
+    engine._diagnose = lambda _task, _result: {}
+    assert engine.run_item(engine.training[0]) == "failed"
+    assert store.state["tasks"]["X-1"]["cause"] == expected_cause
+    assert store.state["lessons"] == {}
+    assert not (settings.data / "examples.jsonl").exists()
+    measured = engine.measure([], "no-usable-code baseline")
+    assert measured is not None and (measured["passed"], measured["total"]) == (0, 1)
+    assert "V-1" not in store.state["tasks"]
+    assert store.state["validation"][0]["passed"] == 0
+    attempts = [json.loads(line) for line in (settings.data / "attempts.jsonl").read_text().splitlines()]
+    assert [(row["task"], row["purpose"], row["passed"]) for row in attempts] == [
+        ("X-1", "first", False), ("V-1", "validation", False)]
+
+
+def test_empty_answer_cannot_create_a_candidate_even_with_a_plausible_diagnosis(tmp_path):
+    from star.eval_checks import score_answer
+
+    settings, store, engine = engine_for(tmp_path, ["X-1", "V-1"], Script())
+
+    def empty_solve(task, _lessons):
+        score = score_answer(task, "", luau_check=fake.luau_ok)
+        return Result(score.passed, score.reasons, [check.record() for check in score.checks], "")
+
+    engine._solve = empty_solve
+    engine._diagnose = lambda _task, _result: {"cause": "forgot the code", "lesson": fake.LESSON}
+    assert engine.run_item(engine.training[0]) == "failed"
+    assert store.state["lessons"] == {} and engine.active() == []
+    assert store.state["counters"]["lessons_discarded"] == 1
+    assert store.state["counters"].get("candidates_kept", 0) == 0
+    assert not (settings.data / "examples.jsonl").exists()
+    attempts = [json.loads(line) for line in (settings.data / "attempts.jsonl").read_text().splitlines()]
+    assert [row["purpose"] for row in attempts] == ["first", "new lesson L1"]
+    assert all(not row["passed"] for row in attempts)
+
+
+def _real_model_engine_for_boundary(tmp_path):
+    """The real model-to-Engine adapter; only the app's model response is scripted."""
+    pytest.importorskip("openai")
+    from nightschool.real import RealModel
+
+    settings, store, engine = engine_for(tmp_path, ["X-1", "V-1"], Script())
+    gate = IdleGate(settings, BrainWatch(settings.brain_url, fetch=lambda _path: []),
+                    log=lambda _text: None)
+    model = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok, wait=False)
+    engine._solve = model.solve
+    engine._diagnose = lambda _task, _result: {}
+    return settings, store, engine, model
+
+
+@pytest.mark.parametrize(
+    ("failure", "outcome", "cause"),
+    [
+        (RuntimeError("Model-call limit exceeded"), "failed", "no answer"),
+        (RuntimeError("streamed no visible answer"), "failed", "no answer"),
+        (OSError("model service disconnected"), "error", None),
+    ],
+    ids=["call-budget-exhausted", "stream-without-text", "model-exception"],
+)
+def test_real_model_exceptions_reach_engine_with_the_correct_outcome(tmp_path, monkeypatch, failure, outcome, cause):
+    from star import desktop_core
+
+    settings, store, engine, model = _real_model_engine_for_boundary(tmp_path)
+
+    def broken_run(*_args, **_kwargs):
+        raise failure
+
+    try:
+        monkeypatch.setattr(desktop_core, "run_task", broken_run)
+        assert engine.run_item(engine.training[0]) == outcome
+    finally:
+        model.close()
+    assert store.state["lessons"] == {}
+    assert not (settings.data / "examples.jsonl").exists()
+    assert store.state["tasks"]["X-1"].get("cause") == cause
+    assert store.state["counters"].get("infrastructure_errors", 0) == (1 if outcome == "error" else 0)
+    assert store.state["counters"].get("still_failing", 0) == (1 if outcome == "failed" else 0)
+    attempts = [json.loads(line) for line in (settings.data / "attempts.jsonl").read_text().splitlines()]
+    assert len(attempts) == 1 and attempts[0]["purpose"] == "first"
+    assert attempts[0]["passed"] is False and bool(attempts[0]["error"]) == (outcome == "error")
+    assert "V-1" not in store.state["tasks"]
+
+
+def test_real_model_checker_exception_is_infrastructure_not_model_quality(tmp_path, monkeypatch):
+    from star import desktop_core
+
+    settings, store, engine, model = _real_model_engine_for_boundary(tmp_path)
+
+    def unavailable_checker(_code, *, strict=False):
+        raise OSError("Luau checker unavailable")
+
+    try:
+        monkeypatch.setattr(desktop_core, "run_task",
+                            lambda *_args, **_kwargs: "```lua\nreturn math.clamp(1, 0, 100)\n```")
+        model._luau_check = unavailable_checker
+        assert engine.run_item(engine.training[0]) == "error"
+    finally:
+        model.close()
+    assert store.state["counters"]["infrastructure_errors"] == 1
+    assert store.state["counters"].get("still_failing", 0) == 0
+    assert store.state["lessons"] == {} and not (settings.data / "examples.jsonl").exists()
+
+
+def test_new_lesson_retry_infrastructure_error_is_not_a_discarded_lesson(tmp_path):
+    settings, store, engine = engine_for(tmp_path, ["H-1", "V-1"], Script())
+
+    def solve(_task, lessons):
+        if lessons:
+            return Result(error="Luau checker unavailable")
+        return Result(False, ["require:uses_expected_call: expected call missing"], answer="```lua\nreturn 1\n```")
+
+    engine._solve = solve
+    engine._diagnose = lambda _task, _result: {"cause": "missing clamp", "lesson": fake.LESSON}
+    assert engine.run_item(engine.training[0]) == "error"
+    counters = store.state["counters"]
+    assert counters["infrastructure_errors"] == 1
+    assert counters.get("lessons_discarded", 0) == counters.get("still_failing", 0) == 0
+    assert store.state["tasks"]["H-1"]["status"] == "error"
+    assert store.state["lessons"] == {} and not (settings.data / "examples.jsonl").exists()
+    attempts = [json.loads(line) for line in (settings.data / "attempts.jsonl").read_text().splitlines()]
+    assert [row["purpose"] for row in attempts] == ["first", "new lesson L1"]
+    assert attempts[-1]["error"] == "Luau checker unavailable"
+
+
+def test_waiting_candidate_retry_error_is_not_a_failed_reattempt(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1"], script)
+    assert engine.run_item(engine.training[0]) == "fixed"
+    lesson = store.state["lessons"]["L1"]
+
+    def solve(task, lessons):
+        if task["id"] == "H-2" and lessons:
+            return Result(error="sandbox unavailable")
+        return script.solve(task, lessons)
+
+    engine._solve = solve
+    assert engine.run_item(engine.training[1]) == "error"
+    assert lesson["status"] == "candidate" and lesson["tried"] == ["H-1"]
+    assert lesson["fixed"] == ["H-1"] and len(lesson["evidence"]) == 1
+    assert store.state["tasks"]["H-2"]["status"] == "error"
+    assert store.state["counters"]["infrastructure_errors"] == 1
+    assert store.state["counters"].get("still_failing", 0) == 0
+    assert [json.loads(row)["purpose"] for row in
+            (settings.data / "attempts.jsonl").read_text().splitlines()][-2:] == ["first", "candidate L1"]
+    assert [json.loads(row)["task"] for row in
+            (settings.data / "examples.jsonl").read_text().splitlines()] == ["H-1"]
+
+
+def test_incomplete_validation_does_not_promote_and_resumes_without_duplicate_records(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2"], script)
+    assert engine.run_item(engine.training[0]) == "fixed"
+    assert engine.run_item(engine.training[1]) == "fixed"
+    script.error_on.add("V-2")
+    engine.consider_promotions()
+    assert store.state["lessons"]["L1"]["status"] == "candidate"
+    assert store.state["validation"] == []
+    assert store.state["counters"]["infrastructure_errors"] == 1
+    assert "V-1" not in store.state["tasks"] and "V-2" not in store.state["tasks"]
+    script.error_on.clear()
+    engine.consider_promotions()
+    assert store.state["lessons"]["L1"]["status"] == "active"
+    assert [row["passed"] for row in store.state["validation"]] == [2, 2]
+    assert [call for call in script.calls if call == ("V-1", ())] == [("V-1", ())]
+    engine.consider_promotions()
+    assert len(store.state["validation"]) == 2
+    assert [json.loads(row)["task"] for row in
+            (settings.data / "examples.jsonl").read_text().splitlines()] == ["H-1", "H-2"]
+
+
+def test_candidate_retry_budget_is_bounded_and_writes_one_final_task_record(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["X-1", "V-1"], script, retry_candidates=1)
+    for number in (1, 2):
+        key = f"L{number}"
+        store.state["lessons"][key] = {
+            "id": key, "text": f"Prefer a checked pattern numbered {number} instead of guessing.",
+            "cause": "required element missing (uses_expected_call)", "status": "candidate",
+            "tried": [], "fixed": [], "evidence": [],
+        }
+    engine._diagnose = lambda _task, _result: {}
+    assert engine.run_item(engine.training[0]) == "failed"
+    attempts = [json.loads(row) for row in (settings.data / "attempts.jsonl").read_text().splitlines()]
+    assert [row["purpose"] for row in attempts] == ["first", "candidate L1"]
+    assert store.state["lessons"]["L1"]["tried"] == ["X-1"]
+    assert store.state["lessons"]["L2"]["tried"] == []
+    assert store.state["tasks"]["X-1"]["tries"] == 1
+    assert store.state["counters"]["still_failing"] == 1
+    assert not (settings.data / "examples.jsonl").exists()
