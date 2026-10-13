@@ -99,7 +99,7 @@ PERMITTED_SETTINGS = frozenset({
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','research_auto_check',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -320,6 +320,12 @@ def sanitize_event(event: dict) -> dict:
         if _model_name(event.get('model')):
             activity['model']=event['model']
         return {'phase':'That model is not available. Using your main model','activity':activity}
+    if kind == 'worked_example_used':
+        count = _bounded_int(event.get('count'), 2)
+        if count is not None and count > 0:
+            return {'phase':f'Using {count} checked practice example' + ('s' if count != 1 else ''),
+                    'activity':{'type':'example','count':count}}
+        return {'phase':'Reviewing local reference data'}
     if kind == 'model_answered':
         # The model name the server itself reported on the answer.
         activity={'type':'model'}
