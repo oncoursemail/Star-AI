@@ -19,7 +19,7 @@ def gltf():
             {"count": 2, "type": "SCALAR", "componentType": 5126,
              "min": [0], "max": [1]},
             {"count": 2, "type": "VEC3", "componentType": 5126},
-            {"count": 2, "type": "MAT4", "componentType": 5126},
+            {"count": 1, "type": "MAT4", "componentType": 5126},
         ],
         "materials": [{"name": "Paint", "pbrMetallicRoughness": {"roughnessFactor": 0.5}}],
         "meshes": [{"primitives": [{
