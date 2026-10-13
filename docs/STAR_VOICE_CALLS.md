@@ -521,3 +521,8 @@ IndexTTS-2 no licence tag on the card (custom bilibili licence in the repo); Poc
 openrail. MOS estimates come from UTMOS22 strong (ONNX export `TigreGotico/utmos-onnx`, MIT; Saeki et al.,
 Interspeech 2022): a screen, not a listening test. It favours clean neutral read speech and scores breathy voices
 low (the owner-liked Nicole scores 3.0), so the owner's ears decide.
+
+VoxCPM2 (OpenBMB, 2B, Apache-2.0, voice design from a description, streaming) was also run in this round: it filled
+the card to 7.7 GB and ran about 2.8 times slower than real time, with MOS estimates 3.4 to 4.1 and large pitch drift
+between lines, so it is audition-only on an 8 GB card. Full table: `docs/research/voice.md` section 9 in the project
+folder.
