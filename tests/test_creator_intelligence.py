@@ -132,6 +132,21 @@ def test_external_resources_are_not_fetched_or_claimed_checked(tmp_path):
     assert not (tmp_path / "creds.png").exists()
 
 
+
+def test_malformed_node_collections_report_errors_not_uncaught_crashes(tmp_path):
+    for broken in (
+        lambda data: data["nodes"][0].update(children="1"),
+        lambda data: data["scenes"][0].update(nodes={"bad": True}),
+    ):
+        data = gltf()
+        broken(data)
+        save_json(tmp_path, data)
+        result = Workspace(tmp_path).call("workspace_asset_audit", {"path": "mesh.gltf"})
+        assert not result["structure_checked"]
+        assert any("array" in issue for issue in result["structural_issues"])
+
+
+
 def test_bounds_and_workspace_symlinks_are_enforced(tmp_path):
     save_json(tmp_path, gltf())
     ws = Workspace(tmp_path)
