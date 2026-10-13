@@ -28,6 +28,15 @@ class SpokenAnswer:
     audio: object
 
 
+def _accepts_live(brain) -> bool:
+    """True when the brain's reply() takes the per-turn `live` text (DiscordBrain does; test doubles may not)."""
+    import inspect
+    try:
+        return "live" in inspect.signature(brain.reply).parameters
+    except (TypeError, ValueError):
+        return False
+
+
 class DiscordService:
     def __init__(self, policy: AccessPolicy, *, brain=None, memory: SessionMemory | None = None,
                  ffmpeg_dir: str = "", searcher=None, rate_limiter: RateLimiter | None = None,
@@ -73,11 +82,33 @@ class DiscordService:
             live = {}
             if getattr(self.brain, "streams", False) is True and (on_delta or on_status):
                 live = {"on_delta": on_delta, "on_status": on_status}
+            remembered = question
+            if _accepts_live(self.brain):
+                # The time (and, for a news/"latest"/weather question, live web results) goes at the
+                # very end of the message (docs/agents/clock-and-web-20261013.md).
+                evidence, extra, clock_line = await self._live_context(question)
+                live["live"] = "\n\n".join(part for part in (extra, clock_line) if part)
+                if evidence:
+                    live["evidence"] = evidence
+                else:
+                    # Stored with the time line it was sent with, so the next request starts with
+                    # the bytes the server already read (prompt cache). Web results are not stored.
+                    remembered = question + "\n\n" + clock_line if not extra else question
             answer = await self.brain.reply(question, history, **live)
-            self.memory.remember(key, question, answer)
+            self.memory.remember(key, remembered, answer)
             return answer
         finally:
             self._brain_lock.release()
+
+    async def _live_context(self, question: str) -> tuple[str, str, str]:
+        """(cited web results or '', a one-line search note or '', the time line). Never raises."""
+        from ..clock import now_line
+        from ..live_context import auto_search
+        try:
+            web, sources = await auto_search(question, searcher=self._searcher)
+        except Exception:
+            web, sources = "", []
+        return (web if sources else ""), ("" if sources else web), now_line()
 
     async def inspect_image(self, key: tuple, prompt: str, jpeg: bytes, *, vision=None) -> str:
         """Owner image analysis (DM, /image or a confirmed /screen); bytes are never persisted."""
@@ -159,7 +190,12 @@ class DiscordService:
             sources = await asyncio.wait_for(searcher(query, limit=5), timeout=25)
             if not sources:
                 raise ValueError("The configured search provider returned no usable sources")
-            answer = await self.brain.reply(query, self.memory.history(key), evidence=source_context(sources))
+            extra = {}
+            if _accepts_live(self.brain):
+                from ..clock import now_line
+                extra["live"] = now_line()
+            answer = await self.brain.reply(query, self.memory.history(key), evidence=source_context(sources),
+                                            **extra)
             self.memory.remember(key, query, answer)
             return ResearchAnswer(answer, tuple(sources[:5]))
         finally:
