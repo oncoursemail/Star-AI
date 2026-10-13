@@ -478,7 +478,7 @@ def test_the_example_place_builds_to_the_expected_tree():
 def test_script_kinds_init_files_and_awkward_text(tmp_path):
     (tmp_path / "ServerScriptService" / "Shop").mkdir(parents=True)
     (tmp_path / "StarterPlayer" / "StarterPlayerScripts").mkdir(parents=True)
-    (tmp_path / "ServerScriptService" / "Main.server.luau").write_text("print('a ]]> b <&> é')\r\n", encoding="utf-8")
+    (tmp_path / "ServerScriptService" / "Main.server.luau").write_bytes("print('a ]]> b <&> é')\r\n".encode("utf-8"))
     (tmp_path / "ServerScriptService" / "Shop" / "init.lua").write_text("return {}", encoding="utf-8")
     (tmp_path / "ServerScriptService" / "Shop" / "Prices.luau").write_text("return {}", encoding="utf-8")
     (tmp_path / "ServerScriptService" / "notes.md").write_text("ignored", encoding="utf-8")
