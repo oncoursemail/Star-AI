@@ -113,8 +113,7 @@ verdict = gate_change("evals/results/baseline-v2.json", run_candidate=lambda: my
 
 ## Skill packs
 
-Twelve packs ship in `star/skill_packs/` in the normal Agent Skill format (`SKILL.md` with `name`/`description`, `references/sources.md`
-listing the official documentation pages and the API names checked against the knowledge service). They are chosen in code
+**Source inventory (October 12, 2026):** `star/next` contains **26 directories** under `star/skill_packs/` (counted from GitHub's source directory listing). This is not a verified installer inventory: the [published October 11, 2026 v0.9.0 release notes](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0) report **18 shipped packs**. In `star/skill_packs/__init__.py`, `available()` only loads directories with a valid `SKILL.md` name and description, so a folder count alone does not prove all 26 can load. Eligible source packs are chosen in code
 (`star/skill_packs/__init__.py`): the prompt must read as a Roblox question *and* name the pack's topic, never in quick
 chat mode, only the best-matching pack is added (about 240 tokens measured with the server's tokenizer, about 4 s of prompt reading at
 roughly 65 tokens per second), and it travels in the per-turn sections after the user's words, never in the system message
