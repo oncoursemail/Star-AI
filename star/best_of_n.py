@@ -634,7 +634,8 @@ class BestOfN:
         if self.started or not self.plan.active or not self.targets:
             return
         self.started = True
-        _emit(self._on_event, {"event": "best_of_n_started", "n": 1 + self.extra, "kind": self.plan.kind})
+        _emit(self._on_event, {"event": "best_of_n_started", "n": 1 + self.extra, "kind": self.plan.kind,
+                               "models": [t.model for t in self.targets]})
         # The test writer goes first: a short request that should get a slot before the long candidates queue.
         if self._write_tests is not None and getattr(self.checker, "can_run_tests", False):
             self._tests_task = asyncio.ensure_future(self._tests())
@@ -824,9 +825,11 @@ def evidence(outcome: Outcome, kind: str) -> str:
         return head + "STAR tried to write several versions and none finished; the first answer is shown unchecked.\n"
     names = [c.name for c in best.checks if c.ran]
     skipped = sorted({c.name for c in best.checks if c.status == "skip"})
-    text = (f"STAR wrote {len(written)} versions"
-            + (f" ({len(outcome.candidates) - len(written)} more did not finish)" if len(written) < len(outcome.candidates) else "")
-            + " and checked each one. ")
+    missing = len(outcome.candidates) - len(written)
+    text = (f"STAR started {len(outcome.candidates)} versions; {missing} did not finish in time, so only the one "
+            "shown was checked. " if len(written) == 1 else
+            f"STAR wrote {len(written)} versions"
+            + (f" ({missing} more did not finish)" if missing else "") + " and checked each one. ")
     if outcome.state == "repaired":
         text += f"None passed everything; STAR fixed the best one and it now passes {best.passed}/{best.ran} checks"
     elif best.hard_failures:
@@ -999,6 +1002,7 @@ def make_checker(kind: str, *, prompt: str, luau_check=None, runner=None, prelud
 # ------------------------------------------------------------------------------------------------ desktop turn
 
 PROBE_TIMEOUT_S = 0.5
+WAIT_FACTOR = 1.0
 FINISH_RESERVE_S = 75.0        # left for STAR's own Luau check, a repair and saving after the candidates
 
 
@@ -1074,7 +1078,9 @@ class DesktopTurn:
             return result
         main_seconds = monotonic() - self.began
         left = (budget - (monotonic() - started)) if started is not None and budget else 600.0
-        wait_s = max(0.0, min(max(30.0, 0.75 * main_seconds), left - FINISH_RESERVE_S))
+        # The candidates started with the main answer and share its server: give them as long again (2x in all).
+        # First live run: 0.75x cut off a star-fast candidate that wrote a longer answer at temperature 0.7.
+        wait_s = max(0.0, min(max(60.0, WAIT_FACTOR * main_seconds), left - FINISH_RESERVE_S))
         try:
             self.outcome = await self.run.finish(answer, main_model, wait_s=wait_s)
         except asyncio.CancelledError:

@@ -309,7 +309,7 @@ def test_slow_and_failed_candidates_do_not_hold_the_answer():
     assert outcome.chosen.index == 1
     errors = {c.model: c.error for c in outcome.candidates[1:]}
     assert errors["slow"] == "not finished in time" and "model not found" in errors["bad"]
-    assert "2 more did not finish" in outcome.footer
+    assert "2 did not finish in time, so only the one shown was checked" in outcome.footer
 
 
 def test_model_written_evidence_marker_is_neutralised():
