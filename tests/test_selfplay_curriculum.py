@@ -118,7 +118,8 @@ def test_trusted_runner_output_classification_and_bounded_rounds(tmp_path):
 
     result = asyncio.run(sp.run_approved_campaign(
         cfg, tmp_path, approved=True, lab_runner=fake_runner, clock=lambda: 2_000_000))
-    assert result["status"] == "passed" and len(result["rounds"]) == 2
+    assert result["status"] == "simulated" and len(result["rounds"]) == 2
+    assert result["studio_verified"] is False and result["learned_candidates"] == 0
     assert result["promoted_lessons"] == 0 and result["trained_weights"] is False
     assert len(calls) == 2
     assert all("selfplay/runs/campaign-" in str(directory).replace("\\", "/") for _, directory in calls)
