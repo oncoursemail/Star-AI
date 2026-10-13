@@ -64,6 +64,8 @@ export type ActivityPayload = {
   steps?: Array<{id?: string; role?: string; needs?: string[]}>
   /** Documentation lookup: how many passages came back. */
   passages?: number
+  /** Local checked practice, only a bounded count, never code or IDs. */
+  count?: number
   /** Luau check: passed | failed | repaired | unavailable. */
   result?: string
   repair?: boolean
@@ -214,6 +216,18 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
           index === found ? {...close(step, failed ? 'failed' : 'done', now, typeof activity.elapsed_ms === 'number' ? activity.elapsed_ms : undefined), detail} : step,
         )
         next.phase = failed ? 'Documentation unavailable' : 'Documentation ready'
+      }
+      break
+    }
+    case 'example': {
+      const count = activity.count
+      if (typeof count === 'number' && Number.isInteger(count) && count >= 1 && count <= 2 &&
+          !steps.some(step => step.id === 'checked-example')) {
+        steps = [...steps, {id: 'checked-example', kind: 'search', state: 'done',
+          title: 'Used checked practice example' + (count === 1 ? '' : 's'),
+          detail: 'Checked by automated practice tests, not Roblox Studio or a person.',
+          startedAt: now, endedAt: now}]
+        next.phase = 'Using local practice examples'
       }
       break
     }
