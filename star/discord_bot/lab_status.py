@@ -95,7 +95,7 @@ def _line(value: object, *, limit: int) -> str:
     if (not isinstance(value, str) or not 1 <= len(value) <= limit
             or value != value.strip() or any(ord(c) < 32 or ord(c) == 127 for c in value)):
         raise ValueError("Invalid Lab task label")
-    if any(c in value for c in "@\`*_~<>|"):
+    if any(c in value for c in "@*_~<>|") or chr(96) in value:
         raise ValueError("Lab task labels may not contain mentions or Markdown")
     return value
 
