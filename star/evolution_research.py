@@ -386,10 +386,13 @@ class ResearchWatcher:
     def check_many(self, source_ids: list[str] | None = None,
                    *, client: httpx.Client | None = None) -> list[dict]:
         """Sequential by design: avoid GitHub/Roblox secondary rate-limit bursts."""
-        # A manual click checks one bounded oldest-first batch, not the same
-        # five alphabetical URLs forever. Repeated clicks cover the catalog.
-        source_ids = ([name for name, _ in self._oldest_first()][:MAX_SOURCES_PER_CHECK]
-                      if source_ids is None else source_ids)
+        # Prioritize the never-checked sources as a *smaller* last batch.
+        # Filling that batch with already-checked sources would waste requests,
+        # obscure progress, and make a manual cycle recheck entries too early.
+        if source_ids is None:
+            ordered = self._oldest_first()
+            pending = [name for name, checked_at in ordered if checked_at is None]
+            source_ids = (pending if pending else [name for name, _ in ordered])[:MAX_SOURCES_PER_CHECK]
         if (not isinstance(source_ids, list) or not source_ids
                 or len(source_ids) > MAX_SOURCES_PER_CHECK
                 or any(name not in SOURCES for name in source_ids)
