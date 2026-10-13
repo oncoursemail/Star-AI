@@ -16,6 +16,7 @@ import {RobloxPanel} from './RobloxPanel'
 import {BlenderPanel} from './BlenderPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
+import {LearnedThisWeek} from './LearnedThisWeek'
 import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
@@ -587,6 +588,13 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    setMessages(list=>list.map(m=>m.mid===mid?{...m,feedback:value||undefined}:m))
    if(done.counts)setData(d=>({...d,learning:done.counts}))
  }
+ /** What was wrong with an answer marked not helpful: kept as a correction candidate (star/corrections.py). */
+ const correct=async(mid:number,text:string)=>{
+   const done=await act('messageFeedback',{messageId:mid,value:'down',correction:text}) as {counts?:LessonCounts}|null
+   if(!done)return false
+   if(done.counts)setData(d=>({...d,learning:done.counts}))
+   return true
+ }
  const copyConversation=async()=>{
    if(!messages.length){setNotice('Nothing to copy yet.');return}
    const transcript=messages.map(m=>(m.role==='assistant'?'STAR':m.role==='user'?'You':'System')+':\n'+m.text).join('\n\n---\n\n')
@@ -739,6 +747,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                        onRetry={recover?retryNow:undefined}
                        onAskAgain={m.role==='assistant'&&at===lastStar&&at>lastUser&&!busy&&lastUser>=0?()=>void send(messages[lastUser].text,[]):undefined}
                        onFeedback={m.role==='assistant'&&typeof m.mid==='number'&&!live?value=>void rate(m.mid as number,value):undefined}
+                       onCorrect={m.role==='assistant'&&typeof m.mid==='number'&&!live?text=>correct(m.mid as number,text):undefined}
                        onConnection={recover?()=>nav('brain'):undefined}/>
                      {at===lastUser&&timelineNode}
                    </Fragment>
@@ -799,6 +808,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={reducedMotion?instant:{duration:.2}}/></div></div>}
             </Panel>
             </LocalBrainFallback>
+            <section className="learn learn-brain" aria-label="Learning"><LearnedThisWeek invoke={act} disabled={inactive} project={data.project}/></section>
           </div></div>}
           {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">

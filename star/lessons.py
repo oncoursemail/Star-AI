@@ -665,9 +665,12 @@ class LessonStore:
         if not 1 <= limit <= 20 or not 100 <= max_chars <= 8000:
             raise ValueError("Recall budget outside the supported range")
         marks = ",".join("?" for _ in RECALLED_KINDS)
+        # A provisional lesson from night school (star/learned_week.py) carries its expiry in `revision`; once its 14
+        # days are over it is not recalled, even before the next sweep marks it expired.
         rows = self.db.execute(
             _SELECT + f"WHERE n.project=? AND n.status='accepted' AND n.reviewed=1 AND n.kind IN ({marks}) "
-            "ORDER BY n.id DESC LIMIT ?", (_project(project), *RECALLED_KINDS, RECALL_SCAN)).fetchall()
+            "AND NOT (n.revision LIKE 'provisional:%' AND substr(n.revision, 13) <= ?) "
+            "ORDER BY n.id DESC LIMIT ?", (_project(project), *RECALLED_KINDS, now(), RECALL_SCAN)).fetchall()
         wanted = subject_tokens(str(prompt)[:4000])
         seen: set[str] = set()
         ranked = []
@@ -886,6 +889,30 @@ def record_feedback(store: LessonStore, *, project: str, chat_id: str, message_i
                                   evidence=f"STAR's answer began: \"{str(answer or '')[:500]}\"")
 
 
+def record_correction(home: Path, store: LessonStore, *, project: str, chat_id: str, message_id: int, value: str,
+                      correction: str, question: str, answer: str) -> dict | None:
+    """Thumbs-down plus the owner's correction (W8): a regression-test candidate (star/corrections.py) and a lesson
+    candidate in the owner's words, both waiting for review. Any other thumb withdraws an unreviewed one."""
+    from .corrections import CorrectionStore
+    ref, source = f"{chat_id}#{message_id}", f"correction:{chat_id}#{message_id}"
+    corrections = CorrectionStore(home)
+    try:
+        if value != "down" or not correction.strip():
+            corrections.withdraw(project=project, source="app", ref=ref)
+            store.withdraw(project, CONTEXT, source)
+            return None
+        item = corrections.record(project=project, source="app", ref=ref, prompt=question, answer=answer,
+                                  correction=correction)
+    finally:
+        corrections.close()
+    store.withdraw(project, CONTEXT, source)
+    asked = " ".join(str(question or "").split())[:120]
+    store.capture_inferred(project=project, kind="correction", source_type=CONTEXT, source=source,
+                           text=f"Correction to an answer about \"{asked}\": {item['correction'][:400]}",
+                           evidence=f"STAR's answer began: \"{str(answer or '')[:500]}\"")
+    return {"id": item["id"], "status": item["status"], "cause": item["cause"]}
+
+
 # --- bridge ----------------------------------------------------------------------------------
 
 LESSON_ACTIONS = frozenset({"listLessons", "reviewLesson", "exportLessons", "messageFeedback"})
@@ -975,6 +1002,9 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
         value = body.get("value")
         if isinstance(message_id, bool) or not isinstance(message_id, int) or value not in ("up", "down", ""):
             raise ValueError("Invalid feedback")
+        correction = body.get("correction")
+        if correction is not None and (not isinstance(correction, str) or value != "down" or len(correction) > 1000):
+            raise ValueError("A correction goes with a thumbs-down and is text of at most 1000 characters")
         chats = Conversations(Path(home) / "conversations.sqlite3")
         try:
             rated = chats.set_feedback(project, message_id, value)
@@ -982,8 +1012,11 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
             chats.close()
         captured = record_feedback(store, project=project, chat_id=rated["chat_id"], message_id=message_id,
                                    value=value, question=rated["question"], answer=rated["answer"])
+        regression = record_correction(home, store, project=project, chat_id=rated["chat_id"],
+                                       message_id=message_id, value=value, correction=correction or "",
+                                       question=rated["question"], answer=rated["answer"])
         return {"messageId": message_id, "value": value, "counts": store.counts(project),
-                "lesson_id": captured.lesson_id if captured else None}
+                "lesson_id": captured.lesson_id if captured else None, "correction": regression}
     finally:
         store.close()
         metrics.close()

@@ -120,6 +120,24 @@ class DiscordService:
             home=home if home is not None else app_data(),
         )
 
+    async def propose_dm_correction(self, key: tuple, *, message_id: int, text: str, project: str, home=None):
+        """The owner says STAR's last DM answer was wrong: a regression-test candidate plus a lesson candidate,
+        both reviewed in STAR Desktop. The corrected question and answer come from this DM's own short memory."""
+        if not isinstance(key, tuple) or len(key) != 3 or key[0] is not None:
+            raise PermissionError("Corrections are owner-DM only")
+        self.policy.require(key[2], None, key[1])
+        turns = self.memory.history(key)
+        question = next((t["content"] for t in reversed(turns) if t["role"] == "user"), "")
+        answer = next((t["content"] for t in reversed(turns) if t["role"] == "assistant"), "")
+        from ..desktop_core import app_data
+        from .dm_mode import capture_discord_correction
+        return await asyncio.to_thread(
+            capture_discord_correction,
+            owner_id=key[2], allowed_owners=self.policy.owners, message_id=message_id, text=text,
+            question=question, answer=answer, project=project,
+            home=home if home is not None else app_data(),
+        )
+
     async def research(self, key: tuple, question: str) -> ResearchAnswer:
         """Optional cited web search; only existing STAR-configured search providers.
 

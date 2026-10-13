@@ -1,3 +1,4 @@
+import {CorrectionBox} from './CorrectionBox'
 import {splitSources, type AnswerSource} from './sources'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
@@ -170,6 +171,8 @@ export type MessageProps = {
   onConnection?: () => void
   /** Rate a saved answer: 'up', 'down', or '' to take the rating back. STAR keeps it as a note to review. */
   onFeedback?: (value: 'up' | 'down' | '') => void
+  /** After a thumbs-down: the owner says what was wrong (a correction that may become a regression test). */
+  onCorrect?: (text: string) => Promise<boolean> | void
 }
 
 /** A turn that ended without an answer. The backend stores this row, so it reads the same after a restart. */
@@ -219,7 +222,7 @@ function TurnNotice({entry, animated, onRetry, onEdit, onConnection}: MessagePro
 export function Message(props: MessageProps) {
   const reduced = useStarReducedMotion()
   const variants = useMotionVariants(messageIn)
-  const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain, onFeedback} = props
+  const {entry, partial = false, pinned = false, animated = true, onEdit, onAskAgain, onFeedback, onCorrect} = props
   if (entry.role === 'event') return <TurnNotice {...props} animated={animated} />
   const isUser = entry.role === 'user'
   const hasImage = Boolean(entry.image?.startsWith('data:image/webp;base64,'))
@@ -316,6 +319,7 @@ export function Message(props: MessageProps) {
           )}
         </div>
       )}
+      {onCorrect && !isUser && entry.feedback === 'down' && <CorrectionBox key={String(entry.mid ?? entry.id)} onCorrect={onCorrect} />}
     </motion.article>
   )
 }
