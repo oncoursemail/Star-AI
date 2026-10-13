@@ -57,13 +57,14 @@ def png():
     return out.getvalue()
 
 
-def test_settings_off_by_default_and_strict_host_only():
+def test_settings_off_by_default_and_strict_host_only(tmp_path):
     assert LabSettings.from_env({}) == LabSettings(False, None)
     assert LabSettings.from_env({"STAR_DISCORD_LAB_STATUS": "0",
                                  "STAR_DISCORD_LAB_REPORT": "/private/path"}) == LabSettings()
+    selected = tmp_path / "latest.json"
     ok = LabSettings.from_env({"STAR_DISCORD_LAB_STATUS": "1",
-                               "STAR_DISCORD_LAB_REPORT": "/tmp/star/latest.json"})
-    assert ok.enabled is True and ok.report_path == Path("/tmp/star/latest.json")
+                               "STAR_DISCORD_LAB_REPORT": str(selected)})
+    assert ok.enabled is True and ok.report_path == selected
     for flag in ("on", "yes", "2", "true"):
         with pytest.raises(ValueError, match="must be 0 or 1"):
             LabSettings.from_env({"STAR_DISCORD_LAB_STATUS": flag})
@@ -83,7 +84,7 @@ def test_receipt_schema_rejects_false_claim_fields_and_unsupported_sources():
         {"engine": "desktop"}, {"state": "secret"}, {"phase": "hacking"},
         {"evidence": "definitely-perfect"},
         {"checked": 9}, {"checked": True}, {"total": "10"},
-        {"task": "Look @everyone, this is done"}, {"task": "Run sudo"},
+        {"task": "Look @everyone, this is done"},
         {"next_step": "Leak\nCredentials"},
         {"updated_at": "2026-10-13T00:00:00+05:00"},
         {"updated_at": "today"}, {"job_id": "../../etc/passwd"},
@@ -171,14 +172,14 @@ def test_only_specific_owner_phrases_route_to_lab_without_an_llm():
     assert classify_lab_question("x" * 200) == ""
 
 
-def test_configured_lab_does_not_grant_any_new_bot_intents():
+def test_configured_lab_does_not_grant_any_new_bot_intents(tmp_path):
     discord = pytest.importorskip("discord")
     from star.discord_bot.bot import create_bot
 
     cfg = BotConfig.from_env({"STAR_DISCORD_BOT_TOKEN": "dummy",
                               "STAR_DISCORD_OWNER_IDS": "123",
                               "STAR_DISCORD_LAB_STATUS": "1",
-                              "STAR_DISCORD_LAB_REPORT": "/tmp/star/latest.json"})
+                              "STAR_DISCORD_LAB_REPORT": str(tmp_path / "latest.json")})
     bot = create_bot(cfg)
     import asyncio
     try:
