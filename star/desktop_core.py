@@ -103,6 +103,7 @@ class Settings:
     blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
     blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
     blender_executable: str = ''           # installed local executable; '' = discover without downloading
+    blender_brain2: bool = False           # use the Blender on brain 2 (the second STAR server) instead of a local one
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
@@ -162,7 +163,7 @@ class Settings:
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
+                            'blender_enabled', 'blender_edit', 'blender_brain2', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -179,6 +180,8 @@ class Settings:
             raise ValueError('Invalid local Graphify MCP port')
         if self.blender_edit and not self.blender_enabled:
             raise ValueError('Enable Blender before enabling Blender scene creation')
+        if self.blender_brain2 and not self.blender_enabled:
+            raise ValueError('Enable Blender before choosing the Blender on brain 2')
         if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
                 or '\x00' in self.blender_executable
                 or self.blender_executable.startswith(('\\\\', '//'))
@@ -1263,7 +1266,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             async with AsyncExitStack() as connections:
                                 tool_kwargs = dict(kwargs)
                                 if allow_blender:
-                                    from .blender_mcp import connect_blender
+                                    if settings.blender_brain2 is True:
+                                        from .blender_brain2 import connect_brain2_blender as connect_blender
+                                    else:
+                                        from .blender_mcp import connect_blender
                                     tool_kwargs["blender"] = await connections.enter_async_context(
                                         connect_blender(settings, home))
                                 if allow_studio:

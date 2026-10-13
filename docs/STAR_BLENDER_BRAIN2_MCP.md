@@ -109,3 +109,13 @@ Roblox's official Blender workflow explicitly discusses coordinate/scale differe
 **Manual Windows/Blender:** test actual official Blender 4.x/5.x binary; verify nonempty editable .blend, .glb geometry and PNG; inspect exported meshes in the Studio Importer; measure job wall time, memory, output size and rendered quality, including failure and timeout cases. Test installer upgrade preservation and the packaged executable path. Before any version is described as released or production-ready, attach screenshot and native device evidence.
 
 **Future work (not shipped):** full Blender modeling and texture-baking graph, skinned and physics foliage, camera-lock reference matching with perceptual and semantic scoring, animation strip validation, visual artifact preview UI, imported Roblox mesh reconciliation and artist-reviewed self-improvement gated by held-out benchmarks. These should be separate small audited PRs, not unbounded powers granted to Brain 2.
+
+## Update 2026-10-13: the Blender that runs ON brain 2 (live GUI, official Blender Lab MCP)
+
+The sections above describe the local, headless, recipe-only connector. A second, opt-in route lets STAR work in the real
+Blender 5.2 GUI that runs on brain 2 (the second STAR server), look at it like a person (viewport screenshots from set camera
+angles, quick renders) and export GLB/FBX for Roblox. Setting `blender_brain2` (needs `blender_enabled`; `blender_edit` for
+anything that changes a scene or starts Blender); off by default. The tool is `star_blender` (`star/blender_brain2.py`); it reaches the
+official Blender Lab MCP add-on through an operator-chosen ssh command, like the Studio connector, and model-written Python
+(`run_bpy`) passes an AST allow-list first. Details, measurements, security model and the live demo evidence:
+`docs/agents/blender-brain2-20261013.md` and `docs/agents/blender-brain2-20261013/`. Launcher and setup script: `server/brain2_blender/`.
