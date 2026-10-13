@@ -734,7 +734,8 @@ def test_waiting_candidate_retry_error_is_not_a_failed_reattempt(tmp_path):
 
 def test_incomplete_validation_does_not_promote_and_resumes_without_duplicate_records(tmp_path):
     script = Script()
-    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2"], script)
+    # W1 (paired gate): the slice needs tasks the lesson helps (V-needs-*), or the gate is INCONCLUSIVE.
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1", "V-2"] + NEEDS, script)
     assert engine.run_item(engine.training[0]) == "fixed"
     assert engine.run_item(engine.training[1]) == "fixed"
     script.error_on.add("V-2")
@@ -744,12 +745,15 @@ def test_incomplete_validation_does_not_promote_and_resumes_without_duplicate_re
     assert store.state["counters"]["infrastructure_errors"] == 1
     assert "V-1" not in store.state["tasks"] and "V-2" not in store.state["tasks"]
     script.error_on.clear()
+    script.calls.clear()
     engine.consider_promotions()
     assert store.state["lessons"]["L1"]["status"] == "active"
-    assert [row["passed"] for row in store.state["validation"]] == [2, 2]
+    assert [row["passed"] for row in store.state["validation"]] == [4, 10]
+    # V-1's first sample (both arms) was recorded before the error and is kept: only sample 2 runs again.
     assert [call for call in script.calls if call == ("V-1", ())] == [("V-1", ())]
+    calls = len(script.calls)
     engine.consider_promotions()
-    assert len(store.state["validation"]) == 2
+    assert len(store.state["validation"]) == 2 and len(script.calls) == calls
     assert [json.loads(row)["task"] for row in
             (settings.data / "examples.jsonl").read_text().splitlines()] == ["H-1", "H-2"]
 
