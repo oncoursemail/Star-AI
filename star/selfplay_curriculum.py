@@ -117,7 +117,7 @@ def build_obstacle_course(seed: int, *, difficulty: int = 1,
 
 def preview(cfg: Curriculum) -> dict:
     """Never connects to Studio, writes files, or calls a model."""
-    plans = [build_obstacle_course(cfg.seed + index, difficulty=cfg.difficulty,
+    plans = [build_obstacle_course((cfg.seed + index) % (2**31), difficulty=cfg.difficulty,
                                    max_iterations=cfg.max_iterations,
                                    play_seconds=cfg.play_seconds)
              for index in range(cfg.rounds)]
@@ -281,7 +281,7 @@ async def run_approved_campaign(cfg: Curriculum, home: Path, *, approved: bool =
     home = Path(home).expanduser().resolve()
     if not home.is_dir() or (home / "selfplay").is_symlink():
         raise PermissionError("Choose a real local STAR private data directory")
-    specs = [build_obstacle_course(cfg.seed + i, difficulty=cfg.difficulty,
+    specs = [build_obstacle_course((cfg.seed + i) % (2**31), difficulty=cfg.difficulty,
                                    max_iterations=cfg.max_iterations,
                                    play_seconds=cfg.play_seconds)
              for i in range(cfg.rounds)]
@@ -302,16 +302,23 @@ async def run_approved_campaign(cfg: Curriculum, home: Path, *, approved: bool =
             try:
                 report = await runner(home, spec, directory, log=lambda *_: None)
                 proof = studio_proof(report, target)
-                entry = {"seed": cfg.seed + ordinal - 1, "ordinal": ordinal,
+                entry = {"seed": (cfg.seed + ordinal - 1) % (2**31), "ordinal": ordinal,
                          "status": "passed" if proof["studio_verified"] else "failed",
                          "evidence": proof, "spec_sha256": digest(spec)}
                 results.append(entry)
                 if not report.get("ok") and not report.get("iterations"):
                     status = "unknown"
                     break
-            except BaseException:
+            except asyncio.CancelledError:
                 status = "unknown"
-                results.append({"seed": cfg.seed + ordinal - 1,
+                results.append({"seed": (cfg.seed + ordinal - 1) % (2**31),
+                                "ordinal": ordinal, "status": "unknown",
+                                "evidence": {"reason": "cancelled_remote_state_unknown"}})
+                ledger.finish(cycle, status=status, results=results)
+                raise
+            except Exception:
+                status = "unknown"
+                results.append({"seed": (cfg.seed + ordinal - 1) % (2**31),
                                 "ordinal": ordinal, "status": "unknown",
                                 "evidence": {"reason": "remote_result_unknown"}})
                 break
@@ -319,10 +326,64 @@ async def run_approved_campaign(cfg: Curriculum, home: Path, *, approved: bool =
             if results and all(x["status"] == "passed" for x in results):
                 status = "passed"
         ledger.finish(cycle, status=status, results=results)
-        return {"status": status, "campaign_id": cycle, "rounds": results,
-                "studio_verified": status == "passed",
-                "learned_candidates": sum(x["status"] == "passed" for x in results),
+        simulated = lab_runner is not None
+        return {"status": "simulated" if simulated and status == "passed" else status,
+                "campaign_id": cycle, "rounds": results,
+                "studio_verified": status == "passed" and not simulated,
+                "simulated_runner": simulated,
+                "learned_candidates": (0 if simulated else sum(
+                    x["status"] == "passed" for x in results)),
                 "promoted_lessons": 0, "trained_weights": False,
                 "note": "Learning records are only candidates until independent review."}
     finally:
         ledger.close()
+
+
+def main(argv=None) -> int:
+    """Owner-only command: preview without Studio, run with explicit approval."""
+    import argparse
+    import sys
+
+    parser = argparse.ArgumentParser(description="STAR bounded Roblox Studio self-play curriculum")
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("preview", "run"):
+        command = commands.add_parser(name)
+        command.add_argument("--project", required=True)
+        command.add_argument("--seed", type=int, default=1)
+        command.add_argument("--rounds", type=int, default=3)
+        command.add_argument("--difficulty", type=int, default=1)
+        command.add_argument("--max-iterations", type=int, default=3)
+        command.add_argument("--play-seconds", type=int, default=90)
+        if name == "run":
+            command.add_argument("--home", required=True, type=Path)
+            command.add_argument("--i-approve-studio-test-place", action="store_true")
+    ack = commands.add_parser("acknowledge-unknown")
+    ack.add_argument("--home", required=True, type=Path)
+    ack.add_argument("--campaign", required=True, type=int)
+    ack.add_argument("--i-reviewed-the-studio-state", action="store_true")
+    args = parser.parse_args(argv)
+    if args.command == "acknowledge-unknown":
+        file = args.home.expanduser().resolve(strict=True) / "selfplay" / "campaigns.sqlite3"
+        if not file.is_file():
+            parser.error("No self-play ledger exists to acknowledge")
+        ledger = CampaignLedger(file)
+        try:
+            ledger.acknowledge_unknown(args.campaign, human_approved=args.i_reviewed_the_studio_state)
+        finally:
+            ledger.close()
+        print(json.dumps({"acknowledged": args.campaign}, sort_keys=True))
+        return 0
+    cfg = Curriculum(project=args.project, seed=args.seed, rounds=args.rounds,
+                     difficulty=args.difficulty, max_iterations=args.max_iterations,
+                     play_seconds=args.play_seconds)
+    if args.command == "preview":
+        result = preview(cfg)
+    else:
+        result = asyncio.run(run_approved_campaign(
+            cfg, args.home, approved=args.i_approve_studio_test_place))
+    print(json.dumps(result, indent=2, sort_keys=True))
+    return 0 if result.get("status") in (None, "passed") else 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
