@@ -35,6 +35,8 @@ from .chat_images import chat_image, generate_chat_image, latest_generated_path
 from .comfy import ComfyError
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
+from .screen_capture import (require_consent as require_screen_consent, store_capture as store_screen_capture,
+                             describe as describe_screen_capture, preview_url as screen_preview_url)
 from .mcp_connections import MCPGateway
 from .blender_bridge import status as blender_status
 from .studio_connections import connection_status, validate_target, select_instance
@@ -62,6 +64,9 @@ ALLOWED_ACTIONS = frozenset({
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
+    # Sidebar chat menu (rename, delete after the Undo window) and the composer's
+    # "Look at my screen", which needs the owner's per-use consent (star/screen_capture.py).
+    'renameChat','deleteChat','captureScreen',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
@@ -83,7 +88,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 WARM_UP_STOPPERS = frozenset({
     'sendMessage','runTeam','generateImage','testServer','testModel','testModelTeam','listModels',
     'startModelRouter','stopBrain','startBrain','installBrain','saveSettings','switchProject',
-    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender',
+    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender','deleteChat',
 })
 
 # Settings the React interface may change. Never a credential: provider and
@@ -703,6 +708,39 @@ def launch():
             payload={'requestId':request_id,'kind':kind,'data':data}
             self.event.emit(json.dumps(payload,default=str))
 
+        def _capture_screen(self) -> dict:
+            """Hide STAR, grab the screen it is on, show STAR again, and store one PNG."""
+            from PySide6.QtCore import QBuffer, QByteArray, QEventLoop, QIODevice, QTimer as _Timer, Qt
+            from PySide6.QtGui import QGuiApplication
+            window=self.host
+            screen=window.screen() if hasattr(window,'screen') else None
+            screen=screen or QGuiApplication.primaryScreen()
+            if screen is None:
+                raise RuntimeError('No screen is available to capture')
+            visible=window.isVisible()
+            if visible:
+                window.hide()  # STAR itself is not what the owner wants it to look at
+                pause=QEventLoop()
+                _Timer.singleShot(320,pause.quit)
+                pause.exec()
+            try:
+                pixmap=screen.grabWindow(0)
+            finally:
+                if visible:
+                    window.show();window.raise_();window.activateWindow()
+            if pixmap.isNull():
+                raise RuntimeError('Windows did not return a picture of the screen')
+            def encode(image,fmt,quality=-1)->bytes:
+                data=QByteArray();buffer=QBuffer(data);buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                ok=image.save(buffer,fmt,quality);buffer.close()
+                if not ok:raise RuntimeError('Could not encode the screenshot')
+                return bytes(data)
+            path=store_screen_capture(encode(pixmap,'PNG'),app_data())
+            self.allowed_files.add(path)
+            thumb=pixmap.scaledToWidth(min(480,pixmap.width()),Qt.TransformationMode.SmoothTransformation)
+            return describe_screen_capture(path,pixmap.width(),pixmap.height(),
+                                           screen_preview_url(encode(thumb,'JPEG',78),'image/jpeg'))
+
         def _run(self, request_id: str, action: str, worker):
             def task():
                 try:
@@ -969,6 +1007,27 @@ def launch():
                     if not self.active_task:self._warm(check=False)
                     busy=bool(self.active_task and self.turn is not None and self.turn.chat_id==chat_id)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=busy)})
+                if action=='renameChat':
+                    chat_id=str(body.get('chatId',''))[:80]
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: title=conversations.rename_chat(settings.project,chat_id,str(body.get('title',''))[:400])
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':{'chatId':chat_id,'title':title}})
+                if action=='deleteChat':
+                    # The interface waits out its Undo window before sending this; the owner chose it.
+                    chat_id=str(body.get('chatId',''))[:80]
+                    if self.active_task and self.turn is not None and self.turn.chat_id==chat_id:
+                        raise RuntimeError('Stop the answer in this chat before deleting it')
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.delete_chat(settings.project,chat_id)
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                if action=='captureScreen':
+                    # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
+                    require_screen_consent(body)
+                    return json.dumps({'ok':True,'data':self._capture_screen()})
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)

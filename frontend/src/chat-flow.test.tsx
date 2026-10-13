@@ -426,6 +426,7 @@ describe('connection status with a STAR Server', () => {
     const id = await waitFor(() => desktop.requestOf('testModel'))
     desktop.host({server: check(true)})
     desktop.emitRaw(id, 'result', {ok: true, model: 'star-fast', sample: 'STAR is ready.'})
+    await user.click(screen.getByRole('button', {name: 'More'}))
     await user.click(screen.getByRole('button', {name: 'Model'}))
     expect(await screen.findByText(/Status: ready/)).toBeTruthy()
   })
