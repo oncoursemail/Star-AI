@@ -745,7 +745,10 @@ def test_incomplete_validation_does_not_promote_and_resumes_without_duplicate_re
     assert "V-1" not in store.state["tasks"] and "V-2" not in store.state["tasks"]
     script.error_on.clear()
     engine.consider_promotions()
-    assert store.state["lessons"]["L1"]["status"] == "active"
+    # Both V tasks pass without the lesson, so a completed retry is INCONCLUSIVE, not a promotion.
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "candidate" and lesson["gated_at_fixes"] == 2
+    assert lesson["gates"][-1]["gate"]["decision"] == "INCONCLUSIVE"
     assert [row["passed"] for row in store.state["validation"]] == [2, 2]
     assert [call for call in script.calls if call == ("V-1", ())] == [("V-1", ())]
     engine.consider_promotions()
