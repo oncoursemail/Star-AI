@@ -163,9 +163,9 @@ def format_learning_digest(
         ))
     lines.extend((
         f"Latest practice failures: **{current.failed_latest}**",
-        f"Unseen validation: **{current.validation_passed}/{current.validation_total}** "
-        f"(original baseline {current.baseline_passed}/{current.validation_total})",
-        f"Candidate lessons awaiting promotion: **{current.candidates}**",
+        f"Validation slice (not used to draft lessons): **{current.validation_passed}/{current.validation_total}** "
+        f"(earliest visible score {current.baseline_passed}/{current.validation_total})",
+        f"Candidate lessons kept (cumulative): **{current.candidates}**",
         "The model's weights have **not** changed. No claim of improved general intelligence "
         "is made without an independently repeated validation gain.",
     ))
