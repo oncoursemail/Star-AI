@@ -80,7 +80,7 @@ def test_planted_real_physics_defects_are_beyond_what_was_ever_jumped():
         assert max(leg["gap"] for leg in legs) >= 10.5          # 9.5 was jumped sometimes
     for name in ("V3TallStep", "V3TallStepClimb", "V3Terrace"):
         legs = map_plan.dry_run(spec_named(name)["plan"], include_operations=False)["route"]["legs"]
-        assert max(leg["rise"] for leg in legs) >= 9.0          # 7.6 was the most ever jumped
+        assert max(leg["rise"] for leg in legs) >= 11.0         # 9 and 9.5 were mounted (jump + ledge step-up)
 
 
 # --------------------------------------------------------------------------- expected outcomes
@@ -341,3 +341,21 @@ def test_configured_account_is_read_only_from_the_lab_home_and_must_be_a_positiv
     for bad in ("123", -5, True, 1.5):
         target.write_text(json.dumps({"command": ["x"], "own_account_id": bad}), encoding="utf-8")
         assert studio_lab_parallel.configured_account(tmp_path) is None
+
+
+def test_a_ledge_climbed_instead_of_jumped_is_a_too_high_rise():
+    """Live v3: 9- and 9.5-stud rises were 'reached' by the probe CLIMBING the ledge face. Above the highest rise a
+    real jump made (7.6), a climbed leg is the planted defect, not a pass; a climbed low step is not."""
+    plan = spec_named("V3TallStep")["plan"]
+    legs = [{"name": "StartFloor", "reached": True, "highest": 10.5, "stood_on": []},
+            {"name": "P1", "reached": True, "highest": 16.8, "stood_on": []},
+            {"name": "P2", "reached": True, "highest": 18.4, "stood_on": [], "climbed": True}]
+    probe = {"finished": True, "started": True, "ok": True, "legs": legs, "problem": "", "failed_leg": None}
+    defects = studio_lab.diagnose(plan, {"ok": True}, probe, [])
+    assert [d["code"] for d in defects] == ["jump-too-high"] and defects[0]["evidence"]["climbed"] is True
+    fixed, changes = studio_lab.fix_plan(plan, defects)
+    assert changes[0]["fix"] == "lower-target"
+    low = spec_named("V3CleanLong")["plan"]
+    legs = [{"name": "StartFloor", "reached": True, "highest": 10.5, "stood_on": []},
+            {"name": "P1", "reached": True, "highest": 16.8, "stood_on": [], "climbed": True}]
+    assert studio_lab.diagnose(low, {"ok": True}, {**probe, "legs": legs}, []) == []

@@ -1,7 +1,7 @@
 {
  "name": "V3Terrace",
  "kind": "map",
- "description": "Two easy steps, then a 9-stud climb up to a terrace (maxJumpRise 10).",
+ "description": "Two easy steps, then an 11.5-stud climb up to a terrace (maxJumpRise 12).",
  "defect": "rise-too-high",
  "expect": {
   "first_pass": false,
@@ -84,7 +84,7 @@
     "name": "Terrace",
     "position": [
      -10.0,
-     19.0,
+     21.5,
      150.0
     ],
     "size": [
@@ -100,7 +100,7 @@
     "name": "Goal",
     "position": [
      3.0,
-     19.0,
+     21.5,
      150.0
     ],
     "size": [
@@ -133,7 +133,7 @@
     "Terrace",
     "Goal"
    ],
-   "maxJumpRise": 10
+   "maxJumpRise": 12
   }
  }
 }

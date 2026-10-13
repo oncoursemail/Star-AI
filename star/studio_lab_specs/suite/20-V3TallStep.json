@@ -1,7 +1,7 @@
 {
  "name": "V3TallStep",
  "kind": "map",
- "description": "A 9-stud rise (maxJumpRise 10); the next leg is flat, so lowering the landing keeps the course.",
+ "description": "An 11.5-stud rise (maxJumpRise 12); the next leg is flat, so lowering the landing keeps the course. (Live v3: a default R15 mounted 9- and 9.5-stud ledges, jump apex plus a step-up.)",
  "defect": "rise-too-high",
  "expect": {
   "first_pass": false,
@@ -66,7 +66,7 @@
     "name": "P2",
     "position": [
      -15.0,
-     15.0,
+     17.5,
      150.0
     ],
     "size": [
@@ -81,7 +81,7 @@
     "name": "P3",
     "position": [
      -3.0,
-     15.0,
+     17.5,
      150.0
     ],
     "size": [
@@ -96,7 +96,7 @@
     "name": "Goal",
     "position": [
      9.0,
-     15.0,
+     17.5,
      150.0
     ],
     "size": [
@@ -129,7 +129,7 @@
     "P3",
     "Goal"
    ],
-   "maxJumpRise": 10
+   "maxJumpRise": 12
   }
  }
 }

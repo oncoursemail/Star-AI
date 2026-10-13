@@ -1,7 +1,7 @@
 {
  "name": "V3TallStepClimb",
  "kind": "map",
- "description": "A 9.5-stud rise followed by a 4-stud climb: lowering the landing would make the next rise too high, so a step is added.",
+ "description": "An 11.5-stud rise followed by a 4-stud climb: lowering the landing would make the next rise too high, so a step is added.",
  "defect": "rise-too-high",
  "expect": {
   "first_pass": false,
@@ -66,7 +66,7 @@
     "name": "P2",
     "position": [
      -14.0,
-     15.5,
+     17.5,
      150.0
     ],
     "size": [
@@ -81,7 +81,7 @@
     "name": "P3",
     "position": [
      -3.0,
-     19.5,
+     21.5,
      150.0
     ],
     "size": [
@@ -96,7 +96,7 @@
     "name": "Goal",
     "position": [
      9.0,
-     19.5,
+     21.5,
      150.0
     ],
     "size": [
@@ -129,7 +129,7 @@
     "P3",
     "Goal"
    ],
-   "maxJumpRise": 10
+   "maxJumpRise": 12
   }
  }
 }

@@ -915,6 +915,14 @@ def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[di
                         if str(name).startswith(prefix)} - allowed)
         extra = [name for name in extra if name in boxes]
         a, b = boxes[source], boxes[target]
+        # Got up a ledge higher than any real jump by CLIMBING its side (Humanoid climbing state; seen live on 9- and
+        # 9.5-stud rises in v3): the route works for the probe but is not a jump a player can rely on.
+        leg_gap, leg_rise = _leg(a, b)
+        if leg.get("climbed") and not extra and leg_rise > REAL_JUMPED_RISE:
+            defects.append({"code": "jump-too-high", "fix": "ease-rise", "object": target, "evidence": {
+                "leg": f"{source} -> {target}", "gap": round(leg_gap, 2), "rise": round(leg_rise, 2), "climbed": True,
+                "probe": leg}})
+            return defects
         # Higher than a jump can lift the character (root 3 above the feet + JumpHeight 7.2 + margin), or climbing:
         # it got up on something. Name the parts in the jump corridor.
         too_high = (leg.get("highest") or 0) > max(a["hi"][1], b["hi"][1]) + 3 + 7.2 + 1.5

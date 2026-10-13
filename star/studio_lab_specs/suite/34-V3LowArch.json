@@ -1,7 +1,7 @@
 {
  "name": "V3LowArch",
  "kind": "map",
- "description": "An archway lintel only 4 studs above plaza B's floor spans the walking line.",
+ "description": "An archway lintel only 2.5 studs above plaza B's floor spans the walking line (a 4-stud clearance was walked under in a real playtest).",
  "defect": "roof-over-walkway",
  "expect": {
   "first_pass": false,
@@ -116,7 +116,7 @@
     "name": "Lintel",
     "position": [
      -4.0,
-     11.0,
+     9.5,
      150.0
     ],
     "size": [
