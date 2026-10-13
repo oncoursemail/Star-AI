@@ -1009,3 +1009,18 @@ def test_lesson_drafts_on_star_quick_are_not_mistaken_for_chat(tmp_path):
     client = FakeClient()
     PlannedGate(settings, FakeWatch(), planner=client, log=lambda m: None).look()
     assert client.calls[0][4] == {"slot": 1, "extra_models": ["star-voice"]}
+
+
+def test_a_connector_studio_id_maps_to_a_free_attached_studio():
+    universe, place = arp.STUDIO_TEST_PLACE
+    two = brain2(studios=2)
+    req = arp.JobRequest("studio-test", "studio-lab-a", "run", studio_id="mcp-abc", universe_id=universe,
+                         place_id=place, identity_verified=True)
+    assert arp.resolve_studio(req, two, []).studio_id == "studio-100"
+    taken = lease("studio-test", "studio-lab-b", studio_id="studio-100")
+    assert arp.resolve_studio(req, two, [taken]).studio_id == "studio-101"
+    assert admit("studio-test", two, [taken], holder="studio-lab-a", studio_id="mcp-abc", universe_id=universe,
+                 place_id=place, identity_verified=True).action == "run"
+    both = [taken, lease("studio-test", "studio-lab-c", studio_id="studio-101")]
+    assert admit("studio-test", two, both, holder="studio-lab-a", studio_id="mcp-abc", universe_id=universe,
+                 place_id=place, identity_verified=True).action == "wait"

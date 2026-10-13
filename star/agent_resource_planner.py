@@ -641,13 +641,14 @@ def resolve_studio(req: JobRequest, snap: MachineSnapshot | None, leases: list) 
     """A Studio test that names no Studio gets the first attached Studio without a running test (or the first one,
     which then waits): the PC knows the connector's ids, brain 2's reporter knows its processes."""
     from dataclasses import replace
-    if req.studio_id or snap is None or not snap.studios:
+    if snap is None or not snap.studios:
         return req
     busy = {l.studio_id for l in leases if l.capability == "studio"}
     ids = [str(s.get("studio_id") or f"studio{i}") for i, s in enumerate(snap.studios)]
     ids = [i for i in ids if _identifier(i)]
-    if not ids:
+    if not ids or req.studio_id in ids:
         return req
+    # No id, or the connector's id (brain 2's reporter names Studios by process): a free attached Studio.
     free = [i for i in ids if i not in busy]
     return replace(req, studio_id=(free or ids)[0])
 
