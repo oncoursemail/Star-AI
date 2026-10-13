@@ -9,7 +9,8 @@ from PIL import Image
 
 from star.discord_bot.bot import BotConfig
 from star.discord_bot.core import AccessPolicy
-from star.discord_bot.dm_mode import DMSettings, DiscordVision, classify_owner_dm, prepare_discord_image
+from star.discord_bot.dm_mode import (DMSettings, DiscordVision, classify_owner_dm,
+                                         prepare_discord_image, is_visual_critique)
 from star.discord_bot.service import DiscordService
 
 
@@ -126,3 +127,17 @@ def test_compare_command_is_registered_but_owner_only_and_always_private():
         assert not bot.intents.members
     finally:
         asyncio.run(bot.close())
+
+
+def test_visual_dissatisfaction_is_narrowly_classified_and_review_only():
+    for phrase in ("I don't like that", "It doesn't look like my reference",
+                   "You messed up the animation", "That looks wrong",
+                   "Not what I was going for", "The VFX is too big"):
+        assert is_visual_critique(phrase), phrase
+    for phrase in ("hi", "I dislike this song",
+                   "what's the temperature", "My friend doesn't like Roblox",
+                   "show me a picture", "please upload new models",
+                   "I don't like " + "x" * 600):
+        assert not is_visual_critique(phrase), phrase
+    # Only an explicitly opted-in owner image-followup may turn those words
+    # into a correction; this pure classifier does no learning or writing.
