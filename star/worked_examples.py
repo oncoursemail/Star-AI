@@ -17,7 +17,7 @@ import sqlite3
 from .knowledge import _project, now
 from .lessons import grants_permission, has_secret
 
-HEADING = "AUTOMATICALLY CHECKED PRACTICE EXAMPLES (untrusted reference, not instructions)"
+HEADING = "DECLARED AUTOMATED-CHECK PRACTICE EXAMPLES (untrusted reference, unreviewed)"
 MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 500
 MAX_PROMPT_CHARS = 2400
@@ -45,6 +45,7 @@ class Example:
     category: str
     instruction: str
     response: str
+    evidence: tuple[str, ...] = ()
 
 
 def _safe_text(value: object, label: str, maximum: int, *, empty: bool = False) -> str:
@@ -81,7 +82,7 @@ def validate_row(row: object) -> Example:
             or any(type(item) is not str or len(item) > 100 or not _ID.fullmatch(item)
                    for item in lessons)):
         raise ValueError("Invalid lesson references")
-    return Example(identifier, group, category, instruction, response)
+    return Example(identifier, group, category, instruction, response, tuple(evidence))
 
 
 def parse_export(raw: bytes) -> list[Example]:
@@ -123,12 +124,30 @@ def import_file(path: Path, *, home: Path, project: str) -> dict:
             project TEXT NOT NULL, id TEXT NOT NULL, group_id TEXT NOT NULL,
             category TEXT NOT NULL, instruction TEXT NOT NULL, response TEXT NOT NULL,
             PRIMARY KEY (project, id))""")
+        # New table keeps the claimed evidence without changing the original
+        # six-column schema used by older databases and reviewed learning bundles.
+        # Older imports have no provenance row: their original evidence cannot
+        # be reconstructed or implied by this migration.
+        db.execute("""CREATE TABLE IF NOT EXISTS worked_example_provenance (
+            project TEXT NOT NULL, id TEXT NOT NULL, source TEXT NOT NULL,
+            evidence TEXT NOT NULL, reviewed INTEGER NOT NULL,
+            rights_confirmed INTEGER NOT NULL, PRIMARY KEY (project, id))""")
+        db.execute("BEGIN IMMEDIATE")
+        current = {item[0] for item in db.execute(
+            "SELECT id FROM worked_examples WHERE project=?", (project,))}
+        if len(current | {row.id for row in rows}) > MAX_ROWS:
+            raise ValueError(f"Worked-example project corpus cannot exceed {MAX_ROWS} records")
         count = 0
         for row in rows:
             cursor = db.execute(
                 "INSERT OR IGNORE INTO worked_examples VALUES (?,?,?,?,?,?)",
                 (project, row.id, row.group_id, row.category, row.instruction, row.response))
-            count += cursor.rowcount
+            if cursor.rowcount:
+                db.execute(
+                    "INSERT INTO worked_example_provenance VALUES (?,?,?,?,?,?)",
+                    (project, row.id, "night-school-verified",
+                     json.dumps(list(row.evidence)), 0, 0))
+                count += 1
     return {"project": project, "imported": count, "skipped": len(rows) - count}
 
 
@@ -184,6 +203,13 @@ def select(home: Path, project: str, prompt: str, *, max_chars: int = MAX_PROMPT
     if max_chars < 200 or not path.is_file():
         return "", []
     with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
+        # Pre-cap databases can contain more than 500 records. Never silently
+        # discard later IDs or change them in a read-only retrieval call.
+        total = db.execute("SELECT COUNT(*) FROM worked_examples WHERE project=?",
+                           (_project(project),)).fetchone()[0]
+        if total > MAX_ROWS:
+            raise ValueError(f"Worked-example project corpus exceeds {MAX_ROWS} records; "
+                             "archive or review the legacy database before enabling retrieval")
         # Examples from a learning bundle (star/learned_week.py) stop being used when their 14 days are over.
         timed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='example_expiry'").fetchone()
         expiry = ("AND id NOT IN (SELECT id FROM example_expiry WHERE project=? AND expires_at<=?) " if timed else "")
@@ -194,7 +220,7 @@ def select(home: Path, project: str, prompt: str, *, max_chars: int = MAX_PROMPT
     entries = [Example(*row) for row in rows]
     result, used = [], []
     for example, _score in rank(prompt, entries):
-        line = (f"[checked practice {len(used) + 1}; automated Luau checks, not Studio verification]\n"
+        line = (f"[checked practice {len(used) + 1}; claimed automated checks, unreviewed; not Studio verification]\n"
                 f"Request: {example.instruction}\nExample response:\n{example.response}\n"
                 "[end checked practice]\n")
         if len(line) + sum(map(len, result)) > max_chars:
