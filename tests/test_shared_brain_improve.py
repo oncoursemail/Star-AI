@@ -152,7 +152,11 @@ def test_recipe_reuses_reviewed_knowledge_and_fixed_expected_tool_fixture(setup)
         # This fixture tests the knowledge primitive and operational tool success,
         # while retaining graph retrieval and the no-results negative fixture.
         cases = args["cases"][1:] + (Fixture("PROJECT", "project settings", ("project.md",), expected_tool_sources=("knowledge",)),)
-        loop = loop_for(setup, cases=cases, sources={**args["sources"], "knowledge": reviewed_source})
+        # A steady fake clock (+1 ms per reading): wall-clock latency on a cold start could trip the latency cap
+        # and make this test flaky; latency is not what it tests.
+        ticks = iter(range(10**6))
+        loop = loop_for(setup, cases=cases, sources={**args["sources"], "knowledge": reviewed_source},
+                        clock=lambda: next(ticks) / 1000)
         proposed = loop.propose_recipe({"name": "project-research", "description": "Read reviewed project decisions and graph entities",
                                        "steps": [{"source": "graphify", "limit": 5}, {"source": "knowledge", "limit": 2}]})
         record = loop.evaluate(proposed["id"])
