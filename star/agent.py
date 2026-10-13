@@ -227,7 +227,7 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             seen['last_text_at'] = now
             seen['text_chars'] = seen.get('text_chars', 0) + len(text)
         pending += text
-        if len(pending) >= 90 or monotonic() - last_flush >= .075:
+        if len(chunks) == 1 or len(pending) >= 90 or monotonic() - last_flush >= .075:
             event({'event': 'assistant_delta', 'text': pending})
             pending = ''
             last_flush = monotonic()
