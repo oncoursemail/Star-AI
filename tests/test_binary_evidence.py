@@ -50,3 +50,21 @@ def test_invalid_and_out_of_workspace_binaries_fail_closed(tmp_path):
         ws.call("workspace_binary_triage", {"path": "fake.bin", "shell": "ghidra"})
     with pytest.raises(ValueError):
         ws.call("workspace_binary_triage", {"path": "fake.bin", "execute": True})
+
+
+def test_triage_cannot_run_unknown_or_oversized_binary_payloads(tmp_path, monkeypatch):
+    import subprocess
+    from star import binary_evidence as binary
+
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Read-only binary triage must never execute a process")
+
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    (tmp_path / "unknown.bin").write_bytes(b"not-an-executable")
+    with pytest.raises(ValueError, match="Unrecognized"):
+        Workspace(tmp_path).call("workspace_binary_triage", {"path": "unknown.bin"})
+    (tmp_path / "module.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00")
+    monkeypatch.setattr(binary, "MAX_BINARY_BYTES", 7)
+    with pytest.raises(ValueError, match="size"):
+        Workspace(tmp_path).call("workspace_binary_triage", {"path": "module.wasm"})

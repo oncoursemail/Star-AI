@@ -231,3 +231,63 @@ def test_graph_rejects_outside_and_nonprojects(tmp_path):
             ws.call("workspace_game_graph", {"path": path})
     with pytest.raises(ValueError):
         ws.call("workspace_game_graph", {"path": "unrelated", "command": "run"})
+
+
+@pytest.mark.parametrize("bad", [
+    "not-json", "[]", '{"asset":{"version":"1.0"}}',
+    '{"asset":{"version":"2.0"},"meshes":"not-a-list"}',
+])
+def test_creator_audit_rejects_malformed_gltf_on_real_workspace_path(tmp_path, bad):
+    (tmp_path / "broken.gltf").write_text(bad, encoding="utf-8")
+    workspace = Workspace(tmp_path)
+    if bad in ("not-json", "[]"):
+        with pytest.raises(ValueError):
+            workspace.call("workspace_asset_audit", {"path": "broken.gltf"})
+    else:
+        result = workspace.call("workspace_asset_audit", {"path": "broken.gltf"})
+        assert result["read_only"] and not result["structure_checked"]
+        assert result["structural_issues"]
+
+
+def test_creator_game_graph_ignores_unsafe_and_unsupported_engine_references(tmp_path):
+    project = tmp_path / "safe"
+    project.mkdir()
+    (project / "project.godot").write_text(
+        '[application]\nconfig/name="Safe"\n', encoding="utf-8")
+    (project / "scene.tscn").write_text(
+        '[ext_resource path="res://inside.gd" id="1"]\n'
+        '[ext_resource path="res://../private.gd" id="2"]\n'
+        '[ext_resource path="uid://unresolvable" id="3"]\n',
+        encoding="utf-8")
+    (project / "inside.gd").write_text("extends Node\n", encoding="utf-8")
+    (tmp_path / "private.gd").write_text("outside project", encoding="utf-8")
+    result = Workspace(tmp_path).call("workspace_game_graph", {"path": "safe"})
+    assert result["engine"] == "godot" and result["read_only"] and not result["executed"]
+    assert [(edge["to"], edge["line"]) for edge in result["relationships"]] == [
+        ("inside.gd", 1)
+    ]
+    assert any("uid://" in note for note in result["notes"])
+
+
+def test_creator_inspections_reject_symlink_escape_from_selected_workspace(tmp_path):
+    workspace_root = tmp_path / "workspace"
+    workspace_root.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    save_json(outside, gltf())
+    (outside / "project.godot").write_text(
+        '[application]\nconfig/name="Outside"\n', encoding="utf-8")
+    (outside / "sample.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00")
+    links = [
+        ("outside.gltf", outside / "mesh.gltf", "workspace_asset_audit"),
+        ("outside_project", outside, "workspace_game_graph"),
+        ("outside.wasm", outside / "sample.wasm", "workspace_binary_triage"),
+    ]
+    try:
+        for name, target, _ in links:
+            (workspace_root / name).symlink_to(target, target_is_directory=target.is_dir())
+    except (OSError, NotImplementedError):
+        pytest.skip("Platform does not allow creating these symlinks")
+    for name, _, tool in links:
+        with pytest.raises(PermissionError, match="escapes"):
+            Workspace(workspace_root).call(tool, {"path": name})
