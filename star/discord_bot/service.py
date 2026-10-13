@@ -11,7 +11,8 @@ from pathlib import Path
 
 from .audio import decode_attachment, ffmpeg_path, synthesize_pcm, validate_attachment, voice_message
 from .brain import DiscordBrain
-from .core import AccessPolicy, SessionMemory, MAX_AUDIO_TEXT, MAX_PROMPT, clean_text, session_key
+from .core import (AccessPolicy, RateLimiter, SessionMemory, MAX_AUDIO_TEXT, MAX_PROMPT, clean_text,
+                   session_key)
 
 
 @dataclass(frozen=True)
@@ -29,12 +30,16 @@ class SpokenAnswer:
 
 class DiscordService:
     def __init__(self, policy: AccessPolicy, *, brain=None, memory: SessionMemory | None = None,
-                 ffmpeg_dir: str = "", searcher=None) -> None:
+                 ffmpeg_dir: str = "", searcher=None, rate_limiter: RateLimiter | None = None,
+                 queue_seconds: float = 60.0) -> None:
         self.policy = policy
         self.brain = brain or DiscordBrain()
         self.memory = memory or SessionMemory()
         self.ffmpeg_dir = ffmpeg_dir
         self._searcher = searcher
+        self.rate_limiter = rate_limiter or RateLimiter()
+        # A short queue (bounded by the rate limit) instead of refusing a quick follow-up DM.
+        self.queue_seconds = queue_seconds
         # One owner conversation at a time to prevent two simultaneous answers from
         # committing out of order. CPU-heavy voice engines have their own locks.
         self._brain_lock = asyncio.Lock()
@@ -44,13 +49,15 @@ class DiscordService:
         self._asr = None
 
     def authorized(self, user_id: int, guild_id: int | None, channel_id: int) -> tuple:
+        """Owner allowlist first (strangers learn nothing), then the owner's rate budget."""
         self.policy.require(user_id, guild_id, channel_id)
+        self.rate_limiter.hit(user_id)
         return session_key(guild_id, channel_id, user_id)
 
     async def _lock_brain(self) -> None:
         # Don't queue a wall of interactions while a local model is busy.
         try:
-            await asyncio.wait_for(self._brain_lock.acquire(), timeout=3.0)
+            await asyncio.wait_for(self._brain_lock.acquire(), timeout=self.queue_seconds)
         except asyncio.TimeoutError as exc:
             raise ValueError("STAR is busy with another request. Try again shortly.") from exc
 
@@ -66,6 +73,52 @@ class DiscordService:
             return answer
         finally:
             self._brain_lock.release()
+
+    async def inspect_image(self, key: tuple, prompt: str, jpeg: bytes, *, vision=None) -> str:
+        """Owner image analysis (DM, /image or a confirmed /screen); bytes are never persisted."""
+        if not isinstance(key, tuple) or len(key) != 3:
+            raise PermissionError("Image analysis needs an authorized owner request")
+        self.policy.require(key[2], key[0], key[1])
+        from .dm_mode import DiscordVision
+        await self._lock_brain()
+        try:
+            answer = await (vision or DiscordVision()).reply(prompt, jpeg)
+            # Temporary context stores only the question and the reply, never an
+            # image file, remote URL, original attachment or image bytes.
+            self.memory.remember(key, "[Image discussed] " + prompt[:300], answer)
+            return answer
+        finally:
+            self._brain_lock.release()
+
+    async def screen_capture(self, key: tuple, prompt: str, *, grab=None, vision=None) -> tuple[str, bytes]:
+        """One capture of this PC's screen, ONLY after the owner pressed the confirm button.
+
+        Returns (answer, jpeg) so the owner privately sees exactly what was captured.
+        """
+        from .dm_mode import capture_screen
+        jpeg = await asyncio.to_thread(capture_screen, grab)
+        question = clean_text(prompt, max_chars=MAX_PROMPT) or "Describe what is on this screen."
+        answer = await self.inspect_image(key, question, jpeg, vision=vision)
+        return answer, jpeg
+
+    async def propose_dm_lesson(self, key: tuple, *, message_id: int,
+                                text: str, kind: str, project: str, home=None):
+        """An explicit remember request creates a reviewable local candidate.
+
+        Even a Discord owner cannot skip desktop lesson approval or use a
+        Discord conversation to grant agent or Roblox permissions.
+        """
+        if not isinstance(key, tuple) or len(key) != 3 or key[0] is not None:
+            raise PermissionError("Lesson capture is owner-DM only")
+        self.policy.require(key[2], None, key[1])
+        from ..desktop_core import app_data
+        from .dm_mode import capture_discord_lesson_candidate
+        return await asyncio.to_thread(
+            capture_discord_lesson_candidate,
+            owner_id=key[2], allowed_owners=self.policy.owners,
+            message_id=message_id, text=text, kind=kind, project=project,
+            home=home if home is not None else app_data(),
+        )
 
     async def research(self, key: tuple, question: str) -> ResearchAnswer:
         """Optional cited web search; only existing STAR-configured search providers.

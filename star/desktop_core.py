@@ -23,6 +23,7 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
+                        look_for_busy_slots,
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
 from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
@@ -115,6 +116,7 @@ class Settings:
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
     practice_lessons_enabled: bool = False  # off until the owner opts in
+    worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
@@ -146,7 +148,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -1073,6 +1075,28 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 error_block = roblox_errors.reference_context(prompt)
                 if error_block:
                     turn_sections.insert(1 if docs.block else 0, (roblox_errors.BLOCK_HEADING, error_block))
+                # Checked practice is opt-in and treated as untrusted reference data, not a lesson.
+                example_block = ''
+                example_extra_chars = 0
+                if settings.worked_examples_enabled is True:
+                    from . import worked_examples
+                    base_chars = (min(3000 if quick else 10000, memory_limit)
+                                  + len(docs.block) + len(document_block) + len(pack_block)
+                                  + len(error_block))
+                    heading_chars = len(worked_examples.HEADING) + 2
+                    room = min(worked_examples.MAX_PROMPT_CHARS - heading_chars,
+                               max(0, allowed_context_chars - 3200 - base_chars - heading_chars))
+                    if room >= 200:
+                        try:
+                            example_block, selected_examples = worked_examples.select(
+                                home, settings.project, prompt, max_chars=room)
+                        except (OSError, sqlite3.DatabaseError, ValueError):
+                            example_block, selected_examples = '', []
+                        if example_block:
+                            example_extra_chars = len(example_block) + heading_chars
+                            turn_sections.append((worked_examples.HEADING, example_block))
+                            audited_event({'event': 'worked_example_used',
+                                           'count': len(selected_examples), 'chars': len(example_block)})
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
@@ -1082,7 +1106,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
                               turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
-                                                  + len(document_block) + len(pack_block) + len(error_block)),
+                                                  + len(document_block) + len(pack_block) + len(error_block)
+                                                  + example_extra_chars),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
@@ -1114,6 +1139,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             conversation_records, window,
                             summary_chars=min(6000, max(700, allowed_context_chars // 4)),
                             cancel_event=cancel_event, on_event=audited_event, candidate=candidate)
+                        # Issue 118: is the chat's slot busy with another client right now? Then this
+                        # turn takes an idle slot (providers.look_for_busy_slots; never raises, <0.5 s).
+                        await look_for_busy_slots(settings, model, conversation=memory_scope)
                         kwargs.update(model=model, request_extras=slot_fields(model), history=window.messages,
                             project_memory=conversation_memory.compose_memory(
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))

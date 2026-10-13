@@ -18,3 +18,21 @@ def _no_owner_roblox_key(monkeypatch, tmp_path_factory):
 def _default_slot_pinning(monkeypatch):
     """The slot rules are tested as the app ships them, whatever the machine's environment says."""
     monkeypatch.delenv("STAR_SERVER_SLOT_PINNING", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _offline_slot_probe(monkeypatch):
+    """Before a chat turn on STAR Server the app asks the server which slots are busy (issue 118).
+    No test may reach a real address for that: by default the page answers "not here", which is the
+    probe's no-change path. Tests of the probe install their own transport."""
+    import httpx
+    import star.providers as providers
+
+    def clear():
+        providers._BUSY_SLOTS.clear()
+        providers._NO_SLOTS_PAGE.clear()
+    clear()
+    monkeypatch.delenv("STAR_SERVER_SLOT_PROBE", raising=False)
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(lambda request: httpx.Response(404)))
+    yield
+    clear()

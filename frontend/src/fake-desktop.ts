@@ -26,7 +26,7 @@ export const backendSettings = {
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
   blender_enabled: false, blender_edit: false, blender_executable: '',
   roblox_research_enabled: true, asset_forge_enabled: false, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
-  practice_lessons_enabled: false,
+  practice_lessons_enabled: false, worked_examples_enabled: false,
 }
 
 const analytics = {started: 0, succeeded: 0, failed: 0, tools: 0, rejected: 0, median_ms: null, messages: 0,
