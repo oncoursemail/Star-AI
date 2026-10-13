@@ -3,7 +3,7 @@
 #
 #   sudo bash tune.sh apply [--dry-run]    record the current values, apply the tuning, make it persistent
 #   sudo bash tune.sh rollback [--dry-run] put the recorded values back and remove everything apply installed
-#   bash   tune.sh status                  read-only report (works without root, also via the sudo allowlist)
+#   bash   tune.sh status                  read-only report (works without root)
 #   bash   tune.sh lxc-notes               print (never run) the optional lxc commands for the container
 #   sudo bash tune.sh uninstall            rollback, then remove the installed script and the optional config file
 #   (internal) boot                        re-applies the non-sysctl settings; started by star-host-tuning.service
@@ -18,14 +18,14 @@
 # What it never touches: Docker, Pterodactyl, LXD settings, containers, the network, the STAR brain service.
 #
 # Files it writes (root only):
-#   /usr/local/sbin/star-host-tune                     copy of this script (the path the sudo allowlist names)
+#   /usr/local/sbin/star-host-tune                     copy of this script
 #   /etc/sysctl.d/90-star-host-tuning.conf             persistent sysctl values
 #   /etc/systemd/system/star-host-tuning.service       boot-time re-apply of the non-sysctl settings
 #   /var/lib/star-host-tuning/state                    the values found before the first apply (for rollback)
 # Optional input: /etc/star-host-tuning.conf (KEY=VALUE lines, owned by root, parsed - never sourced).
 #
 # Safe to run twice: the state file keeps the ORIGINAL values from the first apply, a second apply only re-asserts.
-# Security: runs as root through a sudo allowlist, so it takes no environment input, accepts only the arguments above,
+# Security: runs as root, so it takes no environment input, accepts only the arguments above,
 # parses its config with fixed patterns, and refuses to run from /usr/local/sbin if the file or folder is writable by
 # anyone but root.
 
@@ -294,7 +294,7 @@ install_self() {
   else
     install -o root -g root -m 0755 -- "$self" "$P_INSTALL"
   fi || { fail "cannot install $INSTALL_PATH"; return 0; }
-  say "  installed $INSTALL_PATH (this is the path the sudo allowlist names)"
+  say "  installed $INSTALL_PATH"
 }
 
 # ------------------------------------------------------------------------------------------------------------ modes

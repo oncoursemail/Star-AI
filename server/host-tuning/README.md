@@ -1,18 +1,17 @@
 # Brain 1 host tuning for AI inference
 
-Three files, reviewed and run by the owner once at the server console. **Nothing here has been applied to a real host.**
+Two files, reviewed and run by the owner once at the server console. **Nothing here has been applied to a real host.**
 What was run: `tune.sh status`, `apply --dry-run` and `rollback --dry-run` (all read-only, piped over ssh without
-sudo) against brain 1, the full apply/rollback logic in a scratch folder, and `visudo -cf` on `star-sudoers`. What was
-only written: the real `apply`, the sudoers install and every performance claim below (no before/after numbers exist yet).
+sudo) against brain 1 and the full apply/rollback logic in a scratch folder. What was
+only written: the real `apply` and every performance claim below (no before/after numbers exist yet).
 
 | File | What it is |
 |---|---|
 | `tune.sh` | `apply` / `status` / `rollback` (plus `lxc-notes`, `uninstall`). Idempotent; records the old values; persistent through `/etc/sysctl.d` and a systemd unit; rollback removes both. |
-| `star-sudoers` | `/etc/sudoers.d/` file: passwordless `tune.sh status|apply|rollback` and `lxc restart starai`, nothing else. |
 | `README.md` | this page |
 
 Placeholders: `<brain1-host>` is the server's address, `<owner-account>` your normal login there, `<container-ip>` the
-STAR container, `starops` the example name of the new dedicated account. Do not put real values in this repository.
+STAR container. Do not put real values in this repository.
 
 ## 1. What the host looks like (read without sudo, 2026-10-13, uptime 4 weeks)
 
@@ -92,11 +91,11 @@ ever reserved; all keys can be changed live. Reference:
 
 ## 3. Exact owner steps (about five minutes, no reboot, no restart of STAR)
 
-Review the three files first. Then, from the PC (Git Bash), in the repository folder:
+Review the two files first. Then, from the PC (Git Bash), in the repository folder:
 
 ```bash
 ssh <owner-account>@<brain1-host> 'mkdir -p ~/host-tuning'       # your home, not /tmp (never sudo a file others can write)
-scp server/host-tuning/tune.sh server/host-tuning/star-sudoers <owner-account>@<brain1-host>:host-tuning/
+scp server/host-tuning/tune.sh <owner-account>@<brain1-host>:host-tuning/
 ```
 
 At the server console (or in that ssh session), in `~/host-tuning`:
@@ -109,34 +108,8 @@ sudo bash tune.sh apply                  # applies, installs /usr/local/sbin/sta
 bash tune.sh status                      # VERDICT: applied
 ```
 
-Then the dedicated account and the allowlist (only after `apply`, which installs the script path the allowlist names):
-
-```bash
-sudo adduser --disabled-password --gecos "STAR host operator" starops   # no password, in no other group
-sudo install -d -m 700 -o starops -g starops /home/starops/.ssh
-echo '<one public key line, the .pub of the key STAR uses>' | sudo tee /home/starops/.ssh/authorized_keys >/dev/null
-sudo chown starops:starops /home/starops/.ssh/authorized_keys && sudo chmod 600 /home/starops/.ssh/authorized_keys
-sudo visudo -cf star-sudoers && sudo install -o root -g root -m 440 star-sudoers /etc/sudoers.d/star
-sudo -l -U starops                       # must list exactly the five commands in star-sudoers, nothing else
-```
-
-Checks (from the PC, with the key above; each "must fail" line must say a password is required):
-
-```bash
-ssh starops@<brain1-host> sudo -n /usr/local/sbin/star-host-tune status          # works
-ssh starops@<brain1-host> sudo -n /usr/local/sbin/star-host-tune boot            # must fail
-ssh starops@<brain1-host> sudo -n /snap/bin/lxc exec starai bash                 # must fail
-ssh starops@<brain1-host> id                                                     # groups: starops only
-```
-
-Optional hardening: prefix the key line in `authorized_keys` with `restrict,from="<pc-or-container-ip>" ` (restricts
-forwarding and the source address; shell and sudo still work).
-
-Using your existing account instead of a new one: change `starops` to that name in `star-sudoers` (two lines). That
-account is in the `sudo` and `lxd` groups, so the allowlist adds convenience, not a boundary (see section 5).
-
 Undo any time: `sudo /usr/local/sbin/star-host-tune rollback` (puts the recorded values back, removes the sysctl file, the
-unit and the state), `sudo rm /etc/sudoers.d/star`, and `sudo /usr/local/sbin/star-host-tune uninstall` removes the script.
+unit and the state), and `sudo /usr/local/sbin/star-host-tune uninstall` removes the script.
 
 ## 4. Measure before and after
 
@@ -147,7 +120,7 @@ live slots to be idle (`server/brain/bench/waitidle.sh`). From the PC:
 ./star.cmd lock take --owner claude --holder hosttune --server 1        # release with: lock release ... --holder hosttune
 
 # counters + settings (before)
-ssh starops@<brain1-host> sudo -n /usr/local/sbin/star-host-tune status > status-before.txt
+ssh -t <owner-account>@<brain1-host> sudo /usr/local/sbin/star-host-tune status > status-before.txt
 
 # 1. chat speed through the API: first-token time, tok/s, prompt tok/s, next-turn reuse, 2 parallel streams
 python server/brain/bench/validate.py --base http://<container-ip>:8080 --models star-fast,star-voice --reps 3 --tag hosttune-before
@@ -174,34 +147,7 @@ For the THP experiment, repeat the same procedure with `THP_ENABLED=always` in `
 llama.cpp must be restarted (`star-brain`) for new allocations to see a changed THP mode, which is why this stays an
 explicit, owner-run experiment.
 
-## 5. Risk model of the sudo allowlist
-
-The assumption to defend against: STAR (an LLM agent) can be prompt-injected through a web page, a file or a chat
-message, and an attacker then controls whatever STAR's credentials can do. STAR's credential for the host is an ssh key.
-
-| Layer | What it does |
-|---|---|
-| Dedicated account | `starops` has no password, is in no group (`sudo`, `lxd`, `docker`, `adm` are all absent) and owns nothing. |
-| sudoers rules | Exactly five command lines run as root: `star-host-tune status`, `apply`, `rollback`, `lxc restart starai`, `lxc restart starai --force`. sudo matches the whole command line, so no extra arguments, no other subcommand (`exec`, `config`, `delete`, `stop`, `file push`), no other container. `!setenv` and `env_reset` strip the environment. |
-| `star-host-tune` | Root-owned (`/usr/local/sbin`, 0755). It refuses to run if it or its folder is writable by anyone else. It takes no environment input, writes only the paths listed in its header, uses fixed bounded values (`numa_balancing` 0/1, `swappiness` 0..100, THP/governor enum values), and reads its optional config from a root-owned file with a strict KEY=VALUE parser (never `source`). `starops` cannot edit the script, the config or the state. |
-| What `apply` can do | Set those two sysctls (and the enabled optional ones) to the values the root-owned config says. `rollback` puts back the recorded values. Neither can run a command of the caller's choosing. |
-| What `lxc restart starai` can do | Restart STAR's own container: a few minutes of downtime for STAR itself (self-inflicted denial of service at worst). It cannot reach other containers or the game servers. |
-
-So a prompt-injected STAR can, as root, only: read tuning status, re-apply or undo this tuning, and restart its own
-container. It cannot get a root shell through sudo, change other settings, or touch Docker/Pterodactyl.
-
-What this does **not** protect against, honestly:
-- `starops` itself is a real login: whoever holds the key can run ordinary unprivileged commands on the host (read
-  world-readable files, use the host's network). `restrict,from="..."` in `authorized_keys` narrows that. Keep the key
-  in STAR's key store only.
-- Your existing account is in the `lxd` group, which is root-equivalent by design (any member can start a privileged
-  container with the host's disk mounted) and is also in `sudo`. If STAR connected as that account the allowlist would
-  bound nothing. That is why the dedicated account is the default.
-- A bug in `tune.sh` would run as root. It is about 500 lines of plain bash, has no `eval`, no external input beyond its
-  fixed arguments and one root-owned file, and was run read-only against the real host and fully in a scratch folder;
-  please still read it before the first `apply`.
-
-## 6. Troubleshooting
+## 5. Troubleshooting
 
 - `apply` prints `FAILED:` lines: the value did not read back as written. Run `status`; `rollback` is safe at any time
   (it restores only what was recorded and keeps the state file if something could not be restored).
