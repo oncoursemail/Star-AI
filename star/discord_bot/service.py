@@ -67,6 +67,41 @@ class DiscordService:
         finally:
             self._brain_lock.release()
 
+    async def inspect_image(self, key: tuple, prompt: str, jpeg: bytes, *, vision=None) -> str:
+        """Owner DM image analysis only; normalized bytes are never persisted."""
+        if not isinstance(key, tuple) or len(key) != 3 or key[0] is not None:
+            raise PermissionError("Image analysis is owner-DM only")
+        self.policy.require(key[2], None, key[1])
+        from .dm_mode import DiscordVision
+        await self._lock_brain()
+        try:
+            answer = await (vision or DiscordVision()).reply(prompt, jpeg)
+            # Temporary context stores only the question and the reply, never an
+            # image file, remote URL, original attachment or image bytes.
+            self.memory.remember(key, "[Image discussed] " + prompt[:300], answer)
+            return answer
+        finally:
+            self._brain_lock.release()
+
+    async def propose_dm_lesson(self, key: tuple, *, message_id: int,
+                                text: str, kind: str, project: str, home=None):
+        """An explicit remember request creates a reviewable local candidate.
+
+        Even a Discord owner cannot skip desktop lesson approval or use a
+        Discord conversation to grant agent or Roblox permissions.
+        """
+        if not isinstance(key, tuple) or len(key) != 3 or key[0] is not None:
+            raise PermissionError("Lesson capture is owner-DM only")
+        self.policy.require(key[2], None, key[1])
+        from ..desktop_core import app_data
+        from .dm_mode import capture_discord_lesson_candidate
+        return await asyncio.to_thread(
+            capture_discord_lesson_candidate,
+            owner_id=key[2], allowed_owners=self.policy.owners,
+            message_id=message_id, text=text, kind=kind, project=project,
+            home=home if home is not None else app_data(),
+        )
+
     async def research(self, key: tuple, question: str) -> ResearchAnswer:
         """Optional cited web search; only existing STAR-configured search providers.
 
