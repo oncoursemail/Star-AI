@@ -58,6 +58,75 @@ Add a reference-vs-result comparison command: two sanitized user-uploaded images
 
 Relevant source: star/environment_craft.py already provides palette/luminance/edge diagnostics, while Studio Lab #268 includes screenshot evidence and #277 adds device simulation. Do not claim visual fidelity from low-level pixel statistics alone.
 
+
+## Reference-image review: implementation in this branch
+
+The owner can use /compare with two attached PNG/JPEG/WebP images, or send
+**two images in a one-to-one owner DM**, in the order desired reference then
+STAR result. The bot validates dimensions and file signatures, removes metadata,
+and sends both only to the configured **local or private LAN vision model**.
+Public cloud vision cannot receive them through this command. The output
+prioritizes observed mismatch and a concrete revision proposal; it does not
+modify Roblox Studio, train weights, or permanently store screenshot pixels.
+Temporary chat history retains only a short text record and both image-hash
+prefixes to link follow-up corrections.
+
+If private owner DM learning candidates are separately enabled, and the
+immediately preceding exchange was an image discussion, messages such as
+"I don't like that", "you messed up the animation", "that looks wrong" or
+"the VFX is too big" become **pending** owner correction/regression candidates.
+They are not applied, promoted to facts, or used for neural model training
+without STAR Desktop review. Generic unrelated dislikes do not become training
+data. Explicit "wrong: ..." retains the existing path regardless.
+
+A single screenshot cannot establish moving animation quality, mesh topology,
+network behavior, correct R6/R15 rigging or particle frame rate. For high
+fidelity, the next native iteration should run this multi-evidence sequence:
+
+1. Owner reference and negative style constraints -> persistent reviewed task
+   brief with named layout parts, object types, desired camera/lighting and
+   explicit non-goals.
+2. Analyze reference at a usable resolution, then re-crop tiny labels/icons
+   instead of extrapolating from downscaled images. Ground every identified UI
+   element in actual Studio GuiObject geometry and devices, and 3D shapes in
+   scene instance metadata + multiple matched camera angles. Do not guess object
+   transforms from one screenshot.
+3. Produce editable native geometry/materials, UI, ParticleEmitters, Beams,
+   Trails and named animation tracks. Preserve real Roblox R6/R15 rigs,
+   Motion/Animator semantics, hand attachment alignment, color/size sequences,
+   animation-event markers and loop continuity. Blender previews are not
+   Studio playable tests.
+4. Capture edit-mode and play-mode viewport frames at fixed cameras; test
+   phone/tablet/desktop visual layout, text clipping and touch targets; compare
+   silhouette, edge grouping, contrast, alignment, palette, authored style,
+   particle occlusion and alpha overdraw to owner reference. Pixel difference
+   is one measurement, not proof of semantic fidelity.
+5. Animation must be judged from a multi-frame sequence plus Motor6D/Bone/IK
+   and Animator track data: pose continuity, foot sliding, weapon grip,
+   event synchronization, priority transitions, replication and frame time.
+   VFX must be verified at multiple graphics qualities and mobile particle
+   density with occlusion/overdraw and lifetime budgets. Roblox's creator
+   docs note emitter-rate ceilings of 400/s (100/s mobile) per emitter, not a
+   recommended quality target. Measure actual scene performance.
+6. Present concise before/after images and a diff checklist to the owner.
+   Owner critique overrides AI's aesthetic opinions. Reject mismatched builds,
+   repair one bounded issue at a time, keep immutable exact run/screenshot hashes,
+   and only promote a lesson after independent native checks plus approval.
+
+Research:
+- Official Studio screenshot subagent via MCP: https://create.roblox.com/docs/assistant/guide
+- Official ParticleEmitter guidance including mobile/overdraw:
+  https://github.com/Roblox/creator-docs/blob/main/content/en-us/effects/particle-emitters.md
+- Roblox animation editor, interpolation and loop continuity:
+  https://create.roblox.com/docs/animation/editor
+- Roblox animation graphs and state blending:
+  https://create.roblox.com/docs/animation/graph-editor
+- Roblox animation events:
+  https://create.roblox.com/docs/animation
+- Microsoft Research November 2025 UI grounding benchmark warns existing
+  VLM benchmarks use unrealistically big controls; test the actual small
+  icons and labels: https://www.microsoft.com/en-us/research/articles/ui-e2i-synth-realistic-and-challenging-ui-grounding-benchmark-for-computer-use-agents/
+
 ## Release and security gates
 
 Require GitHub Ubuntu and Windows tests, owner-only authorization, disabled-path checks, stale/malformed/oversized/symlink/hash mismatch regression tests, live Discord interaction smoke, a real approved Roblox Studio test place capture, a Blender render, and host-to-host transfer QA before describing the feature as released. This PR does not activate the bot, install Blender, grant cloud rights, enable guild message reading or publish screenshots proactively.
