@@ -13,11 +13,11 @@ import re
 from urllib.parse import urlparse
 
 DATA = Path(__file__).resolve().parents[1] / "data" / "roblox_api_confusions.json"
-_METHOD = re.compile(r"^:[A-Za-z][A-Za-z0-9]*\\($", re.ASCII)
+_METHOD = re.compile(r"^:[A-Za-z][A-Za-z0-9]*\($", re.ASCII)
 # Do not raise false positives for a method mentioned as data in comments or
 # Luau quoted strings. Preserve newlines so line numbers remain exact.
 _INERT = re.compile(
-    r"--\\[(=*)\\[.*?\\]\\1\\]|--[^\\n]*|\\\"(?:\\\\.|[^\\\"\\\\])*\\\"|'(?:\\\\.|[^'\\\\])*'|`(?:\\\\.|[^`\\\\])*`",
+    r"""--\[(=*)\[.*?\]\1\]|--[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`""",
     re.DOTALL,
 )
 
@@ -52,7 +52,7 @@ def load_confusions() -> tuple[dict[str, str], ...]:
 
 
 def _blank_inert(match: re.Match[str]) -> str:
-    return "".join("\\n" if char == "\\n" else " " for char in match.group())
+    return "".join("\n" if char == "\n" else " " for char in match.group())
 
 
 def scan_luau(source: str) -> list[dict[str, str | int]]:
@@ -73,8 +73,8 @@ def scan_luau(source: str) -> list[dict[str, str | int]]:
             at = clean.find(token, start)
             if at < 0:
                 break
-            hits.append({"line": clean.count("\\n", 0, at) + 1,
-                         "column": at - clean.rfind("\\n", 0, at),
+            hits.append({"line": clean.count("\n", 0, at) + 1,
+                         "column": at - clean.rfind("\n", 0, at),
                          **entry})
             start = at + len(token)
     return sorted(hits, key=lambda hit: (hit["line"], hit["column"], hit["wrong"]))
