@@ -138,7 +138,8 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
     for i, word in enumerate(v):
         prev = v[i - 1] if i else ""
         if word in ("wait", "spawn", "delay") and v[i + 1:i + 2] == ["("] and prev not in (".", ":", "function", "local"):
-            if not any(v[k:k + 2] == ["local", word] for k in range(i)):
+            if not any(v[k:k + 2] == ["local", word] or
+                       v[k:k + 3] == ["local", "function", word] for k in range(i)):
                 add("deprecated-task-global", i, f"Deprecated global {word}().", f"Use task.{word}().")
         if v[i:i + 4] == ["Instance", ".", "new", "("] and len(args(i + 3)) >= 2:
             add("instance-parent-argument", i, "Instance.new passes its parent as argument two.",
