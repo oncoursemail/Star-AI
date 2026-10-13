@@ -43,7 +43,7 @@ class DeliverySettings:
     def from_env(cls, values=None, *, sending: bool = False):
         env = os.environ if values is None else values
         if env.get("STAR_DISCORD_LEARNING_DM_OPT_IN") != "1":
-            raise PermissionError("Learning DMs must be explicitly enabled")
+            raise PermissionError("Learning DMs require explicit opt-in (STAR_DISCORD_LEARNING_DM_OPT_IN=1)")
         policy = AccessPolicy.from_env(env)
         raw = env.get("STAR_DISCORD_LEARNING_DM_OWNER_ID", "")
         if not re.fullmatch(r"[0-9]{1,20}", raw) or not 0 < int(raw) <= MAX_SNOWFLAKE:
