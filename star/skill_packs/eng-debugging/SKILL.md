@@ -12,7 +12,7 @@ description: Debugging method for code questions: read the error, reproduce, fin
 - When the analyzer reports `Unknown type NPC`, inspect **the type namespace**. `NPC` is not a built-in Roblox class type: annotate a Roblox model as `Model` or first declare `type NPC = Model` locally. `type` creates compile-time aliases; `local` creates runtime values. [S1, S2]
 - In `--!strict`, annotate values with `local x: T`, functions with `(x: T): T`, callbacks with `(T) -> ()`; use `T?` for nullable results. A type assertion `::` is not a runtime class check. [S1, S2]
 - For an actual runtime check, test `IsA("Model")`/`IsA("Humanoid")` before relying on a child returned as an `Instance`; never erase a mismatch using `:: any` just to silence the diagnostic. [S1, S3]
-- `typeof(value)` **in type position** derives a type from a value; `export type NPC = Model` publishes the alias across modules and consumers refer to `Module.NPC` after `require`. No runtime `NPC` constructor is created. [S2]
+- `typeof(value)` **in type position** derives a type from a value; `export type NPC = Model` makes the alias available across modules and consumers refer to `Module.NPC` after `require`. No runtime `NPC` constructor is created. [S2]
 - Event callback annotations must match *actual event arguments*: `Player.CharacterAdded` passes a `Model`; `Humanoid.HealthChanged` passes a `number`; `Humanoid.Died` passes none; `BasePart.Touched` passes a `BasePart`. [S4, S5, S6]
 
 ### Twelve paired diagnostics (incorrect → corrected)
