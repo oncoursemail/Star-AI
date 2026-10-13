@@ -89,7 +89,7 @@ Combine techniques with verifiable feedback, not uncontrolled self-rewriting:
 5. **Small local adapter fine-tuning (#275):** export only approved datasets, pin code/dataset/checkpoint, benchmark memory and learning before an opt-in QLoRA job, evaluate blindly, deploy only after approval and explicit rollback.
 6. **Research-grade novelty experiments:** copy the methodological idea of AlphaEvolve—generate algorithms, objectively evaluate them, mutate survivors—but apply it to narrow verifiable objectives: Luau network bandwidth, generated map draw calls, asset triangle budgeting, test scheduling, and pathfinding runtime. Claims of discovered breakthroughs require independent reproduction and controlled baselines.
 
-Research: https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/ ; https://arxiv.org/abs/2506.13131 ; https://arxiv.org/abs/2507.19457 (GEPA) ; https://arxiv.org/abs/2207.14502 (CodeT). Beware repeatedly training on unverified synthetic outputs; model collapse and benchmark contamination are real risks.
+Research: https://deepmind.google/blog/alphaevolve-a-gemini-powered-coding-agent-for-designing-advanced-algorithms/ ; https://arxiv.org/abs/2506.13131 ; https://arxiv.org/abs/2507.19457 (GEPA) ; https://arxiv.org/abs/2207.10397 (CodeT generated tests); https://arxiv.org/abs/2207.14502 (verified self-generated code problems). Beware repeatedly training on unverified synthetic outputs; model collapse and benchmark contamination are real risks.
 
 ## 7. Creator Studio: real assets, animation, VFX and engine tests
 
