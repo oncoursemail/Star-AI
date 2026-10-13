@@ -3,6 +3,15 @@
  "kind": "map",
  "description": "P2 has CanCollide = false.",
  "defect": "not-collidable",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-surface-not-collidable"
+  ],
+  "fixes": [
+   "make-collidable"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

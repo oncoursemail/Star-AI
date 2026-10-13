@@ -1,8 +1,11 @@
 {
  "name": "V2VeryHighRise",
  "kind": "map",
- "description": "A 7.6-stud rise; the plan relaxes maxJumpRise to 8.",
- "defect": "rise-too-high",
+ "description": "Limit check: a 7.6-stud rise (the plan relaxes maxJumpRise to 8): the highest rise real physics jumped; must pass the first time.",
+ "defect": "limit-check",
+ "expect": {
+  "first_pass": true
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

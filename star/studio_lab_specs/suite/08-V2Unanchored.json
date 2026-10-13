@@ -3,6 +3,15 @@
  "kind": "map",
  "description": "P2 is not anchored (falls when the game runs).",
  "defect": "unanchored",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-surface-unanchored"
+  ],
+  "fixes": [
+   "anchor"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

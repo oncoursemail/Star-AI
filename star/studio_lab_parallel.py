@@ -156,8 +156,9 @@ def _release(client, grant) -> None:
 
 class Worker:
     def __init__(self, slot: int, studio_id: str, connect, out: Path, *, home, log=print, lab_kwargs=None,
-                 keep_drafts: bool = False, own_account_id=None, admit=_admit):
+                 keep_drafts: bool = False, own_account_id=None, admit=_admit, deadline: float | None = None):
         self.slot, self.studio_id, self.connect, self.out, self.home = slot, studio_id, connect, Path(out), home
+        self.deadline = deadline          # clock() value after which no new spec is started (nightly runtime cap)
         self.log, self.lab_kwargs, self.keep_drafts = log, dict(lab_kwargs or {}), keep_drafts
         self.own_account_id, self.admit = own_account_id, admit
         self.facts: dict = {}
@@ -194,6 +195,9 @@ class Worker:
                     self.facts["cleaned"] = [await cleaner.remove(sorted(self.clean_names)[:50], slot_root(n))
                                              for n in range(1, MAX_WORKERS + 1)]
                 while not self.broken:
+                    if self.deadline is not None and clock() >= self.deadline:
+                        self.say("runtime cap reached: no new spec")
+                        break
                     try:
                         index, spec = queue.get_nowait()
                     except asyncio.QueueEmpty:
@@ -242,12 +246,15 @@ def row_of(index: int, spec: dict, slot: int, report: dict, seconds: float) -> d
     """One line of the suite table: what was tested, how often Studio really played it, what was fixed."""
     iterations = report.get("iterations", [])
     playtests = sum(1 for it in iterations if (it.get("playtest") or {}).get("started"))
+    checks = sum(len(it.get("devices", [])) for it in iterations) if spec.get("kind") == "ui" else 0
     first = iterations[0] if iterations else {}
     return {"index": index, "spec": spec["name"], "kind": spec.get("kind", "map"), "defect": spec.get("defect", ""),
             "slot": slot, "ran": True, "seconds": seconds, "passed": bool(report.get("passed")),
-            "iterations": len(iterations), "playtests": playtests,
+            "iterations": len(iterations), "playtests": playtests, "ui_checks": checks,
             "first_pass": bool(first.get("passed")),
-            "first_defects": [d.get("code") for d in first.get("defects", [])],
+            "first_defects": [d.get("code") for d in first.get("defects", [])]
+            + [p.get("code") for p in first.get("problems", [])],
+            "expect": studio_lab.expectation(spec, report),
             "fixes": [c.get("fix") for it in iterations for c in it.get("fixes", [])],
             "lesson": (report.get("lesson") or {}).get("code"), "run": report.get("run"),
             "problem": report.get("problem", ""), "cleanup": (report.get("cleanup") or {}).get("ok")}
@@ -266,12 +273,17 @@ def summarize(rows: list[dict], wall_seconds: float, workers: int) -> dict:
             "playtests": playtests, "playtests_per_hour": round(playtests / hours, 1),
             "specs_per_hour": round(len(ran) / hours, 1),
             "lessons": sum(1 for r in ran if r.get("lesson")),
+            "ui_checks": sum(r.get("ui_checks", 0) for r in ran),
+            "expected_declared": sum(1 for r in ran if (r.get("expect") or {}).get("declared")),
+            "expected_met": sum(1 for r in ran if (r.get("expect") or {}).get("met")),
+            "defects_reproduced": sum(1 for r in ran if (r.get("expect") or {}).get("reproduced") is True),
+            "defects_not_reproduced": sum(1 for r in ran if (r.get("expect") or {}).get("reproduced") is False),
             "mean_spec_seconds": round(sum(r["seconds"] for r in ran) / len(ran), 1) if ran else None}
 
 
 async def run_suite(specs: list[dict], studio_ids: list[str], connect_factory, out: Path, *, home, log=print,
                     lab_kwargs=None, keep_drafts: bool = False, own_account_id=None, admit=_admit,
-                    clock=time.monotonic, anchored: bool = False) -> dict:
+                    clock=time.monotonic, anchored: bool = False, max_seconds: float | None = None) -> dict:
     """Spread `specs` over the given Studio instances (one worker each, each with its own connector session)."""
     if not 1 <= len(studio_ids) <= MAX_WORKERS or len(set(studio_ids)) != len(studio_ids):
         raise ValueError(f"1..{MAX_WORKERS} distinct Studio instances")
@@ -283,16 +295,17 @@ async def run_suite(specs: list[dict], studio_ids: list[str], connect_factory, o
     play_lock = asyncio.Lock()          # one Play start/stop at a time across the Studios (see Lab.play_lock)
     kwargs = {"play_lock": play_lock, **dict(lab_kwargs or {})}
     names = {spec["plan"]["mapName"] for spec in specs if spec.get("kind", "map") == "map"}
+    started = clock()
+    deadline = started + max_seconds if max_seconds else None
     workers = [Worker(slot, studio_id, connect_factory, out, home=home, log=log, lab_kwargs=kwargs,
-                      keep_drafts=keep_drafts, own_account_id=own_account_id, admit=admit)
+                      keep_drafts=keep_drafts, own_account_id=own_account_id, admit=admit, deadline=deadline)
                for slot, studio_id in enumerate(studio_ids, 1)]
     for worker in workers:
         worker.clean_names = set(names)
-    started = clock()
     # The first connector process on the Studio machine becomes the host every Studio attaches to; a worker that
     # finishes early would take the host down with it. An anchor session opened first stays the host until the end.
     if anchored:
-        results = await asyncio.gather(*(worker.run(queue) for worker in workers))
+        results = await asyncio.gather(*(worker.run(queue, clock) for worker in workers))
     else:
         async with connect_factory() as anchor:
             try:
@@ -300,14 +313,15 @@ async def run_suite(specs: list[dict], studio_ids: list[str], connect_factory, o
                 await studio.list_tools(anchor)
             except Exception:
                 pass
-            results = await asyncio.gather(*(worker.run(queue) for worker in workers))
+            results = await asyncio.gather(*(worker.run(queue, clock) for worker in workers))
     wall = clock() - started
     rows = sorted((row for part in results for row in part), key=lambda r: r["index"])
     left = []
     while not queue.empty():
         index, spec = queue.get_nowait()
+        capped = deadline is not None and clock() >= deadline
         left.append({"index": index, "spec": spec["name"], "slot": None, "ran": False,
-                     "problem": "no verified Studio was left to run it"})
+                     "problem": "runtime cap reached" if capped else "no verified Studio was left to run it"})
     rows = sorted(rows + left, key=lambda r: r["index"])
     summary = summarize(rows, wall, sum(1 for w in workers if w.facts.get("verified")))
     report = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "summary": summary,
@@ -330,7 +344,7 @@ async def list_instances(session, *, expect: int = 1, seconds: float = 90.0) -> 
 
 
 async def run_cli(specs: list[dict], connect, out_root: Path, *, home, studios: int, keep_drafts: bool,
-                  log) -> dict:
+                  log, max_seconds: float | None = None, prefix: str = "suite") -> dict:
     """Open the anchor session (the connector host), find the Studios, run the suite while the anchor stays open."""
     async with connect() as anchor:
         listed = await list_instances(anchor, expect=max(studios, 1))
@@ -338,9 +352,9 @@ async def run_cli(specs: list[dict], connect, out_root: Path, *, home, studios: 
         if not ids:
             return {"ok": False, "problem": "no Studio is attached to the connector"}
         stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
-        out = Path(out_root) / f"suite-{len(ids)}studio-{stamp}"
+        out = Path(out_root) / f"{prefix}-{len(ids)}studio-{stamp}"
         report = await run_suite(specs, ids, connect, out, home=home, log=log, keep_drafts=keep_drafts,
-                                 anchored=True)
+                                 anchored=True, max_seconds=max_seconds)
         report["out"] = str(out)
         return report
 
@@ -365,6 +379,101 @@ def outbox_records(rows_dir: Path) -> list[dict]:
         if isinstance(data, dict) and data.get("lesson"):
             records.append(data["lesson"])
     return records
+
+
+# --------------------------------------------------------------------------- nightly (scheduled, rotating, capped)
+
+NIGHTLY_MAX_STUDIOS = 3           # the Studio machine's measured safe maximum is 2 (see docs); 3 only by hand
+ROTATION_FILE = "rotation.json"
+
+
+def load_spec_tree(folder: Path) -> tuple[list[dict], list[dict]]:
+    """Every lab spec under a folder (map and UI, sub-folders too), in a stable order; (specs, invalid)."""
+    folder = Path(folder)
+    files = sorted(folder.rglob("*.json"), key=lambda f: f.relative_to(folder).as_posix()) if folder.is_dir() else [folder]
+    specs, invalid = [], []
+    for file in files:
+        try:
+            raw = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            invalid.append({"file": file.name, "problems": ["not JSON"]})
+            continue
+        spec, problems = studio_lab.check_spec(raw)
+        if spec is None:
+            invalid.append({"file": file.name, "problems": problems})
+        else:
+            specs.append(spec)
+    return specs, invalid
+
+
+def rotation(specs: list[dict], count: int, state_file: Path) -> tuple[list[dict], int]:
+    """The next `count` specs after where the last night stopped (wrapping), and the offset used. Pure apart from
+    reading the state file; advance_rotation() writes it after a run that ran something."""
+    total = len(specs)
+    if not total or count <= 0:
+        return [], 0
+    try:
+        start = int(json.loads(Path(state_file).read_text(encoding="utf-8")).get("next", 0)) % total
+    except (OSError, ValueError, TypeError, AttributeError):
+        start = 0
+    return [specs[(start + i) % total] for i in range(min(count, total))], start
+
+
+def advance_rotation(state_file: Path, start: int, ran: int, total: int) -> None:
+    Path(state_file).parent.mkdir(parents=True, exist_ok=True)
+    Path(state_file).write_text(json.dumps({"next": (start + ran) % max(total, 1), "total": total,
+                                            "updated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}),
+                                encoding="utf-8")
+
+
+def prune_evidence(out_root: Path, keep: int) -> list[str]:
+    """Keep the newest `keep` nightly-* evidence folders under out_root; older ones are deleted (only those)."""
+    import shutil
+    folders = sorted((f for f in Path(out_root).glob("nightly-*") if f.is_dir()), key=lambda f: f.name[-16:])
+    removed = []
+    for folder in folders[:max(len(folders) - max(keep, 1), 0)]:
+        shutil.rmtree(folder, ignore_errors=True)
+        removed.append(folder.name)
+    return removed
+
+
+def nightly(spec_folder: Path, *, home, out: Path, outbox: Path | None, studios: int, rotate: int,
+            max_minutes: float, keep: int, log=print, run=None) -> dict:
+    """One scheduled night: a rotating slice of the spec tree on up to `studios` Studios, capped in time; evidence
+    under out/nightly-<n>studio-<stamp>/, lesson candidates (owner review) to the outbox, old evidence pruned."""
+    out = Path(out)
+    specs, invalid = load_spec_tree(Path(spec_folder))
+    state = out / ROTATION_FILE
+    chosen, start = rotation(specs, rotate or len(specs), state)
+    result = {"ok": False, "specs_total": len(specs), "invalid": invalid, "rotation_start": start,
+              "chosen": [s["name"] for s in chosen], "studios_cap": studios, "max_minutes": max_minutes}
+    if not chosen:
+        result["problem"] = "no valid specs"
+        return result
+    command = multi_command(home)
+    if not command and run is None:
+        result["problem"] = f"no multi-Studio connector command ({MULTI_COMMAND_ENV} or <home>/studio/lab-multi.json)"
+        return result
+    studios = max(1, min(int(studios), NIGHTLY_MAX_STUDIOS))
+    runner = run or (lambda: asyncio.run(run_cli(chosen, connector(command), out, home=home, studios=studios,
+                                                 keep_drafts=False, log=log, max_seconds=max_minutes * 60,
+                                                 prefix="nightly")))
+    report = runner()
+    if "summary" not in report:
+        result["problem"] = report.get("problem", "the suite did not run")
+        return result
+    folder = Path(report["out"])
+    ran = report["summary"]["specs_ran"]
+    if ran:
+        advance_rotation(state, start, ran, len(specs))
+    result.update(ok=bool(ran), out=str(folder), summary=report["summary"],
+                  not_run=[r["spec"] for r in report["rows"] if not r.get("ran")])
+    if outbox:
+        records = outbox_records(folder)
+        result["outbox"] = studio_lab.write_outbox(Path(outbox), records) if records else {"records": 0}
+    (folder / "nightly.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+    result["pruned"] = prune_evidence(out, keep)
+    return result
 
 
 def main(arguments=None) -> int:

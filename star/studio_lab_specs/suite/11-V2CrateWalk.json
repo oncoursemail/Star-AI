@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A 4-stud crate (prop) sits on the walkway in the running line.",
  "defect": "prop-in-walkway",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

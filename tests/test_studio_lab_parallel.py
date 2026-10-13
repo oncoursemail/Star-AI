@@ -47,11 +47,14 @@ def diagnose_and_fix(name, target):
 
 # --------------------------------------------------------------------------- the suite
 
-def test_suite_has_10_to_20_valid_specs_each_with_a_named_defect():
+def test_suite_has_valid_specs_each_with_a_named_defect_and_an_expected_outcome():
     specs = suite()
-    assert 10 <= len(specs) <= 20
+    assert 35 <= len(specs) <= 45
     assert len({s["name"] for s in specs}) == len(specs)
-    assert all(s["defect"] for s in specs) and sum(s["defect"] == "none" for s in specs) == 1
+    assert all(s["defect"] and s["expect"] for s in specs)
+    # controls and limit checks must pass the first time; everything else names the defect it plants
+    assert sum(s["defect"] in ("none", "limit-check") for s in specs) == 8
+    assert all(s["expect"]["defects"] for s in specs if s["defect"] not in ("none", "limit-check"))
     for spec in specs:                      # away from the test place's lobby and the old demo draft
         assert spec["plan"]["bounds"]["center"][2] == 150.0
 
@@ -119,7 +122,7 @@ def test_high_rise_lowers_only_the_landing_when_the_next_leg_allows():
 
 
 def test_high_rise_followed_by_a_climb_gets_one_step():
-    _plan, _defects, fixed, changes = diagnose_and_fix("V2HighRiseStairs", "P2")
+    _plan, _defects, fixed, changes = diagnose_and_fix("V3TallStepClimb", "P2")
     assert changes[0]["fix"] == "add-step" and changes[0]["object"] == "P2Step"
     route = fixed["route"]["waypoints"]
     assert route[route.index("P2") - 1] == "P2Step"

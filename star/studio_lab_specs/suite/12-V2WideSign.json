@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A 14-stud-wide decor sign hangs across the second gap; the map is only 22 studs wide.",
  "defect": "decor-no-room",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "remove"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

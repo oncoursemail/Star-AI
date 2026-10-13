@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A floating decor tree crown 4.5 studs above the second jump.",
  "defect": "decor-over-jump",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

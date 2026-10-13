@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A 20x20 plaza; a 6x3x6 fountain basin sits on the running line to the exit.",
  "defect": "decor-in-plaza",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {
