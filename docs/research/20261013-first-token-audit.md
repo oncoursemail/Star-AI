@@ -42,3 +42,11 @@ Knowledge lookup measured ~0.12–0.15 ms, lesson recall ~0.07–0.08 ms and Set
 **Uncertain:** CPU-server true time to first token, whether the remainder is avoidable, a gain from caching/history refactoring, and the effect of full research/agent mode. Separate hosted and llama.cpp measurements are needed.
 
 **Recommendation and smallest next step:** First instrument the 3.5 ms remainder with distinct spans for provider setup, prompt assembly and auxiliary database writes. Then implement one guarded optimization (start with the proven no-grounding branch, with fake-provider prompt/answer equality), rerun exactly these ten prompts before/after in CI, and record signed deltas. Do **not** claim a 3-cost speed gain or alter defaults without this proof.
+
+## Opt-in speed paths now under comparative CI verification
+
+- `STAR_FAST_FIRST_DELTA=1`: emits the first short visible chunk immediately rather than waiting for the legacy stream batch threshold. The fake includes a fixed 90-ms second-chunk gap, which is **not** real model inference.
+- `STAR_FAST_GROUNDING_NOOP=1`: skips the thread dispatch if both the route and relevant follow-up checks require no official documentation; it retains the full retrieval path for real follow-up questions.
+- `STAR_FAST_HISTORY_SNAPSHOT=1`: reuses the conversation SQLite connection for checked checkpoint reads rather than opening a second connection. The original integrity checks still apply.
+
+The same ten prompt cases produce four CI tables: baseline, first-delta only, first-delta plus document no-op, and all three combined. Tests require the exact same prompt lengths and answers; timing deltas are recorded rather than enforced as host-dependent thresholds. None of these modes are enabled by default, and none establishes end-user latency or model-output quality without independent live measurements.
