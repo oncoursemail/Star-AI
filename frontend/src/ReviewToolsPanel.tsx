@@ -39,7 +39,12 @@ export function ReviewToolsPanel({settings,onChange,status,recipes,query,onQuery
       <label className="integrated-switch"><input type="checkbox" disabled={disabled}
         checked={Boolean(settings.roblox_research_enabled)}
         onChange={e=>onChange({...settings,roblox_research_enabled:e.target.checked})}/>
-        <span>Enable public Roblox game, docs and forum research</span>
+        <span>Enable public Roblox game, docs, forum and Poly Haven asset research</span>
+      </label>
+      <label className="integrated-switch"><input type="checkbox" disabled={disabled}
+        checked={settings.asset_forge_enabled===true}
+        onChange={e=>onChange({...settings,asset_forge_enabled:e.target.checked})}/>
+        <span>Enable experimental Asset Forge planning (off by default; Poly Haven metadata needs public research enabled)</span>
       </label>
       <label className="integrated-switch"><input type="checkbox" disabled={disabled}
         checked={Boolean(settings.specialists_enabled)}
