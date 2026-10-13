@@ -13,7 +13,8 @@ from .audio import MAX_ATTACHMENT_BYTES, ffmpeg_path, post_voice_message, valida
 from .core import (AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, RateLimited, RateLimiter, embed_parts,
                    split_message)
 from .digest_task import DigestConfig
-from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
+from .dm_mode import (DMAction, DMSettings, MAX_IMAGE_BYTES, classify_owner_dm,
+                      prepare_discord_image, is_visual_critique)
 from .service import DiscordService
 from .streaming import LiveReply
 from .lab_status import (LabSettings, read_receipt, read_capture, format_receipt, classify_lab_question)
@@ -762,6 +763,17 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         action = classify_owner_dm(
             message.content or "", attachments=len(message.attachments), options=config.dm)
+        # Natural criticism immediately after a visual question is a reviewable
+        # correction candidate, but ONLY when the owner enabled learning and
+        # the previous DM exchange actually involved an image. Generic dislikes
+        # in unrelated conversations never become training data.
+        if action.kind == "text" and config.dm.learning_candidates and is_visual_critique(action.prompt):
+            history = service.memory.history(key)
+            if (len(history) >= 2 and history[-2].get("role") == "user"
+                    and history[-1].get("role") == "assistant"
+                    and history[-2].get("content", "").startswith((
+                        "[Image discussed]", "[Image comparison reference="))):
+                action = DMAction("correct", action.prompt, "correction")
         if action.error:
             await message.channel.send(action.error, allowed_mentions=discord.AllowedMentions.none())
             return
