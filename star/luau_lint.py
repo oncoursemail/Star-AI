@@ -232,9 +232,11 @@ def lint(code: str, *, safety_checks: bool = False, script_class: str | None = N
         from .luau_safety import inspect_safety
 
         extra = inspect_safety(code, script_class=script_class)
-        # Prefer the stronger opt-in text when an existing rule reports the same line.
-        replaced = {(finding.rule_id, finding.line) for finding in extra}
+        # The opt-in implementations replace these legacy heuristics wholesale,
+        # so their old false positives cannot survive alongside the new results.
+        replaced_rules = {"loop-without-yield", "instance-parent-argument",
+                          "deprecated-task-global"}
         findings = [finding for finding in findings
-                    if (finding.rule_id, finding.line) not in replaced]
+                    if finding.rule_id not in replaced_rules]
         findings.extend(extra)
     return sorted(set(findings), key=lambda f: (f.line, f.rule_id, f.message))
