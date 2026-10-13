@@ -269,7 +269,7 @@ export function Composer(props: ComposerProps) {
                   <MenuItem icon={<Paperclip size={16} />} label="Add photos and files" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onAttach)} />
                   {props.onLookAtScreen && <MenuItem icon={<MonitorUp size={16} />} label="Look at my screen" hint="Asks first" availability={teamMode ? {ok: false, reason: 'Team runs are text only'} : undefined} onSelect={() => pick(props.onLookAtScreen!)} />}
                   <MenuItem icon={<ImagePlus size={16} />} label="Create image" checked={imageMode} onSelect={() => pick(() => props.onImageMode(!imageMode))} />
-                  <MenuItem icon={<Globe size={16} />} label="Search the web" checked={research} availability={special ? {ok: false, reason: 'Not in this mode'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
+                  <MenuItem icon={<Globe size={16} />} label="Search the web" checked={research} availability={imageMode ? {ok: false, reason: 'Not with images'} : props.web} onSelect={() => pick(() => props.onResearch(!research))} />
                   <div className="cmp-menu-rule" role="separator" />
                   <button type="button" role="menuitem" className="cmp-menu-item cmp-menu-more" aria-expanded={moreTools} onClick={() => setMoreTools(open => !open)}>
                     <span className="cmp-menu-icon"><ChevronDown size={16} className={moreTools ? 'is-open' : undefined} /></span>
@@ -333,7 +333,7 @@ export function Composer(props: ComposerProps) {
               <Users size={14} aria-hidden="true" /> Team <X size={13} aria-hidden="true" />
             </button>
           )}
-          {research && !special && (
+          {research && !imageMode && (
             <button type="button" className="cmp-chip" aria-label="Stop searching the web" disabled={busy} onClick={() => props.onResearch(false)}>
               <Globe size={14} aria-hidden="true" /> Web <X size={13} aria-hidden="true" />
             </button>

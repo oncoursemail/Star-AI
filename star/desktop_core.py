@@ -28,7 +28,7 @@ from .providers import (ALL_PROVIDERS, background_client, call_limits, connectio
 from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
-from . import doc_grounding, skill_packs
+from . import doc_grounding, skill_packs, roblox_errors
 from . import studio_loop
 from .studio_connections import default_target, validate_target
 
@@ -87,6 +87,7 @@ class Settings:
     skills_enabled: bool = True
     graphify_enabled: bool = True
     roblox_research_enabled: bool = True
+    asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
     specialist_parallelism: int = 1
@@ -143,7 +144,7 @@ class Settings:
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
-                            'roblox_research_enabled', 'tool_workshop_enabled',
+                            'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
@@ -1040,6 +1041,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
                                else settings.endpoint, route.subagent_model),
                     timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
+                    web_enabled=bool(research),
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
@@ -1067,6 +1069,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
                     audited_event({'event': 'skill_packs', 'names': [pack.name for pack in packs], 'chars': len(pack_block)})
                 # <<< Skill packs
+                # Pasted Studio output uses the same per-turn path, including Fast mode.
+                error_block = roblox_errors.reference_context(prompt)
+                if error_block:
+                    turn_sections.insert(1 if docs.block else 0, (roblox_errors.BLOCK_HEADING, error_block))
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
@@ -1075,7 +1081,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block) + len(pack_block),
+                              turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
+                                                  + len(document_block) + len(pack_block) + len(error_block)),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,

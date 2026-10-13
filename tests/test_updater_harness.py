@@ -176,7 +176,7 @@ def test_real_bridge_worker_records_pending_before_requesting_shutdown(tmp_path,
                 events.append(("shutdown",))
         bridge = Bridge()
         outcome = prepare_desktop_update(bridge, "test-request", tmp_path)
-    assert outcome == {"status": "pending_restart", "version": NEWER}
+    assert outcome == {"status": "pending_restart", "version": NEWER, "administrator_prompt": False}
     assert events[-1] == ("shutdown",)
     assert bridge.pending_update.path.is_file()
 

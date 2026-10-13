@@ -44,7 +44,7 @@ type UpdateInfo={available:boolean;version:string;url:string;requires_browser?:b
 const sections:[Tab,string,typeof MessageCircleMore][]=[['chat','Chat',MessageCircleMore],['projects','Projects',Boxes],['library','Library',BookOpen],['tools','Tools',Workflow],['analytics','Analytics',Activity],['brain-overview','Brain',BrainCircuit],['brain','Model & connection',Gauge],['settings','Settings',Settings2]]
 const truncate=(s:string,n=90)=>s.length>n?s.slice(0,n-1)+'…':s
 const fileName=(path:string)=>path.split(/[\\/]/).pop()||path
-const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_target:'local_pc',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,blender_enabled:false,blender_edit:false,blender_executable:'',roblox_research_enabled:true,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
+const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:'local',model:'',fast_model:'',reasoning_model:'',roblox_model:'',vision_model:'',router_models_dir:'',router_context:4096,gpu_layers:25,project:'STAR',workspace:'',studio_id:'',studio_target:'local_pc',studio_edit:false,workspace_edit:false,max_calls:12,context_chars:26000,reduced_motion:false,obsidian_vault:'',obsidian_enabled:false,skills_enabled:true,graphify_enabled:true,comfy_workflow:'',comfy_prompt_node:'6',comfy_port:8188,mcp_graphify_docs:false,mcp_graphify_local:false,mcp_graphify_port:8931,mcp_obsidian_live:false,blender_enabled:false,blender_edit:false,blender_executable:'',roblox_research_enabled:true,asset_forge_enabled:false,tool_workshop_enabled:true,specialists_enabled:true,specialist_parallelism:1}
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 const CHAT_ACTIONS=['sendMessage','generateImage','runTeam']
@@ -387,7 +387,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    const mine=beginRun(value,selected,makeImage?'image':teamMode?'team':'chat')
    if(retryMessageId===undefined)setMessages(m=>[...m,mine]);setFiles([]);setPrompt('')
    const action=intent?'generateImage':imageMode?'generateImage':teamMode?'runTeam':'sendMessage'
-   const res=await act(action,intent?{prompt:intent.prompt,display_prompt:value,files:selected,size:imageSize,followup:intent.followup,...(retryMessageId===undefined?{}:{retryMessageId})}:imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
+   const res=await act(action,intent?{prompt:intent.prompt,display_prompt:value,files:selected,size:imageSize,followup:intent.followup,...(retryMessageId===undefined?{}:{retryMessageId})}:imageMode?{prompt:value,files:selected,size:imageSize}:teamMode?{prompt:value,research}:{prompt:value,files:selected,mode:chatMode,research,github:chatMode==='agent'&&githubSource,...(retryMessageId===undefined?{}:{retryMessageId})})
    if(!res){
      // The host refused before a turn started. Nothing was lost: the question stays with Retry and Edit.
      sending.current=false
@@ -763,7 +763,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                connection={connection} onOpenConnection={()=>nav('brain')}
                onLookAtScreen={()=>setScreenAsk(true)} previews={previews}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
-               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.`:'STAR can make mistakes. Check important information.'}</p>}
+               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
            <div className="thread-rest" aria-hidden="true"/>
            <div className="sr-only" role="status" aria-live="polite">{announce}</div>

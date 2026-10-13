@@ -321,6 +321,14 @@ def parse_diagnosis(reply: str) -> dict:
     return {"cause": cause.group(1).strip()[:300] if cause else "", "lesson": lesson.group(1).strip()[:400] if lesson else ""}
 
 
+def _gate_words(proof: dict) -> str:
+    gate = proof.get("gate")
+    if not isinstance(gate, dict):
+        return "promoted by the old single-run not-worse rule (no statistics)"
+    return (f"paired gate {gate.get('decision')}: {gate.get('wins')} wins / {gate.get('losses')} losses over "
+            f"{gate.get('tasks')} tasks x k={gate.get('k')}, sign test p={gate.get('p_better')}")
+
+
 def export_outbox(settings, state: dict) -> dict:
     """Write what night school learned in the repository's own formats, for a pull request. The installed app has
     no way to read lessons from the server, so this folder is the only way out today."""
@@ -337,12 +345,14 @@ def export_outbox(settings, state: dict) -> dict:
                     project=PROJECT, kind="correction", text=lesson["text"], source_type="verified-fix",
                     source="night-school:" + lesson["id"],
                     evidence=scrub(f"night school: fixed practice tasks {', '.join(proof.get('fixed_tasks', []))}; validation "
-                                   f"slice {proof.get('validation_before', '?')} -> {proof.get('validation_with', '?')}"))
+                                   f"slice {proof.get('validation_before', '?')} -> {proof.get('validation_with', '?')}; "
+                                   + _gate_words(proof)))
             data = store.export(PROJECT)
         finally:
             store.close()
     data["note"] = ("Written by STAR night school on the server. Every lesson is a CANDIDATE: it fixed at least two "
-                    "practice tasks and did not lower the validation slice, but no person has reviewed it.")
+                    "practice tasks and won a paired comparison on the validation slice (lessons promoted before the "
+                    "paired gate only did not lower it; their evidence says so), but no person has reviewed it.")
     write_export(outbox / "star-lessons-night-school.json", data)
     newest: dict[str, dict] = {}
     examples = Path(settings.data) / "examples.jsonl"
