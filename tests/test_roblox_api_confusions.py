@@ -18,13 +18,13 @@ def test_eighty_unique_official_source_backed_entries():
     }
     assert all(row["source_url"].startswith("https://create.roblox.com/docs/reference/engine/classes/")
                for row in raw)
-    assert all(re.fullmatch(r":[A-Za-z][A-Za-z0-9]*\\(", row["wrong"]) for row in raw)
+    assert all(re.fullmatch(r":[A-Za-z][A-Za-z0-9]*\(", row["wrong"]) for row in raw)
 
 
 @pytest.mark.parametrize("entry", api.load_confusions(), ids=lambda row: row["wrong"][1:-1])
 def test_each_wrong_method_hits_but_its_official_replacement_does_not(entry):
-    wrong = "local obj = target\\nobj" + entry["wrong"] + "123)\\n"
-    right = "local obj = target\\nobj" + entry["right"] + "123)\\n"
+    wrong = "local obj = target\nobj" + entry["wrong"] + "123)\n"
+    right = "local obj = target\nobj" + entry["right"] + "123)\n"
     result = api.scan_luau(wrong)
     assert result == [{"line": 2, "column": 4, **entry}]
     assert api.scan_luau(right) == []
