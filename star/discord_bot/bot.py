@@ -416,7 +416,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         Text is ephemeral, image bytes are inspected only for this request, and
         an explicit remember command proposes (never approves) a lesson.
         """
-        if not config.dm.enabled or message.guild is not None or message.author.bot:
+        # A guild-less message can also be a group DM. Only one-to-one DMs
+        # may reach owner authorization, local models, or learning candidates.
+        if (not config.dm.enabled or message.guild is not None or message.author.bot
+                or getattr(message.channel, "type", None) != discord.ChannelType.private):
             return
         try:
             key = service.authorized(message.author.id, None, message.channel.id)

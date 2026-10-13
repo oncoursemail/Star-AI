@@ -216,3 +216,69 @@ def test_doctor_rich_discord_embeds_remain_distinct_from_ascii_console():
     assert "✓" in rich and "✗" in rich and "•" in rich
     assert "[OK]" in terminal and "[SETUP]" in terminal and "[OPTIONAL]" in terminal
     assert terminal.isascii()
+
+def test_gateway_rejects_group_dm_even_from_approved_owner():
+    """Real discord.py channel types; all sends and model replies stay offline."""
+    discord = pytest.importorskip("discord")
+    from star.discord_bot.bot import create_bot
+
+    prompts = []
+
+    class Brain:
+        async def reply(self, question, history):
+            prompts.append(question)
+            return "Offline stub reply"
+
+    config = BotConfig.from_env({
+        "STAR_DISCORD_BOT_TOKEN": "dummy-never-used",
+        "STAR_DISCORD_OWNER_IDS": "123",
+        "STAR_DISCORD_DM_CHAT": "1",
+    })
+    bot = create_bot(config, service=DiscordService(config.policy, brain=Brain()))
+
+    class StubTyping:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+    class StubChannel:
+        def __init__(self, channel_type):
+            self.type = channel_type
+            self.id = 789
+            self.replies = []
+
+        def typing(self):
+            return StubTyping()
+
+        async def send(self, content=None, **kwargs):
+            self.replies.append(content)
+
+    async def dispatch(channel_type, *, guild=None, user_id=123, author_bot=False):
+        channel = StubChannel(channel_type)
+        message = SimpleNamespace(
+            guild=guild,
+            author=SimpleNamespace(id=user_id, bot=author_bot),
+            channel=channel,
+            attachments=[],
+            content="Review this HUD",
+            id=987654321,
+        )
+        await bot.on_message(message)
+        return channel.replies
+
+    async def exercise():
+        try:
+            assert await dispatch(discord.ChannelType.group) == []
+            assert await dispatch(discord.ChannelType.text) == []
+            assert await dispatch(discord.ChannelType.private, guild=object()) == []
+            assert await dispatch(discord.ChannelType.private, user_id=999) == []
+            assert await dispatch(discord.ChannelType.private, author_bot=True) == []
+            assert prompts == []
+            assert await dispatch(discord.ChannelType.private) == ["Offline stub reply"]
+            assert prompts == ["Review this HUD"]
+        finally:
+            await bot.close()
+
+    asyncio.run(exercise())
