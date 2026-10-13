@@ -249,6 +249,14 @@ def _require_project(tmp_path, scripts):
     }, (0, 0, 0, 1), id="shadowed-require"),
     pytest.param({
         "ServerScriptService/Main.server.luau":
+            "local script = {}\nreturn require(script.Parent.Missing)",
+    }, (0, 0, 0, 1), id="shadowed-script-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local game = {}\nreturn require(game:GetService('ReplicatedStorage').Config)",
+    }, (0, 0, 0, 1), id="shadowed-game-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
             '-- require(script.Parent.Missing)\n'
             '--[=[ require(script.Parent.Missing) ]=]\n'
             'local msg = "require(script.Parent.Missing)"\n'

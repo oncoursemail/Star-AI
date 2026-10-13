@@ -102,6 +102,14 @@ def _calls(source: str):
         if values[i] == "local" and tokens[i + 1].kind == "word"
         and values[i + 2:i + 4] == ["=", "require"]
     }
+    # A user-defined local named script/game is not a Roblox Instance root.
+    # Prefer losing an edge to reporting a misleading definite dependency.
+    shadowed_roots = {
+        root for root in ("script", "game")
+        if any(values[i:i + 2] == ["local", root]
+               or values[i:i + 3] == ["function", root, "("]
+               for i in range(len(values)))
+    }
     for i, token in enumerate(tokens):
         if (token.kind != "word" or token.value not in aliases | {"require"}
                 or values[i + 1:i + 2] != ["("]
@@ -112,6 +120,9 @@ def _calls(source: str):
             yield token.line, None, "unclosed-require-call"
         elif token.value in aliases or shadowed:
             yield token.line, None, "require-alias-or-shadowed"
+        elif (end > i + 2 and tokens[i + 2].kind == "word"
+              and tokens[i + 2].value in shadowed_roots):
+            yield token.line, None, "shadowed-source-root"
         else:
             yield token.line, tokens[i + 2:end], ""
 

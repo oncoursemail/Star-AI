@@ -102,7 +102,7 @@ The optional `module_require_graph` output contains source-relative
 calls, plus strongly connected ModuleScript cycles (including self-require),
 scanned-call/source/module totals, `skipped_sources`,
 `truncated`, an explicit `coverage` and limitations.
-Dynamic expressions, aliases, shadowed `require` functions,
+Dynamic expressions, aliases, shadowed `require`, `script` or `game` roots,
 bracket indexing, out-of-tree services and unclosed calls are
 **unresolved**, never misreported as an absent module or all-clear. Cycles
 describe syntactic static edges, not proof of runtime reachability:
