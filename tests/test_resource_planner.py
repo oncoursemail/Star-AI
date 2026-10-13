@@ -161,11 +161,21 @@ def test_studio_tests_run_one_per_studio_and_only_on_the_test_place():
     second = admit("studio-test", brain2(), [busy], **ok)
     assert second.action == "wait" and "already running" in second.reason
     assert admit("studio-test", brain2(studios=2), [busy], **ok).action == "run"     # the other Studio is free
-    unverified = admit("studio-test", brain2(), universe_id=universe, place_id=place, identity_verified=False)
+    observed = admit("studio-test", brain2(), universe_id=universe, place_id=place, identity_verified=False)
+    assert observed.action == "run"                 # brain 2's reporter saw the test place in Studio's launch line
+    unknown = arp.MachineSnapshot("brain2", NOW, 6, 0.3, 11_000, 5000, studios=({"studio_id": "studio-1"},))
+    unverified = admit("studio-test", unknown, universe_id=universe, place_id=place, identity_verified=False)
     assert unverified.action == "wait" and "verified" in unverified.reason
-    other = admit("studio-test", brain2(), universe_id=555, place_id=666, identity_verified=True)
+    elsewhere = arp.MachineSnapshot("brain2", NOW, 6, 0.3, 11_000, 5000,
+                                    studios=({"studio_id": "studio-1", "universe_id": 5, "place_id": 6},))
+    assert admit("studio-test", elsewhere, universe_id=universe, place_id=place, identity_verified=True).action == "wait"
+    foreign = arp.MachineSnapshot("brain2", NOW, 6, 0.3, 11_000, 5000,
+                                  studios=({"studio_id": "studio-1", "universe_id": 555, "place_id": 666},))
+    other = admit("studio-test", foreign, universe_id=555, place_id=666, identity_verified=True)
     assert other.action == "wait" and "STAR Test Place" in other.reason
-    assert admit("studio-test", brain2(), universe_id=0, place_id=0, identity_verified=True).action == "run"
+    blank = arp.MachineSnapshot("brain2", NOW, 6, 0.3, 11_000, 5000,
+                                studios=({"studio_id": "studio-1", "universe_id": 0, "place_id": 0},))
+    assert admit("studio-test", blank, universe_id=0, place_id=0, identity_verified=True).action == "run"
     assert admit("studio-test", brain2(studios=0), **ok).action == "wait"
     assert admit("studio-test", brain2(mem=1500), **ok).action == "wait"          # brain 2 RAM
 
@@ -635,6 +645,15 @@ def test_a_playtest_holds_a_studio_lease_on_brain2_and_waits_when_the_studio_is_
     refused = asyncio.run(busy.call_tool("start_stop_play", {"studio_id": "S", "is_start": True}))
     assert sl.result_failed(refused) and "busy" in sl.result_text(refused)
     assert "start_stop_play" not in busy._session.calls
+    held = pc.Grant("run", "", "lab-lease", job_class="studio-test")
+    pc._HELD.setdefault("studio-test", set()).add(held.lease_id)       # a Studio Lab run holds the Studio already
+    try:
+        inner = FakeClient(admits=("wait",))
+        nested = sr.PinnedSession(FakeConnector(), planner=inner)
+        assert not sl.result_failed(asyncio.run(nested.call_tool("start_stop_play", {"studio_id": "S", "is_start": True})))
+        assert not [c for c in inner.calls if c[0] == "admit"]
+    finally:
+        pc._HELD["studio-test"].discard(held.lease_id)
     unplanned = sr.PinnedSession(FakeConnector())
     assert not sl.result_failed(asyncio.run(unplanned.call_tool("start_stop_play", {"studio_id": "S", "is_start": True})))
 

@@ -200,6 +200,9 @@ class PinnedSession:
         """"" when the playtest may start (planner admitted it, or no planner), else the planner's reason."""
         if self.planner is None or not getattr(self.planner, "enabled", False):
             return ""
+        from .planner_client import holding
+        if holding("studio-test"):                # e.g. a Studio Lab run in this process already holds the Studio
+            return ""
         universe, place = self.place or (0, 0)
         grant = self.planner.admit("studio-test", "studio-remote", "playtest", universe_id=universe, place_id=place,
                                    identity_verified=self.place is not None)

@@ -62,6 +62,15 @@ def configured_url() -> str:
     return url or _first_line(Path.home() / ".star" / "planner_url")
 
 
+_HELD: dict[str, set] = {}          # job class -> lease ids this process holds (any client instance)
+
+
+def holding(job_class: str) -> bool:
+    """True when this process already holds a lease of `job_class` (e.g. a Studio Lab run that holds the Studio,
+    so the playtest inside it does not ask for a second lease on the same Studio)."""
+    return bool(_HELD.get(job_class))
+
+
 class PlannerClient:
     def __init__(self, url: str | None = None, *, key: str | None = None, key_file: str | None = None,
                  timeout: float = 2.0, down_for: float = 30.0, snapshot: Callable[[], dict] | None = None,
@@ -118,7 +127,10 @@ class PlannerClient:
     def admit(self, job_class: str, holder: str, job_id: str, **extra) -> Grant:
         request = {"job_class": job_class, "holder": holder, "job_id": job_id, **extra}
         answer = self._call("POST", "/v1/admit", self._with_snapshot(dict(request)))
-        return self._grant(answer, job_class, request, "planner unreachable" if self.url else "planner not configured")
+        grant = self._grant(answer, job_class, request, "planner unreachable" if self.url else "planner not configured")
+        if grant.planned:
+            _HELD.setdefault(job_class, set()).add(grant.lease_id)
+        return grant
 
     def renew(self, grant: Grant) -> Grant:
         if not grant.planned:
@@ -128,10 +140,13 @@ class PlannerClient:
         new = self._grant(answer, grant.job_class, grant.request, "planner unreachable")
         if new.action in ("run", "fallback") and not new.lease_id:
             new.lease_id = grant.lease_id          # a fallback keeps the lease: the planner may come back
+        if new.action in ("yield", "refuse"):
+            _HELD.get(grant.job_class, set()).discard(grant.lease_id)
         return new
 
     def release(self, grant: Grant | None) -> None:
         if grant is not None and grant.lease_id:
+            _HELD.get(grant.job_class, set()).discard(grant.lease_id)
             self._call("POST", "/v1/release", {"lease_id": grant.lease_id})
             grant.lease_id = ""
 

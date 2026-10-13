@@ -590,9 +590,19 @@ def _studio_check(req: JobRequest, snap: MachineSnapshot, leases: list) -> str:
     for i, s in enumerate(snap.studios):
         sid = str(s.get("studio_id") or f"studio{i}")
         target = req.studio_id or sid
-        instances.append(StudioInstance(sid, req.universe_id, req.place_id,
-                                        identity_verified=req.identity_verified and sid == target,
-                                        active_test=sid in busy))
+        # Identity: brain 2's reporter reads the place from Studio's launch line (observed); the requester may also
+        # have verified it in-session (the pin check). Either counts here; the pin is repeated at dispatch anyway.
+        observed = (s.get("universe_id"), s.get("place_id"))
+        known = all(type(x) is int for x in observed)
+        place = observed if known else (req.universe_id, req.place_id)
+        verified = sid == target and (req.identity_verified or (known and observed == (req.universe_id, req.place_id)))
+        try:
+            instance = StudioInstance(sid, int(place[0]), int(place[1]), identity_verified=verified,
+                                      active_test=sid in busy)
+        except ValueError:
+            instance = StudioInstance(sid, req.universe_id, req.place_id, identity_verified=False,
+                                      active_test=sid in busy)
+        instances.append(instance)
     scenario = StudioScenario(req.job_id, req.studio_id or instances[0].studio_id, req.universe_id, req.place_id,
                               req.clients)
     try:
