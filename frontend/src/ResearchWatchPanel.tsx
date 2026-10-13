@@ -111,11 +111,11 @@ export function ResearchWatchPanel({disabled=false,autoCheck=false,onAutoChange}
       <input type="checkbox" aria-label="Daily automatic research" checked={autoCheck} disabled={disabled||!onAutoChange}
         onChange={event=>onAutoChange?.(event.target.checked)}/>
     </label>
-    <p>Check approved Roblox, Luau and GitHub documentation for revisions. STAR retains source hashes and candidate evidence locally; this never edits code, approves lessons, or publishes releases.</p>
+    <p>Track reviewed Roblox, Luau, GitHub and AI-agent tool documentation for changes. Checks run in bounded five-source batches, with the oldest sources first. Evidence stays local and untrusted; STAR cannot install tools, approve lessons, edit code or publish from this panel.</p>
     <div className="conn-actions">
       <button className="secondary-button" type="button" disabled={disabled||checking} onClick={()=>void check()}>
         {checking?<LoaderCircle size={15} className="spin"/>:<RefreshCcw size={15}/>}
-        {checking?'Checking sources…':'Check official sources'}
+        {checking?'Checking sources…':'Check next five sources'}
       </button>
       <button className="secondary-button" type="button" disabled={disabled||checking} onClick={()=>void refresh()}>
         Refresh history

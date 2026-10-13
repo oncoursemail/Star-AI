@@ -40,7 +40,7 @@ describe('Research Watch candidate evidence',()=>{
     render(<ResearchWatchPanel/>)
     expect(await screen.findByText('No research snapshots are recorded on this device yet.')).toBeTruthy()
     expect(desktop.sent('researchCheck')).toHaveLength(0)
-    await user.click(screen.getByRole('button',{name:'Check official sources'}))
+    await user.click(screen.getByRole('button',{name:'Check next five sources'}))
     await waitFor(()=>expect(desktop.sent('researchCheck')).toHaveLength(1))
     reported={
       ...initial,
@@ -78,7 +78,7 @@ describe('Research Watch candidate evidence',()=>{
 
   it('does not connect to public docs in the inactive website preview',async()=>{
     render(<ResearchWatchPanel disabled/>)
-    expect(screen.getByRole('button',{name:'Check official sources'}).hasAttribute('disabled')).toBe(true)
+    expect(screen.getByRole('button',{name:'Check next five sources'}).hasAttribute('disabled')).toBe(true)
     expect(desktop.sent('researchStatus')).toHaveLength(0)
   })
 
@@ -88,7 +88,7 @@ describe('Research Watch candidate evidence',()=>{
     const user=userEvent.setup()
     render(<ResearchWatchPanel/>)
     await screen.findByText('No research snapshots are recorded on this device yet.')
-    await user.click(screen.getByRole('button',{name:'Check official sources'}))
+    await user.click(screen.getByRole('button',{name:'Check next five sources'}))
     expect(await screen.findByRole('status')).toHaveProperty('textContent','Research check unavailable')
   })
 })
