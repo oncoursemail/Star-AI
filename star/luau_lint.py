@@ -78,8 +78,9 @@ def _tokens(code: str) -> list[_Token]:
     return out
 
 
-def lint(code: str, *, external: bool | None = None) -> list[Finding]:
-    """Return static findings; optional CLI second opinion is OFF by default."""
+def lint(code: str, *, external: bool | None = None, safety_checks: bool = False,
+         script_class: str | None = None) -> list[Finding]:
+    """Return sorted static findings; the CLI second opinion and lifetime checks are OFF by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -227,6 +228,18 @@ def lint(code: str, *, external: bool | None = None) -> list[Finding]:
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")
                         break
+    if safety_checks:
+        # Import lazily: the optional module reuses this linter's lexer and Finding.
+        from .luau_safety import inspect_safety
+
+        extra = inspect_safety(code, script_class=script_class)
+        # The opt-in implementations replace these legacy heuristics wholesale,
+        # so their old false positives cannot survive alongside the new results.
+        replaced_rules = {"loop-without-yield", "instance-parent-argument",
+                          "deprecated-task-global"}
+        findings = [finding for finding in findings
+                    if finding.rule_id not in replaced_rules]
+        findings.extend(extra)
     if external is None:
         from .luau_analyze import enabled
         external = enabled()
