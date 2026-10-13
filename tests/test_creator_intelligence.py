@@ -64,7 +64,7 @@ def test_rig_and_animation_evidence_from_gltf(tmp_path):
     assert stats["skins"] == 1 and stats["joint_references"] == 1
     assert stats["animations"] == [{"name": "Walk", "channels": 1}]
     assert stats["materials"] == 1
-    assert "not" in report["notice"].lower()
+    assert "No geometry buffers" in report["notice"]
 
 
 def test_glb_is_supported_without_reading_binary_buffer(tmp_path):
