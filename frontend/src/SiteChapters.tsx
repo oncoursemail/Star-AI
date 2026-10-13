@@ -129,9 +129,9 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
   <section className="sw-chapter sw-chapter-wide" id="tools" aria-labelledby="sw-tools-title">
    <div className="sw-wrap">
     <div className="sw-chapter-head" data-reveal>
-     <p className="sw-kicker">v0.9.0 capabilities</p>
+     <p className="sw-kicker">v1.0.0 capabilities</p>
      <h2 id="sw-tools-title">Tools, with their limits in view.</h2>
-     <p>These features are present in the v0.9.0 source. The status follows the latest stable GitHub release,
+     <p>These features are present in the v1.0.0 source. The status follows the latest stable GitHub release,
       not the source branch; several require optional packages, models, permissions or your own STAR Server.</p>
     </div>
     <div className="sw-ledger" data-reveal style={delay(80)}>

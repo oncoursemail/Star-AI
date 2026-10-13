@@ -1,4 +1,4 @@
-# ✦ STAR Intelligence — Genesis v0.9.0
+# ✦ STAR Intelligence — v1.0.0
 
 **A local-first AI for creators on Windows 11 — now with a React-powered desktop experience.**
 
@@ -8,11 +8,11 @@ STAR brings local model inference, a real chat workspace, image/video/audio refe
 
 > **Product status:** STAR is an evolving prototype. A successful GitHub build is not a benchmark proving frontier-model intelligence or fault-free Roblox gameplay. Local model weights must still be downloaded separately on your PC. The legacy UI remains available as `STAR.exe --legacy-ui`.
 
-> **Shipping status (verified October 12, 2026):** STAR Genesis **v0.9.0** was published October 11, 2026 with [Windows Setup](https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/STAR-Setup-v0.9.0.exe), [portable ZIP](https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/STAR-Genesis-Windows-x64.zip), and [SHA-256 checksums](https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/SHA256SUMS.txt). The [latest published Windows release](https://github.com/oncoursemail/Star-AI/releases/latest) is authoritative, not source changes or PR builds. Unmerged PR features are not in the published installer. Release publication does not verify every possible GPU, Windows profile, or Roblox workflow; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
+> **Shipping status:** STAR **v1.0.0** was published with [Windows Setup](https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/STAR-Setup-v1.0.0.exe), [portable ZIP](https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/STAR-Genesis-Windows-x64.zip), and [SHA-256 checksums](https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/SHA256SUMS.txt) ([what is new, what is off by default and what was not tested](docs/release/v1.0/RELEASE_NOTES.md)). The previous release, v0.9.0, was published October 11, 2026. The [latest published Windows release](https://github.com/oncoursemail/Star-AI/releases/latest) is authoritative, not source changes or PR builds. Unmerged PR features are not in the published installer. Release publication does not verify every possible GPU, Windows profile, or Roblox workflow; see [release acceptance](docs/STAR_V090_RELEASE_ACCEPTANCE.md).
 
 ### Public release transparency and website handoff
 
-[Latest published Windows release](https://github.com/oncoursemail/Star-AI/releases/latest) is the authoritative download for **v0.9.0**, published **October 11, 2026**. **PRs, CI artifacts and passing tests** do not establish that later source features ship in that installer or that GitHub Pages was deployed.
+[Latest published Windows release](https://github.com/oncoursemail/Star-AI/releases/latest) is the authoritative download for **v1.0.0**. **PRs, CI artifacts and passing tests** do not establish that later source features ship in that installer or that GitHub Pages was deployed.
 
 The public repository currently has **no licence file**; a public source tree does not itself grant an open-source licence. Automated Roblox scripting evaluations varied across dated runs: **13 / 34 on October 12, 2026**, versus **16 / 34 and 18 / 34 in earlier runs** (range **13–18 / 34**). A single run varies; do not interpret the highest result as a reproducible score. The earlier **11 / 23 creation** result has not been reproduced on the released code and is not a current release baseline. **16 Roblox v2 tasks** separately need Studio/manual assessment. These are **not a game-quality score** or proof that a game was completed.
 
