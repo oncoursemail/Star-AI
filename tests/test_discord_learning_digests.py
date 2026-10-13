@@ -87,7 +87,7 @@ def test_notification_configuration_denies_unapproved_recipient_and_sending():
     }
     with pytest.raises(PermissionError, match="approved"):
         sender.DeliverySettings.from_env(values)
-    with pytest.raises(PermissionError, match="opt-in"):
+    with pytest.raises(PermissionError, match="explicitly enabled"):
         sender.DeliverySettings.from_env({**values, "STAR_DISCORD_LEARNING_DM_OPT_IN": "0"})
     with pytest.raises(ValueError, match="token"):
         sender.DeliverySettings.from_env(
