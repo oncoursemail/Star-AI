@@ -1,6 +1,6 @@
 # STAR architecture + Blender production pipeline — research and implementation (2026-10-11)
 
-**Status:** a reviewable *first vertical slice*, not autonomous AAA environment production. This document separates platform-confirmed capabilities, shipped implementation, design judgments, and proposed work. A real headless Blender export runs in the smoke workflow only; Roblox Studio never ran. No assets are uploaded or published by this work.
+**Status:** a reviewable *first vertical slice*, not autonomous AAA environment production. This document separates platform-confirmed capabilities, shipped implementation, design judgments, and proposed work. A real headless Blender export passed on an earlier replacement commit, but the final generator-branch head omits that protected workflow; Roblox Studio never ran. No assets are uploaded or published by this work.
 
 ## 1. Research findings verified from primary documentation
 
@@ -221,6 +221,6 @@ The source branch now implements more than this document's initial vertical slic
 - `star/architecture_quality.py`: fail-closed dimension/material/name/triangle gates, structural opening checks, plus GLB 2.0 header/mesh-name inspection. GLB container checks cannot prove engine import, normals or visuals.
 - `scripts/blender_building.py`: material-batched mesh build, consistent world-projected tile UVs, optional Workbench 3/4-angle preview camera, source .blend and GLB export using a fixed script. These are **prototype UVs**, not handcrafted trim atlases/PBR image textures.
 - `tests/test_architecture_pipeline.py`, `tests/test_architecture_quality.py`, `tests/test_architecture_tool.py`: deterministic offline regression tests for geometry, eight style signatures, preview flags, tool scope, and GLB evidence.
-- `.github/workflows/architecture-blender-smoke.yml`: isolated real Blender headless export on a runner with no owner credentials. It checks the GLB material groups and keeps the generated .blend/.glb as short-lived artifacts. A green smoke job, when observed, proves export **only**, not Roblox import.
+- **Previous CI evidence:** `.github/workflows/architecture-blender-smoke.yml` ran on PR #68 and on the replacement's initial commit (native Blender GLB export passed). The final draft deliberately omits this workflow because the protected-closure policy prohibits generator-authored changes to `.github/workflows/**`. Reintroducing native smoke CI requires separate owner review. Earlier exports prove export **only**, not final-head export, Roblox Studio import, or visual quality.
 
 Future quality work must still integrate artist-reviewed references, visual comparison in the actual game camera, audited PBR textures, modular instancing, valid interiors/stair navigation, reusable assets, real Studio import/reimport, live memory and frame-time measurements, and feedback-driven iteration. The candidate skill stays disabled until the independently owned evaluation gate passes; no checklist or static audit may certify art quality by itself.

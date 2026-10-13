@@ -63,7 +63,7 @@ From a source checkout, with Blender installed locally:
 python -m star.architecture_pipeline examples/architecture/storybook_shop.json --out out/storybook-v1 --blender "C:\Path\To\blender.exe" --preview
 ```
 
-Omit `--blender` and `--preview` for a plan-only run. The [Blender smoke workflow](.github/workflows/architecture-blender-smoke.yml) checks headless export, not screenshot quality or Roblox Studio acceptance.
+Omit `--blender` and `--preview` for a plan-only run. A [native Blender smoke run on an earlier replacement commit](https://github.com/oncoursemail/Star-AI/actions/runs/38401862268) passed headless export only; this generator-owned branch omits the protected CI workflow, so **the final commit has no new native Blender smoke check**. Source tests do not validate screenshot quality or Roblox Studio acceptance.
 
 ## STAR's new interface
 
