@@ -4,7 +4,7 @@
 
 ## What the STAR repository already provides
 
-- The current star/next tree has local llama.cpp and authenticated LAN inference, and explicit Groq, OpenRouter, Gemini and Cerebras providers. Brave/Tavily research credentials exist. Recent draft #265 adds time, SearXNG and web fetching, and #267 connects real-time web context to Discord.
+- The current star/next tree has local llama.cpp and authenticated LAN inference, and explicit Groq, OpenRouter, Gemini and Cerebras providers. Brave/Tavily research credentials exist. Merged #265 added time, SearXNG and web fetching; merged #267 connects real-time web context to Discord.
 - Star has a project-scoped read-only ToolWorkshop (star/tool_workshop.py): propose, preview, list and run human-approved recipes from five existing sources. It does **not** synthesize arbitrary executable plugins or automatically change permissions.
 - Discord code in star/discord_bot/ supports the owner-only DM channel, opt-in image vision, slash ask/research/status/help, privacy/permission checks, one-shot speech, verified Night School reports and reviewable correction candidates. PRs #226 (DM, images, learning), #264 (quick-model chat routing/streaming) and #267 (Discord clock/citations) are merged into star/next.
 - PR #264 observed a 43-73 second owner Discord-chat delay previously dominated by inference-slot queueing. This is evidence to prioritize foreground resource admission over ever more model processes.
@@ -39,7 +39,7 @@ Official references:
 
 Record a structured, immutable evidence chain: task -> code/model/tool versions -> input and source rights -> proposed hypothesis -> build artifacts -> static checks -> test runs -> native Studio/engine screenshot evidence -> owner acceptance -> learning candidate. The model cannot mark its own answer "passed." Keep training, validation and sealed holdouts disjoint by game/project/problem family and have a separate evaluator/permission process that the model cannot modify.
 
-Prioritize improvements through instructions and skills first (GEPA, DSPy MIPROv2, GEPA), and separately prototype small LoRA adapters only from rights-verified reviewed datasets when GPU capacity and heldout evidence justify it. Count actual task success, not generated examples. Run self-play only in owner-approved sandbox Studio places; distinguish simulated checks and actual playtests. Train on confirmed corrections, not recursively generated guesses.
+Prioritize improvements through instructions and skills first (GEPA, DSPy MIPROv2), and separately prototype small LoRA adapters only from rights-verified reviewed datasets when GPU capacity and heldout evidence justify it. Count actual task success, not generated examples. Run self-play only in owner-approved sandbox Studio places; distinguish simulated checks and actual playtests. Train on confirmed corrections, not recursively generated guesses.
 
 Research:
 - https://arxiv.org/abs/2507.19457
@@ -133,6 +133,25 @@ The existing owner-only access model and disabled guild MESSAGE_CONTENT/MEMBERS/
 **H7: Research novelty radar.** Read new papers/docs, find an actionable hypothesis, search STAR's own issues/PRs/code to avoid duplicate effort, and provide a falsifiable experiment rather than an invented "breakthrough".
 
 **H8: Nightly evolutionary optimization tournament.** Use spare resources after live chat constraints to propose algorithm tweaks, evaluate independently and open draft PRs with paired benchmark tables. No changes are auto-deployed and every candidate has a rollback flag.
+
+## 5A. Additional frontier research checked against published 2026 evidence
+
+The following are **real research projects**, not STAR installs. Their results are domain- and hardware-dependent. The near-term recommendation is to borrow test discipline and apply them to small source-rights-cleared Roblox tasks rather than download and run high-risk training stacks.
+
+| Research | Actual contribution | STAR-specific experiment and limitation |
+| --- | --- | --- |
+| **SEAL, Self-Adapting Language Models (NeurIPS 2025)** | Language model proposes its own training-data reformulations and gradient update directives; downstream evaluation supplies reward | Use to design a candidate Luau-fix lesson/curriculum generator. Original repo expects **two A100/H100 GPUs**, so the owner's 8 GiB GPU is unsuitable for that unmodified reproduction; do not assert locally self-training an entire model. |
+| **Microsoft Agent Lightning v1.0 (August 2026)** | Model-request gateway + real agent rollouts + RL trainer, with published coding-agent examples and reward-hacking precautions. Authors report SWE-bench Verified Qwen3.5-9B increase 41.8% to 56.4% and MoE 47.8% to 61.6% under their settings | The useful idea is versioned agent event traces and independent code-test rewards, compatible with STAR's practice ledger. The full verl/vLLM/CUDA 13/Kubernetes-oriented training stack is not a drop-in for CPU llama.cpp or 8 GiB VRAM; benchmark a small offline replay first. |
+| **Recursive automated AI research (June 2026)** | Research system performs multi-experiment search with implementation, evaluation, variance checks and reward-hack mitigation | Add experiment lineage, blinded replications and resource-scoped mutations to proposed ToolDNA. Vendor-reported benchmark claims are not verified on STAR. |
+| **OpenEvolve open-source program evolution** | Candidate program mutations and evaluator-guided selection on self-contained tasks | Restricted benchmark for Luau pathfinding and particle scheduling, with immutable tests, walltime and memory caps. Do not let generated programs mutate evaluator source or host permissions. |
+
+Official/source references:
+- https://arxiv.org/abs/2506.10943 and https://github.com/Continual-Intelligence/SEAL
+- https://github.com/microsoft/agent-lightning and https://microsoft.github.io/agent-lightning/stable/
+- https://www.recursive.com/articles/first-steps-toward-automated-ai-research
+- https://github.com/algorithmicsuperintelligence/openevolve
+
+**Research-to-benchmark ladder:** choose one falsifiable task and an independent executable grader -> run existing STAR baseline ten times -> collect capped agent traces with provenance -> generate one candidate prompt, tool or tiny LoRA dataset -> evaluate blinded on project-disjoint heldouts -> report confidence intervals, CPU/VRAM/time and licensing -> keep as draft until user approval. An experimental *self-edit* is not sufficient evidence of a meaningful model-weight improvement, and self-generated tests are vulnerable to leakage and reward hacking.
 
 ## 6. Phased delivery and quality gates
 
