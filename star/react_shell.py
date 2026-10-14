@@ -494,11 +494,13 @@ def record_turn_failure(home: Path, turn: TurnRef, status: str, detail: str) -> 
 
 
 def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
-               current_turn, cancelled, settings_file: Path | None = None) -> None:
+               current_turn, cancelled, settings_file: Path | None = None, settled=lambda: None) -> None:
     """Run one bridge worker and emit exactly one result or error event.
 
     A failed or cancelled chat/image/team turn is stored BEFORE its error event is
     emitted, so a reload or restart shows the same history the UI just displayed.
+    `settled()` runs just before the event (after a failure is stored): the bridge clears its
+    busy flag there, so a message sent the moment the interface sees the result is accepted.
     """
     try:
         data = worker()
@@ -508,8 +510,10 @@ def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
         turn = current_turn() if action in TURN_ACTIONS else None
         if turn is not None:
             record_turn_failure(home, turn, status, detail)
+        settled()
         emit(request_id, 'error', detail)
         return
+    settled()
     try:
         emit(request_id, 'result', data)
     except Exception as exc:
@@ -788,15 +792,20 @@ def launch():
                                            screen_preview_url(encode(thumb,'JPEG',78),'image/jpeg'))
 
         def _run(self, request_id: str, action: str, worker):
+            settled=[]
+            def settle():
+                # Once only: after the event a new turn may already have started and set these again.
+                if action in TURN_ACTIONS and not settled:
+                    settled.append(True)
+                    self.turn=None
+                    self.active_task=False
             def task():
                 try:
                     run_worker(request_id, action, worker, emit=self._emit, home=app_data(),
                                current_turn=lambda: self.turn, cancelled=self.cancel_chat.is_set,
-                               settings_file=self.settings_file)
+                               settings_file=self.settings_file, settled=settle)
                 finally:
-                    if action in TURN_ACTIONS:
-                        self.turn=None
-                        self.active_task=False
+                    settle()     # also when emitting itself failed
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
