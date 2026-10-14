@@ -25,11 +25,12 @@ CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-
                       "roblox-tweenservice-easing"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
+ENGINE_NAMES = set(skill_packs.ENGINE_CONTEXTS)   # other-engine packs, tested in test_engine_skill_packs.py
 
 
 def test_all_packs_ship_in_the_existing_skill_format():
     packs = skill_packs.available()
-    assert [p.name for p in packs] == NAMES
+    assert [p.name for p in packs if p.name not in ENGINE_NAMES] == NAMES
     for pack in packs:
         assert pack.file.parent.name == pack.name and 1 <= len(pack.description) <= 1024
         assert pack.body.startswith("# ")
@@ -47,7 +48,7 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
         # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
-        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS:
+        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS or pack.name in ENGINE_NAMES:
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:
@@ -100,7 +101,7 @@ def test_only_the_best_matching_pack_is_added():
 def test_environment_switch(monkeypatch):
     monkeypatch.delenv(skill_packs.ENV_VAR, raising=False)
     assert skill_packs.enabled_names() == frozenset(skill_packs.DEFAULT_ENABLED) & frozenset(NAMES)
-    for value, expected in (("off", set()), ("none", set()), ("0", set()), ("all", set(NAMES)),
+    for value, expected in (("off", set()), ("none", set()), ("0", set()), ("all", set(NAMES) | ENGINE_NAMES),
                             ("roblox-ui-layout", {"roblox-ui-layout"}),
                             ("roblox-ui-layout, roblox-secure-remotes ,nonsense", {"roblox-ui-layout", "roblox-secure-remotes"}),
                             ("nonsense", set())):

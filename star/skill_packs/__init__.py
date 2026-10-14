@@ -26,6 +26,7 @@ from pathlib import Path
 import re
 
 from ..agent_skills import _frontmatter
+from .engines import ENGINE_CONTEXTS, ENGINE_TOPICS
 
 PACKS_DIR = Path(__file__).resolve().parent
 ENV_VAR = "STAR_SKILL_PACKS"
@@ -150,6 +151,8 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Other-engine packs (star/skill_packs/engines.py): opt-in, each chosen only when the prompt names its engine.
+    **ENGINE_TOPICS,
 }
 
 
@@ -191,7 +194,11 @@ def enabled_names(environ=None, *, home=None) -> frozenset[str]:
         return frozenset()
     if raw in {"all", "on", "true", "1"}:
         return frozenset(known)
-    return frozenset(known & {part.strip() for part in raw.split(",")})
+    parts = {part.strip() for part in raw.split(",")}
+    if "engines" in parts:
+        # Shorthand for every other-engine pack, on top of the packs enabled by default.
+        parts |= set(ENGINE_CONTEXTS) | set(DEFAULT_ENABLED)
+    return frozenset(known & parts)
 
 
 def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
@@ -203,17 +210,25 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
         return []
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
     godot_context = bool(_GODOT_CONTEXT.search(prompt))
-    if not roblox_context and not godot_context:
+    # Other-engine packs: the prompt must name that engine (ENGINE_CONTEXTS); naming it is enough.
+    engines = {name for name, context in ENGINE_CONTEXTS.items() if name in allowed and context.search(prompt)}
+    if not roblox_context and not godot_context and not engines:
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
-                                    (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
+        if pack.name in ENGINE_CONTEXTS:
+            if pack.name in engines:
+                hits = ({m.group(0).lower() for m in ENGINE_CONTEXTS[pack.name].finditer(prompt)} |
+                        {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)})
+                # A named engine outranks Roblox packs: "port my RemoteEvent to Bevy" wants the Bevy pack.
+                scored.append((0, -len(hits), order, pack))
+        elif pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
+                                      (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):
-                scored.append((-len(hits), order, pack))
-    return [pack for _, _, pack in sorted(scored)[:max(0, limit)]]
+                scored.append((1, -len(hits), order, pack))
+    return [item[-1] for item in sorted(scored, key=lambda item: item[:3])[:max(0, limit)]]
 
 
 def render(packs) -> str:
