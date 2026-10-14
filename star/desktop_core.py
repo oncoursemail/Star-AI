@@ -913,13 +913,20 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     """Full scoped originals and a pure bounded window, shared with warm-up."""
     budget = history_char_budget(settings)
     dialogue = Conversations(home / 'conversations.sqlite3')
+    reuse = os.environ.get('STAR_FAST_HISTORY_SNAPSHOT') == '1'
     try:
         rows = dialogue.raw_history_records(settings.project, chat_id)
+        window = conversation_memory.select_window(rows, budget, current_text=current_text)
+        # Opt-in only: avoid a second SQLite file open while retaining
+        # the source digest, scope and complete-turn checkpoint checks.
+        if reuse:
+            checkpoint = conversation_memory.read_checkpoint_connection(
+                dialogue.connection, settings.project, chat_id, records=rows)
     finally:
         dialogue.close()
-    window = conversation_memory.select_window(rows, budget, current_text=current_text)
-    checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
-                                                      chat_id, records=rows)
+    if not reuse:
+        checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
+                                                          chat_id, records=rows)
     return with_sent_times(conversation_memory.respect_checkpoint(window, checkpoint)), rows
 
 
