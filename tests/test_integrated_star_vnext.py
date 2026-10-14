@@ -82,7 +82,9 @@ def test_auto_fast_path_does_not_hide_explicit_mcp_research():
 
 
 def test_integrated_react_wires_modes_to_native_actions():
-    frontend=(ROOT/"frontend/src/Desktop.tsx").read_text(encoding="utf-8")
+    # Settings moved to SettingsPage.tsx (rendered by Desktop.tsx); its panels count as wired.
+    frontend="\n".join((ROOT/"frontend/src"/name).read_text(encoding="utf-8")
+                        for name in ("Desktop.tsx","SettingsPage.tsx"))
     native=(ROOT/"star/react_shell.py").read_text(encoding="utf-8")
     agent=(ROOT/"star/agent.py").read_text(encoding="utf-8")
     for token in (

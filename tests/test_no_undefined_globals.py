@@ -15,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[1] / "star"
 MODULE_NAMES = {"__file__", "__name__", "__doc__", "__spec__", "__loader__", "__package__",
                 "__path__", "__builtins__", "__annotations__", "__dict__", "__module__", "__qualname__",
                 "__class__"}
+# Ghidra scripts (PR #344) run inside Ghidra, which injects its API as globals (pyproject.toml excludes them from ruff too).
+NOT_STAR_RUNTIME = ("re_scripts",)
 
 
 def _undefined(source: str, label: str) -> list[str]:
@@ -41,6 +43,7 @@ def _undefined(source: str, label: str) -> list[str]:
 
 def test_star_functions_only_use_defined_global_names():
     problems = [problem for path in sorted(ROOT.rglob("*.py"))
+                if path.relative_to(ROOT).parts[0] not in NOT_STAR_RUNTIME
                 for problem in _undefined(path.read_text(encoding="utf-8"), path.relative_to(ROOT.parent).as_posix())]
     assert problems == []
 

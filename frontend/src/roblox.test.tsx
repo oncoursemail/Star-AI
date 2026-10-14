@@ -222,7 +222,7 @@ describe('Roblox Studio switches', () => {
 describe('Roblox interface source', () => {
   const read = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8')
   it('is part of Settings and never puts the key into React state or settings', () => {
-    expect(read('./Desktop.tsx')).toContain('<RobloxPanel status={data.roblox}')
+    expect(read('./SettingsPage.tsx')).toContain('<RobloxPanel status={data.roblox}')
     const panel = read('./RobloxPanel.tsx')
     expect(panel).toContain("invoke('robloxSaveKey',{key:typed})")
     expect(panel).not.toMatch(/useState[^\n]*[Kk]ey\b/)
