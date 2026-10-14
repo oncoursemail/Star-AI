@@ -233,9 +233,10 @@ export function SettingsPage(props:SettingsPageProps) {
    <Block id="roblox" keywords="open cloud roblox research creator store api">
      <RobloxPanel status={data.roblox} draft={draft} onChange={setDraft} invoke={act} disabled={inactive}/>
    </Block>
-   <Block id="roblox-docs" keywords="documentation docs live create.roblox.com engine reference internet">
+   <Block id="roblox-docs" keywords="documentation docs live create.roblox.com engine reference internet skill packs guidance embedding">
      <Panel className="settings-section"><h3 className="settings-group-title">Roblox documentation</h3>
        <Switch label="Read the live Roblox documentation" hint="Off by default. When on, STAR may look up pages on create.roblox.com while answering Roblox questions. Read-only; only the search words leave this PC." checked={draft.roblox_docs_live_enabled===true} onChange={on=>set({roblox_docs_live_enabled:on})}/>
+       <Switch label="Find guidance packs by meaning" hint="Off by default. With STAR Server, when no guidance pack matches your words, its embedding model picks the closest one. Falls back to word matching if the server does not answer." checked={draft.skill_pack_embeddings===true} onChange={on=>set({skill_pack_embeddings:on})}/>
      </Panel>
    </Block>
    <Block id="studio-target" keywords="studio place practice host this pc mcp">
