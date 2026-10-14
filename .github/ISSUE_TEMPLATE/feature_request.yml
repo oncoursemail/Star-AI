@@ -1,0 +1,27 @@
+name: Feature request
+description: Suggest an improvement to STAR
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or goal
+      description: What are you trying to do that STAR does not support well?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Risk and permissions
+      description: Does this touch files, processes, network access, accounts or Roblox? Risky behaviour should be opt-in and off by default.
+  - type: textarea
+    id: verify
+    attributes:
+      label: How would we know it works?
+      description: Tests or observable checks.
