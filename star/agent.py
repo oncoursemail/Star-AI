@@ -26,7 +26,16 @@ class HistoryWindowPressure(RuntimeError):
 # Once one of them has returned in a turn, full Luau execution is refused for the rest of that turn:
 # an instruction hidden in a page must not become code that runs in Studio without the owner seeing it.
 # (Studio's http_get is not listed: the connector only fetches Roblox's own documentation.)
-UNTRUSTED_SOURCE_TOOLS = frozenset({"star_web_fetch", "star_web_search", "star_mcp_registry_search"})
+UNTRUSTED_SOURCE_TOOLS = frozenset({
+    "star_web_fetch", "star_web_search", "star_mcp_registry_search",
+    # Also written by anyone: DevForum posts, YouTube titles/descriptions, public GitHub repositories, game
+    # pages (names, descriptions, artwork text), read-only MCP connections and the research team (it reads the web).
+    "star_roblox_forum_search", "star_roblox_forum_topic", "star_roblox_forum_latest",
+    "star_roblox_youtube_search", "star_roblox_youtube_video",
+    "star_github_tree", "star_github_read",
+    "star_roblox_search_games", "star_roblox_game_report", "star_roblox_compare_games", "star_roblox_game_image",
+    "star_mcp_search", "star_mcp_call", "star_delegate_research",
+})
 LUAU_AFTER_UNTRUSTED = ("Full Luau execution is off for the rest of this turn because it read web or "
                         "third-party content. Ask again in a new message to run Luau.")
 

@@ -88,3 +88,16 @@ def test_luau_before_the_web_read_is_unaffected(monkeypatch):
         _reply(text="done"),
     ], monkeypatch)
     assert studio.calls == [("execute_luau", LUAU_ARGS)]   # the first ran, the one after the page did not
+
+
+def test_every_third_party_text_tool_taints_the_turn():
+    """Review fix: DevForum, YouTube, GitHub, game pages, MCP connections and the research team also return
+    text written by third parties, so they must block full Luau for the rest of the turn like a web page."""
+    third_party = {"star_web_fetch", "star_web_search", "star_mcp_registry_search",
+                   "star_roblox_forum_search", "star_roblox_forum_topic", "star_roblox_forum_latest",
+                   "star_roblox_youtube_search", "star_roblox_youtube_video", "star_github_tree", "star_github_read",
+                   "star_roblox_search_games", "star_roblox_game_report", "star_roblox_compare_games",
+                   "star_roblox_game_image", "star_mcp_search", "star_mcp_call", "star_delegate_research"}
+    assert third_party <= agent.UNTRUSTED_SOURCE_TOOLS
+    # The owner's own material and Roblox's official docs stay trusted.
+    assert not {"workspace_read", "star_docs_search", "star_obsidian_read", "execute_luau"} & agent.UNTRUSTED_SOURCE_TOOLS
