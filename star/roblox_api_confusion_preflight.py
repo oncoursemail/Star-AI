@@ -47,7 +47,7 @@ def confusion_advisories(source: str, dump: ApiDump | None, *,
     for hit in hits[:limit]:
         wrong, right = str(hit["wrong"]), str(hit["right"])
         reference = str(hit["source_url"]).rsplit("/", 1)[-1]
-        classes = inferred.get((hit["line"], wrong), set())
+        classes = inferred.get((int(hit["line"]), wrong), set())
         receiver_class = None
         if len(classes) == 1 and counts[(hit["line"], wrong)] == 1:
             candidate = next(iter(classes))

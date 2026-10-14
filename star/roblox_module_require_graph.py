@@ -36,7 +36,7 @@ def _node_index(services: list[Node]) -> dict[tuple[str, ...], Node]:
     nodes: dict[tuple[str, ...], Node] = {}
     def visit(node: Node, path: tuple[str, ...]) -> None:
         nodes[path] = node
-        for child in node.children:
+        for child in node.children or ():
             visit(child, (*path, child.name))
     for service in services:
         visit(service, (service.name,))
@@ -198,12 +198,12 @@ def inspect_require_graph(services: list[Node], admitted: dict[str, str],
     nodes = _node_index(services)
     module_files = {
         _runtime_source_path(path): path for path in admitted
-        if _script(path.split("/")[-1])[1] == "ModuleScript"
+        if (_script(path.split("/")[-1]) or ("", ""))[1] == "ModuleScript"
     }
     # Keep module identity for oversized sources even when their content was
     # excluded from the per-file static check budget.
     for path in skipped:
-        if _script(path.split("/")[-1])[1] == "ModuleScript":
+        if (_script(path.split("/")[-1]) or ("", ""))[1] == "ModuleScript":
             module_files[_runtime_source_path(path)] = path
     edges: list[dict] = []
     missing: list[dict] = []
@@ -222,6 +222,7 @@ def inspect_require_graph(services: list[Node], admitted: dict[str, str],
             if invalid:
                 unresolved.append({"file": relative, "line": line, "reason": invalid})
                 continue
+            assert target is not None  # _target returns a path whenever it reports no problem
             node = nodes.get(target)
             if node is None:
                 missing.append({"file": relative, "line": line,
