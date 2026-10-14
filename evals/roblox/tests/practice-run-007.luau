@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn({},'a'), {'a'}))
+check("case 2", deepEqual(fn({'a'},'a'), {'a'}))
+check("case 3", deepEqual(fn({'a','b'},'c'), {'a','b','c'}))
+check("case 4", deepEqual(fn({'a','b','c'},'d'), {'b','c','d'}))
+check("case 5", deepEqual(fn({'x'},''), {'x'}))
+check("case 6", deepEqual(fn({'a','b','c'},'a'), {'a','b','c'}))

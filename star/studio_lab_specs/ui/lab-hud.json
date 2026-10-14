@@ -1,0 +1,199 @@
+{
+ "name": "LabHud",
+ "kind": "ui",
+ "description": "A small game HUD: a coin counter top-left, a title banner, a shop button bottom-right and a quest panel. Deliberate defects: a 34x34 px shop button (too small to tap on a phone) and a title too long for its fixed-width label.",
+ "defect": "small-touch-target+clipped-title",
+ "devices": [
+  "phone",
+  "tablet",
+  "desktop"
+ ],
+ "ui": {
+  "palette": {
+   "panel": "#1B1F2A",
+   "accent": "#F2B134",
+   "text": "#FFFFFF",
+   "muted": "#9AA4B2"
+  },
+  "mobile": {
+   "safeArea": true,
+   "scaleByViewport": false
+  },
+  "root": {
+   "type": "screen",
+   "id": "LabHud",
+   "children": [
+    {
+     "type": "frame",
+     "id": "CoinBar",
+     "background": "panel",
+     "corner": 10,
+     "padding": 6,
+     "position": {
+      "x": {
+       "offset": 12
+      },
+      "y": {
+       "offset": 12
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 170
+      },
+      "y": {
+       "offset": 44
+      }
+     },
+     "children": [
+      {
+       "type": "text",
+       "id": "Coins",
+       "text": "Coins: 1,250",
+       "textColor": "accent",
+       "textSize": 22,
+       "font": "GothamBold",
+       "size": {
+        "x": {
+         "scale": 1
+        },
+        "y": {
+         "scale": 1
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "text",
+     "id": "Title",
+     "text": "Welcome to the STAR Studio Lab Obby Championship Finals",
+     "textColor": "text",
+     "textSize": 28,
+     "font": "GothamBold",
+     "background": "panel",
+     "corner": 8,
+     "anchor": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "scale": 0
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "offset": 12
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 300
+      },
+      "y": {
+       "offset": 44
+      }
+     }
+    },
+    {
+     "type": "button",
+     "id": "ShopButton",
+     "text": "$",
+     "textColor": "panel",
+     "background": "accent",
+     "textSize": 20,
+     "corner": 8,
+     "anchor": {
+      "x": {
+       "scale": 1
+      },
+      "y": {
+       "scale": 1
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 1,
+       "offset": -16
+      },
+      "y": {
+       "scale": 1,
+       "offset": -16
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 34
+      },
+      "y": {
+       "offset": 34
+      }
+     }
+    },
+    {
+     "type": "frame",
+     "id": "QuestPanel",
+     "background": "panel",
+     "corner": 10,
+     "padding": 8,
+     "anchor": {
+      "x": {
+       "scale": 1
+      },
+      "y": {
+       "scale": 0
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 1,
+       "offset": -12
+      },
+      "y": {
+       "offset": 70
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 230
+      },
+      "y": {
+       "offset": 120
+      }
+     },
+     "children": [
+      {
+       "type": "text",
+       "id": "Quest",
+       "text": "Quest: reach the goal",
+       "textColor": "muted",
+       "textSize": 18,
+       "textWrapped": true,
+       "size": {
+        "x": {
+         "scale": 1
+        },
+        "y": {
+         "scale": 1
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "ui-text-clipped"
+  ],
+  "fixes": [
+   "ui-widen-text",
+   "ui-wrap-text"
+  ]
+ }
+}

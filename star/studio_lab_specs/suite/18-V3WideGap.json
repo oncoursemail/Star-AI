@@ -1,0 +1,119 @@
+{
+ "name": "V3WideGap",
+ "kind": "map",
+ "description": "Second jump 11 studs flat (plan relaxes maxJumpGap to 12); real physics: 9.5 is at the edge, 11 fails.",
+ "defect": "gap-too-far",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "jump-too-far"
+  ],
+  "fixes": [
+   "extend-platform"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3WideGap",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    67.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -18.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -24.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -7.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     5.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ],
+   "maxJumpGap": 12
+  }
+ }
+}

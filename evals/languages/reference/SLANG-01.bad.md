@@ -1,0 +1,1 @@
+Slang 2026 is stricter about modules. Remove the module declaration from lighting.slang and use `#include "lighting.slang"` in main.slang instead of import; then lambert is pasted into the same file and resolves.

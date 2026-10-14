@@ -9,7 +9,7 @@ Use for concrete Roblox RemoteEvent or RemoteFunction contracts, validating clie
 ## Ten concrete rules
 1. Treat client arguments as untrusted; check permission, state, type, value, and context on the server before state changes. [S1]
 2. OnServerEvent and OnServerInvoke receive the actual sender Player first; never trust a client-supplied identity. [S2][S3]
-3. Allowlist actions and bound payloads; never accept an arbitrary instance, script, path, damage or purchase price. [S1]
+3. Allowlist actions and bound payloads; reject any client-selected Instance, path, damage or price unless the server independently validates and authorizes its use. [S1]
 4. For distance-based actions, verify an existing character and a server-controlled target before measuring range. [S1]
 5. Limit calls per player using server-owned timestamps or token buckets; a client-only debounce is bypassable. [S1]
 6. Clear per-player cooldown state when the player leaves; design idempotency for actions that may repeat. [S1][S4]

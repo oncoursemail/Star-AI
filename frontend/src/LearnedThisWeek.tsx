@@ -10,6 +10,7 @@
 import {useCallback,useEffect,useState} from 'react'
 import {Check,FlaskConical,GraduationCap,LoaderCircle,RotateCcw,Undo2,X} from 'lucide-react'
 import {Tag} from './components'
+import {EmptyState,ErrorState,LoadingState} from './states'
 import type {CorrectionItem,CorrectionListing,LearnedItem,LearnedWeek} from './types'
 import './learning.css'
 
@@ -39,10 +40,13 @@ export function LearnedThisWeek({invoke,disabled=false,project}:{invoke:Invoke;d
  const [fixes,setFixes]=useState<CorrectionListing|null>(null)
  const [pending,setPending]=useState('')
  const [notice,setNotice]=useState('')
+ // First read: '' until it answers, then 'ok' or 'failed' (a failed read is not "nothing learned").
+ const [read,setRead]=useState<''|'ok'|'failed'>('')
  const load=useCallback(async()=>{
    if(disabled)return
    const found=await invoke('learnedThisWeek') as LearnedWeek|null
    if(found&&Array.isArray(found.items))setWeek(found)
+   setRead(current=>found&&Array.isArray(found.items)?'ok':current==='ok'?'ok':'failed')
    const listed=await invoke('listCorrections') as CorrectionListing|null
    if(listed&&Array.isArray(listed.corrections))setFixes(listed)
  },[disabled,invoke])
@@ -79,7 +83,10 @@ export function LearnedThisWeek({invoke,disabled=false,project}:{invoke:Invoke;d
      <div className="learn-title"><h3>What STAR learned this week</h3><p>From night school’s reviewed bundle. A text lesson is used only after it beat the current lessons on held-out practice; it stays for 14 days unless you keep it. Undo stops it at once.</p></div>
      <Tag kind={items.some(i=>i.state==='live')?'gold':'neutral'}>{items.filter(i=>i.state==='live').length} in use</Tag>
    </div>
-   {items.length===0?<p className="learn-empty">{disabled?'Open STAR Desktop to see what it learned.':'Nothing new this week. When night school learns something that passes its checks, it appears here with its evidence.'}</p>
+   {items.length===0?(disabled?<EmptyState compact title="Open STAR Desktop to see what it learned."/>
+     :read===''?<LoadingState compact label="Loading what STAR learned this week" lines={2}/>
+     :read==='failed'?<ErrorState compact title="This week's lessons could not be loaded." description="STAR Desktop did not answer. Try again in a moment." action={<button type="button" className="learn-button" onClick={()=>void load()}>Try again</button>}/>
+     :<EmptyState compact title="Nothing new this week." description="When night school learns something that passes its checks, it appears here with its evidence."/>)
    :<ul className="learn-list">{items.map(item=>{
      const busy=pending.endsWith(':'+item.id)&&!pending.startsWith('fix-')
      return <li key={item.id} className="lesson learned-item">
@@ -98,7 +105,7 @@ export function LearnedThisWeek({invoke,disabled=false,project}:{invoke:Invoke;d
      <div className="learn-title"><h3>Your corrections</h3><p>When you mark an answer as not helpful and say what was wrong (here or with <code>wrong: …</code> on Discord), STAR keeps the question, its answer and your words. Make it a test to add it to the corrections suite; nothing is added without you.</p></div>
      <Tag kind={waiting.length?'gold':'neutral'}>{waiting.length} waiting</Tag>
    </div>
-   {waiting.length===0?<p className="learn-empty">No corrections are waiting.</p>
+   {waiting.length===0?(read==='ok'||disabled?<EmptyState compact title="No corrections are waiting."/>:null)
    :<ul className="learn-list">{waiting.map(item=>{
      const busy=pending.endsWith(':'+item.id)&&pending.startsWith('fix-')
      return <li key={item.id} className="lesson correction-item">

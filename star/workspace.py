@@ -1,7 +1,6 @@
 """Audited file tools confined to a user-selected workspace. Never a shell escape hatch."""
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -55,6 +54,10 @@ TOOLS = [
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
+    {"name": "workspace_edit", "description": "Replace old_string with new_string in one existing UTF-8 text file in the selected workspace. old_string must identify exactly one place (copy it from workspace_read); a different indentation is tolerated. Requires workspace edit mode.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "old_string": {"type": "string"},
+                                                "new_string": {"type": "string"}, "replace_all": {"type": "boolean", "default": False}},
+                     "required": ["path", "old_string", "new_string"], "additionalProperties": False}},
     {"name": "workspace_game_discover", "description": "Discover Godot, Unity, and Unreal game projects in this selected workspace; read-only, bounded scan.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
     {"name": "workspace_game_inspect", "description": "Inspect one Godot, Unity, or Unreal project: engine metadata, languages, sample scenes and export presets. Read-only.",
@@ -66,6 +69,7 @@ TOOLS = [
          "required": ["path", "action"], "additionalProperties": False}},
 ]
 TOOL_NAMES = {t['name'] for t in TOOLS}
+WRITE_TOOLS = frozenset({'workspace_write', 'workspace_edit'})
 
 
 class Workspace:
@@ -140,8 +144,22 @@ class Workspace:
             return search_workspace(self, args['query'], mode=args.get('mode', 'text'))
         if not allow_write:
             raise PermissionError('Workspace editing is switched off')
+        if name == 'workspace_edit':
+            from .edit_match import apply_edit
+            path = self.resolve(args['path'])
+            if not path.is_file() or path.stat().st_size > MAX_READ_BYTES:
+                raise ValueError('Not a small text file')
+            with path.open(encoding='utf-8', newline='') as handle:
+                edited = apply_edit(handle.read(), args['old_string'], args['new_string'],
+                                    replace_all=args.get('replace_all', False))
+            result = self._replace(path, edited.text.encode('utf-8'))
+            result.update({'replacements': edited.count, 'match': edited.strategy})
+            return _with_lint(result, path, edited.text)
         path = self.resolve(args['path'], allow_missing=True)
-        data = args['content'].encode('utf-8')
+        result = self._replace(path, args['content'].encode('utf-8'))
+        return _with_lint(result, path, args['content'])
+
+    def _replace(self, path: Path, data: bytes) -> dict[str, Any]:
         if len(data) > MAX_WRITE_BYTES:
             raise ValueError('File exceeds write limit')
         if path.exists() and not path.is_file():
@@ -160,3 +178,29 @@ class Workspace:
             if tmp_path is not None:
                 tmp_path.unlink(missing_ok=True)
         return {'path': path.relative_to(self.root).as_posix(), 'bytes_written': len(data)}
+
+
+LINTED_SUFFIXES = frozenset({'.lua', '.luau'})
+MAX_LINT_FINDINGS = 8
+
+
+def _with_lint(result: dict[str, Any], path: Path, text: str) -> dict[str, Any]:
+    """Lint-on-edit: a written Luau file comes back with STAR's offline findings, so the model can fix them now.
+
+    Advisory only: the write has already happened and a finding never blocks it (star/luau_lint.py is a pattern
+    checker, not a parser). The SWE-agent ACI study (arXiv 2405.15793) found that showing lint results right after an
+    edit cut broken edits; this is the same idea with STAR's own Roblox rules.
+    """
+    if path.suffix.lower() not in LINTED_SUFFIXES:
+        return result
+    from .luau_lint import lint
+    try:
+        findings = lint(text)
+    except Exception:       # a checker bug must never turn a successful write into a failed tool call
+        return result
+    if findings:
+        result['lint'] = [{'line': f.line, 'rule': f.rule_id, 'severity': f.severity, 'message': f.message,
+                           'fix': f.suggested_fix} for f in findings[:MAX_LINT_FINDINGS]]
+        if len(findings) > MAX_LINT_FINDINGS:
+            result['lint_more'] = len(findings) - MAX_LINT_FINDINGS
+    return result

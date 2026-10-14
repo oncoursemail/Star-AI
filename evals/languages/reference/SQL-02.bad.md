@@ -1,0 +1,1 @@
+SQLite doesn't support cascading deletes, it only stores the REFERENCES text, so delete the inventory rows yourself before the player row. For the lock error, wrap the write in a retry loop that sleeps 100 ms and tries again up to five times.
