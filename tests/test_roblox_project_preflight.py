@@ -608,3 +608,240 @@ def test_preflight_does_not_implicitly_analyze_from_global_env(
     assert report["status"] == "checked"
     assert "native_analysis" not in report
     assert all("native_luau" not in f for f in report["files"])
+
+
+# These deterministic fixtures drive the actual preflight() entrypoint, not a
+# guessed filesystem resolver or an isolated parser. They use the source tree
+# admitted by roblox_place.read_tree, including init.luau conversion.
+def _require_project(tmp_path, scripts):
+    root = tmp_path / "requires"
+    for relative, source in scripts.items():
+        file = root / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(source, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize(("scripts", "counts"), [
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "local m = require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="single-module"),
+    pytest.param({
+        "ServerScriptService/Feature/Main.server.luau":
+            "local m = require(script.Parent.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="nested-parent"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'local m = require(game:GetService("ReplicatedStorage").Shared.Config)',
+        "ReplicatedStorage/Shared/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="static-service"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "local m = require(script.Parent.Kit)",
+        "ServerScriptService/Kit/init.luau": "return {}",
+    }, (1, 0, 0, 0), id="folder-init-module"),
+    pytest.param({
+        "ServerScriptService/Kit/init.luau": "return require(script.Helper)",
+        "ServerScriptService/Kit/Helper.luau": "return {}",
+    }, (1, 0, 0, 0), id="module-child"),
+    pytest.param({
+        "ServerScriptService/A.luau": "return require(script.Parent.B)",
+        "ServerScriptService/B.luau": "return require(script.Parent.A)",
+    }, (2, 1, 0, 0), id="two-module-cycle"),
+    pytest.param({
+        "ServerScriptService/Loop.luau": "return require(script)",
+    }, (1, 1, 0, 0), id="self-cycle"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Missing)",
+    }, (0, 0, 1, 0), id="missing-static-module"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Lib)",
+        "ServerScriptService/Lib/Child.luau": "return {}",
+    }, (0, 0, 1, 0), id="nonmodule-folder"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(chosenModule)",
+    }, (0, 0, 0, 1), id="dynamic-variable"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local loader = require\nreturn loader(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="require-alias"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(script.Parent["Config"])',
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="bracket-expression"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(game:GetService("Players").Helpers)',
+    }, (0, 0, 0, 1), id="outside-supported-service"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "return require(script.Parent.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="parent-outside-boundary"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(script.Parent.Config',
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="malformed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function require(value) return value end\nreturn require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="shadowed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local script = {}\nreturn require(script.Parent.Missing)",
+    }, (0, 0, 0, 1), id="shadowed-script-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local game = {}\nreturn require(game:GetService('ReplicatedStorage').Config)",
+    }, (0, 0, 0, 1), id="shadowed-game-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(require) return require(script.Parent.Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(script) return require(script.Parent.Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-script"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(game) return require(game:GetService('ReplicatedStorage').Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-game"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            '-- require(script.Parent.Missing)\n'
+            '--[=[ require(script.Parent.Missing) ]=]\n'
+            'local msg = "require(script.Parent.Missing)"\n'
+            'local example = [==[require(script.Parent.Missing)]==]\n'
+            'return true',
+    }, (0, 0, 0, 0), id="strings-and-comments"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "return require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+        "ServerScriptService/ConfigOld.luau": "return {}",
+    }, (1, 0, 0, 0), id="exactly-named-target"),
+])
+def test_module_require_graph_real_preflight_fixtures(tmp_path, scripts, counts):
+    root = _require_project(tmp_path, scripts)
+    report = preflight(root, api_dump=DUMP, module_requires=True)
+    graph = report["module_require_graph"]
+    assert (len(graph["edges"]), len(graph["cycles"]),
+            len(graph["missing"]), len(graph["unresolved"])) == counts
+    assert graph["scanned_calls"] == sum(counts[:1] + counts[2:])
+    assert not graph["truncated"] and not graph["skipped_sources"]
+    assert all(edge["from"] in scripts and edge["to"] in scripts
+               and edge["line"] >= 1 for edge in graph["edges"])
+    assert all(item["file"] in scripts and item["line"] >= 1
+               for item in graph["missing"] + graph["unresolved"])
+    assert graph["status"] == ("findings" if counts[1] or counts[2] else
+                               "partial" if counts[3] else "checked-static")
+    assert report["summary"]["module_require_edges"] == counts[0]
+    assert report["summary"]["module_require_missing"] == counts[2]
+    assert report["summary"]["module_require_unresolved"] == counts[3]
+    assert "Roblox" in " ".join(report["limitations"])
+
+
+def test_module_require_cycle_and_missing_are_distinct_with_source_lines(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/A.luau": "-- heading\nreturn require(script.Parent.B)",
+        "ServerScriptService/B.luau": "return require(script.Parent.A)",
+        "ServerScriptService/Main.server.luau":
+            "require(script.Parent.Absent)\nrequire(script.Parent.A)",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["cycles"] == [{"modules": [
+        "ServerScriptService/A.luau", "ServerScriptService/B.luau"]}]
+    assert graph["missing"] == [{
+        "file": "ServerScriptService/Main.server.luau", "line": 1,
+        "target": "ServerScriptService/Absent", "reason": "missing-from-source-tree",
+    }]
+    assert any(edge["from"] == "ServerScriptService/A.luau" and edge["line"] == 2
+               for edge in graph["edges"])
+
+
+def test_require_graph_off_preserves_default_report_and_cli_json(tmp_path, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    })
+    before = preflight(root, api_dump=DUMP)
+    assert before == preflight(root, api_dump=DUMP, module_requires=False)
+    assert "module_require_graph" not in before
+    assert "module_require_edges" not in before["summary"]
+    assert main([str(root), "--api-dump", str(DUMP)]) == 1
+    default_json = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 1
+    assert capsys.readouterr().out == default_json
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    optin = json.loads(capsys.readouterr().out)
+    assert optin["module_require_graph"]["status"] == "checked-static"
+    assert "module-requires-static" in optin["files"][0]["checked_scope"]
+
+
+def test_require_graph_failing_cli_missing_and_bad_tree_are_fail_closed(tmp_path, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Absent)",
+    })
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "findings"
+    assert report["module_require_graph"]["missing"][0]["line"] == 1
+    assert main([str(root / "no-project"), "--module-requires"]) == 2
+    invalid = json.loads(capsys.readouterr().out)
+    assert invalid["status"] == "invalid" and invalid["files"] == []
+
+
+def test_require_graph_source_budget_is_partial_not_a_clean_bill(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau":
+            "--" + "x" * (MAX_CHECK_SOURCE_BYTES + 1) + "\n"
+            + "return require(script.Parent.Undeclared)",
+        "ServerScriptService/Util.luau": "return {}",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["status"] == "partial"
+    assert graph["scanned_calls"] == 0 and not graph["missing"]
+    assert graph["skipped_sources"] == ["ServerScriptService/Main.server.luau"]
+    assert graph["coverage"] == "partial"
+
+
+def test_require_graph_limits_call_count_and_reports_truncation(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau":
+            "local m = require(script.Parent.Config)\n" * 270,
+        "ServerScriptService/Config.luau": "return {}",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["scanned_calls"] == 256
+    assert len(graph["edges"]) == 256
+    assert graph["truncated"] and graph["status"] == "partial"
+    assert graph["coverage"] == "partial"
+
+
+def test_require_graph_has_deterministic_json_and_no_side_effects(tmp_path, monkeypatch, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "require(script.Parent.Shared)",
+        "ServerScriptService/Shared.luau": "return {}",
+    })
+    before = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.rglob("*") if p.is_file()}
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Optional require preflight attempted a side effect")
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr("subprocess.run", forbidden)
+    monkeypatch.setattr("socket.create_connection", forbidden)
+    a = preflight(root, api_dump=DUMP, module_requires=True)
+    b = preflight(root, api_dump=DUMP, module_requires=True)
+    assert a == b
+    assert before == {
+        p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in root.rglob("*") if p.is_file()
+    }
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    assert json.loads(capsys.readouterr().out) == a

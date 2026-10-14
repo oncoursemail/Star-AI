@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .luau_lint import lint
 from .roblox_api_confusion_preflight import confusion_advisories
+from .roblox_module_require_graph import inspect_require_graph
 from .roblox_api_checker import ApiDump, check_luau_api, load_api_dump
 from .roblox_place import BuildError, MAX_FILES, Node, _script, read_tree
 
@@ -106,7 +107,8 @@ def _lint_report(source: str, script_class: str) -> list[dict]:
 
 
 def preflight(source: str | Path, *, api_dump: str | Path | None = None,
-              api_confusions: bool = False, native_luau: bool = False) -> dict:
+              api_confusions: bool = False, native_luau: bool = False,
+              module_requires: bool = False) -> dict:
     """Inspect a bounded script-only Roblox place tree with explicit evidence.
 
     Return invalid for malformed structures or API dumps; never conflate missing
@@ -132,6 +134,8 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
         total_findings = 0
         confusion_candidates = 0
         confusion_reported = 0
+        admitted_sources: dict[str, str] = {}
+        skipped_sources: list[str] = []
         limited = False
         native_attempted = 0
         native_checked = 0
@@ -144,7 +148,12 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
             findings: list[dict] = []
             if len(code.encode("utf-8")) > MAX_CHECK_SOURCE_BYTES:
                 warnings.append("Source exceeds 20 KB per-file static-check budget")
+                if module_requires:
+                    skipped_sources.append(relative)
             else:
+                if module_requires:
+                    admitted_sources[relative] = code
+                    scopes.append("module-requires-static")
                 scopes.extend(("luau-patterns", "lifetime-safety", "roblox-api-rules"))
                 if script_class == "Script":
                     scopes.append("inline-server-remote-trust")
@@ -238,17 +247,21 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
     except (OSError, UnicodeError):
         return _invalid("Cannot read the supplied project source tree")
 
-    if total_findings:
+    graph = (inspect_require_graph(services, admitted_sources, skipped_sources)
+             if module_requires else None)
+    if total_findings or (graph is not None and graph["status"] == "findings"):
         state = "findings"
     elif ignored:
         state = "unsupported"
-    elif limited:
+    elif limited or (graph is not None and graph["status"] == "partial"):
         state = "partial"
     else:
         state = "checked"
     report = {
         "schema_version": 1, "status": state,
-        "coverage": "partial" if limited or ignored else "static-only",
+        "coverage": ("partial" if limited or ignored
+                     or (graph is not None and graph["status"] != "checked-static")
+                     else "static-only"),
         "files": files, "unsupported_files": ignored,
         "findings": total_findings, "error": None, "limitations": list(LIMITATIONS),
         "summary": {
@@ -281,6 +294,17 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
         report["limitations"].insert(1, (
             "Standalone Luau lacks Roblox engine type definitions; excluded engine "
             "diagnostics and incomplete checks are disclosed per file."))
+    if graph is not None:
+        report["module_require_graph"] = graph
+        report["summary"].update({
+            "module_require_edges": len(graph["edges"]),
+            "module_require_cycles": len(graph["cycles"]),
+            "module_require_missing": len(graph["missing"]),
+            "module_require_unresolved": len(graph["unresolved"]),
+        })
+        report["limitations"].append(
+            "Require graph covers admitted static source paths only; dynamic modules, "
+            "runtime-created Instances and real Roblox require behavior remain unverified.")
     return report
 
 
@@ -293,9 +317,13 @@ def main(argv: list[str] | None = None) -> int:
         help="opt in to source-linked possible Roblox method spelling advisories")
     parser.add_argument("--native-luau", action="store_true",
                         help="explicitly run installed native Luau analyzer, never Studio")
+    parser.add_argument(
+        "--module-requires", action="store_true",
+        help="opt in to static ModuleScript require edges and unresolved evidence")
     args = parser.parse_args(argv)
     report = preflight(args.source, api_dump=args.api_dump,
-                       api_confusions=args.api_confusions, native_luau=args.native_luau)
+                       api_confusions=args.api_confusions, native_luau=args.native_luau,
+                       module_requires=args.module_requires)
     print(json.dumps(report, sort_keys=True, ensure_ascii=True))
     if report["status"] == "invalid":
         return 2

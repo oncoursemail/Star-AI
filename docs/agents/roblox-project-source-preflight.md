@@ -171,3 +171,68 @@ native subprocesses for successful and refused evidence paths. The existing
 pinned Luau quality-smoke job also exercises a clean and an intentionally
 broken project through the real preflight entry point, without changing its
 pinned runtime or any workflow.
+## Optional ModuleScript require graph (OFF by default)
+
+Use `--module-requires` to add bounded, read-only static require evidence:
+
+~~~sh
+python -m star.roblox_project_preflight path/to/project --module-requires
+python -m star.roblox_project_preflight path/to/project --api-dump local-fullApi.json --module-requires
+~~~
+
+With the flag absent, all existing JSON fields, return codes, permissions and
+check scopes stay unchanged. The scanner runs **only** on already-loaded
+`read_tree` source under the existing 20 KB per-script limit, and
+reuses its trusted Script/LocalScript/ModuleScript metadata. It does not
+reopen project files, rewrite source, execute Luau, call Roblox, or use a model.
+
+Supported, exact static paths (including additional `.Parent` ascents
+and direct children):
+
+- `require(script.Parent.Config)` and
+  `require(script.Parent.Parent.Shared.Config)`
+- `require(script.Child)` (if the source-tree node is a ModuleScript child)
+- `require(game:GetService("ReplicatedStorage").Shared.Config)`
+  when the named service is in the recognized source-tree subset
+
+Only admitted ModuleScripts become target edges. A directory with an
+`init.luau` is represented by that ModuleScript node, not an
+additional Folder; directory and similarly named ModuleScripts are never
+guessed from partial names. A missing source-tree target is distinguished
+from a non-ModuleScript target and is **not proof** that an Instance could
+not be created dynamically at runtime.
+
+The optional `module_require_graph` output contains source-relative
+1-based line evidence for exact edges, missing static targets and unresolved
+calls, plus strongly connected ModuleScript cycles (including self-require),
+scanned-call/source/module totals, `skipped_sources`,
+`truncated`, an explicit `coverage` and limitations.
+Dynamic expressions, aliases, shadowed `require`, `script` or `game` roots
+(including function parameters),
+bracket indexing, out-of-tree services and unclosed calls are
+**unresolved**, never misreported as an absent module or all-clear. Cycles
+describe syntactic static edges, not proof of runtime reachability:
+branch conditions and runtime construction remain outside this checker.
+
+Maximum 256 recognized lexical require calls are classified across at most
+400 scripts / 3 MB admitted by `read_tree`, and only source
+under 20 KB per script is tokenized. At most 32 strongly connected cycle
+groups are emitted. Any unmatched call, skipped oversized source or
+truncation leaves graph coverage partial. Missing targets or static cycles
+produce a findings status; purely unresolved calls a partial status (exit 1).
+A graph with no detected issue says only `checked-static`, **not**
+Studio-valid or gameplay-safe. The ordinary preflight report still carries
+its own API/type/runtime limitations and exit status.
+
+### Tool choice
+
+| Option | Licence and cost | Installation/upkeep | Decision |
+| --- | --- | --- | --- |
+| Existing Python stdlib + STAR source-tree and tokenizer | Python PSF-2.0, free, no new dependency | Maintain a deliberately small supported grammar and tests | Selected: conservative, offline and stays within preflight bounds |
+| Pinned `luau-analyze` 0.691 | MIT, free | Pinned native binary and Studio type definitions required for trustworthy engine Instance resolution | Stronger syntax/type analysis, but cannot derive Roblox service hierarchy alone |
+| Rojo 7.7.1 source mapping | MPL-2.0, free | External executable, configuration and version tracking | Useful for full projects, but this preflight only admits the existing subset and must not install tools |
+
+Regression fixtures run `preflight()` and the actual
+`main()` CLI entrypoint on deterministic small script trees.
+GitHub Actions supplies executed Python/Windows/frontend evidence; this is
+not an engine execution or benchmark of generated-game correctness.
