@@ -1,7 +1,6 @@
 """Audited file tools confined to a user-selected workspace. Never a shell escape hatch."""
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
