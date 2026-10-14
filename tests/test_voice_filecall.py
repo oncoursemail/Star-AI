@@ -1,6 +1,8 @@
 """File-driven calls: the scripted caller, the virtual speaker, and the loudspeaker-echo simulation."""
 import json
 
+import pytest
+
 from star.voice.call import CallConfig, CallSession
 from star.voice.filecall import FileCall, VirtualSpeaker, nearest_resample, read_wav, write_wav
 from star.voice.pcm import rms
@@ -72,6 +74,20 @@ def test_loudspeaker_echo_makes_star_interrupt_herself_unless_the_echo_gate_is_o
     assert gated.turns[1].interrupted and gated.turns[1].interrupt_reason == "barge_in"   # a real voice still does
 
 
+class _ManualClock:
+    """A clock that only moves when the test says so."""
+    def __init__(self, start: float = 100.0):
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+
+LOW = bytes([0x10, 0x00])                           # one PCM16 sample of a quiet tone
+HIGH = bytes([0x20, 0x00])
+SILENCE = bytes([0x00, 0x00])
+
+
 def test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording():
     clock = [100.0]
     speaker = VirtualSpeaker(clock=lambda: clock[0])
@@ -91,6 +107,36 @@ def test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording():
     assert speaker.level() == 0 and rms(speaker.audible(clock[0], 0.032, 16000)) == 0
     speaker.reset()
     assert speaker.played_seconds() == 0
+
+
+def test_virtual_speaker_keeps_real_gaps_between_separate_utterances():
+    # Durations are binary fractions (1/8 s, 3/8 s) so the sample arithmetic is exact.
+    clock = _ManualClock()
+    speaker = VirtualSpeaker(clock=clock)
+    origin = clock()
+    speaker.play(LOW * 2000, 16000)                 # 0.125 s
+    clock.now += 0.375                              # 0.25 s of silence after it finished
+    speaker.play(HIGH * 2000, 16000)
+    clock.now += 0.125
+    recording, rate = speaker.recording(origin)
+    assert rate == 16000 and len(recording) == 2 * 8000
+    assert recording[:2 * 2000] == LOW * 2000
+    assert recording[2 * 2000:2 * 6000] == SILENCE * 4000
+    assert recording[2 * 6000:] == HIGH * 2000
+    assert speaker.pending_seconds() == 0 and speaker.played_seconds() == pytest.approx(0.25)
+
+
+def test_stopping_before_queued_audio_starts_drops_it_from_the_recording():
+    clock = _ManualClock()
+    speaker = VirtualSpeaker(clock=clock)
+    origin = clock()
+    speaker.play(LOW * 2000, 16000)                 # plays 0 to 0.125 s
+    speaker.play(HIGH * 2000, 16000)                # queued for 0.125 to 0.25 s
+    clock.now += 0.0625
+    speaker.stop()
+    recording, _ = speaker.recording(origin)
+    assert recording == LOW * 1000                  # half of the first clip, none of the second
+    assert speaker.played_seconds() == pytest.approx(0.0625)
 
 
 def test_wav_helpers_round_trip_and_resample(tmp_path):
