@@ -163,6 +163,15 @@ def parse_bundle(data: object) -> dict:
     return {"project": project, "digest": hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()}
 
 
+def bundle_error(data: object) -> str | None:
+    """None when `data` is a well-formed bundle, otherwise one plain sentence saying what is wrong (never raises)."""
+    try:
+        parse_bundle(data)
+    except (ValueError, TypeError, RecursionError, LessonRefused) as exc:
+        return str(exc) or type(exc).__name__
+    return None
+
+
 def read_bundle(path: Path) -> dict:
     with Path(path).open("rb") as handle:
         raw = handle.read(MAX_BUNDLE_BYTES + 1)

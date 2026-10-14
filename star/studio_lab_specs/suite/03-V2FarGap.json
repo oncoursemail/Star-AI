@@ -1,0 +1,112 @@
+{
+ "name": "V2FarGap",
+ "kind": "map",
+ "description": "Limit check: second jump 7.8 studs with a 2-stud rise. Was meant as a too-far gap; real physics jumped it in every run (v2/v3), so it now guards the measured limit and must pass the first time.",
+ "defect": "limit-check",
+ "expect": {
+  "first_pass": true
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2FarGap",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    59.8,
+    40,
+    40.0
+   ],
+   "center": [
+    -22.1,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -27.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -13.2,
+     8.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     -2.2,
+     8.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ]
+  }
+ }
+}

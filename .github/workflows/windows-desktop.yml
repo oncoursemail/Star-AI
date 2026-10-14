@@ -30,14 +30,106 @@ concurrency:
   group: star-windows-${{ github.ref }}
   cancel-in-progress: true
 
+# Layout (2026-10-13): the React bundle is built and tested once on Linux; the Windows offline
+# suite runs as two parallel shards (tests/sharding.py) while windows-build packages the EXE.
+# A release still needs every shard green: attest-release needs windows-tests, and
+# publish-release needs attest-release. Check names: "Windows offline tests (1/2)" and "(2/2)".
 jobs:
+  frontend:
+    name: React desktop assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package.json
+      - name: Build and verify React desktop assets
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run test
+          npm run build
+          test -s dist/index.html
+      - name: Hand the React bundle to the Windows jobs
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: star-frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 1
+
+  windows-tests:
+    name: Windows offline tests (${{ matrix.shard }}/2)
+    needs: frontend
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-desktop.txt
+            requirements-dev.txt
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+      - name: Download the React bundle built from this commit
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: star-frontend-dist
+          path: frontend/dist
+      - name: Install STAR test requirements
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-desktop.txt -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependencies could not be installed' }
+          python -m pip check
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependency check failed' }
+      - name: Run offline tests
+        shell: pwsh
+        env:
+          STAR_TEST_SHARD: ${{ matrix.shard }}/2
+        run: |
+          python -m pytest -q --durations=15 --junitxml=test-results/windows-shard.xml
+          if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
+          python -m compileall -q star star_desktop.py
+      - name: Keep this shard's per-test results and timings
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-tests-shard-${{ matrix.shard }}
+          path: test-results/windows-shard.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
   windows-build:
+    needs: frontend
     runs-on: windows-latest
     timeout-minutes: 65
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Stamp exact source provenance for app diagnostics
         shell: pwsh
         env:
@@ -54,40 +146,33 @@ jobs:
             run_id = [string]$env:GITHUB_RUN_ID
           } | ConvertTo-Json -Compress
           [System.IO.File]::WriteAllText('star/build-info.json', $payload, (New-Object System.Text.UTF8Encoding $false))
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
           cache: pip
-          cache-dependency-path: requirements-desktop.txt
-      - uses: actions/setup-node@v7
+          cache-dependency-path: |
+            requirements.txt
+            requirements-desktop.txt
+            requirements-dev.txt
+      - name: Download the React bundle built from this commit
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          node-version: '22'
-      - name: Build and verify React desktop assets
+          name: star-frontend-dist
+          path: frontend/dist
+      - name: Check the React bundle (npm run build in the frontend job)
         shell: pwsh
-        working-directory: frontend
         run: |
-          npm install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { throw 'React dependencies could not be installed' }
-          npm run typecheck
-          if ($LASTEXITCODE -ne 0) { throw 'TypeScript check failed' }
-          npm run test
-          if ($LASTEXITCODE -ne 0) { throw 'React component tests failed' }
-          npm run build
-          if ($LASTEXITCODE -ne 0) { throw 'React build failed' }
-          if (-not (Test-Path 'dist/index.html')) { throw 'React index missing' }
+          if (-not (Test-Path 'frontend/dist/index.html')) { throw 'React index missing' }
       - name: Install STAR build requirements
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-desktop.txt -r requirements-dev.txt
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependencies could not be installed' }
           python -m pip install 'pyinstaller>=6.10,<7'
+          if ($LASTEXITCODE -ne 0) { throw 'PyInstaller could not be installed' }
           python -m pip check
-      - name: Run offline tests
-        shell: pwsh
-        run: |
-          python -m pytest -q
-          if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
-          python -m compileall -q star star_desktop.py
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependency check failed' }
       - name: Capture real STAR OLED GUI screens for review
         shell: pwsh
         run: |
@@ -95,7 +180,7 @@ jobs:
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'STAR-CI-Empty-Profile'
           python -m scripts.capture_desktop_ui
       - name: Upload rendered GUI preview screenshots
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: STAR-OLED-GUI-Previews
           path: ui-previews/*.png
@@ -106,7 +191,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
-            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' --add-data 'star/skill_packs;star/skill_packs' --add-data 'star/data;star/data' --add-data 'star/voice/voices.json;star/voice' --add-data 'star/blender_worker.py;star' `
+            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' --add-data 'star/skill_packs;star/skill_packs' --add-data 'star/data;star/data' --add-data 'star/studio_lab_specs;star/studio_lab_specs' --add-data 'star/voice/voices.json;star/voice' --add-data 'star/blender_worker.py;star' `
             --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
@@ -164,7 +249,7 @@ jobs:
           @("$setupHash  STAR-Setup-v$version.exe", "$zipHash  STAR-Genesis-Windows-x64.zip") |
             Set-Content -Encoding utf8 'STAR-PREVIEW-SHA256SUMS.txt'
       - name: Upload testable executables
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ github.event_name == 'pull_request' && 'STAR-Fast-Brain-Preview' || 'STAR-Windows-vNext' }}
           path: |
@@ -178,7 +263,7 @@ jobs:
       # Stable releases keep using STAR-Windows-vNext above unchanged.
       - name: Upload Ultimate preview Windows installer
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: STAR-Ultimate-Windows-Setup
           path: |
@@ -188,7 +273,7 @@ jobs:
           retention-days: 30
       - name: Upload Ultimate preview portable ZIP
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: STAR-Ultimate-Windows-Portable
           path: |
@@ -200,7 +285,7 @@ jobs:
   # The PR build receives NO attestation or publishing permissions. Only
   # verified main-branch artifacts enter this trusted provenance job.
   attest-release:
-    needs: windows-build
+    needs: [windows-build, windows-tests]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -211,7 +296,7 @@ jobs:
       artifact-metadata: write
     steps:
       - name: Download successfully tested Windows binaries
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: STAR-Windows-vNext
           path: attest-input
@@ -228,7 +313,7 @@ jobs:
           cp "$SETUP" attest-ready/
           cp "$PORTABLE" attest-ready/
       - name: Attest exact verified Windows release artifacts
-        uses: actions/attest@v4
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: 'attest-ready/*'
 
@@ -240,12 +325,12 @@ jobs:
       contents: write
       attestations: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - name: Download tested Windows packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: STAR-Windows-vNext
           path: release-assets

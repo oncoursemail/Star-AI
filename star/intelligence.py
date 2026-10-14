@@ -200,6 +200,19 @@ VFX_TOOLS = (
 )
 _VFX_TRIGGER = re.compile(r"\b(?:vfx|visual effects?|particles?|ability effects?|effects? for|spell effects?|explosion "
                           r"effects?|aura|shockwave|energy burst)\b", re.I)
+# STAR Studio Lab (star/studio_lab.py): build a map plan in STAR Test Place on the STAR Studio server, playtest it,
+# screenshot it, fix and repeat. Opt-in: setting studio_lab_enabled or STAR_STUDIO_LAB=1; off by default.
+STUDIO_LAB_TOOLS = (
+    _tool("star_roblox_studio_lab",
+          "Build a map plan (same shape as star_roblox_map_plan; it must pass that dry run and name its route surfaces "
+          "in plan.route.waypoints) for real in STAR Test Place on the STAR Studio server, under "
+          "Workspace/MapDrafts/<mapName>, as one undo step; read it back and compare; playtest it with a probe that "
+          "walks and jumps the character along the route; take fixed-camera screenshots; fix found defects in the plan "
+          "and repeat (at most max_iterations). Returns per-iteration results, defects, fixes and the evidence folder. "
+          "Never saves or publishes. Takes one to several minutes.",
+          {"plan": {"type": "object"}, "max_iterations": {"type": "integer", "minimum": 1, "maximum": 5, "default": 3},
+           "vision": {"type": "boolean", "default": False}}, ("plan",)),
+)
 # Live retrieval from create.roblox.com/docs (star/roblox_docs_live.py). Opt-in: off unless enabled.
 ROBLOX_DOCS_LIVE_TOOLS = (
     _tool("star_roblox_docs_live_search",
@@ -230,7 +243,7 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS,
+             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *STUDIO_LAB_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS,
              *VFX_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 _SHARED_TOOL_NAMES = frozenset(tool["name"] for tool in RUNTIME_TOOLS)
@@ -257,7 +270,7 @@ class LocalIntelligence:
                  obsidian_vault: Path | None = None, skills_enabled: bool = True,
                  graphify_enabled: bool = True, roblox_research_enabled: bool = True,
                  asset_forge_enabled: bool = False, docs=None, cloud=None, design_enabled: bool = True,
-                 map_plans_enabled: bool = True,
+                 map_plans_enabled: bool = True, studio_lab_enabled: bool = False,
                  vfx_studio_enabled: bool = False,
                  docs_live: RobloxDocsLive | None = None,
                  registered_workspaces: Iterable[Path | str] = (),
@@ -267,6 +280,7 @@ class LocalIntelligence:
         self.design_enabled = design_enabled
         self.map_plans_enabled = map_plans_enabled
         self.vfx_studio_enabled = vfx_studio_enabled is True
+        self.studio_lab_enabled = studio_lab_enabled is True
         self.docs_live = docs_live   # None unless the owner enabled live Roblox docs retrieval
         self.docs = docs   # star.doc_knowledge.KnowledgeClient, or None when not configured
         # star.roblox_cloud.RobloxCloud: reads with the owner's key; writes only as approved actions.
@@ -348,6 +362,8 @@ class LocalIntelligence:
             "design": {"enabled": self.design_enabled, "read_only": True, "offline": True,
                        "tools": [tool["name"] for tool in DESIGN_TOOLS] if self.design_enabled else []},
             "map_plans": {"enabled": self.map_plans_enabled, "offline": True, "applies_nothing": True},
+            "studio_lab": {"enabled": self.studio_lab_enabled, "target": "STAR Test Place only",
+                           "note": "Opt-in: setting studio_lab_enabled or STAR_STUDIO_LAB=1."},
             "roblox_docs_live": {"enabled": self.docs_live is not None, "read_only": True,
                                  "host": "create.roblox.com",
                                  "note": "Opt-in: setting roblox_docs_live_enabled or STAR_ROBLOX_DOCS_LIVE=1."},
@@ -382,6 +398,8 @@ class LocalIntelligence:
             result.extend(DESIGN_TOOLS)
         if self.map_plans_enabled and roblox_prompt and _MAP_TRIGGER.search(prompt):
             result.extend(MAP_PLAN_TOOLS)
+            if self.studio_lab_enabled:
+                result.extend(STUDIO_LAB_TOOLS)
         if self.vfx_studio_enabled and roblox_prompt and _VFX_TRIGGER.search(prompt):
             result.extend(VFX_TOOLS)
         if self.docs_live is not None and roblox_prompt and _DOCS_TRIGGER.search(prompt):
@@ -463,6 +481,10 @@ class LocalIntelligence:
             if not self.vfx_studio_enabled:
                 raise PermissionError("STAR VFX Studio is not enabled")
             return self._vfx_call(args)
+        if name == "star_roblox_studio_lab":
+            if not self.studio_lab_enabled:
+                raise PermissionError("The Studio lab is off (setting studio_lab_enabled or STAR_STUDIO_LAB=1)")
+            return self._studio_lab_call(args)
         if name in _DOCS_LIVE_NAMES:
             if self.docs_live is None:
                 raise PermissionError("Live Roblox docs retrieval is not enabled")
@@ -616,6 +638,27 @@ class LocalIntelligence:
         summary["evidence_folder"] = str(out)
         return summary
 
+    def _studio_lab_call(self, args: dict) -> dict:
+        from . import studio_lab
+        import time as _time
+        plan = args["plan"]
+        spec, problems = studio_lab.check_spec({"name": plan.get("mapName") if isinstance(plan, dict) else None,
+                                                "plan": plan, "maxIterations": args.get("max_iterations", 3)})
+        if spec is None:
+            return {"ok": False, "applied": False, "problems": problems,
+                    "note": "Nothing was built. Fix the plan (star_roblox_map_plan shows the dry run) and try again."}
+        base = Path(self.home) / "studio-lab"
+        out = base / "runs" / f"{spec['name'].replace(' ', '_')}-{_time.strftime('%Y%m%dT%H%M%SZ', _time.gmtime())}"
+        critic = studio_lab.BrainCritic() if args.get("vision") else None
+        report = studio_lab.run_lab_sync(Path(self.home), spec, out, critic=critic)
+        summary = studio_lab.public_summary(report, out)
+        if report.get("lesson"):
+            try:
+                summary["outbox"] = studio_lab.write_outbox(base / "outbox", [report["lesson"]])
+            except Exception as error:
+                summary["outbox"] = {"error": type(error).__name__}
+        return summary
+
     def _cloud_call(self, name: str, args: dict) -> dict:
         """Roblox Open Cloud. A refusal reaches the model as text (CloudError is a ValueError)."""
         from .roblox_cloud import MAX_SCRIPT_CHARS, CloudError
@@ -705,6 +748,8 @@ def for_settings(settings, home: Path) -> LocalIntelligence:
                            and _env_on("STAR_MAP_PLAN_TOOLS")),
         vfx_studio_enabled=(getattr(settings, "vfx_studio_enabled", False) is True
                             or _env_on("STAR_VFX_STUDIO", default=False)),
+        studio_lab_enabled=(getattr(settings, "studio_lab_enabled", False) is True
+                            or _env_on("STAR_STUDIO_LAB", default=False)),
         docs_live=(RobloxDocsLive(cache_dir=Path(home) / "cache" / "roblox-docs")
                    if live_enabled(settings) else None),
     )
