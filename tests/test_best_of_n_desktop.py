@@ -106,3 +106,27 @@ def test_settings_validate_best_of_n(desk):
         settings.best_of_n, settings.best_of_n_max = value, maximum
         with pytest.raises(ValueError):
             settings.validate()
+
+
+def test_failed_main_answer_cancels_the_extra_candidates(desk, monkeypatch):
+    """Review fix: when the main answer fails (or the turn is cancelled) the candidates must not keep running."""
+    import pytest
+    from types import SimpleNamespace
+    cancelled, started = [], []
+
+    async def cancel():
+        cancelled.append(True)
+
+    fake = SimpleNamespace(on_first_request=started.append, run=SimpleNamespace(cancel=cancel))
+
+    async def for_turn(*args, **kwargs):
+        return fake
+    monkeypatch.setattr(bon, "for_turn", for_turn)
+    busy = RuntimeError("rate limited")
+    busy.status_code = 429
+    desk.chats.add("STAR", "user", PROMPT, chat_id=desk.chat)
+    desk.models.responses.append(busy)
+    with pytest.raises(RuntimeError, match="rate limited"):
+        from star.desktop_core import run_task
+        run_task(desk.settings, PROMPT, chat_id=desk.chat, mode="auto")
+    assert started and cancelled == [True]

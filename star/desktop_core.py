@@ -1335,21 +1335,28 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     used = replace(route, model=quick_name)
                     audited_event({'event': 'route_busy_quick', 'model': quick_name})
                 try:
-                    result = await answer_with(used.model)
-                except Exception as exc:
-                    # A role's model that is missing or will not load: answer with the single
-                    # configured model instead, once, and only if nothing was shown or run yet.
-                    if (kind != 'lan' or used.model == settings.model or first_visible_token
-                            or tools_ran or not model_unavailable(exc)):
-                        raise
-                    server_roles.mark_failed(settings, used.model)
-                    used = replace(route, model=settings.model, subagent_model=(
-                        settings.model if route.subagent_model == route.model else route.subagent_model))
-                    if specialists is not None:
-                        specialists.model = used.subagent_model
-                    kwargs.update(subagent_model=used.subagent_model)
-                    audited_event({'event': 'route_fallback', 'model': settings.model})
-                    result = await answer_with(settings.model)
+                    try:
+                        result = await answer_with(used.model)
+                    except Exception as exc:
+                        # A role's model that is missing or will not load: answer with the single
+                        # configured model instead, once, and only if nothing was shown or run yet.
+                        if (kind != 'lan' or used.model == settings.model or first_visible_token
+                                or tools_ran or not model_unavailable(exc)):
+                            raise
+                        server_roles.mark_failed(settings, used.model)
+                        used = replace(route, model=settings.model, subagent_model=(
+                            settings.model if route.subagent_model == route.model else route.subagent_model))
+                        if specialists is not None:
+                            specialists.model = used.subagent_model
+                        kwargs.update(subagent_model=used.subagent_model)
+                        audited_event({'event': 'route_fallback', 'model': settings.model})
+                        result = await answer_with(settings.model)
+                except BaseException:
+                    # The main answer failed or the turn was cancelled: stop the extra candidates too, so they
+                    # do not keep generating on the server slots after the turn is over.
+                    if several is not None:
+                        await several.run.cancel()
+                    raise
                 if several is not None:
                     # The best of the candidates (the main answer above is candidate 1) replaces the answer.
                     result = await several.apply(result, used.model, started=started, budget=route.task_timeout,
