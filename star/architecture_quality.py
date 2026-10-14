@@ -62,7 +62,8 @@ def _diagnostics(plan: object) -> tuple[list[str], list[str], dict]:
             elif any(v < 0.01 for v in part["size"]):
                 errors.append(f"Box {index} has a near-zero dimension")
             angle = part.get("angle_y")
-            if type(angle) not in (int, float) or not isfinite(angle) or abs(angle) > 180:
+            if (not isinstance(angle, (int, float)) or isinstance(angle, bool) or not isfinite(angle)
+                    or abs(angle) > 180):
                 errors.append(f"Box {index} has an invalid rotation")
             metrics["triangles"] += 12
         elif kind == "triangle_prism":
