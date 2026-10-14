@@ -131,6 +131,7 @@ class Settings:
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    luau_retry_ladder: bool = False        # opt-in: a second, thinking repair after a failed Luau repair
 
     @classmethod
     def load(cls, file: Path):
@@ -165,7 +166,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'luau_retry_ladder', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -1384,7 +1385,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     result = await answer_with(settings.model)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
                 return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
-                                                    started=started, on_event=audited_event)
+                                                    started=started, on_event=audited_event,
+                                                    retry_ladder=settings.luau_retry_ladder is True,
+                                                    thinking=provider_kind(settings) in ('local', 'lan'))
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
