@@ -12,7 +12,8 @@ from pathlib import Path
 import re
 from typing import Callable, Iterable
 
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 from .asset_forge import PolyHavenCatalog, plan_building, preview_terrain
 from .agent_skills import SkillLibrary, install_starters

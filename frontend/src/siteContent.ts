@@ -44,7 +44,7 @@ export const tour:TourView[]=[
   points:['Streaming replies','Image and file references','Copyable code blocks']},
  {id:'brain',tab:'Brain',title:'Your model, installed in one step.',
   body:'STAR Brain downloads a verified engine and model, then asks it for a real reply, so you know it works before you rely on it.',
-  points:['About 3.4 GB estimated (v0.9.0 file sizes, October 2026)','SHA-256 checks on engine and weights','Runs on loopback, on your PC']},
+  points:['About 3.4 GB estimated (v1.0.0 file sizes, unchanged since v0.9.0)','SHA-256 checks on engine and weights','Runs on loopback, on your PC']},
  {id:'tools',tab:'Tools',title:'Exactly the access a task needs.',
   body:'Connect Roblox Studio and a project folder. Studio inspection starts read-only; editing a disposable test place requires a separate permission.',
   points:['Official Studio MCP','Read-only Studio inspection','Scoped edits are opt-in']},
@@ -59,7 +59,7 @@ export const tour:TourView[]=[
 export type BrainRoute={id:string;icon:'pc'|'server'|'cloud';title:string;body:string;since:string;note?:string}
 export const brainRoutes:BrainRoute[]=[
  {id:'pc',icon:'pc',title:'This PC',since:'0.8.0',note:'Default',
-  body:'A managed llama.cpp engine with Qwen 3.5 4B. The v0.9.0 setup targets a Vulkan GPU with about 8 GB VRAM; this is guidance, not a hardware benchmark.'},
+  body:'A managed llama.cpp engine with Qwen 3.5 4B. The v1.0.0 setup targets a Vulkan GPU with about 8 GB VRAM; this is guidance, not a hardware benchmark.'},
  {id:'lan',icon:'server',title:'STAR Server, on your network',since:'0.9.0',
   body:'A model server you run on another machine at home. STAR reaches it at a private network address, keeps its key in Windows Credential Manager, and needs no model download on this PC.'},
  {id:'hosted',icon:'cloud',title:'A hosted provider, with your key',since:'0.9.0',note:'Optional',
@@ -106,7 +106,7 @@ export const connections:Connection[]=[
  {name:'STAR Teams',what:'Bounded specialist agents on one task',since:'0.9.0'}
 ]
 
-/** Code-backed v0.9.0 features; release badges are driven only by published GitHub tags. */
+/** Code-backed features (first shipped in v0.9.0); release badges are driven only by published GitHub tags. */
 export const capabilities=[
  {name:'STAR Server on your network',since:'0.9.0',doc:LINKS.server,
   what:'Use a model server at a private network address. Its key stays in the OS credential store; this PC needs no local model download.'},
@@ -136,7 +136,7 @@ export const evalResults=[
 export const steps=[
  {title:'Download STAR',fact:'installer',
   body:'One Setup file from GitHub Releases. Per-user installation normally needs no administrator approval; an all-users installation or upgrade may require it.'},
- {title:'Start STAR Brain',fact:'v0.9.0 estimate (Oct 2026): ~3.4 GB download; 4.3 GB free-space check',
+ {title:'Start STAR Brain',fact:'v1.0.0 estimate (Oct 2026): ~3.4 GB download; 4.3 GB free-space check',
   body:'Open STAR Brain and press Download and start. STAR fetches the engine and model, checks every file, then runs a test reply.'},
  {title:'Start creating',fact:'Works offline after setup',
   body:'Open Chat and ask for what you need. Attach a screenshot or a file when it helps.'},
@@ -146,8 +146,8 @@ export const steps=[
 
 export const requirements=[
  {term:'System',detail:'Windows 11, 64-bit. Windows 10 is untested.'},
- {term:'Graphics',detail:'The v0.9.0 local-model guidance targets a Vulkan GPU with about 8 GB VRAM; hardware coverage is limited.'},
- {term:'Disk',detail:'v0.9.0 checks for 4.3 GB free before downloading STAR Brain (October 2026 source), plus space for the app.'},
+ {term:'Graphics',detail:'The v1.0.0 local-model guidance targets a Vulkan GPU with about 8 GB VRAM; hardware coverage is limited.'},
+ {term:'Disk',detail:'v1.0.0 checks for 4.3 GB free before downloading STAR Brain (October 2026 source), plus space for the app.'},
  {term:'Internet',detail:'Needed to download the model and to check for updates. Local chat then works offline.'},
  {term:'Account',detail:'None. No sign-in, no API key for the local brain.'}
 ] as const

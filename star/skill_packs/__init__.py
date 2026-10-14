@@ -209,12 +209,15 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
-    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
-    if not allowed:
-        return []
+    # The prompt test comes first: it is a regular expression, while the enabled set with `home`
+    # opens the knowledge database (promoter switches). Most prompts are not Roblox or Godot
+    # questions and return here without touching it. Same result in either order.
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
     godot_context = bool(_GODOT_CONTEXT.search(prompt))
     if not roblox_context and not godot_context:
+        return []
+    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
+    if not allowed:
         return []
     scored = []
     for order, pack in enumerate(available()):
