@@ -10,6 +10,7 @@ import {useCallback,useEffect,useRef,useState} from 'react'
 import {BookOpen,Check,Download,LoaderCircle,Pencil,RotateCcw,Sparkles,Trash2,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
 import {Tag} from './components'
+import {EmptyState,ErrorState,LoadingState} from './states'
 import {LearnedThisWeek} from './LearnedThisWeek'
 import type {AppSettings,Lesson,LessonCounts,LessonStatus} from './types'
 import './learning.css'
@@ -56,10 +57,13 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
  const [notice,setNotice]=useState('')
  const [teach,setTeach]=useState('')
  const digestId=useRef('')
+ // First read: '' until it answers, then 'ok' or 'failed' (a failed read is not "no lessons").
+ const [read,setRead]=useState<''|'ok'|'failed'>('')
  const load=useCallback(async()=>{
    if(disabled)return
    const found=await invoke('listLessons') as Listing|null
    if(found?.lessons){setLessons(found.lessons);setTotals(found.counts)}
+   setRead(current=>found?.lessons?'ok':current==='ok'?'ok':'failed')
  },[disabled,invoke])
  useEffect(()=>{void load()},[load,project])
  // The background summary answers later, as an event: show what it did and re-read the list.
@@ -127,11 +131,14 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    </div>
    <LearnedThisWeek invoke={invoke} disabled={disabled} project={project}/>
    <p className="learn-help">{practice} {practice===1?'lesson has':'lessons have'} been imported from STAR’s own practice. {autoLive?'A practice lesson is used on its own only when it beat the current lessons on held-out practice, for 14 days, listed above with Undo; every other import waits for your review.':'Automatic use is off: every import waits for your review.'}</p>
-   <p className="learn-help">To import a server lesson export locally, run <code>python -m star.lessons import lessons.json</code>. No server connection is made.</p>
+   <details className="learn-advanced"><summary>Advanced: import a lesson file exported from STAR Server</summary><p className="learn-help">There is no button for this yet. If you run STAR from its source code, run <code>python -m star.lessons import lessons.json</code> in a terminal. The lessons arrive here for review; no server connection is made.</p></details>
    <div className="learn-tabs" role="tablist" aria-label="Lessons by status">
      {views.map(v=><button key={v.id} type="button" role="tab" aria-selected={view===v.id} className={'learn-tab'+(view===v.id?' is-current':'')} onClick={()=>{setView(v.id);setEditing(null);setConfirming(null)}}>{v.label} <span>{countOf(v.id)}</span></button>)}
    </div>
-   {shown.length===0?<p className="learn-empty">{disabled?'Open STAR Desktop to see what it has learned.':emptyText[view]}</p>
+   {shown.length===0?(disabled?<EmptyState compact title="Open STAR Desktop to see what it has learned."/>
+     :read===''&&!lessons.length?<LoadingState compact label="Loading lessons" lines={2}/>
+     :read==='failed'&&!lessons.length?<ErrorState compact title="Lessons could not be loaded." description="STAR Desktop did not answer. Try again in a moment." action={<button type="button" className="learn-button" onClick={()=>void load()}>Try again</button>}/>
+     :<EmptyState compact title={emptyText[view]}/>)
    :<ul className="learn-list">{shown.map(lesson=>{
      const busy=pending.endsWith(':'+lesson.id)
      return <li key={lesson.id} className="lesson">
@@ -169,7 +176,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    </label>
    <div className="learn-tools"><button type="button" className="learn-button is-primary" disabled={disabled||!!pending||teach.trim().length<3} onClick={()=>void remember()}><Check size={14} aria-hidden="true"/> Save as accepted</button><span className="learn-count">{teach.length}/1200</span></div>
    <div className="learn-settings">
-     <label className="learn-switch"><span><strong>Import bundled STAR practice lessons</strong><small>Off by default. When enabled, import the shipped, reviewed-in-code bundle once per app version as candidates. Approval remains your choice.</small></span><input type="checkbox" disabled={disabled} checked={settings.practice_lessons_enabled===true} onChange={e=>void change("practice_lessons_enabled",e.target.checked)}/></label>
+     <label className="learn-switch"><span><strong>Import bundled STAR practice lessons</strong><small>Off by default. When on, STAR adds the practice lessons that ship with each version, once, as suggestions. Nothing is used until you approve it.</small></span><input type="checkbox" disabled={disabled} checked={settings.practice_lessons_enabled===true} onChange={e=>void change("practice_lessons_enabled",e.target.checked)}/></label>
      <label className="learn-switch"><span><strong>Use what night school learns, on a 14-day trial</strong><small>{autoLive?'On: a text lesson that beat the current lessons on held-out practice is used at once, shown under What STAR learned this week, and expires after 14 days unless you keep it.':'Off: night school’s lessons wait for your review like any other import.'}</small></span><input type="checkbox" disabled={disabled} checked={autoLive} onChange={e=>void change('learning_auto_live',e.target.checked)}/></label>
      <label className="learn-switch"><span><strong>Accept my own corrections automatically</strong><small>{autoAccept?'What you state in your own words is kept at once. Everything STAR infers still waits for review.':'Review everything: even your own statements wait here until you approve them.'}</small></span><input type="checkbox" disabled={disabled} checked={autoAccept} onChange={e=>void change('learning_auto_accept',e.target.checked)}/></label>
      <label className="learn-switch"><span><strong>Summarise raw notes in the background</strong><small>After an answer, the spare fast model of a STAR Server may reword raw notes. It never runs on the model you chat with; use “Summarise raw notes” for that. Its suggestions always wait for review.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest??true} onChange={e=>void change('learning_digest',e.target.checked)}/></label>

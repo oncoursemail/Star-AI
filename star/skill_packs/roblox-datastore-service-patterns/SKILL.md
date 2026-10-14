@@ -11,7 +11,7 @@ Use for Roblox server-owned persistent records, concurrent saves, budgets and pr
 2. Prefer UpdateAsync when a write depends on old data or multiple servers might write. It uses read and write budgets. [S2]
 3. An UpdateAsync transform returns a new value or nil to cancel. It cannot yield and might run again; avoid side effects. [S2]
 4. Wrap yielding data-store operations in pcall. Failed responses do not prove writes never committed; use ordered, bounded, idempotent retries. [S3]
-5. Check StandardRead and StandardWrite budgets for UpdateAsync. The older DataStoreRequestType.UpdateAsync enum is legacy. [S4]
+5. Check StandardRead and StandardWrite budgets for standard UpdateAsync calls. The enum still lists UpdateAsync, but current server budget documentation uses the StandardRead and StandardWrite types. [S4]
 6. Budgets are snapshots, not reservations. Stagger saves and handle throttling; do not issue a request on every change. [S3][S4]
 7. For live player profiles, atomically claim a session lock with UpdateAsync, ideally in key metadata, before using the record. [S5]
 8. Reject non-owner saves, refresh the lease periodically and release it on PlayerRemoving and BindToClose; recover from crashes. [S5][S6]

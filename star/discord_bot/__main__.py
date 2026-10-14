@@ -11,7 +11,7 @@ import logging
 import sys
 
 from .bot import BotConfig, create_bot
-from .local_config import load_merged_env
+from .local_config import ensure_settings_file, load_merged_env
 
 
 async def smoke(config: BotConfig) -> int:
@@ -54,6 +54,8 @@ def main() -> int:
     if args not in ([], ["doctor"], ["smoke"]):
         print("Usage: python -m star.discord_bot [doctor | smoke]", file=sys.stderr)
         return 2
+    if ensure_settings_file():
+        print("Created a settings template (discord-settings.env) in your .star folder; fill in your IDs.")
     try:
         env = load_merged_env()
     except ValueError as exc:

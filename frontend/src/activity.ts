@@ -122,6 +122,7 @@ export function toolLabel(name?: string): string {
   if (name === 'star_web_search') return 'Searching the web'
   if (name.startsWith('star_github_')) return 'Reading STAR source on GitHub'
   if (name === 'workspace_write') return 'Writing to your workspace'
+  if (name === 'workspace_edit') return 'Editing a workspace file'
   if (name === 'workspace_search') return 'Searching your workspace'
   if (name === 'workspace_list') return 'Listing workspace files'
   if (name.startsWith('workspace_')) return 'Reading a workspace file'

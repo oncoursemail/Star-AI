@@ -1,7 +1,7 @@
 """STAR Desktop's local-only backend. The Qt GUI calls this from worker threads."""
 from __future__ import annotations
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -131,6 +131,7 @@ class Settings:
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    roblox_docs_live_enabled: bool = False  # opt-in live retrieval from create.roblox.com/docs; STAR_ROBLOX_DOCS_LIVE=1 also enables
 
     @classmethod
     def load(cls, file: Path):
@@ -146,8 +147,8 @@ class Settings:
 
     def validate(self):
         validate_target(self.studio_target)
-        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
-            validate_alias(getattr(self, field), field=field)
+        for name in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, name), field=name)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -165,7 +166,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -295,6 +296,27 @@ def _read_settings_object(file: Path) -> dict | None:
 TERMINAL_STATUSES = ('failed', 'cancelled')
 
 
+# Gives every project whose pre-upgrade messages (chat_id 'legacy') have no chat row yet its
+# 'Previous conversation' row. Runs on every open, so it must not read the whole messages table:
+# the project names are walked through idx_chat_messages one index seek at a time (a "skip
+# scan"), projects that already have their legacy row are left out (INSERT OR IGNORE would keep
+# them unchanged anyway), and only the remaining projects' legacy rows are read, by index. The
+# rows inserted are exactly those of the plain form
+#   INSERT OR IGNORE ... SELECT ... FROM messages WHERE chat_id='legacy' GROUP BY project
+# which scanned every message on every open.
+LEGACY_CHAT_MIGRATION = (
+    "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
+    "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
+    "FROM messages WHERE chat_id='legacy' AND project IN ("
+    "WITH RECURSIVE projects(name) AS ("
+    "SELECT MIN(project) FROM messages "
+    "UNION ALL SELECT (SELECT MIN(project) FROM messages WHERE project>name) FROM projects WHERE name IS NOT NULL) "
+    "SELECT name FROM projects WHERE name IS NOT NULL "
+    "EXCEPT SELECT project FROM chats WHERE id='legacy') "
+    "GROUP BY project"
+)
+
+
 class Conversations:
     """Persistent, project-scoped chat threads.
 
@@ -345,12 +367,31 @@ class Conversations:
             'value TEXT NOT NULL, updated TEXT NOT NULL)'
         )
         # A pre-upgrade conversation is preserved verbatim under one stable ID.
-        self.connection.execute(
-            "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
-            "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
-            "FROM messages WHERE chat_id='legacy' GROUP BY project"
-        )
+        self.connection.execute(LEGACY_CHAT_MIGRATION)
         self.connection.commit()
+
+    def _next_chat_stamp(self, project: str) -> str:
+        """Make per-project chat activity order stable at coarse clock ticks.
+
+        Old SQLite databases have no sequence column. ISO UTC timestamps are
+        kept in the existing fields; ties in legacy rows sort by rowid.
+        """
+        stamp = datetime.now(timezone.utc)
+        newest = self.connection.execute(
+            'SELECT updated FROM chats WHERE project=? '
+            'ORDER BY updated DESC, rowid DESC LIMIT 1', (project,)
+        ).fetchone()
+        if newest:
+            try:
+                previous = datetime.fromisoformat(newest[0])
+                if previous.tzinfo is None:
+                    previous = previous.replace(tzinfo=timezone.utc)
+                if stamp <= previous:
+                    stamp = previous + timedelta(microseconds=1)
+            except (TypeError, ValueError, OverflowError):
+                # Older malformed dates are left untouched; new writes use UTC.
+                pass
+        return stamp.isoformat()
 
     def new_chat(self, project: str) -> str:
         import uuid
@@ -366,7 +407,7 @@ class Conversations:
         if current:
             return current[0]
         chat_id = uuid.uuid4().hex
-        created = datetime.now(timezone.utc).isoformat()
+        created = self._next_chat_stamp(project)
         with self.connection:
             self.connection.execute(
                 'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
@@ -388,7 +429,7 @@ class Conversations:
         if found:
             return found[0]
         newest = self.connection.execute(
-            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC LIMIT 1',
+            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC, rowid DESC LIMIT 1',
             (project,)
         ).fetchone()
         if newest:
@@ -414,7 +455,7 @@ class Conversations:
             {'id': chat_id, 'title': title, 'created': created, 'updated': updated}
             for chat_id, title, created, updated in self.connection.execute(
                 'SELECT id,title,created,updated FROM chats WHERE project=? '
-                'ORDER BY updated DESC LIMIT ?', (project, limit)
+                'ORDER BY updated DESC, rowid DESC LIMIT ?', (project, limit)
             )
         ]
 
@@ -426,7 +467,7 @@ class Conversations:
         if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
                                      or type(reply_to) is not int):
             raise ValueError('Only an event record that answers a user message can be failed or cancelled')
-        stamp = datetime.now(timezone.utc).isoformat()
+        stamp = self._next_chat_stamp(project)
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
             if chat_id is None:
@@ -492,19 +533,6 @@ class Conversations:
             (*args, limit)
         ).fetchall()
         return list(reversed(rows))
-
-    def history_rows(self, project: str, chat_id: str | None = None, clip: int = 4000):
-        """Every user/assistant row of the chat as (role, text), oldest first, without events.
-
-        All rows, not the newest few: the model's history window is measured from the
-        first message of the chat so that it stays put from turn to turn (see
-        context_layout.conversation_window). Each text is cut to ``clip`` characters.
-        """
-        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
-        return self.connection.execute(
-            f"SELECT role,SUBSTR(body,1,?) FROM messages WHERE {scope} AND role IN ('user','assistant') ORDER BY id",
-            (clip, *args)
-        ).fetchall()
 
     def raw_history_records(self, project: str, chat_id: str | None = None) -> list[dict]:
         """Full ID-bearing records of exactly one chat, including terminal outcomes."""
@@ -946,7 +974,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     audio transcript, a note about video frames). Only the owner's own words can become an
     automatically accepted lesson.
     """
-    from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
@@ -1409,7 +1436,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         first = token_timing['first']
-        last = token_timing['last']
         requested = token_timing['requested']
         measured_first = (instant_answer.first_token_ms if instant_answer is not None else
                           model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else

@@ -191,7 +191,7 @@
   gap: 6px;
   height: 32px;
   padding: 0 var(--star-3);
-  border: 1px solid var(--star-stroke-strong);
+  border: 1px solid var(--star-stroke-control);
   border-radius: var(--star-r-sm);
   background: var(--star-surface-3);
   box-shadow: var(--star-shadow-float);
@@ -247,7 +247,7 @@
   flex-direction: column;
   gap: var(--star-2);
   padding: var(--star-3);
-  border: 1px solid var(--star-stroke);
+  border: 1px solid var(--star-stroke-control);
   border-radius: var(--star-r-lg);
   background: var(--star-surface-2);
   transition: border-color var(--star-dur-hover) var(--star-ease);
@@ -590,9 +590,9 @@
   place-items: center;
   color: var(--star-muted);
 }
+/* The label never shrinks; a long hint (an unavailable tool's reason) gives way and ends in an ellipsis. */
 .cmp-menu-text {
-  flex: 1;
-  min-width: 0;
+  flex: 1 0 auto;
   white-space: nowrap;
 }
 .cmp-menu-item small {
@@ -1414,7 +1414,7 @@
 }
 .msg-correction textarea {
   padding: var(--star-2);
-  border: 1px solid var(--star-stroke);
+  border: 1px solid var(--star-stroke-control);
   border-radius: 6px;
   background: var(--star-surface-1);
   color: var(--star-text);
