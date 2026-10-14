@@ -106,7 +106,7 @@ auto mode, skill packs off, one run per task, October 2026):
 |---|---|---|
 | Roblox scripting, development set | 13 / 34 | 16 / 34 |
 | Creation tasks | 11 / 23 | 10 / 23 |
-| Blind holdout, never used for tuning | 8 / 24 | being re-run (first pass: 8 passed, 13 failed, 3 server-timeout errors) |
+| Blind holdout, never used for tuning | 8 / 24 | 9 / 24 |
 
 **Answer quality is about the same as v0.9.0.** A paired test on the development set calls the difference
 inconclusive. A single run varies: earlier runs of the same development set scored 16 / 34 and 18 / 34 (range

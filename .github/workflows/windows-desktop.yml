@@ -111,6 +111,7 @@ jobs:
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
             --collect-all ctranslate2 --collect-all av `
+            --collect-all pypdf --collect-all docx --collect-all pptx --collect-all openpyxl `
             --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules keyring `
             --collect-submodules cryptography star_desktop.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }

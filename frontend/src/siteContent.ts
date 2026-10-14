@@ -39,11 +39,11 @@ export const LINKS={
 } as const
 
 /**
- * The newest release known to be published when this source was written (README: "The previous release, v0.9.0").
+ * The newest release known to be published when this source was written (v1.0.0, published October 14, 2026).
  * The build-time snapshot is refreshed by the website deployment, but if that refresh fails the committed copy can be
  * days old; a snapshot older than this floor is stale and is never named on the page. Raise it with every release.
  */
-export const PUBLISHED_FLOOR='0.9.0'
+export const PUBLISHED_FLOOR='1.0.0'
 
 /** The release the page may name: GitHub's live answer, else the build snapshot if it is not older than the floor. */
 export function currentRelease(live:ReleaseInfo|null,snapshot:ReleaseInfo|null):ReleaseInfo|null{
@@ -124,15 +124,15 @@ export const learnCorrections={title:'Your corrections',body:'Mark an answer “
 
 /**
  * Measured on STAR Server (model star-fast, mode auto, skill packs off), one run per task, October 2026.
- * Source: docs/release/v1.0/RELEASE_NOTES.md and docs/agents/release-v1.0.md. Update the holdout row when its
- * re-run ends; never replace a result with a better-looking one from another run.
+ * Source: docs/release/v1.0/RELEASE_NOTES.md and docs/agents/release-v1.0.md. Never replace a result with a
+ * better-looking one from another run.
  */
 export const evaluation={
  rows:[
   {suite:'Roblox scripting, development set',before:'13 / 34',after:'16 / 34',note:''},
   {suite:'Creation tasks',before:'11 / 23',after:'10 / 23',note:''},
-  {suite:'Blind holdout, never used for tuning',before:'8 / 24',after:'Re-running',
-   note:'First pass: 8 passed, 13 failed, 3 stopped by server timeouts. Those 3 are being run again.'},
+  {suite:'Blind holdout, never used for tuning',before:'8 / 24',after:'9 / 24',
+   note:'3 tasks stopped by server timeouts on the first pass were run once more on a quiet server.'},
  ],
  setup:'STAR Server, model star-fast, auto mode, skill packs off. One run per task, v0.9.0 and v1.0.0 measured a day apart in October 2026.',
 } as const
@@ -156,7 +156,7 @@ export const brainCounts={
 
 export const limits=[
  {title:'It is early software.',body:'Most testing happened on one Windows 11 PC. Other graphics cards and Windows setups are largely untested.',link:{href:LINKS.acceptance,label:'Acceptance issue #15'}},
- {title:'Not everything was tried for real.',body:'Not yet tested end to end: installing over v0.9.0, a real Look at my screen capture, pictures from the installed app, voice with sound, and the Discord bot on Discord.',link:{href:LINKS.notes,label:'What was and was not tested'}},
+ {title:'Not everything was tried for real.',body:'Installing over v0.9.0 with Setup was tried on one PC. Not yet tested end to end: the in-app Install & restart from v0.9.0, a real Look at my screen capture, pictures from the installed app, voice with sound, and the Discord bot on Discord.',link:{href:LINKS.notes,label:'What was and was not tested'}},
  {title:'The installer is not code-signed.',body:'Windows may show a publisher warning. Compare the SHA-256 checksum before you run it.'},
  {title:'It makes mistakes.',body:'The 4B model on a PC is not a frontier model, and neither are the server models. Check anything that matters.'},
  {title:'Roblox work needs your review.',body:'STAR helps inside your test place. It does not ship a finished game, and what it writes needs playtesting.'},

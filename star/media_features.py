@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import json
+import math
 import shutil
 import subprocess
 import tempfile
@@ -15,15 +16,20 @@ def video_frames(path: Path, destination: Path, *, max_frames: int = 4) -> list[
     path = path.expanduser().resolve(strict=True)
     if path.suffix.lower() not in VIDEO_EXTENSIONS or path.stat().st_size > 700_000_000:
         raise ValueError('Unsupported video or file exceeds 700 MB')
-    if max_frames < 1 or max_frames > 4:
+    if type(max_frames) is not int or max_frames < 1 or max_frames > 4:
         raise ValueError('Use 1-4 frames per model request')
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise RuntimeError('Install FFmpeg (ffmpeg and ffprobe) and add them to PATH for video frames')
     p = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                         '-of', 'default=noprint_wrappers=1:nokey=1', str(path)],
                        capture_output=True, text=True, timeout=20, check=True)
-    duration = float(p.stdout.strip())
-    if duration <= 0 or duration > 60 * 90:
+    # ffprobe prints "N/A" for streams without a duration and can print "nan"; a NaN passed both
+    # range checks below and every seek then failed inside ffmpeg with an unhelpful error.
+    try:
+        duration = float(p.stdout.strip())
+    except ValueError:
+        raise ValueError('The video has no readable duration') from None
+    if not math.isfinite(duration) or duration <= 0 or duration > 60 * 90:
         raise ValueError('Video duration out of supported range (90 minutes)')
     destination.mkdir(parents=True, exist_ok=True)
     points = [max(0., duration * (i + .5) / max_frames) for i in range(max_frames)]

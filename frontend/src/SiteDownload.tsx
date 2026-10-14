@@ -74,7 +74,7 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
    <dl className="sw-after">
     <div>
      <dt>Updating</dt>
-     <dd>Setup keeps your chats, models and settings in <code>%APPDATA%\STAR</code> (tested from v0.8.0 to v0.9.0). Back up that folder before you update.</dd>
+     <dd>Setup keeps your chats, models and settings in <code>%APPDATA%\STAR</code> (tested from v0.9.0 to v1.0.0 on one PC). Back up that folder before you update.</dd>
     </div>
     <div>
      <dt>Something wrong?</dt>

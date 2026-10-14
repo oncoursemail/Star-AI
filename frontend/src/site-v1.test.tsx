@@ -23,7 +23,7 @@ describe('website v1.0 claims',()=>{
   expect(evaluation.rows.map(row=>[row.suite,row.before,row.after])).toEqual([
    ['Roblox scripting, development set','13 / 34','16 / 34'],
    ['Creation tasks','11 / 23','10 / 23'],
-   ['Blind holdout, never used for tuning','8 / 24','Re-running'],
+   ['Blind holdout, never used for tuning','8 / 24','9 / 24'],
   ])
   for(const text of ['13 / 34','16 / 34','11 / 23','10 / 23','8 / 24','About the same','inconclusive','not a game-quality score'])
    expect(page.body.textContent?.replace(/\s+/g,' '),text).toContain(text)
