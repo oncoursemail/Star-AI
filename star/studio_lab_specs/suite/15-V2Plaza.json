@@ -1,0 +1,119 @@
+{
+ "name": "V2Plaza",
+ "kind": "map",
+ "description": "A 20x20 plaza; a 6x3x6 fountain basin sits on the running line to the exit.",
+ "defect": "decor-in-plaza",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2Plaza",
+  "style": "modern",
+  "bounds": {
+   "size": [
+    52.0,
+    40,
+    40.0
+   ],
+   "center": [
+    -26.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -24.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     20,
+     1,
+     20
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     -10.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   },
+   {
+    "name": "Fountain",
+    "position": [
+     -24.0,
+     8.0,
+     150.0
+    ],
+    "size": [
+     6,
+     3,
+     6
+    ],
+    "material": "Concrete",
+    "color": "#AAB7B8",
+    "role": "decor"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "Goal"
+   ]
+  }
+ }
+}

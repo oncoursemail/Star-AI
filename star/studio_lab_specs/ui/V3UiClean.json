@@ -1,0 +1,105 @@
+{
+ "name": "V3UiClean",
+ "kind": "ui",
+ "description": "Control HUD: scale-based sizes, short labels; should pass on all devices.",
+ "defect": "none",
+ "expect": {
+  "first_pass": true
+ },
+ "devices": [
+  "phone",
+  "tablet",
+  "desktop"
+ ],
+ "ui": {
+  "palette": {
+   "panel": "#1B1F2A",
+   "accent": "#F2B134",
+   "text": "#FFFFFF",
+   "muted": "#9AA4B2"
+  },
+  "mobile": {
+   "safeArea": true,
+   "scaleByViewport": false
+  },
+  "root": {
+   "type": "screen",
+   "id": "V3UiClean",
+   "children": [
+    {
+     "type": "frame",
+     "id": "TopBar",
+     "background": "panel",
+     "corner": 8,
+     "padding": 6,
+     "position": {
+      "x": {
+       "scale": 0.02
+      },
+      "y": {
+       "scale": 0.03
+      }
+     },
+     "size": {
+      "x": {
+       "scale": 0.3
+      },
+      "y": {
+       "offset": 44
+      }
+     },
+     "children": [
+      {
+       "type": "text",
+       "id": "Score",
+       "text": "Score 120",
+       "textColor": "accent",
+       "textSize": 20,
+       "size": {
+        "x": {
+         "scale": 1
+        },
+        "y": {
+         "scale": 1
+        }
+       }
+      }
+     ]
+    },
+    {
+     "type": "button",
+     "id": "Menu",
+     "text": "Menu",
+     "textColor": "panel",
+     "background": "accent",
+     "textSize": 20,
+     "corner": 8,
+     "anchor": {
+      "x": {
+       "scale": 1
+      },
+      "y": {
+       "scale": 0
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 0.98
+      },
+      "y": {
+       "scale": 0.03
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 96
+      },
+      "y": {
+       "offset": 48
+      }
+     }
+    }
+   ]
+  }
+ }
+}

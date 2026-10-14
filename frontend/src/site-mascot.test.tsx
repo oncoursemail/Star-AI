@@ -1,75 +1,72 @@
 // @vitest-environment jsdom
 import {afterEach,describe,expect,it} from 'vitest'
-import {cleanup,fireEvent,render,screen} from '@testing-library/react'
-import {readFileSync} from 'node:fs'
+import {cleanup,fireEvent,render} from '@testing-library/react'
+import {existsSync,readFileSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {renderToString} from 'react-dom/server'
 import {Landing} from './Landing'
-import {SiteMascotHero,SiteMascotMeet,SiteMascotFooter} from './SiteMascot'
+import {SiteMascotHero,SiteMascotFooter} from './SiteMascot'
 
 afterEach(()=>cleanup())
+const css=readFileSync(resolve(process.cwd(),'src','site.css'),'utf8')
 
 describe('Star mascot on the public site',()=>{
- it('reserves image dimensions with alt text and lazy loading for every mascot image',()=>{
-  const html=renderToString(<Landing/>)
-  const page=new DOMParser().parseFromString(html,'text/html')
-  const images=[...page.querySelectorAll('img[src^="./assets/mascot/"]')]
-  expect(images).toHaveLength(13)
-  for(const image of images){
-   expect(image.getAttribute('alt')).toBeTruthy()
+ it('uses resized copies of the approved art, with dimensions and alt text',()=>{
+  const page=new DOMParser().parseFromString(renderToString(<Landing/>),'text/html')
+  const hero=page.querySelector('.sw-star img')!
+  // The resized webp copies are what browsers fetch; the approved original is only the no-srcset fallback.
+  expect(hero.getAttribute('src')).toBe('./assets/mascot/star-hero.png')
+  expect(hero.getAttribute('srcset')).toContain('./site/star-hero-480.webp 480w')
+  expect(hero.getAttribute('srcset')).toContain('./site/star-hero-900.webp 900w')
+  expect(hero.getAttribute('alt')).toMatch(/^Star, STAR's mascot/)
+  // The hero is the largest image above the fold: never lazy, and visible from the prerendered first paint.
+  expect(hero.getAttribute('loading')).toBe('eager')
+  expect(hero.closest('.sw-art')?.getAttribute('data-loaded')).toBe('true')
+  for(const image of page.querySelectorAll('.sw-footer-star img')){
    expect(image.getAttribute('loading')).toBe('lazy')
    expect(Number(image.getAttribute('width'))).toBeGreaterThan(0)
-   expect(Number(image.getAttribute('height'))).toBeGreaterThan(0)
-   expect(image.closest('.sw-mascot-art')?.getAttribute('data-loaded')).toBe('false')
   }
-  expect(images.find(image=>image.getAttribute('src')==='./assets/mascot/star-hero.png')?.getAttribute('width')).toBe('1086')
-  expect(images.find(image=>image.getAttribute('src')==='./assets/mascot/star-hero.png')?.getAttribute('height')).toBe('1448')
-  expect(page.querySelector('.sw-mascot-hero')).toBeTruthy()
-  expect(page.querySelector('#meet-star h2')?.textContent).toBe('Meet Star.')
-  expect(page.querySelectorAll('#meet-star figure')).toHaveLength(8)
-  expect(page.querySelectorAll('#meet-star figure[tabindex="0"]')).toHaveLength(8)
-  expect(page.querySelector('.sw-footer-mascot[tabindex="0"]')).toBeTruthy()
+  for(const file of ['star-hero-480.webp','star-hero-900.webp','pose-stand.webp','pose-wave-a.webp'])
+   expect(existsSync(resolve(process.cwd(),'public','site',file)),file).toBe(true)
+  // The originals stay where the desktop app loads them from.
+  expect(existsSync(resolve(process.cwd(),'public','assets','mascot','star-hero.png'))).toBe(true)
  })
- it('does not require the artwork files to exist before rendering a complete fallback',()=>{
+ it('falls back to the mark when the hero art fails, and recovers when it loads',()=>{
   const {container}=render(<SiteMascotHero/>)
-  const art=container.querySelector('.sw-mascot-hero-art')!
+  const art=container.querySelector('.sw-star-art')!
   const image=art.querySelector('img')!
-  expect(art.getAttribute('data-loaded')).toBe('false')
-  expect(art.querySelector('.sw-construct')).toBeTruthy()
   fireEvent.error(image)
   expect(art.getAttribute('data-loaded')).toBe('false')
-  expect(art.querySelector('.sw-mascot-fallback')).toBeTruthy()
+  expect(art.querySelector('.sw-art-fallback svg')).toBeTruthy()
   fireEvent.load(image)
   expect(art.getAttribute('data-loaded')).toBe('true')
  })
- it('shows exactly eight named faces even before any artwork arrives',()=>{
-  render(<SiteMascotMeet/>)
-  const gallery=screen.getByRole('list',{name:'Eight expressions of Star'})
-  expect(gallery.querySelectorAll('figure')).toHaveLength(8)
-  expect([...gallery.querySelectorAll('figcaption')].map(node=>node.textContent?.replace(/^\d\d/,'').trim())).toEqual([
-   'Normal','Happy','Content','Puppy eyes','Surprised','Thinking','Focused','Proud'
-  ])
+ it('keeps every glint decorative and hidden from assistive technology',()=>{
+  const {container}=render(<SiteMascotHero/>)
+  const glints=container.querySelectorAll('svg.sw-glint')
+  expect(glints).toHaveLength(4)
+  for(const glint of glints)expect(glint.getAttribute('aria-hidden')).toBe('true')
  })
- it('uses the alternate expression for the blink and the wave pose for hover/focus',()=>{
-  const {container}=render(<><SiteMascotHero/><SiteMascotFooter/></>)
-  expect(container.querySelector('.sw-mascot-blink-alt img')?.getAttribute('src')).toBe('./assets/mascot/faces/content.png')
-  const footer=container.querySelector('.sw-footer-mascot')!
+ it('waves in the footer only once the wave pose has loaded',()=>{
+  const {container}=render(<SiteMascotFooter/>)
+  const footer=container.querySelector('.sw-footer-star')!
   const wave=footer.querySelector('.sw-footer-pose-wave img')!
+  expect(footer.getAttribute('tabindex')).toBe('0')
   expect(footer.getAttribute('data-can-wave')).toBe('false')
   fireEvent.load(wave)
   expect(footer.getAttribute('data-can-wave')).toBe('true')
   fireEvent.error(wave)
   expect(footer.getAttribute('data-can-wave')).toBe('false')
  })
- it('has desktop, mobile, fallback, screenshot and reduced-motion styles',()=>{
-  const css=readFileSync(resolve(process.cwd(),'src','site.css'),'utf8')
-  expect(css).toContain('.sw-mascot-art[data-loaded="false"]>img{opacity:0;visibility:hidden}')
-  expect(css).toContain('@keyframes sw-mascot-float')
-  expect(css).toContain('@keyframes sw-mascot-blink')
-  expect(css).toContain('@media (max-width:900px)')
-  expect(css).toContain('@media (max-width:640px)')
-  expect(css).toContain('.sw-still .sw-mascot-blink-alt{opacity:0!important}')
-  expect(css).toContain('.sw-mascot-blink-alt{opacity:0!important}')
-  expect(css).toContain('.sw-mascot-face-card:focus-visible')
+ it('animates only transform and opacity, and stops for reduced motion and screenshots',()=>{
+  for(const name of ['sw-float','sw-glint','sw-twinkle','sw-arrive','sw-shadow']){
+   const body=css.match(new RegExp('@keyframes '+name+'\\{(.*?)\\}\\}'))?.[1]||''
+   expect(body,name).not.toBe('')
+   expect(body.replace(/transform:[^;}]*|opacity:[^;}]*/g,'').replace(/from|to|[\d.%,;{}\s]/g,''),name).toBe('')
+  }
+  expect(css).toContain('@media (prefers-reduced-motion:reduce)')
+  expect(css).toMatch(/prefers-reduced-motion:reduce\)\{[^@]*animation:none!important/)
+  expect(css).toContain('.sw-still .sw-glint{display:none}')
+  expect(css).toContain('@media (hover:hover) and (pointer:fine)')
  })
 })

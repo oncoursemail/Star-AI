@@ -1,0 +1,95 @@
+{
+ "about": "STAR's code structure as Graphify sees it: files, their functions and classes, and the calls and imports between them. Not neurons, and not a measure of answer quality.",
+ "generatedAt": "2026-10-14T01:43:08Z",
+ "graphify": "graphify extract . --code-only",
+ "current": {
+  "version": "1.0",
+  "commit": "64c1982",
+  "nodes": 13072,
+  "edges": 33168,
+  "communities": 464,
+  "files": 777
+ },
+ "areas": [
+  {
+   "id": "learning",
+   "label": "Learning",
+   "color": "#C9A2FF",
+   "files": 30
+  },
+  {
+   "id": "roblox",
+   "label": "Roblox",
+   "color": "#FF8F66",
+   "files": 86
+  },
+  {
+   "id": "interface",
+   "label": "Interface",
+   "color": "#5CC8FF",
+   "files": 96
+  },
+  {
+   "id": "server",
+   "label": "Server",
+   "color": "#5BE3A1",
+   "files": 51
+  },
+  {
+   "id": "core",
+   "label": "Core",
+   "color": "#FFC857",
+   "files": 149
+  },
+  {
+   "id": "tests",
+   "label": "Tests and evaluations",
+   "color": "#A3B1BD",
+   "files": 332
+  },
+  {
+   "id": "other",
+   "label": "Scripts and other",
+   "color": "#E9D8A6",
+   "files": 33
+  }
+ ],
+ "shown": {
+  "files": 255,
+  "links": 720
+ },
+ "history": [
+  {
+   "version": "0.6.0",
+   "nodes": 576,
+   "edges": 1333,
+   "communities": 18,
+   "files": 48,
+   "commit": "e0d7f36"
+  },
+  {
+   "version": "0.8.1",
+   "nodes": 809,
+   "edges": 1831,
+   "communities": 41,
+   "files": 67,
+   "commit": "9e6b2fb"
+  },
+  {
+   "version": "0.9.0",
+   "nodes": 7988,
+   "edges": 19840,
+   "communities": 317,
+   "files": 473,
+   "commit": "cb5e9df"
+  },
+  {
+   "version": "1.0",
+   "nodes": 13072,
+   "edges": 33168,
+   "communities": 464,
+   "files": 777,
+   "commit": "64c1982"
+  }
+ ]
+}

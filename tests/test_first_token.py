@@ -441,3 +441,45 @@ def test_early_progress_events_have_wording_and_reveal_nothing():
     assert sanitize_event({"event": "model_responding"}) == {"phase": "The model is writing"}
     assert sanitize_event({"event": "tool_requested", "tool": "execute_luau", "arguments": "secret"}) == {
         "phase": "Preparing a tool request"}
+
+
+# ------------------------------------------------------------------ a prompt that does not fit is not resent
+
+class ContextRefused(Exception):
+    status_code = 400
+
+
+@pytest.mark.parametrize("message", [
+    "the request exceeds the available context size, try increasing it",          # llama.cpp
+    "This model's maximum context length is 32768 tokens. However, you requested 40000 tokens",  # OpenAI/vLLM
+    "Error code: 400 - {'error': {'type': 'exceed_context_size_error'}}",
+])
+def test_context_refusal_is_raised_after_one_request(message):
+    async def run():
+        models = Models([ContextRefused(message), reply("never used"), reply("never used")])
+        with pytest.raises(ContextRefused):
+            await execute(client=Client(models), model="m", prompt="hi", image_paths=[], stream_tokens=True,
+                          request_extras=lambda tools: {"cache_prompt": True})
+        # Before: stream+cache fields, stream without them, then a non-streamed request: three refusals.
+        assert len(models.requests) == 1
+    asyncio.run(run())
+
+
+def test_other_400s_still_fall_back_without_cache_fields_and_streaming():
+    class Refused(Exception):
+        status_code = 400
+
+    async def run():
+        models = Models([Refused("unknown field cache_prompt"), Refused("stream not supported"), reply("plain")])
+        answer, _, _ = await execute(client=Client(models), model="m", prompt="hi", image_paths=[],
+                                     stream_tokens=True, request_extras=lambda tools: {"cache_prompt": True})
+        assert answer == "plain" and len(models.requests) == 3
+        assert "extra_body" not in models.requests[1] and "stream" not in models.requests[2]
+    asyncio.run(run())
+
+
+def test_is_context_refusal_reads_the_error_body():
+    error = ContextRefused("Error code: 400")
+    error.body = {"error": {"message": "prompt is too long: 9000 tokens > 8192"}}
+    assert agent.is_context_refusal(error)
+    assert not agent.is_context_refusal(ContextRefused("unknown field: id_slot"))

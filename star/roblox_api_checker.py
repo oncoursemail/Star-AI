@@ -34,6 +34,29 @@ class ApiFinding:
     name: str
     suggestion: str | None
 
+    @property
+    def severity(self) -> str:
+        """Normalized advisory severity; API spelling guesses are not engine proof."""
+        return "warning"
+
+    @property
+    def message(self) -> str:
+        """A bounded statement without echoing untrusted names."""
+        if self.rule_id == "unknown-class":
+            return "Unknown Roblox class in Instance.new; check against the local API dump."
+        if self.rule_id == "unknown-service":
+            return "Unknown service in GetService; check against the local API dump."
+        return "Possible unknown class member; verify its receiver and the local API dump."
+
+    @property
+    def suggested_fix(self) -> str:
+        """A repair action, not an unverified automatic rename."""
+        if self.rule_id == "unknown-class":
+            return "Use a class listed in the validated local Roblox API dump."
+        if self.rule_id == "unknown-service":
+            return "Use a service listed in the validated local Roblox API dump."
+        return "Confirm the inferred class and choose a documented member from the local API dump."
+
 
 @dataclass(frozen=True)
 class _Token:
@@ -162,8 +185,18 @@ def _tokens(source: str) -> list[_Token]:
     return result
 
 
+# How alike two names must be (difflib ratio) before one is offered as "did you mean". With no
+# floor, every unknown name got the least-unlike real name, e.g. Instance.new("MyHitbox") -> "Model".
+SUGGESTION_CUTOFF = 0.6
+
+
 def _nearest(name: str, candidates: frozenset[str] | dict[str, ApiClass]) -> str | None:
-    matches = get_close_matches(name, sorted(candidates), n=1, cutoff=0)
+    """The real name the author most likely meant, or None when nothing is close enough."""
+    names = sorted(candidates)
+    folded = [candidate for candidate in names if candidate.lower() == name.lower()]
+    if folded:
+        return folded[0]    # wrong case only (Instance.new("part"), :findFirstChild)
+    matches = get_close_matches(name, names, n=1, cutoff=SUGGESTION_CUTOFF)
     return matches[0] if matches else None
 
 
