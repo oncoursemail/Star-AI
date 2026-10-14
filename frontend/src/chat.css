@@ -590,9 +590,9 @@
   place-items: center;
   color: var(--star-muted);
 }
+/* The label never shrinks; a long hint (an unavailable tool's reason) gives way and ends in an ellipsis. */
 .cmp-menu-text {
-  flex: 1;
-  min-width: 0;
+  flex: 1 0 auto;
   white-space: nowrap;
 }
 .cmp-menu-item small {

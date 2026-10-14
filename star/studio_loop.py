@@ -21,7 +21,8 @@ import json
 import re
 import secrets
 
-import anyio
+from ._lazy import lazy_module
+anyio = lazy_module("anyio")  # loaded on first use, not when the desktop starts
 
 from .policy import BLOCKED_TOOLS, PLAYTEST_TOOLS, READ_TOOLS, WRITE_TOOLS, classify
 from .roblox_cloud import DENIED_PLACE_IDS, DENIED_UNIVERSE_IDS

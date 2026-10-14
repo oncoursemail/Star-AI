@@ -1,0 +1,73 @@
+{
+ "name": "V3UiLongButton",
+ "kind": "ui",
+ "description": "A play button whose label is far too long for its 160-px width.",
+ "defect": "clipped-text",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "ui-text-clipped"
+  ],
+  "fixes": [
+   "ui-widen-text"
+  ]
+ },
+ "devices": [
+  "phone",
+  "tablet",
+  "desktop"
+ ],
+ "ui": {
+  "palette": {
+   "panel": "#1B1F2A",
+   "accent": "#F2B134",
+   "text": "#FFFFFF",
+   "muted": "#9AA4B2"
+  },
+  "mobile": {
+   "safeArea": true,
+   "scaleByViewport": false
+  },
+  "root": {
+   "type": "screen",
+   "id": "V3UiLongButton",
+   "children": [
+    {
+     "type": "button",
+     "id": "PlayButton",
+     "text": "Start the Championship Obby Round Now",
+     "textSize": 24,
+     "textColor": "panel",
+     "background": "accent",
+     "corner": 8,
+     "font": "GothamBold",
+     "anchor": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "scale": 1
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "scale": 1,
+       "offset": -24
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 160
+      },
+      "y": {
+       "offset": 50
+      }
+     }
+    }
+   ]
+  }
+ }
+}

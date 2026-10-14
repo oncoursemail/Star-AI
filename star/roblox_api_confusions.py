@@ -17,7 +17,7 @@ _METHOD = re.compile(r"^:[A-Za-z][A-Za-z0-9]*\($", re.ASCII)
 # Do not raise false positives for a method mentioned as data in comments or
 # Luau quoted strings. Preserve newlines so line numbers remain exact.
 _INERT = re.compile(
-    r"""--\[(=*)\[.*?\]\1\]|--[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`""",
+    r"""--\[(=*)\[.*?\]\1\]|--[^\n]*|\[(=*)\[.*?\]\2\]|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`""",
     re.DOTALL,
 )
 

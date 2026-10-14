@@ -1,7 +1,6 @@
 """The voice brain client: LAN-only address, streamed text, clean cancellation, and a key that never leaks."""
 import json
 import threading
-import time
 
 import httpx
 import pytest
@@ -88,14 +87,28 @@ def test_from_env_needs_both_variables_and_reads_them(monkeypatch):
 
 
 def test_close_from_another_thread_ends_a_stream_cleanly():
-    brain = ScriptedBrain(["one two three four five six seven eight"], first_delay=0.01, tokens_per_second=20)
+    brain = ScriptedBrain(["one two three four five six seven eight"],
+                          first_delay=0, tokens_per_second=0.1)
     stream = brain.stream([])
+    first = next(stream)
+    entered, finished = threading.Event(), threading.Event()
     got = []
-    threading.Timer(0.12, stream.close).start()
-    started = time.monotonic()
-    for piece in stream:
-        got.append(piece)
-    assert 1 <= len(got) < 8 and time.monotonic() - started < 0.4
+
+    def consume():
+        entered.set()
+        try:
+            got.extend(list(stream))  # blocks waiting for a word unless close wakes it
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=consume, daemon=True)
+    worker.start()
+    assert entered.wait(2), "consumer never started"
+    stream.close()  # test close from the other thread, with no Timer scheduling race
+    assert finished.wait(0.4), "close must wake a blocked stream within 400 ms"
+    worker.join(timeout=0.4)
+    assert not worker.is_alive()
+    assert first == "one" and got == []
 
 
 def test_voice_prompt_asks_for_short_spoken_replies_with_a_quick_opening():

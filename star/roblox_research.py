@@ -20,7 +20,12 @@ import sqlite3
 import time
 import uuid
 
-import httpx
+from ._lazy import lazy_module
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from . import roblox_cloud
 from PIL import Image, ImageOps, UnidentifiedImageError
