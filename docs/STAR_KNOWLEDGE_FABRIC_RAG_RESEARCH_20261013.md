@@ -220,6 +220,19 @@ Related memory and 2026 research:
 - **Chroma**: compare local embedded collection vs SQLite FTS5/STAR KB under identical source revisions. Check source deletion propagation, metadata filters and CPU/RAM latency.
 - **Postgres+pgvector**: provision on isolated Brain 1 only after Chroma vs STAR baseline evidence justifies it, with per-project RLS or partitioning, backup/restore, migration, EXPLAIN profiling and exact-vs-HNSW recall tests.
 
+## Adversarial RAG and workflow security
+
+A retrieved Markdown/PDF page may embed adversarial instructions: "ignore previous directions", fake system role delimiters, links to an attacker endpoint, or malicious text in visually tiny/hidden characters. A vector database does not make those instructions trustworthy. OWASP explicitly notes that RAG and fine-tuning do NOT solve prompt injection. Treat raw pages and LLM-generated graph entities as untrusted data; only the trusted host decides active tools, scopes and actions.
+
+OWASP's vector/embedding threat model also describes cross-tenant leakage, poisoned embeddings, inversion attempts and deletion/expiry gaps. For a project-bearing assistant like STAR, the store must validate project/source status **before** querying, and the answer tool must validate returned citations **after** retrieval. A metadata filter set by the model is insufficient on its own.
+
+For Langflow/n8n external workflow MCP, the 2026 MCP Security Best Practices warn about confused deputy attacks, token passthrough and state-handle hijacking. Require audience-bound scoped tokens, reviewed tool schemas, per-client consent and a strict read-only intent route for the initial pilot. The bot/LLM must not create or expose public endpoints, run arbitrary Python, pull code over network or reveal owner secrets.
+
+Sources:
+- https://genai.owasp.org/llmrisk/llm01-prompt-injection/
+- https://github.com/OWASP/www-project-top-10-for-large-language-model-applications/blob/main/2_0_vulns/LLM08_VectorAndEmbeddingWeaknesses.md
+- https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/docs/2026-07-28/tutorials/security/security_best_practices.mdx
+
 ## Go/no-go requirements
 
 1. No unauthorized source or wrong-project hit in top 20 of any candidate backend, including during stale, deleted, nonreviewed or concurrent ingestion.
