@@ -1,5 +1,6 @@
 import {CorrectionBox} from './CorrectionBox'
 import {splitSources, type AnswerSource} from './sources'
+import {splitStreaming} from './streamSplit'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
 import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, ThumbsDown, ThumbsUp, X} from 'lucide-react'
@@ -129,6 +130,17 @@ const Prose = memo(function Prose({text}: {text: string}) {
   )
 })
 
+/** A streaming answer: finished blocks keep their memoized render; only the live tail is parsed per delta. */
+function StreamingProse({text}: {text: string}) {
+  const [done, live] = splitStreaming(text)
+  return (
+    <>
+      {done && <Prose text={done} />}
+      <Prose text={live} />
+    </>
+  )
+}
+
 /** Official documentation STAR retrieved for this answer. Links are https and host-checked in sources.ts. */
 function SourcesRow({sources}: {sources: AnswerSource[]}) {
   return (
@@ -255,7 +267,7 @@ export function Message(props: MessageProps) {
         <div className="msg-bubble">{entry.text}</div>
       ) : (
         <div className="msg-prose">
-          <Prose text={body} />
+          {partial ? <StreamingProse text={body} /> : <Prose text={body} />}
         </div>
       )}
       {sources.length > 0 && <SourcesRow sources={sources} />}

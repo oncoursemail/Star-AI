@@ -154,6 +154,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const lastProject=useRef(data.project)
  const runRef=useRef<ActivityRun|null>(null)
  const streamRef=useRef('')
+ // At most one streaming render per animation frame, however many deltas arrive in it.
+ const streamFrame=useRef<number|null>(null)
  const chatRef=useRef(data.active_chat)
  const answeringChat=useRef('')
  const cancelRequested=useRef(false)
@@ -235,8 +237,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        const info=(typeof event.data==='string'?event.data:(event.data||{})) as ProgressPayload|string
        // Text is appended to the one live message; it is never re-animated per token.
        if(typeof info!=='string'&&typeof info.delta==='string'&&info.delta){
+         const first=streamRef.current===''
          streamRef.current+=info.delta
-         setStreamingText(streamRef.current)
+         // The first words show at once; later deltas are drawn once per frame.
+         if(first)setStreamingText(streamRef.current)
+         else if(streamFrame.current===null)streamFrame.current=window.requestAnimationFrame(()=>{streamFrame.current=null;setStreamingText(streamRef.current)})
        }
        if(runRef.current)updateRun(applyProgress(runRef.current,info,Date.now()))
      }else if(action==='testModelTeam'){
