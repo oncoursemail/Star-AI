@@ -287,9 +287,11 @@ def test_architecture_guidance_documents_opt_in_and_source_only():
     root = Path(__file__).resolve().parents[1]
     readme = (root / "README.md").read_text(encoding="utf-8")
     guide = (root / "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md").read_text(encoding="utf-8")
-    assert "Experimental building and Blender kit (source checkout only, off by default)" in readme
+    # The v1.0 README lists it as one Opt-in row; the caveats live in the guide it links.
+    assert "Architecture planning prototype and Blender building kit (source checkout only" in readme
     assert "STAR_ARCHITECTURE_TOOLS=1" in readme
-    assert "final commit has no new native Blender smoke check" in readme
+    assert "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md" in readme
+    assert "omits that protected workflow" in guide
     assert "Roblox Studio never ran" in guide
 
 
