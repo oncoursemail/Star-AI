@@ -106,11 +106,6 @@ def load_merged_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     return merged
 
 
-def token_file_present(env: Mapping[str, str] | None = None) -> bool:
-    """Existence only; the file content is not read here."""
-    return (config_dir(env) / TOKEN_FILE).is_file()
-
-
 SETTINGS_TEMPLATE = """# STAR Discord bot: nonsecret local settings (never commit; the bot token goes in discord.env).
 # Discord: User Settings > Advanced > Developer Mode, then right-click yourself / your server > Copy ID.
 DISCORD_OWNER_ID=
@@ -133,3 +128,20 @@ STAR_DISCORD_LEARNING_DM_OPT_IN=0
 STAR_DISCORD_LEARNING_REPORT_SSH=
 STAR_DISCORD_LEARNING_REPORT=
 """
+
+
+def ensure_settings_file(env: Mapping[str, str] | None = None) -> bool:
+    """Write SETTINGS_TEMPLATE if discord-settings.env is missing; never overwrite.
+
+    Returns True only when a file was created. Holds no secrets; the token is never written here.
+    """
+    path = config_dir(env) / SETTINGS_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(SETTINGS_TEMPLATE)
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    return True

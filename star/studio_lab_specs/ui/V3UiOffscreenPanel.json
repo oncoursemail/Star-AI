@@ -1,0 +1,78 @@
+{
+ "name": "V3UiOffscreenPanel",
+ "kind": "ui",
+ "description": "An inventory panel placed 760 px from the left: off screen on a phone.",
+ "defect": "off-screen",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "ui-off-screen"
+  ],
+  "fixes": [
+   "ui-clamp"
+  ]
+ },
+ "devices": [
+  "phone",
+  "tablet",
+  "desktop"
+ ],
+ "ui": {
+  "palette": {
+   "panel": "#1B1F2A",
+   "accent": "#F2B134",
+   "text": "#FFFFFF",
+   "muted": "#9AA4B2"
+  },
+  "mobile": {
+   "safeArea": true,
+   "scaleByViewport": false
+  },
+  "root": {
+   "type": "screen",
+   "id": "V3UiOffscreenPanel",
+   "children": [
+    {
+     "type": "frame",
+     "id": "Inventory",
+     "background": "panel",
+     "corner": 10,
+     "padding": 8,
+     "position": {
+      "x": {
+       "offset": 760
+      },
+      "y": {
+       "offset": 80
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 220
+      },
+      "y": {
+       "offset": 160
+      }
+     },
+     "children": [
+      {
+       "type": "text",
+       "id": "InvTitle",
+       "text": "Inventory",
+       "textColor": "text",
+       "textSize": 20,
+       "size": {
+        "x": {
+         "scale": 1
+        },
+        "y": {
+         "offset": 30
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

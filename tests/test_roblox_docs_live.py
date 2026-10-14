@@ -163,3 +163,21 @@ def test_live_switch_is_off_by_default(monkeypatch):
     class Settings:
         roblox_docs_live_enabled = True
     assert live.live_enabled(Settings()) is True
+
+
+def test_live_setting_is_a_real_persisted_setting(monkeypatch, tmp_path):
+    from star import desktop_core as core
+    monkeypatch.delenv("STAR_ROBLOX_DOCS_LIVE", raising=False)
+    file = tmp_path / "settings.json"
+    assert core.Settings().roblox_docs_live_enabled is False
+    assert live.live_enabled(core.Settings()) is False
+    core.Settings(roblox_docs_live_enabled=True).save(file)
+    loaded = core.Settings.load(file)
+    assert loaded.roblox_docs_live_enabled is True
+    assert live.live_enabled(loaded) is True
+    for bad in ("yes", 1, None):
+        with pytest.raises(ValueError):
+            core.Settings(roblox_docs_live_enabled=bad).save(tmp_path / "bad.json")
+    # the environment variable still enables it when the setting is off
+    monkeypatch.setenv("STAR_ROBLOX_DOCS_LIVE", "1")
+    assert live.live_enabled(core.Settings()) is True

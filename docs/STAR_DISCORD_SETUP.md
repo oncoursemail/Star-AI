@@ -32,8 +32,9 @@ Time needed: about 10 minutes.
    Save it (File > Save as, "All files", name `discord.env`). This file is the only place the token lives.
 2. In Discord: **User Settings > Advanced > Developer Mode** on. Right-click your own name >
    **Copy User ID**; right-click your server icon > **Copy Server ID**.
-3. Open `%USERPROFILE%\.star\discord-settings.env` (created for you; the template is in
-   `star/discord_bot/local_config.py`) and fill in:
+3. Open `%USERPROFILE%\.star\discord-settings.env` (created for you the first time you run
+   `scripts\star_discord.cmd doctor` or start the bot, if the file is missing; an existing file is never
+   overwritten; the template is in `star/discord_bot/local_config.py`) and fill in:
 
    ```
    DISCORD_OWNER_ID=<your user ID>
@@ -84,10 +85,13 @@ images), including the STAR Brain server when that is your provider. Choose thos
 
 ## Opt-in switches (`discord-settings.env`)
 
-| Switch | Default | What it does |
+In code every switch is OFF unless set. The generated template turns on DM chat and images; lesson
+candidates, screen capture and Night School DMs stay 0 until you change them.
+
+| Switch | Default (if unset) | What it does |
 |---|---|---|
-| `STAR_DISCORD_DM_CHAT` | 1 | Answer your DMs to the bot. |
-| `STAR_DISCORD_DM_IMAGES` | 1 | Look at images you send (DM or `/image`); needs a vision model in STAR Settings; refused for cloud providers. |
+| `STAR_DISCORD_DM_CHAT` | 0 (template sets 1) | Answer your DMs to the bot. |
+| `STAR_DISCORD_DM_IMAGES` | 0 (template sets 1) | Look at images you send (DM or `/image`); needs a vision model in STAR Settings; refused for cloud providers. |
 | `STAR_DISCORD_DM_LEARNING_CANDIDATES` | 0 | `remember: ...` in a DM proposes a lesson; you approve it in STAR Desktop; never trusted automatically. |
 | `STAR_DISCORD_SCREEN_CAPTURE` | 0 | `/screen` lets STAR look at this PC's screen. **Every capture needs you to press "Capture my screen now"** (expires after 60 s, one capture per press). Nothing is saved; you see the capture privately. |
 | `STAR_DISCORD_LEARNING_DM_OPT_IN` | 0 | DM a short Night School digest when the verified practice numbers change (at most one per 6 h); `/digest` shows it on demand. Report source: `STAR_DISCORD_LEARNING_REPORT_SSH` (your existing key login to the brain server) or `STAR_DISCORD_LEARNING_REPORT` (a local file). |
