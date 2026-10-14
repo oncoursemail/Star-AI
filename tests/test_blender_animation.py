@@ -64,7 +64,7 @@ def test_roblox_animation_preflight_is_deterministic_and_immutable():
     assert result["frame_count"] == 30 and result["seconds"] == 1.0
     assert result["pose_count"] == 4 and result["authored_joint_keys"] == 8
     assert len(result["recipe_sha256"]) == 64
-    assert result["native_studio_import_tested"] if "native_studio_import_tested" in result else True
+    assert "native_studio_import_tested" not in result  # pure preflight never claims native QA
     assert "required_studio_check" in result
     assert "foot" in str(result["warnings"]).lower()
 
@@ -178,7 +178,8 @@ def fake_spawn(records):
 
 def test_r15_export_requires_two_independent_opt_ins(tmp_path, monkeypatch):
     import star.blender_bridge as bridge
-    fake_executable = tmp_path / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    fake_executable = tmp_path / "fake-bin" / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    fake_executable.parent.mkdir()
     fake_executable.write_text("fake executable for offline tests", encoding="utf-8")
     fake_executable.chmod(0o755)
     monkeypatch.setattr(bridge, "discover_blender", lambda _configured: fake_executable)
@@ -194,7 +195,8 @@ def test_r15_export_requires_two_independent_opt_ins(tmp_path, monkeypatch):
 
 def test_fake_animation_job_is_private_versioned_and_requires_native_studio_import(tmp_path, monkeypatch):
     import star.blender_bridge as bridge
-    fake_executable = tmp_path / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    fake_executable = tmp_path / "fake-bin" / ("blender.exe" if __import__("os").name == "nt" else "blender")
+    fake_executable.parent.mkdir()
     fake_executable.write_text("fake executable for offline tests", encoding="utf-8")
     fake_executable.chmod(0o755)
     monkeypatch.setattr(bridge, "discover_blender", lambda _configured: fake_executable)
