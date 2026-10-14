@@ -32,7 +32,7 @@ function audit(view:string){
  const unnamed:string[]=[]
  for(const role of ROLES){
   const all=scope.queryAllByRole(role)
-  const named=new Set(scope.queryAllByRole(role,{name:/\\S/}))
+  const named=new Set(scope.queryAllByRole(role,{name:/\S/}))
   total+=all.length
   for(const el of all)if(!named.has(el))unnamed.push(role+': '+el.outerHTML.slice(0,200))
  }
