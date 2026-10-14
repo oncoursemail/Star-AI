@@ -97,3 +97,11 @@ can be hidden behind it; stop Blender before Studio-lab runs that look at the di
 - 23:11 first demo run: Eevee preview stalled Blender (MemoryHigh throttle) -> removed MemoryHigh. 23:15 demo ok.
 - 23:20 black Studio window over Blender in a screenshot -> raise window first. 23:21 final demo evidence.
 - Tests: tests/test_blender_brain2_remote.py (67) + tests/test_blender_brain2.py (12) green; full suite see PR.
+
+## Dragon hard test (2026-10-13, item #93, notes docs/agents/dragon-20261013.md)
+A rigged, animated stylized dragon (18,734 triangles, 6 meshes each <= 10k, GLB + FBX with skin and a 48-frame wing
+flap) built entirely through `star_blender` on brain 2. It found one real bug and several gaps, fixed here with tests:
+LabError hidden as "ExceptionGroup" (fixed), `zoom` for screenshot/render_preview, `frame` for poses, export of the
+deforming rig + animation + per-mesh triangle counts, GLB skins/animations in `inspect_glb`, bones/extras hidden in
+screenshots, CLI `--call-file`. Open items (12k code limit, 30-min hard stop, no checkpoint, render presets) are listed
+in the dragon notes.

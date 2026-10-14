@@ -161,8 +161,8 @@ def test_code_size_and_type_limits():
 
 @pytest.mark.parametrize("template,values", [
     (bb.NEW_SCENE, {"SCENE": "lantern"}), (bb.OPEN_SCENE, {"SCENE": "lantern"}), (bb.SAVE_SCENE, {"SCENE": "lantern"}),
-    (bb.VIEW, {"AZ": 40.0, "EL": 25.0}),
-    (bb.RENDER, {"W": 640, "H": 360, "AZ": 0.0, "EL": 0.0, "ENGINE": "workbench", "NAME": "a-front"}),
+    (bb.VIEW, {"AZ": 40.0, "EL": 25.0, "ZOOM": 1.0}),
+    (bb.RENDER, {"W": 640, "H": 360, "AZ": 0.0, "EL": 0.0, "ZOOM": 1.0, "ENGINE": "workbench", "NAME": "a-front"}),
     (bb.EXPORT, {"SCENE": "lantern", "FORMAT": "glb"}),
 ])
 def test_templates_are_valid_python_with_values_as_literals(template, values):
@@ -494,3 +494,89 @@ def test_launcher_refuses_to_start_without_blender_and_rejects_bad_shot_names(tm
     assert sh(tmp_path, "shot", "../x", "0", "0", "1", "1").returncode == 7
     assert sh(tmp_path, "shot", "x", "1", "2").returncode in (2, 7)
     assert sh(tmp_path, "nonsense").returncode == 2
+
+
+# --------------------------------------------------------------------------- dragon hard test (2026-10-13) additions
+
+def test_a_blender_error_inside_the_mcp_session_is_shown_not_hidden(tmp_path):
+    """anyio task groups (the real stdio session) wrap a LabError raised in their body in an ExceptionGroup; the model
+    must still get 'Blender code failed: ...', not 'could not be reached (ExceptionGroup)'."""
+    session = FakeSession([{"status": "error", "message": "Traceback...\nAttributeError: 'NoneType' has no attribute 'x'"}])
+
+    @asynccontextmanager
+    async def wrapping_factory():
+        try:
+            yield session
+        except Exception as error:
+            raise ExceptionGroup("unhandled errors in a TaskGroup", [error]) from None
+
+    c = bb.BrainTwoBlender(COMMAND, home=tmp_path, edit=True, runner=FakeLauncher(), session_factory=wrapping_factory)
+    reply = run(c.call(bb.TOOL, {"action": "run_bpy", "scene": "dragon", "code": "x = 1"}))
+    assert reply["isError"] and text(reply)["error"].startswith("Blender code failed: AttributeError")
+    # a real transport failure still only shows its kind
+    assert bb._first_safe_error(ExceptionGroup("g", [OSError("secret-launcher-host refused")])) is None
+
+
+def test_screenshot_zoom_and_frame_reach_the_view_code(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"crop": [0, 24, 1574, 932], "meshes": 6}}])
+    c, _, _ = client(tmp_path, edit=False, launcher=FakeLauncher(files={"shots/dragon-front.png": PNG}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "screenshot", "scene": "dragon", "angles": ["front"], "zoom": 2.0, "frame": 25}))
+    assert not reply["isError"], reply
+    code = session.calls[0][1]["code"]
+    assert code.startswith("import bpy\nbpy.context.scene.frame_set(25)\n")
+    assert "r3d.view_distance *= 0.95 / 2.0" in code and "show_bones = False" in code
+    for bad in ({"zoom": 9}, {"zoom": 0.1}, {"frame": -1}, {"frame": 1.5}, {"frame": "1); import os"}):
+        assert run(c.call(bb.TOOL, {"action": "screenshot", "angles": ["front"], **bad}))["isError"]
+    with pytest.raises(ValueError):
+        bb._at_frame("x = 1", True)
+
+
+def test_render_preview_zoom_and_frame(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-right.png", "engine": "eevee", "size": [960, 540]}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-right.png": PNG}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "eevee", "angles": ["right"],
+                                 "width": 960, "height": 540, "zoom": 2.0, "frame": 13}))
+    assert not reply["isError"], reply
+    code = session.calls[0][1]["code"]
+    assert code.startswith("import bpy\nbpy.context.scene.frame_set(13)\n") and "* 1.12 / 2.0" in code
+    ast.parse(code)
+
+
+def test_export_takes_the_deforming_rig_and_its_animation():
+    code = bb.fill(bb.EXPORT, SCENE="dragon", FORMAT="fbx")
+    ast.parse(code)
+    assert "object_types={'MESH', 'ARMATURE'}" in code and "bake_anim=animated" in code
+    assert "m.type == 'ARMATURE' and m.object == o" in code and "export_animations=animated" in code
+    assert "per_mesh_triangles=per_mesh" in code and "add_leaf_bones=False" in code
+
+
+def test_inspect_glb_reports_skins_and_animations():
+    document = {"asset": {"version": "2.0"}, "nodes": [{"mesh": 0}], "accessors": [{"count": 8}, {"count": 6}],
+                "meshes": [{"primitives": [{"attributes": {"POSITION": 0}, "indices": 1}]}],
+                "skins": [{"joints": [1, 2, 3]}], "animations": [{"name": "Dragon_WingFlap", "channels": [{}, {}]}]}
+    body = json.dumps(document).encode()
+    body += b" " * (-len(body) % 4)
+    glb = b"glTF" + struct.pack("<II", 2, 20 + len(body)) + struct.pack("<II", len(body), 0x4E4F534A) + body
+    info = bb.inspect_glb(glb)
+    assert info["skins"] == [3] and info["animations"] == [{"name": "Dragon_WingFlap", "channels": 2}]
+    assert bb.inspect_glb(make_glb())["animations"] == []
+
+
+def test_command_line_call_file_avoids_argument_quoting(tmp_path, monkeypatch, capsys):
+    seen = []
+
+    class FakeClient:
+        def __init__(self, command, *, home, edit):
+            self.home = home
+
+        async def call(self, name, arguments):
+            seen.append(arguments)
+            return {"isError": False, "content": [{"type": "text", "text": "{}"}]}
+
+    monkeypatch.setattr(bb, "BrainTwoBlender", FakeClient)
+    monkeypatch.setenv(bb.COMMAND_ENV, json.dumps(COMMAND))
+    code = "s = \"quote ' and \\\" and $HOME and %PATH%\"\nresult = {'n': 1}\n" * 50
+    call = tmp_path / "call.json"
+    call.write_text(json.dumps({"action": "run_bpy", "scene": "dragon", "code": code}), encoding="utf-8")
+    assert bb.main(["--home", str(tmp_path), "--edit", "--call-file", str(call)]) == 0
+    assert seen == [{"action": "run_bpy", "scene": "dragon", "code": code}]

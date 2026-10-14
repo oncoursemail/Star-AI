@@ -64,6 +64,8 @@ SCHEMA = {
                    "items": {"type": "string", "enum": sorted(ANGLES)}},
         "azimuth": {"type": "number", "minimum": -360, "maximum": 360},
         "elevation": {"type": "number", "minimum": -89, "maximum": 90},
+        "zoom": {"type": "number", "minimum": 0.5, "maximum": 4},
+        "frame": {"type": "integer", "minimum": 0, "maximum": 100000},
         "format": {"type": "string", "enum": ["glb", "fbx"]},
         "width": {"type": "integer", "minimum": 64, "maximum": 960},
         "height": {"type": "integer", "minimum": 64, "maximum": 540},
@@ -84,7 +86,8 @@ DESCRIPTION = (
     "operators and bpy.data; no files, no network, no classes, no while loops, no getattr/exec/open, no dunder names; "
     "set `result = {...}` to return values; the scene is saved after a run that worked); "
     "screenshot {angles: [front,right,back,left,top,three_quarter,rear_quarter] or azimuth+elevation}: images of the "
-    "3D viewport as a person sees it; render_preview {angles, width, height, engine}: a quick render (workbench is "
+    "3D viewport as a person sees it (zoom 0.5-4 frames closer, default 1; frame: show that animation frame); "
+    "render_preview {angles, width, height, engine, zoom, frame}: a quick render (workbench is "
     "fastest, eevee looks better); export {scene, format: glb|fbx}: a file for Roblox Studio's importer plus its "
     "statistics; inspect {object?}: scene or object summary; docs {query}: search the Blender Python API; "
     "list_files: what is in the sandbox. Returned images are evidence: look at them before you claim a model is right."
@@ -289,6 +292,8 @@ for flag in ('show_region_header', 'show_region_toolbar', 'show_region_ui', 'sho
         setattr(space, flag, False)
 space.overlay.show_text = False
 space.overlay.show_stats = False
+space.overlay.show_bones = False      # rigs and lights are not part of what the model looks like
+space.overlay.show_extras = False
 space.show_gizmo = False
 r3d.view_perspective = 'PERSP'
 r3d.view_rotation = mathutils.Euler((math.radians(90.0 - @@EL@@), 0.0, math.radians(@@AZ@@))).to_quaternion()
@@ -300,7 +305,7 @@ for o in meshes:
 if meshes:
     with bpy.context.temp_override(window=win, area=area, region=region):
         bpy.ops.view3d.view_selected()
-    r3d.view_distance *= 0.95
+    r3d.view_distance *= 0.95 / @@ZOOM@@
 for o in bpy.data.objects:
     o.select_set(False)
 with bpy.context.temp_override(window=win, area=area, region=region):
@@ -327,7 +332,7 @@ try:
     scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage = w, h, 100
     sensor = cam_data.sensor_width * (min(1.0, h / w))
     half = math.atan((sensor / 2.0) / cam_data.lens)
-    dist = radius / math.sin(half) * 1.12
+    dist = radius / math.sin(half) * 1.12 / @@ZOOM@@
     az, el = math.radians(@@AZ@@), math.radians(@@EL@@)
     cam.location = center + mathutils.Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) * dist
     cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
@@ -368,6 +373,11 @@ EXPORT = _HEAD + """\
 objs = [o for o in bpy.context.scene.objects if o.type == 'MESH' and o.visible_get()]
 if not objs:
     raise RuntimeError("nothing to export: the scene has no visible mesh")
+# a rig that deforms the meshes goes along (bones + its action), so a skinned model and its idle survive the export
+rigs = [o for o in bpy.context.scene.objects if o.type == 'ARMATURE' and o.visible_get()
+        and any(m.type == 'ARMATURE' and m.object == o for x in objs for m in x.modifiers)]
+animated = any(o.animation_data and o.animation_data.action for o in rigs)
+objs = objs + rigs
 os.makedirs(os.path.join(SB, "exports"), exist_ok=True)
 rel = "exports/" + @@SCENE@@ + "." + @@FORMAT@@
 path = os.path.join(SB, rel)
@@ -377,17 +387,38 @@ for o in objs:
     o.select_set(True)
 bpy.context.view_layer.objects.active = objs[0]
 if @@FORMAT@@ == "glb":
-    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True)
+    bpy.ops.export_scene.gltf(filepath=path, export_format='GLB', use_selection=True, export_apply=True, export_yup=True,
+                              export_animations=animated)
 else:
-    bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={'MESH'}, use_mesh_modifiers=True,
+    bpy.ops.export_scene.fbx(filepath=path, use_selection=True, object_types={'MESH', 'ARMATURE'}, use_mesh_modifiers=True,
                              apply_scale_options='FBX_SCALE_ALL', axis_forward='-Z', axis_up='Y',
-                             mesh_smooth_type='FACE', bake_anim=False, add_leaf_bones=False)
+                             mesh_smooth_type='FACE', bake_anim=animated, bake_anim_use_all_actions=False,
+                             bake_anim_use_nla_strips=False, add_leaf_bones=False)
 for o in bpy.data.objects:
     o.select_set(False)
-result = dict(_stats(), file=rel, bytes=os.path.getsize(path), format=@@FORMAT@@)
+per_mesh = {}
+dg = bpy.context.evaluated_depsgraph_get()
+for o in objs:
+    if o.type == 'MESH':
+        e = o.evaluated_get(dg)
+        m = e.to_mesh()
+        m.calc_loop_triangles()
+        per_mesh[o.name] = len(m.loop_triangles)
+        e.to_mesh_clear()
+result = dict(_stats(), file=rel, bytes=os.path.getsize(path), format=@@FORMAT@@,
+              armatures=[o.name for o in rigs], animated=animated, per_mesh_triangles=per_mesh)
 """
 
 OBJECT_DETAIL = None  # inspect uses the Lab's own read-only tools
+
+
+def _at_frame(code: str, frame) -> str:
+    """Show an animation frame first (an integer validated by the schema), so poses can be looked at and rendered."""
+    if frame is None:
+        return code
+    if type(frame) is not int or not 0 <= frame <= 100000:
+        raise ValueError("frame must be a whole number from 0 to 100000")
+    return "import bpy\nbpy.context.scene.frame_set(" + str(frame) + ")\n" + code
 
 
 def fill(template: str, **values) -> str:
@@ -424,7 +455,10 @@ def inspect_glb(data: bytes) -> dict:
     return {"version": version, "declared_bytes": length, "actual_bytes": len(data),
             "meshes": len(document.get("meshes", [])), "nodes": len(document.get("nodes", [])),
             "materials": [m.get("name", "") for m in document.get("materials", [])], "triangles": triangles,
-            "extensions": sorted(document.get("extensionsUsed", []))}
+            "extensions": sorted(document.get("extensionsUsed", [])),
+            "skins": [len(skin.get("joints", [])) for skin in document.get("skins", [])],
+            "animations": [{"name": a.get("name", ""), "channels": len(a.get("channels", []))}
+                           for a in document.get("animations", [])]}
 
 
 def is_png(data: bytes) -> bool:
@@ -437,6 +471,18 @@ def png_size(data: bytes) -> tuple[int, int]:
 
 class LabError(RuntimeError):
     """A failure with a message that is safe to show (never the launcher command or the server's own stderr)."""
+
+
+def _first_safe_error(error: BaseException):
+    """The first LabError inside a (nested) exception group, else None. anyio task groups (the MCP stdio session)
+    wrap anything raised in their body, which would otherwise hide 'Blender code failed: ...' from the model."""
+    if isinstance(error, LabError):
+        return error
+    for inner in getattr(error, "exceptions", None) or ():
+        found = _first_safe_error(inner)
+        if found is not None:
+            return found
+    return None
 
 
 def wants_blender_brain2(prompt: str) -> bool:
@@ -601,6 +647,9 @@ class BrainTwoBlender:
         except asyncio.CancelledError:
             raise
         except Exception as error:   # transport failures: the kind only, never the command or its output
+            inner = _first_safe_error(error)
+            if inner is not None:   # a LabError raised inside the MCP session arrives wrapped in an ExceptionGroup
+                return self._result({"error": str(inner)[:300]}, error=True)
             return self._result({"error": f"Blender on brain 2 could not be reached ({type(error).__name__})"}, error=True)
 
     def validate(self, arguments) -> dict:
@@ -682,14 +731,14 @@ class BrainTwoBlender:
             reply = _text_payload(await session.call_tool("search_api_docs", arguments={"query": args["query"], "max_results": 8}))
         return self._result({"docs": json.dumps(reply.get("result", reply))[:3500]})
 
-    async def _view_images(self, angles, scene):
+    async def _view_images(self, angles, scene, zoom: float = 1.0, frame=None):
         images, notes = [], []
         status = await self._control_json("status")
         if not (status.get("running") and status.get("mcp_port_open")):
             raise LabError("Blender is not running on brain 2 (start it first, or ask for an edit action)")
         async with self._session_factory() as session:
             for label, azimuth, elevation in angles:
-                geometry = await self._exec(session, fill(VIEW, AZ=azimuth, EL=elevation))
+                geometry = await self._exec(session, _at_frame(fill(VIEW, AZ=azimuth, EL=elevation, ZOOM=zoom), frame))
                 if not geometry.get("meshes"):
                     raise LabError("the scene has no visible mesh to look at")
                 await asyncio.sleep(0.4)
@@ -705,7 +754,8 @@ class BrainTwoBlender:
         return images, notes
 
     async def _do_screenshot(self, args):
-        images, notes = await self._view_images(self._angles(args), args.get("scene", ""))
+        images, notes = await self._view_images(self._angles(args), args.get("scene", ""), float(args.get("zoom", 1.0)),
+                                                args.get("frame"))
         return self._result({"screenshots": notes}, images)
 
     async def _do_render_preview(self, args):
@@ -717,8 +767,8 @@ class BrainTwoBlender:
             for label, azimuth, elevation in self._angles(args)[:4]:
                 name = re.sub(r"[^a-z0-9_-]", "", f"{scene}-{label}")[:60]
                 began = time.monotonic()
-                info = await self._exec(session, fill(RENDER, W=width, H=height, AZ=azimuth, EL=elevation,
-                                                      ENGINE=args.get("engine", "workbench"), NAME=name))
+                info = await self._exec(session, _at_frame(fill(RENDER, W=width, H=height, AZ=azimuth, EL=elevation, ZOOM=float(args.get("zoom", 1.0)),
+                                                      ENGINE=args.get("engine", "workbench"), NAME=name), args.get("frame")))
                 png = await self._fetch(info["file"], MAX_IMAGE)
                 if not is_png(png):
                     raise LabError("the preview was not a PNG")
@@ -874,6 +924,8 @@ def main(arguments=None) -> int:
     parser.add_argument("--set-command", metavar="JSON", help='the launcher as a JSON list, e.g. ["ssh","host","lxc","exec",...,"blender-lab.sh"]')
     parser.add_argument("--status", action="store_true", help="ask the launcher for status (starts nothing)")
     parser.add_argument("--call", metavar="JSON", help="one star_blender call as JSON (edit actions need --edit)")
+    parser.add_argument("--call-file", metavar="FILE", help="the same, read from a UTF-8 JSON file (long run_bpy code "
+                        "does not survive cmd.exe / ssh argument quoting)")
     parser.add_argument("--demo", metavar="OUTDIR", help="build the lantern, 3 screenshots, a preview and a GLB into OUTDIR")
     parser.add_argument("--edit", action="store_true", help="the owner's Blender edit permission for this run")
     chosen = parser.parse_args(arguments)
@@ -883,6 +935,8 @@ def main(arguments=None) -> int:
             print(json.dumps(save_command(home, json.loads(chosen.set_command) if chosen.set_command else [])))
         except ValueError as error:
             print(str(error)); return 2
+    if chosen.call_file:
+        chosen.call = Path(chosen.call_file).read_text(encoding="utf-8")
     command = load_command(home)
     if not (chosen.status or chosen.call or chosen.demo):
         print(json.dumps(public(home)))
