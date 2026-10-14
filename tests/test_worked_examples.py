@@ -397,6 +397,25 @@ def test_legacy_oversize_corpus_is_reported_not_silently_id_truncated(tmp_path):
     assert _stored_example_count(home, "STAR") == 501
 
 
+def test_expired_learning_bundle_rows_do_not_trip_the_retrieval_cap(tmp_path):
+    # learned_week.py inserts bundle examples with an expiry; expired rows stay until the
+    # weekly sweep deletes them. They are not usable, so they must not switch retrieval off.
+    home = tmp_path / "home"
+    unique = row(400, "PathfindingService pursuit spline sentinel unique")
+    examples.import_file(export_file(tmp_path, [row(i, TOPICS[0]) for i in range(1, 400)] + [unique]),
+                         home=home, project="STAR")
+    with sqlite3.connect(home / "worked_examples.sqlite3") as db:
+        db.execute("CREATE TABLE example_expiry (project TEXT, id TEXT, expires_at TEXT)")
+        for i in range(401, 551):
+            r = row(i, TOPICS[1])
+            db.execute("INSERT INTO worked_examples VALUES (?,?,?,?,?,?)",
+                       ("STAR", r["id"], r["group_id"], r["task_category"], r["instruction"], r["response"]))
+            db.execute("INSERT INTO example_expiry VALUES (?,?,?)", ("STAR", r["id"], "2000-01-01T00:00:00"))
+    assert _stored_example_count(home, "STAR") == 550
+    text, found = examples.select(home, "STAR", unique["instruction"])
+    assert found and found[0].id == unique["id"] and unique["instruction"] in text
+
+
 def test_schema_valid_forgery_is_not_promoted_in_real_opt_in_run_task(monkeypatch, tmp_path):
     home = tmp_path / "home"
     candidate = row(1, TOPICS[0])

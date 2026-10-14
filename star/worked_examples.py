@@ -203,17 +203,19 @@ def select(home: Path, project: str, prompt: str, *, max_chars: int = MAX_PROMPT
     if max_chars < 200 or not path.is_file():
         return "", []
     with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
-        # Pre-cap databases can contain more than 500 records. Never silently
-        # discard later IDs or change them in a read-only retrieval call.
-        total = db.execute("SELECT COUNT(*) FROM worked_examples WHERE project=?",
-                           (_project(project),)).fetchone()[0]
-        if total > MAX_ROWS:
-            raise ValueError(f"Worked-example project corpus exceeds {MAX_ROWS} records; "
-                             "archive or review the legacy database before enabling retrieval")
         # Examples from a learning bundle (star/learned_week.py) stop being used when their 14 days are over.
         timed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='example_expiry'").fetchone()
         expiry = ("AND id NOT IN (SELECT id FROM example_expiry WHERE project=? AND expires_at<=?) " if timed else "")
-        values = (_project(project), *((_project(project), now()) if timed else ()), MAX_ROWS)
+        filters = (_project(project), *((_project(project), now()) if timed else ()))
+        # Pre-cap databases can contain more than 500 usable records. Never silently
+        # discard later IDs or change them in a read-only retrieval call. Expired
+        # learning-bundle rows wait for the weekly sweep and are not usable, so they do not count.
+        total = db.execute("SELECT COUNT(*) FROM worked_examples WHERE project=? " + expiry,
+                           filters).fetchone()[0]
+        if total > MAX_ROWS:
+            raise ValueError(f"Worked-example project corpus exceeds {MAX_ROWS} records; "
+                             "archive or review the legacy database before enabling retrieval")
+        values = (*filters, MAX_ROWS)
         rows = db.execute(
             "SELECT id,group_id,category,instruction,response FROM worked_examples WHERE project=? " + expiry +
             "ORDER BY id LIMIT ?", values).fetchall()
