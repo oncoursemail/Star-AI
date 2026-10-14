@@ -229,7 +229,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
                    w == "Wait" and j > 0 and body[j - 1] == ":"
                    for j, w in enumerate(body))
 
-    loops = [(i, block_end(i)) for i, w in enumerate(v) if w in ("while", "repeat", "for")]
+    # Generic `for ... in` loops usually wire each element once (not a leak); numeric
+    # `for i = ...` loops and while/repeat loops can connect the same signal repeatedly.
+    loops = [(i, block_end(i)) for i, w in enumerate(v)
+             if w in ("while", "repeat") or (w == "for" and v[i + 2:i + 3] == ["="])]
     for i, word in enumerate(v):
         if word == "while" and v[i + 1:i + 3] == ["true", "do"]:
             end = block_end(i)
@@ -277,7 +280,8 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             fn = next((j for j in range(i + 1, len(v)) if v[j] == "function"), -1)
             if fn >= 0:
                 body = [w.lower() for w in v[fn:block_end(fn)]]
-                if not any(w in body for w in ("debounce", "cooldown", "busy", "active", "canhit", "hitonce")):
+                if not (any(w in body for w in ("debounce", "cooldown", "busy", "active", "canhit", "hitonce"))
+                        or ("lasthit" in body and "cooldown_seconds" in body and "if" in body)):
                     add("touched-debounce", i, "Touched handler lacks an obvious state guard.",
                         "Add a debounce or per-object cooldown.", "review")
         if word in ("OnServerEvent", "OnServerInvoke"):
