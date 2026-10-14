@@ -10,7 +10,7 @@ from .media import image_part, mcp_images
 from .redact import redact_text
 from .policy import allowed_registry, enforce
 from .memory import compact
-from .workspace import TOOLS, TOOL_NAMES
+from .workspace import TOOLS, TOOL_NAMES, WRITE_TOOLS as WORKSPACE_WRITE_TOOLS
 from . import code_answer_completion
 
 
@@ -363,7 +363,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             "parameters": tool["inputSchema"]}} for tool in code_team_tools)
     code_team_enabled = bool(code_team_tools)
     if workspace is not None:
-        definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
+        definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] not in WORKSPACE_WRITE_TOOLS)
     def selected(source) -> list[dict]:
         # The prompt-gated sources. With a tool memory, what earlier prompts of this
         # conversation selected stays selected (re-checked against today's settings).
@@ -704,7 +704,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             raise PermissionError("Document tool not authorized for this task")
                     elif name not in TOOL_NAMES:
                         enforce(name, args, registry, studio_id, may_edit, allow_luau=allow_luau)
-                    elif workspace is None or (name == "workspace_write" and not workspace_edit):
+                    elif workspace is None or (name in WORKSPACE_WRITE_TOOLS and not workspace_edit):
                         raise PermissionError("Workspace tool not authorized")
                 except Exception as exc:
                     result = json.dumps({"isError": True, "output": f"Tool request rejected: {type(exc).__name__}"})

@@ -23,6 +23,7 @@ import secrets
 
 import anyio
 
+from .edit_match import EditMismatch, apply_edit
 from .policy import BLOCKED_TOOLS, PLAYTEST_TOOLS, READ_TOOLS, WRITE_TOOLS, classify
 from .roblox_cloud import DENIED_PLACE_IDS, DENIED_UNIVERSE_IDS
 
@@ -751,10 +752,14 @@ class GuardedStudio:
                 after = edit["new_string"]
                 continue
             if not isinstance(edit, dict) or not isinstance(edit.get("old_string"), str) \
-                    or not isinstance(edit.get("new_string"), str) or not edit["old_string"] \
-                    or edit["old_string"] == edit["new_string"] or edit["old_string"] not in after:
+                    or not isinstance(edit.get("new_string"), str):
                 return _Refused("Edit refused: old_string must match the script exactly")
-            after = after.replace(edit["old_string"], edit["new_string"], -1 if edit.get("replace_all") else 1)
+            try:
+                # Tolerates indentation/trailing-space slips; refuses anything ambiguous (star/edit_match.py).
+                after = apply_edit(after, edit["old_string"], edit["new_string"],
+                                   replace_all=bool(edit.get("replace_all"))).text
+            except EditMismatch as exc:
+                return _Refused("Edit refused: " + str(exc))
         if len(after) > 100_000 or (before is not None and len(before) > 100_000):
             return _Refused("Edit refused: script exceeds the bounded source size")
         if "execute_luau" not in self.tools or self.verdict.identity is None:
