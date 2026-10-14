@@ -98,7 +98,7 @@ can be hidden behind it; stop Blender before Studio-lab runs that look at the di
 - 23:20 black Studio window over Blender in a screenshot -> raise window first. 23:21 final demo evidence.
 - Tests: tests/test_blender_brain2_remote.py (67) + tests/test_blender_brain2.py (12) green; full suite see PR.
 
-## Dragon hard test (2026-10-13, item #93, notes docs/agents/dragon-20261013.md)
+## Dragon hard test (2026-10-13, item #93, notes and images kept in the workspace, not in this repo)
 A rigged, animated stylized dragon (18,734 triangles, 6 meshes each <= 10k, GLB + FBX with skin and a 48-frame wing
 flap) built entirely through `star_blender` on brain 2. It found one real bug and several gaps, fixed here with tests:
 LabError hidden as "ExceptionGroup" (fixed), `zoom` for screenshot/render_preview, `frame` for poses, export of the
