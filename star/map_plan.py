@@ -21,10 +21,12 @@ script that records a single undo step. Nothing here applies anything.
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 import re
 
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 MANAGED_ROOT = "Workspace/MapDrafts"
 # Default Roblox character: Humanoid.JumpHeight 7.2 studs (JumpPower 50, gravity 196.2) and
@@ -104,7 +106,12 @@ SCHEMA = {
             "maxObjects": {"type": "integer", "minimum": 1, "maximum": 5000}}},
     },
 }
-_VALIDATOR = Draft202012Validator(SCHEMA)
+
+
+@lru_cache(maxsize=1)
+def _validator():
+    """The map plan schema validator, built on first use (jsonschema is not imported at start-up)."""
+    return Draft202012Validator(SCHEMA)
 
 
 class _Box:
@@ -267,7 +274,7 @@ def dry_run(plan, *, include_operations: bool = True) -> dict:
     if not isinstance(plan, dict):
         return {"ok": False, "blockers": [_issue("schema", "A map plan must be a JSON object.")],
                 "warnings": [], "info": [], "credit": CREDIT}
-    errors = sorted(_VALIDATOR.iter_errors(plan), key=lambda e: list(e.absolute_path))
+    errors = sorted(_validator().iter_errors(plan), key=lambda e: list(e.absolute_path))
     if errors:
         found = [f"{'/'.join(str(p) for p in e.absolute_path) or '(root)'}: {e.message[:200]}" for e in errors]
         return {"ok": False, "blockers": [_issue("schema", "The plan does not match the map plan schema.", found)],

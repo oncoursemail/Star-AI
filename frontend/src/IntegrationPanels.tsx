@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import type {ReactNode} from 'react'
-import {BookOpen,Check,ChevronDown,Globe,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
+import {Check,ChevronDown,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
 import type {AppSettings,McpStatus,ServerReport,ServerRole,ServerStatus} from './types'
 import './integrated-tools.css'
@@ -268,7 +268,6 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
 const targets=[{name:'graphify_docs',flag:'mcp_graphify_docs',label:'Graphify documentation',note:'Fixed remote read-only Graphify documentation tools'},
  {name:'graphify_local',flag:'mcp_graphify_local',label:'Local Graphify MCP',note:'Explicit localhost Graphify MCP; read-only tools'},
  {name:'obsidian_live',flag:'mcp_obsidian_live',label:'Obsidian live MCP',note:'Existing local vault integration remains independently scoped'}] as const
-type Flag=typeof targets[number]['flag']
 
 export function McpPanel({draft,onChange,status,invoke,disabled=false}:{draft:AppSettings;onChange:(settings:AppSettings)=>void;status?:McpStatus;invoke:Invoke;disabled?:boolean}){
  const [pending,setPending]=useState('')

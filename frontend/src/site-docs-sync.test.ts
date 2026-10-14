@@ -7,7 +7,7 @@ const root=resolve(process.cwd(),'..')
 const readme=readFileSync(resolve(root,'README.md'),'utf8')
 const handoff=readFileSync(resolve(root,'docs','WEBSITE_RELEASE_CHECKLIST.md'),'utf8')
 
-describe('published v0.9.0 website and README release status',()=>{
+describe('published v1.0.0 website and README release status',()=>{
  it('derives model routing from the published release, not development source',()=>{
   const release={tag:'v0.8.1',name:'STAR',publishedAt:'2026-10-10T00:00:00Z',
    url:LINKS.latest,prerelease:false,assets:[]}
@@ -16,10 +16,11 @@ describe('published v0.9.0 website and README release status',()=>{
   expect(modelLabelForRelease(null)).toBe('Check GitHub')
   expect(modelLabelForRelease({...release,tag:'unverified'})).toBe('Check GitHub')
  })
- it('documents actual published v0.9.0 assets rather than a source candidate',()=>{
-  expect(SOURCE_VERSION).toBe('0.9.0')
-  expect(readme).toContain('**v0.9.0** was published')
-  expect(readme).toContain('STAR-Setup-v0.9.0.exe')
+ it('documents actual published v1.0.0 assets rather than a source candidate',()=>{
+  expect(SOURCE_VERSION).toBe('1.0.0')
+  expect(readme).toContain('**v1.0.0** was published')
+  expect(readme).toContain('STAR-Setup-v1.0.0.exe')
+  expect(readme).toContain('docs/release/v1.0/RELEASE_NOTES.md')
   expect(readme).toContain('STAR-Genesis-Windows-x64.zip')
   expect(readme).toContain('SHA256SUMS.txt')
   expect(readme).toContain('**PRs, CI artifacts and passing tests**')

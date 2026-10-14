@@ -81,11 +81,16 @@ def raw_records(connection, project: str, chat: str | None, *, through_id: int |
             connection.rollback()  # Ends only the read snapshot opened above.
 
 
+# json.dumps with these options builds a new JSONEncoder on every call; one shared encoder
+# produces the same text (encode() is what dumps() calls) and keeps no state between calls.
+_DIGEST_ENCODER = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+
 def source_digest(records: list[dict]) -> str:
     digest = hashlib.sha256()
+    encode = _DIGEST_ENCODER.encode
     for record in records:
-        digest.update(json.dumps({key: record[key] for key in _FIELDS}, ensure_ascii=False,
-                                 sort_keys=True, separators=(',', ':')).encode('utf-8'))
+        digest.update(encode({key: record[key] for key in _FIELDS}).encode('utf-8'))
         digest.update(b'\n')
     return digest.hexdigest()
 
