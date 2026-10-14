@@ -19,7 +19,7 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing", "roblox-vfx-composer"]
+         "roblox-tweenservice-easing", "roblox-vfx-composer", "roblox-cutscenes"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}

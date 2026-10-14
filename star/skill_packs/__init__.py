@@ -155,6 +155,12 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:ability (?:vfx|effects?)|anime (?:vfx|effects?|ability)|vfx style|art style|style profiles?|"
         r"screen flash|camera shake|shockwave rings?|ground cracks?|vortex|energy pillar|charge-?up|aura|"
         r"colou?r inversion|flash frames?|dissipat\w*|impact frames?)\b", re.IGNORECASE),
+    # Cutscenes and facial expressions (timeline, camera paths, FaceControls, typed Luau modules). OFF until evaluated.
+    "roblox-cutscenes": re.compile(
+        r"\b(?:cut-?scenes?|cinematics?|cinematic camera|camera (?:paths?|shots?|dolly|crane|fly-?through)|"
+        r"CameraType\.Scriptable|Scriptable camera|letterbox\w*|skip button|FaceControls|facial (?:expressions?|animation)|"
+        r"dynamic heads?|FACS|expressions? (?:change|player)|lip-?sync|talking animation|"
+        r"Catmull-?Rom|camera splines?|depth of field|DepthOfFieldEffect|boss intro)\b", re.IGNORECASE),
 }
 
 
