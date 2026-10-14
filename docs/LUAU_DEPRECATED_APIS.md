@@ -41,7 +41,9 @@ Raycast returns a RaycastResult rather than the legacy tuple.
 Only an unshadowed global Instance.new with a first quoted literal and an
 unshadowed global workspace ray method are diagnosed. Locals, assignments,
 function parameters, unrelated receiver methods, comments and literal
-strings are conservatively excluded. This intentionally causes false negatives
+strings (including backtick-interpolated display strings) are conservatively
+excluded. Interpolated expressions inside backticks are intentionally not
+analyzed by these syntactic deprecation rules. This intentionally causes false negatives
 for aliases and complex control flow; there is no runtime type analysis.
 
 ## Three implementation options
@@ -61,7 +63,7 @@ not deprecated engine APIs, and is not copied here.
 
 ## Verification
 
-tests/test_luau_deprecated_apis.py exercises 21 positive snippets and 34
+tests/test_luau_deprecated_apis.py exercises 21 positive snippets and at least 45
 negative snippets across the seven rules, plus shadowing, inert text,
 line numbers, default-off behavior, invalid input, literal inputs from the
 existing lint test file, and checked-in Roblox example source. These tests

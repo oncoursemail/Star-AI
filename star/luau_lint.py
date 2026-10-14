@@ -184,10 +184,29 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
                     "Store the child and check it is non-nil before indexing.")
 
     if deprecated_apis:
+        # Backtick-interpolated Luau strings are not skipped by the baseline
+        # lexer. Mark their token spans inert only for these optional rules;
+        # the default tokenizer and all legacy lint findings stay unchanged.
+        inert_backticks: set[int] = set()
+        inside_backtick = False
+        for token_index, token in enumerate(ts):
+            if token.value == "`":
+                slashes = 0
+                pos = token.offset - 1
+                while pos >= 0 and code[pos] == "\\":
+                    slashes += 1
+                    pos -= 1
+                if slashes % 2 == 0:
+                    inside_backtick = not inside_backtick
+            elif inside_backtick:
+                inert_backticks.add(token_index)
+
         # Recognize only Roblox's known globals, not arbitrary receiver
         # methods: Luau tables may define names identical to engine members.
         def shadowed(name: str) -> bool:
             for j, token in enumerate(v):
+                if j in inert_backticks:
+                    continue
                 if token == name:
                     if (j and v[j - 1] in ("local", "function", "for")) or v[j + 1:j + 2] == ["="]:
                         return True
@@ -210,6 +229,8 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
         builtin_instance = not shadowed("Instance")
         builtin_workspace = not shadowed("workspace")
         for i, word in enumerate(v):
+            if i in inert_backticks:
+                continue
             if (builtin_instance and v[i:i + 4] == ["Instance", ".", "new", "("]
                     and (i == 0 or v[i - 1] not in (".", ":"))):
                 # The lexer skips strings. Inspect only the first literal at a

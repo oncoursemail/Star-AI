@@ -85,6 +85,27 @@ def test_ray_method_six_clean_examples(method: str, rule: str, replacement: str)
         assert not new_findings(code), code
 
 
+@pytest.mark.parametrize(("class_name", "rule", "replacement"), BODY_RULES)
+def test_interpolated_display_strings_do_not_fire_body_rules(class_name, rule, replacement):
+    examples = (
+        f'local text = `Instance.new("{class_name}")`',
+        f'local text = `escaped \\` Instance.new("{class_name}")`',
+    )
+    for code in examples:
+        assert not new_findings(code), code
+
+
+@pytest.mark.parametrize(("method", "rule", "replacement"), RAY_RULES)
+def test_interpolated_display_strings_do_not_fire_ray_rules(method, rule, replacement):
+    code = f'local text = `workspace:{method}(ray)`'
+    assert not new_findings(code), code
+
+
+def test_backtick_content_cannot_shadow_real_builtin_calls():
+    source = 'local display = `local workspace = fake`\nworkspace:FindPartOnRay(ray)'
+    assert [f.rule_id for f in new_findings(source)] == ["deprecated-find-part-on-ray"]
+
+
 @pytest.mark.parametrize("code", [
     "local function f(Instance)\nreturn Instance.new('BodyVelocity')\nend",
     "Instance = {new = function() end}\nInstance.new('BodyForce')",
