@@ -88,14 +88,20 @@ def test_from_env_needs_both_variables_and_reads_them(monkeypatch):
 
 
 def test_close_from_another_thread_ends_a_stream_cleanly():
-    brain = ScriptedBrain(["one two three four five six seven eight"], first_delay=0.01, tokens_per_second=20)
+    # The next word is 10 s away, so the only way the loop can end within the bound is close()
+    # waking it. (The old version raced a 0.12 s timer against 50 ms words and a 0.4 s limit.)
+    brain = ScriptedBrain(["one two three four"], first_delay=0, tokens_per_second=0.1)
     stream = brain.stream([])
-    got = []
-    threading.Timer(0.12, stream.close).start()
+    assert next(stream) == "one"
+    closer = threading.Timer(0.05, stream.close)
     started = time.monotonic()
-    for piece in stream:
-        got.append(piece)
-    assert 1 <= len(got) < 8 and time.monotonic() - started < 0.4
+    closer.start()
+    try:
+        assert list(stream) == []
+        assert time.monotonic() - started < 5
+    finally:
+        closer.cancel()
+    assert list(stream) == []                     # a closed stream stays finished
 
 
 def test_voice_prompt_asks_for_short_spoken_replies_with_a_quick_opening():
