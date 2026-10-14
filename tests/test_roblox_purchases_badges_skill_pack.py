@@ -18,7 +18,8 @@ def test_real_selection_and_library_loading_opt_in_only(tmp_path):
     assert NAME not in skill_packs.DEFAULT_ENABLED
     assert NAME not in skill_packs.enabled_names({})
     assert skill_packs.enabled_names({skill_packs.ENV_VAR: NAME}) == {NAME}
-    assert skill_packs.matching_names(PROMPT) == []
+    # Default packs (e.g. roblox-secure-remotes) may match this prompt; this pack must not without opt-in.
+    assert NAME not in skill_packs.matching_names(PROMPT)
     assert skill_packs.matching_names(PROMPT, enabled={NAME}) == [NAME]
     assert skill_packs.matching_names("Web purchases", enabled={NAME}) == []
     assert skill_packs.matching_names("In Roblox Studio, create a lobby", enabled={NAME}) == []
