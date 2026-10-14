@@ -1,0 +1,579 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "fixture-doc-1",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000001",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-2",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000002",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-3",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000003",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-4",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000004",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-5",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000005",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-6",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000006",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-7",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000007",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-8",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000008",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-9",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000009",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-10",
+      "project": "ReferenceDocs",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000a",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-11",
+      "project": "RobloxTestPlace",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000b",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-12",
+      "project": "ReferenceDocs",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000c",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-13",
+      "project": "RobloxTestPlace",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000d",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-14",
+      "project": "ReferenceDocs",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000e",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-15",
+      "project": "RobloxTestPlace",
+      "sha256": "000000000000000000000000000000000000000000000000000000000000000f",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-16",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000010",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-17",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000011",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-18",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000012",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-19",
+      "project": "RobloxTestPlace",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000013",
+      "reviewed": true,
+      "active": true
+    },
+    {
+      "id": "fixture-doc-20",
+      "project": "ReferenceDocs",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000014",
+      "reviewed": true,
+      "active": true
+    }
+  ],
+  "cases": [
+    {
+      "id": "fixture-case-1",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-1"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-1",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-1",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000001"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-2",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-2"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-2",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000002"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-2",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000002"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-3",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-3"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-3",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-3",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000003"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-4",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-4"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-4",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-4",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000004"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-5",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-5"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-5",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-5",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000005"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-6",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-6"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-6",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000006"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-6",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000006"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-7",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-7"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-7",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-7",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000007"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-8",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-8"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-8",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000008"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-8",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000008"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-9",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-9"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-9",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000009"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-9",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000009"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-10",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-10"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-10",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000a"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-10",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000a"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-11",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-11"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-11",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000b"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-11",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000b"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-12",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-12"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": [
+          {
+            "id": "fixture-doc-12",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000c"
+          }
+        ]
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-12",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000c"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-13",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-13"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-13",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000d"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-14",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-14"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-14",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000e"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-15",
+      "project": "RobloxTestPlace",
+      "expected": [
+        "fixture-doc-15"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-15",
+            "sha256": "000000000000000000000000000000000000000000000000000000000000000f"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-16",
+      "project": "ReferenceDocs",
+      "expected": [
+        "fixture-doc-16"
+      ],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": [
+          {
+            "id": "fixture-doc-16",
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000010"
+          }
+        ]
+      }
+    },
+    {
+      "id": "fixture-case-17",
+      "project": "RobloxTestPlace",
+      "expected": [],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": []
+      }
+    },
+    {
+      "id": "fixture-case-18",
+      "project": "ReferenceDocs",
+      "expected": [],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": []
+      }
+    },
+    {
+      "id": "fixture-case-19",
+      "project": "RobloxTestPlace",
+      "expected": [],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": []
+      }
+    },
+    {
+      "id": "fixture-case-20",
+      "project": "ReferenceDocs",
+      "expected": [],
+      "baseline": {
+        "latency_ms": 200,
+        "hits": []
+      },
+      "candidate": {
+        "latency_ms": 125,
+        "hits": []
+      }
+    }
+  ]
+}

@@ -9,6 +9,7 @@
  * Re-run after the desktop UI changes:
  *   1. npm run build                (from frontend/)
  *   2. node scripts/capture-site-media.mjs --tools <dir with playwright-core and sharp installed>
+ *   (this PC: --tools ../worktrees/wt-website/.local/tools)
  *
  * The tools are deliberately not project dependencies; CI never runs this script.
  * Browser: an installed Edge or Chrome (`--channel msedge|chrome`, default msedge).
@@ -49,23 +50,55 @@ function serve(){
 }
 
 const DESKTOP={width:1280,height:800}
-const NARROW={width:430,height:620}
-const VIEWS=[
- {id:'chat',prepare:async page=>{
-   // Typed into the real composer. The preview never sends it anywhere.
-   await page.getByRole('textbox',{name:'Message STAR'}).fill('Inspect my Roblox Studio test place, then plan a responsive inventory UI. Do not edit anything yet.')
-   await page.getByRole('textbox',{name:'Message STAR'}).blur()
+const PHONE={width:390,height:844}
+
+/** Scrolls the conversation so the answer's first heading sits near the top, as a reader would see it. */
+async function showAnswerTop(page){
+ await page.evaluate(()=>{
+  const heading=[...document.querySelectorAll('h2')].find(node=>/Inventory for Ember Hollow/.test(node.textContent||''))
+  let box=heading?.parentElement||null
+  while(box&&box.scrollHeight<=box.clientHeight+4)box=box.parentElement
+  if(heading&&box)box.scrollTop+=heading.getBoundingClientRect().top-box.getBoundingClientRect().top-24
+ })
+}
+/** Union of the boxes of several elements, padded, for a crop that keeps a popover with its trigger. */
+async function unionClip(page,selectors,pad){
+ const boxes=[]
+ for(const selector of selectors){const box=await page.locator(selector).first().boundingBox();if(box)boxes.push(box)}
+ const x=Math.max(0,Math.min(...boxes.map(b=>b.x))-pad),y=Math.max(0,Math.min(...boxes.map(b=>b.y))-pad)
+ const right=Math.max(...boxes.map(b=>b.x+b.width))+pad,bottom=Math.max(...boxes.map(b=>b.y+b.height))+pad
+ return {x,y,width:right-x,height:bottom-y}
+}
+
+/**
+ * Each shot: the page query, a viewport, optional steps through the real controls, and either the viewport or a
+ * crop. `fixture=chat` is the preview's scripted sample conversation; the app labels it "Preview fixture".
+ */
+const SHOTS=[
+ {id:'chat',query:'tab=chat&fixture=chat',viewport:DESKTOP,widths:[1280,2560],prepare:async page=>{
+   await showAnswerTop(page)
+   await page.getByRole('button',{name:'More options for Inventory UI for Ember Hollow'}).click()
  }},
- {id:'brain'},
- {id:'tools'},
- {id:'projects'},
- {id:'analytics'}
-]
-/** Element-level crops used inside the feature chapters. The Studio cards are only captured stacked. */
-const CROPS=[
- {id:'studio-narrow',tab:'tools',selector:'.two-up',viewport:{width:430,height:900}},
- {id:'setup',tab:'brain',selector:'.conn-local',viewport:{width:980,height:800}},
- {id:'setup-narrow',tab:'brain',selector:'.conn-local',viewport:{width:430,height:800}}
+ {id:'chat-phone',query:'tab=chat&fixture=chat',viewport:PHONE,widths:[780],prepare:showAnswerTop},
+ {id:'plus',query:'tab=chat',viewport:DESKTOP,crop:true,prepare:async page=>{
+   await page.getByRole('button',{name:'Add files and tools'}).click()
+   await page.waitForTimeout(250)
+   return unionClip(page,['[role="menu"]'],1)
+ }},
+ {id:'consent',query:'tab=chat',viewport:DESKTOP,crop:true,prepare:async page=>{
+   await page.getByRole('button',{name:'Add files and tools'}).click()
+   await page.getByRole('menuitem',{name:/Look at my screen/}).click()
+   await page.waitForTimeout(300)
+   return unionClip(page,['[role="dialog"]'],24)
+ }},
+ {id:'learned',query:'tab=brain',viewport:{width:1100,height:900},crop:true,prepare:async page=>{
+   await page.locator('.learn-brain').first().scrollIntoViewIfNeeded()
+   return unionClip(page,['.learn-brain'],0)
+ }},
+ {id:'learned-phone',query:'tab=brain',viewport:PHONE,crop:true,prepare:async page=>{
+   await page.locator('.learn-brain').first().scrollIntoViewIfNeeded()
+   return unionClip(page,['.learn-brain'],0)
+ }}
 ]
 
 async function settle(page){
@@ -91,28 +124,16 @@ const browser=await chromium.launch({channel,headless:true})
 const manifest={capturedAt:new Date().toISOString(),sourceVersion:JSON.parse(await readFile(path.join(frontend,'package.json'),'utf8')).version,images:{}}
 try{
  await mkdir(outDir,{recursive:true})
- for(const view of VIEWS){
-  for(const [suffix,viewport,widths] of [['',DESKTOP,[1280,2560]],['-narrow',NARROW,[860]]]){
-   const context=await browser.newContext({viewport,deviceScaleFactor:2,reducedMotion:'reduce',colorScheme:'dark'})
-   const page=await context.newPage()
-   await page.goto(base+'?preview=1&tab='+view.id,{waitUntil:'networkidle'})
-   await settle(page)
-   if(view.prepare)await view.prepare(page)
-   await page.waitForTimeout(150)
-   manifest.images[view.id+suffix]=await save(await page.screenshot({type:'png'}),view.id+suffix,widths)
-   await context.close()
-  }
- }
- for(const crop of CROPS){
-  const context=await browser.newContext({viewport:crop.viewport,deviceScaleFactor:2,reducedMotion:'reduce',colorScheme:'dark'})
+ for(const shot of SHOTS){
+  const context=await browser.newContext({viewport:shot.viewport,deviceScaleFactor:2,reducedMotion:'reduce',colorScheme:'dark'})
   const page=await context.newPage()
-  await page.goto(base+'?preview=1&tab='+crop.tab,{waitUntil:'networkidle'})
+  await page.goto(base+'?preview=1&'+shot.query,{waitUntil:'networkidle'})
   await settle(page)
-  const target=page.locator(crop.selector).first()
-  await target.scrollIntoViewIfNeeded()
-  const shot=await target.screenshot({type:'png'})
-  const {width}=await sharp(shot).metadata()
-  manifest.images[crop.id]=await save(shot,crop.id,crop.id.endsWith('-narrow')?[width]:[Math.round(width/2),width])
+  const clip=shot.prepare?await shot.prepare(page):undefined
+  await page.waitForTimeout(200)
+  const png=await page.screenshot({type:'png',...(shot.crop&&clip?{clip}:{})})
+  const {width}=await sharp(png).metadata()
+  manifest.images[shot.id]=await save(png,shot.id,shot.widths||[Math.round(width/2),width])
   await context.close()
  }
 }finally{

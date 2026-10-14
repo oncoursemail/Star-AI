@@ -333,3 +333,21 @@ def test_real_ffmpeg_round_trip_when_system_codec_is_available():
     assert len(base64.b64decode(msg.waveform)) == 10
     decoded = decode_attachment(msg.ogg, executable=binary)
     assert abs(len(decoded) - len(pcm)) < 3200  # Opus has codec delay/priming
+
+
+def test_ffmpeg_reads_only_stdin(monkeypatch):
+    """Security audit 2026-10-13: a playlist-style attachment must not make FFmpeg open URLs or files."""
+    import subprocess
+    from star.discord_bot import audio
+    seen = []
+
+    def fake_run(argv, **kwargs):
+        seen.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout=b"\x00\x00" * 1600, stderr=b"")
+    monkeypatch.setattr(audio.subprocess, "run", fake_run)
+    audio.decode_attachment(b"#EXTM3U\nhttp://198.51.100.7/x.ts\n", executable="ffmpeg")
+    argv = seen[0]
+    guard = argv.index("-protocol_whitelist")
+    assert argv[guard + 1] == "pipe" and guard < argv.index("-i")
+    with pytest.raises(ValueError):
+        audio._ffmpeg(["-i", "https://198.51.100.7/a.ogg", "pipe:1"], b"x", executable="ffmpeg")
