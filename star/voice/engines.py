@@ -12,6 +12,7 @@ Model files are looked up in the folder named by STAR_VOICE_MODELS (see docs/STA
 from __future__ import annotations
 
 import glob
+import math
 import os
 import site
 import threading
@@ -283,9 +284,16 @@ def parse_kokoro_voice(voice: str) -> list[tuple[str, float]]:
     parts = []
     for piece in voice.split("+"):
         name, _, weight = piece.strip().partition(":")
-        parts.append((name.strip(), float(weight) if weight else 1.0))
+        try:
+            value = float(weight) if weight else 1.0
+        except ValueError:
+            raise ValueError(f"Unknown Kokoro voice: {voice!r}") from None
+        parts.append((name.strip(), value))
     total = sum(w for _, w in parts)
-    if not parts or total <= 0 or any(w < 0 or not n for n, w in parts):
+    # "nan" and "inf" parse as floats but pass every comparison below (or make total infinite), which
+    # turned the blend into NaN weights and Star's voice into silence or noise.
+    if (not parts or not math.isfinite(total) or total <= 0
+            or any(not math.isfinite(w) or w < 0 or not n for n, w in parts)):
         raise ValueError(f"Unknown Kokoro voice: {voice!r}")
     return [(n, w / total) for n, w in parts]
 

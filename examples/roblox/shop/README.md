@@ -15,7 +15,9 @@
 - The server prepares a Tool clone before committing a purchase, then confirms it only after granting to Backpack; a failed grant calls the pure `ShopCore.rollback` exactly once.
 - On respawn, the server re-grants owned Tools when missing. `leaderstats.Coins` displays balance, but is not the authority for funds.
 - Inventory and coins are **session-only** and reset after leaving: no real currency, DataStore, Robux, MarketplaceService or ProcessReceipt claims. Do not use this sample for paid developer products.
-- The thirteen pure Luau cases are run by STAR's pinned native interpreter and test forged prices, double clicks, invalid quantity, unknown IDs, insufficient funds, isolated wallets, rollback and inventories. Headless Luau tests do NOT prove Studio replication, Tool parenting or actual RemoteFunction behavior.
+- `Tests/ShopCore.spec.luau` (13 cases) and `Tests/ShopSequence.spec.luau` (8 additional cases) execute the **actual pure ShopCore** on the pinned native Luau CLI. Multi-action cases cover repeated purchases, pending/confirmed/rolled-back grants, departure and reseed, two players purchasing the same item, hostile quantities and prices, and a fixed-seed 144-action three-player reference model. A deliberately incorrect double-debit implementation is confirmed to fail the duplicate-purchase invariant.
+- Impossible **server-internal** corruption of pending ownership, price or wallet raises an explicit invariant error **before** `rollback` can alter money or discard pending evidence. This is distinct from routine malformed client input, which is refused without changing state. It is not a recovery mechanism for invalid persistent saves.
+- These headless Luau tests do **not** prove Studio replication, Tool parenting, real RemoteFunction behavior or successful grant/rollback across Roblox engine boundaries. A two-client Studio playtest is still required.
 
 ## Official documentation
 

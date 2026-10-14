@@ -130,3 +130,33 @@ def test_invalid_types_are_refused(dump):
 def test_loading_local_dump_only_and_never_executes_luau(dump):
     assert check_luau_api('require(999)\nloadstring("Instance.new(\\"Bad\\")")', dump) == []
     assert json.loads(DUMP_PATH.read_text(encoding="utf-8"))["Classes"]
+
+
+# -- "did you mean" is only offered when a real name is close ---------------------------------------------------
+
+@pytest.mark.parametrize("source", [
+    'Instance.new("MyCustomHitboxThing")',
+    'local s = game:GetService("ZzzQqq")',
+    'local p = Instance.new("Part")\np:ExplodeIntoConfetti()',
+])
+def test_unrelated_unknown_names_get_no_misleading_suggestion(dump, source):
+    findings = check_luau_api(source, dump)
+    assert len(findings) == 1 and findings[0].suggestion is None
+
+
+@pytest.mark.parametrize(("source", "suggestion"), [
+    ('Instance.new("part")', "Part"),
+    ('local p = Instance.new("Part")\np:destroy()', "Destroy"),
+    ('local s = game:GetService("players")', "Players"),
+])
+def test_wrong_case_suggests_the_exact_name(dump, source, suggestion):
+    findings = check_luau_api(source, dump)
+    assert len(findings) == 1 and findings[0].suggestion == suggestion
+
+
+def test_preflight_message_omits_review_hint_without_a_close_name(dump):
+    from star.roblox_project_preflight import _api_report
+    rows = _api_report('Instance.new("MyCustomHitboxThing")', dump)
+    assert rows[0]["message"] == "Unknown API name MyCustomHitboxThing."
+    rows = _api_report('Instance.new("Prat")', dump)
+    assert rows[0]["message"] == "Unknown API name Prat. Review Part."

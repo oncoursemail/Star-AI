@@ -1,12 +1,12 @@
 import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
-import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,Ellipsis,Folder,FolderOpen,Gauge,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Pencil,Plus,Search,Settings2,Shield,SquarePen,Trash2,Undo2,Workflow,X,Zap} from 'lucide-react'
+import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,Ellipsis,Folder,FolderOpen,Gauge,GraduationCap,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Pencil,Plus,Search,Settings2,Shield,SquarePen,Trash2,Undo2,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
 import {BrainOverview} from './BrainOverview'
 import {Message,Panel,StarMark,Tag} from './components'
 import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts,MediaStatus} from './types'
 import './tokens.css'
 import './stellar-ui.css'
 import './chat.css'
@@ -15,7 +15,6 @@ import {McpPanel} from './IntegrationPanels'
 import {BlenderPanel} from './BlenderPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
-import {LearnedThisWeek} from './LearnedThisWeek'
 import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
@@ -24,12 +23,15 @@ import type {ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {SettingsPage,type UpdateInfo} from './SettingsPage'
 import {Composer,type Availability,type ChatMode} from './Composer'
+import {imageReadiness,webSearchAvailability} from './availability'
 import {StarPet,type PetState} from './StarPet'
 import {StarFace,type StarMood} from './StarFace'
 import {ChatRow} from './ChatRow'
 import {ScreenConsent} from './ScreenConsent'
 import {useDismiss} from './Composer'
 import './redesign.css'
+import './resilience.css'
+import {EmptyState} from './states'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -46,6 +48,8 @@ const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 const CHAT_ACTIONS=['sendMessage','generateImage','runTeam']
+/** The sidebar lists this many recent chats; search covers all of them. */
+const CHAT_WINDOW=60
 
 /** Starter prompts for things STAR can really do. They fill the composer so you can finish the sentence. */
 const starters=[
@@ -83,7 +87,7 @@ function groupChats(chats:ChatThread[]):Array<{label:string;chats:ChatThread[]}>
 
 export function Desktop({initial=null,preview=false}:{initial?:BootData|null;preview?:boolean}) {
  const [tab,setTab]=useState<Tab>(()=>initialPreviewTab(preview))
- const [data,setData]=useState<BootData>(initial??{version:'0.9.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
+ const [data,setData]=useState<BootData>(initial??{version:'1.0.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
@@ -122,6 +126,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>readPreference('star.sidebar')==='collapsed')
  const [showJump,setShowJump]=useState(false)
  const [imageMode,setImageMode]=useState(false)
+ // The image engine's real state, read when Create image is switched on: the composer offers setup only when it is not ready.
+ const [imageStatus,setImageStatus]=useState<MediaStatus|null>(null)
+ const imageStatusRequest=useRef('')
  const [imageSize,setImageSize]=useState('square')
  const [historySearchOpen,setHistorySearchOpen]=useState(false)
  const [historyQuery,setHistoryQuery]=useState('')
@@ -137,6 +144,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const chatMenuTrigger=useRef<HTMLButtonElement>(null)
  const [screenAsk,setScreenAsk]=useState(false)
  const [capturing,setCapturing]=useState(false)
+ const consentConfirmed=useRef(false)
  const [previews,setPreviews]=useState<Record<string,string>>({})
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const reducedMotion=useEffectiveReducedMotion(!themeMotion)
@@ -342,6 +350,23 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else void sync()
  },[sync,updateRun,refreshConnection])
  useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
+ // Create image switched on: ask the host whether pictures can be made (the same checks it runs before making one).
+ useEffect(()=>onBackendEvent(event=>{
+   if(!imageStatusRequest.current||event.requestId!==imageStatusRequest.current||event.kind==='progress')return
+   imageStatusRequest.current=''
+   if(event.kind==='result'&&event.data&&typeof event.data==='object')setImageStatus(event.data as MediaStatus)
+ }),[])
+ useEffect(()=>{
+   if(!imageMode||inactive)return
+   let live=true
+   const requestId=crypto.randomUUID()
+   imageStatusRequest.current=requestId // Subscribe before a fast worker can answer.
+   void request<MediaStatus>('mediaStatus',{},requestId).then(reply=>{
+     if(!reply.ok||!reply.pending){if(imageStatusRequest.current===requestId)imageStatusRequest.current=''}
+     if(live&&reply.ok&&!reply.pending&&reply.data&&typeof reply.data==='object')setImageStatus(reply.data)
+   })
+   return ()=>{live=false}
+ },[imageMode,inactive])
  // Once per provider, model and address: the host checks the selected model server in the background and
  // lets it read the start of the conversation, so the status is truthful and the first message is not the slow one.
  const warmTarget=connectionTarget(data.settings as AppSettings&Record<string,unknown>)
@@ -435,12 +460,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      if(!live)return
      const chosen:Fixture|undefined=module.FIXTURES[fixture]
      if(!chosen)return
-     setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
+     const chats=chosen.chats||module.fixtureChats
+     const open=chats[0]?.id||''
+     setData(d=>({...d,chats,active_chat:open,project:chosen.project||d.project,projects:chosen.projects||d.projects,server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
      // The scripted turn belongs to the fixture chat from its first event (React has not re-rendered yet).
-     chatRef.current='fx-1'
+     chatRef.current=open
      setDraft(d=>({...d,...module.fixtureSettings,...chosen.settings}))
      setMessages(chosen.messages)
-     if(chosen.finishedRun)setLastRun({chat:'fx-1',run:chosen.finishedRun})
+     if(chosen.finishedRun)setLastRun({chat:open,run:chosen.finishedRun})
      if(chosen.script)play(chosen.script,chosen.messages)
    })
    return ()=>{
@@ -526,7 +553,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
  const filteredChats=data.chats.filter(c=>c.id!==pendingDelete?.id&&c.title.toLowerCase().includes(historyQuery.toLowerCase()))
- const chatGroups=groupChats(filteredChats.slice(0,60))
+ const chatGroups=groupChats(filteredChats.slice(0,CHAT_WINDOW))
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
  /** Reduced motion applies at once and is stored straight away, not only on Save. */
  const setReducedMotion=(reduced:boolean)=>{
@@ -616,6 +643,17 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  // A notice belongs to the page where the action happened: it must not follow to another page and cover it.
  const nav=(id:Tab)=>{if(id!==tab)setNotice('');setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
+ /** "What STAR learned this week" lives once, on the Projects page; the Model page links to it. */
+ const openLearned=()=>{
+   nav('projects')
+   let tries=0
+   const reveal=()=>{
+     const found=document.querySelector('.learn-week')
+     if(found){found.scrollIntoView({block:'start',behavior:reducedMotion?'auto':'smooth'});return}
+     if(++tries<20)window.setTimeout(reveal,50)
+   }
+   window.setTimeout(reveal,0)
+ }
  const extraPages:Tab[]=['library','analytics','brain-overview','brain']
  const showMore=moreOpen||extraPages.includes(tab)
  const fillComposer=(text:string)=>{
@@ -633,7 +671,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const brain=brainStatus(data)
  const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brain,server:data.server,ownHardware:runsOnOwnHardware(data.settings),credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
  // STAR Server brings its own search (self-hosted SearXNG, server/searxng); a Brave/Tavily key also works.
- const web:Availability=data.credentials?.brave||data.credentials?.tavily||(serverMode&&(data.settings as AppSettings&Record<string,unknown>).search_endpoint!=='off')?{ok:true}:{ok:false,reason:'Needs STAR Server or a search key'}
+ const web:Availability=webSearchAvailability(data.settings as AppSettings&Record<string,unknown>,data.credentials)
  const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
@@ -673,7 +711,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        {historySearchOpen&&<div className="rail-search"><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setHistorySearchOpen(false);setHistoryQuery('')}}}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={14}/></button></div>}
      </div>
      <nav className="rail-group" aria-label="Workspace">
-       {sections.filter(([id])=>id==='projects'||id==='tools').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{name}</span>{id==='projects'&&<small title={'Current project: '+data.project}>{data.project}</small>}</button>)}
+       {sections.filter(([id])=>id==='projects'||id==='tools').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{name}</span>{id==='projects'&&<small dir="auto" title={'Current project: '+data.project}>{data.project}</small>}</button>)}
        <button className="rail-item rail-more" type="button" aria-expanded={showMore} onClick={()=>setMoreOpen(v=>!v)}><ChevronRight size={16} className={showMore?'is-open':undefined}/><span>More</span></button>
        {showMore&&<div className="rail-more-group">
          {sections.filter(([id])=>extraPages.includes(id)).map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{id==='brain'?'Model':name}</span></button>)}
@@ -691,7 +729,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </motion.div>)}
          </AnimatePresence>
        </Fragment>)}
-       {!filteredChats.length&&<p className="rail-empty">{historyQuery?'No chats match that search.':'Chats you start are saved here.'}</p>}
+       {!filteredChats.length&&<EmptyState compact title={historyQuery?'No chats match that search.':'Chats you start are saved here.'}/>}
+       {filteredChats.length>CHAT_WINDOW&&<p className="rail-window-note">Showing the {CHAT_WINDOW} most recent chats. Search finds older ones.</p>}
      </div>
      <div className="rail-foot">
        <button className={'rail-item '+(tab==='settings'?'is-current':'')} type="button" aria-current={tab==='settings'?'page':undefined} onClick={()=>nav('settings')}><Settings2 size={16}/><span>Settings</span><small>v{data.version}</small></button>
@@ -701,10 +740,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      <header className="bar">
        <div className="bar-left">
          <button className="bar-action bar-reveal" type="button" aria-label="Show sidebar" title="Show sidebar" onClick={()=>{if(narrow())setLeftOpen(true);else setSidebarCollapsed(false)}}><PanelLeftOpen size={18}/></button>
-         {tab==='chat'?<div className="bar-title"><span className="bar-crumb">{data.project}</span><span className="bar-sep" aria-hidden="true">/</span>{renamingTitle&&currentChat?<input className="bar-rename" aria-label="Chat name" autoFocus defaultValue={chatTitle} maxLength={80}
+         {tab==='chat'?<div className="bar-title"><span className="bar-crumb" dir="auto" title={data.project}>{data.project}</span><span className="bar-sep" aria-hidden="true">/</span>{renamingTitle&&currentChat?<input className="bar-rename" aria-label="Chat name" dir="auto" autoFocus defaultValue={chatTitle} maxLength={80}
              onBlur={event=>{const next=event.currentTarget.value.trim();setRenamingTitle(false);if(next&&next!==chatTitle)void renameChat(currentChat.id,next)}}
              onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.currentTarget.value=chatTitle;setRenamingTitle(false)}}}/>
-           :<h1 title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
+           :<h1 dir="auto" title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
            :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
        </div>
        <div className="bar-right">
@@ -750,7 +789,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                      {at===lastUser&&timelineNode}
                    </Fragment>
                  })}
-                 {query&&!matchingMessages.length&&<div className="thread-none"><Search size={18} aria-hidden="true"/><span>No messages match “{chatSearch.trim()}”.</span></div>}
+                 {query&&!matchingMessages.length&&<EmptyState compact icon={<Search size={16}/>} title={'No messages match “'+chatSearch.trim()+'”.'} description="Try a shorter word, or close search to see the whole chat."/>}
                  {busy&&run&&!timeline&&!streamingText&&<RunStatus run={run} label={stopping?'Stopping':undefined}/>}
                  {busy&&run?.mode==='image'&&viewingAnswer&&!stopping&&<div className={'image-pending is-'+imageSize} role="img" aria-label="Image being created"><span className="image-pending-sheen" aria-hidden="true"/><span className="image-pending-label"><ImagePlus size={15} aria-hidden="true"/> Your image will appear here</span></div>}
                  {interrupted&&<Message entry={{id:'interrupted',role:'event',text:interrupted.detail,status:'cancelled'}} animated={false} pinned onRetry={retryNow} onEdit={()=>fillComposer(interrupted.prompt)}/>}
@@ -764,11 +803,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
                files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>void attach()} onTranscribe={()=>void transcribe()}
                mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
-               imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles(f=>f.filter(p=>/\.(png|jpe?g|webp)$/i.test(p)).slice(0,2));setTeamMode(false)}composerRef.current?.focus()}} imageReady={true} onImageSetup={()=>nav('settings')} imageSize={imageSize} onImageSize={setImageSize}
+               imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles(f=>f.filter(p=>/\.(png|jpe?g|webp)$/i.test(p)).slice(0,2));setTeamMode(false)}composerRef.current?.focus()}} imageReady={imageReadiness(imageStatus)} onImageSetup={()=>nav('settings')} imageSize={imageSize} onImageSize={setImageSize}
                teamMode={teamMode} onTeamMode={on=>{setTeamMode(on);composerRef.current?.focus()}} team={team}
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}
-               onLookAtScreen={()=>setScreenAsk(true)} previews={previews}/>
+               onLookAtScreen={()=>{consentConfirmed.current=false;setScreenAsk(true)}} previews={previews}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
                :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
@@ -777,7 +816,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='brain-overview'&&<div className="scroll-region"><div className="page-wrap"><BrainOverview load={!inactive}/></div></div>}
-         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
+         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong dir="auto" title={name}>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
             {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
@@ -806,7 +845,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={reducedMotion?instant:{duration:.2}}/></div></div>}
             </Panel>
             </LocalBrainFallback>
-            <section className="learn learn-brain" aria-label="Learning"><LearnedThisWeek invoke={act} disabled={inactive} project={data.project}/></section>
+            <section className="learn learn-brain" aria-label="What STAR learned"><div className="learn-head"><GraduationCap size={18} aria-hidden="true"/><div className="learn-title"><h2>What STAR learned</h2><p>This week’s lessons and your corrections are on the Projects page.</p></div><button type="button" className="learn-button" onClick={openLearned}>Open <ArrowRight size={14} aria-hidden="true"/></button></div></section>
           </div></div>}
           {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
@@ -845,11 +884,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      </AnimatePresence>
      <AnimatePresence>
        {pendingDelete&&<motion.div key={'undo-'+pendingDelete.id} role="status" className="undo-toast" initial={reducedMotion?false:{opacity:0,y:12,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8}} transition={reducedMotion?instant:{duration:.2,ease:[0.23,1,0.32,1]}}>
-         <Trash2 size={15} aria-hidden="true"/><span>Deleted <strong>{pendingDelete.title}</strong></span>
+         <Trash2 size={15} aria-hidden="true"/><span title={pendingDelete.title}>Deleted <strong dir="auto">{pendingDelete.title}</strong></span>
          <button type="button" onClick={undoDelete}><Undo2 size={14} aria-hidden="true"/> Undo</button>
        </motion.div>}
      </AnimatePresence>
-     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>void lookAtScreen()} onClosed={()=>composerRef.current?.focus()}/>
+     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>{consentConfirmed.current=true;void lookAtScreen()}} onClosed={()=>{
+       if(consentConfirmed.current)composerRef.current?.focus()
+       else document.querySelector<HTMLButtonElement>('.cmp-icon-button[aria-label="Add files and tools"]')?.focus()
+       consentConfirmed.current=false
+     }}/>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {tab==='chat'&&showStar&&<StarPet state={petState} reducedMotion={reducedMotion} idleEnabled={!inactive}/>}
