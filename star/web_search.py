@@ -22,7 +22,9 @@ _LABEL = "STAR search"
 _MAX_REPLY_BYTES = 1024 * 1024
 # What one provider's failure may look like. AttributeError covers a reply of the wrong JSON shape (a list,
 # or "web": null), which used to escape and end the whole search instead of trying the next provider.
-_PROVIDER_ERRORS = (httpx.HTTPError, ValueError, TypeError, AttributeError)
+def _provider_errors() -> tuple[type[BaseException], ...]:
+    # A function, not a module constant: naming httpx.HTTPError at import time would load httpx at desktop start.
+    return (httpx.HTTPError, ValueError, TypeError, AttributeError)
 # A question about what is happening now: ask SearXNG's news engines for the past week first.
 _FRESH = re.compile(r"\b(?:news|latest|newest|recent(?:ly)?|today|tonight|yesterday|this\s+(?:week|month)|"
                     r"headlines?|breaking|just\s+(?:released|announced|happened)|update[sd]?|announce(?:d|ment)s?)\b",
@@ -144,7 +146,7 @@ async def search_web(query: str, *, limit: int = 5, settings=None) -> list[dict]
                 if results:
                     return results
                 failures.append("Brave returned no usable web results")
-            except _PROVIDER_ERRORS as exc:
+            except _provider_errors() as exc:
                 failures.append(f"Brave: {type(exc).__name__}")
         if tavily:
             try:
@@ -158,7 +160,7 @@ async def search_web(query: str, *, limit: int = 5, settings=None) -> list[dict]
                 if results:
                     return results
                 failures.append("Tavily returned no usable web results")
-            except _PROVIDER_ERRORS as exc:
+            except _provider_errors() as exc:
                 failures.append(f"Tavily: {type(exc).__name__}")
         if endpoint and server_key:
             # The self-hosted search answers when there is no key, and when the keyed providers failed.
@@ -167,7 +169,7 @@ async def search_web(query: str, *, limit: int = 5, settings=None) -> list[dict]
                 if results:
                     return results
                 failures.append("STAR search returned no usable web results")
-            except _PROVIDER_ERRORS as exc:
+            except _provider_errors() as exc:
                 status = getattr(getattr(exc, "response", None), "status_code", None)
                 failures.append(f"STAR search: {type(exc).__name__}" + (f" {status}" if status else ""))
     raise RuntimeError("Web research unavailable: " + "; ".join(failures))
