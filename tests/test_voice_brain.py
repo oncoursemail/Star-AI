@@ -1,14 +1,13 @@
 """The voice brain client: LAN-only address, streamed text, clean cancellation, and a key that never leaks."""
 import json
 import threading
-import time
 
 import httpx
 import pytest
 
 from star.voice.brain import BrainError, ScriptedBrain, ServerBrain, validate_server_url
 from star.voice.persona import VOICE_SYSTEM_PROMPT, system_message
-from star.voice.settings import VoiceSettings
+from star.voice.settings import STAR_VOICE, VoiceSettings
 
 KEY = "sk-test-do-not-leak-1234567890"
 
@@ -88,20 +87,28 @@ def test_from_env_needs_both_variables_and_reads_them(monkeypatch):
 
 
 def test_close_from_another_thread_ends_a_stream_cleanly():
-    # The next word is 10 s away, so the only way the loop can end within the bound is close()
-    # waking it. (The old version raced a 0.12 s timer against 50 ms words and a 0.4 s limit.)
-    brain = ScriptedBrain(["one two three four"], first_delay=0, tokens_per_second=0.1)
+    brain = ScriptedBrain(["one two three four five six seven eight"],
+                          first_delay=0, tokens_per_second=0.1)
     stream = brain.stream([])
-    assert next(stream) == "one"
-    closer = threading.Timer(0.05, stream.close)
-    started = time.monotonic()
-    closer.start()
-    try:
-        assert list(stream) == []
-        assert time.monotonic() - started < 5
-    finally:
-        closer.cancel()
-    assert list(stream) == []                     # a closed stream stays finished
+    first = next(stream)
+    entered, finished = threading.Event(), threading.Event()
+    got = []
+
+    def consume():
+        entered.set()
+        try:
+            got.extend(list(stream))  # blocks waiting for a word unless close wakes it
+        finally:
+            finished.set()
+
+    worker = threading.Thread(target=consume, daemon=True)
+    worker.start()
+    assert entered.wait(2), "consumer never started"
+    stream.close()  # test close from the other thread, with no Timer scheduling race
+    assert finished.wait(0.4), "close must wake a blocked stream within 400 ms"
+    worker.join(timeout=0.4)
+    assert not worker.is_alive()
+    assert first == "one" and got == []
 
 
 def test_voice_prompt_asks_for_short_spoken_replies_with_a_quick_opening():
@@ -114,7 +121,7 @@ def test_voice_prompt_asks_for_short_spoken_replies_with_a_quick_opening():
 
 def test_settings_validate_everything_the_ui_can_send(monkeypatch):
     defaults = VoiceSettings().validate()
-    assert defaults.voice == "heart" and defaults.endpointer == "smart-turn" and defaults.output == "headphones"
+    assert defaults.voice == STAR_VOICE and defaults.voice_id == "star-mum" and defaults.endpointer == "smart-turn" and defaults.output == "headphones"
     custom = VoiceSettings.from_mapping({"voice": "blend-heart-nicole", "speed": "0.9", "barge_in_ms": "400",
                                          "partial_transcripts": "false", "output": "speakers", "junk": 1})
     assert (custom.voice, custom.speed, custom.barge_in_ms, custom.partial_transcripts) == (

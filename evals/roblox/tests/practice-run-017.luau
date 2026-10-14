@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn("red","blue",true), true))
+check("case 2", deepEqual(fn("red","red",true), false))
+check("case 3", deepEqual(fn("red","blue",false), false))
+check("case 4", deepEqual(fn("","blue",true), false))
+check("case 5", deepEqual(fn("red","",true), false))
+check("case 6", deepEqual(fn("blue","red",true), true))

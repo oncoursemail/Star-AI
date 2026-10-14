@@ -4,20 +4,17 @@ This is a real local-model client, not a static UI mockup. Heavy work always use
 worker threads; Windows .exe is produced by GitHub Actions on a Windows runner.
 """
 from __future__ import annotations
-from dataclasses import asdict, replace
-import html
-import json
+from dataclasses import replace
 from pathlib import Path
-import subprocess
 import sys
 import uuid
 
 from PySide6.QtCore import Qt, QThread, Signal, QSize, QUrl, QTimer, QPropertyAnimation, QEasingCurve, QEvent
-from PySide6.QtGui import QFont, QIcon, QDesktopServices, QPixmap, QPainter, QLinearGradient, QColor, QPen
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QScrollArea, QFileDialog,
     QComboBox, QCheckBox, QMessageBox, QInputDialog, QStackedWidget, QFormLayout, QSpinBox,
-    QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QProgressBar, QGraphicsOpacityEffect)
+    QListWidget, QProgressBar, QGraphicsOpacityEffect)
 
 from .desktop_core import Settings, app_data, Conversations, query_models, run_task, check_studio
 from .providers import uses_star_server
@@ -580,7 +577,6 @@ class MainWindow(QMainWindow):
             self.brain_progress.setRange(0,100)
             pct=min(99,int(loaded*100/total))
             self.brain_progress.setValue(pct)
-            current=event.get('downloaded') or 0
             self.brain_status.setText(f'{phase}  ·  {pct}%  ·  {loaded/1e9:.2f} / {total/1e9:.2f} GB total')
         else:
             self.brain_status.setText(phase + ('…' if not event.get('finished') else ''))

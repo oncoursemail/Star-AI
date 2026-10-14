@@ -7,8 +7,10 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import logging
 import time
 from .analytics import AnalyticsStore
+from .atomic_io import atomic_write_text, move_aside
 from dataclasses import dataclass, asdict, replace, field
 from contextlib import AsyncExitStack
 from typing import Callable
@@ -129,12 +131,16 @@ class Settings:
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    discord_autostart: bool = False        # opt-in: STAR Desktop starts and supervises the Discord bot (star/discord_supervisor.py)
+    roblox_docs_live_enabled: bool = False  # opt-in live retrieval from create.roblox.com/docs; STAR_ROBLOX_DOCS_LIVE=1 also enables
 
     @classmethod
     def load(cls, file: Path):
         if not file.exists():
             return cls()
-        raw = json.loads(file.read_text(encoding='utf-8'))
+        raw = _read_settings_object(file)
+        if raw is None:
+            return cls()
         if 'studio_target' not in raw:
             # An old ID was selected on an unknown implicit route; never rebind its grants.
             raw = {**raw, 'studio_target': 'local_pc', 'studio_id': '', 'studio_edit': False, 'studio_luau': False}
@@ -142,8 +148,8 @@ class Settings:
 
     def validate(self):
         validate_target(self.studio_target)
-        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
-            validate_alias(getattr(self, field), field=field)
+        for name in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, name), field=name)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -161,7 +167,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -240,12 +246,76 @@ class Settings:
 
     def save(self, file: Path):
         self.validate()
-        file.parent.mkdir(parents=True, exist_ok=True)
-        # configuration is nonsecret; never write bearer tokens here
-        file.write_text(json.dumps(asdict(self), indent=2), encoding='utf-8')
+        # configuration is nonsecret; never write bearer tokens here. Written in one step so a crash,
+        # power cut or a reader in another STAR process never sees half a settings file.
+        atomic_write_text(file, json.dumps(asdict(self), indent=2))
+
+
+_log = logging.getLogger(__name__)
+
+
+def _read_settings_object(file: Path) -> dict | None:
+    """The saved settings as a dict, or None after moving a damaged file aside.
+
+    A truncated or hand-broken settings.json used to raise on every Settings.load, so the desktop
+    could not start and every bridge request failed. The file is read twice (a writer from an older
+    STAR copy may still replace it in place) before it is renamed to settings.json.corrupt-<time>
+    for the owner to inspect, and the defaults are used. The defaults are the safe ones: Studio
+    editing, Luau execution and every opt-in feature are off.
+    """
+    problem = None
+    damaged = 0
+    for attempt in range(4):
+        try:
+            raw = json.loads(file.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return None
+        except ValueError as exc:            # also UnicodeDecodeError: the content is damaged
+            problem = exc
+            damaged += 1
+            if damaged >= 2:
+                break
+            time.sleep(0.05)
+            continue
+        except OSError:
+            # Locked or unreadable right now (another STAR process swapping it in on Windows, a virus
+            # scanner, permissions): that is not damage, so the owner's file is never moved aside for it.
+            if attempt == 3:
+                raise
+            time.sleep(0.05)
+            continue
+        if isinstance(raw, dict):
+            return raw
+        problem = TypeError(f'settings file holds {type(raw).__name__}, not an object')
+        break
+    backup = move_aside(file)
+    _log.warning('STAR settings could not be read (%s); using defaults%s', type(problem).__name__,
+                 f'; the damaged file was kept as {backup.name}' if backup else '')
+    return None
 
 
 TERMINAL_STATUSES = ('failed', 'cancelled')
+
+
+# Gives every project whose pre-upgrade messages (chat_id 'legacy') have no chat row yet its
+# 'Previous conversation' row. Runs on every open, so it must not read the whole messages table:
+# the project names are walked through idx_chat_messages one index seek at a time (a "skip
+# scan"), projects that already have their legacy row are left out (INSERT OR IGNORE would keep
+# them unchanged anyway), and only the remaining projects' legacy rows are read, by index. The
+# rows inserted are exactly those of the plain form
+#   INSERT OR IGNORE ... SELECT ... FROM messages WHERE chat_id='legacy' GROUP BY project
+# which scanned every message on every open.
+LEGACY_CHAT_MIGRATION = (
+    "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
+    "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
+    "FROM messages WHERE chat_id='legacy' AND project IN ("
+    "WITH RECURSIVE projects(name) AS ("
+    "SELECT MIN(project) FROM messages "
+    "UNION ALL SELECT (SELECT MIN(project) FROM messages WHERE project>name) FROM projects WHERE name IS NOT NULL) "
+    "SELECT name FROM projects WHERE name IS NOT NULL "
+    "EXCEPT SELECT project FROM chats WHERE id='legacy') "
+    "GROUP BY project"
+)
 
 
 class Conversations:
@@ -259,7 +329,6 @@ class Conversations:
         import sqlite3
         db.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(db, timeout=30)
-        self._last_stamp: datetime | None = None
         self.connection.execute(
             'CREATE TABLE IF NOT EXISTS messages '
             '(id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, '
@@ -299,25 +368,31 @@ class Conversations:
             'value TEXT NOT NULL, updated TEXT NOT NULL)'
         )
         # A pre-upgrade conversation is preserved verbatim under one stable ID.
-        self.connection.execute(
-            "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
-            "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
-            "FROM messages WHERE chat_id='legacy' GROUP BY project"
-        )
+        self.connection.execute(LEGACY_CHAT_MIGRATION)
         self.connection.commit()
 
-    def _stamp(self) -> str:
-        """A UTC timestamp that is strictly later than the previous one from this store.
+    def _next_chat_stamp(self, project: str) -> str:
+        """Make per-project chat activity order stable at coarse clock ticks.
 
-        Chats are ordered by ``updated``. Two writes within one tick of the system clock
-        (about 16 ms on some Windows machines) used to get the same stamp, so the newest
-        chat could be listed second and ``active_chat`` could fall back to the wrong one.
+        Old SQLite databases have no sequence column. ISO UTC timestamps are
+        kept in the existing fields; ties in legacy rows sort by rowid.
         """
-        now = datetime.now(timezone.utc)
-        if self._last_stamp is not None and now <= self._last_stamp:
-            now = self._last_stamp + timedelta(microseconds=1)
-        self._last_stamp = now
-        return now.isoformat(timespec='microseconds')
+        stamp = datetime.now(timezone.utc)
+        newest = self.connection.execute(
+            'SELECT updated FROM chats WHERE project=? '
+            'ORDER BY updated DESC, rowid DESC LIMIT 1', (project,)
+        ).fetchone()
+        if newest:
+            try:
+                previous = datetime.fromisoformat(newest[0])
+                if previous.tzinfo is None:
+                    previous = previous.replace(tzinfo=timezone.utc)
+                if stamp <= previous:
+                    stamp = previous + timedelta(microseconds=1)
+            except (TypeError, ValueError, OverflowError):
+                # Older malformed dates are left untouched; new writes use UTC.
+                pass
+        return stamp.isoformat()
 
     def new_chat(self, project: str) -> str:
         import uuid
@@ -333,7 +408,7 @@ class Conversations:
         if current:
             return current[0]
         chat_id = uuid.uuid4().hex
-        created = self._stamp()
+        created = self._next_chat_stamp(project)
         with self.connection:
             self.connection.execute(
                 'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
@@ -355,7 +430,7 @@ class Conversations:
         if found:
             return found[0]
         newest = self.connection.execute(
-            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC LIMIT 1',
+            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC, rowid DESC LIMIT 1',
             (project,)
         ).fetchone()
         if newest:
@@ -381,7 +456,7 @@ class Conversations:
             {'id': chat_id, 'title': title, 'created': created, 'updated': updated}
             for chat_id, title, created, updated in self.connection.execute(
                 'SELECT id,title,created,updated FROM chats WHERE project=? '
-                'ORDER BY updated DESC LIMIT ?', (project, limit)
+                'ORDER BY updated DESC, rowid DESC LIMIT ?', (project, limit)
             )
         ]
 
@@ -393,7 +468,7 @@ class Conversations:
         if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
                                      or type(reply_to) is not int):
             raise ValueError('Only an event record that answers a user message can be failed or cancelled')
-        stamp = self._stamp()
+        stamp = self._next_chat_stamp(project)
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
             if chat_id is None:
@@ -459,19 +534,6 @@ class Conversations:
             (*args, limit)
         ).fetchall()
         return list(reversed(rows))
-
-    def history_rows(self, project: str, chat_id: str | None = None, clip: int = 4000):
-        """Every user/assistant row of the chat as (role, text), oldest first, without events.
-
-        All rows, not the newest few: the model's history window is measured from the
-        first message of the chat so that it stays put from turn to turn (see
-        context_layout.conversation_window). Each text is cut to ``clip`` characters.
-        """
-        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
-        return self.connection.execute(
-            f"SELECT role,SUBSTR(body,1,?) FROM messages WHERE {scope} AND role IN ('user','assistant') ORDER BY id",
-            (clip, *args)
-        ).fetchall()
 
     def raw_history_records(self, project: str, chat_id: str | None = None) -> list[dict]:
         """Full ID-bearing records of exactly one chat, including terminal outcomes."""
@@ -851,13 +913,20 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     """Full scoped originals and a pure bounded window, shared with warm-up."""
     budget = history_char_budget(settings)
     dialogue = Conversations(home / 'conversations.sqlite3')
+    reuse = os.environ.get('STAR_FAST_HISTORY_SNAPSHOT') == '1'
     try:
         rows = dialogue.raw_history_records(settings.project, chat_id)
+        window = conversation_memory.select_window(rows, budget, current_text=current_text)
+        # Opt-in only: avoid a second SQLite file open while retaining
+        # the source digest, scope and complete-turn checkpoint checks.
+        if reuse:
+            checkpoint = conversation_memory.read_checkpoint_connection(
+                dialogue.connection, settings.project, chat_id, records=rows)
     finally:
         dialogue.close()
-    window = conversation_memory.select_window(rows, budget, current_text=current_text)
-    checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
-                                                      chat_id, records=rows)
+    if not reuse:
+        checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
+                                                          chat_id, records=rows)
     return with_sent_times(conversation_memory.respect_checkpoint(window, checkpoint)), rows
 
 
@@ -913,7 +982,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     audio transcript, a note about video frames). Only the owner's own words can become an
     automatically accepted lesson.
     """
-    from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
@@ -1376,7 +1444,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         first = token_timing['first']
-        last = token_timing['last']
         requested = token_timing['requested']
         measured_first = (instant_answer.first_token_ms if instant_answer is not None else
                           model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else

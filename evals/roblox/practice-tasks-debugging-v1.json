@@ -1663,5 +1663,853 @@
       ]
     },
     "split": "development"
+  },
+  {
+    "id": "DBG-26",
+    "category": "roblox-debugging-npc-undeclared-npc-record",
+    "difficulty": 3,
+    "goal": "Repair NPC undeclared npc record in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"Strict mode rejects an undeclared NPCMovement alias.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal state: NPCMovement = { speed = 12 }\nprint(state.speed)\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/luau/type-checking.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The undeclared-npc-record defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Declare typed NPC records explicitly.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "type\\s+NPCMovement\\s*=\\s*\\{\\s*speed\\s*:\\s*number",
+          "why": "NPC undeclared-npc-record: required safe handling 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "type\\s+NPCMovement\\s*=\\s*any\\b",
+          "why": "NPC undeclared-npc-record: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC undeclared-npc-record: required safe handling 1",
+        "Absent: NPC undeclared-npc-record: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-27",
+    "category": "roblox-debugging-npc-humanoid-instance-narrowing",
+    "difficulty": 3,
+    "goal": "Repair NPC humanoid instance narrowing in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"A generic FindFirstChild lookup may be nil or an unexpected class.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal candidate = script.Parent:FindFirstChild(\"Humanoid\")\ncandidate:TakeDamage(5)\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Instance.yaml",
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The humanoid-instance-narrowing defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Narrow an optional Instance with IsA before calling Humanoid methods.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "candidate\\s+and\\s+candidate:IsA\\([\"']Humanoid[\"']\\)",
+          "why": "NPC humanoid-instance-narrowing: required safe handling 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "^candidate:TakeDamage",
+          "why": "NPC humanoid-instance-narrowing: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC humanoid-instance-narrowing: required safe handling 1",
+        "Absent: NPC humanoid-instance-narrowing: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-28",
+    "category": "roblox-debugging-npc-optional-player-character-target",
+    "difficulty": 3,
+    "goal": "Repair NPC optional player character target in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"The NPC attacks a joining player with a nil Character.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function targetPosition(player: Player): Vector3\n    return player.Character.HumanoidRootPart.Position\nend\nreturn targetPosition\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Player.yaml",
+      "content/en-us/reference/engine/classes/BasePart.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The optional-player-character-target defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Check Player.Character and narrow HumanoidRootPart to BasePart.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "Vector3\\?",
+          "why": "NPC optional-player-character-target: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "if\\s+not\\s+character\\s+then\\s+return\\s+nil",
+          "why": "NPC optional-player-character-target: required safe handling 2"
+        },
+        {
+          "id": "required_3",
+          "re": "root\\s+and\\s+root:IsA\\([\"']BasePart[\"']\\)",
+          "why": "NPC optional-player-character-target: required safe handling 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "player\\.Character\\.HumanoidRootPart\\.Position",
+          "why": "NPC optional-player-character-target: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC optional-player-character-target: required safe handling 1",
+        "Present: NPC optional-player-character-target: required safe handling 2",
+        "Present: NPC optional-player-character-target: required safe handling 3",
+        "Absent: NPC optional-player-character-target: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-29",
+    "category": "roblox-debugging-npc-blocked-waypoint-index",
+    "difficulty": 3,
+    "goal": "Repair NPC blocked waypoint index in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"Path.Blocked restarts NPC navigation even for obstacles behind it.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\npath.Blocked:Connect(function(blocked: boolean)\n    if blocked then warn(\"replan\") end\nend)\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Path.yaml",
+      "content/en-us/characters/pathfinding.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The blocked-waypoint-index defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Path.Blocked passes an index, not a boolean; compare with current progress.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "function\\s*\\(\\s*blockedWaypointIndex\\s*:\\s*number\\s*\\)",
+          "why": "NPC blocked-waypoint-index: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "blockedWaypointIndex\\s*>=\\s*currentWaypointIndex",
+          "why": "NPC blocked-waypoint-index: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "blocked\\s*:\\s*boolean",
+          "why": "NPC blocked-waypoint-index: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC blocked-waypoint-index: required safe handling 1",
+        "Present: NPC blocked-waypoint-index: required safe handling 2",
+        "Absent: NPC blocked-waypoint-index: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-30",
+    "category": "roblox-debugging-npc-computeasync-failure-recovery",
+    "difficulty": 3,
+    "goal": "Repair NPC computeasync failure recovery in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"A patrol NPC continues to traverse waypoints after ComputeAsync fails.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\nlocal origin = Vector3.new(0, 0, 0)\nlocal goal = Vector3.new(20, 0, 0)\npath:ComputeAsync(origin, goal)\nprint(#path:GetWaypoints())\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Path.yaml",
+      "content/en-us/characters/pathfinding.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The computeasync-failure-recovery defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Catch ComputeAsync failures and reject non-Success Path.Status.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "pcall\\s*\\(\\s*function\\s*\\(\\s*\\)",
+          "why": "NPC computeasync-failure-recovery: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "if\\s+not\\s+ok\\s+or\\s+path\\.Status\\s*~=\\s*Enum\\.PathStatus\\.Success",
+          "why": "NPC computeasync-failure-recovery: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "^path:ComputeAsync",
+          "why": "NPC computeasync-failure-recovery: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC computeasync-failure-recovery: required safe handling 1",
+        "Present: NPC computeasync-failure-recovery: required safe handling 2",
+        "Absent: NPC computeasync-failure-recovery: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-31",
+    "category": "roblox-debugging-npc-movetofinished-reached-callback",
+    "difficulty": 3,
+    "goal": "Repair NPC movetofinished reached callback in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"An NPC skips a waypoint when MoveToFinished reports a timeout.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal humanoid = script.Parent:WaitForChild(\"Humanoid\") :: Humanoid\nhumanoid.MoveToFinished:Connect(function(_reached)\n    print(\"advance\")\nend)\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The movetofinished-reached-callback defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Treat reached=false from Humanoid.MoveToFinished as failure.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "function\\s*\\(\\s*reached\\s*:\\s*boolean\\s*\\)",
+          "why": "NPC movetofinished-reached-callback: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "if\\s+not\\s+reached\\s+then",
+          "why": "NPC movetofinished-reached-callback: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "function\\s*\\(\\s*_reached\\s*\\)",
+          "why": "NPC movetofinished-reached-callback: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC movetofinished-reached-callback: required safe handling 1",
+        "Present: NPC movetofinished-reached-callback: required safe handling 2",
+        "Absent: NPC movetofinished-reached-callback: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-32",
+    "category": "roblox-debugging-npc-jump-action-at-waypoint",
+    "difficulty": 3,
+    "goal": "Repair NPC jump action at waypoint in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"An NPC stops at ledges even though the path includes Jump actions.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function travel(humanoid: Humanoid, waypoints: {PathWaypoint})\n    for _, waypoint in waypoints do\n        humanoid:MoveTo(waypoint.Position)\n    end\nend\nreturn travel\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/characters/pathfinding.md",
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The jump-action-at-waypoint defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Follow PathWaypoint.Action, not only Position.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "waypoint\\.Action\\s*==\\s*Enum\\.PathWaypointAction\\.Jump",
+          "why": "NPC jump-action-at-waypoint: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "humanoid\\.Jump\\s*=\\s*true",
+          "why": "NPC jump-action-at-waypoint: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "for\\s+_,\\s*waypoint\\s+in\\s+waypoints\\s+do\\s*humanoid:MoveTo",
+          "why": "NPC jump-action-at-waypoint: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC jump-action-at-waypoint: required safe handling 1",
+        "Present: NPC jump-action-at-waypoint: required safe handling 2",
+        "Absent: NPC jump-action-at-waypoint: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-33",
+    "category": "roblox-debugging-npc-waypoint-is-not-a-part",
+    "difficulty": 3,
+    "goal": "Repair NPC waypoint is not a part in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"The NPC indexes waypoint.Position.Position and crashes.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function step(humanoid: Humanoid, waypoint: PathWaypoint)\n    humanoid:MoveTo(waypoint.Position.Position)\nend\nreturn step\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Path.yaml",
+      "content/en-us/reference/engine/classes/Humanoid.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The waypoint-is-not-a-part defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "PathWaypoint.Position is already a Vector3, not a Part.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "humanoid:MoveTo\\s*\\(\\s*waypoint\\.Position\\s*\\)",
+          "why": "NPC waypoint-is-not-a-part: required safe handling 1"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "waypoint\\.Position\\.Position",
+          "why": "NPC waypoint-is-not-a-part: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC waypoint-is-not-a-part: required safe handling 1",
+        "Absent: NPC waypoint-is-not-a-part: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-34",
+    "category": "roblox-debugging-npc-empty-path-waypoint-guard",
+    "difficulty": 3,
+    "goal": "Repair NPC empty path waypoint guard in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"An NPC crashes by indexing the first element of an empty GetWaypoints result.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function start(humanoid: Humanoid, path: Path)\n    local first = path:GetWaypoints()[1]\n    humanoid:MoveTo(first.Position)\nend\nreturn start\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Path.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The empty-path-waypoint-guard defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Guard empty waypoint arrays before indexing.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "if\\s+#waypoints\\s*==\\s*0\\s+then\\s+return",
+          "why": "NPC empty-path-waypoint-guard: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "local\\s+first\\s*=\\s*waypoints\\s*\\[\\s*1\\s*\\]",
+          "why": "NPC empty-path-waypoint-guard: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "path:GetWaypoints\\(\\)\\s*\\[\\s*1\\s*\\]",
+          "why": "NPC empty-path-waypoint-guard: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC empty-path-waypoint-guard: required safe handling 1",
+        "Present: NPC empty-path-waypoint-guard: required safe handling 2",
+        "Absent: NPC empty-path-waypoint-guard: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-35",
+    "category": "roblox-debugging-npc-npc-model-class-refinement",
+    "difficulty": 3,
+    "goal": "Repair NPC npc model class refinement in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"An NPC spawn can yield a Part instead of a Model; .Humanoid is invalid.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function moveNpc(model: Instance)\n    local humanoid = model.Humanoid\n    humanoid:MoveTo(Vector3.new(0, 0, 5))\nend\nreturn moveNpc\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Model.yaml",
+      "content/en-us/reference/engine/classes/Instance.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The npc-model-class-refinement defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Narrow to Model and check FindFirstChildOfClass result before moving.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "if\\s+not\\s+model:IsA\\([\"']Model[\"']\\)\\s+then\\s+return",
+          "why": "NPC npc-model-class-refinement: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "FindFirstChildOfClass\\([\"']Humanoid[\"']\\)",
+          "why": "NPC npc-model-class-refinement: required safe handling 2"
+        },
+        {
+          "id": "required_3",
+          "re": "if\\s+not\\s+humanoid\\s+then\\s+return",
+          "why": "NPC npc-model-class-refinement: required safe handling 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "model\\.Humanoid\\b",
+          "why": "NPC npc-model-class-refinement: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC npc-model-class-refinement: required safe handling 1",
+        "Present: NPC npc-model-class-refinement: required safe handling 2",
+        "Present: NPC npc-model-class-refinement: required safe handling 3",
+        "Absent: NPC npc-model-class-refinement: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-36",
+    "category": "roblox-debugging-npc-missing-primarypart-navigation",
+    "difficulty": 3,
+    "goal": "Repair NPC missing primarypart navigation in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"An NPC lacks PrimaryPart; path setup crashes on nil.Position.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function position(model: Model): Vector3\n    return model.PrimaryPart.Position\nend\nreturn position\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Model.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The missing-primarypart-navigation defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Model.PrimaryPart is optional and must be checked.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "Vector3\\?",
+          "why": "NPC missing-primarypart-navigation: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "if\\s+not\\s+root\\s+then\\s+return\\s+nil",
+          "why": "NPC missing-primarypart-navigation: required safe handling 2"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "model\\.PrimaryPart\\.Position",
+          "why": "NPC missing-primarypart-navigation: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC missing-primarypart-navigation: required safe handling 1",
+        "Present: NPC missing-primarypart-navigation: required safe handling 2",
+        "Absent: NPC missing-primarypart-navigation: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "DBG-37",
+    "category": "roblox-debugging-npc-blocked-listener-replan-cleanup",
+    "difficulty": 3,
+    "goal": "Repair NPC blocked listener replan cleanup in strict Luau",
+    "prompt": "In my Roblox NPC navigation code: \"Every NPC repath adds another Blocked callback and multiplies retries.\"\nLocation: ServerScriptService/NpcController ModuleScript\nBroken Luau:\n```luau\n--!strict\nlocal function watchPath(path: Path)\n    path.Blocked:Connect(function(index: number)\n        warn(index)\n    end)\nend\nreturn watchPath\n```\nFind and repair the mistake in --!strict Luau. Return a fenced Luau code block and explain the cause and repair.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/characters/pathfinding.md",
+      "content/en-us/reference/engine/datatypes/RBXScriptConnection.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "The blocked-listener-replan-cleanup defect remains"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "teaches": "Disconnect the old RBXScriptConnection when switching paths.",
+    "auto": {
+      "strict": true,
+      "compile_mode": "exact",
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "strict mode preserved",
+          "scope": "first_raw"
+        },
+        {
+          "id": "required_1",
+          "re": "blockedConnection\\s*:\\s*RBXScriptConnection\\?",
+          "why": "NPC blocked-listener-replan-cleanup: required safe handling 1"
+        },
+        {
+          "id": "required_2",
+          "re": "blockedConnection:Disconnect\\(\\)",
+          "why": "NPC blocked-listener-replan-cleanup: required safe handling 2"
+        },
+        {
+          "id": "required_3",
+          "re": "blockedConnection\\s*=\\s*path\\.Blocked:Connect",
+          "why": "NPC blocked-listener-replan-cleanup: required safe handling 3"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "forbidden_1",
+          "re": "^\\s*path\\.Blocked:Connect",
+          "why": "NPC blocked-listener-replan-cleanup: unsafe original construct 1"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "Strict Luau compile/type-check and all conservative static defect checks pass"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Strict Luau compile/type-check",
+        "Present: NPC blocked-listener-replan-cleanup: required safe handling 1",
+        "Present: NPC blocked-listener-replan-cleanup: required safe handling 2",
+        "Present: NPC blocked-listener-replan-cleanup: required safe handling 3",
+        "Absent: NPC blocked-listener-replan-cleanup: unsafe original construct 1"
+      ]
+    },
+    "split": "development"
   }
 ]

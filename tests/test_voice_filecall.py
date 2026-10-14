@@ -1,6 +1,5 @@
 """File-driven calls: the scripted caller, the virtual speaker, and the loudspeaker-echo simulation."""
 import json
-import time
 
 import pytest
 
@@ -90,25 +89,22 @@ SILENCE = bytes([0x00, 0x00])
 
 
 def test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording():
-    # A manual clock instead of time.sleep: the old wall-clock version failed when a busy
-    # machine overslept the 0.25 s pause past the 0.45 s upper bound.
-    clock = _ManualClock()
-    speaker = VirtualSpeaker(clock=clock)
-    origin = clock()
-    tone = LOW * 8000                               # 0.5 s at 16 kHz
+    clock = [100.0]
+    speaker = VirtualSpeaker(clock=lambda: clock[0])
+    origin = clock[0]
+    tone = b"\x10\x00" * 8000                       # 0.5 s at 16 kHz
     speaker.play(tone, 16000)
-    speaker.play(tone, 16000)                       # queued behind the first, not mixed over it
-    assert speaker.pending_seconds() == pytest.approx(1.0) and speaker.played_seconds() == 0
-    clock.now += 0.25
+    speaker.play(tone, 16000)
+    assert speaker.pending_seconds() == 1.0 and speaker.played_seconds() == 0
+    clock[0] += 0.25
     assert speaker.level() > 0
-    assert rms(speaker.audible(clock(), 0.032, 16000)) > 0
-    assert speaker.played_seconds() == pytest.approx(0.25)
+    assert rms(speaker.audible(clock[0], 0.032, 16000)) > 0
     speaker.stop()
-    assert speaker.pending_seconds() == 0 and speaker.played_seconds() == pytest.approx(0.25)
+    assert speaker.pending_seconds() == 0 and speaker.played_seconds() == 0.25
     recording, rate = speaker.recording(origin)
-    assert rate == 16000 and len(recording) == 2 * 4000   # only the 0.25 s heard before the stop
-    clock.now += 0.5                                       # past the 0.4 s level hold
-    assert speaker.level() == 0 and rms(speaker.audible(clock(), 0.032, 16000)) == 0
+    assert rate == 16000 and len(recording) == 8000  # exactly 250 ms of PCM16, not queued 1 s
+    clock[0] += 0.5
+    assert speaker.level() == 0 and rms(speaker.audible(clock[0], 0.032, 16000)) == 0
     speaker.reset()
     assert speaker.played_seconds() == 0
 

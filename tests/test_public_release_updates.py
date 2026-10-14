@@ -40,7 +40,7 @@ class Client:
         return self.responses[url]
 
 
-def sample_release(repo, data, version='0.9.2'):
+def sample_release(repo, data, version='1.0.2'):
     name=f'STAR-Setup-v{version}.exe'
     return {'tag_name':'v'+version, 'html_url':f'https://github.com/{repo}/releases/tag/v{version}',
             'assets':[{'name':name,'size':len(data),'digest':'sha256:'+hashlib.sha256(data).hexdigest(),
@@ -53,8 +53,8 @@ def test_source_release_public_without_github_cli():
     result=updates.get_latest(Client(response))
     assert result.available and not result.requires_browser
     assert result.anonymous_access and result.repository==REPO
-    assert result.version=='0.9.2'
-    assert updates._trusted_setup_asset(result)['name']=='STAR-Setup-v0.9.2.exe'
+    assert result.version=='1.0.2'
+    assert updates._trusted_setup_asset(result)['name']=='STAR-Setup-v1.0.2.exe'
 
 
 def test_private_source_returns_manual_browser_fallback():
@@ -65,7 +65,7 @@ def test_private_source_returns_manual_browser_fallback():
 
 def test_forged_private_result_cannot_start_auto_download():
     data=b'MZ'+b'X'*(updates.MIN_INSTALLER_BYTES + 400)
-    result=updates.UpdateResult(True,'0.9.2',updates.RELEASES_URL,
+    result=updates.UpdateResult(True,'1.0.2',updates.RELEASES_URL,
          repository=REPO,assets=tuple(sample_release(REPO,data)['assets']))
     with pytest.raises(PermissionError):updates._trusted_setup_asset(result)
 
@@ -80,15 +80,15 @@ def test_source_public_installer_download_is_hash_verified(tmp_path, monkeypatch
     saved=updates.stage_installer(detected,tmp_path,c)
     assert saved.path.read_bytes()==data
     assert saved.checksum_verified and saved.expected_sha256
-    assert saved.path.parent.name=='v0.9.2'
+    assert saved.path.parent.name=='v1.0.2'
 
 
 def test_verified_auto_launch_restarts_via_silent_installer(tmp_path, monkeypatch):
     monkeypatch.setattr(updates.sys,'platform','win32')
-    installer=tmp_path/'STAR-Setup-v0.9.2.exe'
+    installer=tmp_path/'STAR-Setup-v1.0.2.exe'
     installer.write_bytes(b'MZ'+b'Z'*(updates.MIN_INSTALLER_BYTES+400))
     digest=hashlib.sha256(installer.read_bytes()).hexdigest()
-    candidate=updates.InstallerCandidate(installer,'0.9.2',True,digest)
+    candidate=updates.InstallerCandidate(installer,'1.0.2',True,digest)
     events=[]
     monkeypatch.setattr(updates.subprocess,'Popen',lambda argv, **kwargs:events.append((argv,kwargs)))
     updates.launch_installer(candidate,unattended=True)
@@ -97,7 +97,7 @@ def test_verified_auto_launch_restarts_via_silent_installer(tmp_path, monkeypatc
     assert '/SILENT' in args and '/CLOSEAPPLICATIONS' in args and '/NORESTART' in args
     assert kwargs['shell'] is False
     with pytest.raises(PermissionError):
-        updates.launch_installer(updates.InstallerCandidate(installer,'0.9.2',False),unattended=True)
+        updates.launch_installer(updates.InstallerCandidate(installer,'1.0.2',False),unattended=True)
 
 
 def test_old_update_cleanup_only_removes_outdated_versioned_downloads(tmp_path):
@@ -117,12 +117,13 @@ def test_old_update_cleanup_only_removes_outdated_versioned_downloads(tmp_path):
 def test_windows_installer_replaces_old_dependencies_and_restarts_silently():
     script=(Path(__file__).resolve().parents[1]/'installer/STAR.iss').read_text()
     assert 'AppId={{E2B5518B-30A1-409D-AF44-6F773BF05C97}' in script
-    assert '[InstallDelete]' in script
-    assert 'Type: filesandordirs; Name: "{app}\\_internal"' in script
+    # The old runtime is replaced as a whole: moved aside before the copy, restored if Setup fails
+    # (issue 120; tests/test_installer_upgrade_rollback.py checks the [Code] in detail).
+    assert "MoveAside(RuntimeDir)" in script and "RuntimeDir = '_internal';" in script
     assert 'Flags: nowait skipifnotsilent' in script
     assert 'Flags: nowait postinstall skipifsilent' in script
-    guarded=script.split('[InstallDelete]',1)[1].split('[Files]',1)[0]
-    assert '{userappdata}\\STAR' not in guarded.splitlines()[1:]
+    code=script.replace('\r\n','\n').split('\n[Code]\n',1)[1]
+    assert 'userappdata' not in code.lower()
 
 
 def test_site_downloads_match_an_existing_release_channel():
@@ -136,9 +137,9 @@ def test_site_downloads_match_an_existing_release_channel():
 def test_updater_queries_only_the_official_release_endpoint():
     """Public Star-AI Releases, not a deprecated second channel, are authoritative."""
     payload=b'MZ'+b'Q'*(updates.MIN_INSTALLER_BYTES+400)
-    client=Client({updates.API:Response(200,sample_release(REPO,payload,'0.9.5'))})
+    client=Client({updates.API:Response(200,sample_release(REPO,payload,'1.0.5'))})
     result=updates.get_latest(client)
-    assert result.available and result.version=='0.9.5'
+    assert result.available and result.version=='1.0.5'
     assert result.repository==REPO
     assert client.called==[updates.API]
     assert not hasattr(updates, 'PUBLIC_API')
@@ -153,7 +154,7 @@ def test_checked_download_progress_and_local_cache(tmp_path,monkeypatch):
     release=sample_release(REPO,payload)
     uri=release['assets'][0]['browser_download_url']
     client=Client({uri:Response(200,data=payload)})
-    result=updates.UpdateResult(True,'0.9.2',release['html_url'],
+    result=updates.UpdateResult(True,'1.0.2',release['html_url'],
        repository=REPO,anonymous_access=True,assets=tuple(release['assets']))
     events=[]
     one=updates.stage_installer(result,tmp_path,client,progress=lambda done,total:events.append((done,total)))

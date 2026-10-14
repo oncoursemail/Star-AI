@@ -1,0 +1,9 @@
+{
+  "name": "Harbor Warehouse",
+  "style": "industrial",
+  "width_studs": 48,
+  "depth_studs": 32,
+  "floors": 2,
+  "bays": 4,
+  "story_height_studs": 13
+}

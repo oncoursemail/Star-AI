@@ -3,7 +3,10 @@
 One setting per capability (`media_images`, `media_voice`, `media_video`), one function every code
 path asks (`require`), and one description the Settings page shows (`describe`). An option that
 does not exist is listed as unavailable with the reason; choosing it never falls back silently
-to the other place.
+to the other place. `fixable` tells the page whether a setting could make an option available
+(connect STAR Server, install the on-device brain) or whether this install can never offer it
+(no image or voice model on servers without a graphics card); the page explains the second kind
+instead of drawing it as a choice.
 
 The speed notes come from `media_measurements.py`: numbers measured on the owner's hardware,
 each with its date. Where a number is an estimate from published measurements it says so.
@@ -62,8 +65,8 @@ def _images(settings, home: Path | None) -> dict:
                  'measurements, not measured on the servers. ' if high else '')
               + (f"This PC makes the same image in about {_seconds(sizes.get('1024x1024'))} s."
                  if sizes.get('1024x1024') else ''))
-    return {'pc': {'available': True, 'note': note, 'reason': ''},
-            'servers': {'available': False, 'note': '', 'reason': reason.strip()}}
+    return {'pc': {'available': True, 'note': note, 'reason': '', 'fixable': True},
+            'servers': {'available': False, 'note': '', 'reason': reason.strip(), 'fixable': False}}
 
 
 def _voice(settings, home: Path | None) -> dict:
@@ -80,8 +83,8 @@ def _voice(settings, home: Path | None) -> dict:
                  f"{pc['tts_cpu_seconds']} s to speak each sentence (against {pc['asr_gpu_seconds']} s and "
                  f"{pc['tts_gpu_seconds']} s on the graphics card), plus sending the audio over the network. "
                  'Not measured on the servers.' if pc else ''))
-    return {'pc': {'available': True, 'note': note, 'reason': ''},
-            'servers': {'available': False, 'note': '', 'reason': reason.strip()}}
+    return {'pc': {'available': True, 'note': note, 'reason': '', 'fixable': True},
+            'servers': {'available': False, 'note': '', 'reason': reason.strip(), 'fixable': False}}
 
 
 def _video(settings, home: Path | None) -> dict:
@@ -101,10 +104,10 @@ def _video(settings, home: Path | None) -> dict:
     brain = bool(home and (Path(home) / 'brain.json').is_file())
     pc_note = ('The on-device brain on your graphics card reads the frames; nothing leaves this PC. '
                + (pc.get('note') or 'Not measured yet on this PC.'))
-    return {'servers': {'available': server_set, 'note': note,
+    return {'servers': {'available': server_set, 'note': note, 'fixable': True,
                         'reason': '' if server_set else
                         'Not available: no STAR Server is connected. Add its address and key in Settings → STAR Server.'},
-            'pc': {'available': brain, 'note': pc_note,
+            'pc': {'available': brain, 'note': pc_note, 'fixable': True,
                    'reason': '' if brain else
                    'Not available: the on-device brain is not installed (Settings → On-device brain). '
                    'It shares the graphics card with image generation.'}}
