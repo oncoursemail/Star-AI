@@ -242,6 +242,19 @@ def test_fix_close_gap_moves_the_rest_of_the_route():
     assert moved["P1"] == 83 and moved["P2"] == 93.0 and moved["Goal"] == 112.5
 
 
+def test_failed_first_leg_from_the_spawn_is_reported_not_fixed():
+    # A route that starts on a part (not the spawn): the probe's first leg is spawn -> StartFloor. A failure there has
+    # no previous route surface; the fixer must not wrap around to the LAST surface and move the whole course.
+    plan = clean_plan()
+    plan["route"]["waypoints"] = ["StartFloor", "P1", "P2", "P3", "Goal"]
+    probe = studio_lab.parse_probe(probe_lines("abcd1234", [{"name": "StartFloor", "reached": False}]), "abcd1234")
+    defects = studio_lab.diagnose(plan, {"ok": True}, probe, [])
+    assert [d["code"] for d in defects] == ["route-failed"] and defects[0]["fix"] is None
+    for fix in ("close-gap", "lower-rest"):
+        fixed, changes = studio_lab.fix_plan(plan, [{"code": "x", "fix": fix, "object": "StartFloor"}])
+        assert fixed == plan and changes[0]["fix"] is None
+
+
 def test_fix_shift_map_clears_foreign_parts():
     plan = clean_plan()
     defects = [{"code": "foreign-overlap", "fix": "shift-map",
