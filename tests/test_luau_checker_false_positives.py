@@ -179,6 +179,16 @@ def test_known_good_corpus_has_no_unclassified_findings():
     sources = corpus()
     dump = load_api_dump(API_DUMP)
     counts, accepted, unexpected = report(sources, dump)
+    assert len(sources) == 46, "Review corpus changes and recompute precision"
+    assert dict(counts) == {
+        "luau_lint_all_modes": 7,
+        "luau_safety": 1,
+        "luau_server_security": 0,
+        "roblox_api_checker": 92,
+    }, "Reclassify changed checker findings before updating the baseline"
+    assert len(accepted) == 100
+    assert sum(1 for _, _, _, _, verdict, _ in accepted
+               if verdict == "true_positive") == 2
     print(f"corpus_count={len(sources)}")
     print("corpus_files=" + repr([name for name, _, _ in sources]))
     print("checker_finding_counts=" + repr(dict(sorted(counts.items()))))

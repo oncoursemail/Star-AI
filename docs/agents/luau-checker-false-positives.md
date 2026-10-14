@@ -20,7 +20,7 @@ First GitHub Linux Python workflow on commit `318f12e7` failed as expected:
 **108 unclassified findings** across 46 source snippets, measured from the
 failing test output (not inferred from source patterns).
 
-| Checker entrypoint | Before fixes | Expected after narrow fixes |
+| Checker entrypoint | Before fixes | After narrow fixes (asserted by CI regression) |
 | --- | ---: | ---: |
 | `luau_lint_all_modes` | 15 | 7 |
 | `luau_safety` | 1 | 1 |
@@ -35,8 +35,8 @@ warning to `while` and `repeat` loops. One `touched-debounce` warning
 on the explicitly guarded `KillService` was removed by acknowledging
 a last-hit map used together with a cooldown constant and conditional.
 
-**Confirmed small-scope false positives:** 8 before, 0 after *if*
-the follow-up GitHub checker confirms the two fixes. Rate:
+**Confirmed narrow-heuristic false positives:** 8 before, 0 after according
+to the regression's exact per-checker count assertions. Rate:
 `8 / 46 = 0.1739` findings per snippet initially; anticipated
 `0 / 46 = 0` after. This is not a model correctness probability.
 
