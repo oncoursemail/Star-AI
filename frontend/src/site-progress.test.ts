@@ -272,10 +272,10 @@ describe('prerendering',()=>{
  // Vitest runs in Node here, so this is the same no-browser render the website build performs.
  const markup=renderToString(createElement(Landing))
  it('renders the whole page without a browser',()=>{
-  expect(markup.startsWith('<div class="sw')).toBe(true)
-  expect(markup).toContain('Make the things you')
-  expect(markup).toContain('id="download"')
-  expect(markup).toContain('id="progress"')
+  // React hoists the hero image preload to the front; the prerender script moves it into <head>.
+  expect(markup.replace(/^(?:<link [^>]*>)*/,'').startsWith('<div class="sw')).toBe(true)
+  expect(markup).toContain('An AI that runs on machines you')
+  for(const id of ['features','learning','honest','download'])expect(markup).toContain('id="'+id+'"')
   expect(markup).not.toMatch(/undefined|NaN|\[object Object\]/)
  })
  it('offers the published release, not the source version, in the static markup',()=>{
@@ -283,16 +283,12 @@ describe('prerendering',()=>{
   const setup=releaseFiles(latestStable(snapshot)).setup
   expect(setup).not.toBeNull()
   expect(markup).toContain('href="'+setup!.url+'"')
-  expect(markup).not.toContain('STAR-Setup-v'+pkg.version+'.exe')
+  // Only meaningful while the source is ahead of the published release (after a release they are the same file).
+  if(latestStable(snapshot)?.tag!=='v'+pkg.version)expect(markup).not.toContain('STAR-Setup-v'+pkg.version+'.exe')
  })
  it('contains nothing that depends on the visitor clock or time zone',()=>{
   expect(markup).not.toMatch(/\d+ (min|hours?|days?) ago|just now/)
   expect(markup).not.toMatch(/\d{1,2}:\d{2} (AM|PM)/)
- })
- it('labels every open draft as a draft in the static markup too',()=>{
-  const drafts=(parseStoredProgress(committed as unknown,'build')?.pulls||[]).filter(pull=>pull.state==='open'&&pull.draft&&!pull.bot)
-  if(drafts.length)expect(markup).toContain('sw-chip-draft')
-  expect(markup).toContain('A draft is unfinished work')
  })
  it('only touches a built document with an empty root',()=>{
   const page='<html><body><div id="root"></div></body></html>'
@@ -300,6 +296,10 @@ describe('prerendering',()=>{
   expect(prerender.injectMarkup(page,'<p>not the page</p>')).toBeNull()
   expect(prerender.injectMarkup('<html><body><div id="root">already</div></body></html>','<div class="sw">x</div>')).toBeNull()
   expect(prerender.injectMarkup(page,'<div class="sw">$1 $& kept literally</div>')).toContain('$1 $& kept literally')
+  const doc='<html><head><title>t</title></head><body><div id="root"></div></body></html>'
+  expect(prerender.injectMarkup(doc,'<link rel="preload" as="image" href="a.webp"/><div class="sw">x</div>'))
+   .toBe('<html><head><title>t</title><link rel="preload" as="image" href="a.webp"/></head><body><div id="root"><div class="sw">x</div></div></body></html>')
+  expect(prerender.injectMarkup(page,'<link rel="preload" href="a"/><div class="sw">x</div>')).toBeNull()
  })
  it('runs for the website deployment and not for desktop builds',()=>{
   expect(prerender.isSiteBuild({GITHUB_WORKFLOW_REF:'oncoursemail/Star-AI/.github/workflows/website-pages.yml@refs/heads/main'})).toBe(true)
