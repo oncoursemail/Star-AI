@@ -193,3 +193,69 @@ def test_fetch_is_refused_without_the_web_switch():
                       prompt="Calculate 2 + 2", image_paths=[], now="", on_event=events.append)
         assert {"event": "tool_rejected", "tool": "star_web_fetch"} in events
     asyncio.run(run())
+
+
+# -- hostile or broken replies end the tool call, never the chat turn -------------------------------------------
+
+@pytest.mark.parametrize("charset", ["bogus", "rot13", "base64", "zlib"])
+def test_unknown_or_non_text_charset_falls_back_to_utf8(charset):
+    headers = {"content-type": f"text/html; charset={charset}"}
+    transport = serve({"/": (200, headers, "<title>Café</title><p>naïve text</p>".encode())})
+    page = asyncio.run(fetch_page("https://site.example/", transport=transport, resolver=public_resolver))
+    assert page.title == "Café" and page.text == "naïve text"
+
+
+def test_quoted_known_charset_is_honoured():
+    headers = {"content-type": 'text/html; charset="iso-8859-1"'}
+    transport = serve({"/": (200, headers, "<p>café</p>".encode("latin-1"))})
+    page = asyncio.run(fetch_page("https://site.example/", transport=transport, resolver=public_resolver))
+    assert page.text == "café"
+
+
+def test_malformed_redirect_location_is_refused_not_raised():
+    # httpx itself rejects this Location; the urljoin guard in fetch_page covers spellings it lets through.
+    transport = serve({"/": (302, {"location": "http://[::1"}, b"")})
+    with pytest.raises((FetchRefused, httpx.HTTPError)):
+        asyncio.run(fetch_page("https://site.example/", transport=transport, resolver=public_resolver))
+    result = asyncio.run(web_fetch.tool_result({"url": "https://site.example/"}, transport=transport,
+                                               resolver=public_resolver))
+    assert result["isError"] is True and result["content"][0]["text"].startswith(("Not fetched", "Could not read"))
+
+
+def test_urljoin_failure_becomes_fetch_refused(monkeypatch):
+    def broken_join(base, location):
+        raise ValueError("Invalid IPv6 URL")
+    monkeypatch.setattr(web_fetch, "urljoin", broken_join)
+    transport = serve({"/": (302, {"location": "/next"}, b"")})
+    with pytest.raises(FetchRefused, match="malformed redirect"):
+        asyncio.run(fetch_page("https://site.example/", transport=transport, resolver=public_resolver))
+
+
+def test_unexpected_error_inside_fetch_is_a_tool_error(monkeypatch):
+    async def explode(*args, **kwargs):
+        raise LookupError("unknown encoding: x-hostile")
+    monkeypatch.setattr(web_fetch, "fetch_page", explode)
+    result = asyncio.run(web_fetch.tool_result({"url": "https://site.example/"}))
+    assert result == {"isError": True,
+                      "content": [{"type": "text", "text": "Could not read the page (LookupError)"}]}
+
+
+GATEWAY = ("192.168.1.20", 8093)  # documentation address (star:allow)
+
+
+def test_public_page_cannot_redirect_onto_the_search_gateway():
+    exempt = frozenset({GATEWAY})
+    transport = serve({"/bounce": (302, {"location": "http://192.168.1.20:8093/search?q=x"}, b""),  # documentation address (star:allow)
+                       "/search": (200, HTML, b"<p>private gateway</p>")})
+    with pytest.raises(FetchRefused):
+        asyncio.run(fetch_page("https://site.example/bounce", transport=transport, resolver=public_resolver,
+                               exempt=exempt))
+
+
+def test_gateway_may_still_redirect_within_itself():
+    exempt = frozenset({GATEWAY})
+    transport = serve({"/search": (301, {"location": "/search/"}, b""),
+                       "/search/": (200, HTML, b"<p>results</p>")})
+    page = asyncio.run(fetch_page("http://192.168.1.20:8093/search", transport=transport,  # documentation address (star:allow)
+                                  resolver=public_resolver, exempt=exempt))
+    assert page.text == "results"

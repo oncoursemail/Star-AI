@@ -17,6 +17,7 @@ Any public http(s) URL may be read (no allowlist), with these guards:
 from __future__ import annotations
 
 import asyncio
+import codecs
 from dataclasses import dataclass
 from html.parser import HTMLParser
 import ipaddress
@@ -219,8 +220,16 @@ def readable_text(html: str) -> tuple[str, str]:
 
 
 def _charset(content_type: str) -> str:
-    match = re.search(r"charset=([\w.-]+)", content_type or "", re.I)
-    return match.group(1) if match else "utf-8"
+    """The declared text encoding when Python knows it, else UTF-8 (a page may declare anything)."""
+    match = re.search(r"charset=[\"']?([\w.-]+)", content_type or "", re.I)
+    if not match:
+        return "utf-8"
+    try:
+        info = codecs.lookup(match.group(1))
+    except LookupError:
+        return "utf-8"
+    # bytes.decode refuses codecs that are not text encodings (rot13, base64, zlib): use UTF-8 for those too.
+    return info.name if getattr(info, "_is_text_encoding", True) else "utf-8"
 
 
 async def fetch_page(url: str, *, transport: httpx.AsyncBaseTransport | None = None, resolver=_resolve,
@@ -228,10 +237,15 @@ async def fetch_page(url: str, *, transport: httpx.AsyncBaseTransport | None = N
     """Fetch and reduce one page. Raises FetchRefused (bad URL / address / limit) or httpx.HTTPError."""
     deadline = time.monotonic() + TOTAL_TIMEOUT
     current = url
+    came_from_exempt = False
     async with httpx.AsyncClient(transport=transport, trust_env=False, follow_redirects=False,
                                  timeout=httpx.Timeout(10.0, connect=5.0)) as client:
         for _hop in range(MAX_REDIRECTS + 1):
-            host, port, address = await asyncio.to_thread(check_url, current, resolver=resolver, exempt=exempt)
+            # The search gateway exemption covers the first request and redirects the gateway itself sends;
+            # a public page must not be able to bounce a fetch onto the private gateway address.
+            hop_exempt = exempt if (_hop == 0 or came_from_exempt) else frozenset()
+            host, port, address = await asyncio.to_thread(check_url, current, resolver=resolver, exempt=hop_exempt)
+            came_from_exempt = (host, port) in hop_exempt
             parts = urlsplit(current)
             # Connect to the checked address; the name goes in Host and in TLS SNI (certificate check).
             target_host = f"[{address}]" if ":" in address else address
@@ -253,7 +267,10 @@ async def fetch_page(url: str, *, transport: httpx.AsyncBaseTransport | None = N
                     location = response.headers.get("location", "")
                     if not location:
                         raise FetchRefused("Redirect without a location")
-                    current = urljoin(current, location)
+                    try:
+                        current = urljoin(current, location)
+                    except ValueError as exc:
+                        raise FetchRefused("The site sent a malformed redirect") from exc
                     continue
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -316,4 +333,7 @@ async def tool_result(args: dict, *, settings=None, transport=None, resolver=_re
         status = getattr(getattr(exc, "response", None), "status_code", None)
         detail = f"HTTP {status}" if status else type(exc).__name__
         return {"isError": True, "content": [{"type": "text", "text": f"Could not read the page ({detail})"}]}
+    except Exception as exc:   # a hostile or broken reply must end this tool call, not the chat turn
+        return {"isError": True, "content": [{"type": "text",
+                                              "text": f"Could not read the page ({type(exc).__name__})"}]}
     return {"isError": False, "content": [{"type": "text", "text": page_context(page)}]}
