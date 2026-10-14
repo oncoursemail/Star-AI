@@ -85,3 +85,11 @@ def test_corpus_cannot_be_silently_changed_to_invalid_or_external_sources(monkey
     finally:
         monkeypatch.setattr(api, "DATA", original)
         api.load_confusions.cache_clear()
+
+
+def test_luau_long_bracket_strings_cannot_trigger_confusion_matches():
+    source = "[=[\nobject:FindChild()\n]=]\n" \
+             "[==[object:GetAllChildren()]==]\n" \
+             "object:FindChild()\n"
+    assert [(row["line"], row["column"], row["wrong"]) for row in
+            api.scan_luau(source)] == [(5, 7, ":FindChild(")]

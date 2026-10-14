@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-BUNDLED_TREES = ("star/skill_packs", "star/data")
+BUNDLED_TREES = ("star/skill_packs", "star/data", "star/studio_lab_specs")
 
 
 def _runtime_data_files() -> list[str]:

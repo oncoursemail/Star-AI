@@ -1,5 +1,8 @@
 """Regression coverage for STAR's in-place chat thread migration."""
 import sqlite3
+from datetime import datetime, timezone
+
+from star import desktop_core as core
 
 import pytest
 
@@ -87,5 +90,88 @@ def test_a_long_first_message_gives_a_title_that_ends_with_an_ellipsis(tmp_path)
         short = store.new_chat("STAR")
         store.add("STAR", "user", "  Say   hello\nin three words.  ", chat_id=short)
         assert store.list_chats("STAR")[0]["title"] == "Say hello in three words."
+    finally:
+        store.close()
+
+
+def _freeze_chat_clock(monkeypatch):
+    """Reproduce a coarse clock without changing system time or other modules."""
+    class CoarseUtc(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2026, 10, 13, 12, 0, tzinfo=tz or timezone.utc)
+
+    monkeypatch.setattr(core, "datetime", CoarseUtc)
+
+
+def test_equal_clock_ticks_keep_real_last_activity_first_across_50_restarts(tmp_path, monkeypatch):
+    _freeze_chat_clock(monkeypatch)
+    for index in range(50):
+        db = tmp_path / f"coarse-clock-{index}.sqlite3"
+        store = Conversations(db)
+        try:
+            first = store.new_chat("P")
+            store.add("P", "user", "first question", chat_id=first)
+            second = store.new_chat("P")
+            store.add("P", "user", "second question", chat_id=second)
+            assert [c["id"] for c in store.list_chats("P")] == [second, first], index
+            # Updating an *older* row within the same clock tick must restore it
+            # to the top, not merely leave the last inserted row first.
+            store.add("P", "assistant", "newest activity", chat_id=first)
+            assert store.list_chats("P")[0]["id"] == first, index
+            assert store.recent("P", chat_id=first)[-1][1] == "newest activity"
+            assert store.recent("P", chat_id=second)[0][1] == "second question"
+            store.switch_chat("P", second)
+            assert store.active_chat("P") == second
+            # No explicitly active chat after restart: choose most recently
+            # *updated* thread deterministically, even at equal wall-clock ticks.
+            with store.connection:
+                store.connection.execute("DELETE FROM active_chats WHERE project='P'")
+            assert store.active_chat("P") == first, index
+        finally:
+            store.close()
+        reopened = Conversations(db)
+        try:
+            assert reopened.active_chat("P") == first, index
+            assert reopened.list_chats("P")[0]["id"] == first, index
+            assert reopened.recent("P", chat_id=second)[0][1] == "second question"
+        finally:
+            reopened.close()
+
+
+def test_preupgrade_equal_timestamp_chats_use_rowid_tiebreak_without_migration(tmp_path, monkeypatch):
+    _freeze_chat_clock(monkeypatch)
+    db = tmp_path / "old-format.sqlite3"
+    stamp = "2026-10-13T12:00:00+00:00"
+    with sqlite3.connect(db) as connection:
+        connection.execute(
+            "CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+            "project TEXT NOT NULL, role TEXT NOT NULL, body TEXT NOT NULL, "
+            "created TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE chats (project TEXT NOT NULL, id TEXT NOT NULL, "
+            "title TEXT NOT NULL, created TEXT NOT NULL, updated TEXT NOT NULL, "
+            "PRIMARY KEY(project,id))"
+        )
+        connection.executemany(
+            "INSERT INTO chats VALUES (?,?,?,?,?)",
+            [("P", "older", "Old", stamp, stamp), ("P", "newer", "New", stamp, stamp)]
+        )
+        connection.execute(
+            "INSERT INTO messages(project,role,body,created) VALUES (?,?,?,?)",
+            ("Other", "user", "preserved legacy text", stamp)
+        )
+    store = Conversations(db)
+    try:
+        assert [c["id"] for c in store.list_chats("P")] == ["newer", "older"]
+        assert store.active_chat("P") == "newer"
+        assert store.recent("Other", chat_id="legacy")[0][1] == "preserved legacy text"
+        assert store.connection.execute(
+            "SELECT created,updated FROM chats WHERE id='older'"
+        ).fetchone() == (stamp, stamp)
+        # The next write uses a stamp beyond the old tie and sorts the correct chat.
+        store.add("P", "user", "older becomes newest", chat_id="older")
+        assert store.list_chats("P")[0]["id"] == "older"
     finally:
         store.close()

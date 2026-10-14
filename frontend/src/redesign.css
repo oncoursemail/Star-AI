@@ -671,3 +671,18 @@
     max-width: none;
   }
 }
+
+/* A blocked + menu entry gives its reason under its name, so a longer reason ("Add your STAR Server key in
+ * Settings") wraps instead of running over the label (chat.css keeps both on one unwrapped line). */
+.shell .cmp-menu-item.is-blocked {
+  flex-wrap: wrap;
+  row-gap: 0;
+  padding-block: 6px;
+}
+.shell .cmp-menu-item.is-blocked small {
+  flex: 1 0 100%;
+  padding-left: 26px;
+  overflow: visible;
+  line-height: 1.35;
+  white-space: normal;
+}

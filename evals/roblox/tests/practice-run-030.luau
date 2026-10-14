@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(100,20), {buyer=20,seller=80}))
+check("case 2", deepEqual(fn(100,100), {buyer=100,seller=0}))
+check("case 3", deepEqual(fn(0,0), {buyer=0,seller=0}))
+check("case 4", deepEqual(fn(1,0), {buyer=0,seller=1}))
+check("case 5", deepEqual(fn(50,51), nil))
+check("case 6", deepEqual(fn(100,-1), nil))
