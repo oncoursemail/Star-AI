@@ -111,7 +111,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 25
+    # Every reader is listed by name below (no separate count: it only made unrelated PRs collide).
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
@@ -153,7 +153,6 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(PACKAGE_DATA_SITES) == 15
     assert len(bundled) == 6  # two optional readers share the skill-pack directory
 
 
