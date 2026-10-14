@@ -21,10 +21,11 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
          "roblox-tweenservice-easing",
          "roblox-studio-mcp-workflow", "roblox-replication-hot-paths", "roblox-editable-memory-streaming",
-         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender", "roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints", "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs", "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud"]
+         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender", "roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints", "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs", "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud",
+         "roblox-purchases-badges"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-                      "roblox-tweenservice-easing"}
+                      "roblox-tweenservice-easing", "roblox-purchases-badges"}
 # Typed gameplay and platform packs; their grounding is checked in test_roblox_gameplay_skill_packs.py.
 GAMEPLAY_PACKS = {"roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints",
                   "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs",

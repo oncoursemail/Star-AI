@@ -216,6 +216,10 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:Open Cloud|OpenCloud|apis\.roblox\.com|cloud/v2|x-api-key|HttpService|RequestAsync|GetSecret|secrets? store|"
         r"MessagingService|SubscribeAsync|webhooks?|external (?:server|service|tool)|from (?:outside|Python|Node))\b",
         re.IGNORECASE),
+    "roblox-purchases-badges": re.compile(
+        r"\b(?:ProcessReceipt|PurchaseId|PromptProductPurchase|PromptGamePassPurchase|UserOwnsGamePassAsync|"
+        r"BadgeService|AwardBadgeAsync|UserHasBadgeAsync|developer products?|game passes?|purchase receipts?|leaderstats)\b",
+        re.IGNORECASE),
 }
 
 

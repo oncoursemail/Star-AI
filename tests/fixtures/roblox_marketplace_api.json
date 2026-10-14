@@ -1,0 +1,108 @@
+{
+  "Classes": [
+    {
+      "Name": "Instance",
+      "Superclass": "<<<ROOT>>>",
+      "Members": [
+        {
+          "Name": "FindFirstChild"
+        },
+        {
+          "Name": "IsA"
+        },
+        {
+          "Name": "Parent"
+        },
+        {
+          "Name": "Name"
+        },
+        {
+          "Name": "Destroy"
+        }
+      ]
+    },
+    {
+      "Name": "Folder",
+      "Superclass": "Instance",
+      "Members": []
+    },
+    {
+      "Name": "IntValue",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "Value"
+        }
+      ]
+    },
+    {
+      "Name": "Player",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "UserId"
+        }
+      ]
+    },
+    {
+      "Name": "Players",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "GetPlayerByUserId"
+        }
+      ],
+      "Tags": [
+        "Service"
+      ]
+    },
+    {
+      "Name": "DataStoreService",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "GetDataStore"
+        }
+      ],
+      "Tags": [
+        "Service"
+      ]
+    },
+    {
+      "Name": "MarketplaceService",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "ProcessReceipt"
+        },
+        {
+          "Name": "PromptProductPurchase"
+        },
+        {
+          "Name": "PromptGamePassPurchase"
+        },
+        {
+          "Name": "UserOwnsGamePassAsync"
+        }
+      ],
+      "Tags": [
+        "Service"
+      ]
+    },
+    {
+      "Name": "BadgeService",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "UserHasBadgeAsync"
+        },
+        {
+          "Name": "AwardBadgeAsync"
+        }
+      ],
+      "Tags": [
+        "Service"
+      ]
+    }
+  ]
+}
