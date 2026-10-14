@@ -197,7 +197,7 @@ def validate(spec: str | dict[str, Any]) -> tuple[dict[str, Any], tuple[Diagnost
                      | ({"states", "enabled"} if kind in {"button", "toggle", "input"} else set())
                      | ({"value"} if kind == "progress" else set()))
         for key in obj:
-            if key not in supported:
+            if key in NODE_KEYS and key not in supported:  # unknown keys are reported once above
                 issue("error", path + "." + key, f"property not supported on {kind}")
         ident = obj.get("id")
         if not isinstance(ident, str) or not ID_RE.fullmatch(ident):

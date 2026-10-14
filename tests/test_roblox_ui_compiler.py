@@ -383,3 +383,12 @@ return {
     )
     assert fixture == expected
 
+
+
+def test_unknown_node_key_is_reported_once():
+    spec = {"root": {"type": "screen", "id": "r", "children": [
+        {"type": "frame", "id": "f", "bogus": 1}]}}
+    with pytest.raises(SpecError) as caught:
+        validate(spec)
+    paths = [d.path for d in caught.value.diagnostics]
+    assert paths.count("$.root.children[0].bogus") == 1
