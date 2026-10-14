@@ -17,6 +17,10 @@ This module
     (where the subject's head is on screen, its size, the FOV, the FACS values) and a measured critique of framing,
     timing, easing, letterbox, VFX and return of control. All advisory; nothing is saved or published.
 
+The demo (version 4) shows the cinematic defaults the pack teaches: a look preset, thirds composition solved from the
+lab's own samples, eased push-ins and handheld drift, rim light and a focus pull on close-ups, accent-sized VFX, a free
+Dynamic Head with layered clothing, a dressed set. Captures run at high Studio render quality (restored afterwards).
+
 CLI: python -m star.roblox_cutscene_studio plan|run|remove ...
 """
 from __future__ import annotations
@@ -35,14 +39,15 @@ from typing import Any
 
 PACK_DIR = Path(__file__).resolve().parent / "skill_packs" / "roblox-cutscenes"
 LUAU_DIR = PACK_DIR / "luau"
-SHARED_MODULES = ("CutsceneTypes", "CameraPath", "ExpressionPlayer", "CutsceneUi", "ActorMotion", "CutscenePlayer",
-                  "CutsceneClient")
+SHARED_MODULES = ("CutsceneTypes", "CameraPath", "ExpressionPlayer", "CutsceneUi", "ActorMotion", "CutsceneLook",
+                  "CutscenePlayer", "CutsceneClient")
 SERVER_MODULE = "CutsceneService"
 LAB_FOLDER = "StarCutsceneLab"          # ReplicatedStorage.StarCutsceneLab (modules), ServerScriptService (Script)
 LAB_CLIENT = "StarCutsceneLabClient"    # StarterPlayer.StarterPlayerScripts.StarCutsceneLabClient
 VFX_FOLDER = "StarVfx"                  # ReplicatedStorage.StarVfx: VFX composer modules for vfx cues
 MARK = "STARCUT"
 STAGE_ORIGIN = (-300.0, 0.0, 300.0)     # empty baseplate in STAR Test Place, away from the lobby and map drafts
+STAGE_ORIGIN_V4 = (-300.0, 4.0, 300.0)  # v4 set: terrain ground fills y 0..4 above the baseplate (no z-fighting)
 MAX_FRAMES = 110
 
 KINDS = ("spawn", "walk", "anim", "expression", "blink", "talk", "caption", "vfx", "letterbox", "fade", "despawn")
@@ -52,6 +57,28 @@ EASING_STYLES = ("Linear", "Sine", "Back", "Quad", "Quart", "Quint", "Bounce", "
                  "Cubic")
 EASING_DIRECTIONS = ("In", "Out", "InOut")
 GESTURES = ("recoil", "nod", "reach", "wave", "point", "cheer")
+# CutsceneLook presets (Luau: CutsceneLook.PRESETS / CutsceneTypes.LOOKS; tests keep the lists in step).
+LOOKS = ("golden_hour", "dusk", "battle", "neutral")
+# Small cutscene accent abilities (CutsceneLook.ACCENTS); the VFX composer's own abilities are full-size.
+ACCENTS = ("accent_pulse", "accent_hit")
+# Free avatars for cutscene actors (catalog items priced 0 by Roblox, or parts of free bundles; nothing bought).
+# HumanoidDescription fields via CutsceneService.describe. `legacy` = the v3 lab look (body colours only).
+AVATARS: dict[str, dict] = {
+    "dylan_v3": {"legacy": True, "head": 10687288296},
+    "explorer": {
+        "head": 10725826963,           # Man Face - Head (Dynamic Head, free "Man Face" bundle 949)
+        "brows": 10725837187,          # Man Face - Brows (same bundle; follows the brow FACS values)
+        "hair": [376548738],           # Brown Charmer Hair (free)
+        "layered": [                   # free Roblox layered clothing, inner first
+            {"id": 9112474888, "kind": "TShirt"},     # Basic T-Shirt - Gray
+            {"id": 7192549218, "kind": "Jacket"},     # Leather Jacket - Black (v4b's teal hoodie glowed mint)
+            {"id": 6984740059, "kind": "Pants"},      # Cargo Pants - Brown
+            {"id": 7193165925, "kind": "LeftShoe"},   # Roblox Sneakers - Gray (free bundle 872)
+            {"id": 7193166879, "kind": "RightShoe"},
+        ],
+        "skin": (214, 150, 120),
+    },
+}
 # Python mirror of ExpressionPlayer.PRESETS (tests keep the two in step).
 PRESETS: dict[str, dict[str, float]] = {
     "neutral": {},
@@ -113,6 +140,8 @@ def validate_timeline(timeline: dict) -> list[str]:
     letterbox = timeline.get("letterbox", 0.11)
     if not isinstance(letterbox, (int, float)) or not 0 <= letterbox <= 0.2:
         problems.append("letterbox must be 0..0.2")
+    if timeline.get("look") is not None and timeline["look"] not in LOOKS:
+        problems.append(f"unknown look {timeline['look']!r} (one of {', '.join(LOOKS)})")
     shots = timeline.get("shots")
     if not isinstance(shots, list) or not 1 <= len(shots) <= 16:
         return problems + ["1..16 shots required"]
@@ -153,13 +182,23 @@ def validate_timeline(timeline: dict) -> list[str]:
         roll = shot.get("roll", 0)
         if not isinstance(roll, (int, float)) or abs(roll) > 45:
             problems.append(f"{where}: roll must be within 45 degrees")
+        handheld = shot.get("handheld", 0)
+        if not isinstance(handheld, (int, float)) or isinstance(handheld, bool) or not 0 <= handheld <= 3:
+            problems.append(f"{where}: handheld must be 0..3 degrees")
+        if shot.get("rim") is not None and not (isinstance(shot["rim"], str) and _NAME.fullmatch(shot["rim"])):
+            problems.append(f"{where}: rim must be an actor name")
         dof = shot.get("dof")
         if dof is not None:
-            if not isinstance(dof, dict) or set(dof) - {"focusActor", "distance", "radius", "far", "near"}:
+            if not isinstance(dof, dict) or set(dof) - {"focusActor", "distance", "radius", "far", "near", "pullFrom",
+                                                        "pullAt", "pullTime"}:
                 problems.append(f"{where}: dof has unknown fields")
             elif any(not isinstance(dof[k], (int, float)) or not 0 <= dof[k] <= 500
-                     for k in ("distance", "radius", "far", "near") if k in dof):
+                     for k in ("distance", "radius", "far", "near", "pullAt", "pullTime") if k in dof):
                 problems.append(f"{where}: dof numbers out of range")
+            elif dof.get("pullFrom") is not None and not _is_vec(dof["pullFrom"]):
+                problems.append(f"{where}: dof.pullFrom must be (x, y, z)")
+            elif dof.get("pullFrom") is not None and not dof.get("focusActor"):
+                problems.append(f"{where}: a focus pull needs dof.focusActor (where focus ends)")
     if abs(cursor - length) > 1e-3:
         problems.append(f"shots end at {cursor} but the timeline length is {length}")
     cues = timeline.get("cues")
@@ -198,6 +237,11 @@ def validate_timeline(timeline: dict) -> list[str]:
                 problems.append(f"{where}: vfx needs an ability and a style name")
             if cue.get("position") is not None and not _is_vec(cue["position"]):
                 problems.append(f"{where}: vfx position must be (x, y, z)")
+            for key, low, high in (("scale", 0.1, 2), ("screen", 0, 1)):
+                value = cue.get(key)
+                if value is not None and (not isinstance(value, (int, float)) or isinstance(value, bool)
+                                          or not low <= value <= high):
+                    problems.append(f"{where}: vfx {key} must be {low}..{high}")
         if kind == "anim":
             if cue.get("animation") is not None and not (isinstance(cue["animation"], str) and _ASSET.fullmatch(cue["animation"])):
                 problems.append(f"{where}: animation must be rbxassetid://<number>")
@@ -268,10 +312,59 @@ def craft_check(timeline: dict) -> list[str]:
             notes.append("letterbox: bring the bars in at the start (they tell the player control is taken)")
         if not any(b.get("show") is False for b in boxes):
             notes.append("letterbox: take the bars out before the end so the hand-back to gameplay is visible")
+    notes += cinematic_notes(timeline)
     if not timeline.get("skippable", True):
         notes.append("not skippable: always let players skip a cutscene they have seen")
     if timeline["length"] > 20:
         notes.append("longer than 20s: players skip long cutscenes; split it or let gameplay continue")
+    return notes
+
+
+def _looks_at(shot: dict, actor) -> bool:
+    return bool(actor) and shot.get("lookActor") == actor
+
+
+def cinematic_notes(timeline: dict) -> list[str]:
+    """The v4 cinematic defaults: a mood look, no static shots, rim light and depth of field on close-ups,
+    expressions held long enough to read, VFX sized as an accent."""
+    notes = []
+    if not timeline.get("look"):
+        notes.append("no look preset: the default midday light reads flat; use golden_hour, dusk or battle")
+    for shot in timeline["shots"]:
+        points = shot["points"]
+        span = max((math.dist(a, b) for a in points for b in points), default=0.0)
+        fov = shot.get("fov") or [70]
+        if span < 0.5 and max(fov) - min(fov) < 3 and not shot.get("handheld"):
+            notes.append(f"shot {shot['name']}: a static camera; add a slow push-in (dolly) or a slight handheld drift")
+        if shot.get("lookActor") and min(fov) <= 36:
+            if not shot.get("rim"):
+                notes.append(f"shot {shot['name']}: a close-up without a rim light (rim = actor) blends into the background")
+            if not shot.get("dof"):
+                notes.append(f"shot {shot['name']}: a close-up without depth of field; blur the background (dof)")
+    shots = timeline["shots"]
+    for cue in _cues(timeline, "expression"):
+        if cue.get("name") == "neutral":
+            continue
+        start = cue["at"] + (cue.get("duration") or 0.25)
+        later = [c["at"] for c in _cues(timeline, "expression") if c.get("actor") == cue.get("actor") and c["at"] > cue["at"]]
+        index = next((i for i, s in enumerate(shots) if cue["at"] < s["start"] + s["duration"]), len(shots) - 1)
+        end = None
+        while index < len(shots) and _looks_at(shots[index], cue.get("actor")):
+            end = shots[index]["start"] + shots[index]["duration"]
+            index += 1
+        if end is None:
+            continue  # off camera: craft_check already says so
+        hold = min([end, *later]) - start
+        if hold < 1.2:
+            notes.append(f"expression {cue['name']} at {cue['at']}s is held {hold:.1f}s on camera; hold 1.2s or more so "
+                         "it reads")
+    for cue in _cues(timeline, "vfx"):
+        if cue.get("ability") not in ACCENTS and (cue.get("scale") or 1) > 0.8:
+            notes.append(f"vfx {cue.get('ability')} at {cue['at']}s: a full-size ability fills a cutscene frame; use an "
+                         "accent (accent_pulse) or scale 0.4..0.8")
+        screen = cue.get("screen")
+        if (0.35 if screen is None else screen) > 0.6:
+            notes.append(f"vfx at {cue['at']}s: screen effects above 0.6 flash the whole frame white")
     return notes
 
 
@@ -328,7 +421,10 @@ def timeline_luau(timeline: dict) -> str:
              "local timeline: Types.Timeline = {",
              f"\tname = {_str(timeline['name'])},", f"\tlength = {_num(timeline['length'])},",
              f"\tskippable = {'true' if timeline.get('skippable', True) else 'false'},",
-             f"\tletterbox = {_num(timeline.get('letterbox', 0.11))},", "\tshots = {"]
+             f"\tletterbox = {_num(timeline.get('letterbox', 0.11))},"]
+    if timeline.get("look"):
+        lines.append(f"\tlook = {_str(timeline['look'])},")
+    lines.append("\tshots = {")
     for shot in timeline["shots"]:
         lines.append("\t\t{ " + ", ".join(_field(k, v) for k, v in shot.items() if v is not None) + " },")
     lines.append("\t},")
@@ -359,10 +455,17 @@ def lint_sources(sources: dict[str, str]) -> dict[str, list[dict]]:
 HERO = "Hero"
 
 
-def demo_timeline(version: int = 3) -> dict:
+DEMO_VERSION = 4
+
+
+def demo_timeline(version: int = DEMO_VERSION) -> dict:
     """The 15-second lab cutscene: a hero walks to a crystal, is surprised, the crystal bursts (VFX), the hero
     smiles. Five shots: establishing tracking shot, medium close-up reaction, over-the-shoulder on the crystal,
-    close-up smile, crane pull-back. `version` keeps the earlier iterations reproducible (see the notes file)."""
+    close-up smile, crane pull-back. `version` keeps the earlier iterations reproducible (see the notes file);
+    4 is the cinematic pass (golden-hour look, one side of the action line, eased push-ins, handheld reaction,
+    rim light and a focus pull on the close-ups, an accent-sized burst)."""
+    if version >= 4:
+        return _demo_v4()
     v = int(_clamp(version, 1, 3))
     # Set: the hero enters at x = -26 and stops at x = 0; the crystal pedestal is at x = 8 (all local, studs).
     est_points = [(-30, 12, -26), (-20, 9, -24), (-8, 7, -20)] if v == 1 else [(-34, 9, -22), (-22, 7.5, -21), (-9, 6.5, -18)]
@@ -413,6 +516,56 @@ def demo_timeline(version: int = 3) -> dict:
         cues = [c for c in cues if not (c["kind"] == "letterbox" and c.get("show") is False)]
     cues.sort(key=lambda c: c["at"])
     return {"name": "crystal_wake", "length": 15.0, "skippable": True, "letterbox": 0.11, "shots": shots, "cues": cues}
+
+
+def _demo_v4() -> dict:
+    # Same set and story as v3. Every camera stays on the +z side of the hero -> crystal line (the 180-degree
+    # rule: the hero walks and looks screen-right in every shot). Sun (golden hour) is low in the -x/-z quarter:
+    # contre-jour on the reaction shots, the crystal's green light is the motivated key on the face.
+    shots = [
+        {"name": "establish", "start": 0.0, "duration": 4.0, "curve": "catmull",
+         "points": [(-31, 3.4, 17), (-22, 3.6, 15), (-12, 3.9, 13.5)],
+         "lookActor": HERO, "lookOffset": (4.5, 0.6, 0), "fov": [42, 40], "ease": {"style": "Sine", "direction": "InOut"}},
+        {"name": "reaction", "start": 4.0, "duration": 3.5, "curve": "linear",
+         "points": [(7.0, 4.85, 6.0), (6.1, 4.75, 5.2)], "lookActor": HERO, "lookOffset": (0.76, -0.4, -0.9),
+         "fov": [33, 31], "ease": {"style": "Quad", "direction": "Out"}, "handheld": 0.45, "rim": HERO,
+         "dof": {"focusActor": HERO, "radius": 3, "far": 0.55, "near": 0.1}},
+        {"name": "crystal", "start": 7.5, "duration": 3.0, "curve": "catmull",
+         "points": [(-4.6, 5.6, 8.2), (-3.6, 5.4, 7.2)], "look": [(7.6, 4.0, -3.7), (7.2, 4.1, -3.5)],
+         "fov": [44, 41], "ease": {"style": "Sine", "direction": "InOut"}},
+        {"name": "smile", "start": 10.5, "duration": 2.5, "curve": "linear",
+         "points": [(6.25, 4.4, 4.75), (5.5, 4.45, 4.15)], "lookActor": HERO, "lookOffset": (0.57, -0.38, -0.76),
+         "fov": [30, 29], "ease": {"style": "Sine", "direction": "InOut"}, "rim": HERO,
+         "dof": {"focusActor": HERO, "radius": 2.5, "far": 0.6, "near": 0.6, "pullFrom": (-18, 3, -12),
+                 "pullAt": 0.1, "pullTime": 0.8}},
+        {"name": "pullback", "start": 13.0, "duration": 2.0, "curve": "bezier",
+         "points": [(-3.5, 6.2, 9.5), (-7, 9.5, 13), (-10.5, 13, 16)], "look": [(5, 3.5, 0), (5, 3, 0)],
+         "fov": [46, 52], "ease": {"style": "Sine", "direction": "InOut"}},
+    ]
+    cues = [
+        # open from black: a classic fade-in that also hides the frame where layered clothing fits itself
+        {"at": 0.0, "kind": "fade", "alpha": 1, "duration": 0},
+        {"at": 0.0, "kind": "letterbox", "show": True, "duration": 0.6},
+        {"at": 0.0, "kind": "spawn", "actor": HERO, "template": HERO, "position": (-26, 0, 0), "facing": -90},
+        {"at": 0.15, "kind": "fade", "alpha": 0, "duration": 0.8},
+        {"at": 0.3, "kind": "walk", "actor": HERO, "to": (0, 0, 0), "duration": 3.6},
+        {"at": 2.0, "kind": "blink", "actor": HERO},
+        {"at": 4.3, "kind": "expression", "actor": HERO, "name": "surprised", "duration": 0.18},
+        {"at": 4.35, "kind": "anim", "actor": HERO, "name": "recoil"},
+        {"at": 5.6, "kind": "blink", "actor": HERO},
+        {"at": 5.7, "kind": "caption", "speaker": "Hero", "text": "The crystal... it is waking up!", "duration": 2.9},
+        {"at": 5.8, "kind": "talk", "actor": HERO, "duration": 1.3},
+        {"at": 8.0, "kind": "vfx", "ability": "accent_pulse", "style": "anime_energy", "position": (8, 0, 0),
+         "scale": 0.8, "screen": 0.5},
+        {"at": 11.0, "kind": "expression", "actor": HERO, "name": "happy", "duration": 0.35},
+        {"at": 11.2, "kind": "caption", "speaker": "Hero", "text": "It chose me.", "duration": 1.7},
+        {"at": 11.3, "kind": "talk", "actor": HERO, "duration": 0.6},
+        {"at": 12.0, "kind": "blink", "actor": HERO},
+        {"at": 12.2, "kind": "anim", "actor": HERO, "name": "nod"},
+        {"at": 14.2, "kind": "letterbox", "show": False, "duration": 0.6},
+    ]
+    return {"name": "crystal_wake", "length": 15.0, "skippable": True, "letterbox": 0.11, "look": "golden_hour",
+            "shots": shots, "cues": cues}
 
 
 def plan(timeline: dict | None = None) -> dict:
@@ -471,34 +624,150 @@ local function part(name: string, size: Vector3, offset: CFrame, color: Color3, 
 	return p
 end
 local stone = Color3.fromRGB(120, 116, 110)
+if config.set == "v4" then
+	-- v4 dressing pass (playtest only; terrain and parts vanish when the playtest stops): terrain ground with
+	-- material patches, distant hills and a rock hill behind the gate, a worn path, a stepped pedestal ringed by
+	-- rocks and small crystal shards, a ruined gate and trees.
+	local T = workspace.Terrain
+	local function at(x: number, y: number, z: number): CFrame
+		return origin * CFrame.new(x, y, z)
+	end
+	-- LeafyGrass, not Grass: Grass grows blade decorations taller than a low camera (v4a: the establishing shot
+	-- was all blades). Grass stays on the far hills, where the blades read as a soft silhouette.
+	T:FillBlock(at(-20, -2, 0), Vector3.new(640, 4, 640), Enum.Material.LeafyGrass)
+	local patches = {
+		{ 6, 8, 5, Enum.Material.Ground }, { -22, -7, 5, Enum.Material.Ground }, { 2, 0, 4, Enum.Material.Ground },
+		{ 10, 0, 4.5, Enum.Material.Mud }, { -9, 9, 4, Enum.Material.Mud }, { 16, 6, 6, Enum.Material.Ground },
+		{ -36, -10, 7, Enum.Material.Rock },
+	}
+	for _, pt in patches do
+		T:FillCylinder(at(pt[1], -2, pt[2]), 4.2, pt[3], pt[4])
+	end
+	for i = 0, 13 do
+		T:FillCylinder(at(-30 + i * 2.4, -2, 0.3 * math.sin(i)), 4.2, 2.2, Enum.Material.Ground)
+	end
+	for _, hill in { { -70, -60, 46 }, { 30, -110, 62 }, { -150, 10, 70 }, { 110, 40, 64 }, { -60, 90, 55 }, { 70, -50, 40 } } do
+		T:FillBall(at(hill[1], -hill[3] * 0.55, hill[2]).Position, hill[3], Enum.Material.Grass)
+	end
+	T:FillBall(at(36, -8, 2).Position, 17, Enum.Material.Rock)
+	T:FillBall(at(30, -9, -14).Position, 12, Enum.Material.Slate)
+	T:FillBall(at(32, -10, 15).Position, 11, Enum.Material.Rock)
+	-- Put the set on the ground that was actually made: in a playtest the filled slab's surface came out 2 studs
+	-- above the block's top (v4a-v4e: actors waist-deep). Measure it and lift the origin (parts, actors, camera).
+	task.wait(0.5)
+	local hit = workspace:Raycast((origin * CFrame.new(0, 30, 0)).Position, Vector3.new(0, -60, 0))
+	if hit and hit.Instance == T then
+		origin = origin * CFrame.new(0, hit.Position.Y - origin.Y, 0)
+	end
+	local rng = Random.new(7)
+	for i = 0, 9 do
+		if i ~= 3 and i ~= 7 then -- two stones missing: an old path
+			local size = Vector3.new(rng:NextNumber(2.4, 3.3), 0.35, rng:NextNumber(2.8, 3.8))
+			part("PathStone" .. i, size, CFrame.new(-27 + i * 3.4, -0.1, rng:NextNumber(-0.5, 0.5)) * CFrame.Angles(0, rng:NextNumber(-0.25, 0.25), 0),
+				Color3.fromRGB(128 + rng:NextInteger(-12, 12), 122, 112), Enum.Material.Slate)
+		end
+	end
+	part("PedestalBase", Vector3.new(4.4, 0.6, 4.4), CFrame.new(8, 0.3, 0) * CFrame.Angles(0, math.rad(45), 0), stone, Enum.Material.Slate)
+	part("Pedestal", Vector3.new(3, 1.5, 3), CFrame.new(8, 1.35, 0), stone, Enum.Material.Cobblestone)
+	part("PedestalCap", Vector3.new(3.5, 0.3, 3.5), CFrame.new(8, 2.25, 0), Color3.fromRGB(104, 100, 96), Enum.Material.Slate)
+	for i = 0, 7 do
+		local a = i / 8 * math.pi * 2 + 0.3
+		local r = 3.3 + 0.5 * math.sin(i * 1.7)
+		local size = Vector3.new(rng:NextNumber(0.8, 1.6), rng:NextNumber(0.5, 1.1), rng:NextNumber(0.8, 1.5))
+		part("RingRock" .. i, size, CFrame.new(8 + math.cos(a) * r, size.Y * 0.4, math.sin(a) * r) * CFrame.Angles(rng:NextNumber(-0.4, 0.4), a, rng:NextNumber(-0.3, 0.3)),
+			Color3.fromRGB(92, 96, 86), Enum.Material.Rock)
+	end
+	for i = 0, 5 do
+		local a = i / 6 * math.pi * 2 + 0.9
+		local h = rng:NextNumber(0.9, 1.8)
+		local shard = part("Shard" .. i, Vector3.new(0.35, h, 0.35), CFrame.new(8 + math.cos(a) * 2.5, h * 0.35, math.sin(a) * 2.5) * CFrame.Angles(rng:NextNumber(-0.5, 0.5), a, rng:NextNumber(-0.6, 0.6)),
+			Color3.fromRGB(70, 230, 165), Enum.Material.Neon)
+		shard.Transparency = 0.15
+	end
+	for _, z in { -7, 7 } do
+		part("PillarBase", Vector3.new(2.8, 1, 2.8), CFrame.new(11, 0.5, z), stone, Enum.Material.Slate)
+		part("PillarCap", Vector3.new(2.6, 0.8, 2.6), CFrame.new(11, 11.6, z), stone, Enum.Material.Slate)
+	end
+	part("BrokenPillar", Vector3.new(1.8, 5, 1.8), CFrame.new(15, 0.9, -11) * CFrame.Angles(math.rad(80), math.rad(20), 0), stone, Enum.Material.Slate)
+	local function tree(x: number, z: number, s: number)
+		part("Trunk", Vector3.new(7 * s, 1.1 * s, 1.1 * s), CFrame.new(x, 3.5 * s, z) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(92, 66, 46), Enum.Material.Wood, Enum.PartType.Cylinder)
+		for k, o in { Vector3.new(0, 8, 0), Vector3.new(1.6, 7, 1), Vector3.new(-1.4, 7.3, -0.8) } do
+			local c = Color3.fromRGB(58 + k * 6, 92 + k * 5, 52)
+			part("Canopy", Vector3.one * (5.5 - k * 0.6) * s, CFrame.new(x + o.X * s, o.Y * s, z + o.Z * s), c, Enum.Material.LeafyGrass, Enum.PartType.Ball)
+		end
+	end
+	tree(-20, -13, 1.1)
+	tree(-7, -16, 0.9)
+	tree(18, -12, 1.2)
+	tree(24, 10, 1)
+	tree(-40, -7, 1.3)
+	tree(-48, 14, 1.15)
+	-- (no lanterns: v4d/v4e showed their neon glow as blobs behind the close-up and over-the-shoulder heads)
+	for i, rk in { Vector3.new(-14, 0.5, 7), Vector3.new(-6, 0.4, -8), Vector3.new(4, 0.6, 9), Vector3.new(-20, 0.5, -6), Vector3.new(-26, 0.4, 6) } do
+		part("Rock" .. i, Vector3.new(2.4, 1.4, 2), CFrame.new(rk) * CFrame.Angles(0.3 * i, 0.7 * i, 0.2), Color3.fromRGB(96, 94, 86), Enum.Material.Rock)
+	end
+else
 part("Ground", Vector3.new(90, 1, 50), CFrame.new(-6, -0.45, 0), Color3.fromRGB(70, 92, 60), Enum.Material.Grass)
 for i = 0, 9 do
 	part("PathTile" .. i, Vector3.new(3.2, 0.3, 4), CFrame.new(-27 + i * 3.4, 0.15, 0), stone, Enum.Material.Slate)
 end
 part("Pedestal", Vector3.new(3, 2.4, 3), CFrame.new(8, 1.2, 0), stone, Enum.Material.Cobblestone)
+end
 local crystal = part("Crystal", Vector3.new(1.4, 3.2, 1.4), CFrame.new(8, 4, 0) * CFrame.Angles(0, math.rad(45), math.rad(8)), Color3.fromRGB(90, 255, 140), Enum.Material.Neon)
+if config.set == "v4" then
+	-- v4b read as a glowing slab: thinner neon core inside a glass shell, a pointed tip, two small side crystals
+	local tilt = CFrame.new(8, 4, 0) * CFrame.Angles(0, math.rad(45), math.rad(8))
+	crystal.Size = Vector3.new(0.8, 2.9, 0.8)
+	local shell = part("CrystalShell", Vector3.new(1.35, 3.1, 1.35), tilt, Color3.fromRGB(120, 255, 200), Enum.Material.Glass)
+	shell.Transparency = 0.45
+	shell.Reflectance = 0.15
+	part("CrystalTip", Vector3.new(0.95, 0.95, 0.95), tilt * CFrame.new(0, 1.55, 0) * CFrame.Angles(math.rad(45), 0, math.rad(45)), Color3.fromRGB(150, 255, 200), Enum.Material.Neon)
+	for _, side in { { -0.9, -24, 1.6 }, { 0.85, 20, 1.2 } } do
+		local small = tilt * CFrame.new(side[1], -1.2 + side[3] * 0.4, 0) * CFrame.Angles(0, 0, math.rad(side[2]))
+		part("CrystalSide", Vector3.new(0.5, side[3], 0.5), small, Color3.fromRGB(80, 235, 170), Enum.Material.Neon)
+	end
+end
 local glow = Instance.new("PointLight")
 glow.Color = Color3.fromRGB(90, 255, 140)
-glow.Range = 14
-glow.Brightness = 2
+glow.Range = if config.set == "v4" then 12 else 14
+glow.Brightness = if config.set == "v4" then 1.4 else 2
+if config.set == "v4" then
+	glow.Color = Color3.fromRGB(130, 255, 200) -- less saturated: v4-final-a turned the whole floor green
+end
 glow.Parent = crystal
 for _, z in { -7, 7 } do
 	part("Pillar", Vector3.new(2, 12, 2), CFrame.new(11, 6, z), stone, Enum.Material.Slate)
 end
 part("Lintel", Vector3.new(2.4, 1.6, 16.4), CFrame.new(11, 12.6, 0), stone, Enum.Material.Slate)
+if config.set ~= "v4" then
 part("Backdrop", Vector3.new(2, 18, 46), CFrame.new(24, 9, 0), Color3.fromRGB(60, 64, 78), Enum.Material.Rock)
 for i, at in { Vector3.new(-14, 0.8, 7), Vector3.new(-6, 0.6, -8), Vector3.new(4, 0.9, 9), Vector3.new(-20, 0.7, -6) } do
 	part("Rock" .. i, Vector3.new(2.6, 1.8, 2.2), CFrame.new(at) * CFrame.Angles(0.3 * i, 0.7 * i, 0.2), Color3.fromRGB(96, 92, 88), Enum.Material.Rock)
 end
+end
 set.Parent = workspace
+task.wait(0.5) -- terrain is raycastable a moment after it is written
+do -- where is the walkable ground on the hero's path? (actors are placed at origin height; 0 = on the ground)
+	local heights = {}
+	for _, x in { -20, -10, 0 } do
+		local hit = workspace:Raycast((origin * CFrame.new(x, 30, 0)).Position, Vector3.new(0, -60, 0))
+		table.insert(heights, if hit then string.format("%.2f:%s", hit.Position.Y - origin.Y, hit.Instance.Name) else "none")
+	end
+	print("__MARK__ ground " .. config.run .. " " .. table.concat(heights, " "))
+end
 
-local description = Instance.new("HumanoidDescription")
-description.HeadColor = Color3.fromRGB(234, 184, 146)
-description.LeftArmColor = description.HeadColor
-description.RightArmColor = description.HeadColor
-description.TorsoColor = Color3.fromRGB(52, 96, 200)
-description.LeftLegColor = Color3.fromRGB(40, 40, 52)
-description.RightLegColor = Color3.fromRGB(40, 40, 52)
+local description: HumanoidDescription
+if config.avatar then
+	description = CutsceneService.describe(config.avatar)
+else
+	description = Instance.new("HumanoidDescription")
+	description.HeadColor = Color3.fromRGB(234, 184, 146)
+	description.LeftArmColor = description.HeadColor
+	description.RightArmColor = description.HeadColor
+	description.TorsoColor = Color3.fromRGB(52, 96, 200)
+	description.LeftLegColor = Color3.fromRGB(40, 40, 52)
+	description.RightLegColor = Color3.fromRGB(40, 40, 52)
+end
 if config.head > 0 then
 	description.Head = config.head
 end
@@ -509,7 +778,15 @@ if not okActor then
 	okActor, actor = pcall(CutsceneService.makeActor, "__HERO__", description)
 end
 local faceControls = okActor and (actor :: Model):FindFirstChildWhichIsA("FaceControls", true)
-print("__MARK__ actor " .. config.run .. " ok=" .. tostring(okActor) .. " facecontrols=" .. tostring(faceControls ~= nil))
+local layers = 0
+if okActor then
+	for _, item in (actor :: Model):GetDescendants() do
+		if item:IsA("WrapLayer") then
+			layers += 1
+		end
+	end
+end
+print("__MARK__ actor " .. config.run .. " ok=" .. tostring(okActor) .. " facecontrols=" .. tostring(faceControls ~= nil) .. " layers=" .. layers)
 
 local player = Players:GetPlayers()[1] or Players.PlayerAdded:Wait()
 local character = player.Character or player.CharacterAdded:Wait()
@@ -545,12 +822,14 @@ local ok, problem = CutsceneClient.register(timeline)
 print("__MARK__ register " .. config.run .. " " .. tostring(ok) .. " " .. tostring(problem))
 CutsceneClient.speed = config.speed
 CutsceneClient.options.faceBackend = config.faceBackend
-local vfxFolder = ReplicatedStorage:FindFirstChild("__VFX__")
-if vfxFolder then
-	local VfxClient = require(vfxFolder:WaitForChild("VfxClient")) :: any
+local vfxHook = CutsceneClient.composerVfx("__VFX__")
+if vfxHook then
 	CutsceneClient.options.vfx = function(cue: any, at: CFrame, speed: number)
-		local handle = VfxClient.preview(cue.ability, cue.style, at, speed)
-		print("__MARK__ vfx " .. config.run .. " " .. tostring(cue.ability) .. " " .. tostring(handle ~= nil))
+		local ok, why = pcall(vfxHook, cue, at, speed)
+		print("__MARK__ vfx " .. config.run .. " " .. tostring(cue.ability) .. " " .. tostring(ok) .. " " .. tostring(why or ""))
+		if not ok then
+			error(why, 0)
+		end
 	end
 end
 local active: any = nil
@@ -606,7 +885,18 @@ CutsceneClient.options.onFrame = function(t: number, shot: any, cam: Camera)
 	end
 	table.insert(tracks, "joint=" .. (if shoulder then shoulder.ClassName else "none"))
 	table.insert(tracks, "arm" .. string.format("%.0f", arm))
-	print("__MARK__ frame " .. config.run .. " " .. f3(t) .. " " .. shot.name .. " fov=" .. f3(cam.FieldOfView) .. " head " .. framing .. " face " .. facs .. " tracks " .. table.concat(tracks, ","))
+	if head and head:IsA("BasePart") then
+		local toCamera = (cam.CFrame.Position - head.Position).Unit
+		table.insert(tracks, "facing=" .. string.format("%.2f", head.CFrame.LookVector:Dot(toCamera)))
+	end
+	local marks = {}
+	local set = workspace:FindFirstChild("StarCutsceneSet")
+	local crystal = set and set:FindFirstChild("Crystal")
+	if crystal and crystal:IsA("BasePart") then
+		local c, on = cam:WorldToViewportPoint(crystal.Position)
+		table.insert(marks, "Crystal:" .. f3(c.X / vp.X) .. ":" .. f3(c.Y / vp.Y) .. ":" .. tostring(on and c.Z > 0))
+	end
+	print("__MARK__ frame " .. config.run .. " " .. f3(t) .. " " .. shot.name .. " fov=" .. f3(cam.FieldOfView) .. " head " .. framing .. " face " .. facs .. " tracks " .. table.concat(tracks, ",") .. " marks " .. table.concat(marks, ","))
 end
 CutsceneClient.onPlay = function(name: string, handle: any)
 	active = handle
@@ -668,18 +958,46 @@ print("__MARK__ client-ready " .. config.run)
 """
 
 
+def _avatar_luau(avatar: dict) -> str:
+    """A CutsceneService.Avatar table (numbers and fixed kind names only)."""
+    parts = []
+    for key in ("head", "brows", "shirt", "pants"):
+        if avatar.get(key):
+            parts.append(f"{key} = {int(avatar[key])}")
+    if avatar.get("hair"):
+        parts.append("hair = { " + ", ".join(str(int(x)) for x in avatar["hair"]) + " }")
+    if avatar.get("layered"):
+        items = []
+        for item in avatar["layered"]:
+            if not _NAME.fullmatch(str(item["kind"])):
+                raise ValueError("unsafe accessory kind")
+            order = f", order = {int(item['order'])}" if item.get("order") else ""
+            items.append(f"{{ id = {int(item['id'])}, kind = {json.dumps(item['kind'])}{order} }}")
+        parts.append("layered = { " + ", ".join(items) + " }")
+    if avatar.get("skin"):
+        parts.append("skin = Color3.fromRGB(" + ", ".join(str(int(_clamp(c, 0, 255))) for c in avatar["skin"]) + ")")
+    return "{ " + ", ".join(parts) + " }"
+
+
 def lab_config(spec: dict, run: str) -> str:
     values = {"run": run, "speed": float(_clamp(spec.get("speed", 0.35), 0.05, 1)),
               "lead": float(spec.get("lead", 6)), "sampleEvery": float(spec.get("sample_every", 0.25)),
               "head": int(spec.get("head") or 0), "timer": bool(spec.get("timer", True)),
               "skipAt": float(spec.get("skip_at") or 0),
-              "faceBackend": spec.get("face_backend") if spec.get("face_backend") in ("facs", "gui") else "auto"}
+              "faceBackend": spec.get("face_backend") if spec.get("face_backend") in ("facs", "gui") else "auto",
+              "set": "v4" if spec.get("set") == "v4" else "v3"}
     lines = ["--!strict", "return {"]
     for key, value in values.items():
         rendered = ("true" if value else "false") if isinstance(value, bool) else (
             json.dumps(value) if isinstance(value, str) else _num(float(value)))
         lines.append(f"\t{key} = {rendered},")
-    lines.append(f"\torigin = {{ {', '.join(_num(float(c)) for c in spec.get('origin', STAGE_ORIGIN))} }},")
+    default_origin = STAGE_ORIGIN_V4 if values["set"] == "v4" else STAGE_ORIGIN
+    lines.append(f"\torigin = {{ {', '.join(_num(float(c)) for c in spec.get('origin', default_origin))} }},")
+    avatar = spec.get("avatar")
+    if isinstance(avatar, str):
+        avatar = AVATARS.get(avatar)
+    if isinstance(avatar, dict) and not avatar.get("legacy"):
+        lines.append(f"\tavatar = {_avatar_luau(avatar)},")
     clock = spec.get("clock")
     lines.append(f"\tclock = {_num(float(clock)) if isinstance(clock, (int, float)) else 'nil'},")
     lines.append("}")
@@ -754,6 +1072,17 @@ def check_luau(run: str) -> str:
             f'return "{MARK}_CHECK {run} " .. table.concat(out, "; ")')
 
 
+def quality_luau(level: int | str) -> str:
+    """Edit-context Luau that sets Studio's render quality for the capture and returns the previous value.
+    Studio's Automatic quality drops post effects (depth of field, sun rays, bloom) on a weak GPU, so a capture
+    at Automatic does not show what the look does; v4b (level 21) vs v4-final-a (Automatic, reset by Studio)
+    showed the difference. The previous value is put back after the playtest."""
+    name = f"Level{int(_clamp(int(level), 1, 21)):02d}" if str(level).isdigit() else "Automatic"
+    return ('local r = settings().Rendering local before = r.QualityLevel.Name '
+            f'r.QualityLevel = Enum.QualityLevel.{name} '
+            f'return "{MARK}_QUALITY " .. before .. " " .. r.QualityLevel.Name')
+
+
 def remove_luau() -> str:
     return ('local n = 0\n'
             'for _, parent in { game:GetService("ReplicatedStorage"), game:GetService("ServerScriptService"), '
@@ -794,7 +1123,11 @@ def parse_console(text: str, run: str) -> dict:
                 if len(hp) == 4:
                     sample.update({"x": float(hp[0]), "y": float(hp[1]), "on_screen": hp[2] == "true", "head_size": float(hp[3])})
                 face, _, tracks = face.partition(" tracks ")
+                tracks, _, marks = tracks.partition(" marks ")
                 sample["tracks"] = [x for x in tracks.split(",") if x]
+                for mark in (m for m in marks.split(",") if m.count(":") == 3):
+                    name, mx, my, on = mark.split(":")
+                    sample.setdefault("marks", {})[name] = {"x": float(mx), "y": float(my), "on_screen": on == "true"}
                 fp = face.split()
                 if len(fp) >= 2:
                     sample["backend"], sample["expression"] = fp[0], fp[1]
@@ -834,11 +1167,30 @@ def letterbox_score(image, fraction: float = 0.11) -> float:
     return dark / max(1, total)
 
 
+def effect_share(data: bytes, bar: float = 0.11) -> dict:
+    """Inside the letterbox: the share of near-white pixels (blown highlights) and of bright, saturated pixels
+    (glowing effect colour). A burst that 'fills the frame' shows as a large saturated share."""
+    from PIL import Image
+    image = Image.open(io.BytesIO(data)).convert("HSV")
+    w, h = image.size
+    image = image.crop((0, int(h * bar), w, int(h * (1 - bar)))).resize((160, max(1, round(90 * (1 - 2 * bar)))))
+    raw = image.tobytes()
+    pairs = list(zip(raw[1::3], raw[2::3]))  # (saturation, value) per pixel
+    white = sum(1 for sat, val in pairs if val > 242 and sat < 40)
+    glow = sum(1 for sat, val in pairs if sat > 140 and val > 200)
+    return {"white": round(white / len(pairs), 3), "glow": round(glow / len(pairs), 3)}
+
+
+THIRDS_BAND = 0.09  # a head within 0.09 of a third line (x 0.33 / 0.67) counts as "on a third"
+
+
 def critique(frames: list[dict], evidence: dict, timeline: dict) -> dict:
     """A measured, advisory critique of a captured cutscene: framing (engine samples of where the subject's head is
-    on screen), timing (shots and cues happened when the timeline says; expression changes on camera), easing
-    (camera motion at the start and end of each moving shot vs its middle), cuts (big picture changes only at shot
-    boundaries or the VFX impact), letterbox in/out, VFX played, and return of control."""
+    on screen) and composition (faces on a third, eye line, head not cut, face turned to the lens), timing (shots and
+    cues happened when the timeline says; expression changes on camera), easing (camera motion at the start and end of
+    each moving shot vs its middle), cuts (big picture changes only at shot boundaries or the VFX impact), VFX
+    coverage of the picture and blown highlights, letterbox in/out, VFX played, actors on the ground, and return of
+    control."""
     findings: list[str] = []
     scores: dict = {}
     bar = float(timeline.get("letterbox", 0.11))
@@ -867,7 +1219,36 @@ def critique(frames: list[dict], evidence: dict, timeline: dict) -> dict:
                 findings.append(f"{name}: the head is cut by the top letterbox bar (y {info['y']})")
             if on and min(shot.get("fov") or [70]) <= 40 and info["head_size"] < 0.07:
                 findings.append(f"{name}: a close-up FOV but the head is only {info['head_size']:.0%} of the frame height")
+            if on:
+                # composition: the face on a third (with look room), eyes in the upper part of the picture
+                mean_x = sum(s["x"] for s in on) / len(on)
+                third = min(abs(mean_x - 1 / 3), abs(mean_x - 2 / 3))
+                info["thirds_offset"] = round(third, 3)
+                if info["head_size"] >= 0.12 and third > THIRDS_BAND:
+                    findings.append(f"{name}: close-up face at x {mean_x:.2f}, not on a third (0.33 / 0.67)")
+                top = min(s["y"] - s["head_size"] / 2 for s in on)
+                if info["head_size"] >= 0.12 and top < bar + 0.01:
+                    findings.append(f"{name}: the top of the head is cut by the frame (top {top:.2f})")
+                mean_y = sum(s["y"] for s in on) / len(on)
+                if info["head_size"] >= 0.12 and not 0.3 <= mean_y <= 0.55:
+                    findings.append(f"{name}: the eyes sit at y {mean_y:.2f}; keep them in the upper half (0.30-0.55)")
+        facing = [float(t.split("=", 1)[1]) for s in on for t in s.get("tracks", []) if t.startswith("facing=")]
+        if facing:
+            info["facing_min"] = round(min(facing), 2)
+            if shot.get("lookActor") and info.get("head_size", 0) >= 0.12 and min(facing) < 0.25:
+                findings.append(f"{name}: the face turns away from the camera (facing {min(facing):.2f}; 1 = at the lens)")
+        crystal = [s["marks"]["Crystal"] for s in samples if s["shot"] == name and "Crystal" in s.get("marks", {})
+                   and s["marks"]["Crystal"]["on_screen"]]
+        if crystal:
+            info["crystal_x"] = round(sum(c["x"] for c in crystal) / len(crystal), 3)
     scores["framing"] = framing
+    ground = evidence.get("flags", {}).get("ground", "")
+    heights = [float(g.split(":")[0]) for g in ground.split() if re.fullmatch(r"-?\d+(\.\d+)?:\S+", g)]
+    if heights:
+        scores["ground"] = heights
+        if max(abs(h) for h in heights) > 0.3:
+            findings.append(f"actors are placed {max(heights, key=abs):+.2f} studs from the walkable ground (they sink "
+                            "into it or float)")
     # expressions on camera, FACS taken by the engine
     expr = []
     skipped_at = None
@@ -935,6 +1316,26 @@ def critique(frames: list[dict], evidence: dict, timeline: dict) -> dict:
             findings.append("letterbox bars not visible during the cutscene")
         if after is not None and after > 0.5:
             findings.append("letterbox bars still on screen after the cutscene")
+        # VFX coverage and blown highlights: the burst should be an accent, not the whole frame
+        shares = [effect_share(f["data"], bar) for f in frames]
+        playing = [(sh, t) for sh, t in zip(shares, ts) if 0.5 <= t <= timeline["length"] - 0.5]
+        if playing:
+            scores["white_max"] = max(sh["white"] for sh, _ in playing)
+            if scores["white_max"] > 0.25:
+                findings.append(f"blown highlights: up to {scores['white_max']:.0%} of the picture is near white")
+        for cue in _cues(timeline, "vfx"):
+            shot = shot_at(timeline, cue["at"])
+            s0, s1 = shot["start"] + 0.15, shot["start"] + shot["duration"] - 0.15
+            window = [sh["glow"] for sh, t in zip(shares, ts) if cue["at"] <= t <= min(cue["at"] + 2.5, s1)]
+            # baseline: the quietest frame of the same shot (bright grass or a neon prop is not the effect)
+            same = [sh["glow"] for sh, t in zip(shares, ts) if s0 <= t <= s1]
+            if window:
+                peak = max(window)
+                base = min(same) if same else 0.0
+                scores.setdefault("vfx_coverage", []).append({"at": cue["at"], "peak_glow": peak, "before": base})
+                if peak - base > 0.3:
+                    findings.append(f"vfx at {cue['at']}s covers {peak:.0%} of the picture: scale it down or move it "
+                                    "further from the camera so it reads as an accent")
         diffs = [_diff(a, b) for a, b in zip(grays, grays[1:])]
         mids = [(ts[i] + ts[i + 1]) / 2 for i in range(len(diffs))]
         bounds = [s["start"] for s in timeline["shots"][1:]]
@@ -977,7 +1378,8 @@ def critique(frames: list[dict], evidence: dict, timeline: dict) -> dict:
                 e, c = sum(edge) / len(edge), sum(mid) / len(mid)
                 easing[shot["name"]] = {"edge": round(e, 4), "middle": round(c, 4)}
                 style = (shot.get("ease") or {}).get("style", "Sine")
-                if style != "Linear" and c > 0.01 and e > 1.35 * c and not shot.get("lookActor"):
+                has_vfx = any(s0 <= v["at"] < s0 + d0 for v in _cues(timeline, "vfx"))
+                if style != "Linear" and c > 0.01 and e > 1.35 * c and not shot.get("lookActor") and not has_vfx:
                     findings.append(f"{shot['name']}: the camera moves faster at the shot's ends than in its middle; "
                                     "the easing does not read")
         scores["easing"] = easing
@@ -1132,7 +1534,19 @@ class CutsceneLab:
         self.log(f"check: {report['check']}")
         if not report["check"]["ok"]:
             return self._finish(report)
-        report["playtest"] = await self._playtest(spec, run)
+        restore_quality = None
+        if spec.get("quality"):
+            ok, text = await self._luau(quality_luau(spec["quality"]))
+            match = re.search(rf"{MARK}_QUALITY (\w+) (\w+)", text)
+            report["quality"] = {"ok": ok and bool(match), "before": match and match.group(1),
+                                 "during": match and match.group(2)}
+            if ok and match:
+                restore_quality = match.group(1).replace("Level", "")
+        try:
+            report["playtest"] = await self._playtest(spec, run)
+        finally:
+            if restore_quality is not None:
+                await self._luau(quality_luau(restore_quality))
         frames = report["playtest"].pop("_frames", [])
         console = report["playtest"].pop("_console", "")
         evidence = parse_console(console, run)
@@ -1181,6 +1595,7 @@ class CutsceneLab:
                 return info
             stop_at = self.clock() + float(spec.get("lead", 6)) + wall + 8
             index = 0
+            seen: dict[str, None] = dict.fromkeys(console.splitlines())
             while self.clock() < stop_at and len(frames) < MAX_FRAMES:
                 before = self.clock()
                 shot = await self._call("screen_capture", capture_id=f"StarCut_{run}_{index}")
@@ -1195,10 +1610,13 @@ class CutsceneLab:
                     now = self.clock()
                     frames.append({"index": index, "data": data, "mime": mime, "wall": now})
                     index += 1
+                if index % 8 == 0:
+                    seen.update(dict.fromkeys((await self._console()).splitlines()))
                 if play_at and self.clock() > play_at + wall + 3.0:
                     break
             await self.sleep(1.0)
-            console = await self._console()
+            seen.update(dict.fromkeys((await self._console()).splitlines()))
+            console = "\n".join(seen)
         finally:
             stopped = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
                                                                        "is_start": False})
@@ -1265,13 +1683,17 @@ def main(arguments=None) -> int:
     for name in ("plan", "run"):
         p = sub.add_parser(name)
         p.add_argument("--timeline", help="timeline JSON file (default: the built-in demo)")
-        p.add_argument("--version", type=int, default=3, help="demo timeline version (1..3)")
+        p.add_argument("--version", type=int, default=DEMO_VERSION, help="demo timeline version (1..4)")
         if name == "run":
             p.add_argument("--home", required=True)
             p.add_argument("--out", required=True)
             p.add_argument("--speed", type=float, default=0.35, help="playback speed for capture (1 = real time)")
             p.add_argument("--clock", type=float, help="Lighting.ClockTime during the playtest (client only)")
             p.add_argument("--head", type=int, default=0, help="HumanoidDescription.Head asset id (a Dynamic Head)")
+            p.add_argument("--avatar", choices=sorted(AVATARS), default="explorer", help="free actor avatar")
+            p.add_argument("--set", choices=("v3", "v4"), default="v4", help="lab set (v4: dressed, terrain)")
+            p.add_argument("--quality", default="21",
+                           help="Studio render quality during the capture (1..21 or 'none'; restored afterwards)")
             p.add_argument("--skip-at", type=float, default=0, help="press Skip at this cutscene time")
             p.add_argument("--face", choices=("auto", "facs", "gui"), default="auto", help="expression backend")
             p.add_argument("--label", default="")
@@ -1303,8 +1725,11 @@ def main(arguments=None) -> int:
         if result.get("generated_luau"):
             print(result["generated_luau"])
         return 0 if result.get("ok") else 1
-    spec = {"timeline": timeline, "speed": args.speed, "clock": args.clock, "head": args.head,
-            "skip_at": args.skip_at, "label": args.label, "face_backend": args.face}
+    avatar = AVATARS[args.avatar]
+    spec = {"timeline": timeline, "speed": args.speed, "clock": args.clock,
+            "head": args.head or (avatar["head"] if avatar.get("legacy") else 0), "avatar": args.avatar,
+            "set": args.set, "skip_at": args.skip_at, "label": args.label, "face_backend": args.face,
+            "quality": None if args.quality == "none" else args.quality}
     report = asyncio.run(run_cutscene_lab(Path(args.home), [spec], Path(args.out), keep=args.keep))
     print(json.dumps(public_summary(report), indent=1, default=str))
     return 0 if report.get("ok") else 1

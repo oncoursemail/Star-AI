@@ -1,5 +1,6 @@
-"""STAR Cutscene Studio: the typed Luau modules, the timeline validator and craft check, Luau generation, the Studio
-lab against a stand-in, console evidence parsing, frame alignment and the measured critique, the opt-in skill pack."""
+"""STAR Cutscene Studio: the typed Luau modules, the timeline validator and craft check (with the v4 cinematic
+defaults), Luau generation, the Studio lab against a stand-in, console evidence parsing, frame alignment and the measured
+critique (composition, VFX coverage, face toward the lens, ground), the opt-in skill pack."""
 import asyncio
 import base64
 import copy
@@ -71,7 +72,7 @@ def test_player_restores_camera_controls_and_ui_and_never_tweens_the_camera():
 
 # ------------------------------------------------------------------ timeline validation and craft
 
-@pytest.mark.parametrize("version", [1, 2, 3])
+@pytest.mark.parametrize("version", [1, 2, 3, 4])
 def test_demo_timelines_are_valid_15_second_cutscenes_with_the_required_beats(version):
     timeline = cut.demo_timeline(version)
     assert cut.validate_timeline(timeline) == []
@@ -83,14 +84,14 @@ def test_demo_timelines_are_valid_15_second_cutscenes_with_the_required_beats(ve
 def test_craft_check_flags_the_first_draft_and_passes_the_final():
     first = cut.craft_check(cut.demo_timeline(1))
     assert any("linear easing" in n for n in first) and any("take the bars out" in n for n in first)
-    assert cut.craft_check(cut.demo_timeline(3)) == []
-    bad = cut.demo_timeline(3)
+    assert cut.craft_check(cut.demo_timeline(4)) == []
+    bad = cut.demo_timeline(4)
     for cue in bad["cues"]:
         if cue["kind"] == "expression" and cue["name"] == "happy":
             cue["at"] = 8.0  # during the crystal shot, which does not look at the hero
     bad["cues"].sort(key=lambda c: c["at"])
     assert any("off camera" in n for n in cut.craft_check(bad))
-    short = cut.demo_timeline(3)
+    short = cut.demo_timeline(4)
     short["cues"] = [dict(c, duration=0.5) if c["kind"] == "caption" else c for c in short["cues"]]
     assert any("reading needs" in n for n in cut.craft_check(short))
 
@@ -106,6 +107,13 @@ def test_craft_check_flags_the_first_draft_and_passes_the_final():
     (lambda t: t["shots"][0].update(fov=[200]), "FOV"),
     (lambda t: t["cues"].append({"at": 14.9, "kind": "anim", "actor": "Hero", "animation": "http://x"}), "rbxassetid"),
     (lambda t: t.update(length=200), "length"),
+    (lambda t: t.update(look="noir"), "unknown look"),
+    (lambda t: t["shots"][1].update(handheld=5), "handheld"),
+    (lambda t: t["shots"][1].update(rim="a b"), "rim must be"),
+    (lambda t: t["shots"][0].update(dof={"pullFrom": (1, 2, 3)}), "focus pull needs"),
+    (lambda t: t["shots"][0].update(dof={"focusActor": "Hero", "pullFrom": (1, 2)}), "pullFrom"),
+    (lambda t: t["cues"].append({"at": 14.9, "kind": "vfx", "ability": "a", "style": "b", "scale": 3}), "scale"),
+    (lambda t: t["cues"].append({"at": 14.9, "kind": "vfx", "ability": "a", "style": "b", "screen": 2}), "screen"),
 ])
 def test_validator_refuses_broken_or_unsafe_timelines(change, expected):
     timeline = copy.deepcopy(cut.demo_timeline())
@@ -122,7 +130,7 @@ def test_generated_luau_renders_vectors_lists_and_escaped_text():
     timeline["cues"].append({"at": 14.95, "kind": "caption", "speaker": "Hero", "text": 'He said "go" (now)!',
                              "duration": 0.05})
     code = cut.timeline_luau(timeline)
-    assert code.startswith("--!strict") and "Vector3.new(-34, 9, -22)" in code
+    assert code.startswith("--!strict") and "Vector3.new(-31, 3.4, 17)" in code and 'look = "golden_hour"' in code
     assert "fov = { 55, 52, 50 }" in code and r'text = "He said \"go\" (now)!"' in code
     assert luau_lint.lint(code, safety_checks=True) == []
 
@@ -341,3 +349,156 @@ def test_the_cutscene_pack_is_opt_in_bounded_and_chosen_for_cutscene_words():
     prompt = "In my Roblox game: a boss intro cutscene with a letterbox, a skip button and FaceControls expressions."
     assert skill_packs.matching_names(prompt, enabled=names) == ["roblox-cutscenes"]
     assert skill_packs.matching_names("Plan a cinematic camera path for my film.", enabled=names) == []
+
+
+# ------------------------------------------------------------------ v4 cinematic defaults
+
+def test_look_presets_and_accents_match_between_luau_and_python():
+    look = luau("CutsceneLook")
+    presets = re.findall(r"^\t(\w+) = \{\n", look.split("CutsceneLook.PRESETS = {")[1].split("CutsceneLook.ORDER")[0], re.M)
+    assert presets == list(cut.LOOKS)
+    types = luau("CutsceneTypes")
+    assert set(re.findall(r"(\w+) = true", types.split("Types.LOOKS = {")[1].split("}")[0])) == set(cut.LOOKS)
+    accents = re.findall(r"^\t(\w+) = \{\n\t\tname = \"(\w+)\"", look, re.M)
+    assert [a for a, b in accents if a == b] == list(cut.ACCENTS)
+    # bloom only on emissives: every preset's threshold is above 1 (the sky and lit walls stay below it)
+    assert all(float(x) > 1 for x in re.findall(r"threshold = ([0-9.]+)", look))
+    # an accent never tints the screen or raises a sky pillar
+    block = look.split("CutsceneLook.ACCENTS = {")[1].split("local LIGHTING_PROPS")[0]
+    assert '"tint"' not in block and '"pillar"' not in block
+
+
+def test_player_applies_and_restores_the_look_rim_and_focus_pull():
+    player = luau("CutscenePlayer")
+    for needle in ("CutsceneLook.apply(lookName)", "restoreLook()", "CutsceneLook.rim(", "rim:destroy()", "d.pullFrom",
+                   "rim:place(rimHead, cf.Position)"):
+        assert needle in player, needle
+    look = luau("CutsceneLook")
+    assert "effect.Enabled = true" in look and "instance:Destroy()" in look  # restore() undoes everything
+    path = luau("CameraPath")
+    assert "function CameraPath.handheld" in path and "math.noise" in path and "shot.handheld" in path
+    client = luau("CutsceneClient")
+    assert "scaledStyle" in client and "CutsceneLook.ACCENTS" in client and "SCREEN_DEFAULT = 0.35" in client
+
+
+def test_actor_idle_is_the_main_default_idle_not_the_look_around():
+    motion = luau("ActorMotion")
+    assert 'idle = "rbxassetid://507766388"' in motion and 'idle = "rbxassetid://507766666"' not in motion
+
+
+def test_avatar_description_and_lab_config():
+    service = luau("CutsceneService")
+    assert "function CutsceneService.describe" in service and "SetAccessories(list, true)" in service
+    assert "EyebrowAccessory" not in service  # not a HumanoidDescription property (the first v4 run failed on it)
+    config = cut.lab_config({"set": "v4", "avatar": "explorer"}, "r")
+    assert 'set = "v4"' in config and "origin = { -300, 4, 300 }" in config
+    assert 'kind = "Jacket"' in config and "head = 10725826963" in config and "Color3.fromRGB(" in config
+    legacy = cut.lab_config({"avatar": "dylan_v3", "head": 10687288296}, "r")
+    assert "avatar =" not in legacy and 'set = "v3"' in legacy and "origin = { -300, 0, 300 }" in legacy
+    with pytest.raises(ValueError):
+        cut._avatar_luau({"layered": [{"id": 1, "kind": "Jacket\"] game:Destroy() --"}]})
+
+
+def test_lab_dresses_the_set_and_measures_the_ground():
+    server = cut.LAB_SERVER
+    assert 'config.set == "v4"' in server and "FillBlock" in server and "Enum.Material.LeafyGrass)" in server
+    assert "__MARK__ ground" in server and "workspace:Raycast" in server and "origin = origin * CFrame.new(0, hit" in server
+    assert "FillBall(at(" in server and ").Position," in server  # FillBall takes a Vector3 centre
+    client = cut.LAB_CLIENT_SRC
+    assert "facing=" in client and "Crystal:" in client and 'CutsceneClient.composerVfx("__VFX__")' in client
+
+
+def test_cinematic_notes_flag_the_basic_v3_and_pass_v4():
+    notes = cut.cinematic_notes(cut.demo_timeline(3))
+    text = " ".join(notes)
+    assert "no look preset" in text and "without a rim light" in text and "full-size ability" in text
+    assert cut.cinematic_notes(cut.demo_timeline(4)) == []
+    static = cut.demo_timeline(4)
+    static["shots"][3].update(points=[(6, 4.4, 4.6)], fov=[30])
+    assert any("static camera" in n for n in cut.cinematic_notes(static))
+    quick = cut.demo_timeline(4)
+    quick["cues"].append({"at": 11.5, "kind": "expression", "actor": "Hero", "name": "sad", "duration": 0.2})
+    quick["cues"].sort(key=lambda c: c["at"])
+    assert any("held 0.2s" in n for n in cut.cinematic_notes(quick))
+    loud = cut.demo_timeline(4)
+    for cue in loud["cues"]:
+        if cue["kind"] == "vfx":
+            cue.update(ability="energy_burst", scale=1.0, screen=0.9)
+    text = " ".join(cut.cinematic_notes(loud))
+    assert "full-size ability" in text and "flash the whole frame" in text
+
+
+def test_console_parses_marks_and_facing():
+    line = ("STARCUT frame r2 5.000 crystal fov=44.000 head 0.270 0.500 true 0.180 face facs neutral JawDrop=0.000 "
+            "tracks idle:1.00,facing=-0.49 marks Crystal:0.650:0.480:true")
+    sample = cut.parse_console(line, "r2")["samples"][0]
+    assert sample["marks"]["Crystal"] == {"x": 0.65, "y": 0.48, "on_screen": True}
+    assert "facing=-0.49" in sample["tracks"]
+
+
+def _green(size=(192, 108), share=0.0):
+    image = Image.new("RGB", size, (90, 110, 90))
+    if share:
+        ImageDraw.Draw(image).rectangle((0, 0, int(size[0] * share), size[1]), fill=(40, 255, 90))
+    buffer = io.BytesIO()
+    image.save(buffer, "PNG")
+    return buffer.getvalue()
+
+
+def test_effect_share_measures_glow_and_white():
+    assert cut.effect_share(_green())["glow"] == 0
+    assert cut.effect_share(_green(share=0.6))["glow"] > 0.5
+    white = io.BytesIO()
+    Image.new("RGB", (64, 36), (255, 255, 255)).save(white, "PNG")
+    assert cut.effect_share(white.getvalue())["white"] == 1
+
+
+def test_critique_measures_composition_vfx_coverage_facing_and_ground():
+    timeline = cut.demo_timeline(4)
+    evidence = _evidence(timeline)
+    for sample in evidence["samples"]:
+        if sample["shot"] == "smile":
+            sample.update(x=0.5, y=0.62, tracks=["idle:1.00", "facing=-0.3"])
+    evidence["flags"]["ground"] = "2.00:Terrain 2.00:Terrain 2.00:Terrain"
+    frames = _clip(timeline)
+    vfx = next(c["at"] for c in timeline["cues"] if c["kind"] == "vfx")
+    for f in frames:
+        if vfx + 0.2 <= f["t"] <= vfx + 1.2:
+            f["data"] = _green(share=0.8)
+    report = cut.critique(frames, evidence, timeline)
+    text = " ".join(report["findings"])
+    assert "smile: close-up face at x 0.50, not on a third" in text
+    assert "the eyes sit at y 0.62" in text and "turns away from the camera" in text
+    assert "covers" in text and "accent" in text
+    assert "+2.00 studs from the walkable ground" in text
+    good = cut.critique(_clip(timeline), _evidence(timeline), timeline)
+    assert not any("third" in f or "covers" in f for f in good["findings"])
+
+
+def test_lab_sets_and_restores_render_quality(tmp_path):
+    assert "Enum.QualityLevel.Level21" in cut.quality_luau("21") and "Enum.QualityLevel.Automatic" in cut.quality_luau("Automatic")
+    assert "Level01" in cut.quality_luau("0")
+    clock = {"t": 0.0}
+
+    async def sleep(seconds):
+        clock["t"] += seconds
+
+    def now():
+        clock["t"] += 0.5
+        return clock["t"]
+
+    guarded = FakeGuarded()
+    seen = []
+
+    async def with_quality(name, arguments, original=guarded.call_tool):
+        if name == "execute_luau" and "STARCUT_QUALITY" in arguments["code"]:
+            seen.append(arguments["code"])
+            text = "STAR_EDIT " + json.dumps({"ok": True, "result": "STARCUT_QUALITY Automatic Level21"})
+            return {"content": [{"type": "text", "text": text}]}
+        return await original(name, arguments)
+
+    guarded.call_tool = with_quality
+    lab = cut.CutsceneLab(guarded, tmp_path, log=lambda *_: None, sleep=sleep, clock=now)
+    report = asyncio.run(lab.run({"timeline": cut.demo_timeline(), "speed": 0.5, "quality": "21"}))
+    assert report["quality"] == {"ok": True, "before": "Automatic", "during": "Level21"}
+    assert len(seen) == 2 and "Level21" in seen[0] and "Automatic" in seen[1]  # restored after the playtest

@@ -26,8 +26,10 @@ local ActorMotion = {}
 
 -- Animation ids from Roblox's default R15 Animate script (owned by Roblox, load in any experience).
 ActorMotion.DEFAULT_ANIMATIONS = {
-	idle = "rbxassetid://507766666",
-	walk = "rbxassetid://507777826",
+	-- 507766388 is the default Animate script's main idle (weight 9); 507766666 is its rare look-around variant
+	-- (weight 1), which turned the actor's head away from the camera in every close-up up to v4c.
+	idle = "rbxassetid://507766388",
+	walk = "rbxassetid://913402848", -- the walk the current default Animate script plays (Players:CreateHumanoidModelFromDescriptionAsync rigs)
 	run = "rbxassetid://507767714",
 	wave = "rbxassetid://507770239",
 	point = "rbxassetid://507770453",
@@ -58,12 +60,12 @@ end
 
 -- Built-in gestures as keyframes: { time, { joint = CFrame } }. Angles are joint-space rotations.
 ActorMotion.GESTURES = {
-	recoil = { -- surprised step back: lean back, hands come up
+	recoil = { -- surprised step back: lean back, hands come up to the chest (elbows out, not arms at the lens)
 		{ 0, {} },
-		{ 0.25, { UpperTorso = deg(-14, 0, 0), Head = deg(-8, 0, 0), RightUpperArm = deg(70, 0, 15),
-			LeftUpperArm = deg(70, 0, -15), RightLowerArm = deg(40, 0, 0), LeftLowerArm = deg(40, 0, 0) } },
-		{ 0.9, { UpperTorso = deg(-10, 0, 0), Head = deg(-4, 0, 0), RightUpperArm = deg(55, 0, 12),
-			LeftUpperArm = deg(55, 0, -12), RightLowerArm = deg(35, 0, 0), LeftLowerArm = deg(35, 0, 0) } },
+		{ 0.25, { UpperTorso = deg(-14, 0, 0), Head = deg(-8, 0, 0), RightUpperArm = deg(38, 0, 22),
+			LeftUpperArm = deg(38, 0, -22), RightLowerArm = deg(62, 0, 0), LeftLowerArm = deg(62, 0, 0) } },
+		{ 0.9, { UpperTorso = deg(-10, 0, 0), Head = deg(-4, 0, 0), RightUpperArm = deg(30, 0, 16),
+			LeftUpperArm = deg(30, 0, -16), RightLowerArm = deg(50, 0, 0), LeftLowerArm = deg(50, 0, 0) } },
 		{ 1.4, {} },
 	},
 	nod = {

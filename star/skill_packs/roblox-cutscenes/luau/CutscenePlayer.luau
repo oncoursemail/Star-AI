@@ -8,7 +8,9 @@
 --   * move walking actors (trapezoid speed profile: short acceleration, constant cruise that matches the walk cycle,
 --     short deceleration; the walk track's speed follows the actual speed, so feet do not slide),
 --   * update facial expressions, then set the camera from the active shot's path (CameraType Scriptable, CFrame,
---     FieldOfView, Focus) and depth of field.
+--     FieldOfView, Focus, handheld drift) and depth of field (with an eased focus pull when the shot has one),
+--   * keep the rim light behind the head of the shot's `rim` actor.
+-- The timeline's `look` (CutsceneLook preset: golden_hour, dusk, battle) is applied for the cutscene's length.
 -- At the end, on skip, or on cancel: actors are put in their end state (skip), the camera goes back to Custom on
 -- the player's Humanoid with the old FOV, controls and hidden UI come back, and everything made is destroyed.
 
@@ -21,6 +23,7 @@ local CameraPath = require(script.Parent:WaitForChild("CameraPath"))
 local ExpressionPlayer = require(script.Parent:WaitForChild("ExpressionPlayer"))
 local CutsceneUi = require(script.Parent:WaitForChild("CutsceneUi"))
 local ActorMotion = require(script.Parent:WaitForChild("ActorMotion"))
+local CutsceneLook = require(script.Parent:WaitForChild("CutsceneLook"))
 
 export type PlayOptions = {
 	origin: CFrame, -- where the timeline's local space sits in the world
@@ -33,6 +36,7 @@ export type PlayOptions = {
 	hideScreenGuis: boolean?, -- default true
 	keepActors: boolean?, -- leave the actors in the world after the end (default false)
 	faceBackend: string?, -- "auto" (default: FaceControls when the head has them), "facs" or "gui"
+	look: string?, -- overrides timeline.look ("neutral" keeps the game's lighting)
 }
 
 export type Handle = {
@@ -151,6 +155,9 @@ function CutscenePlayer.play(timeline: Types.Timeline, options: PlayOptions): (H
 	end)
 
 	local ui = CutsceneUi.new({ barHeight = timeline.letterbox, skippable = timeline.skippable ~= false, speed = speed })
+	local lookName = options.look or timeline.look
+	local restoreLook = CutsceneLook.apply(lookName)
+	local rim = CutsceneLook.rim(lookName, folder)
 	local dof = Instance.new("DepthOfFieldEffect")
 	dof.Enabled = false
 	dof.Parent = camera
@@ -307,9 +314,11 @@ function CutscenePlayer.play(timeline: Types.Timeline, options: PlayOptions): (H
 		for _, face in faces do
 			face:destroy()
 		end
+		rim:destroy()
 		if not options.keepActors then
 			folder:Destroy()
 		end
+		restoreLook()
 		dof:Destroy()
 		ui:destroy()
 		camera.CameraType = Enum.CameraType.Custom
@@ -369,13 +378,27 @@ function CutscenePlayer.play(timeline: Types.Timeline, options: PlayOptions): (H
 		camera.CameraType = Enum.CameraType.Scriptable
 		camera.CFrame = cf
 		camera.FieldOfView = fov
-		local focusActor = shot.dof and shot.dof.focusActor
+		local d = shot.dof
+		local focusActor = d and d.focusActor
 		local focusPoint = if focusActor then actorHead(focusActor) else nil
 		if focusPoint then
-			dof.FocusDistance = (focusPoint - cf.Position).Magnitude
+			local distance = (focusPoint - cf.Position).Magnitude
+			local pullFrom = d and d.pullFrom
+			if d and pullFrom then
+				-- focus pull: hold on the near/far point, then rack to the subject with an eased curve
+				local from = (origin:PointToWorldSpace(pullFrom) - cf.Position).Magnitude
+				local a = CameraPath.ease(((t - shot.start) - (d.pullAt or 0.3)) / math.max(0.05, d.pullTime or 0.8), "Sine", "InOut")
+				distance = from + (distance - from) * a
+			end
+			dof.FocusDistance = distance
 			camera.Focus = CFrame.new(focusPoint)
 		else
 			camera.Focus = cf * CFrame.new(0, 0, -20)
+		end
+		local rimHead = if shot.rim then actorHead(shot.rim) else nil
+		rim:enable(rimHead ~= nil)
+		if rimHead then
+			rim:place(rimHead, cf.Position)
 		end
 		local hook = options.onFrame
 		if hook then
