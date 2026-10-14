@@ -1,0 +1,1531 @@
+[
+ {
+  "id": "C-01",
+  "category": "c-memory",
+  "difficulty": 2,
+  "goal": "Spot the realloc leak and fix it with a temporary pointer",
+  "prompt": "My C program sometimes loses memory when it runs out of RAM. Explain the bug in this function and fix it. In your explanation, say what realloc returns on failure and what happens to the original block.\n\nint push(int **items, size_t *len, int value) {\n    *items = realloc(*items, (*len + 1) * sizeof **items);\n    (*items)[*len] = value;\n    (*len)++;\n    return 0;\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-c"
+  ],
+  "expected_sources": [
+   "https://en.cppreference.com/w/c/memory/realloc",
+   "https://wiki.sei.cmu.edu/confluence/display/c"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps `p = realloc(p, n)`"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "null_on_failure",
+     "why": "says realloc returns NULL on failure",
+     "scope": "prose",
+     "any": [
+      "(?i)realloc\\W{0,3}\\s.{0,80}\\b(returns?|gives?)\\s+`?(NULL|a null pointer|nullptr)",
+      "(?i)(NULL|null pointer).{0,60}(on|when it|if it|if allocation) fail"
+     ]
+    },
+    {
+     "id": "original_kept",
+     "why": "says the original block is left allocated and leaks when overwritten",
+     "scope": "prose",
+     "any": [
+      "(?i)(original|old) (block|memory|pointer|buffer).{0,120}(still (valid|allocated)|not freed|untouched|leak)",
+      "(?i)leak"
+     ]
+    },
+    {
+     "id": "temp_pointer",
+     "why": "fixes it with a temporary pointer checked before assignment",
+     "scope": "prose",
+     "re": "(?i)\\btemp(orary)?\\b|\\btmp\\b|\\bnew_items\\b|\\bgrown\\b"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_cast_fix",
+     "why": "casting realloc's result is not the fix",
+     "scope": "prose",
+     "re": "(?i)(fix|solution) is to cast"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says realloc returns NULL on failure",
+    "Present: says the original block is left allocated and leaks when overwritten",
+    "Present: fixes it with a temporary pointer checked before assignment",
+    "Absent: casting realloc's result is not the fix"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "C-02",
+  "category": "c-undefined-behaviour",
+  "difficulty": 3,
+  "goal": "Explain why an overflow check is optimised away and replace it with a defined check",
+  "prompt": "This overflow check in my C code works at -O0 but at -O2 the compiler removes it and the program misbehaves. Why? Show a correct way to check before adding. Name the C23 header or the compiler builtin you would use.\n\nint safe_add(int a, int b, int *out) {\n    if (b > 0 && a + b < a) return -1; /* overflow */\n    *out = a + b;\n    return 0;\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-c"
+  ],
+  "expected_sources": [
+   "https://en.cppreference.com/w/c/language/behavior",
+   "https://en.cppreference.com/w/c/header/stdckdint"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Claims signed overflow wraps by definition"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "ub",
+     "why": "says signed overflow is undefined behaviour",
+     "scope": "prose",
+     "any": [
+      "(?i)undefined behaviou?r",
+      "(?i)\\bUB\\b"
+     ]
+    },
+    {
+     "id": "optimiser_assumes",
+     "why": "explains the optimiser assumes it cannot happen",
+     "scope": "prose",
+     "any": [
+      "(?i)(assume|assumes|assuming).{0,80}(never|cannot|can't|does not|doesn't) (happen|overflow|occur)",
+      "(?i)(optimi[sz]er|compiler).{0,80}(removes?|deletes?|drops?|folds?).{0,60}(check|condition|test)"
+     ]
+    },
+    {
+     "id": "defined_check",
+     "why": "uses ckd_add, __builtin_add_overflow or an INT_MAX comparison",
+     "scope": "prose",
+     "any": [
+      "ckd_add",
+      "__builtin_add_overflow",
+      "INT_MAX\\s*-\\s*b",
+      "stdckdint"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "wrap_claim",
+     "why": "does not claim signed overflow is defined to wrap",
+     "scope": "prose",
+     "re": "(?i)signed (integer )?overflow (is|wraps)\\W{0,4}(well-defined|(?<!un)defined|guaranteed)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says signed overflow is undefined behaviour",
+    "Present: explains the optimiser assumes it cannot happen",
+    "Present: uses ckd_add, __builtin_add_overflow or an INT_MAX comparison",
+    "Absent: does not claim signed overflow is defined to wrap"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "CPP-01",
+  "category": "cpp-iterator-invalidation",
+  "difficulty": 2,
+  "goal": "Fix erasing from a vector inside a range-for loop",
+  "prompt": "My C++ game crashes randomly when enemies die. What is wrong and what is the idiomatic C++20 fix? Name the concept that causes the crash.\n\nfor (auto& e : enemies) {\n    if (e.hp <= 0) {\n        enemies.erase(std::find(enemies.begin(), enemies.end(), e));\n    }\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-cpp"
+  ],
+  "expected_sources": [
+   "https://en.cppreference.com/w/cpp/container/vector/erase",
+   "https://en.cppreference.com/w/cpp/container/vector/erase2"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps erasing inside the range-for"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "invalidation",
+     "why": "names iterator invalidation",
+     "scope": "prose",
+     "re": "(?i)invalidat"
+    },
+    {
+     "id": "ub",
+     "why": "says it is undefined behaviour",
+     "scope": "prose",
+     "re": "(?i)undefined behaviou?r|\\bUB\\b"
+    },
+    {
+     "id": "erase_if",
+     "why": "uses std::erase_if or the erase-remove idiom",
+     "scope": "prose",
+     "any": [
+      "erase_if",
+      "(?i)erase[- ]remove",
+      "remove_if"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_safe_claim",
+     "why": "does not claim erasing in a range-for is safe",
+     "scope": "prose",
+     "re": "(?i)(safe|fine|ok) to erase (inside|in|during) (a )?range"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names iterator invalidation",
+    "Present: says it is undefined behaviour",
+    "Present: uses std::erase_if or the erase-remove idiom",
+    "Absent: does not claim erasing in a range-for is safe"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "CPP-02",
+  "category": "cpp-dangling",
+  "difficulty": 2,
+  "goal": "Explain a dangling std::string_view bound to a temporary",
+  "prompt": "Why does this C++ print garbage sometimes? Explain and fix it.\n\nstd::string makeName(int id) { return \"Player\" + std::to_string(id); }\n\nint main() {\n    std::string_view name = makeName(7);\n    std::cout << name << '\\n';\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-cpp"
+  ],
+  "expected_sources": [
+   "https://en.cppreference.com/w/cpp/string/basic_string_view",
+   "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps the string_view bound to a temporary"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "temporary",
+     "why": "says the returned std::string is a temporary destroyed at the end of the statement",
+     "scope": "prose",
+     "re": "(?i)temporar"
+    },
+    {
+     "id": "dangling",
+     "why": "names the dangling view",
+     "scope": "prose",
+     "any": [
+      "(?i)dangl",
+      "(?i)(destroyed|freed|gone|deallocated).{0,80}(view|string_view|points)"
+     ]
+    },
+    {
+     "id": "non_owning",
+     "why": "explains string_view does not own its characters",
+     "scope": "prose",
+     "any": [
+      "(?i)(does ?n[o']t|not|never) own",
+      "(?i)non-owning"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "owns_claim",
+     "why": "does not claim string_view copies or owns the data",
+     "scope": "prose",
+     "re": "(?i)string_view (owns|copies) (the|its)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says the returned std::string is a temporary destroyed at the end of the statement",
+    "Present: names the dangling view",
+    "Present: explains string_view does not own its characters",
+    "Absent: does not claim string_view copies or owns the data"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "CPP-03",
+  "category": "cpp-linker",
+  "difficulty": 2,
+  "goal": "Diagnose an undefined reference to a template function defined in a .cpp file",
+  "prompt": "My C++ project fails to link: `undefined reference to 'int clampAdd<int>(int, int)'` (MSVC says LNK2019). The function template is declared in math.h and defined in math.cpp, and main.cpp calls clampAdd(1, 2). Why, and how do I fix it?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-cpp"
+  ],
+  "expected_sources": [
+   "https://isocpp.org/wiki/faq/templates#templates-defn-vs-decl",
+   "https://en.cppreference.com/w/cpp/language/function_template"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Suggests extern \"C\""
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "template_instantiation",
+     "why": "explains templates are instantiated where used and need the definition visible",
+     "scope": "prose",
+     "re": "(?i)instantiat"
+    },
+    {
+     "id": "header",
+     "why": "moves the definition into the header (or uses explicit instantiation)",
+     "scope": "prose",
+     "any": [
+      "(?i)(move|put|define).{0,60}(header|math\\.h)",
+      "(?i)explicit(ly)? instantiat"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_extern_c",
+     "why": "extern \"C\" is not the fix",
+     "scope": "prose",
+     "re": "(?i)(add|use|wrap.{0,20}in) extern \\\"C\\\""
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains templates are instantiated where used and need the definition visible",
+    "Present: moves the definition into the header (or uses explicit instantiation)",
+    "Absent: extern \"C\" is not the fix"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "RS-01",
+  "category": "rust-borrow-checker",
+  "difficulty": 2,
+  "goal": "Fix a conflicting borrow when pushing to a Vec while holding a reference",
+  "prompt": "This Rust code fails to compile. Explain the error and fix it. In your explanation, name the rustc error code.\n\nfn main() {\n    let mut scores = vec![10, 20, 30];\n    let first = &scores[0];\n    scores.push(40);\n    println!(\"first = {first}\");\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-rust"
+  ],
+  "expected_sources": [
+   "https://doc.rust-lang.org/error_codes/E0502.html",
+   "https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Uses unsafe to bypass the borrow checker"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "code",
+     "why": "names E0502",
+     "scope": "prose",
+     "re": "E0502"
+    },
+    {
+     "id": "why",
+     "why": "explains push needs a mutable borrow while an immutable borrow is alive",
+     "scope": "prose",
+     "any": [
+      "(?i)mutabl.{0,120}(immutabl|shared)",
+      "(?i)(immutabl|shared).{0,120}mutabl"
+     ]
+    },
+    {
+     "id": "realloc_reason",
+     "why": "mentions push may reallocate or that the reference is still used later",
+     "scope": "prose",
+     "any": [
+      "(?i)realloc",
+      "(?i)(still|later) (used|alive|in use)",
+      "(?i)used (later|afterwards|after)"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_unsafe",
+     "why": "unsafe is not the fix",
+     "scope": "prose",
+     "re": "(?i)\\b(use|add|wrap.{0,20}in) (an? )?`?unsafe\\b"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names E0502",
+    "Present: explains push needs a mutable borrow while an immutable borrow is alive",
+    "Present: mentions push may reallocate or that the reference is still used later",
+    "Absent: unsafe is not the fix"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "RS-02",
+  "category": "rust-threads",
+  "difficulty": 2,
+  "goal": "Fix a closure that borrows a local when spawning a thread",
+  "prompt": "Rust says `closure may outlive the current function, but it borrows 'names', which is owned by the current function`. How do I fix it? Name the error code and the language feature or std API you use.\n\nuse std::thread;\nfn main() {\n    let names = vec![\"a\".to_string(), \"b\".to_string()];\n    let h = thread::spawn(|| println!(\"{}\", names.len()));\n    h.join().unwrap();\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-rust"
+  ],
+  "expected_sources": [
+   "https://doc.rust-lang.org/error_codes/E0373.html",
+   "https://doc.rust-lang.org/std/thread/fn.scope.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Leaks memory or uses unsafe"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "code",
+     "why": "names E0373",
+     "scope": "prose",
+     "re": "E0373"
+    },
+    {
+     "id": "static",
+     "why": "explains spawned threads need 'static data",
+     "scope": "prose",
+     "any": [
+      "'static",
+      "(?i)outlive"
+     ]
+    },
+    {
+     "id": "fix",
+     "why": "uses a move closure or thread::scope (or Arc)",
+     "scope": "prose",
+     "any": [
+      "(?i)\\bmove\\b",
+      "thread::scope",
+      "\\bArc\\b"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_leak",
+     "why": "does not leak memory or use unsafe to satisfy the borrow checker",
+     "scope": "prose",
+     "re": "(?i)Box::leak|mem::forget|\\bunsafe\\b"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names E0373",
+    "Present: explains spawned threads need 'static data",
+    "Present: uses a move closure or thread::scope (or Arc)",
+    "Absent: does not leak memory or use unsafe to satisfy the borrow checker"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "RS-03",
+  "category": "rust-2024-edition",
+  "difficulty": 2,
+  "goal": "Explain why rng.gen() fails after moving to the 2024 edition",
+  "prompt": "After switching my Rust crate to `edition = \"2024\"`, `let roll: u32 = rng.gen();` no longer compiles (expected identifier, found reserved keyword). Why, and what should I write instead?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-rust"
+  ],
+  "expected_sources": [
+   "https://doc.rust-lang.org/edition-guide/rust-2024/gen-keyword.html",
+   "https://doc.rust-lang.org/reference/identifiers.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Calls it a typo or a rand bug"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "reserved",
+     "why": "says gen is a reserved keyword in the 2024 edition",
+     "scope": "prose",
+     "any": [
+      "(?i)\\bgen\\b.{0,80}(reserved|keyword)",
+      "(?i)(reserved|keyword).{0,80}\\bgen\\b"
+     ]
+    },
+    {
+     "id": "fix",
+     "why": "uses r#gen or rand's renamed method random()",
+     "scope": "prose",
+     "any": [
+      "r#gen",
+      "\\brandom\\(\\)",
+      "(?i)\\brandom\\b method"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_typo",
+     "why": "does not call it a typo",
+     "scope": "prose",
+     "re": "(?i)\\btypo\\b"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says gen is a reserved keyword in the 2024 edition",
+    "Present: uses r#gen or rand's renamed method random()",
+    "Absent: does not call it a typo"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "ZIG-01",
+  "category": "zig-version-migration",
+  "difficulty": 2,
+  "goal": "Port managed ArrayList code to the unmanaged ArrayList of Zig 0.15+",
+  "prompt": "I upgraded from Zig 0.14 to Zig 0.17 and this no longer compiles: `var list = std.ArrayList(u8).init(allocator); defer list.deinit(); try list.append('a');` What changed and how do I write it now?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-zig"
+  ],
+  "expected_sources": [
+   "https://ziglang.org/download/0.15.1/release-notes.html",
+   "https://ziglang.org/download/0.17.0/release-notes.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps ArrayList.init(allocator)"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "unmanaged",
+     "why": "says ArrayList no longer stores the allocator (unmanaged) since 0.15",
+     "scope": "prose",
+     "any": [
+      "(?i)unmanaged",
+      "(?i)(no longer|doesn't|does not) (store|hold|keep).{0,30}allocator"
+     ]
+    },
+    {
+     "id": "empty",
+     "why": "initializes with .empty",
+     "scope": "prose",
+     "re": "\\.empty\\b"
+    },
+    {
+     "id": "pass_allocator",
+     "why": "passes the allocator to append and deinit",
+     "scope": "prose",
+     "any": [
+      "append\\(\\s*\\w*(gpa|alloc)\\w*\\s*,",
+      "deinit\\(\\s*\\w*(gpa|alloc)\\w*\\s*\\)",
+      "(?i)pass (the )?allocator (to|into) (each|every|append)"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "managed_default",
+     "why": "does not claim the managed ArrayList is still the default",
+     "scope": "prose",
+     "re": "(?i)managed (ArrayList|version) is (still )?the default"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says ArrayList no longer stores the allocator (unmanaged) since 0.15",
+    "Present: initializes with .empty",
+    "Present: passes the allocator to append and deinit",
+    "Absent: does not claim the managed ArrayList is still the default"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "ZIG-02",
+  "category": "zig-version-migration",
+  "difficulty": 3,
+  "goal": "Replace an errdefer capture removed in Zig 0.17",
+  "prompt": "Zig 0.17 rejects `errdefer |err| std.log.err(\"load failed: {s}\", .{@errorName(err)});` in my loader function. Why, and how do I log the error now?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-zig"
+  ],
+  "expected_sources": [
+   "https://ziglang.org/download/0.17.0/release-notes.html",
+   "https://ziglang.org/documentation/master/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Claims the capture still works"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "removed",
+     "why": "says the errdefer capture was removed in 0.17",
+     "scope": "prose",
+     "any": [
+      "(?i)(capture|\\|err\\|).{0,80}(removed|no longer (allowed|supported))",
+      "(?i)(removed|no longer).{0,80}(capture|\\|err\\|)"
+     ]
+    },
+    {
+     "id": "wrapper",
+     "why": "moves the logging to a caller or wrapper with catch |err|",
+     "scope": "prose",
+     "any": [
+      "catch \\|err\\|",
+      "(?i)\\bwrap(per|ping)?\\b"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "still_works",
+     "why": "does not claim errdefer |err| still works",
+     "scope": "prose",
+     "re": "(?i)errdefer \\|err\\| (still )?works"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says the errdefer capture was removed in 0.17",
+    "Present: moves the logging to a caller or wrapper with catch |err|",
+    "Absent: does not claim errdefer |err| still works"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "GO-01",
+  "category": "go-concurrency",
+  "difficulty": 2,
+  "goal": "Fix concurrent map writes from goroutines",
+  "prompt": "My Go server crashes with `fatal error: concurrent map writes`. Several goroutines run `hits[path]++` on a shared `map[string]int`. Why can't I recover from it, how do I fix it, and how do I find such bugs earlier?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-go"
+  ],
+  "expected_sources": [
+   "https://go.dev/doc/articles/race_detector",
+   "https://go.dev/ref/mem"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Suggests recover() to survive the crash"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "not_safe",
+     "why": "says Go maps are not safe for concurrent writes",
+     "scope": "prose",
+     "any": [
+      "(?i)(not|isn't|aren't|are not|is not) (safe|thread-safe|goroutine-safe)",
+      "(?i)data race"
+     ]
+    },
+    {
+     "id": "lock",
+     "why": "guards the map with a mutex (or sync.Map/channel ownership)",
+     "scope": "prose",
+     "any": [
+      "sync\\.(RW)?Mutex",
+      "\\bMutex\\b",
+      "sync\\.Map"
+     ]
+    },
+    {
+     "id": "race",
+     "why": "recommends the race detector",
+     "scope": "prose",
+     "any": [
+      "-race",
+      "(?i)race detector"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_recover",
+     "why": "recover() is not a fix (fatal errors cannot be recovered)",
+     "scope": "prose",
+     "re": "(?i)(use|add|call) `?recover\\(\\)`?.{0,60}(fix|catch|handle|prevent)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says Go maps are not safe for concurrent writes",
+    "Present: guards the map with a mutex (or sync.Map/channel ownership)",
+    "Present: recommends the race detector",
+    "Absent: recover() is not a fix (fatal errors cannot be recovered)"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GO-02",
+  "category": "go-errors",
+  "difficulty": 3,
+  "goal": "Explain the typed-nil error interface trap",
+  "prompt": "In Go, `validate()` returns `error` and ends with `var verr *ValidationError; return verr` when nothing is wrong. The caller's `if err != nil` is always true. Why? Fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-go"
+  ],
+  "expected_sources": [
+   "https://go.dev/doc/faq#nil_error",
+   "https://go.dev/ref/spec#Interface_types"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps returning the typed nil pointer"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "interface_pair",
+     "why": "explains an interface holds a type and a value, so a typed nil pointer is a non-nil interface",
+     "scope": "prose",
+     "any": [
+      "(?i)(type|dynamic type).{0,80}(value|nil)",
+      "(?i)typed nil"
+     ]
+    },
+    {
+     "id": "return_nil",
+     "why": "fixes it by returning a literal nil",
+     "scope": "prose",
+     "re": "(?i)return (a |an )?(literal |untyped |plain )?`?nil`?"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "wrong_compare",
+     "why": "errors.Is(err, nil) is not the fix",
+     "scope": "prose",
+     "re": "errors\\.Is\\(\\s*err\\s*,\\s*nil\\s*\\)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains an interface holds a type and a value, so a typed nil pointer is a non-nil interface",
+    "Present: fixes it by returning a literal nil",
+    "Absent: errors.Is(err, nil) is not the fix"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "CS-01",
+  "category": "csharp-async",
+  "difficulty": 2,
+  "goal": "Explain a .Result deadlock and make the code async all the way",
+  "prompt": "My C# desktop app freezes forever on this line in a button click handler: `var data = client.GetStringAsync(url).Result;`. Why does it hang and what is the right fix?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-csharp"
+  ],
+  "expected_sources": [
+   "https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/",
+   "https://learn.microsoft.com/en-us/archive/msdn-magazine/2013/march/async-await-best-practices-in-asynchronous-programming"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Blocks on the task in another way"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "deadlock",
+     "why": "names the deadlock",
+     "scope": "prose",
+     "re": "(?i)deadlock"
+    },
+    {
+     "id": "context",
+     "why": "explains the UI thread/synchronization context is blocked while the continuation needs it",
+     "scope": "prose",
+     "re": "(?i)(UI thread|synchroni[sz]ation ?context|main thread)"
+    },
+    {
+     "id": "await",
+     "why": "fixes it with await and an async handler",
+     "scope": "prose",
+     "re": "(?i)\\bawait\\b"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_blocking_fix",
+     "why": "does not replace .Result with another blocking call",
+     "scope": "prose",
+     "re": "(?i)(use|switch to|replace (it )?with) `?\\.?(Wait\\(\\)|GetAwaiter\\(\\)\\.GetResult\\(\\))"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the deadlock",
+    "Present: explains the UI thread/synchronization context is blocked while the continuation needs it",
+    "Present: fixes it with await and an async handler",
+    "Absent: does not replace .Result with another blocking call"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "CS-02",
+  "category": "csharp-unity",
+  "difficulty": 2,
+  "goal": "Explain Unity's fake null with ?. on destroyed objects",
+  "prompt": "In Unity C#, `target?.TakeDamage(10);` throws `MissingReferenceException` after the target GameObject's component was destroyed, even though I used `?.`. Why, and what should I write?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-csharp"
+  ],
+  "expected_sources": [
+   "https://docs.unity3d.com/ScriptReference/Object-operator_eq.html",
+   "https://docs.unity3d.com/ScriptReference/Object.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps ?. on a UnityEngine.Object"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "overload",
+     "why": "explains Unity overloads == null for destroyed objects but ?. bypasses it",
+     "scope": "prose",
+     "any": [
+      "(?i)overload",
+      "(?i)fake null",
+      "(?i)(\\?\\.|null-conditional).{0,120}(bypass|skip|ignore|doesn't use|does not use)"
+     ]
+    },
+    {
+     "id": "fix",
+     "why": "uses an explicit != null check or implicit bool test",
+     "scope": "prose",
+     "any": [
+      "!= null",
+      "(?i)if \\(\\s*target\\s*\\)"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "safe_claim",
+     "why": "does not claim ?. is safe for Unity objects",
+     "scope": "prose",
+     "re": "(?i)\\?\\. (is|works) (safe|fine|correctly) (for|with) Unity"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains Unity overloads == null for destroyed objects but ?. bypasses it",
+    "Present: uses an explicit != null check or implicit bool test",
+    "Absent: does not claim ?. is safe for Unity objects"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "JAVA-01",
+  "category": "java-collections",
+  "difficulty": 1,
+  "goal": "Fix ConcurrentModificationException when removing during for-each",
+  "prompt": "Java throws `java.util.ConcurrentModificationException` here. Why, and what is the clean fix?\n\nfor (Bullet b : bullets) {\n    if (b.isExpired()) bullets.remove(b);\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-java"
+  ],
+  "expected_sources": [
+   "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/ConcurrentModificationException.html",
+   "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/Collection.html#removeIf(java.util.function.Predicate)"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Adds synchronized or catches the exception"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "structural",
+     "why": "explains the list was structurally modified while its iterator was in use (fail-fast)",
+     "scope": "prose",
+     "any": [
+      "(?i)fail-fast",
+      "(?i)(structural|modif).{0,80}iterat",
+      "(?i)iterat.{0,80}(modif|changed)"
+     ]
+    },
+    {
+     "id": "fix",
+     "why": "uses removeIf or Iterator.remove",
+     "scope": "prose",
+     "any": [
+      "removeIf",
+      "(?i)iterator\\.remove|it\\.remove\\(\\)"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_sync",
+     "why": "synchronization is not the fix for a single-threaded loop",
+     "scope": "prose",
+     "re": "(?i)(make|use|add).{0,20}synchronized.{0,40}(fix|solve)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains the list was structurally modified while its iterator was in use (fail-fast)",
+    "Present: uses removeIf or Iterator.remove",
+    "Absent: synchronization is not the fix for a single-threaded loop"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "JAVA-02",
+  "category": "java-equality",
+  "difficulty": 2,
+  "goal": "Explain why Integer == works for 127 but not 128",
+  "prompt": "In Java, `Integer a = 127, b = 127;` gives `a == b` true, but with 128 it is false. Why, and what should I use?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-java"
+  ],
+  "expected_sources": [
+   "https://docs.oracle.com/javase/specs/jls/se25/html/jls-5.html#jls-5.1.7",
+   "https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html#valueOf(int)"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps == on boxed Integers"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "identity",
+     "why": "explains == compares references (identity) for objects",
+     "scope": "prose",
+     "re": "(?i)(reference|identity)"
+    },
+    {
+     "id": "cache",
+     "why": "mentions the Integer cache for -128..127 (autoboxing via valueOf)",
+     "scope": "prose",
+     "re": "(?i)cache"
+    },
+    {
+     "id": "equals",
+     "why": "uses equals (or compares primitives)",
+     "scope": "prose",
+     "any": [
+      "\\.equals\\(",
+      "Objects\\.equals",
+      "(?i)\\bequals\\b"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "jvm_bug",
+     "why": "does not call it a JVM bug",
+     "scope": "prose",
+     "re": "(?i)JVM bug|bug in (the )?(JVM|Java)"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains == compares references (identity) for objects",
+    "Present: mentions the Integer cache for -128..127 (autoboxing via valueOf)",
+    "Present: uses equals (or compares primitives)",
+    "Absent: does not call it a JVM bug"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "KT-01",
+  "category": "kotlin-coroutines",
+  "difficulty": 3,
+  "goal": "Explain why catching Exception breaks coroutine cancellation",
+  "prompt": "In Kotlin, my polling loop inside `viewModelScope.launch { while (true) { try { poll(); delay(5000) } catch (e: Exception) { log(e) } } }` never stops when the screen closes. Why, and how do I fix it?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-kotlin"
+  ],
+  "expected_sources": [
+   "https://kotlinlang.org/docs/cancellation-and-timeouts.html",
+   "https://kotlinlang.org/docs/exception-handling.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Moves the loop to GlobalScope"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "cancellation_exception",
+     "why": "explains cancellation is delivered as CancellationException and the catch swallows it",
+     "scope": "prose",
+     "re": "CancellationException"
+    },
+    {
+     "id": "fix",
+     "why": "rethrows CancellationException or checks isActive/ensureActive",
+     "scope": "prose",
+     "any": [
+      "(?i)rethrow",
+      "throw e\\b",
+      "ensureActive",
+      "isActive"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_globalscope",
+     "why": "GlobalScope is not the fix",
+     "scope": "prose",
+     "re": "(?i)(use|switch to|move (it )?to) `?GlobalScope"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains cancellation is delivered as CancellationException and the catch swallows it",
+    "Present: rethrows CancellationException or checks isActive/ensureActive",
+    "Absent: GlobalScope is not the fix"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "KT-02",
+  "category": "kotlin-null-safety",
+  "difficulty": 1,
+  "goal": "Fix 'smart cast is impossible' on a mutable property",
+  "prompt": "Kotlin error: `Smart cast to 'Player' is impossible, because 'target' is a mutable property that could have been changed by this time` on `if (target != null) target.attack()` where `var target: Player? = null` is a class property. What does it mean and what is the idiomatic fix?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-kotlin"
+  ],
+  "expected_sources": [
+   "https://kotlinlang.org/docs/typecasts.html#smart-cast-prerequisites",
+   "https://kotlinlang.org/docs/null-safety.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Uses !!"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "why",
+     "why": "explains the mutable property could change between the check and the use",
+     "scope": "prose",
+     "any": [
+      "(?i)(could|might|may) (have )?(been )?chang",
+      "(?i)another thread|between the check"
+     ]
+    },
+    {
+     "id": "fix",
+     "why": "copies to a local val or uses ?.let / ?.",
+     "scope": "prose",
+     "any": [
+      "(?i)local `?val",
+      "\\?\\.let",
+      "target\\?\\.attack\\(\\)"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_bang",
+     "why": "!! is not the idiomatic fix",
+     "scope": "prose",
+     "any": [
+      "(?i)(use|add) `?!!`?.{0,30}(fix|instead)",
+      "(?i)just use !!"
+     ]
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains the mutable property could change between the check and the use",
+    "Present: copies to a local val or uses ?.let / ?.",
+    "Absent: !! is not the idiomatic fix"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "SWIFT-01",
+  "category": "swift-arc",
+  "difficulty": 2,
+  "goal": "Find and fix a retain cycle through a stored closure",
+  "prompt": "My Swift `GameScene` never gets deinitialized. It stores `var onTick: (() -> Void)?` and in `init` I set `onTick = { self.score += 1 }`. Why does it leak and how do I fix it?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-swift"
+  ],
+  "expected_sources": [
+   "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/automaticreferencecounting/",
+   "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/closures/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Keeps the strong self capture"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "cycle",
+     "why": "names the strong reference (retain) cycle",
+     "scope": "prose",
+     "re": "(?i)(retain|reference) cycle"
+    },
+    {
+     "id": "weak",
+     "why": "breaks it with a weak self capture",
+     "scope": "prose",
+     "any": [
+      "\\[weak self\\]",
+      "(?i)captur\\w*.{0,40}weak"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "unowned_safe",
+     "why": "does not claim unowned is always safe",
+     "scope": "prose",
+     "re": "(?i)unowned is always safe"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the strong reference (retain) cycle",
+    "Present: breaks it with a weak self capture",
+    "Absent: does not claim unowned is always safe"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SWIFT-02",
+  "category": "swift-concurrency",
+  "difficulty": 3,
+  "goal": "Fix a main-actor isolation error in Swift 6 language mode",
+  "prompt": "Swift 6 language mode error: `Main actor-isolated property 'status' can not be mutated from a nonisolated context` in `func refresh() async { status = await api.load() }` where `status` is a property of a `@MainActor` class and `refresh` is declared in a nonisolated extension. How do I fix it properly?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-swift"
+  ],
+  "expected_sources": [
+   "https://www.swift.org/migration/documentation/migrationguide/",
+   "https://docs.swift.org/swift-book/documentation/the-swift-programming-language/concurrency/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 900,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "Turns off strict concurrency checking"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "require": [
+    {
+     "id": "isolation",
+     "why": "explains status is isolated to the main actor and refresh is not",
+     "scope": "prose",
+     "re": "(?i)isolat"
+    },
+    {
+     "id": "fix",
+     "why": "marks refresh @MainActor or hops with await MainActor.run",
+     "scope": "prose",
+     "any": [
+      "@MainActor",
+      "MainActor\\.run"
+     ]
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_disable",
+     "why": "does not disable concurrency checking or use nonisolated(unsafe) as the fix",
+     "scope": "prose",
+     "any": [
+      "(?i)(disable|turn off).{0,30}(strict )?concurrency",
+      "nonisolated\\(unsafe\\)"
+     ]
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains status is isolated to the main actor and refresh is not",
+    "Present: marks refresh @MainActor or hops with await MainActor.run",
+    "Absent: does not disable concurrency checking or use nonisolated(unsafe) as the fix"
+   ]
+  },
+  "split": "holdout"
+ }
+]
