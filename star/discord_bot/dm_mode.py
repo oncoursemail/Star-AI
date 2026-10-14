@@ -21,7 +21,7 @@ from .core import MAX_PROMPT, MAX_REPLY, clean_text
 MAX_IMAGE_BYTES = 6 * 1024 * 1024        # the normalized picture sent to the vision model
 MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024    # what STAR downloads from Discord (phone photos are 3-12 MB)
 MAX_IMAGE_PIXELS = 16_000_000            # a screen capture
-MAX_SOURCE_PIXELS = 80_000_000           # an uploaded photo before it is shrunk; Pillow's own limit (star/pil_safe.py, 20 MP, error above 40 MP) also applies
+MAX_SOURCE_PIXELS = 60_000_000           # an uploaded photo before it is shrunk; Pillow's own limit (star/pil_safe.py, 20 MP, error above 40 MP) also applies
 MAX_IMAGE_EDGE = 1536                    # screen captures
 MAX_UPLOAD_EDGE = 1568                   # uploaded photos: longest side sent to the vision model
 _MAX_SNOWFLAKE = 2**64 - 1
@@ -175,6 +175,35 @@ async def download_attachment(attachment, *, limit: int = MAX_DOWNLOAD_BYTES, at
                      "Send it again.")
 
 
+# A JPEG is decoded at 1/2 to 1/8 scale (draft), so its stored size may be larger; what is decoded must still fit
+# STAR's global Pillow limit (star/pil_safe.py).
+MAX_JPEG_SOURCE_PIXELS = 250_000_000
+
+
+def _open_photo(data: bytes, expected: str, Image):
+    """Open an upload as one of the expected formats, WITHOUT Image.open's global decompression-bomb check.
+
+    That check (20 MP, error above 40 MP) would refuse a 48 MP phone photo before it can be shrunk; this path
+    applies its own limits right after reading the header (nothing is decoded yet), see prepare_discord_image.
+    """
+    prefix = data[:16]
+    Image.preinit()
+    Image.init()
+    wanted = sorted(_FORMATS[expected] - {"MPO"})        # the JPEG factory itself returns MPO files as MPO
+    for name in wanted:
+        factory, accept = Image.OPEN.get(name, (None, None))
+        if factory is None or (accept and accept(prefix) is not True):
+            continue
+        try:
+            return factory(BytesIO(data), "")
+        except (SyntaxError, IndexError, TypeError, ValueError, OSError) as exc:
+            raise ValueError("Image could not be decoded") from exc
+    others = {fmt for kind, fmts in _FORMATS.items() if kind != expected for fmt in fmts}
+    if any(Image.OPEN.get(name, (None, None))[1] and Image.OPEN[name][1](prefix) is True for name in others):
+        raise ValueError("Image content does not match filename")
+    raise ValueError("Image could not be decoded")
+
+
 def prepare_discord_image(filename: str, content_type: str | None,
                           declared_size: int, data: bytes) -> bytes:
     """Bounded, normalized JPEG: EXIF rotation applied, metadata stripped, longest side MAX_UPLOAD_EDGE.
@@ -200,13 +229,25 @@ def prepare_discord_image(filename: str, content_type: str | None,
     if heic and not _heif_ready():
         raise ValueError(HEIC_HELP)
     try:
-        with Image.open(BytesIO(data)) as image:
+        with _open_photo(data, expected, Image) as image:
             if image.format not in _FORMATS[expected]:
                 raise ValueError("Image content does not match filename")
-            if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_SOURCE_PIXELS:
+            if image.width <= 0 or image.height <= 0:
                 raise ValueError("Image dimensions are too large")
             if image.format in ("JPEG", "MPO"):
+                if image.width * image.height > MAX_JPEG_SOURCE_PIXELS:
+                    raise ValueError("Image dimensions are too large")
                 image.draft("RGB", (MAX_UPLOAD_EDGE, MAX_UPLOAD_EDGE))   # decode big photos at a reduced scale
+                limit = Image.MAX_IMAGE_PIXELS or MAX_SOURCE_PIXELS       # what is decoded: STAR's global limit
+            else:
+                limit = MAX_SOURCE_PIXELS
+            if image.width * image.height > limit:
+                raise ValueError("Image dimensions are too large")
+            image.load()
+            if max(image.size) > 2 * MAX_UPLOAD_EDGE:
+                # Shrink by a whole factor first: reduce() works on the full frame and needs no crop, so
+                # Pillow's global crop check (20 MP) never sees the big original.
+                image = image.reduce(max(1, max(image.size) // (2 * MAX_UPLOAD_EDGE)))
             # Transpose using EXIF, then discard original metadata and color channels.
             return normalize_pil_image(ImageOps.exif_transpose(image), edge=MAX_UPLOAD_EDGE,
                                        max_pixels=MAX_SOURCE_PIXELS)
