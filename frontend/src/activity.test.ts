@@ -48,6 +48,31 @@ describe('activity timeline is driven only by backend events', () => {
     expect(applyProgress(selected, {activity: {type: 'example', count: 2}}, 500).steps).toHaveLength(1)
   })
 
+  it('tracks the producing brain and measured first-token speed without inventing steps', () => {
+    const local = replay('chat', [
+      {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast', model: 'server-model'}},
+      {activity: {type: 'instant', model: 'pc-small'}},
+      {activity: {type: 'answer_stats', brain: 'pc', model: 'pc-small',
+        first_token_ms: 80, tokens_per_second: 20, estimated_tokens: false}},
+    ])
+    expect(local.model).toBe('pc-small')
+    expect(local.brain).toBe('pc')
+    expect(local.firstTokenMs).toBe(80)
+    expect(local.tokensPerSecond).toBe(20)
+    expect(local.estimatedTokens).toBe(false)
+    expect(local.steps).toHaveLength(0)
+
+    const fallback = replay('chat', [
+      {activity: {type: 'instant_fallback', model: 'server-model'}},
+      {activity: {type: 'answer_stats', brain: 'server', model: 'server-model',
+        first_token_ms: 123, tokens_per_second: 12.5, estimated_tokens: true}},
+    ])
+    expect(fallback.brain).toBe('server')
+    expect(fallback.model).toBe('server-model')
+    expect(fallback.firstTokenMs).toBe(123)
+    expect(fallback.estimatedTokens).toBe(true)
+  })
+
   it('keeps a plain answer to one status line, not a timeline', () => {
     const run = replay('chat', [
       {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast'}},

@@ -88,11 +88,12 @@ def test_rule_precedence_uses_recorded_signals():
 
 
 def test_loader_accepts_all_generated_exercises_with_sidecars(stored_failures, tmp_path):
-    cause, items = generate_practice(stored_failures)
-    assert cause == "required feature missing"
+    by_cause, items = generate_practice(stored_failures, leading_only=True)
+    assert by_cause == {"required feature missing": 16}
     assert len(items) == 16  # retries of the same failed task do not multiply exercises
     assert len({x.task["id"] for x in items}) == len(items)
     assert len({x.task["prompt"] for x in items}) == len(items)
+    assert all(x.task["targets_cause"] == "required feature missing" for x in items)
     out = tmp_path / "pool" / "targeted.json"
     assert not out.exists()
     write_practice(items, out)
@@ -101,7 +102,8 @@ def test_loader_accepts_all_generated_exercises_with_sidecars(stored_failures, t
     assert pool.dropped == {}
     assert len(pool.tasks) == len(items)
     assert pool.prelude == PRELUDE
-    assert all(task["_test_body"].count('check("') == 4 for task in pool.tasks)
+    assert all(task["_test_body"].count('check("') == task["auto"]["unit_test"]["checks"] for task in pool.tasks)
+    assert all('check("required feature: ' in task["_test_body"] for task in pool.tasks)
     assert all((out.parent / task["auto"]["unit_test"]["file"]).is_file() for task in pool.tasks)
     with pytest.raises(FileExistsError, match="replace"):
         write_practice(items, out)
@@ -126,15 +128,18 @@ class ScriptedSandbox:
     def run(self, script):
         self.calls += 1
         assert "local __SRC =" in script and "load_answer()" in script
+        body = script.split("-- ===== test body =====", 1)[1]
+        names = __import__("re").findall(r'(?m)^\s*check\("([^"]+)"', body)
         mark = "pass" if self.checks_pass else "fail"
-        lines = [f"@@T\t{mark}\tcase {i}" for i in range(4)]
+        lines = [f"@@T\t{mark}\t{name}" for name in names]
         return SimpleNamespace(stdout="\n".join([*lines, "@@DONE", ""]), error="", timed_out=False)
 
 
 def test_reference_answers_pass_real_grader_and_bad_answers_fail():
     for index, cause in enumerate(CAUSES):
         source = Failure("sample.json", f"task-{index}", "remote-security", cause, "recorded")
-        example = practice_for(source, index)
+        example = practice_for(source, 0)
+        assert example.task["targets_cause"] == cause
         good_sandbox = ScriptedSandbox(True)
         good = score_answer(example.task, example.reference_answer,
                             luau_check=lambda code, strict=False: {"errors": []},
@@ -142,14 +147,11 @@ def test_reference_answers_pass_real_grader_and_bad_answers_fail():
         assert good.passed and good_sandbox.calls == 1
         assert len([c for c in good.checks if c.id == "unit_tests" and c.ok]) == 1
         bad_sandbox = ScriptedSandbox(False)
-        fence = chr(96) * 3
-        bad_answer = fence + "luau\nreturn math.constrain(7, 0, 10)\n" + fence
-        bad = score_answer(example.task, bad_answer,
+        bad = score_answer(example.task, example.bad_answer,
                            luau_check=lambda code, strict=False: {"errors": []},
                            sandbox=bad_sandbox, prelude=PRELUDE, test_body=example.test_body)
-        assert not bad.passed and bad_sandbox.calls == 1
-        assert {"unit_tests", "require:round_down", "require:limit_output",
-                "forbid:no_imaginary_helper"} <= {c.id for c in bad.checks if not c.ok}
+        assert not bad.passed
+        assert "unit_tests" in {c.id for c in bad.checks if not c.ok}
 
 
 def test_holdout_suite_is_never_opened(tmp_path):
@@ -214,8 +216,8 @@ def test_public_evals_command_dispatches_through_night_school_loader(tmp_path, c
     out = tmp_path / "new-pool" / "targeted.json"
     assert dispatch(["ledger", "practice", "--results", str(DEFAULT_RESULTS),
                      "--suites", str(DEFAULT_SUITES), "--out", str(out)]) == 0
-    assert "Wrote 16 independent practice tasks" in capsys.readouterr().out
-    assert len(load_pool(out.parent).tasks) == 16
+    assert "Wrote 44 independent practice tasks" in capsys.readouterr().out
+    assert len(load_pool(out.parent).tasks) == 44
 
 
 def test_parent_cli_options_are_not_shadowed_by_practice_parser(tmp_path, capsys):

@@ -379,6 +379,20 @@ async def look_for_busy_slots(settings, model: str = "", *, conversation: str = 
     _BUSY_SLOTS[key] = (time.monotonic(), busy)
     return busy
 
+async def model_slots_full(settings, model: str, *, probe=None) -> bool:
+    """True when every slot of `model` on STAR Server is generating right now (so a new request would queue).
+
+    One `look_for_busy_slots` question (<= `SLOT_PROBE_TIMEOUT_S`). False whenever it cannot tell: not STAR
+    Server, slot count unknown, probe switched off or failed. Used to keep interactive chat off a main model
+    whose slots are all held by background answers (docs/agents/chat-speed-20261013.md).
+    """
+    try:
+        busy = await (probe or look_for_busy_slots)(settings, model, conversation="interactive-busy-check")
+        slots = server_slots(settings, model or None)
+    except Exception:
+        return False
+    return bool(slots) and len(busy) >= slots
+
 def _server_places_every_request() -> bool:
     """`STAR_SERVER_SLOT_PINNING=off`: name no slot at all (see `llama_request_fields`). Off unless set."""
     return os.environ.get("STAR_SERVER_SLOT_PINNING", "").strip().lower() in ("off", "0", "false", "no")
