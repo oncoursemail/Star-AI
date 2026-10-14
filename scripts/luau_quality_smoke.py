@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from statistics import median
 from time import perf_counter
 
 from star.luau_lint import lint
+from star.roblox_project_preflight import preflight
 
 
 SOURCE = Path("examples/roblox-templates/simulator/ReplicatedStorage/Shared/CostCurve.luau")
@@ -37,6 +39,25 @@ def main() -> int:
             raise AssertionError("Pinned Luau analyzer did not catch seeded syntax error")
         if name == "type" and "luau-analyze-typeerror" not in categories:
             raise AssertionError("Pinned Luau analyzer did not catch seeded type error")
+    # End-to-end project preflight, not just the analyzer adapter. The binary
+    # is the same checksum-pinned Luau CLI that this existing workflow installs.
+    with TemporaryDirectory(prefix="star-native-preflight-smoke-") as temp:
+        game = Path(temp)
+        scripts = game / "ServerScriptService"
+        scripts.mkdir()
+        script = scripts / "Example.server.luau"
+        script.write_text("--!strict\nlocal n: number = 2\nprint(n)\n", encoding="utf-8")
+        dump = Path("tests/fixtures/roblox_api_small.json")
+        clean = preflight(game, api_dump=dump, native_luau=True)
+        assert clean["native_analysis"]["checked_files"] == 1, clean
+        assert clean["native_analysis"]["statuses"] == {"checked": 1}, clean
+        script.write_text("--!strict\nlocal n: number =\n", encoding="utf-8")
+        broken = preflight(game, api_dump=dump, native_luau=True)
+        assert broken["native_analysis"]["statuses"] == {"diagnostics": 1}, broken
+        assert any(row["rule"] == "luau-analyze-syntaxerror"
+                   and row["checker"] == "native-luau"
+                   for file in broken["files"] for row in file["findings"]), broken
+    print("Real pinned analyzer: preflight clean + syntax-error fixtures passed")
     print(f"Real pinned analyzer invoked on 3 STAR-derived cases; median_ms={median(samples)}")
     return 0
 

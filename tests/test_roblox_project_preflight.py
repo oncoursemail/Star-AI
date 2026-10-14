@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from star.roblox_project_preflight import MAX_CHECK_SOURCE_BYTES, main, preflight
+from star import luau_analyze
+from star.roblox_project_preflight import MAX_CHECK_SOURCE_BYTES, MAX_NATIVE_FILES, main, preflight
 
 DUMP = Path(__file__).parent / "fixtures" / "roblox_api_small.json"
 
@@ -347,3 +349,262 @@ def test_optin_never_writes_project_runs_code_or_calls_network(tmp_path, monkeyp
         p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
         for p in root.rglob("*") if p.is_file()
     }
+def _fake_native(monkeypatch, result=None):
+    """An installed analyzer double; reads the ACTUAL temporarily staged source."""
+    calls = []
+    monkeypatch.setattr(luau_analyze, "locate_analyzer",
+                        lambda **kwargs: "installed-luau-analyze")
+
+    def execute(args, **kwargs):
+        assert args == ["installed-luau-analyze", "--mode=strict", "star-check.luau"]
+        assert kwargs["timeout"] == luau_analyze.TIMEOUT_SECONDS
+        assert kwargs["capture_output"] and kwargs["text"] and kwargs["check"] is False
+        assert kwargs["env"]["HOME"] == kwargs["cwd"]
+        assert kwargs["env"]["USERPROFILE"] == kwargs["cwd"]
+        assert "OPENAI_API_KEY" not in kwargs["env"]
+        staged = Path(kwargs["cwd"]) / "star-check.luau"
+        code = staged.read_text(encoding="utf-8")
+        calls.append(code)
+        if callable(result):
+            return result(args, kwargs, code)
+        return result or subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(luau_analyze.subprocess, "run", execute)
+    return calls
+
+
+def test_native_analysis_disabled_keeps_entire_default_json_and_never_locates_binary(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    def unexpected(**kwargs):
+        raise AssertionError("Native analyzer must be disabled by default")
+    monkeypatch.setattr(luau_analyze, "locate_analyzer", unexpected)
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    original = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    assert capsys.readouterr().out == original
+    assert "native_luau" not in original and "native_analysis" not in original
+
+
+def test_explicit_native_analysis_reports_actual_checked_files_in_cli_json(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    calls = _fake_native(monkeypatch)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["status"] == "checked" and data["coverage"] == "static-only"
+    assert data["native_analysis"] == {
+        "requested": True, "checked_files": 2, "unverified_files": 0,
+        "attempted_files": 2, "skipped_files": 0, "file_limit": MAX_NATIVE_FILES,
+        "statuses": {"checked": 2},
+        "scope": "Standalone Luau source analyzer; NOT Roblox Studio or engine verification",
+    }
+    assert len(calls) == 2
+    assert all(f["native_luau"]["status"] == "checked" for f in data["files"])
+    assert all("native-luau-syntax-limited-types" in f["checked_scope"] for f in data["files"])
+    assert all(f["native_luau"]["diagnostic_count"] == 0 for f in data["files"])
+
+
+@pytest.mark.parametrize("kind,expected", [
+    ("syntax", "luau-analyze-syntaxerror"),
+    ("type", "luau-analyze-typeerror"),
+])
+def test_native_parser_reports_real_file_line_rule_and_severity(
+        tmp_path, monkeypatch, capsys, kind, expected):
+    root = _project(tmp_path)
+    code = ("--!strict\nlocal = 1\n" if kind == "syntax"
+            else '--!strict\nlocal points: number = "wrong"\n')
+    (root / "ServerScriptService/Main.server.luau").write_text(code, encoding="utf-8")
+
+    def recorded(args, kwargs, source):
+        if source == code:
+            message = ("SyntaxError: Expected identifier"
+                       if kind == "syntax" else
+                       "TypeError: Type 'string' could not be converted into 'number'")
+            return subprocess.CompletedProcess(
+                args, 1, stdout="", stderr=f"star-check.luau(2,7): {message}\n")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    calls = _fake_native(monkeypatch, recorded)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    hits = [f for f in file["findings"] if f["checker"] == "native-luau"]
+    assert len(hits) == 1
+    assert (hits[0]["line"], hits[0]["rule"]) == (2, expected)
+    assert hits[0]["severity"] == ("error" if kind == "syntax" else "warning")
+    assert file["native_luau"]["status"] == "diagnostics"
+    assert file["file"] == "ServerScriptService/Main.server.luau"
+    assert report["native_analysis"]["checked_files"] == 2
+    assert report["status"] == "findings" and report["findings"] >= 1
+    assert len(calls) == 2
+
+
+def test_suppressed_roblox_engine_errors_are_unverified_not_clean(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    src = "--!strict\nreturn game:GetService('Players')\n"
+    (root / "ServerScriptService/Main.server.luau").write_text(src, encoding="utf-8")
+
+    def recorded(args, kwargs, code):
+        return subprocess.CompletedProcess(
+            args, 1, stdout="", stderr="star-check.luau(2,8): "
+            "TypeError: Unknown global 'game'\n") if code == src else (
+                subprocess.CompletedProcess(args, 0, stdout="", stderr=""))
+
+    _fake_native(monkeypatch, recorded)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    assert file["status"] == "partial"
+    assert file["native_luau"]["status"] == "engine_limited"
+    assert file["native_luau"]["engine_symbols_ignored"] == 1
+    assert report["native_analysis"]["unverified_files"] == 1
+    assert any("Roblox engine" in msg for msg in file["unverified"])
+    assert not any("Unknown global 'game'" in f["message"] for f in file["findings"])
+
+
+def test_missing_binary_produces_partial_evidence_and_nonzero_exit(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    monkeypatch.setattr(luau_analyze, "locate_analyzer", lambda **kwargs: None)
+    monkeypatch.setattr(luau_analyze.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            AssertionError("missing binary must not spawn")))
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "partial"
+    assert report["native_analysis"]["checked_files"] == 0
+    assert report["native_analysis"]["statuses"] == {"unavailable": 2}
+    assert all(f["status"] == "partial" for f in report["files"])
+
+
+def test_timeout_and_start_failure_are_not_accepted_as_passes(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for failure, status in (
+        (subprocess.TimeoutExpired(["fake"], 6), "timed_out"),
+        (OSError("internal path not for reports"), "failed"),
+    ):
+        def throw(args, kwargs, code):
+            raise failure
+        _fake_native(monkeypatch, throw)
+        report = preflight(root, api_dump=DUMP, native_luau=True)
+        assert report["status"] == "partial"
+        assert report["native_analysis"]["checked_files"] == 0
+        assert report["native_analysis"]["statuses"] == {status: 2}
+        assert "internal path" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("code,stderr,stdout,exitcode,expected", [
+    ("ok", "", "", 1, "malformed"),
+    ("garbage", "leaked source path or raw stderr", "", 1, "malformed"),
+    ("conflicting", "star-check.luau(1,1): SyntaxError: bad\n", "", 0, "malformed"),
+    ("stdout", "", "raw private diagnostics", 0, "malformed"),
+    ("bad_status", "", "", 2, "malformed"),
+    ("oversized", "x" * (luau_analyze.MAX_OUTPUT_BYTES + 1), "", 1, "truncated"),
+], ids=["silent-exit-one", "unrecognized", "exit-zero-diagnostic",
+        "unexpected-stdout", "exit-two", "oversized-output"])
+def test_malformed_silent_and_truncated_analyzer_outputs_cannot_pass(
+        tmp_path, monkeypatch, code, stderr, stdout, exitcode, expected):
+    root = _project(tmp_path)
+    _fake_native(monkeypatch, lambda args, kwargs, source:
+                 subprocess.CompletedProcess(args, exitcode, stdout=stdout, stderr=stderr))
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["status"] == "partial"
+    assert result["native_analysis"]["checked_files"] == 0
+    assert result["native_analysis"]["statuses"] == {expected: 2}
+    text = json.dumps(result)
+    assert "raw private" not in text and "leaked source path" not in text
+
+
+def test_native_result_refuses_diagnostics_from_other_file_or_outside_source(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for stderr in (
+        "somebody-elses-file.luau(1,1): SyntaxError: no\n",
+        "star-check.luau(900,1): SyntaxError: invalid line\n",
+        "star-check.luau(0,0): TypeError: bad column\n",
+    ):
+        _fake_native(monkeypatch, lambda args, kwargs, source:
+                     subprocess.CompletedProcess(args, 1, stderr=stderr, stdout=""))
+        result = preflight(root, api_dump=DUMP, native_luau=True)
+        assert result["native_analysis"]["statuses"] == {"malformed": 2}
+        assert result["findings"] == 0 and result["status"] == "partial"
+
+
+def test_more_than_twenty_native_diagnostics_are_truncated_and_disclosed(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    raw = "".join(
+        f"star-check.luau(1,1): SyntaxError: bad token {i}\n"
+        for i in range(luau_analyze.MAX_FINDINGS + 3))
+    _fake_native(monkeypatch, lambda args, kwargs, source:
+                 subprocess.CompletedProcess(args, 1, stderr=raw, stdout=""))
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["native_analysis"]["statuses"] == {"truncated": 2}
+    assert result["native_analysis"]["unverified_files"] == 2
+    assert result["findings"] == 2 * luau_analyze.MAX_FINDINGS
+    assert all(f["status"] == "partial" for f in result["files"])
+
+
+def test_native_budget_skips_oversized_and_twelfth_plus_source(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for i in range(MAX_NATIVE_FILES + 2):
+        (root / "ServerScriptService" / f"Extra{i:02d}.server.luau").write_text(
+            "local value = 1\n", encoding="utf-8")
+    too_long = root / "ServerScriptService" / "Extra00.server.luau"
+    too_long.write_text("-- " + "z" * (MAX_CHECK_SOURCE_BYTES + 2), encoding="utf-8")
+    calls = _fake_native(monkeypatch)
+    report = preflight(root, api_dump=DUMP, native_luau=True)
+    assert len(report["files"]) == MAX_NATIVE_FILES + 4
+    assert len(calls) == MAX_NATIVE_FILES
+    assert report["native_analysis"]["attempted_files"] == MAX_NATIVE_FILES
+    assert report["native_analysis"]["skipped_files"] == 4
+    assert report["native_analysis"]["statuses"] == {
+        "checked": MAX_NATIVE_FILES, "skipped": 4,
+    }
+    assert _files(report)["ServerScriptService/Extra00.server.luau"][
+        "native_luau"]["status"] == "skipped"
+    assert report["status"] == "partial"
+
+
+def test_opt_in_native_staging_never_modifies_project_or_contacts_network(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    original = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in root.rglob("*") if p.is_file()}
+    def forbid_network(*args, **kwargs):
+        raise AssertionError("preflight must not access network")
+    monkeypatch.setattr("socket.create_connection", forbid_network)
+    calls = _fake_native(monkeypatch)
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["status"] == "checked" and len(calls) == 2
+    after = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in root.rglob("*") if p.is_file()}
+    assert original == after
+
+
+def test_native_flag_deterministic_json_for_same_returned_evidence(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    _fake_native(monkeypatch)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    first = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    assert capsys.readouterr().out == first
+
+
+def test_preflight_does_not_implicitly_analyze_from_global_env(
+        tmp_path, monkeypatch):
+    """Only explicit --native-luau may start the standalone analyzer."""
+    root = _project(tmp_path)
+    monkeypatch.setenv(luau_analyze.ENV_VAR, "on")
+    monkeypatch.setattr(
+        luau_analyze, "locate_analyzer",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError(
+            "only --native-luau may locate the tool")))
+    report = preflight(root, api_dump=DUMP)
+    assert report["status"] == "checked"
+    assert "native_analysis" not in report
+    assert all("native_luau" not in f for f in report["files"])
