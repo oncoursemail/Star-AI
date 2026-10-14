@@ -743,8 +743,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         # Strict owner-DM lab questions bypass the LLM entirely. A recorded
         # screenshot is returned only for an explicit owner request, never
         # because the model suggested taking a desktop capture.
+        # With Lab reports off (the default) these phrases are ordinary chat for the brain.
         lab_intent = (classify_lab_question(message.content or "")
-                      if not message.attachments else "")
+                      if config.lab.enabled and not message.attachments else "")
         if lab_intent:
             try:
                 receipt = await asyncio.to_thread(read_receipt, config.lab)

@@ -481,3 +481,18 @@ def test_reference_compare_and_lab_slash_are_in_discord_workflow(tmp_path):
         assert not bot.intents.presences
     finally:
         asyncio.run(bot.close())
+
+
+def test_lab_phrases_stay_normal_chat_when_lab_reports_are_off():
+    """Default-off Lab must not change DM behaviour: 'what is star working on' goes to the brain."""
+    discord, bot, _, brain = make_bot()
+
+    async def run():
+        try:
+            channel = DMChannel(discord)
+            await bot.on_message(dm(discord, channel, "What is STAR working on?"))
+            assert brain.prompts and "working on" in brain.prompts[-1]
+            assert not any("Lab reports are disabled" in (c or "") for c, _ in channel.sent)
+        finally:
+            await bot.close()
+    asyncio.run(run())
