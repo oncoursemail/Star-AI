@@ -22,6 +22,7 @@ from __future__ import annotations
 import ast
 import asyncio
 import base64
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
 from datetime import timedelta
 import json
@@ -31,6 +32,7 @@ import re
 import struct
 import sys
 import time
+from typing import Any
 
 from jsonschema import Draft202012Validator
 
@@ -907,7 +909,7 @@ async def _run(argv: list[str], timeout: float) -> tuple[int, bytes, bytes]:
         process.kill()
         await process.wait()
         raise LabError("Blender on brain 2 did not answer in time") from None
-    return process.returncode, out, err
+    return (process.returncode if process.returncode is not None else -1), out, err
 
 
 @asynccontextmanager
@@ -1044,7 +1046,7 @@ class BrainTwoBlender:
         return (Path("blender") / "brain2" / (scene or "no-scene") / name).as_posix()
 
     @staticmethod
-    def _result(info: dict, images: list[bytes] = (), *, error: bool = False) -> dict:
+    def _result(info: dict, images: Sequence[bytes] = (), *, error: bool = False) -> dict:
         content = [{"type": "text", "text": json.dumps(info, ensure_ascii=False)}]
         for image in images:
             content.append({"type": "image", "mimeType": "image/png", "data": base64.b64encode(image).decode("ascii")})
@@ -1146,7 +1148,7 @@ class BrainTwoBlender:
             reopened = await self._scene_open(session, args["scene"])
             ran = await self._exec(session, args["code"])
             saved = await self._exec(session, fill(SAVE_SCENE, SCENE=args["scene"]))
-        info = {"ran": ran, "scene": saved}
+        info: dict[str, Any] = {"ran": ran, "scene": saved}
         if reopened:
             info["note"] = "Blender had restarted; the saved scene was reopened before your code ran"
         await self._add_memory(info)
