@@ -58,7 +58,8 @@ Expect `[PASS] W03b Matches SHA256SUMS.txt` and `[PASS] W03c Matches the digest 
 2. Run the new `STAR-Setup-vX.Y.Z.exe`. The installer is per-user (no administrator) and installs to `%LOCALAPPDATA%\Programs\STAR`. Windows SmartScreen will warn because the build is unsigned; record that you saw it.
 3. Tick **Launch STAR Intelligence** at the end.
 
-Expect: the wizard reuses the previous folder; it replaces `_internal` only. It must not touch `%APPDATA%\STAR`.
+Expect: the wizard reuses the previous folder; it replaces `_internal` and `STAR.exe` only. It must not touch `%APPDATA%\STAR`.
+After a finished upgrade no `_internal.star-previous` folder or `STAR.exe.star-previous` file is left in the install folder.
 
 ### W04b Run Setup while STAR is open [manual, Restart Manager]
 
@@ -105,6 +106,25 @@ and source commits; installer SHA-256; interactive/silent mode; idle/streaming/v
 state; owned child-process state before and after; elapsed shutdown time; installer
 result; profile/history checks; and PASS, FAIL or NOT RUN with evidence. Omit keys,
 private addresses, account names and private chat text from published evidence.
+
+### W04c A refused or failed upgrade leaves the old STAR working [manual, issue 120]
+
+**Recorded result: NOT RUN.** The installer moves the old runtime (`_internal` and `STAR.exe`) aside to
+`*.star-previous` before copying, refuses with a message while a runtime file is still open, puts the old
+copy back if Setup does not finish, and deletes it only after Setup has finished. Only the script text is
+checked offline (`tests/test_installer_upgrade_rollback.py`) and the Windows workflow compiles it; no Setup
+run has exercised it.
+
+1. Start the OLD STAR with "Run as administrator" (Restart Manager in a per-user Setup cannot close it) and
+   run the new Setup interactively; choose to let Setup close applications. Expect the message
+   "STAR Intelligence is still running ... Nothing was changed"; after OK, Setup ends. Confirm the old
+   version still starts, its chats are there, and no `*.star-previous` item is left.
+2. Close STAR, run the new Setup and press **Cancel** while files are being copied. Expect Setup's own
+   rollback, then the old `_internal` and `STAR.exe` back in place: the OLD version starts with its chats.
+3. Run the new Setup to the end. Expect W04/W05 to pass and no `*.star-previous` item to be left.
+
+Record for each step: installed and replacement versions, interactive or silent, the message shown, the
+version that starts afterwards, and PASS, FAIL or NOT RUN.
 
 ### W05 STAR launches and the old runtime is gone [manual]
 
