@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from hashlib import sha256
 from dataclasses import dataclass
 
 from .audio import decode_attachment, ffmpeg_path, synthesize_pcm, validate_attachment, voice_message
@@ -137,6 +138,33 @@ class DiscordService:
             # Temporary context stores only the question and the reply, never an
             # image file, remote URL, original attachment or image bytes.
             self.memory.remember(key, "[Image discussed] " + prompt[:300], answer)
+            return answer
+        finally:
+            self._brain_lock.release()
+
+    async def compare_images(self, key: tuple, prompt: str, reference: bytes, rendered: bytes,
+                             *, vision=None) -> str:
+        """Compare exactly two owner-supplied, normalized private images.
+
+        Only a short, text-only receipt enters temporary chat context; the
+        screenshots are never stored, trained on, exported or cloud-routed.
+        A future owner correction can refer to the image hashes, but still
+        requires the existing desktop review and approval process.
+        """
+        if not isinstance(key, tuple) or len(key) != 3:
+            raise PermissionError("Reference comparison requires an authorized owner")
+        self.policy.require(key[2], key[0], key[1])
+        from .dm_mode import DiscordVision
+        question = clean_text(prompt, max_chars=MAX_PROMPT) or (
+            "Compare the desired reference with STAR's result and suggest concrete fixes.")
+        await self._lock_brain()
+        try:
+            answer = await (vision or DiscordVision()).compare(question, reference, rendered)
+            ref_hash = sha256(reference).hexdigest()[:16]
+            render_hash = sha256(rendered).hexdigest()[:16]
+            self.memory.remember(
+                key, "[Image comparison reference=" + ref_hash + " result=" + render_hash
+                + "] " + question[:300], answer)
             return answer
         finally:
             self._brain_lock.release()
