@@ -96,9 +96,12 @@ def main():
     args = sys.argv[sys.argv.index("--") + 1:]
     if len(args) != 1:
         raise ValueError("STAR Blender animation worker expects exactly one path")
-    spec_file = Path(args[0]).resolve(strict=True)
+    requested = Path(args[0])
+    if requested.is_symlink() or requested.name != "animation.json":
+        raise ValueError("STAR Blender animation recipe cannot be a symlink or arbitrary input")
+    spec_file = requested.resolve(strict=True)
     folder = spec_file.parent
-    if spec_file.name != "animation.json" or spec_file.is_symlink():
+    if spec_file.name != "animation.json":
         raise ValueError("STAR Blender animation recipe must be in its immutable job directory")
     if spec_file.stat().st_size > 24_000:
         raise ValueError("STAR Blender animation recipe exceeds its bound")
