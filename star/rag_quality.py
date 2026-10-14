@@ -104,6 +104,7 @@ def _cases(raw: object, catalog: dict[str, dict]) -> list[dict]:
         project = _name(item["project"], "project", project=True)
         expected = item["expected"]
         if (type(expected) is not list or len(expected) > MAX_EXPECTED
+                or any(type(entry) is not str for entry in expected)
                 or len(expected) != len(set(expected))):
             raise ValueError("Invalid expected source set")
         for source_id in expected:
