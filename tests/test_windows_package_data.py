@@ -33,6 +33,7 @@ PACKAGE_DATA_SITES = {
     "star/reverse_engineering.py": "star/re_scripts",  # Ghidra scripts (PR #344), not in the PyInstaller lists
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
     "star/roblox_api_dataset.py": "data/roblox_api/roblox_api.json",
+    "star/roblox_cutscene_studio.py": "star/skill_packs",  # roblox-cutscenes pack luau/ (PR #351)
     "star/roblox_vfx_studio.py": "star/skill_packs",  # roblox-vfx-composer pack luau/ (PR #327)
     "star/skill_packs/__init__.py": "star/skill_packs",
     "star/studio_milestones.py": "evals/studio",
@@ -154,7 +155,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(bundled) == 6  # two optional readers share the skill-pack directory
+    assert len(bundled) == 6  # five readers share the skill-pack directory
 
 
 def test_actual_packaged_root_readers_resolve_resources(tmp_path):
