@@ -31,6 +31,7 @@ PACKAGE_DATA_SITES = {
     "star/lesson_import.py": "star/skill_packs",
     "star/react_shell.py": "frontend/dist",
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
+    "star/roblox_api_dataset.py": "data/roblox_api/roblox_api.json",
     "star/skill_packs/__init__.py": "star/skill_packs",
     "star/studio_milestones.py": "evals/studio",
     "star/voice/catalog.py": "star/voice/voices.json",
@@ -50,6 +51,7 @@ PENDING_OWNER_REVIEW = frozenset({
     "docs/lessons/luau-record-types.md",
     "examples/roblox-templates",
     "data/roblox_api_confusions.json",
+    "data/roblox_api/roblox_api.json",  # bundled API dump (#331): not packaged yet
     "evals/studio",  # do not bundle protected evaluation manifests blindly
 })
 
@@ -105,7 +107,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 21
+    assert len(discovered) == 22
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
@@ -147,7 +149,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(PACKAGE_DATA_SITES) == 13
+    assert len(PACKAGE_DATA_SITES) == 14
     assert len(bundled) == 6  # two optional readers share the skill-pack directory
 
 
