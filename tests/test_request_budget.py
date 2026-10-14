@@ -52,7 +52,7 @@ def test_plain_chat_exact_prompt_one_call_no_reference_or_compaction_preprocessi
     models = Models([reply("Hello")])
     prompt = "  Hello, STAR.\nPlease explain simply.  "
     answer, _, archive = asyncio.run(agent.execute(client=client(models), model="fake", prompt=prompt,
-                                                   image_paths=[], context_chars=6000))
+                                                   image_paths=[], context_chars=6000, now=""))
     assert answer == "Hello"
     assert len(models.requests) == 1
     assert "tools" not in models.requests[0]
@@ -196,7 +196,7 @@ def test_earlier_turns_removed_in_whole_blocks_are_archived_before_dispatch():
                for index, role in enumerate(["user", "assistant", "user", "assistant"])]
     original = copy.deepcopy(history)
     _, _, archive = asyncio.run(agent.execute(client=client(models), model="fake", prompt="Current question",
-                                              image_paths=[], history=history, context_chars=6000))
+                                              image_paths=[], history=history, context_chars=6000, now=""))
     assert history == original
     assert agent.text_size(models.requests[0]["messages"]) <= 6000
     assert any(record.get("history_bounded") and record["messages"] == original for record in archive)

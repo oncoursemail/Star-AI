@@ -149,5 +149,5 @@ def test_missing_search_credentials_fail_early_with_actionable_message(monkeypat
         pytest.fail("No search should run without configured credentials")
 
     monkeypatch.setattr(deep_research, "search_web", should_not_search)
-    with pytest.raises(RuntimeError, match="needs a Brave Search or Tavily API key"):
+    with pytest.raises(RuntimeError, match="needs STAR Server .self-hosted search. or a Brave Search / Tavily API key"):
         asyncio.run(research_web("Research Roblox studio security"))

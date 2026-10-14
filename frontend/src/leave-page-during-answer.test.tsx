@@ -25,6 +25,9 @@ async function start(){
 for(const page of ['Analytics','Settings','Model']){
  it('keeps streaming when visiting '+page+' and returning',async()=>{
   const {user,id}=await start()
+  // Analytics and Model sit in the sidebar's folded "More" group.
+  const more=screen.getByRole('button',{name:'More'})
+  if(page!=='Settings'&&more.getAttribute('aria-expanded')==='false')await user.click(more)
   await user.click(screen.getByRole('button',{name:page==='Settings'?/^Settings/:page}))
   bridge.delta(id,' mountains')
   expect(bridge.sent('cancelMessage')).toHaveLength(0)

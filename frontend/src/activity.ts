@@ -41,6 +41,10 @@ export type ActivityRun = {
   toolCalls?: number
   /** The model this run was sent to; replaced by the name the server reported on the answer. */
   model?: string
+  brain?: 'pc' | 'server' | 'cloud'
+  firstTokenMs?: number
+  tokensPerSecond?: number
+  estimatedTokens?: boolean
 }
 
 /** The sanitized `activity` object from the backend. All fields are enumerated or bounded there. */
@@ -56,6 +60,10 @@ export type ActivityPayload = {
   model?: string
   /** Route only: the chosen model was unavailable and the main model answers instead. */
   fallback?: boolean
+  brain?: 'pc' | 'server' | 'cloud'
+  first_token_ms?: number
+  tokens_per_second?: number
+  estimated_tokens?: boolean
   step?: number
   max_steps?: number
   elapsed_ms?: number
@@ -183,6 +191,21 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
       if (activity.profile && ROUTES[activity.profile]) next.label = ROUTES[activity.profile]
       if (typeof activity.model === 'string' && activity.model) next.model = activity.model
       next.phase = activity.fallback ? 'That model is not available. Using your main model' : 'Choosing how to answer'
+      break
+    case 'instant':
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      next.phase = 'Answering on this PC'
+      break
+    case 'instant_fallback':
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      next.phase = 'Using STAR Server'
+      break
+    case 'answer_stats':
+      if (activity.brain === 'pc' || activity.brain === 'server' || activity.brain === 'cloud') next.brain = activity.brain
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      if (typeof activity.first_token_ms === 'number') next.firstTokenMs = activity.first_token_ms
+      if (typeof activity.tokens_per_second === 'number') next.tokensPerSecond = activity.tokens_per_second
+      next.estimatedTokens = activity.estimated_tokens === true
       break
     case 'model':
       // The name the server itself put on the answer.
