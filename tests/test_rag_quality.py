@@ -201,3 +201,12 @@ def test_cli_reads_only_operator_file_returns_redacted_aggregate(tmp_path, capsy
     except (OSError, NotImplementedError):
         pytest.skip("Host disallows symlink creation")
     assert main(["--manifest", str(link)]) == 2
+
+
+def test_explicitly_synthetic_example_is_valid_but_not_real_retrieval_proof():
+    from pathlib import Path
+    file = Path(__file__).resolve().parents[1] / "examples" / "rag" / "synthetic_quality_fixture.json"
+    result = compare(json.loads(file.read_text(encoding="utf-8")))
+    assert result["decision"] == "candidate_for_owner_review"
+    assert result["candidate"]["cases"] == 20
+    assert "Synthetic/mock retrieval predictions" in result["notes"][0]
