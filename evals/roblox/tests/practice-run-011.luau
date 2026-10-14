@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn("Lobby","start"), "Playing"))
+check("case 2", deepEqual(fn("Playing","finish"), "Results"))
+check("case 3", deepEqual(fn("Results","reset"), "Lobby"))
+check("case 4", deepEqual(fn("Lobby","finish"), "Lobby"))
+check("case 5", deepEqual(fn("Playing","start"), "Playing"))
+check("case 6", deepEqual(fn("Results","start"), "Results"))

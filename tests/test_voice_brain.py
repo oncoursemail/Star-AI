@@ -7,7 +7,7 @@ import pytest
 
 from star.voice.brain import BrainError, ScriptedBrain, ServerBrain, validate_server_url
 from star.voice.persona import VOICE_SYSTEM_PROMPT, system_message
-from star.voice.settings import VoiceSettings
+from star.voice.settings import STAR_VOICE, VoiceSettings
 
 KEY = "sk-test-do-not-leak-1234567890"
 
@@ -121,7 +121,7 @@ def test_voice_prompt_asks_for_short_spoken_replies_with_a_quick_opening():
 
 def test_settings_validate_everything_the_ui_can_send(monkeypatch):
     defaults = VoiceSettings().validate()
-    assert defaults.voice == "heart" and defaults.endpointer == "smart-turn" and defaults.output == "headphones"
+    assert defaults.voice == STAR_VOICE and defaults.voice_id == "star-mum" and defaults.endpointer == "smart-turn" and defaults.output == "headphones"
     custom = VoiceSettings.from_mapping({"voice": "blend-heart-nicole", "speed": "0.9", "barge_in_ms": "400",
                                          "partial_transcripts": "false", "output": "speakers", "junk": 1})
     assert (custom.voice, custom.speed, custom.barge_in_ms, custom.partial_transcripts) == (

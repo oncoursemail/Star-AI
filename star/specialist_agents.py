@@ -14,7 +14,6 @@ import asyncio
 from copy import deepcopy
 import json
 import re
-from typing import Any
 
 from ._lazy import lazy_attr
 Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
