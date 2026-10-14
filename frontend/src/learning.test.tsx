@@ -245,7 +245,12 @@ describe('reviewing lessons', () => {
     const {user, refresh} = open(host, {practice_lessons_enabled: false})
     expect(await screen.findByText('Check RemoteEvent arguments on the server.')).toBeTruthy()
     expect(screen.getByText(/1 lesson has been imported from STAR’s own practice/)).toBeTruthy()
-    expect(screen.getByText(/python -m star.lessons import lessons.json/)).toBeTruthy()
+    // The developer command is kept, but only inside a closed "Advanced" disclosure.
+    const command = screen.getByText(/python -m star.lessons import lessons.json/)
+    const advanced = command.closest('details') as HTMLDetailsElement
+    expect(advanced).toBeTruthy()
+    expect(advanced.open).toBe(false)
+    expect(within(advanced).getByText(/Advanced: import a lesson file/)).toBeTruthy()
     const enabled = screen.getByRole('checkbox', {name: /Import bundled STAR practice lessons/i}) as HTMLInputElement
     expect(enabled.checked).toBe(false)
     await user.click(enabled)

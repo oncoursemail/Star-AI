@@ -57,7 +57,11 @@ def doctor():
     try:
         from .studio import launcher
         _, _, path = launcher()
-        print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
+        if path is None:
+            # A host-defined launcher command has no local file to look for (and may name a host).
+            print("Roblox MCP: custom launcher configured")
+        else:
+            print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
     except Exception as exc:
         print("Roblox MCP:", type(exc).__name__)
     print("This is not a live model or Roblox tool smoke test.")

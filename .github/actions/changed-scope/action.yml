@@ -1,0 +1,28 @@
+name: Changed scope
+description: >-
+  Sets output docs_only=true when the change is documentation that no code or test reads
+  (scripts/ci_changed_scope.py). Needs a checkout with fetch-depth 2. Any error gives false.
+outputs:
+  docs_only:
+    description: "'true' or 'false'"
+    value: ${{ steps.scope.outputs.docs_only }}
+runs:
+  using: composite
+  steps:
+    - id: scope
+      shell: bash
+      env:
+        EVENT: ${{ github.event_name }}
+        BEFORE: ${{ github.event.before }}
+      run: |
+        list="$RUNNER_TEMP/changed.txt"
+        : > "$list"
+        if [ "$EVENT" = pull_request ]; then
+          # HEAD is the pull request merge commit; HEAD^1 is the base it merges into.
+          git diff --name-only --no-renames HEAD^1 HEAD > "$list" || : > "$list"
+        elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+          if git fetch --no-tags --depth=1 origin "$BEFORE"; then
+            git diff --name-only --no-renames "$BEFORE" HEAD > "$list" || : > "$list"
+          fi
+        fi
+        python3 scripts/ci_changed_scope.py --root . --files "$list" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"

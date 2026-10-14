@@ -1,0 +1,35 @@
+[Unit]
+Description=STAR resource planner (admission service: live CPU/RAM/slot load of brain 1, brain 2 and the PC; leases for night school, evals, re-index, Studio tests and GPU training)
+After=network-online.target star-brain.service
+
+# What it does: every 2 s it reads /proc, the quiet lock and the brain's /slots and /metrics (loaded models only),
+# notices chat (busy slots that no lease explains), and answers jobs that ask whether they may run. It never starts
+# or stops a job; a job that cannot reach it does what it did before. A timing window ("eval-timing") sets the quiet
+# lock /opt/star/lock for its holder and removes only its own lock.
+# Status:  curl -s http://127.0.0.1:8098/v1/status      Log: journalctl -u star-planner -n 50
+# Optional settings go into /opt/star/planner/env (STAR_PLANNER_...), not into this file.
+[Service]
+Type=simple
+User=star
+Group=star
+WorkingDirectory=/opt/star/planner/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=-/opt/star/planner/env
+ExecStart=/usr/bin/python3 -m star.resource_planner_service serve --port 8098 --machine brain1 --brain-url http://127.0.0.1:8080 --key-file /opt/star/secrets/api_keys --report-token-file /opt/star/secrets/planner_report_token
+Nice=-5
+Restart=always
+RestartSec=10
+MemoryMax=256M
+TasksMax=64
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/star
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

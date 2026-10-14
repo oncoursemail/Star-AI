@@ -1,0 +1,119 @@
+{
+ "name": "V2CrateWalk",
+ "kind": "map",
+ "description": "A 4-stud crate (prop) sits on the walkway in the running line.",
+ "defect": "prop-in-walkway",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2CrateWalk",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    52.0,
+    40,
+    40.0
+   ],
+   "center": [
+    -26.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -26.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     16,
+     1,
+     16
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     -10.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   },
+   {
+    "name": "Crate",
+    "position": [
+     -28.0,
+     8.5,
+     150.0
+    ],
+    "size": [
+     4,
+     4,
+     4
+    ],
+    "material": "WoodPlanks",
+    "color": "#8B5A2B",
+    "role": "prop"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "Goal"
+   ]
+  }
+ }
+}
