@@ -2,6 +2,7 @@
 from __future__ import annotations
 from pathlib import Path
 import json
+import logging
 import math
 import shutil
 import subprocess
@@ -9,6 +10,8 @@ import tempfile
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi'}
 AUDIO_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.aac'}
+
+log = logging.getLogger(__name__)
 
 
 def video_frames(path: Path, destination: Path, *, max_frames: int = 4) -> list[Path]:
@@ -46,6 +49,15 @@ def video_frames(path: Path, destination: Path, *, max_frames: int = 4) -> list[
     return outputs
 
 
+VOICE_UNAVAILABLE_MESSAGE = 'Voice features are not set up on this computer yet.'
+
+
+def _voice_unavailable(exc: BaseException) -> None:
+    """Raise a plain-language error; the developer hint goes to the log only."""
+    log.warning('Voice extras missing (%s); install with: pip install -r requirements-voice.txt', exc)
+    raise RuntimeError(VOICE_UNAVAILABLE_MESSAGE) from exc
+
+
 def transcribe_audio(path: Path, *, model_name: str = 'base', device: str = 'cpu') -> str:
     """Optional faster-whisper offline STT; CPU int8 default avoids GPU contention."""
     path = path.expanduser().resolve(strict=True)
@@ -54,7 +66,7 @@ def transcribe_audio(path: Path, *, model_name: str = 'base', device: str = 'cpu
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
-        raise RuntimeError('Install optional voice extras: pip install -r requirements-voice.txt') from exc
+        _voice_unavailable(exc)
     if model_name not in {'tiny', 'base', 'small'}:
         raise ValueError('Supported STT models: tiny, base, small')
     if device not in {'cpu', 'cuda'}:
@@ -71,7 +83,7 @@ def local_speak(text: str) -> None:
     try:
         import pyttsx3
     except ImportError as exc:
-        raise RuntimeError('Install optional voice extras: pip install -r requirements-voice.txt') from exc
+        _voice_unavailable(exc)
     engine = pyttsx3.init()
     engine.say(text)
     engine.runAndWait()
