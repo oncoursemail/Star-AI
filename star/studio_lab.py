@@ -49,10 +49,17 @@ READ_MARK = "STAR_LAB_READ "
 APPLY_MARK = "STAR_LAB_APPLY "
 PROBE_NAME = "StarLabProbe"
 DEFAULT_ITERATIONS, MAX_ITERATIONS = 3, 5
+UI_ITERATIONS = 2
 DEFAULT_PLAY_SECONDS, MAX_PLAY_SECONDS = 90.0, 240.0
 LEG_SECONDS = 8.0
-SAFE_GAP = 6.0           # studs a fix aims for when a jump failed in the playtest (limit in the dry run: 8)
-SAFE_RISE = 4.5
+# Real physics (Studio Lab v2/v3 playtests on brain 2, default R15 character, WalkSpeed 16, JumpHeight 7.2): a 7.8-stud
+# gap with a 2-stud rise and rises of 6.3 and 7.6 studs were jumped every time; a 9.5-stud flat gap failed in one run
+# and was jumped in two others (the edge). The map-plan dry run keeps its player-facing limits (8 gap / 6.5 rise: a
+# person does not run the perfect line the probe runs). A FIX aims comfortably inside what was always jumped:
+REAL_JUMPED_GAP = 7.8    # studs, always jumped in real playtests
+REAL_JUMPED_RISE = 7.6
+SAFE_GAP = 7.0           # studs a fix aims for when a jump failed in the playtest (was 6.0 before the measurements)
+SAFE_RISE = 6.0          # (was 4.5)
 # Free height above the take-off/landing surfaces a running jump needs: the feet rise JumpHeight (7.2) and the
 # head is about 5.2 above the feet (R15), plus a margin. Measured in the lab's first Studio runs: a beam 3 studs
 # above the surface is jumped over, one 5.8 above is hit by the head.
@@ -99,7 +106,7 @@ def check_spec(spec) -> tuple[dict | None, list[str]]:
     if spec.get("kind") == "ui":
         return check_ui_spec(spec)
     unknown = sorted(set(spec) - {"name", "kind", "plan", "maxIterations", "playSeconds", "description", "lesson",
-                                  "defect"})
+                                  "defect", "expect"})
     if unknown:
         problems.append("unknown keys: " + ", ".join(unknown))
     if spec.get("kind", "map") != "map":
@@ -125,12 +132,59 @@ def check_spec(spec) -> tuple[dict | None, list[str]]:
         problems.append("the lab needs plan.route.waypoints to playtest (names of the surfaces in order)")
     elif any(not isinstance(w, str) for w in plan["route"]["waypoints"]):
         problems.append("the lab route must name objects (coordinates are not playtested)")
+    expect, issue = check_expect(spec.get("expect"))
+    if issue:
+        problems.append(issue)
     if problems:
         return None, problems
     return {"name": name, "kind": "map", "plan": copy.deepcopy(plan), "maxIterations": iterations,
             "playSeconds": float(seconds), "description": str(spec.get("description", ""))[:600],
             "lesson": spec.get("lesson") if isinstance(spec.get("lesson"), dict) else {},
-            "defect": str(spec.get("defect", ""))[:80]}, []
+            "defect": str(spec.get("defect", ""))[:80], "expect": expect}, []
+
+
+def check_expect(raw) -> tuple[dict, str]:
+    """The spec's expected outcome: {"first_pass": true|false|null, "defects": [codes, any one], "fixes": [fixes,
+    any one]}. ({} , "") when absent; (normalised, "") or ({}, problem)."""
+    if raw is None:
+        return {}, ""
+    if not isinstance(raw, dict) or set(raw) - {"first_pass", "defects", "fixes"}:
+        return {}, "expect must be an object with first_pass, defects, fixes"
+    first = raw.get("first_pass")
+    if first is not None and not isinstance(first, bool):
+        return {}, "expect.first_pass must be true, false or null"
+    out = {"first_pass": first}
+    for key in ("defects", "fixes"):
+        value = raw.get(key, [])
+        if not isinstance(value, list) or len(value) > 8 or any(not isinstance(v, str) or not 0 < len(v) <= 40
+                                                                  for v in value):
+            return {}, f"expect.{key} must be a list of short codes"
+        out[key] = list(value)
+    return out, ""
+
+
+def expectation(spec: dict, report: dict) -> dict:
+    """Did the run do what the spec's author expected? The deliberate defect must REPRODUCE in real Studio (first
+    iteration not passed, one of the expected defect codes found), the expected fix must be the one applied, and the
+    run must end passed. A control spec (first_pass true) must pass the first time. Pure."""
+    expect = spec.get("expect") or {}
+    if not expect:
+        return {"declared": False}
+    iterations = report.get("iterations", [])
+    first = iterations[0] if iterations else {}
+    found = [d.get("code") for d in first.get("defects", [])] + [p.get("code") for p in first.get("problems", [])]
+    fixes = [c.get("fix") for it in iterations for c in it.get("fixes", [])]
+    first_pass = bool(first.get("passed"))
+    checks = {"passed": bool(report.get("passed"))}
+    if expect.get("first_pass") is not None:
+        checks["first_pass"] = first_pass == expect["first_pass"]
+    if expect.get("defects") and not first_pass:
+        checks["defect"] = any(code in expect["defects"] for code in found)
+    if expect.get("fixes") and not first_pass:
+        checks["fix"] = any(fix in expect["fixes"] for fix in fixes)
+    reproduced = None if expect.get("first_pass") is not False else not first_pass
+    return {"declared": True, "met": all(checks.values()), "checks": checks, "reproduced": reproduced,
+            "found": [c for c in found if c][:6], "fixes": [f for f in fixes if f][:6]}
 
 
 DEVICES = {
@@ -145,7 +199,8 @@ def check_ui_spec(spec: dict) -> tuple[dict | None, list[str]]:
     """{"name", "kind": "ui", "ui": {...star/roblox_ui_compiler spec...}, "devices": ["phone", "tablet", "desktop"]}."""
     from . import roblox_ui_compiler
     problems = []
-    unknown = sorted(set(spec) - {"name", "kind", "ui", "devices", "description", "defect"})
+    unknown = sorted(set(spec) - {"name", "kind", "ui", "devices", "description", "defect", "expect",
+                                  "maxIterations"})
     if unknown:
         problems.append("unknown keys: " + ", ".join(unknown))
     name = spec.get("name")
@@ -160,11 +215,17 @@ def check_ui_spec(spec: dict) -> tuple[dict | None, list[str]]:
     except (roblox_ui_compiler.SpecError, TypeError, ValueError) as error:
         problems.append("ui spec: " + str(error)[:300])
         compiled = None
+    iterations = spec.get("maxIterations", UI_ITERATIONS)
+    if type(iterations) is not int or not 1 <= iterations <= MAX_ITERATIONS:
+        problems.append(f"maxIterations must be 1..{MAX_ITERATIONS}")
+    expect, issue = check_expect(spec.get("expect"))
+    if issue:
+        problems.append(issue)
     if problems:
         return None, problems
     return {"name": name, "kind": "ui", "ui": copy.deepcopy(spec["ui"]), "devices": list(devices),
             "description": str(spec.get("description", ""))[:600], "defect": str(spec.get("defect", ""))[:80],
-            "warnings": [str(w) for w in compiled.warnings][:10]}, []
+            "warnings": [str(w) for w in compiled.warnings][:10], "maxIterations": iterations, "expect": expect}, []
 
 
 # --------------------------------------------------------------------------- geometry of the route
@@ -854,6 +915,14 @@ def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[di
                         if str(name).startswith(prefix)} - allowed)
         extra = [name for name in extra if name in boxes]
         a, b = boxes[source], boxes[target]
+        # Got up a ledge higher than any real jump by CLIMBING its side (Humanoid climbing state; seen live on 9- and
+        # 9.5-stud rises in v3): the route works for the probe but is not a jump a player can rely on.
+        leg_gap, leg_rise = _leg(a, b)
+        if leg.get("climbed") and not extra and leg_rise > REAL_JUMPED_RISE:
+            defects.append({"code": "jump-too-high", "fix": "ease-rise", "object": target, "evidence": {
+                "leg": f"{source} -> {target}", "gap": round(leg_gap, 2), "rise": round(leg_rise, 2), "climbed": True,
+                "probe": leg}})
+            return defects
         # Higher than a jump can lift the character (root 3 above the feet + JumpHeight 7.2 + margin), or climbing:
         # it got up on something. Name the parts in the jump corridor.
         too_high = (leg.get("highest") or 0) > max(a["hi"][1], b["hi"][1]) + 3 + 7.2 + 1.5
@@ -1182,10 +1251,10 @@ def plan_summary(plan: dict) -> str:
 LESSON_TEXT = {
     "jump-corridor-blocked": "Roblox obby: keep about 13 studs of free height above every jump (default jump "
                              "height 7.2 plus the character); move decorations aside instead of floating them.",
-    "jump-too-far": "Roblox obby: keep jump gaps at or under about 6 studs for a default character (WalkSpeed 16, "
-                    "JumpHeight 7.2); widen the landing toward the jump rather than moving the whole course.",
-    "jump-too-high": "Roblox obby: keep the rise between platforms at or under about 4.5 studs for a default "
-                     "character; lower the landing or add one step halfway for more.",
+    "jump-too-far": "Roblox obby: keep jump gaps at or under about 7 studs for a default character (real playtests "
+                    "always jumped 7.8, 9.5 only sometimes); widen the landing toward the jump, not the whole course.",
+    "jump-too-high": "Roblox obby: keep rises between platforms at or under about 6 studs for a default character "
+                     "(7.6 was the most a real playtest jumped); lower the landing or add one step halfway.",
     "route-unintended-support": "Roblox obby: keep decorations out of the jump path; a character can climb onto a "
                                 "thin decor part over a gap and skip the jump. Move it beside the path.",
     "route-surface-not-collidable": "Roblox obby: every platform a player must stand on needs CanCollide = true; "
@@ -1652,51 +1721,234 @@ class Lab:
         return report
 
 
+# --------------------------------------------------------------------------- UI fixes (change the UI SPEC, then re-check)
+
+UI_FIXABLE = ("ui-text-clipped", "ui-off-screen", "ui-zero-size")
+UI_MARGIN = 12            # px from the screen edge a clamped element keeps
+UI_LESSON_TEXT = {
+    "ui-text-clipped": "Roblox UI: size a text label or button for its longest text at phone size (about 666x374 in "
+                       "Studio's simulator), or let it wrap; a fixed pixel width that fits a short label clips a long one.",
+    "ui-off-screen": "Roblox UI: place and size panels with Scale and AnchorPoint (or a UISizeConstraint), not large "
+                     "pixel offsets; an offset that fits a desktop screen puts the panel off a phone screen.",
+    "ui-zero-size": "Roblox UI: give every visible element a non-zero size; a zero-size element never shows.",
+}
+
+
+def _ui_tree(node: dict, parent=None):
+    yield node, parent
+    for child in node.get("children", []) or []:
+        yield from _ui_tree(child, node)
+
+
+def _ui_axis(vector: dict | None, axis: str) -> dict:
+    return dict(((vector or {}).get(axis) or {}))
+
+
+def fix_ui(ui: dict, devices: list[dict]) -> tuple[dict, list[dict]]:
+    """Fix the UI spec for the layout problems Studio reported (per device read-back). Returns (new spec, changes).
+    Smallest change first: widen a clipped label to its text (wrap + smaller text when even 90% of the narrowest
+    screen is too small); clamp an off-screen element to the nearest edge with AnchorPoint/Scale; an element larger
+    than the screen gets a Scale size with a UISizeConstraint keeping its designed pixel size as the maximum. Pure."""
+    new = copy.deepcopy(ui)
+    nodes, parents = {}, {}
+    for node, parent in _ui_tree(new["root"]):
+        key = str(node.get("name", node.get("id", "")))[:24]
+        nodes[key], parents[key] = node, (str(parent.get("name", parent.get("id", "")))[:24] if parent else None)
+    viewports = [tuple((d.get("layout") or {}).get("viewport") or ()) for d in devices]
+    viewports = [v for v in viewports if len(v) == 2 and v[0] > 0 and v[1] > 0]
+    if not viewports:
+        return new, []
+    narrow_w = min(v[0] for v in viewports)
+    changes, fixed = [], set()
+
+    def under_fixed(name):
+        up = parents.get(name)
+        while up:
+            if up in fixed:
+                return True
+            up = parents.get(up)
+        return False
+
+    for device in devices:
+        layout = device.get("layout") or {}
+        viewport = layout.get("viewport") or [0, 0]
+        width, height = viewport[0], viewport[1]
+        rows = {row[0]: row for row in layout.get("rows", []) if isinstance(row, list) and len(row) == 8}
+        for problem in device.get("problems", []):
+            code, name = problem.get("code"), problem.get("object")
+            node = nodes.get(name)
+            if code not in UI_FIXABLE or node is None or name in fixed or under_fixed(name) or node is new["root"]:
+                continue
+            row = rows.get(name)
+            size = node.setdefault("size", {})
+            if code == "ui-text-clipped":
+                text, text_size = str(node.get("text", "")), float(node.get("textSize", 14))
+                need = int(round(len(text) * text_size * 0.56 + 2 * float(node.get("padding", 0)) + 20))
+                cap = int(narrow_w * 0.9)
+                if need <= cap:
+                    size["x"] = {"offset": need}
+                    size.setdefault("y", {"offset": 40})
+                    changes.append({"fix": "ui-widen-text", "object": name, "width": need})
+                else:
+                    lines = 2
+                    smaller = max(12, int(text_size * min(1.0, lines * cap / max(need, 1))))
+                    tall = int(lines * smaller * 1.3 + 12)
+                    size["x"] = {"offset": cap}
+                    size["y"] = {"offset": max(int(_ui_axis(size, "y").get("offset", 0)), tall)}
+                    node["textWrapped"], node["textSize"] = True, smaller
+                    changes.append({"fix": "ui-wrap-text", "object": name, "width": cap, "textSize": smaller})
+            elif code == "ui-off-screen" and row is not None and width > 0 and height > 0:
+                _, _, x, y, w, h, _, _ = row
+                if w > width * 0.95 or h > height * 0.95:
+                    designed = [int(_ui_axis(size, "x").get("offset", 0)) or int(w),
+                                int(_ui_axis(size, "y").get("offset", 0)) or int(h)]
+                    size["x"] = {"scale": 0.9} if w > width * 0.95 else (size.get("x") or {"offset": int(w)})
+                    size["y"] = {"scale": 0.9} if h > height * 0.95 else (size.get("y") or {"offset": int(h)})
+                    node["maxSize"] = {"x": {"offset": designed[0]}, "y": {"offset": designed[1]}}
+                    node["anchor"] = {"x": {"scale": 0.5}, "y": {"scale": 0.5}}
+                    node["position"] = {"x": {"scale": 0.5}, "y": {"scale": 0.5}}
+                    changes.append({"fix": "ui-fit-scale", "object": name, "maxSize": designed})
+                else:
+                    anchor = node.setdefault("anchor", {})
+                    position = node.setdefault("position", {})
+                    moved = {}
+                    if x + w > width + 1:
+                        anchor["x"], position["x"] = {"scale": 1}, {"scale": 1, "offset": -UI_MARGIN}
+                        moved["x"] = "right"
+                    elif x < -1:
+                        anchor["x"], position["x"] = {"scale": 0}, {"offset": UI_MARGIN}
+                        moved["x"] = "left"
+                    if y + h > height + 1:
+                        anchor["y"], position["y"] = {"scale": 1}, {"scale": 1, "offset": -UI_MARGIN}
+                        moved["y"] = "bottom"
+                    elif y < -1:
+                        anchor["y"], position["y"] = {"scale": 0}, {"offset": UI_MARGIN}
+                        moved["y"] = "top"
+                    if not moved:
+                        continue
+                    anchor.setdefault("x", {"scale": 0})
+                    anchor.setdefault("y", {"scale": 0})
+                    position.setdefault("x", {"offset": 0})
+                    position.setdefault("y", {"offset": 0})
+                    changes.append({"fix": "ui-clamp", "object": name, "edges": moved})
+            elif code == "ui-zero-size" and row is not None:
+                _, _, _, _, w, h, _, _ = row
+                if w <= 0:
+                    size["x"] = {"offset": 120}
+                if h <= 0:
+                    size["y"] = {"offset": 40}
+                size.setdefault("x", {"offset": 120})
+                size.setdefault("y", {"offset": 40})
+                changes.append({"fix": "ui-min-size", "object": name})
+            else:
+                continue
+            fixed.add(name)
+    return new, changes
+
+
+def ui_lesson_record(report: dict) -> dict | None:
+    """A Studio-verified UI lesson candidate: a layout problem seen in the real Device Simulator read-back, a fix of
+    the UI spec, and a clean read-back on every device afterwards."""
+    iterations = report.get("iterations", [])
+    if len(iterations) < 2 or not report.get("passed"):
+        return None
+    codes = [p.get("code") for p in iterations[0].get("problems", []) if p.get("code") in UI_LESSON_TEXT]
+    if not codes:
+        return None
+    code, last = codes[0], iterations[-1]
+    evidence = {
+        "kind": "studio-verified-ui", "run": report["run"], "place": report.get("place"),
+        "studio": "real Roblox Studio Device Simulator read-back through the official Studio MCP",
+        "before": {"iteration": 1, "defect": ", ".join(f"{p.get('code')}:{p.get('object')}@{p.get('device')}"
+                                                       for p in iterations[0].get("problems", [])[:4])},
+        "fix": [c for it in iterations for c in it.get("fixes", [])][:6],
+        "after": {"iteration": last["index"], "devices": [d["device"] for d in last.get("devices", [])],
+                  "legs": len(last.get("devices", [])), "build_hash": digest(report.get("final_ui") or {})},
+        "screenshots": [{"device": d["device"], "sha256": (d.get("screenshot") or {}).get("sha256")}
+                        for d in last.get("devices", []) if (d.get("screenshot") or {}).get("ok")],
+    }
+    return {"id": f"studio-lab-{report['run']}-{code}", "kind": "pitfall", "text": UI_LESSON_TEXT[code], "code": code,
+            "source": "studio-lab:" + report["run"], "source_type": "verified-fix", "evidence": evidence,
+            "reviewed": False}
+
+
 class UiLab(Lab):
     """A UI spec: build the compiled ScreenGui in Edit mode, then per device size switch the Device Simulator, read
-    the layout back, check it and take a screenshot of the viewport. The simulator is put back at the end."""
+    the layout back, check it and take a screenshot of the viewport. Problems the fixer knows change the UI spec and
+    the loop builds and checks again (maxIterations, default 2). The simulator is put back at the end."""
 
     async def _ui(self, code: str) -> tuple[bool, dict]:
         ok, text, _entry = await self._luau(code)
         return ok, (marked_json(text, UI_MARK) or {})
 
+    async def _check(self, spec: dict, index: int) -> list[dict]:
+        devices = []
+        for device in spec["devices"]:
+            _, switched = await self._ui(ui_device_luau(device))
+            _, layout = await self._ui(ui_layout_luau(spec["name"]))
+            shot = await self._read("screen_capture", capture_id=f"StarLabUi_{spec['name']}_{device}_{index}")
+            images = _images(shot)
+            entry = {"device": device, "simulator": switched, "layout": layout, "problems": ui_check(layout, device)}
+            if images and not _failed(shot):
+                data, mime = images[0]
+                name = f"ui-it{index}-{device}.{'jpg' if 'jpeg' in mime else 'png'}"
+                (self.out / name).write_bytes(data)
+                entry["screenshot"] = {"ok": True, "file": name, "bytes": len(data), "sha256": digest(data)}
+            else:
+                entry["screenshot"] = {"ok": False, "detail": _text(shot)[:200]}
+            devices.append(entry)
+            self.log(f"[ui {index}] {device}: viewport {layout.get('viewport')} preset {switched.get('preset')} "
+                     f"problems {[p['code'] for p in entry['problems']]}")
+        return devices
+
     async def run(self, spec: dict, *, run: str | None = None, keep: bool = True) -> dict:
         run = run or secrets.token_hex(4)
         self.out.mkdir(parents=True, exist_ok=True)
-        report = {"lab": LAB_VERSION, "kind": "ui", "run": run, "spec": spec["name"], "devices": [],
+        report = {"lab": LAB_VERSION, "kind": "ui", "run": run, "spec": spec["name"], "devices": [], "iterations": [],
                   "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "passed": False}
         identity = getattr(getattr(self.guarded, "verdict", None), "identity", None)
         if identity is not None:
             report["place"] = {"place_id": identity.place_id, "universe_id": identity.game_id}
-        ok, applied = await self._ui(ui_apply_luau(spec, run))
-        report["apply"] = {"ok": ok and applied.get("run") == run and bool(applied.get("made")), **applied}
-        self.log(f"[ui] apply: {report['apply']}")
-        if report["apply"]["ok"]:
-            try:
-                for device in spec["devices"]:
-                    _, switched = await self._ui(ui_device_luau(device))
-                    _, layout = await self._ui(ui_layout_luau(spec["name"]))
-                    shot = await self._read("screen_capture", capture_id=f"StarLabUi_{spec['name']}_{device}")
-                    images = _images(shot)
-                    entry = {"device": device, "simulator": switched, "layout": layout,
-                             "problems": ui_check(layout, device)}
-                    if images and not _failed(shot):
-                        data, mime = images[0]
-                        name = f"ui-{device}.{'jpg' if 'jpeg' in mime else 'png'}"
-                        (self.out / name).write_bytes(data)
-                        entry["screenshot"] = {"ok": True, "file": name, "bytes": len(data), "sha256": digest(data)}
-                    else:
-                        entry["screenshot"] = {"ok": False, "detail": _text(shot)[:200]}
-                    report["devices"].append(entry)
-                    self.log(f"[ui] {device}: viewport {layout.get('viewport')} preset {switched.get('preset')} "
-                             f"problems {[p['code'] for p in entry['problems']]}")
-            finally:
-                _, reset = await self._ui(ui_device_luau("desktop"))
-                report["reset"] = reset
+        limit = int(spec.get("maxIterations", UI_ITERATIONS))
+        current = dict(spec)
+        try:
+            for index in range(1, limit + 1):
+                ok, applied = await self._ui(ui_apply_luau(current, run))
+                step = {"index": index, "apply": {"ok": ok and applied.get("run") == run and bool(applied.get("made")),
+                                                  **applied}, "devices": [], "problems": [], "fixes": [],
+                        "passed": False}
+                report["iterations"].append(step)
+                report["apply"] = step["apply"]
+                self.log(f"[ui {index}] apply: {step['apply']}")
+                if not step["apply"]["ok"]:
+                    break
+                step["devices"] = await self._check(current, index)
+                step["problems"] = [{**p, "device": d["device"]} for d in step["devices"] for p in d["problems"]]
+                step["passed"] = bool(step["devices"]) and all(d["screenshot"]["ok"] and not d["problems"]
+                                                               for d in step["devices"])
+                report["devices"] = step["devices"]
+                if step["passed"] or index >= limit:
+                    break
+                fixed_ui, step["fixes"] = fix_ui(current["ui"], step["devices"])
+                self.log(f"[ui {index}] fixes: {step['fixes']}")
+                if not step["fixes"]:
+                    break
+                try:
+                    from . import roblox_ui_compiler
+                    roblox_ui_compiler.compile_ui(fixed_ui)
+                except Exception as error:               # a fix the compiler refuses: stop and report it
+                    step["fix_refused"] = type(error).__name__
+                    break
+                current = {**current, "ui": fixed_ui}
+        finally:
+            _, reset = await self._ui(ui_device_luau("desktop"))
+            report["reset"] = reset
         if not keep:
             report["removed"] = (await self._ui(ui_remove_luau(spec["name"])))[1]
-        report["passed"] = bool(report["apply"]["ok"] and report["devices"]
-                                and all(d["screenshot"]["ok"] and not d["problems"] for d in report["devices"]))
+        last = report["iterations"][-1] if report["iterations"] else {}
+        report["passed"] = bool(last.get("passed"))
+        report["final_ui"] = current["ui"]
+        report["lesson"] = ui_lesson_record(report)
         report["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         (self.out / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
         return report
@@ -1826,6 +2078,13 @@ def main(arguments=None) -> int:
         command.add_argument("--capture", default="", help="JSON list: command that writes a PNG of the display")
         command.add_argument("--vision", action="store_true", help="ask the brain's vision model for a critique")
         command.add_argument("--outbox", default="", help="folder for Studio-verified lesson candidates")
+        if name == "nightly":
+            command.add_argument("--studios", type=int, default=0,
+                                 help="run on this many Studios through the multi-Studio connector (1..3; 0 = the "
+                                      "single-Studio path, every spec in the folder, no rotation)")
+            command.add_argument("--rotate", type=int, default=0, help="specs per night (rotating; 0 = all)")
+            command.add_argument("--max-minutes", type=float, default=45.0, help="no new spec after this many minutes")
+            command.add_argument("--keep", type=int, default=14, help="nightly evidence folders to keep")
     remove = sub.add_parser("remove", help="delete lab drafts by name under Workspace/MapDrafts (one undo step)")
     remove.add_argument("names", nargs="+")
     remove.add_argument("--home", required=True)
@@ -1839,6 +2098,16 @@ def main(arguments=None) -> int:
                           "cameras": cameras(spec["plan"]) if spec else [],
                           "probe": probe_config(spec["plan"], "0" * 8) if spec else None}, indent=1))
         return 0 if spec else 2
+    if chosen.command == "nightly" and chosen.studios > 0:
+        from . import studio_lab_parallel
+        result = studio_lab_parallel.nightly(
+            Path(chosen.spec), home=Path(chosen.home).expanduser(), out=Path(chosen.out),
+            outbox=Path(chosen.outbox) if chosen.outbox else None, studios=chosen.studios, rotate=chosen.rotate,
+            max_minutes=chosen.max_minutes, keep=chosen.keep,
+            log=lambda text: print(time.strftime("%H:%M:%S"), text, flush=True))
+        print(json.dumps({k: v for k, v in result.items() if k != "invalid"} | {"invalid": len(result["invalid"])},
+                         indent=1, default=str))
+        return 0 if result.get("ok") else 1
     capture = json.loads(chosen.capture) if chosen.capture else None
     critic = BrainCritic() if chosen.vision else None
     records, results = [], []

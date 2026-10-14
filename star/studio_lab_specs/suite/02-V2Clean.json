@@ -3,6 +3,9 @@
  "kind": "map",
  "description": "Control course with comfortable jumps; should pass the first time.",
  "defect": "none",
+ "expect": {
+  "first_pass": true
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

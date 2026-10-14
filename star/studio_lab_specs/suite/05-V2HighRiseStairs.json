@@ -1,8 +1,11 @@
 {
  "name": "V2HighRiseStairs",
  "kind": "map",
- "description": "A 6.3-stud rise followed by another 4-stud climb.",
- "defect": "rise-too-high",
+ "description": "Limit check: a 6.3-stud rise followed by a 4-stud climb; jumped in every real run.",
+ "defect": "limit-check",
+ "expect": {
+  "first_pass": true
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

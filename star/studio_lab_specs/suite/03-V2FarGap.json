@@ -1,8 +1,11 @@
 {
  "name": "V2FarGap",
  "kind": "map",
- "description": "Second jump 7.8 studs with a 2-stud rise: inside the dry run's 8-stud limit.",
- "defect": "gap-too-far",
+ "description": "Limit check: second jump 7.8 studs with a 2-stud rise. Was meant as a too-far gap; real physics jumped it in every run (v2/v3), so it now guards the measured limit and must pass the first time.",
+ "defect": "limit-check",
+ "expect": {
+  "first_pass": true
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

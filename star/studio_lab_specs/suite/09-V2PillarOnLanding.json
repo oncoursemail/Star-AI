@@ -3,6 +3,17 @@
  "kind": "map",
  "description": "A 1x7x1 decor pillar stands on P2, in the running line.",
  "defect": "decor-on-landing",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "remove",
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

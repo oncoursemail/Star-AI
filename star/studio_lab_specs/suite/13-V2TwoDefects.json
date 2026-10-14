@@ -3,6 +3,18 @@
  "kind": "map",
  "description": "A banner in the first gap and an unanchored P3.",
  "defect": "decor-in-gap+unanchored",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked",
+   "route-surface-unanchored"
+  ],
+  "fixes": [
+   "move-aside",
+   "anchor"
+  ]
+ },
  "maxIterations": 4,
  "playSeconds": 60,
  "plan": {

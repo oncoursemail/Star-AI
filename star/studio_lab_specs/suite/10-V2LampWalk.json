@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A 1-stud lamp post stands in the middle of a 24-stud walkway.",
  "defect": "decor-in-walkway",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

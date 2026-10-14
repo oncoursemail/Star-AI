@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A decorative banner stands in the third gap; the dry run accepts it.",
  "defect": "decor-in-gap",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

@@ -1,8 +1,17 @@
 {
  "name": "V2VeryFarGap",
  "kind": "map",
- "description": "Second jump 9.5 studs flat; the plan relaxes maxJumpGap to 10.",
+ "description": "Second jump 9.5 studs flat; the plan relaxes maxJumpGap to 10. The edge of real physics: failed in one run, jumped in two (v2/v3), so either outcome is accepted.",
  "defect": "gap-too-far",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "jump-too-far"
+  ],
+  "fixes": [
+   "extend-platform"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

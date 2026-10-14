@@ -3,6 +3,16 @@
  "kind": "map",
  "description": "A roof beam 4 studs above the second jump.",
  "defect": "beam-over-jump",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "raise-overhead"
+  ]
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {

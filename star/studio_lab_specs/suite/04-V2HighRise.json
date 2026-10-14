@@ -1,8 +1,11 @@
 {
  "name": "V2HighRise",
  "kind": "map",
- "description": "A 6.3-stud rise (dry run limit 6.5).",
- "defect": "rise-too-high",
+ "description": "Limit check: a 6.3-stud rise (dry run limit 6.5). Real physics jumped it in every run; must pass the first time.",
+ "defect": "limit-check",
+ "expect": {
+  "first_pass": true
+ },
  "maxIterations": 3,
  "playSeconds": 60,
  "plan": {
