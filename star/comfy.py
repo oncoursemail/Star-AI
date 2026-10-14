@@ -35,6 +35,9 @@ def load_workflow(path: Path, *, prompt_text: str, prompt_node: str):
             raise PermissionError(f'Unreviewed or external workflow node {node_id}: {node.get("class_type") if isinstance(node,dict) else "invalid"}')
     if prompt_node not in raw or raw[prompt_node].get('class_type')!='CLIPTextEncode':
         raise ValueError('Prompt node must be the ID of a CLIPTextEncode node')
+    # A hand-edited export can lack the inputs block; that used to surface as a bare KeyError.
+    if not isinstance(raw[prompt_node].get('inputs'),dict):
+        raise ValueError('The prompt node has no inputs. Export using ComfyUI Save (API format).')
     if not 1 <= len(prompt_text) <= 1500:
         raise ValueError('Prompt must be 1-1500 characters')
     result=copy.deepcopy(raw)
@@ -71,7 +74,8 @@ def generate(workflow_file: Path, *, prompt: str, node_id: str, output: Path, po
                 for node in detail.get('outputs',{}).values():
                     for result in node.get('images',[]):
                         name=result.get('filename','')
-                        if not name or '/' in name or '\\' in name or name in ('.','..'):
+                        # ':' would write into an NTFS alternate stream of another file instead of a picture.
+                        if not isinstance(name,str) or not name or any(c in name for c in '/\\:') or name in ('.','..'):
                             continue
                         params={'filename':name,'type':result.get('type','output'),'subfolder':result.get('subfolder','')}
                         if params['type'] not in {'output','temp'}:
