@@ -25,7 +25,9 @@ EVAL_FILES = ["questions.jsonl", "heldout.jsonl", "golden-task-queries.jsonl"]
 WORD = re.compile(r"[a-z0-9]+")
 # Only the indexed documentation sources and known local model families are
 # eligible. Metadata is an unverified declaration, never an attestation.
-_ALLOWED_LICENCES = frozenset({"CC-BY-4.0", "MIT"})
+# Exact strings as server/knowledge/corpora.json stores them in the index's sources table (creator-docs is
+# "CC-BY-4.0 (prose), MIT (code samples)"); anything else is untrusted.
+_ALLOWED_LICENCES = frozenset({"CC-BY-4.0", "MIT", "CC-BY-4.0 (prose), MIT (code samples)"})
 _LOCAL_GENERATORS = ("qwen", "mellum", "star-quick", "local-open-model")
 _FORBIDDEN_GENERATORS = ("chatgpt", "claude", "codex", "openai", "anthropic", "gemini", "gpt-")
 

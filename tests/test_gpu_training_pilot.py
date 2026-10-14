@@ -271,3 +271,19 @@ def test_casefolded_duplicate_queries_and_manifest_counts(tmp_path, monkeypatch)
     assert manifest["pages"] == 1
     assert sum(manifest["by_origin"].values()) == manifest["pairs"]
     assert len({(p["anchor"].casefold(), p["text_sha"]) for p in pairs}) == len(pairs)
+
+
+def test_every_indexed_corpus_licence_is_accepted(tmp_path, monkeypatch):
+    """Review fix: the real index stores creator-docs as 'CC-BY-4.0 (prose), MIT (code samples)' (corpora.json);
+    an exact-match allowlist without it dropped every pair of the main corpus."""
+    corpora = json.loads((Path(__file__).resolve().parents[1] / "server" / "knowledge" / "corpora.json")
+                         .read_text(encoding="utf-8"))
+    licences = {source["licence"] for source in corpora["sources"]}
+    assert licences and licences <= build_pairs._ALLOWED_LICENCES
+    db_path = tmp_path / "kb.sqlite3"
+    make_db(db_path)
+    with sqlite3.connect(db_path) as db:
+        db.execute("UPDATE sources SET licence = ?", ("CC-BY-4.0 (prose), MIT (code samples)",))
+    pairs, manifest = _adversarial_pairs(tmp_path, monkeypatch, query_rows=[_synthetic_row(_known_provenance())])
+    assert pairs and manifest["pairs"] == len(pairs)
+    assert "untrusted document source" not in manifest["dropped"]
