@@ -132,6 +132,16 @@ BAD = [
     ("x = 'http://example.com'", "path or URL"),
     ("for i in range(900000):\n    pass", "range()"),
     ("def f(:", "syntax error"),
+    # Module escapes through what allowed modules carry (random._os, typing.sys, operator.attrgetter, ...)
+    ("import random\nrandom._os.read(1)", "'._os'"),
+    ("import collections\ncollections._sys", "'._sys'"),
+    ("from random import _os", "private names"),
+    ("from collections import _sys", "private names"),
+    ("import typing", "Import of 'typing'"),
+    ("from typing import sys", "Import of 'typing'"),
+    ("from bpy_extras.io_utils import os", "private names or modules"),
+    ("import bpy_extras\nbpy_extras.io_utils.os", "'.os'"),
+    ("import bpy\nbpy.types.sys", "'.sys'"),
     ("", "needs Python code"),
 ]
 

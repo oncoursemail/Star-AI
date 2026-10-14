@@ -140,8 +140,9 @@ def public(home) -> dict:
 
 # --------------------------------------------------------------------------- the filter for model-written Python
 
+# `typing` is not allowed: it re-exports sys/operator/types and get_type_hints() evaluates annotation strings.
 ALLOWED_IMPORTS = frozenset({"bpy", "bmesh", "mathutils", "math", "random", "colorsys", "itertools", "functools",
-                             "collections", "typing", "bpy_extras"})
+                             "collections", "bpy_extras"})
 ALLOWED_OPS = frozenset({
     "object", "mesh", "curve", "curves", "surface", "transform", "material", "node", "uv", "collection", "armature",
     "pose", "constraint", "lattice", "geometry", "rigidbody", "anim", "mball", "font",
@@ -157,6 +158,10 @@ BLOCKED_ATTRIBUTES = frozenset({
     "directory", "files", "sound_open", "texts", "scripts", "addons", "extensions", "handlers",
     "timers", "msgbus", "driver_namespace",
 })
+# Modules (or their stand-ins) an allowed module still carries, e.g. random._os, collections._sys: any attribute or
+# from-import name starting with "_" is refused, and these names too.
+ESCAPE_ATTRIBUTES = frozenset({"os", "sys", "modules", "builtins", "operator", "subprocess", "importlib", "socket",
+                               "shutil", "ctypes", "posix", "nt", "popen"})
 _PATH_LIKE = re.compile(r"(^/|^\\|^~|\.\.|://|^[A-Za-z]:|\\\\)")
 
 
@@ -194,6 +199,9 @@ def check_bpy_code(code: object) -> str:
             for root in roots:
                 if root not in ALLOWED_IMPORTS:
                     raise ValueError(f"Import of '{root}' is not allowed; only {', '.join(sorted(ALLOWED_IMPORTS))}{where}")
+            if isinstance(node, ast.ImportFrom) and any(alias.name.startswith("_") or alias.name in ESCAPE_ATTRIBUTES
+                                                        or alias.name in BLOCKED_ATTRIBUTES for alias in node.names):
+                raise ValueError(f"Importing private names or modules from '{node.module}' is not allowed{where}")
         elif isinstance(node, (ast.ClassDef, ast.While, ast.AsyncFunctionDef, ast.Await, ast.Global, ast.Nonlocal,
                                ast.AsyncFor, ast.AsyncWith, ast.Yield, ast.YieldFrom)):
             raise ValueError(f"'{type(node).__name__}' is not allowed (no classes, while loops or async code){where}")
@@ -201,7 +209,7 @@ def check_bpy_code(code: object) -> str:
             if node.id in BLOCKED_NAMES or (node.id.startswith("__") and node.id.endswith("__")):
                 raise ValueError(f"The name '{node.id}' is not allowed{where}")
         elif isinstance(node, ast.Attribute):
-            if node.attr.startswith("__") or node.attr in BLOCKED_ATTRIBUTES:
+            if node.attr.startswith("_") or node.attr in BLOCKED_ATTRIBUTES or node.attr in ESCAPE_ATTRIBUTES:
                 raise ValueError(f"The attribute '.{node.attr}' is not allowed (files, add-ons and internals are off limits){where}")
             if (isinstance(node.value, ast.Attribute) and node.value.attr == "ops"
                     and isinstance(node.value.value, ast.Name) and node.value.value.id == "bpy"
