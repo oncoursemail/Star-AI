@@ -24,7 +24,8 @@
   --star-stroke: #292e33;
   --star-stroke-soft: #1c2025;
   --star-stroke-strong: #3a4047;
-  --star-stroke-focus: #59616a; /* composer edge while typing */
+  --star-stroke-control: #6b747d; /* essential control boundaries, >=3:1 on raised layers */
+  --star-stroke-focus: #6b747d; /* composer and menu focus borders */
   --star-veil: rgba(255, 255, 255, 0.06); /* hover on an already raised layer */
   --star-scrim: rgba(5, 6, 8, 0.86);
 
