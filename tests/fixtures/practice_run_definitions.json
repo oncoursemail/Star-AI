@@ -1,0 +1,962 @@
+[
+  {
+    "slug": "profile-key",
+    "contract": "Return 'user_<id>' for a strictly positive integer userId; otherwise nil.",
+    "reference": "--!strict\nreturn function(userId: number): string?\n  if userId <= 0 or userId % 1 ~= 0 then return nil end\n  return \"user_\" .. tostring(userId)\nend\n",
+    "wrong": "--!strict\nreturn function(userId: number): string?\n  if userId < 0 or userId % 1 ~= 0 then return nil end\n  return \"user_\" .. tostring(userId)\nend\n",
+    "cases": [
+      {
+        "args": "1",
+        "expected": "\"user_1\""
+      },
+      {
+        "args": "42",
+        "expected": "\"user_42\""
+      },
+      {
+        "args": "0",
+        "expected": "nil"
+      },
+      {
+        "args": "-2",
+        "expected": "nil"
+      },
+      {
+        "args": "1.5",
+        "expected": "nil"
+      },
+      {
+        "args": "1000",
+        "expected": "\"user_1000\""
+      }
+    ]
+  },
+  {
+    "slug": "profile-defaults",
+    "contract": "Normalize a possibly absent stored record to {coins = nonnegative integer, xp = nonnegative integer}; invalid fields become 0.",
+    "reference": "--!strict\nreturn function(row)\n  local source = type(row) == \"table\" and row or {}\n  local function clean(value)\n    if type(value) ~= \"number\" or value < 0 or value % 1 ~= 0 then return 0 end\n    return value\n  end\n  return { coins = clean(source.coins), xp = clean(source.xp) }\nend\n",
+    "wrong": "--!strict\nreturn function(row)\n  local source = type(row) == \"table\" and row or {}\n  local function clean(value)\n    if type(value) ~= \"number\" or value < -100 or value % 1 ~= 0 then return 0 end\n    return value\n  end\n  return { coins = clean(source.coins), xp = clean(source.xp) }\nend\n",
+    "cases": [
+      {
+        "args": "nil",
+        "expected": "{coins=0,xp=0}"
+      },
+      {
+        "args": "{coins=4,xp=7}",
+        "expected": "{coins=4,xp=7}"
+      },
+      {
+        "args": "{coins=-1,xp=9}",
+        "expected": "{coins=0,xp=9}"
+      },
+      {
+        "args": "{coins=8.5,xp=2}",
+        "expected": "{coins=0,xp=2}"
+      },
+      {
+        "args": "{coins=4,xp='bad'}",
+        "expected": "{coins=4,xp=0}"
+      },
+      {
+        "args": "\"invalid\"",
+        "expected": "{coins=0,xp=0}"
+      }
+    ]
+  },
+  {
+    "slug": "profile-migration",
+    "contract": "Migrate old version 1 {gold,level} or version 2 {coins,rank} into {version=2,coins>=0 integer,rank>=1 integer}; nil defaults.",
+    "reference": "--!strict\nreturn function(row)\n  local source = type(row) == \"table\" and row or {}\n  local modern = source.version == 2\n  local money = modern and source.coins or source.gold\n  local level = modern and source.rank or source.level\n  local coins = 0\n  if type(money) == \"number\" and money >= 0 then coins = math.floor(money) end\n  local rank = 1\n  if type(level) == \"number\" and level >= 1 then rank = math.floor(level) end\n  return { version = 2, coins = coins, rank = rank }\nend\n",
+    "wrong": "--!strict\nreturn function(row)\n  local source = type(row) == \"table\" and row or {}\n  local modern = source.version == 1\n  local money = modern and source.coins or source.gold\n  local level = modern and source.rank or source.level\n  local coins = 0\n  if type(money) == \"number\" and money >= 0 then coins = math.floor(money) end\n  local rank = 1\n  if type(level) == \"number\" and level >= 1 then rank = math.floor(level) end\n  return { version = 2, coins = coins, rank = rank }\nend\n",
+    "cases": [
+      {
+        "args": "nil",
+        "expected": "{version=2,coins=0,rank=1}"
+      },
+      {
+        "args": "{version=1,gold=9,level=3}",
+        "expected": "{version=2,coins=9,rank=3}"
+      },
+      {
+        "args": "{version=2,coins=7,rank=4}",
+        "expected": "{version=2,coins=7,rank=4}"
+      },
+      {
+        "args": "{version=1,gold=-4,level=2}",
+        "expected": "{version=2,coins=0,rank=2}"
+      },
+      {
+        "args": "{version=2,coins=4.7,rank=2.9}",
+        "expected": "{version=2,coins=4,rank=2}"
+      },
+      {
+        "args": "{version=1,gold=5,level=0}",
+        "expected": "{version=2,coins=5,rank=1}"
+      }
+    ]
+  },
+  {
+    "slug": "merge-checkpoints",
+    "contract": "Combine two saved progress records {checkpoint,trophies} using the maximum nonnegative value of each field; either input may be nil.",
+    "reference": "--!strict\nreturn function(a, b)\n  local x = a or {}\n  local y = b or {}\n  return {checkpoint = math.max(0, x.checkpoint or 0, y.checkpoint or 0),\n          trophies = math.max(0, x.trophies or 0, y.trophies or 0)}\nend\n",
+    "wrong": "--!strict\nreturn function(a, b)\n  local x = a or {}\n  local y = b or {}\n  return {checkpoint = math.min(0, x.checkpoint or 0, y.checkpoint or 0),\n          trophies = math.max(0, x.trophies or 0, y.trophies or 0)}\nend\n",
+    "cases": [
+      {
+        "args": "nil,nil",
+        "expected": "{checkpoint=0,trophies=0}"
+      },
+      {
+        "args": "{checkpoint=2,trophies=3},{checkpoint=5,trophies=1}",
+        "expected": "{checkpoint=5,trophies=3}"
+      },
+      {
+        "args": "{checkpoint=9,trophies=1},{checkpoint=1,trophies=6}",
+        "expected": "{checkpoint=9,trophies=6}"
+      },
+      {
+        "args": "{},{}",
+        "expected": "{checkpoint=0,trophies=0}"
+      },
+      {
+        "args": "{checkpoint=4},{trophies=7}",
+        "expected": "{checkpoint=4,trophies=7}"
+      },
+      {
+        "args": "{checkpoint=0,trophies=2},nil",
+        "expected": "{checkpoint=0,trophies=2}"
+      }
+    ]
+  },
+  {
+    "slug": "clamped-save-delta",
+    "contract": "Apply an integer signed delta to a saved balance, clamp between 0 and 500, and ignore a noninteger delta.",
+    "reference": "--!strict\nreturn function(balance: number, delta: number): number\n  if delta % 1 ~= 0 then return balance end\n  return math.clamp(balance + delta, 0, 500)\nend\n",
+    "wrong": "--!strict\nreturn function(balance: number, delta: number): number\n  if delta % 1 ~= 0 then return balance end\n  return math.clamp(balance + delta, 0, 600)\nend\n",
+    "cases": [
+      {
+        "args": "10,5",
+        "expected": "15"
+      },
+      {
+        "args": "0,-3",
+        "expected": "0"
+      },
+      {
+        "args": "499,9",
+        "expected": "500"
+      },
+      {
+        "args": "500,1",
+        "expected": "500"
+      },
+      {
+        "args": "20,1.5",
+        "expected": "20"
+      },
+      {
+        "args": "23,-20",
+        "expected": "3"
+      }
+    ]
+  },
+  {
+    "slug": "save-payload-selection",
+    "contract": "Save only sanitized coins (nonnegative integer), stage (>=1 integer) and soundEnabled (boolean, default true) from a live record; omit runtime fields.",
+    "reference": "--!strict\nreturn function(row)\n  local data = type(row) == \"table\" and row or {}\n  local coins = type(data.coins) == \"number\" and math.max(0, math.floor(data.coins)) or 0\n  local stage = type(data.stage) == \"number\" and math.max(1, math.floor(data.stage)) or 1\n  local soundEnabled = type(data.soundEnabled) == \"boolean\" and data.soundEnabled or data.soundEnabled ~= false\n  return {coins=coins,stage=stage,soundEnabled=soundEnabled}\nend\n",
+    "wrong": "--!strict\nreturn function(row)\n  local data = type(row) == \"table\" and row or {}\n  local coins = type(data.coins) == \"number\" and math.max(0, math.floor(data.coins)) or 0\n  local stage = type(data.stage) == \"number\" and math.max(1, math.floor(data.stage)) or 1\n  local soundEnabled = type(data.soundEnabled) == \"boolean\" and data.soundEnabled or data.soundEnabled ~= true\n  return {coins=coins,stage=stage,soundEnabled=soundEnabled}\nend\n",
+    "cases": [
+      {
+        "args": "nil",
+        "expected": "{coins=0,stage=1,soundEnabled=true}"
+      },
+      {
+        "args": "{coins=3,stage=2,soundEnabled=false,runtime='ignore'}",
+        "expected": "{coins=3,stage=2,soundEnabled=false}"
+      },
+      {
+        "args": "{coins=-5,stage=0,soundEnabled=true}",
+        "expected": "{coins=0,stage=1,soundEnabled=true}"
+      },
+      {
+        "args": "{coins=8.8,stage=5.5}",
+        "expected": "{coins=8,stage=5,soundEnabled=true}"
+      },
+      {
+        "args": "{coins='bad',stage='bad',soundEnabled='x'}",
+        "expected": "{coins=0,stage=1,soundEnabled=true}"
+      },
+      {
+        "args": "{coins=0,stage=1,soundEnabled=false}",
+        "expected": "{coins=0,stage=1,soundEnabled=false}"
+      }
+    ]
+  },
+  {
+    "slug": "recent-reward-receipts",
+    "contract": "Append a nonempty receipt ID to an ordered recent-ID list if absent; retain only last 3 and preserve input; invalid or repeated IDs leave list unchanged.",
+    "reference": "--!strict\nreturn function(old, receipt)\n  local result = {}\n  for _, id in old do table.insert(result, id) end\n  if type(receipt) ~= \"string\" or receipt == \"\" then return result end\n  for _, id in result do if id == receipt then return result end end\n  table.insert(result, receipt)\n  while #result > 3 do table.remove(result, 1) end\n  return result\nend\n",
+    "wrong": "--!strict\nreturn function(old, receipt)\n  local result = {}\n  for _, id in old do table.insert(result, id) end\n  if type(receipt) ~= \"string\" or receipt == \"\" then return result end\n  for _, id in result do if id == receipt then return result end end\n  table.insert(result, receipt)\n  while #result > 4 do table.remove(result, 1) end\n  return result\nend\n",
+    "cases": [
+      {
+        "args": "{},'a'",
+        "expected": "{'a'}"
+      },
+      {
+        "args": "{'a'},'a'",
+        "expected": "{'a'}"
+      },
+      {
+        "args": "{'a','b'},'c'",
+        "expected": "{'a','b','c'}"
+      },
+      {
+        "args": "{'a','b','c'},'d'",
+        "expected": "{'b','c','d'}"
+      },
+      {
+        "args": "{'x'},''",
+        "expected": "{'x'}"
+      },
+      {
+        "args": "{'a','b','c'},'a'",
+        "expected": "{'a','b','c'}"
+      }
+    ]
+  },
+  {
+    "slug": "best-saved-score",
+    "contract": "Return the highest nonnegative number from a list of saved scores, skipping malformed values; default 0.",
+    "reference": "--!strict\nreturn function(scores)\n  local best = 0\n  for _, score in scores do\n    if type(score) == \"number\" and score > best then best = score end\n  end\n  return best\nend\n",
+    "wrong": "--!strict\nreturn function(scores)\n  local best = 0\n  for _, score in scores do\n    if type(score) == \"number\" and score < best then best = score end\n  end\n  return best\nend\n",
+    "cases": [
+      {
+        "args": "{}",
+        "expected": "0"
+      },
+      {
+        "args": "{1,9,4}",
+        "expected": "9"
+      },
+      {
+        "args": "{-3,-1}",
+        "expected": "0"
+      },
+      {
+        "args": "{3,'bad',8}",
+        "expected": "8"
+      },
+      {
+        "args": "{7,7,2}",
+        "expected": "7"
+      },
+      {
+        "args": "{1,20,15}",
+        "expected": "20"
+      }
+    ]
+  },
+  {
+    "slug": "daily-streak-update",
+    "contract": "For integer calendar days, preserve streak if today==lastDay, increment only if today==lastDay+1, otherwise reset streak to 1; disallow future lastDay by leaving streak unchanged.",
+    "reference": "--!strict\nreturn function(lastDay: number, today: number, streak: number): number\n  if today <= lastDay then return streak end\n  if today == lastDay + 1 then return streak + 1 end\n  return 1\nend\n",
+    "wrong": "--!strict\nreturn function(lastDay: number, today: number, streak: number): number\n  if today <= lastDay then return streak end\n  if today >= lastDay + 1 then return streak + 1 end\n  return 1\nend\n",
+    "cases": [
+      {
+        "args": "10,10,5",
+        "expected": "5"
+      },
+      {
+        "args": "10,11,5",
+        "expected": "6"
+      },
+      {
+        "args": "10,12,5",
+        "expected": "1"
+      },
+      {
+        "args": "20,21,0",
+        "expected": "1"
+      },
+      {
+        "args": "30,29,7",
+        "expected": "7"
+      },
+      {
+        "args": "1,9,3",
+        "expected": "1"
+      }
+    ]
+  },
+  {
+    "slug": "reject-stale-save-version",
+    "contract": "Choose the save record with higher version; if versions tie preserve existing record, and treat missing records as version 0.",
+    "reference": "--!strict\nreturn function(current, incoming)\n  if current == nil then return incoming end\n  if incoming == nil then return current end\n  if incoming.version > current.version then return incoming end\n  return current\nend\n",
+    "wrong": "--!strict\nreturn function(current, incoming)\n  if current == nil then return incoming end\n  if incoming == nil then return current end\n  if incoming.version >= current.version then return incoming end\n  return current\nend\n",
+    "cases": [
+      {
+        "args": "nil,{version=1,coins=3}",
+        "expected": "{version=1,coins=3}"
+      },
+      {
+        "args": "{version=2,coins=10},nil",
+        "expected": "{version=2,coins=10}"
+      },
+      {
+        "args": "{version=2,coins=10},{version=3,coins=2}",
+        "expected": "{version=3,coins=2}"
+      },
+      {
+        "args": "{version=4,coins=10},{version=1,coins=2}",
+        "expected": "{version=4,coins=10}"
+      },
+      {
+        "args": "{version=2,coins=10},{version=2,coins=2}",
+        "expected": "{version=2,coins=10}"
+      },
+      {
+        "args": "{version=8,coins=0},{version=9,coins=40}",
+        "expected": "{version=9,coins=40}"
+      }
+    ]
+  },
+  {
+    "slug": "round-phase-transitions",
+    "contract": "Given a round phase and event, accept Lobby/start=>Playing, Playing/finish=>Results, Results/reset=>Lobby; all other combinations leave phase unchanged.",
+    "reference": "--!strict\nreturn function(phase: string, event: string): string\n  if phase == \"Lobby\" and event == \"start\" then return \"Playing\" end\n  if phase == \"Playing\" and event == \"finish\" then return \"Results\" end\n  if phase == \"Results\" and event == \"reset\" then return \"Lobby\" end\n  return phase\nend\n",
+    "wrong": "--!strict\nreturn function(phase: string, event: string): string\n  if phase == \"Lobby\" and event == \"start\" then return \"Playing\" end\n  if phase == \"Playing\" and event == \"stop\" then return \"Results\" end\n  if phase == \"Results\" and event == \"reset\" then return \"Lobby\" end\n  return phase\nend\n",
+    "cases": [
+      {
+        "args": "\"Lobby\",\"start\"",
+        "expected": "\"Playing\""
+      },
+      {
+        "args": "\"Playing\",\"finish\"",
+        "expected": "\"Results\""
+      },
+      {
+        "args": "\"Results\",\"reset\"",
+        "expected": "\"Lobby\""
+      },
+      {
+        "args": "\"Lobby\",\"finish\"",
+        "expected": "\"Lobby\""
+      },
+      {
+        "args": "\"Playing\",\"start\"",
+        "expected": "\"Playing\""
+      },
+      {
+        "args": "\"Results\",\"start\"",
+        "expected": "\"Results\""
+      }
+    ]
+  },
+  {
+    "slug": "countdown-clamping",
+    "contract": "Advance remaining round seconds by nonnegative dt, clamping remaining at zero; a negative dt must leave remaining unchanged.",
+    "reference": "--!strict\nreturn function(remaining: number, dt: number): number\n  if dt < 0 then return remaining end\n  return math.max(0, remaining - dt)\nend\n",
+    "wrong": "--!strict\nreturn function(remaining: number, dt: number): number\n  if dt < 0 then return remaining end\n  return math.max(0, remaining + dt)\nend\n",
+    "cases": [
+      {
+        "args": "10,2",
+        "expected": "8"
+      },
+      {
+        "args": "5,5",
+        "expected": "0"
+      },
+      {
+        "args": "3,8",
+        "expected": "0"
+      },
+      {
+        "args": "0,2",
+        "expected": "0"
+      },
+      {
+        "args": "12,0",
+        "expected": "12"
+      },
+      {
+        "args": "8,-1",
+        "expected": "8"
+      }
+    ]
+  },
+  {
+    "slug": "deterministic-score-winner",
+    "contract": "For a map of player labels to numeric scores, choose highest-scoring label and break ties lexicographically smallest; return nil for empty.",
+    "reference": "--!strict\nreturn function(scores)\n  local winner = nil\n  local high = -math.huge\n  for player, score in scores do\n    if score > high or (score == high and (winner == nil or player < winner)) then\n      winner = player\n      high = score\n    end\n  end\n  return winner\nend\n",
+    "wrong": "--!strict\nreturn function(scores)\n  local winner = nil\n  local high = -math.huge\n  for player, score in scores do\n    if score > high or (score == high and (winner == nil or player > winner)) then\n      winner = player\n      high = score\n    end\n  end\n  return winner\nend\n",
+    "cases": [
+      {
+        "args": "{}",
+        "expected": "nil"
+      },
+      {
+        "args": "{A=1}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{A=2,B=5}",
+        "expected": "\"B\""
+      },
+      {
+        "args": "{Z=6,A=6}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{A=0,B=0}",
+        "expected": "\"A\""
+      },
+      {
+        "args": "{C=-3,B=-1}",
+        "expected": "\"B\""
+      }
+    ]
+  },
+  {
+    "slug": "round-minimum-population",
+    "contract": "Return true only if player count is a whole number between 2 and 12 inclusive.",
+    "reference": "--!strict\nreturn function(count: number): boolean\n  return count % 1 == 0 and count >= 2 and count <= 12\nend\n",
+    "wrong": "--!strict\nreturn function(count: number): boolean\n  return count % 1 == 0 and count >= 3 and count <= 12\nend\n",
+    "cases": [
+      {
+        "args": "2",
+        "expected": "true"
+      },
+      {
+        "args": "12",
+        "expected": "true"
+      },
+      {
+        "args": "1",
+        "expected": "false"
+      },
+      {
+        "args": "13",
+        "expected": "false"
+      },
+      {
+        "args": "4.5",
+        "expected": "false"
+      },
+      {
+        "args": "8",
+        "expected": "true"
+      }
+    ]
+  },
+  {
+    "slug": "round-combo-score",
+    "contract": "Award nonnegative integer base * combo with combo clamped 1..5; return 0 for a negative or fractional base.",
+    "reference": "--!strict\nreturn function(base: number, combo: number): number\n  if base < 0 or base % 1 ~= 0 then return 0 end\n  return base * math.clamp(combo, 1, 5)\nend\n",
+    "wrong": "--!strict\nreturn function(base: number, combo: number): number\n  if base < 0 or base % 1 ~= 0 then return 0 end\n  return base * math.clamp(combo, 1, 6)\nend\n",
+    "cases": [
+      {
+        "args": "10,1",
+        "expected": "10"
+      },
+      {
+        "args": "10,3",
+        "expected": "30"
+      },
+      {
+        "args": "10,9",
+        "expected": "50"
+      },
+      {
+        "args": "10,0",
+        "expected": "10"
+      },
+      {
+        "args": "-1,4",
+        "expected": "0"
+      },
+      {
+        "args": "1.5,2",
+        "expected": "0"
+      }
+    ]
+  },
+  {
+    "slug": "lobby-only-join",
+    "contract": "Return a fresh ordered list with new player ID appended once only during Lobby; any other phase or duplicate ID leaves list unchanged.",
+    "reference": "--!strict\nreturn function(phase: string, participants, playerId: number)\n  local result = {}\n  for _, id in participants do table.insert(result, id) end\n  if phase ~= \"Lobby\" then return result end\n  for _, id in result do if id == playerId then return result end end\n  table.insert(result, playerId)\n  return result\nend\n",
+    "wrong": "--!strict\nreturn function(phase: string, participants, playerId: number)\n  local result = {}\n  for _, id in participants do table.insert(result, id) end\n  if phase ~= \"Playing\" then return result end\n  for _, id in result do if id == playerId then return result end end\n  table.insert(result, playerId)\n  return result\nend\n",
+    "cases": [
+      {
+        "args": "\"Lobby\",{},1",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Lobby\",{1,2},3",
+        "expected": "{1,2,3}"
+      },
+      {
+        "args": "\"Lobby\",{1,2},1",
+        "expected": "{1,2}"
+      },
+      {
+        "args": "\"Playing\",{1},2",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Results\",{1},2",
+        "expected": "{1}"
+      },
+      {
+        "args": "\"Lobby\",{4},5",
+        "expected": "{4,5}"
+      }
+    ]
+  },
+  {
+    "slug": "friendly-fire-protection",
+    "contract": "Damage is permitted only when round is active, both teams are nonempty and attacker team differs from victim team.",
+    "reference": "--!strict\nreturn function(attacker: string, victim: string, active: boolean): boolean\n  return active and attacker ~= \"\" and victim ~= \"\" and attacker ~= victim\nend\n",
+    "wrong": "--!strict\nreturn function(attacker: string, victim: string, active: boolean): boolean\n  return active and attacker ~= \"\" and victim ~= \"\" and attacker == victim\nend\n",
+    "cases": [
+      {
+        "args": "\"red\",\"blue\",true",
+        "expected": "true"
+      },
+      {
+        "args": "\"red\",\"red\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"red\",\"blue\",false",
+        "expected": "false"
+      },
+      {
+        "args": "\"\",\"blue\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"red\",\"\",true",
+        "expected": "false"
+      },
+      {
+        "args": "\"blue\",\"red\",true",
+        "expected": "true"
+      }
+    ]
+  },
+  {
+    "slug": "idempotent-round-reward",
+    "contract": "Return a new {coins, claimed} record awarding exactly 25 coins only if roundId is not in claimed map; preserve previous claims.",
+    "reference": "--!strict\nreturn function(coins: number, claimed, roundId: string)\n  local flags = {}\n  for id, yes in claimed do flags[id] = yes end\n  if not flags[roundId] then\n    flags[roundId] = true\n    coins += 25\n  end\n  return {coins=coins,claimed=flags}\nend\n",
+    "wrong": "--!strict\nreturn function(coins: number, claimed, roundId: string)\n  local flags = {}\n  for id, yes in claimed do flags[id] = yes end\n  if flags[roundId] then\n    flags[roundId] = true\n    coins += 25\n  end\n  return {coins=coins,claimed=flags}\nend\n",
+    "cases": [
+      {
+        "args": "0,{},'r1'",
+        "expected": "{coins=25,claimed={r1=true}}"
+      },
+      {
+        "args": "50,{r1=true},'r1'",
+        "expected": "{coins=50,claimed={r1=true}}"
+      },
+      {
+        "args": "75,{r1=true},'r2'",
+        "expected": "{coins=100,claimed={r1=true,r2=true}}"
+      },
+      {
+        "args": "0,{r2=true},'r3'",
+        "expected": "{coins=25,claimed={r2=true,r3=true}}"
+      },
+      {
+        "args": "10,{},'x'",
+        "expected": "{coins=35,claimed={x=true}}"
+      },
+      {
+        "args": "100,{a=true,b=true},'b'",
+        "expected": "{coins=100,claimed={a=true,b=true}}"
+      }
+    ]
+  },
+  {
+    "slug": "rotating-spawn-index",
+    "contract": "Given a zero-based spawn slot cursor and a positive integer number of spawns, return the next 1-based slot (round robin); invalid count returns nil.",
+    "reference": "--!strict\nreturn function(cursor: number, count: number): number?\n  if count <= 0 or count % 1 ~= 0 then return nil end\n  return (cursor % count) + 1\nend\n",
+    "wrong": "--!strict\nreturn function(cursor: number, count: number): number?\n  if count <= 0 or count % 1 ~= 0 then return nil end\n  return ((cursor + 1) % count) + 1\nend\n",
+    "cases": [
+      {
+        "args": "0,3",
+        "expected": "1"
+      },
+      {
+        "args": "1,3",
+        "expected": "2"
+      },
+      {
+        "args": "2,3",
+        "expected": "3"
+      },
+      {
+        "args": "3,3",
+        "expected": "1"
+      },
+      {
+        "args": "10,2",
+        "expected": "1"
+      },
+      {
+        "args": "0,0",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "overtime-winner",
+    "contract": "If remaining seconds are positive return nil; at time zero return 'red', 'blue', or 'draw' by comparing team scores.",
+    "reference": "--!strict\nreturn function(redScore: number, blueScore: number, remaining: number): string?\n  if remaining > 0 then return nil end\n  if redScore > blueScore then return \"red\" end\n  if blueScore > redScore then return \"blue\" end\n  return \"draw\"\nend\n",
+    "wrong": "--!strict\nreturn function(redScore: number, blueScore: number, remaining: number): string?\n  if remaining >= 0 then return nil end\n  if redScore > blueScore then return \"red\" end\n  if blueScore > redScore then return \"blue\" end\n  return \"draw\"\nend\n",
+    "cases": [
+      {
+        "args": "3,2,10",
+        "expected": "nil"
+      },
+      {
+        "args": "3,2,0",
+        "expected": "\"red\""
+      },
+      {
+        "args": "2,3,0",
+        "expected": "\"blue\""
+      },
+      {
+        "args": "4,4,0",
+        "expected": "\"draw\""
+      },
+      {
+        "args": "0,0,0",
+        "expected": "\"draw\""
+      },
+      {
+        "args": "2,3,1",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "upgrade-price-growth",
+    "contract": "Upgrade price is floor(basePrice * 1.25^tier) for nonnegative whole-number tier and positive whole base price; otherwise nil.",
+    "reference": "--!strict\nreturn function(base: number, tier: number): number?\n  if base <= 0 or base % 1 ~= 0 or tier < 0 or tier % 1 ~= 0 then return nil end\n  return math.floor(base * (1.25 ^ tier))\nend\n",
+    "wrong": "--!strict\nreturn function(base: number, tier: number): number?\n  if base <= 0 or base % 1 ~= 0 or tier < 0 or tier % 1 ~= 0 then return nil end\n  return math.floor(base * (1 + 0.25 * tier))\nend\n",
+    "cases": [
+      {
+        "args": "100,0",
+        "expected": "100"
+      },
+      {
+        "args": "100,1",
+        "expected": "125"
+      },
+      {
+        "args": "100,2",
+        "expected": "156"
+      },
+      {
+        "args": "80,3",
+        "expected": "156"
+      },
+      {
+        "args": "5,1",
+        "expected": "6"
+      },
+      {
+        "args": "40,-1",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "purchase-affordability",
+    "contract": "Return true if nonnegative integer wallet balance is at least positive integer price; invalid or fractional inputs reject.",
+    "reference": "--!strict\nreturn function(balance: number, price: number): boolean\n  if balance < 0 or price <= 0 or balance % 1 ~= 0 or price % 1 ~= 0 then return false end\n  return balance >= price\nend\n",
+    "wrong": "--!strict\nreturn function(balance: number, price: number): boolean\n  if balance < 0 or price <= 0 or balance % 1 ~= 0 or price % 1 ~= 0 then return false end\n  return balance > price\nend\n",
+    "cases": [
+      {
+        "args": "10,10",
+        "expected": "true"
+      },
+      {
+        "args": "20,10",
+        "expected": "true"
+      },
+      {
+        "args": "9,10",
+        "expected": "false"
+      },
+      {
+        "args": "0,0",
+        "expected": "false"
+      },
+      {
+        "args": "15.5,10",
+        "expected": "false"
+      },
+      {
+        "args": "10,4.5",
+        "expected": "false"
+      }
+    ]
+  },
+  {
+    "slug": "wallet-cap-after-grant",
+    "contract": "Return integer wallet balance after a nonnegative grant, capped by server wallet cap; negative grants are ignored.",
+    "reference": "--!strict\nreturn function(balance: number, grant: number, cap: number): number\n  if grant < 0 then return balance end\n  return math.min(cap, balance + grant)\nend\n",
+    "wrong": "--!strict\nreturn function(balance: number, grant: number, cap: number): number\n  if grant < -100 then return balance end\n  return math.min(cap, balance + grant)\nend\n",
+    "cases": [
+      {
+        "args": "20,5,100",
+        "expected": "25"
+      },
+      {
+        "args": "95,10,100",
+        "expected": "100"
+      },
+      {
+        "args": "100,1,100",
+        "expected": "100"
+      },
+      {
+        "args": "10,-5,100",
+        "expected": "10"
+      },
+      {
+        "args": "0,0,50",
+        "expected": "0"
+      },
+      {
+        "args": "70,20,90",
+        "expected": "90"
+      }
+    ]
+  },
+  {
+    "slug": "shop-sell-floor",
+    "contract": "Sell count items of the same type for exactly floor(unitPrice * count * 0.6) server currency; invalid count returns nil.",
+    "reference": "--!strict\nreturn function(price: number, count: number): number?\n  if price < 0 or count <= 0 or count % 1 ~= 0 then return nil end\n  return math.floor(price * count * 0.6)\nend\n",
+    "wrong": "--!strict\nreturn function(price: number, count: number): number?\n  if price < 0 or count <= 0 or count % 1 ~= 0 then return nil end\n  return math.floor(price * count * 0.7)\nend\n",
+    "cases": [
+      {
+        "args": "10,1",
+        "expected": "6"
+      },
+      {
+        "args": "9,1",
+        "expected": "5"
+      },
+      {
+        "args": "9,2",
+        "expected": "10"
+      },
+      {
+        "args": "100,3",
+        "expected": "180"
+      },
+      {
+        "args": "4,3",
+        "expected": "7"
+      },
+      {
+        "args": "10,0",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "discounted-bundle-price",
+    "contract": "Sum nonnegative integer item prices, apply integer discount percent between 0 and 50 inclusive, then floor once after the full sum; invalid percent returns nil.",
+    "reference": "--!strict\nreturn function(prices, discount: number): number?\n  if discount < 0 or discount > 50 or discount % 1 ~= 0 then return nil end\n  local total = 0\n  for _, cost in prices do\n    if cost < 0 or cost % 1 ~= 0 then return nil end\n    total += cost\n  end\n  return math.floor(total * (100 - discount) / 100)\nend\n",
+    "wrong": "--!strict\nreturn function(prices, discount: number): number?\n  if discount < 0 or discount > 50 or discount % 1 ~= 0 then return nil end\n  local total = 0\n  for _, cost in prices do\n    if cost < 0 or cost % 1 ~= 0 then return nil end\n    total += cost\n  end\n  return math.ceil(total * (100 - discount) / 100)\nend\n",
+    "cases": [
+      {
+        "args": "{10,20},0",
+        "expected": "30"
+      },
+      {
+        "args": "{10,20},10",
+        "expected": "27"
+      },
+      {
+        "args": "{1,2},25",
+        "expected": "2"
+      },
+      {
+        "args": "{11,11},50",
+        "expected": "11"
+      },
+      {
+        "args": "{},50",
+        "expected": "0"
+      },
+      {
+        "args": "{10},51",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "weighted-loot-selection",
+    "contract": "From positive integer rarity weights and a 1-based integer roll, return the 1-based bucket index whose cumulative weight includes the roll; invalid rolls return nil.",
+    "reference": "--!strict\nreturn function(weights, roll: number): number?\n  if roll < 1 or roll % 1 ~= 0 then return nil end\n  local total = 0\n  for _, weight in weights do\n    total += weight\n    if roll <= total then return _ end\n  end\n  return nil\nend\n",
+    "wrong": "--!strict\nreturn function(weights, roll: number): number?\n  if roll < 1 or roll % 1 ~= 0 then return nil end\n  local total = 0\n  for _, weight in weights do\n    total += weight\n    if roll < total then return _ end\n  end\n  return nil\nend\n",
+    "cases": [
+      {
+        "args": "{2,3,1},1",
+        "expected": "1"
+      },
+      {
+        "args": "{2,3,1},2",
+        "expected": "1"
+      },
+      {
+        "args": "{2,3,1},3",
+        "expected": "2"
+      },
+      {
+        "args": "{2,3,1},5",
+        "expected": "2"
+      },
+      {
+        "args": "{2,3,1},6",
+        "expected": "3"
+      },
+      {
+        "args": "{2,3,1},7",
+        "expected": "nil"
+      }
+    ]
+  },
+  {
+    "slug": "craft-atomic-recipe",
+    "contract": "Return a new inventory with all recipe material counts deducted when every material is available; otherwise nil without changing inputs.",
+    "reference": "--!strict\nreturn function(inventory, recipe)\n  for item, amount in recipe do\n    if amount <= 0 or (inventory[item] or 0) < amount then return nil end\n  end\n  local result = {}\n  for item, count in inventory do result[item] = count end\n  for item, amount in recipe do result[item] -= amount end\n  return result\nend\n",
+    "wrong": "--!strict\nreturn function(inventory, recipe)\n  for item, amount in recipe do\n    if amount <= 0 or (inventory[item] or 0) <= amount then return nil end\n  end\n  local result = {}\n  for item, count in inventory do result[item] = count end\n  for item, amount in recipe do result[item] -= amount end\n  return result\nend\n",
+    "cases": [
+      {
+        "args": "{wood=2,iron=1},{wood=2,iron=1}",
+        "expected": "{wood=0,iron=0}"
+      },
+      {
+        "args": "{wood=5,iron=1},{wood=2,iron=1}",
+        "expected": "{wood=3,iron=0}"
+      },
+      {
+        "args": "{wood=1},{wood=2}",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=3},{iron=1}",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=3},{wood=1}",
+        "expected": "{wood=2}"
+      },
+      {
+        "args": "{wood=4,stone=2},{wood=2}",
+        "expected": "{wood=2,stone=2}"
+      }
+    ]
+  },
+  {
+    "slug": "stack-capacity-limit",
+    "contract": "Add nonnegative item count to a stack, capping the stack at limit; negative additions are ignored.",
+    "reference": "--!strict\nreturn function(current: number, amount: number, limit: number): number\n  if amount < 0 then return current end\n  return math.min(limit, current + amount)\nend\n",
+    "wrong": "--!strict\nreturn function(current: number, amount: number, limit: number): number\n  if amount < 0 then return current end\n  return math.min(limit - 1, current + amount)\nend\n",
+    "cases": [
+      {
+        "args": "0,1,5",
+        "expected": "1"
+      },
+      {
+        "args": "4,1,5",
+        "expected": "5"
+      },
+      {
+        "args": "4,5,5",
+        "expected": "5"
+      },
+      {
+        "args": "5,1,5",
+        "expected": "5"
+      },
+      {
+        "args": "3,-2,5",
+        "expected": "3"
+      },
+      {
+        "args": "1,0,2",
+        "expected": "1"
+      }
+    ]
+  },
+  {
+    "slug": "trade-preserves-item-count",
+    "contract": "Transfer exactly one unit of named inventory item from source to destination, returning {from=...,to=...}; return nil if source has none. Never duplicate counts.",
+    "reference": "--!strict\nreturn function(source, dest, item: string)\n  if (source[item] or 0) < 1 then return nil end\n  local from = {}\n  local to = {}\n  for name, amount in source do from[name] = amount end\n  for name, amount in dest do to[name] = amount end\n  from[item] = from[item] - 1\n  to[item] = (to[item] or 0) + 1\n  return {from=from,to=to}\nend\n",
+    "wrong": "--!strict\nreturn function(source, dest, item: string)\n  if (source[item] or 0) < 1 then return nil end\n  local from = {}\n  local to = {}\n  for name, amount in source do from[name] = amount end\n  for name, amount in dest do to[name] = amount end\n  from[item] = from[item] - 0\n  to[item] = (to[item] or 0) + 1\n  return {from=from,to=to}\nend\n",
+    "cases": [
+      {
+        "args": "{wood=1},{},'wood'",
+        "expected": "{from={wood=0},to={wood=1}}"
+      },
+      {
+        "args": "{wood=4},{wood=2},'wood'",
+        "expected": "{from={wood=3},to={wood=3}}"
+      },
+      {
+        "args": "{}, {}, 'wood'",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=2,iron=1},{gold=5},'wood'",
+        "expected": "{from={wood=1,iron=1},to={gold=5,wood=1}}"
+      },
+      {
+        "args": "{iron=1},{wood=1},'wood'",
+        "expected": "nil"
+      },
+      {
+        "args": "{wood=2},{wood=3},'wood'",
+        "expected": "{from={wood=1},to={wood=4}}"
+      }
+    ]
+  },
+  {
+    "slug": "escrow-conservation",
+    "contract": "Split nonnegative integer escrow total into buyer payment and seller remainder with no currency creation or loss; invalid or overspending portions return nil.",
+    "reference": "--!strict\nreturn function(total: number, buyerPortion: number)\n  if total < 0 or buyerPortion < 0 or buyerPortion > total then return nil end\n  if total % 1 ~= 0 or buyerPortion % 1 ~= 0 then return nil end\n  return {buyer=buyerPortion,seller=total-buyerPortion}\nend\n",
+    "wrong": "--!strict\nreturn function(total: number, buyerPortion: number)\n  if total < 0 or buyerPortion < 0 or buyerPortion >= total then return nil end\n  if total % 1 ~= 0 or buyerPortion % 1 ~= 0 then return nil end\n  return {buyer=buyerPortion,seller=total-buyerPortion}\nend\n",
+    "cases": [
+      {
+        "args": "100,20",
+        "expected": "{buyer=20,seller=80}"
+      },
+      {
+        "args": "100,100",
+        "expected": "{buyer=100,seller=0}"
+      },
+      {
+        "args": "0,0",
+        "expected": "{buyer=0,seller=0}"
+      },
+      {
+        "args": "1,0",
+        "expected": "{buyer=0,seller=1}"
+      },
+      {
+        "args": "50,51",
+        "expected": "nil"
+      },
+      {
+        "args": "100,-1",
+        "expected": "nil"
+      }
+    ]
+  }
+]

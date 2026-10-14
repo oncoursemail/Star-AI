@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(nil,{version=1,coins=3}), {version=1,coins=3}))
+check("case 2", deepEqual(fn({version=2,coins=10},nil), {version=2,coins=10}))
+check("case 3", deepEqual(fn({version=2,coins=10},{version=3,coins=2}), {version=3,coins=2}))
+check("case 4", deepEqual(fn({version=4,coins=10},{version=1,coins=2}), {version=4,coins=10}))
+check("case 5", deepEqual(fn({version=2,coins=10},{version=2,coins=2}), {version=2,coins=10}))
+check("case 6", deepEqual(fn({version=8,coins=0},{version=9,coins=40}), {version=9,coins=40}))

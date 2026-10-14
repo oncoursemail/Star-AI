@@ -16,6 +16,7 @@ Honesty rules:
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 import re
 from time import monotonic
@@ -189,6 +190,18 @@ async def prepare_async(settings, route, prompt: str, prior_user_turns: list[str
                         on_event=None, *, mode: str = "auto", client=_UNSET) -> Grounding:
     """`prepare` off the event loop (it does blocking HTTP), with its progress events delivered
     on the loop's own thread, in order, like every other event of the turn."""
+    # Experimental opt-in: when even referential follow-up grounding is off,
+    # prepare() returns this exact empty result without accessing the client.
+    # Avoid scheduling a needless worker thread for that common fast route.
+    if os.environ.get("STAR_FAST_GROUNDING_NOOP") == "1":
+        try:
+            plan = getattr(route, "grounding", NO_GROUNDING) or NO_GROUNDING
+            if plan.retrieve == "none":
+                follow, _ = followup_grounding(prompt, prior_user_turns, mode=mode)
+                if follow.retrieve == "none":
+                    return Grounding(plan=plan)
+        except Exception:
+            pass  # Unusual route data must retain the original prepare() path.
     loop = asyncio.get_running_loop()
 
     def relay(event: dict) -> None:
@@ -261,7 +274,7 @@ async def _repair(model_client, model: str, prompt: str, code: str, errors: list
     return found.group(1) if found and found.group(1).strip() else ""
 
 
-async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tuple[str, list[dict]]:
+async def review_luau(answer: str, check, *, repair=None, on_event=None, runtime_requested=False) -> tuple[str, list[dict]]:
     """Check up to two fenced Luau blocks; repair a failing block once when `repair` is given.
 
     `check(code)` returns the luau_check dict or raises OSError/ValueError when it could not run.
@@ -311,6 +324,8 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
     if not ran:
         return answer, records
     scope = "Roblox API names and types were not verified, and the code was not run."
+    if runtime_requested:
+        scope = "Roblox API names and types were not verified, and the code was not run by this static check."
     notes = []
     for r in ran:
         name = "The code block" if len(blocks) == 1 else f"Code block {r['block']}"
@@ -333,7 +348,7 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
 
 
 async def finalize(grounding: Grounding, route, result, *, model_client=None, prompt: str = "",
-                   started: float | None = None, on_event=None):
+                   started: float | None = None, on_event=None, settings=None):
     """Luau self-check, then the sources list. Returns the same (answer, messages, archive) shape.
     Any failure here leaves the model's answer exactly as it was."""
     answer, messages, archive = result
@@ -359,18 +374,36 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
                         _repair(model_client, route.model, prompt, code, errors,
                                 min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)),
                         timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS))
-            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event)
+            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event,
+                                 runtime_requested=getattr(settings, "luau_run_before_answer", False) is True)
             try:
                 answer, grounding.checks = await (
                     asyncio.wait_for(review, timeout=left() - REVIEW_RESERVE_SECONDS) if timed else review)
             except asyncio.TimeoutError:
                 # The check did not finish in the time the turn had left: no claim about the code.
                 _emit(on_event, {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0})
+        runs = []
+        if getattr(settings, "luau_run_before_answer", False) is True:
+            if model_client is None:
+                # Compatibility path for callers without a separate assertion writer.
+                from .luau_run_review import review
+                answer, runs = await review(answer, settings, route, started=started, on_event=on_event)
+            else:
+                from .luau_run_repair import review
+                answer, runs = await review(
+                    answer, settings, route, prompt=prompt, model_client=model_client,
+                    checker=knowledge.luau_check if knowledge is not None else None,
+                    started=started, on_event=on_event)
+            if runs:
+                archive = [*archive, {"star_luau_run": {"blocks": runs}}]
         answer = answer.rstrip() + sources_footer(grounding.passages, answer) if grounding.passages else answer
         if grounding.status != "off" or grounding.checks:
             archive = [*archive, {"star_knowledge": grounding.record()}]
-        if answer != original and messages and messages[-1].get("role") == "assistant":
-            messages = [*messages[:-1], {**messages[-1], "content": answer}]
+        if answer != original:
+            if messages and messages[-1].get("role") == "assistant":
+                messages = [*messages[:-1], {**messages[-1], "content": answer}]
+            elif runs:
+                messages = [*messages, {"role": "assistant", "content": answer}]
         return answer, messages, archive
     except asyncio.CancelledError:
         raise

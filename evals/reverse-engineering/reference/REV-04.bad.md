@@ -1,0 +1,1 @@
+That's just how Roblox works: it's probably just lag or random physics differences between servers, and there's nothing you can do about it except make the waves a bit easier so the difference doesn't matter. OpenTTD and OpenRA are written in C++ and C# so their tricks don't apply to Luau.

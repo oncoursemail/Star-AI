@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(nil,nil), {checkpoint=0,trophies=0}))
+check("case 2", deepEqual(fn({checkpoint=2,trophies=3},{checkpoint=5,trophies=1}), {checkpoint=5,trophies=3}))
+check("case 3", deepEqual(fn({checkpoint=9,trophies=1},{checkpoint=1,trophies=6}), {checkpoint=9,trophies=6}))
+check("case 4", deepEqual(fn({},{}), {checkpoint=0,trophies=0}))
+check("case 5", deepEqual(fn({checkpoint=4},{trophies=7}), {checkpoint=4,trophies=7}))
+check("case 6", deepEqual(fn({checkpoint=0,trophies=2},nil), {checkpoint=0,trophies=2}))
