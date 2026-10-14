@@ -1,0 +1,96 @@
+{
+ "schema_version": 1,
+ "suite_id": "star-fundamentals-development-v1",
+ "status": "author_reviewed_development_oracles_no_model_measurement",
+ "visibility": "Evaluator sidecar. Never serialize this file, derivations, expected outputs or oracle hashes into model messages.",
+ "grading_policy": "Strict bounded JSON parsing, duplicate-key rejection, exact key sets and JSON types, followed by semantic equality to these expected objects. Array order is significant. Every expected value is recomputed independently by tests/test_fundamentals.py.",
+ "cases": {
+  "GF-01": {
+   "expected": {
+    "total_steps": 8,
+    "final_accumulator_ms": 2
+   },
+   "derivation": "40 -> 2 steps, 8 left; 8+10=18 -> 1 step, 2 left; 2+30=32 -> 2 steps, 0 left; 120 clamped to 50 -> 3 steps, 2 left. Total 8, remainder 2."
+  },
+  "GF-02": {
+   "expected": {
+    "max_probes": 20
+   },
+   "derivation": "floor(log2(1,000,000)) + 1 = 19 + 1 = 20."
+  },
+  "GF-03": {
+   "expected": {
+    "path": [
+     "S",
+     "A",
+     "B",
+     "C",
+     "G"
+    ],
+    "cost": 7
+   },
+   "derivation": "The heuristic is admissible (true costs to G: S 7, A 6, B 4, C 3, D 1), so A* returns an optimal path: S-A-B-C-G = 1+2+1+3 = 7 (S-B-C-G costs 8, S-A-B-D-G costs 9)."
+  },
+  "GF-04": {
+   "expected": {
+    "x": 0,
+    "y": 0,
+    "z": 1
+   },
+   "derivation": "qx*qz applies qz first: (1,0,0) -> (0,1,0) about Z, then (0,1,0) -> (0,0,1) about X."
+  },
+  "GF-05": {
+   "expected": {
+    "reconciled_x": 11,
+    "inputs_replayed": 3
+   },
+   "derivation": "Drop inputs 1-5; replay 6, 7, 8 (+3, +3, +1) from x = 4: 11."
+  },
+  "GF-06": {
+   "expected": {
+    "rewind_to_tick": 4992
+   },
+   "derivation": "60 ms + 100 ms = 160 ms = 8 ticks of 20 ms; 5000 - 8 = 4992."
+  },
+  "GF-07": {
+   "expected": {
+    "root_status": "Success",
+    "actions_run": [
+     "FindCover",
+     "Patrol"
+    ]
+   },
+   "derivation": "Sequence 1 fails at EnemyVisible (Attack not run); Sequence 2 runs FindCover, which fails (Heal not run); Patrol succeeds, so the Selector succeeds."
+  },
+  "GF-08": {
+   "expected": {
+    "final_value": 14,
+    "lost_increment": 5
+   },
+   "derivation": "A and B both read 10; A writes 15; B writes 13 (A's +5 lost); A reads 13 and writes 14. Correct total 10+5+3+1 = 19; 19-14 = 5."
+  },
+  "GF-09": {
+   "expected": {
+    "vulnerable": [
+     "S1",
+     "S3",
+     "S5"
+    ]
+   },
+   "derivation": "S1 concatenates, S3 interpolates an unvalidated identifier, S5 uses string formatting. S2 is parameterised; S4 takes the identifier from an allowlist."
+  },
+  "GF-10": {
+   "expected": {
+    "order": [
+     "Input",
+     "AI",
+     "Audio",
+     "Physics",
+     "Animation",
+     "Render"
+    ]
+   },
+   "derivation": "Ready {Input}; then {AI, Physics} -> AI; then {Audio, Physics} -> Audio; then Physics; then Animation; then Render (needs Animation and AI)."
+  }
+ }
+}

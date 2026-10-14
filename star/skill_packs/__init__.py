@@ -150,7 +150,52 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Fundamentals packs: engine- and language-independent (docs/research/fundamentals). See GENERAL_PACKS.
+    "fund-algorithms": re.compile(
+        r"\b(?:big-?O|time complexity|space complexity|complexity|algorithms?|data structures?|binary search|binary heap|"
+        r"priority queue|min-?heap|hash ?(?:map|table|set)|linked list|ring buffer|spatial ?hash\w*|quadtree|octree|BVH|"
+        r"union-?find|topological sort|Dijkstra|BFS|DFS|sort(?:ing)? algorithm|floating[- ]point|float precision|epsilon|"
+        r"quaternions?|slerp|nlerp|gimbal lock|euler angles|dot product|cross product|matri(?:x|ces)|linear algebra|"
+        r"Verlet|semi-?implicit Euler|numerical (?:integration|methods?)|interpolation|lerp)\b", re.IGNORECASE),
+    "fund-game-architecture": re.compile(
+        r"\b(?:game ?loop|fixed time-?step|timestep|delta ?time|accumulator|spiral of death|ECS|entity component system|"
+        r"archetypes?|scene graph|event bus|observer pattern|state machines?|FSM|behaviou?r trees?|blackboard|GOAP|"
+        r"goal-oriented action planning|utility AI|utility scoring|A\*|A-star|pathfinding|path-?finding|navmesh|"
+        r"navigation mesh|flow fields?|steering behaviou?rs?|boids|procedural(?:ly)? generat\w*|procgen|"
+        r"wave function collapse|perlin|simplex noise|dungeon generat\w*)(?!\w)", re.IGNORECASE),
+    "fund-rendering-physics": re.compile(
+        r"\b(?:rendering pipeline|forward rendering|deferred (?:rendering|shading)|clustered (?:shading|forward|lighting)|"
+        r"forward\+|G-?buffer|PBR|physically based|BRDF|GGX|shadow maps?|cascaded shadows?|shadow acne|global illumination|"
+        r"GI|lightmaps?|ray tracing|path tracing|draw calls?|overdraw|broadphase|narrowphase|GJK|separating axis|"
+        r"collision detection|tunnel(?:l?ing)|CCD|continuous collision|rigid ?bod(?:y|ies)|constraint solver|"
+        r"physics engine|deterministic physics|inverse kinematics|IK|FABRIK|blend (?:tree|space)s?|motion matching|"
+        r"skinning|root motion|skeletal animation)\b", re.IGNORECASE),
+    "fund-netcode": re.compile(
+        r"\b(?:netcode|net ?code|client-side prediction|client prediction|server reconciliation|reconciliation|"
+        r"lag compensation|rewind|rollback netcode|rollback networking|GGPO|lockstep|interpolation delay|"
+        r"entity interpolation|snapshot interpolation|tick ?rate|server tick|server-authoritative|client-authoritative|"
+        r"ping|jitter|packet loss|interest management|relevancy|peeker'?s advantage|dead reckoning|desync\w*)\b",
+        re.IGNORECASE),
+    "fund-software-engineering": re.compile(
+        r"\b(?:design patterns?|SOLID|dependency injection|singletons?|refactor\w*|unit tests?|integration tests?|"
+        r"property-based|fuzz\w*|flaky|test pyramid|profil\w*|profiler|benchmark\w*|bottleneck|concurren\w*|race conditions?|"
+        r"deadlocks?|mutex\w*|threads?|thread-?safe|async|OWASP|SQL injection|injection|XSS|CSRF|threat model\w*|"
+        r"API design|semantic versioning|semver|git bisect|branching strategy|CI/CD|continuous integration|"
+        r"code review)\b", re.IGNORECASE),
+    "fund-unfamiliar-codebase": re.compile(
+        r"\b(?:unfamiliar|new (?:to )?(?:this )?(?:codebase|code ?base|repo(?:sitory)?|engine|language)|"
+        r"(?:understand|learn|navigate|onboard\w*|explore|get up to speed (?:on|with)) (?:a |an |the |this |my |our )?"
+        r"(?:\w+ )?(?:codebase|code ?base|repo(?:sitory)?|project|engine|language)|legacy code|where do I start|"
+        r"entry points?|code ?base map|onboarding)\b", re.IGNORECASE),
 }
+
+# Packs whose knowledge does not depend on the engine: they may be chosen for a prompt that is not a Roblox question.
+# Every other pack still needs _ROBLOX_CONTEXT. Like all packs these are off unless enabled (DEFAULT_ENABLED or
+# STAR_SKILL_PACKS) and have not yet been through the evaluation gate.
+GENERAL_PACKS = frozenset({
+    "fund-algorithms", "fund-game-architecture", "fund-rendering-physics", "fund-netcode",
+    "fund-software-engineering", "fund-unfamiliar-codebase",
+})
 
 
 @dataclass(frozen=True)
@@ -195,7 +240,7 @@ def enabled_names(environ=None, *, home=None) -> frozenset[str]:
 
 
 def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
-    """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
+    """The packs for this prompt, best match first. Without Roblox or Godot context only GENERAL_PACKS can match."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
@@ -203,17 +248,20 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
         return []
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
     godot_context = bool(_GODOT_CONTEXT.search(prompt))
-    if not roblox_context and not godot_context:
+    if not roblox_context and not godot_context and not (allowed & GENERAL_PACKS):
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
+        if pack.name in allowed and (pack.name in GENERAL_PACKS or
+                                    (pack.name in GODOT_PACKS and godot_context and not roblox_context) or
                                     (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):
-                scored.append((-len(hits), order, pack))
-    return [pack for _, _, pack in sorted(scored)[:max(0, limit)]]
+                # In an engine question the engine's own packs come first; a general pack only fills the gap.
+                general_in_engine = pack.name in GENERAL_PACKS and (roblox_context or godot_context)
+                scored.append((general_in_engine, -len(hits), order, pack))
+    return [pack for *_, pack in sorted(scored, key=lambda item: item[:3])[:max(0, limit)]]
 
 
 def render(packs) -> str:

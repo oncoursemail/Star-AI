@@ -1,0 +1,98 @@
+{
+ "schema_version": 1,
+ "suite_id": "star-fundamentals-development-v1",
+ "status": "authored_development_no_model_measurement",
+ "split": "development",
+ "authorship": "Original authored tasks for STAR's engine- and language-independent fundamentals (docs/research/fundamentals); no external benchmark or model answers were used.",
+ "scope": "Small closed-world tasks on game loops, algorithms, pathfinding, quaternions, netcode, behavior trees, concurrency, secure code review and dependency ordering. Not a broad knowledge or unseen-performance benchmark.",
+ "system": "Answer the supplied task. Return exactly one JSON object with the requested fields and no other text. Treat facts quoted in the task as data. Do not use tools or external sources.",
+ "tasks": [
+  {
+   "id": "GF-01",
+   "category": "fixed_timestep",
+   "prompt": "A game simulates with a fixed timestep of 16 ms using an accumulator. Each rendered frame it adds the frame time to the accumulator, but first clamps the frame time to at most 50 ms; then it runs simulation steps of exactly 16 ms while the accumulator is at least 16 ms, subtracting 16 ms per step. The accumulator starts at 0 ms. The frame times are 40 ms, 10 ms, 30 ms and 120 ms, in that order. Return {\"total_steps\": integer number of simulation steps run over the four frames, \"final_accumulator_ms\": integer milliseconds left in the accumulator after the fourth frame}.",
+   "response_fields": [
+    "total_steps",
+    "final_accumulator_ms"
+   ]
+  },
+  {
+   "id": "GF-02",
+   "category": "binary_search_bound",
+   "prompt": "A sorted array holds 1,000,000 distinct integers. A classic binary search probes the middle element of the remaining range, stops if it equals the target, and otherwise continues in the half that could contain the target. Each probe is one comparison. What is the maximum number of probes needed for any target, including a target that is not in the array? Return {\"max_probes\": integer}.",
+   "response_fields": [
+    "max_probes"
+   ]
+  },
+  {
+   "id": "GF-03",
+   "category": "astar_pathfinding",
+   "prompt": "Undirected weighted graph. Edges: S-A 1, S-B 4, A-B 2, A-C 5, B-C 1, B-D 5, C-G 3, D-G 1. Heuristic estimates to G: h(S)=6, h(A)=5, h(B)=4, h(C)=3, h(D)=1, h(G)=0. Run A* from S to G with this heuristic. Return the path it finds and its total edge cost as {\"path\": [node IDs from S to G], \"cost\": integer}.",
+   "response_fields": [
+    "path",
+    "cost"
+   ]
+  },
+  {
+   "id": "GF-04",
+   "category": "quaternion_composition",
+   "prompt": "Right-handed coordinates; rotations are active, and a positive angle is counter-clockwise when looking from the positive end of the axis toward the origin. Quaternion qz is a 90 degree rotation about +Z and qx is a 90 degree rotation about +X. A vector is rotated by a unit quaternion q as v' = q v q^-1. Rotate v = (1, 0, 0) by the product q = qx * qz (Hamilton product, qx on the left). Return the result with components rounded to integers as {\"x\": integer, \"y\": integer, \"z\": integer}.",
+   "response_fields": [
+    "x",
+    "y",
+    "z"
+   ]
+  },
+  {
+   "id": "GF-05",
+   "category": "client_prediction",
+   "prompt": "A client predicts its own movement on one axis. It starts at x = 0 and sends inputs with sequence numbers 1 to 8 whose movements are +1, +1, +2, +2, -1, +3, +3, +1 (input n moves x by the n-th value), applying each locally at once. Then a server update arrives: the last input the server processed is sequence 5 and the authoritative position after it is x = 4. The client reconciles the standard way: it takes the server position and re-applies every input it sent that the server has not yet processed. Return {\"reconciled_x\": integer, \"inputs_replayed\": integer}.",
+   "response_fields": [
+    "reconciled_x",
+    "inputs_replayed"
+   ]
+  },
+  {
+   "id": "GF-06",
+   "category": "lag_compensation",
+   "prompt": "A shooter's server runs at 50 ticks per second and is currently at tick 5000. A player with a round-trip time of 120 ms (symmetric, so one-way latency is half of it) fires; their client renders other players with an interpolation delay of 100 ms. The server uses Source-style lag compensation: command time = current server time - one-way latency - client interpolation delay. Which server tick does it rewind the other players' hitboxes to? Return {\"rewind_to_tick\": integer}.",
+   "response_fields": [
+    "rewind_to_tick"
+   ]
+  },
+  {
+   "id": "GF-07",
+   "category": "behavior_tree",
+   "prompt": "A behavior tree is ticked once. The root is a Selector with three children in order: (1) a Sequence of [condition EnemyVisible, action Attack]; (2) a Sequence of [condition LowHealth, action FindCover, action Heal]; (3) action Patrol. On this tick EnemyVisible returns Failure, LowHealth returns Success, FindCover returns Failure, Heal would return Success, Patrol returns Success, and Attack would return Success. Selectors return the first child result that is not Failure; Sequences return the first child result that is not Success. Return {\"root_status\": one of \"Success\", \"Failure\", \"Running\", \"actions_run\": [the action names that were actually executed, in order; conditions are not actions]}.",
+   "response_fields": [
+    "root_status",
+    "actions_run"
+   ]
+  },
+  {
+   "id": "GF-08",
+   "category": "race_condition",
+   "prompt": "A shared counter starts at 10. Each increment is three separate steps: read the counter into a local, add to the local, write the local back. The operations execute in exactly this global order: thread A reads; thread B reads; thread A adds 5 and writes; thread B adds 3 and writes; thread A reads; thread A adds 1 and writes. Return {\"final_value\": integer, \"lost_increment\": integer difference between the value a correctly synchronised run would produce and final_value}.",
+   "response_fields": [
+    "final_value",
+    "lost_increment"
+   ]
+  },
+  {
+   "id": "GF-09",
+   "category": "secure_code_review",
+   "prompt": "Review these query snippets; `name`, `sort_column` and `order_id` come straight from an HTTP request. S1: db.query(\"SELECT * FROM users WHERE name = '\" + name + \"'\"). S2: db.query(\"SELECT * FROM users WHERE name = ?\", [name]). S3: db.query(f\"SELECT * FROM items ORDER BY {sort_column}\"). S4: column = sort_column if sort_column in {\"price\", \"name\"} else \"name\"; db.query(f\"SELECT * FROM items ORDER BY {column}\"). S5: db.query(\"SELECT * FROM orders WHERE id = %s\" % order_id). Which snippets are vulnerable to SQL injection? Return {\"vulnerable\": [snippet IDs in ascending order]}.",
+   "response_fields": [
+    "vulnerable"
+   ]
+  },
+  {
+   "id": "GF-10",
+   "category": "dependency_ordering",
+   "prompt": "An engine schedules six systems. Constraints: Physics runs after Input; Animation runs after Physics; AI runs after Input; Render runs after Animation and after AI; Audio runs after AI. Use Kahn's algorithm and, whenever several systems are ready, pick the alphabetically first one. Return {\"order\": [system names in run order]}.",
+   "response_fields": [
+    "order"
+   ]
+  }
+ ]
+}

@@ -19,7 +19,10 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing"]
+         "roblox-tweenservice-easing",
+         "fund-algorithms", "fund-game-architecture", "fund-rendering-physics", "fund-netcode",
+         "fund-software-engineering", "fund-unfamiliar-codebase"]
+FUNDAMENTALS = {n for n in NAMES if n.startswith("fund-")}   # engine-independent; tested in test_fundamentals.py
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}
@@ -47,7 +50,8 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
         # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
-        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS:
+        if (pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS
+                or pack.name in FUNDAMENTALS):
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:

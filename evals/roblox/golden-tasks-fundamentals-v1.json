@@ -1,0 +1,401 @@
+[
+ {
+  "id": "FND-01",
+  "category": "algorithms-priority-queue",
+  "difficulty": 2,
+  "goal": "Implement a binary min-heap priority queue as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a `Heap` class: `Heap.new(less)` where the optional `less(a, b)` comparator returns true when a should come out first (default `a < b`, so a min-heap); methods `:push(value)`, `:pop()` (removes and returns the first value, nil when empty), `:peek()` (returns it without removing, nil when empty) and `:size()`. push and pop must be O(log n): it will be used as the open set of A* with thousands of nodes. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-algorithms"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "pop is O(n) or the order is wrong"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-01.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-01.luau",
+    "checks": 11
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-02",
+  "category": "algorithms-pathfinding",
+  "difficulty": 3,
+  "goal": "Implement optimal A* pathfinding on a grid as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a table `AStar` for grid pathfinding with `AStar.findPath(grid, start, goal)`. `grid` is an array of equal-length strings, one per row; \"#\" is a wall and any other character is walkable. Points are tables {x = column, y = row}, both 1-based. Moves are 4-directional with cost 1. Return the shortest path as an array of points from start to goal inclusive (start == goal gives a one-point path), or nil when the goal is unreachable or the start or goal is a wall or outside the grid. Use A* with an admissible heuristic and a binary-heap open set. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-game-architecture"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "a returned path is not the shortest"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-02.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-02.luau",
+    "checks": 9
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-03",
+  "category": "game-loop-fixed-timestep",
+  "difficulty": 2,
+  "goal": "Implement a fixed-timestep accumulator with a spiral-of-death clamp as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a `FixedStep` class for a fixed-timestep game loop: `FixedStep.new(step, maxFrame)` (seconds); `:advance(frameDt)` adds one rendered frame's time to an accumulator and returns how many simulation steps of exactly `step` seconds to run now (subtracting `step` per step and keeping the remainder for later frames); frame times are clamped to [0, maxFrame] first so a long hitch cannot cause a spiral of death; `:alpha()` returns accumulator / step, the interpolation factor between the previous and current simulation states. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-game-architecture"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "frame time is not clamped"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-03.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-03.luau",
+    "checks": 11
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-04",
+  "category": "math-quaternions",
+  "difficulty": 3,
+  "goal": "Implement quaternion rotation, composition and shortest-path slerp as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a table `Quat` of quaternion functions working on plain tables {w, x, y, z} and vectors {x, y, z} (do not use CFrame or Vector3): `Quat.fromAxisAngle(axis, angle)` (radians, right-handed, the axis need not be unit length), `Quat.mul(a, b)` (Hamilton product, so rotating by mul(a, b) applies b first, then a), `Quat.rotate(q, v)` (returns q v q^-1 as a vector), `Quat.normalize(q)` and `Quat.slerp(a, b, t)` (spherical interpolation that always takes the shortest path, returns a unit quaternion and stays finite when a and b are nearly equal). Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-algorithms"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "wrong multiplication order or slerp takes the long way"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-04.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-04.luau",
+    "checks": 12
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-05",
+  "category": "netcode-prediction-reconciliation",
+  "difficulty": 3,
+  "goal": "Implement client-side prediction with server reconciliation as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a `Predictor` class for client-side prediction with server reconciliation: `Predictor.new(initialState, apply)` where `apply(state, input)` returns the next state without mutating its arguments; `:applyInput(input)` gives the input the next sequence number (1, 2, 3, ...), applies it locally at once, keeps it as pending and returns the sequence number; `:onServerState(lastSeq, serverState)` handles an authoritative server update meaning the server processed every input up to lastSeq and is now at serverState: drop pending inputs up to lastSeq, start from serverState and re-apply the remaining pending inputs in order with `apply`; ignore an update whose lastSeq is older than one already handled; `:state()` returns the predicted state and `:pendingCount()` the number of unacknowledged inputs. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-netcode"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "pending inputs are not replayed"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-05.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-05.luau",
+    "checks": 12
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-06",
+  "category": "ai-behavior-tree",
+  "difficulty": 3,
+  "goal": "Implement behavior tree composites with Running resume as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a table `BT` for behavior trees. Every node is a table with a method `:tick(blackboard)` that returns \"Success\", \"Failure\" or \"Running\". Constructors: `BT.Action(fn)` (fn(blackboard) returns a status), `BT.Condition(fn)` (fn(blackboard) returns a boolean: true is Success, false is Failure), `BT.Inverter(child)` (swaps Success and Failure, keeps Running), `BT.Sequence(children)` (ticks children in order, returns the first result that is not Success, Success when all succeed or there are none) and `BT.Selector(children)` (returns the first result that is not Failure, Failure when all fail or there are none). Sequence and Selector have memory: when a child returns Running, the next tick resumes at that child without re-ticking the children before it; after the composite finishes (Success or Failure) its next tick starts again from the first child. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-game-architecture"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "a Running child is not resumed"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-06.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-06.luau",
+    "checks": 13
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "FND-07",
+  "category": "algorithms-spatial-hash",
+  "difficulty": 2,
+  "goal": "Implement a uniform-grid spatial hash for radius queries as tested pure Luau",
+  "prompt": "For my Roblox game: write a pure-Luau ModuleScript (no Roblox services, no task.wait) that returns a `SpatialHash` class for 2D neighbour queries: `SpatialHash.new(cellSize)`; `:insert(id, x, y)` (inserting an id that already exists moves it), `:remove(id)`, `:move(id, x, y)` and `:queryRadius(x, y, r)` which returns an array (any order) of every id whose point is within distance r of (x, y), including points exactly at distance r. Coordinates can be negative. Store ids in grid cells so a query only visits the cells that overlap the query circle. Start the file with --!strict and annotate parameters and return types.",
+  "run_mode": "automated",
+  "helps": [
+   "fund-algorithms"
+  ],
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 1200,
+   "wall_seconds": 600
+  },
+  "hard_fail": [
+   "neighbouring cells are not searched"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [
+   "tests/FND-07.luau"
+  ],
+  "auto": {
+   "strict": false,
+   "compile_mode": "exact",
+   "unit_test": {
+    "file": "tests/FND-07.luau",
+    "checks": 9
+   },
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static+vm",
+   "checks": [
+    "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+    "Unit tests run in the server's standalone Luau VM (see fixtures)",
+    "Present: the file starts with --!strict"
+   ]
+  },
+  "split": "development"
+ }
+]
