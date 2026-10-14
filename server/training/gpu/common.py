@@ -153,3 +153,72 @@ def free_ram_gb() -> float:
         if line.startswith("MemAvailable:"):
             return int(line.split()[1]) / 2**20
     return float("inf")
+
+
+class TrainingGate:
+    """GPU training on the owner's PC asks STAR's resource planner first (class "gpu-train"): it starts only while the
+    owner is not gaming (no known game, no fullscreen window, no graphics load on the GPU), with enough free VRAM and
+    with RAM above the floor plus the job's own need; every `renew_every` seconds a renewal can say "yield" (the owner
+    started a game, RAM fell), and the run saves a checkpoint and waits to resume.
+    The free-RAM floor is checked locally on every call, planner or not. Planner not configured or unreachable:
+    exactly the old behaviour (RAM floor only)."""
+
+    def __init__(self, job_id: str, *, log=print, renew_every: float = 30.0, client=None, memory_mib: int = 4096,
+                 vram_mib: int = 2048, free_gb=None):
+        import re
+        self.job_id = re.sub(r"[^A-Za-z0-9_.-]", "-", job_id)[:60] or "train"
+        self.log, self.renew_every = log, renew_every
+        self.client = client if client is not None else _planner_client()
+        self.extra = {"memory_mib": memory_mib, "vram_mib": vram_mib}
+        self.grant = None
+        self._renewed = 0.0
+        self._free_gb = free_gb or free_ram_gb
+
+    def start(self, stop=lambda: False, max_wait: float | None = None) -> bool:
+        """Block until the planner admits the run (or there is no planner). False when the RAM floor or stop says no."""
+        if self._free_gb() < RAM_FLOOR_GB:
+            self.log(f"free RAM {self._free_gb():.1f} GB is below the {RAM_FLOOR_GB} GB floor; not starting")
+            return False
+        if self.client is None:
+            return True
+        self.grant = self.client.wait_for("gpu-train", "pc-training", self.job_id, stop=stop, max_wait=max_wait,
+                                          log=self.log, **self.extra)
+        if self.grant.action == "fallback":
+            self.log(f"planner: {self.grant.reason}; using the RAM floor only")
+        self._renewed = time.monotonic()
+        return self.grant.go
+
+    def stop_reason(self) -> str:
+        """"" to go on, else why the run should save and stop now."""
+        if self._free_gb() < RAM_FLOOR_GB:
+            return f"free RAM below {RAM_FLOOR_GB} GB"
+        if self.client is None or self.grant is None or not self.grant.planned:
+            return ""
+        if time.monotonic() - self._renewed < self.renew_every:
+            return ""
+        self._renewed = time.monotonic()
+        grant = self.client.renew(self.grant)
+        if grant.action in ("yield", "refuse"):
+            self.grant = None
+            return "planner: " + (grant.reason or grant.action)
+        self.grant = grant
+        return ""
+
+    def close(self) -> None:
+        if self.client is not None:
+            self.client.release(self.grant)
+        self.grant = None
+
+
+def _planner_client():
+    """The planner client with a live PC snapshot, or None when no planner is configured."""
+    if str(REPO) not in sys.path:
+        sys.path.insert(0, str(REPO))
+    try:
+        from star.planner_client import PlannerClient
+        from star.resource_probes import CpuMeter, pc_snapshot
+    except ImportError:
+        return None
+    meter = CpuMeter()
+    client = PlannerClient(timeout=3.0, snapshot=lambda: pc_snapshot(cpu=meter))
+    return client if client.enabled else None

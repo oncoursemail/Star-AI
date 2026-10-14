@@ -14,14 +14,19 @@
  *  - when the voice engine is not installed nothing is played and the page says what is missing;
  *  - a preview that fails says so on the row it belongs to. Nothing is reported as played or saved
  *    before the host confirmed it.
+ *
+ * It also holds the two voice habits (`voiceGetSettings` / `voiceSaveSettings`): automatic read-aloud of new
+ * replies (off by default) and how calls listen (push to talk by default, or hands-free).
  */
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {Check,LoaderCircle,Play,Volume2} from 'lucide-react'
 import {onBackendEvent,request} from './bridge'
+import {setAutoReadAloud} from './ReadAloud'
 import type {VoiceCatalog,VoiceEngineStatus,VoiceEntry} from './types'
 import './learning.css'
 import './media.css'
 import './settings-ui.css'
+import './voice-call.css'
 
 const DEFAULT_STYLE='warm-caring'
 const OPT_IN_STYLE='confident-commanding'
@@ -39,6 +44,42 @@ const firstSound=(voice:VoiceEntry)=>{
   const seconds=voice.latency?.first_audio_seconds
   if(typeof seconds!=='number')return ''
   return `${seconds} s to first sound`+(voice.latency?.device?`, measured on ${voice.latency.device}`:'')
+}
+
+type VoiceHabits={read_aloud_auto:boolean;call_mode:'push-to-talk'|'hands-free'}
+
+function VoiceHabitsPanel({disabled}:{disabled:boolean}){
+  const [habits,setHabits]=useState<VoiceHabits|null>(null)
+  const [message,setMessage]=useState('')
+  useEffect(()=>{
+    if(disabled)return
+    void request<{settings?:Partial<VoiceHabits>}>('voiceGetSettings').then(reply=>{
+      const saved=reply.data?.settings
+      if(reply.ok&&saved)setHabits({read_aloud_auto:saved.read_aloud_auto===true,call_mode:saved.call_mode==='hands-free'?'hands-free':'push-to-talk'})
+    })
+  },[disabled])
+  const save=async(change:Partial<VoiceHabits>)=>{
+    if(!habits)return
+    setMessage('')
+    const reply=await request<{settings?:Partial<VoiceHabits>}>('voiceSaveSettings',{settings:change})
+    const saved=reply.data?.settings
+    if(!reply.ok||!saved){setMessage(plainError(reply.error,'That change could not be saved.'));return}
+    const next={read_aloud_auto:saved.read_aloud_auto===true,call_mode:saved.call_mode==='hands-free'?'hands-free' as const:'push-to-talk' as const}
+    setHabits(next)
+    setAutoReadAloud(next.read_aloud_auto)
+    setMessage('Saved.')
+  }
+  if(!habits)return null
+  return <div className="media-capability voice-habits" role="group" aria-label="Read-aloud and calls">
+    <label className="learn-switch"><span><strong>Read new replies aloud</strong>
+      <small>Star reads each new reply in her voice as soon as it is finished. Code, links and tables are not read out; she says they are on screen. Every reply also has a Read aloud button.</small></span>
+      <input type="checkbox" checked={habits.read_aloud_auto} disabled={disabled} onChange={event=>void save({read_aloud_auto:event.target.checked})}/></label>
+    <label className="voice-habit-select"><span><strong>Voice calls listen</strong>
+      <small>Push to talk: only while you hold the talk button or Space. Hands-free: the microphone stays open during the call.</small></span>
+      <select value={habits.call_mode} disabled={disabled} onChange={event=>void save({call_mode:event.target.value as VoiceHabits['call_mode']})}>
+        <option value="push-to-talk">Push to talk</option><option value="hands-free">Hands-free</option></select></label>
+    {message&&<p role="status" className="learn-help">{message}</p>}
+  </div>
 }
 
 export function VoiceSettings({disabled=false}:{disabled?:boolean}){
@@ -112,7 +153,8 @@ export function VoiceSettings({disabled=false}:{disabled?:boolean}){
   const selectedStyle=catalog?.styles.find(style=>style.id===(selected?.style||catalog.selected.style))
   return <section className="learn" aria-label="Star's voice">
     <div className="learn-head"><Volume2 size={20}/><div className="learn-title"><h2>Star's voice</h2>
-      <p>Choose how Star sounds in voice calls. Each style also changes how she words what she says. Every voice here is an original synthetic voice; none of them copies a real person.</p></div></div>
+      <p>Choose how Star sounds when she reads replies aloud and in voice calls. Each style also changes how she words what she says on a call. Every voice here is an original synthetic voice; none of them copies a real person.</p></div></div>
+    <VoiceHabitsPanel disabled={disabled}/>
     {!catalog&&!loadError&&<p className="learn-help">{disabled?'Open STAR Desktop to see and change this.':'Reading the voice list…'}</p>}
     {loadError&&<p role="alert" className="media-warning">The voice list could not be shown: {loadError}</p>}
     {engineMissing&&<p role="status" className="media-warning">The voice engine is not installed on this PC, so no voice can be played here yet.
