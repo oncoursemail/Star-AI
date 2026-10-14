@@ -10,7 +10,6 @@ from dataclasses import dataclass
 import io
 import math
 import shutil
-import struct
 import subprocess
 import wave
 from pathlib import Path

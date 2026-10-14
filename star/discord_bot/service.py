@@ -7,7 +7,6 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
 from .audio import decode_attachment, ffmpeg_path, synthesize_pcm, validate_attachment, voice_message
 from .brain import DiscordBrain

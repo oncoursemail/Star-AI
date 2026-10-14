@@ -9,13 +9,11 @@ from __future__ import annotations
 import asyncio
 from hashlib import sha256
 import json
-import math
 import os
 from pathlib import Path
 import re
 import secrets
 import shutil
-import sys
 
 from jsonschema import Draft202012Validator
 

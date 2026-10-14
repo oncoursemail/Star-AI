@@ -4,7 +4,6 @@ Autonomous routine edits; no per-operation prompts. The model CANNOT write
 core permissions, security files, tests, credentials or workflow definitions.
 Generated code is only syntax checked, never executed by this builder.
 """
-import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path, PurePosixPath

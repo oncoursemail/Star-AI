@@ -25,6 +25,10 @@ jobs:
         run: python -m pip install -r requirements.txt pytest
       - name: Compile Python sources
         run: python -m compileall -q star main.py
+      - name: Lint star/ with ruff (correctness rules in pyproject.toml)
+        run: |
+          python -m pip install ruff==0.16.9
+          ruff check star --output-format=github
       - name: Validate research evaluation catalog
         run: python -m pytest -q tests/test_star_research.py
       - name: Run all offline regression tests

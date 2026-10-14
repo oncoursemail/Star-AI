@@ -44,14 +44,14 @@ class BotConfig:
 
     @classmethod
     def from_env(cls, env=None) -> "BotConfig":
-        vars = os.environ if env is None else env
-        token = vars.get("STAR_DISCORD_BOT_TOKEN", "").strip()
+        source = os.environ if env is None else env
+        token = source.get("STAR_DISCORD_BOT_TOKEN", "").strip()
         if not token or any(char.isspace() for char in token):
             raise ValueError("No bot token: put DISCORD_BOT_TOKEN=... in ~/.star/discord.env "
                              "(see docs/STAR_DISCORD_SETUP.md); never commit it")
-        policy = AccessPolicy.from_env(vars)
-        raw = vars.get("STAR_DISCORD_SYNC_GUILD_ID", "").strip()
-        sync = vars.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip().lower()
+        policy = AccessPolicy.from_env(source)
+        raw = source.get("STAR_DISCORD_SYNC_GUILD_ID", "").strip()
+        sync = source.get("STAR_DISCORD_SYNC_COMMANDS", "0").strip().lower()
         if sync not in {"", "0", "1", "global"}:
             raise ValueError("STAR_DISCORD_SYNC_COMMANDS must be 0 or 1 (or 'global')")
         if raw and (not raw.isdecimal() or int(raw) not in policy.guilds):
@@ -60,13 +60,13 @@ class BotConfig:
             raw = str(next(iter(policy.guilds)))  # the single approved server is the obvious target
         if sync == "1" and not raw:
             raise ValueError("Supply an approved STAR_DISCORD_SYNC_GUILD_ID before syncing commands")
-        screen = vars.get("STAR_DISCORD_SCREEN_CAPTURE", "0").strip() or "0"
+        screen = source.get("STAR_DISCORD_SCREEN_CAPTURE", "0").strip() or "0"
         if screen not in {"0", "1"}:
             raise ValueError("STAR_DISCORD_SCREEN_CAPTURE must be 0 or 1")
         return cls(token, policy, sync == "1", int(raw) if raw else None,
-                   DMSettings.from_env(vars), sync_global=sync == "global",
-                   screen_capture=screen == "1", rate_limit=RateLimiter.from_env(vars).limit,
-                   digest=DigestConfig.from_env(vars, policy=policy))
+                   DMSettings.from_env(source), sync_global=sync == "global",
+                   screen_capture=screen == "1", rate_limit=RateLimiter.from_env(source).limit,
+                   digest=DigestConfig.from_env(source, policy=policy))
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None):

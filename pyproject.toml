@@ -6,3 +6,20 @@ requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+extend-exclude = ["frontend", "site", "data", "evals"]
+
+[tool.ruff.lint]
+# Correctness-focused rules only (no style churn): pyflakes (unused imports and
+# variables, undefined names, redefinitions, import shadowing), syntax errors,
+# bare except, mutable or call defaults, and builtin shadowing.
+select = ["F", "E9", "E722", "B002", "B006", "B008", "B012", "B015", "B018", "A001", "A002", "PLE"]
+# Invisible characters in these two literals are deliberate (filters and a Discord blank message).
+ignore = ["PLE2502", "PLE2515"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Frozen dataclass: safe to share as a default argument.
+extend-immutable-calls = ["star.shared_brain.improve.Limits"]

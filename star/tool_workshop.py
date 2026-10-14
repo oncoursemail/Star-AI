@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 import re
 import sqlite3
-from typing import Any
 
 from jsonschema import Draft202012Validator
 from .workspace import Workspace
