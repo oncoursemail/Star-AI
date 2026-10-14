@@ -43,6 +43,7 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
     "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
     "STAR_DISCORD_PRESENCE", "STAR_DISCORD_PRESENCE_MINUTES",
+    "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
 })
 # The token may only come from the secret file or the process environment.
 _SECRET_KEYS = frozenset({"STAR_DISCORD_BOT_TOKEN"})
@@ -126,6 +127,14 @@ STAR_DISCORD_SCREEN_CAPTURE=0
 # Never accepts Discord-supplied file paths; the producer must supply SHA-matched evidence.
 STAR_DISCORD_LAB_STATUS=0
 STAR_DISCORD_LAB_REPORT=
+# Make images ("draw a dragon" or /draw) on this PC's graphics card. ANYONE=1 also lets members of your
+# approved server use /draw (never strangers' DMs). TIMEOUT: seconds before a picture is cancelled.
+STAR_DISCORD_DRAW=1
+STAR_DISCORD_DRAW_ANYONE=0
+STAR_DISCORD_DRAW_TIMEOUT=240
+# 1 = answer @STAR mentions in your approved server (Discord then sends the bot server message events;
+# it still only sees the text of messages that mention it).
+STAR_DISCORD_MENTIONS=0
 # Requests per 10 minutes from the owner before STAR asks to slow down.
 STAR_DISCORD_RATE_LIMIT=30
 # Optional: bot-account activity (runtime status, not a channel message), fixed safe labels.

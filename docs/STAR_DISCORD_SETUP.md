@@ -134,11 +134,20 @@ and is deliberately not used. Use A or B, or both: if both start, the second one
   It shows "typing…" while it thinks, answers long replies in several messages (code blocks kept
   intact), and remembers the last few turns for an hour (`/star reset` forgets them). Send `help` for
   a reminder.
-- Attach **one screenshot** to a DM (or use `/image`) and ask about it.
+- Attach **one photo or screenshot** to a DM (or use `/image`) and ask about it. Phone photos up to
+  25 MB are fine: the bot shrinks them on the PC (longest side 1568 px, rotation fixed) before the
+  vision model sees them. iPhone HEIC photos need `pillow-heif` (in `requirements-discord.txt`).
 - Attach **two images** to an owner DM (first desired reference, second current STAR result), or use `/compare` with the two attachments. STAR produces a private local-vision critique and a proposed change list; images are normalized and not stored in chat history. A screenshot is not enough to judge motion, rig correctness, or real Studio test results.
 - If `STAR_DISCORD_DM_LEARNING_CANDIDATES=1` is enabled and your previous DM was about an image, a follow-up like “I don’t like that” or “you messed up the animation” creates a review-only correction candidate, not automatic changes or training. You can also use `wrong: ...` or `remember correction: ...` explicitly.
-- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, plus the `/star ...` group
-  (research, speech, voice channel, reset, doctor).
+- **Make an image**: DM `draw a dragon over a castle` (or `generate an image of ...`), or use
+  `/draw prompt:`. The bot shows "Drawing…", then posts the PNG with its prompt. It is made exactly
+  like STAR Desktop's **Create image**: ComfyUI on this PC (127.0.0.1 only) with FLUX.2 klein 4B on
+  the graphics card. When ComfyUI is not running the bot starts the install STAR finds (the
+  `media/ComfyUI` folder made by `MEDIA_HOME=<starai>/media bash scripts/media/setup_comfyui.sh all`,
+  or `STAR_COMFY_HOME`), and stops it again after 10 quiet minutes. One picture at a time; the first
+  picture after a start takes longest. Pictures are kept in `~/.star/discord-images/generated-images`.
+- Slash commands: `/ask`, `/draw` (make an image), `/image` (look at an image), `/compare`, `/screen`,
+  `/status`, `/digest`, plus the `/star ...` group (research, speech, voice channel, reset, doctor).
 
 ## Opt-in switches (`discord-settings.env`)
 
@@ -152,6 +161,10 @@ candidates, screen capture and Night School DMs stay 0 until you change them.
 | `STAR_DISCORD_DM_LEARNING_CANDIDATES` | 0 | `remember: ...` in a DM proposes a lesson; you approve it in STAR Desktop; never trusted automatically. |
 | `STAR_DISCORD_SCREEN_CAPTURE` | 0 | `/screen` lets STAR look at this PC's screen. **Every capture needs you to press "Capture my screen now"** (expires after 60 s, one capture per press). Nothing is saved; you see the capture privately. |
 | `STAR_DISCORD_LEARNING_DM_OPT_IN` | 0 | DM a short Night School digest when the verified practice numbers change (at most one per 6 h); `/digest` shows it on demand. Report source: `STAR_DISCORD_LEARNING_REPORT_SSH` (your existing key login to the brain server) or `STAR_DISCORD_LEARNING_REPORT` (a local file). |
+| `STAR_DISCORD_DRAW` | 1 | Make images (`draw ...` DMs, `/draw`) on this PC's graphics card. 0 = off; the bot then says so and how to turn it on. |
+| `STAR_DISCORD_DRAW_ANYONE` | 0 | 1 = members of your approved server may use `/draw` too (rate-limited each). Strangers' DMs never reach the image engine. |
+| `STAR_DISCORD_DRAW_TIMEOUT` | 240 | Seconds before a picture is cancelled in ComfyUI (30-900). |
+| `STAR_DISCORD_MENTIONS` | 0 | 1 = answer `@STAR ...` in your approved server (draw requests and, for you, questions). Discord then sends the bot server message events; without the message-content intent it only sees the text of messages that mention it. |
 | `STAR_DISCORD_RATE_LIMIT` | 30 | Requests per 10 minutes before STAR asks you to slow down. |
 | `STAR_DISCORD_LAB_STATUS` | 0 | Enable read-only owner Lab progress/screenshot reports from a trusted, pre-staged job receipt; does not control Studio or capture the host desktop. |
 | `STAR_DISCORD_LAB_REPORT` | empty | Absolute path on the bot host to an operator-approved latest.json receipt and same-folder checked viewport/render screenshot. |
