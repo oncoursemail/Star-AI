@@ -163,6 +163,15 @@ def parse_bundle(data: object) -> dict:
     return {"project": project, "digest": hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()}
 
 
+def bundle_error(data: object) -> str | None:
+    """None when `data` is a well-formed bundle, otherwise one plain sentence saying what is wrong (never raises)."""
+    try:
+        parse_bundle(data)
+    except (ValueError, TypeError, RecursionError, LessonRefused) as exc:
+        return str(exc) or type(exc).__name__
+    return None
+
+
 def read_bundle(path: Path) -> dict:
     with Path(path).open("rb") as handle:
         raw = handle.read(MAX_BUNDLE_BYTES + 1)
@@ -467,7 +476,7 @@ def import_bundled(home: Path, version: str, *, auto_live: bool = True, bundle: 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=(__doc__ or "").split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     make = sub.add_parser("bundle", help="package night school's outbox as a reviewed bundle (for a draft PR)")
     make.add_argument("--outbox", required=True, type=Path)
