@@ -7,6 +7,13 @@ Everything heavy is behind small interfaces (VoiceActivity, SpeechToText, Brain,
 engines are swappable and the turn logic is tested with fakes. Threads: the caller feeds microphone frames
 from one thread; each reply runs on its own worker thread plus one speech thread.
 
+Two ways to take a turn:
+  hands-free     voice activity + end-of-turn model decide when the user started and finished (TurnDetector);
+  push-to-talk   the user holds a key or button while talking (push_to_talk(True/False)). Releasing it ends
+                 the turn at once, so there is no end-of-turn wait and no risk of being cut off mid-thought.
+                 Pressing it while Star talks interrupts her; talking over her (without the key) also stops
+                 her speech when `ptt_voice_barge_in` is on, but only the key opens a new turn.
+
 Barge-in: when the user starts talking while Star is thinking or speaking, the reply is cancelled at once
 (the model request is closed, queued speech is dropped, the speaker is silenced). Only the words that were
 actually played stay in the conversation history, so Star knows what the user did and did not hear.
@@ -69,6 +76,9 @@ class CallConfig:
     use_echo_gate: bool = False           # True when playing through loudspeakers instead of headphones
     echo_margin_db: float = 4.0           # how much louder than the loudest echo the user must be to interrupt
     echo_tail: float = 0.5                # seconds the echo gate stays armed after playback ends
+    push_to_talk: bool = False            # True: turns are opened and closed by push_to_talk(), not by the VAD
+    ptt_tail_ms: int = 160                # keep recording this long after the key is released (trailing words)
+    ptt_voice_barge_in: bool = True       # push-to-talk: talking over Star (without the key) still silences her
 
 
 @dataclass
@@ -121,6 +131,13 @@ class CallSession:
         self._last_level = 0.0
         self._last_audible = float("-inf")
         self._stopped = False
+        self._ptt_lock = threading.Lock()
+        self._ptt_held = False
+        self._ptt_frames: list[bytes] = []
+        self._ptt_voiced_ms = 0
+        self._ptt_released_at: float | None = None
+        self._ptt_tail_frames = 0               # frames recorded since the key was released
+        self._ptt_barge_ms = 0
 
     # -- lifecycle --------------------------------------------------------------------------
     def start(self) -> None:
@@ -147,6 +164,84 @@ class CallSession:
             self.detector.reset()
         self._emit({"type": "muted", "muted": self.muted})
 
+    def push_to_talk(self, down: bool) -> None:
+        """Push-to-talk key or button: True when pressed, False when released. Ignored in hands-free calls."""
+        if not self.config.push_to_talk or self._stopped:
+            return
+        now = self.clock()
+        if down:
+            with self._ptt_lock:
+                if self._ptt_held and self._ptt_released_at is None:
+                    return                                   # key repeat
+                if self._ptt_held:                           # pressed again during the release tail: keep going
+                    self._ptt_released_at, self._ptt_tail_frames = None, 0
+                    return
+                self._ptt_held, self._ptt_frames, self._ptt_voiced_ms = True, [], 0
+                self._ptt_released_at, self._ptt_tail_frames = None, 0
+            was_busy = self.busy()
+            if was_busy:
+                self._cancel_reply("push_to_talk")
+            self._last_partial = now
+            self._emit({"type": "speech_started", "barge_in": bool(was_busy), "push_to_talk": True})
+            self._set_state("user_speaking")
+        else:
+            with self._ptt_lock:
+                if self._ptt_held and self._ptt_released_at is None:
+                    self._ptt_released_at = now
+            if self.config.ptt_tail_ms <= 0:
+                self._ptt_finish(now)
+
+    def _feed_ptt(self, frame: bytes, now: float) -> None:
+        """Push-to-talk frame handling: record while the key is held; otherwise only watch for talking over Star.
+
+        The release tail is counted in microphone frames, not wall time, so it is exact whatever the frame pacing."""
+        cfg = self.config
+        if self._ptt_held:
+            probability = float(self.vad.probability(frame))
+            with self._ptt_lock:
+                self._ptt_frames.append(frame)
+                if probability >= cfg.turn.end_threshold:
+                    self._ptt_voiced_ms += FRAME_MS
+                if self._ptt_released_at is not None:
+                    self._ptt_tail_frames += 1
+                tail_done = (self._ptt_released_at is not None
+                             and self._ptt_tail_frames * FRAME_MS >= cfg.ptt_tail_ms)
+                too_long = len(self._ptt_frames) * FRAME_MS >= cfg.turn.max_turn_ms
+            if too_long or tail_done:
+                self._ptt_finish(now)
+            elif (cfg.partial_transcripts and now - self._last_partial >= cfg.partial_interval
+                  and not self._partial_busy.is_set()):
+                self._last_partial = now
+                self._start_partial(b"".join(self._ptt_frames))
+            return
+        if not (cfg.ptt_voice_barge_in and self.busy() and self.speaker.pending_seconds() > 0):
+            self._ptt_barge_ms = 0
+            return
+        probability = float(self.vad.probability(frame))
+        gate_open = True
+        if self.echo_gate is not None:
+            gate_open = self.echo_gate.allows(rms(frame), self.speaker.level())
+        voiced = probability >= cfg.turn.barge_in_threshold and gate_open
+        self._ptt_barge_ms = self._ptt_barge_ms + FRAME_MS if voiced else max(0, self._ptt_barge_ms - FRAME_MS)
+        if self._ptt_barge_ms >= cfg.turn.barge_in_ms:
+            self._ptt_barge_ms = 0
+            self._cancel_reply("barge_in")
+            self._emit({"type": "speech_started", "barge_in": True, "push_to_talk": False})
+
+    def _ptt_finish(self, now: float) -> None:
+        with self._ptt_lock:
+            if not self._ptt_held:
+                return
+            audio, voiced = b"".join(self._ptt_frames), self._ptt_voiced_ms
+            released = self._ptt_released_at if self._ptt_released_at is not None else now
+            self._ptt_held, self._ptt_frames, self._ptt_voiced_ms, self._ptt_released_at = False, [], 0, None
+        if voiced < self.config.turn.min_turn_ms:
+            self._emit({"type": "discarded", "reason": "too_short"})
+            if not self.busy():
+                self._set_state("listening")
+            return
+        self._begin_reply(TurnEvent("turn_end", now, audio=audio, speech_end=released, reason="push_to_talk"))
+
     def busy(self) -> bool:
         reply = self._reply
         return reply is not None and not reply.done.is_set()
@@ -168,6 +263,9 @@ class CallSession:
         now = self.clock()
         mic_level = rms(frame)
         self._emit_levels(mic_level, now)
+        if self.config.push_to_talk:
+            self._feed_ptt(frame, now)
+            return
         if self.muted:
             return
         probability = float(self.vad.probability(frame))
@@ -270,7 +368,7 @@ class CallSession:
                         text = (self.asr.transcribe(audio, 16000) or "").strip()
                     finally:
                         self._asr_lock.release()
-                    if text and self.detector.state != TurnDetector.IDLE:
+                    if text and (self.detector.state != TurnDetector.IDLE or self._ptt_held):
                         self._emit({"type": "partial_transcript", "text": text})
             except Exception:
                 pass
@@ -466,7 +564,7 @@ class CallSession:
         reply.done.set()
         with self._lock:
             latest = self._reply is reply
-        if latest and not self._stopped and self.detector.state == TurnDetector.IDLE:
+        if latest and not self._stopped and self.detector.state == TurnDetector.IDLE and not self._ptt_held:
             self._set_state("listening")
 
     # -- events -------------------------------------------------------------------------------
