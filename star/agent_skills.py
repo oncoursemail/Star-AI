@@ -12,7 +12,7 @@ from .validation_messages import describe_invalid
 
 _NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 _MAX_FILE = 64_000
-_MAX_SKILLS = 80
+_MAX_SKILLS = 200  # bundled packs alone are ~90 since the engine and gameplay packs; user/project skills come on top
 _REFERENCE_SUFFIXES = {".md", ".txt", ".json", ".yaml", ".yml"}
 
 _STARTERS = {
