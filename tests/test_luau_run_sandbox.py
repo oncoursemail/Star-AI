@@ -264,3 +264,22 @@ def test_real_vm_bombs_contained(vm, code):
     result = luaurun.run(code, time_limit_s=0.3, memory_limit_mb=32, tools_dir=vm)
     assert not result["ok"] and result["usage"]["wall_seconds"] < 2
     assert result["usage"]["output_bytes"] <= luaurun.OUTPUT_BYTES
+
+
+def test_real_vm_cannot_mutate_shared_string_metatable(vm):
+    """An attempt to rewrite string.upper must fail, not silently alter later checks."""
+    result = luaurun.run(
+        "getmetatable('').__index.upper = function() return 'forged' end",
+        tools_dir=vm,
+    )
+    assert result["executed"] is True and result["ok"] is False
+    assert result["error"] == "runtime_error"
+    followup = luaurun.run(
+        "return string.upper('safe')", "assert(result == 'SAFE')", tools_dir=vm,
+    )
+    assert followup["ok"] is True
+
+
+def test_bootstrap_never_exposes_getmetatable():
+    bootstrap = luaurun.bootstrap("return 1", "assert(result == 1)")
+    assert "getmetatable=getmetatable" not in bootstrap

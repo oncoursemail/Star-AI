@@ -81,7 +81,7 @@ def bootstrap(code: str, tests: str) -> str:
     pcall=pcall, xpcall=xpcall, select=select, tonumber=tonumber,
     tostring=tostring, type=type, typeof=typeof, print=print,
     rawequal=rawequal, rawget=rawget, rawset=rawset, rawlen=rawlen,
-    getmetatable=getmetatable, setmetatable=setmetatable,
+    setmetatable=setmetatable,
     unpack=unpack, _VERSION=_VERSION,
 }
 -- Copy only pure standard libraries; no io, os, require, network or filesystem.

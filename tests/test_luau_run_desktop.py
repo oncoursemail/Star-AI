@@ -42,6 +42,18 @@ def test_real_settings_default_old_file_and_saved_opt_in(tmp_path):
     assert Settings.load(path).luau_run_before_answer is False
 
 
+def test_the_settings_switch_is_saved_through_the_desktop_bridge(tmp_path):
+    """The React Settings checkbox reaches Settings only through the shell allowlist."""
+    from star.react_shell import apply_setting_changes
+    path = tmp_path / "settings.json"
+    settings = apply_setting_changes(Settings(), {"luau_run_before_answer": True})
+    settings.save(path)
+    assert Settings.load(path).luau_run_before_answer is True
+    settings = apply_setting_changes(Settings.load(path), {"luau_run_before_answer": False})
+    settings.save(path)
+    assert Settings.load(path).luau_run_before_answer is False
+
+
 @pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
 def test_settings_reject_non_boolean_grants(value, tmp_path):
     with pytest.raises(ValueError, match="true or false"):
