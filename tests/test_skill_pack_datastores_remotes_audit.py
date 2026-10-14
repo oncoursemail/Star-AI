@@ -75,6 +75,10 @@ def test_corrected_claims_remove_absences_and_absolute_prohibitions():
     assert "under 1000 bytes" not in secure
     assert "guarantees eventual arrival" not in secure
     assert "PurchaseId" in secure
+    report = AUDIT.read_text(encoding="utf-8")
+    assert "Client-provided identity can be authoritative" not in report
+    assert "UpdateAsync enum item no longer exists" not in report
+    assert "A client-supplied identity must not replace the sender Player | **true**" in report
 
 
 def test_all_six_real_pack_luau_code_blocks_are_lint_clean():

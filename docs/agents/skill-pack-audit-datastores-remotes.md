@@ -4,9 +4,9 @@ Status: review material, not a model-quality evaluation. Examined 53 checkable c
 
 | Verdict | Count |
 |---|---:|
-| true | 34 |
-| partly | 9 |
-| false | 6 |
+| true | 35 |
+| partly | 11 |
+| false | 3 |
 | unverifiable | 4 |
 | **Total** | **53** |
 
@@ -34,7 +34,7 @@ Status: review material, not a model-quality evaluation. Examined 53 checkable c
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:10` | UpdateAsync transform must not yield | **true** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore) | Retained |
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:11` | pcall and ordered bounded retries are recommended | **true** | [Creator Hub](https://create.roblox.com/docs/cloud-services/data-stores/best-practices) | Retained |
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:12` | StandardRead and StandardWrite are current enum names | **true** | [Creator Hub](https://create.roblox.com/docs/reference/engine/enums/DataStoreRequestType) | Retained |
-| `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:12` | UpdateAsync enum item no longer exists | **false** | [Creator Hub](https://create.roblox.com/docs/reference/engine/enums/DataStoreRequestType) | Rephrased: still exists but newer budget docs use Standard types |
+| `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:12` | The older UpdateAsync budget enum is called legacy | **partly** | [Creator Hub](https://create.roblox.com/docs/reference/engine/enums/DataStoreRequestType) | Rephrased: still exists but newer budget docs use Standard types |
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:13` | Preflight budget snapshot does not reserve capacity | **partly** | [Creator Hub](https://create.roblox.com/docs/cloud-services/data-stores/error-codes-and-limits) | Kept as caveat, not hard guarantee |
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:14` | Atomic session-lock claim can use UpdateAsync metadata | **true** | [Creator Hub](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing) | Retained |
 | `star/skill_packs/roblox-datastore-service-patterns/SKILL.md:15` | Lease needs refresh, release and crash recovery | **true** | [Creator Hub](https://create.roblox.com/docs/cloud-services/data-stores/player-data-purchasing) | Retained |
@@ -43,7 +43,7 @@ Status: review material, not a model-quality evaluation. Examined 53 checkable c
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:8` | Server must validate untrusted client messages | **true** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Retained |
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:9` | OnServerEvent first arg is sender Player | **true** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent) | Retained |
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:9` | OnServerInvoke first arg is sender Player | **true** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/RemoteFunction) | Retained |
-| `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:9` | Client-provided identity can be authoritative | **false** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Already correctly rejects identity |
+| `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:9` | A client-supplied identity must not replace the sender Player | **true** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Already correctly rejects client-supplied identity |
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:10` | Reject every client-supplied Instance regardless of validation | **partly** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Explicitly allow independent server authorization |
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:11` | Measure distance against server state | **true** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Retained |
 | `star/skill_packs/roblox-remote-event-function-patterns/SKILL.md:12` | Apply server-owned per-player rate limiting | **true** | [Creator Hub](https://create.roblox.com/docs/scripting/security/client-server-boundary) | Retained |
@@ -65,7 +65,7 @@ Status: review material, not a model-quality evaluation. Examined 53 checkable c
 | `star/skill_packs/roblox-secure-remotes/SKILL.md:11` | InvokeClient must never be called under any circumstances | **false** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/RemoteFunction) | Clarified authority/deadlock warning |
 | `star/skill_packs/roblox-secure-remotes/SKILL.md:12` | UnreliableRemoteEvent supports lossy transient updates | **true** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/UnreliableRemoteEvent) | Retained |
 | `star/skill_packs/roblox-secure-remotes/SKILL.md:12` | Class reference documents a universal 1000-byte limit | **unverifiable** | [Creator Hub](https://create.roblox.com/docs/reference/engine/classes/UnreliableRemoteEvent) | Removed hard-coded payload number |
-| `star/skill_packs/roblox-secure-remotes/SKILL.md:12` | RemoteEvent guarantees eventual arrival even after disconnect | **false** | [Creator Hub](https://create.roblox.com/docs/scripting/events/remote) | Qualified connected transport and reconnection recovery |
+| `star/skill_packs/roblox-secure-remotes/SKILL.md:12` | RemoteEvent should carry messages needing reliable ordered delivery | **partly** | [Creator Hub](https://create.roblox.com/docs/scripting/events/remote) | Qualified connected transport and reconnection recovery |
 | `star/skill_packs/roblox-secure-remotes/SKILL.md:13` | Receipt acknowledgment after persisted grant and ID | **partly** | [Creator Hub](https://create.roblox.com/docs/production/monetization/developer-products) | Specified atomic award/ID history |
 
 ## Scope, confidence and retesting
