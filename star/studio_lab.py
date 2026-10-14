@@ -1543,10 +1543,17 @@ class Lab:
             if _failed(started):
                 return {"ok": False, "started": False, "detail": _text(started)[:300], "probe": probe, "errors": []}
             settle_until = time.monotonic() + self.settle
-            while time.monotonic() < settle_until and not probe["started"]:
-                await self.sleep(min(self.poll, 1.0))
-                console = _text(await self._read("get_console_output"))
-                probe = parse_probe(console, run)
+            try:
+                while time.monotonic() < settle_until and not probe["started"]:
+                    await self.sleep(min(self.poll, 1.0))
+                    console = _text(await self._read("get_console_output"))
+                    probe = parse_probe(console, run)
+            except BaseException:
+                # Never leave Studio in Play (GuardedStudio would refuse every later edit): stop while still
+                # holding the lock, then let the error go on.
+                await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                 "is_start": False})
+                raise
         deadline = time.monotonic() + seconds
         try:
             while time.monotonic() < deadline and not probe["finished"]:

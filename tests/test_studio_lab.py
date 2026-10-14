@@ -542,3 +542,23 @@ def test_for_settings_switch(tmp_path, monkeypatch):
     assert intelligence.for_settings(settings, tmp_path).studio_lab_enabled is False
     monkeypatch.setenv("STAR_STUDIO_LAB", "1")
     assert intelligence.for_settings(settings, tmp_path).studio_lab_enabled is True
+
+
+def test_playtest_stops_play_when_reading_the_output_fails_while_settling(tmp_path):
+    # The settle wait (holding the play lock) reads the console; if that read raises, Play must still be stopped.
+    class Broken(StandInStudio):
+        async def call_tool(self, name, arguments):
+            if name == "get_console_output":
+                raise RuntimeError("connector gone")
+            return await super().call_tool(name, arguments)
+
+    studio = Broken()
+    studio.config, studio.token = {"waypoints": []}, "abcd1234"
+
+    async def no_sleep(_):
+        return None
+
+    lab = studio_lab.Lab(studio, tmp_path, log=lambda *_: None, sleep=no_sleep, poll=0)
+    with pytest.raises(RuntimeError):
+        asyncio.run(lab.playtest("abcd1234", 10, tmp_path))
+    assert studio.calls.count("start_stop_play") == 2 and studio.playing is False
