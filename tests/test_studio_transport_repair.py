@@ -652,7 +652,9 @@ def test_probe_rejects_missing_instance_tool_and_zero_instances(monkeypatch):
 
 
 def test_delayed_attach_is_polled_on_the_same_client_and_exact_selection(monkeypatch):
-    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.2)
+    # The Studio appears on the third poll, so the deadline is never reached; it only has to be
+    # far enough away that a slow machine (Windows sleeps in 16 ms ticks) is not cut off first.
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 5)
     monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.005)
     class Delayed(Pages):
         instance_calls = 0
@@ -671,8 +673,10 @@ def test_delayed_attach_is_polled_on_the_same_client_and_exact_selection(monkeyp
 
 
 def test_permanent_validated_empty_is_bounded_across_requests_and_sleeps(monkeypatch):
-    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.15)
-    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.08)
+    # The deadline (0.6 s) falls in the middle of the second pause (0.43 to 0.83 s), never inside a
+    # request: with the old 0.15 s / 0.08 s values, a 16 ms clock tick moved it into the request.
+    monkeypatch.setattr(studio, "INSTANCE_SECONDS", 0.6)
+    monkeypatch.setattr(studio, "INSTANCE_POLL_SECONDS", 0.4)
     class Empty:
         calls = 0
         async def call_tool(self, name, arguments):
@@ -685,8 +689,8 @@ def test_permanent_validated_empty_is_bounded_across_requests_and_sleeps(monkeyp
         before = asyncio.get_running_loop().time()
         with pytest.raises(studio.StudioNoInstancesError) as caught:
             await studio.list_studios(client, tool_count=30)
-        assert 0.1 <= asyncio.get_running_loop().time() - before < 0.5
-        assert caught.value.tool_count == 30 and 2 <= client.calls <= 6
+        assert 0.5 <= asyncio.get_running_loop().time() - before < 3
+        assert caught.value.tool_count == 30 and client.calls == 2
     run(scenario())
 
 
