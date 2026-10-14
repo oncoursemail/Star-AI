@@ -150,7 +150,7 @@ def test_more_key_formats_are_replaced(text, secret):
     "Module.Something.Method(Instance.new('Part'))",
     "local hf_value = 3  -- AKIA prefix explained",
     "See https://example.invalid/docs/xox for details",
-    "xoxo-gossip-girl-fans and xoxa-love-from-the-team",
+    "xoxo-gossip-girl-fans and xoxa-love-from-the-team",  # not a token (star:allow)
     "require(NetworkReplicationController.Shared.AnimationControllerServiceModule)",
     "OnPlayerCharacterAddedEvent.Signal.ConnectParallelSomethingLongerName:Wait()",
 ])

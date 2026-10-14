@@ -1,7 +1,58 @@
 {
  "version": 1,
- "generated_by": "voice-lab/make_catalog.py",
+ "generated_by": "voice-lab/make_catalog.py + voice-lab/add_star_mum.py",
  "voices": [
+  {
+   "id": "star-mum",
+   "name": "Star (warm mum)",
+   "style": "warm-caring",
+   "archetype": "warm",
+   "engine": "kokoro",
+   "engine_settings": {
+    "recipe": [
+     [
+      "af_heart",
+      0.5
+     ],
+     [
+      "af_bella",
+      0.25
+     ],
+     [
+      "af_nicole",
+      0.25
+     ]
+    ],
+    "speed": 0.8,
+    "lang": "en-us",
+    "sentence_gap_ms": 120,
+    "pitch_semitones": 0.0
+   },
+   "reference_clip": "",
+   "audition": "star-mom-kokoro/mom-heart-bella-nicole",
+   "licence": "Kokoro-82M weights and code: Apache-2.0 (hexgrad). A blend of three stock voices shipped with the model (heart, bella, nicole); no real person is cloned. Runs in STAR calls and read-aloud today.",
+   "latency": {
+    "first_audio_seconds": 0.33,
+    "first_audio_kind": "first sentence",
+    "first_sentence_seconds": 0.33,
+    "realtime_factor": 0.107,
+    "device": "PC GPU (RTX 3060 Ti)"
+   },
+   "measured": {
+    "pitch_hz": 186.0,
+    "words_per_minute": 161.1,
+    "pitch_range_st": 7.1,
+    "pause_share": 0.279,
+    "final_fall_st": -7.6,
+    "heard_back_wer_percent": 0.5,
+    "mos_utmos": 4.42,
+    "measured_on": "the six comparison lines"
+   },
+   "recommended_for": [
+    "live"
+   ],
+   "notes": "The default Star persona: warm, nurturing and patient, a little slower than stock with a short pause after each sentence. Chosen on 2026-10-13 for the best recipe fit (98) with a high MOS estimate (4.4) among the live-speed voices."
+  },
   {
    "id": "heart",
    "name": "Heart",

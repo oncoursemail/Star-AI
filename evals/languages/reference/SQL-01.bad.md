@@ -1,0 +1,1 @@
+The query is mostly fine. To be safe, escape the quotes in the inputs with `name.replace("'", "''")` and `sort.replace("'", "''")`; escaping the single quotes is enough to stop attacks, since an attacker needs a quote to break out of the string.
