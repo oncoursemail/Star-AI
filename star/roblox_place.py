@@ -104,7 +104,9 @@ def _read(path: Path, root: Path, files: list, budget: list) -> str:
            for char in text):
         raise BuildError(f"Invalid XML character in: {path.relative_to(root).as_posix()}")
     files.append(path.relative_to(root).as_posix())
-    return text
+    # CRLF -> LF: a Windows (git autocrlf) checkout and a Linux one must build the same place bytes.
+    # A lone CR is kept and survives XML parsing through the &#13; reference in _cdata.
+    return text.replace("\r\n", "\n")
 
 
 def _folder(path: Path, root: Path, trail: tuple, files: list, budget: list) -> Node:

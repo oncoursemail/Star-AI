@@ -83,8 +83,17 @@ def test_each_valid_source_round_trips_exactly_through_xml(tmp_path, name, sourc
     _put(tmp_path, f"ServerScriptService/{name}.server.luau", source)
     assert _parsed(build_place(tmp_path)) == [
         ("ServerScriptService", "ServerScriptService", None),
-        (f"ServerScriptService/{name}", "Script", source),
+        (f"ServerScriptService/{name}", "Script", source.replace("\r\n", "\n")),
     ]
+
+
+def test_crlf_and_lf_checkouts_build_identical_place_bytes(tmp_path):
+    """git autocrlf on Windows must not change the place file or its hash."""
+    lf, crlf = tmp_path / "lf", tmp_path / "crlf"
+    _put(lf, "ServerScriptService/Main.server.luau", "local n = 1\nreturn n\n")
+    _put(crlf, "ServerScriptService/Main.server.luau", "local n = 1\r\nreturn n\r\n")
+    left, right = build_place(lf), build_place(crlf)
+    assert left.data == right.data and left.sha256 == right.sha256
 
 
 def test_file_order_and_bytes_do_not_depend_on_filesystem_creation_order(tmp_path):

@@ -470,8 +470,8 @@ def test_the_example_place_builds_to_the_expected_tree():
         ("ServerScriptService", "ServerScriptService", [
             ("ModuleScript", "Shop", []), ("Folder", "Tests", [("ModuleScript", "Shop.spec", [])])])]
     source = root.find(".//Item[@class='ModuleScript']/Properties/ProtectedString[@name='Source']").text
-    # read_text() translates CRLF on Windows, but the XML builder now preserves exact source bytes.
-    assert source == (EXAMPLE / "ReplicatedStorage/Shared/Catalog.luau").read_bytes().decode("utf-8-sig")
+    # The builder turns CRLF into LF, so the place is the same from a Windows or a Linux checkout.
+    assert source == (EXAMPLE / "ReplicatedStorage/Shared/Catalog.luau").read_bytes().decode("utf-8-sig").replace("\r\n", "\n")
     referents = [item.get("referent") for item in root.iter("Item")]
     assert len(referents) == len(set(referents)) == build.instances == 7
 
@@ -492,7 +492,7 @@ def test_script_kinds_init_files_and_awkward_text(tmp_path):
                        "Prices": "ModuleScript", "StarterPlayer": "StarterPlayer",
                        "StarterPlayerScripts": "StarterPlayerScripts", "Hud": "LocalScript"}
     main = root.find(".//Item[@class='Script']/Properties/ProtectedString").text
-    assert main == "print('a ]]> b <&> é')\r\n"
+    assert main == "print('a ]]> b <&> é')\n"
 
 
 def test_the_builder_refuses_what_it_cannot_represent(tmp_path):
