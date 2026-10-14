@@ -541,18 +541,8 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
     return resolved
 
 
-def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
-    settings = Settings.load(settings_file)
-    home = app_data()
-    try:
-        lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
-    except (OSError, ValueError, sqlite3.Error) as exc:
-        lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
-    try:
-        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
-                                                 project=settings.project)
-    except (OSError, ValueError, sqlite3.Error) as exc:
-        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
+def _chat_view(home: Path, settings: Settings, busy: bool = False) -> dict:
+    """The chat part of the state: what changes when the owner opens, starts or deletes a chat."""
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -577,6 +567,28 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         if preview:
             entry.update(preview)
         messages.append(entry)
+    return {'project': settings.project, 'projects': projects, 'messages': messages,
+            'active_chat': active_chat, 'chats': chat_threads, 'retry': retry}
+
+
+def _chat_state(settings_file: Path, busy: bool = False) -> dict:
+    """Answer to newChat/switchChat/deleteChat: no bundle imports, status probes or keyring reads."""
+    return _chat_view(app_data(), Settings.load(settings_file), busy)
+
+
+def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
+    settings = Settings.load(settings_file)
+    home = app_data()
+    try:
+        lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
+    try:
+        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
+                                                 project=settings.project)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
+    chat = _chat_view(home, settings, busy)
     brain = BrainInstall.load(home / 'brain.json')
     workshop = ToolWorkshop(home=home,project=settings.project)
     try:
@@ -584,9 +596,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
     finally:
         workshop.close()
     return {
-        'version':__version__,'build':read_build_info(),'project':settings.project,'projects':projects,
-        'messages':messages,'active_chat':active_chat,'chats':chat_threads,
-        'retry':retry,
+        'version':__version__,'build':read_build_info(),**chat,
         'settings':asdict(settings),
         'brain_installed':brain is not None,'brain_running':runtime.status()=='running',
         'model_router_running':runtime.router_running(),
@@ -1072,7 +1082,7 @@ def launch():
                     try: conversations.new_chat(settings.project)
                     finally: conversations.close()
                     self._warm(check=False)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file)})
                 if action=='switchChat':
                     # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
@@ -1082,7 +1092,7 @@ def launch():
                     finally: conversations.close()
                     if not self.active_task:self._warm(check=False)
                     busy=bool(self.active_task and self.turn is not None and self.turn.chat_id==chat_id)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=busy)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file,busy=busy)})
                 if action=='renameChat':
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
@@ -1099,7 +1109,7 @@ def launch():
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.delete_chat(settings.project,chat_id)
                     finally: conversations.close()
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file,busy=self.active_task)})
                 if action=='captureScreen':
                     # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
                     require_screen_consent(body)

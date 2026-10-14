@@ -37,6 +37,8 @@ export type CustomToolCatalog = {project:string;tools:CustomToolRecipe[];notice:
 export type WorkshopStatus = {pending:number;approved:number;rejected:number;disabled:number;read_only:boolean}
 export type BuildInfo = {stamped:boolean; source_commit:string; head_commit:string; run_url:string; build_event:string; note:string}
 export type BootData = { version:string; build?:BuildInfo; project:string; projects:string[]; messages:ChatMessage[]; active_chat:string; chats:ChatThread[]; settings:AppSettings; brain_installed:boolean; brain_running:boolean; model_router_running?:boolean; analytics:Analytics; release_url:string; intelligence?:IntelligenceStatus; credentials:Record<string,boolean>; mcp?:McpStatus; blender?:BlenderStatus; tool_workshop?:WorkshopStatus; server?:ServerStatus; retry?:RetryState|null; learning?:LessonCounts; roblox?:RobloxStatus; studio?:StudioConnectionStatus }
+/** What chat navigation (newChat, switchChat, deleteChat) returns: only the chat part of BootData. */
+export type ChatState = Pick<BootData,'project'|'projects'|'messages'|'active_chat'|'chats'|'retry'>
 /** Where a media capability runs: the STAR Brains (servers) or this PC's graphics card (star/media_places.py). */
 export type MediaPlace = 'servers'|'pc'
 export type MediaOption = { id: MediaPlace; label: string; available: boolean; note: string; reason: string; /** false: this install can never offer it (not a setting away); older hosts omit it. */ fixable?: boolean }

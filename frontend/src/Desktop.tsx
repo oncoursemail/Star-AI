@@ -6,7 +6,7 @@ import {BrainOverview} from './BrainOverview'
 import {Message,Panel,StarMark,Tag} from './components'
 import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts,MediaStatus} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatState,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts,MediaStatus} from './types'
 import './tokens.css'
 import './stellar-ui.css'
 import './chat.css'
@@ -499,10 +499,12 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  },[])
  const attach=async()=>{const v=await act('pickFiles',imageMode?{kind:'image'}:{});if(Array.isArray(v))setFiles(f=>[...f,...v.map(String)].slice(0,imageMode?2:8))}
  const transcribe=async()=>{const r=await act('pickFiles',{kind:'audio'});if(Array.isArray(r)&&r[0])void act('transcribe',{file:r[0]})}
- const applyBoot=(b:BootData)=>{chatRef.current=b.active_chat;setData(b);setDraft(b.settings);setMessages(b.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText(b.active_chat===answeringChat.current?streamRef.current:'');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ /** Chat navigation answers carry only the chat part of the state (react_shell._chat_state); the rest stays. */
+ const applyChat=(c:ChatState)=>{chatRef.current=c.active_chat;setData(d=>({...d,...c}));setMessages(c.messages);setChatSearch('');setShowChatSearch(false);setRetryText('');setLastRun(null);setStreamingText(c.active_chat===answeringChat.current?streamRef.current:'');followBottom.current=true;setShowJump(false);setTab('chat');setLeftOpen(false)}
+ const applyBoot=(b:BootData)=>{applyChat(b);setData(b);setDraft(b.settings)}
  const changeProject=async(name:string)=>{if(busy)return;const v=await act('switchProject',{project:name});if(v){applyBoot(v as BootData);lastProject.current=name}setLeftOpen(false)}
- const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
- const openChat=async(id:string)=>{if(id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyBoot(v as BootData)}
+ const startNewChat=async()=>{if(busy){setNotice('Stop the current answer before starting a new chat.');return}const v=await act('newChat');if(v){applyChat(v as ChatState);setPrompt('');setImageMode(false);setFiles([])}setTab('chat');composerRef.current?.focus()}
+ const openChat=async(id:string)=>{if(id===data.active_chat){setTab('chat');setLeftOpen(false);return}const v=await act('switchChat',{chatId:id});if(v)applyChat(v as ChatState)}
  /** Rename: the sidebar shows the new title at once; a refusal puts the old one back. */
  const renameChat=async(id:string,title:string)=>{
    const before=data.chats.find(c=>c.id===id)?.title
@@ -516,10 +518,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    if(deleteTimer.current!==null){window.clearTimeout(deleteTimer.current);deleteTimer.current=null}
    setPendingDelete(current=>current?.id===chat.id?null:current)
    if(inactive){setData(d=>({...d,chats:d.chats.filter(c=>c.id!==chat.id)}));return}
-   const v=await act('deleteChat',{chatId:chat.id}) as BootData|null
+   const v=await act('deleteChat',{chatId:chat.id}) as ChatState|null
    if(!v)return
    // Only the list changes, unless the host had to open another chat.
-   if(v.active_chat!==chatRef.current)applyBoot(v)
+   if(v.active_chat!==chatRef.current)applyChat(v)
    else setData(d=>({...d,chats:v.chats}))
  // eslint-disable-next-line react-hooks/exhaustive-deps
  },[inactive,act])
@@ -533,7 +535,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    // Like ChatGPT: deleting the open chat leaves you on a fresh one straight away.
    if(chat.id===data.active_chat&&!busy){
      if(inactive){setMessages([]);setData(d=>({...d,active_chat:''}))}
-     else{const v=await act('newChat');if(v){applyBoot(v as BootData);setPrompt('')}}
+     else{const v=await act('newChat');if(v){applyChat(v as ChatState);setPrompt('')}}
    }
  }
  const undoDelete=()=>{
