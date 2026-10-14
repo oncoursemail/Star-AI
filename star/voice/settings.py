@@ -22,19 +22,29 @@ ASR_MODELS = ("auto", "tiny.en", "base.en", "small.en", "medium.en", "distil-lar
 VAD_ENGINES = ("silero", "energy")
 ENDPOINTERS = ("smart-turn", "silence")
 OUTPUT_MODES = ("headphones", "speakers")
+CALL_MODES = ("push-to-talk", "hands-free")
+# The default "Star" persona voice: a warm, nurturing, mum-like blend of Kokoro stock voices (no real person),
+# chosen in the 2026-10-13 audition round (docs/STAR_VOICE_CALLS.md section 10, catalog id "star-mum").
+STAR_VOICE_ID = "star-mum"
+STAR_VOICE = "af_heart:0.5+af_bella:0.25+af_nicole:0.25"
+STAR_SPEED = 0.80
+STAR_PITCH = 0.0
+STAR_GAP_MS = 120
 _VOICE_ID = re.compile(r"^[A-Za-z0-9_.:+\-]{1,120}$")
 
 
 @dataclass
 class VoiceSettings:
     tts_engine: str = "kokoro"
-    voice: str = "heart"                 # id from the audition page, or an engine-specific recipe
-    speed: float = 0.92                  # a little slower than neutral: calmer
+    voice: str = STAR_VOICE              # id from the audition page, or an engine-specific recipe
+    speed: float = STAR_SPEED            # slower than neutral: calmer, mum-like
     voice_style: str = "warm-caring"     # speaking manner: warm-caring | confident-commanding | anime-bright
-    voice_id: str = ""                   # catalog id of the chosen voice (star/voice/voices.json); "" = custom `voice`
+    voice_id: str = STAR_VOICE_ID        # catalog id of the chosen voice (star/voice/voices.json); "" = custom `voice`
     tts_lang: str = "en-us"              # phonemiser language for the voice (en-gb for the British stock voices)
-    sentence_gap_ms: int = 0             # extra silence after each sentence (the commanding voices use 400 to 450)
-    pitch_semitones: float = 0.0         # whole-voice pitch change in semitones (anime voices up, commanding down)
+    sentence_gap_ms: int = STAR_GAP_MS   # extra silence after each sentence (the commanding voices use 400 to 450)
+    pitch_semitones: float = STAR_PITCH  # whole-voice pitch change in semitones (anime voices up, commanding down)
+    call_mode: str = "push-to-talk"      # push-to-talk (hold a key or button) | hands-free (voice activity)
+    read_aloud_auto: bool = False        # read each new chat reply aloud in Star's voice (opt-in)
     asr_engine: str = "faster-whisper"
     asr_model: str = "auto"              # auto = small.en on an NVIDIA GPU, base.en on the CPU
     asr_prompt: str = "Star, Roblox, Luau, RemoteEvent."     # spellings the transcript should prefer
@@ -68,6 +78,7 @@ class VoiceSettings:
                   (self.vad in VAD_ENGINES, "Unknown voice activity detector"),
                   (self.endpointer in ENDPOINTERS, "Unknown end-of-turn setting"),
                   (self.output in OUTPUT_MODES, "Output must be headphones or speakers"),
+                  (self.call_mode in CALL_MODES, "Call mode must be push-to-talk or hands-free"),
                   (300 <= int(self.end_silence_ms) <= 3000, "end_silence_ms must be 300-3000"),
                   (256 <= int(self.min_end_silence_ms) <= 2000, "min_end_silence_ms must be 256-2000"),
                   (int(self.end_silence_ms) <= int(self.max_silence_ms) <= 6000, "max_silence_ms must be up to 6000"),
@@ -109,4 +120,5 @@ class VoiceSettings:
                           min_end_silence_ms=min(int(self.min_end_silence_ms), int(self.max_silence_ms)),
                           barge_in_ms=int(self.barge_in_ms))
         return CallConfig(turn=turn, system_extra=self.system_extra, partial_transcripts=self.partial_transcripts,
-                          use_echo_gate=self.output == "speakers", style=self.voice_style)
+                          use_echo_gate=self.output == "speakers", style=self.voice_style,
+                          push_to_talk=self.call_mode == "push-to-talk")

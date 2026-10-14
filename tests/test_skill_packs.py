@@ -19,7 +19,9 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing"]
+         "roblox-tweenservice-easing",
+         "roblox-studio-mcp-workflow", "roblox-replication-hot-paths", "roblox-editable-memory-streaming",
+         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}
@@ -52,6 +54,11 @@ def test_implementation_packs_cite_official_documentation_and_list_the_api_names
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:
             assert sources.count("https://docs.godotengine.org/en/stable/") >= 5, pack.name
+        elif pack.name == "roblox-architecture-blender":
+            # Experimental pack is OFF until API lookup and independent evaluation.
+            assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
+            assert pack.name not in skill_packs.DEFAULT_ENABLED
+            assert "API names not yet verified by STAR Knowledge /api-lookup" in sources
         else:
             assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
             assert "verified with the knowledge service /api-lookup" in sources, pack.name
@@ -261,6 +268,33 @@ def test_run_task_delivers_service_pack_only_when_enabled(monkeypatch, tmp_path,
     assert skill_packs.BLOCK_HEADING not in off_text
     assert not any(e["event"] == "skill_packs" for e in off_events)
     assert messages[0] == off_messages[0]
+
+
+def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
+    prompt = "In my Roblox project design an architectural facade in Blender and import a glTF."
+    assert skill_packs.matching_names(prompt, enabled={"roblox-architecture-blender"}) == ["roblox-architecture-blender"]
+    assert "roblox-architecture-blender" not in skill_packs.matching_names(prompt)
+    assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
+    assert skill_packs.enabled_names({skill_packs.ENV_VAR: "roblox-architecture-blender"}) == {"roblox-architecture-blender"}
+
+
+def test_architecture_guidance_documents_opt_in_and_source_only():
+    # The skill is bundled for future opt-in, but it may not suggest the installed
+    # application can export Blender files or that native CI proves Studio import.
+    pack = next(pack for pack in skill_packs.available() if pack.name == "roblox-architecture-blender")
+    assert "STAR_ARCHITECTURE_TOOLS=1" in pack.body
+    assert "source checkout of STAR" in pack.body
+    assert "installed app does not include" in pack.body
+
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    guide = (root / "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md").read_text(encoding="utf-8")
+    # The v1.0 README lists it as one Opt-in row; the caveats live in the guide it links.
+    assert "Architecture planning prototype and Blender building kit (source checkout only" in readme
+    assert "STAR_ARCHITECTURE_TOOLS=1" in readme
+    assert "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md" in readme
+    assert "omits that protected workflow" in guide
+    assert "Roblox Studio never ran" in guide
 
 
 @pytest.mark.parametrize(("name", "prompt"), (

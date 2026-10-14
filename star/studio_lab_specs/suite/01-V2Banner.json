@@ -1,0 +1,151 @@
+{
+ "name": "V2Banner",
+ "kind": "map",
+ "description": "A decorative banner stands in the third gap; the dry run accepts it.",
+ "defect": "decor-in-gap",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2Banner",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    66.0,
+    40,
+    40.0
+   ],
+   "center": [
+    -19.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -27.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -17.0,
+     8.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "P3",
+    "position": [
+     -7.0,
+     8.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     4.0,
+     8.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   },
+   {
+    "name": "Banner",
+    "position": [
+     -12.0,
+     12,
+     150.0
+    ],
+    "size": [
+     0.4,
+     10,
+     8
+    ],
+    "material": "Fabric",
+    "color": "#C0392B",
+    "role": "decor"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "P3",
+    "Goal"
+   ]
+  }
+ }
+}

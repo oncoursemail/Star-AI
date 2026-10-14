@@ -128,3 +128,25 @@ in a quiet window and ~80 min of server CPU to embed 18,133 chunks (duty 0.5). B
 - 14:30Z QLoRA feasibility: Gemma 4 E2B (two failed attempts: LoRA hit vision-tower layers; fp32 upcast spilled,
   RAM floor stopped it; third: VRAM ok, host RAM floor stopped it at step 1). Qwen3.5-2B: 30 steps OK.
 - 14:45Z writing this doc; next: full pytest, star commit, push, draft PR to star/next, claim done, message.
+
+
+## Post-pilot pair integrity checks (future builds; not a reproduction of W10)
+
+New calls to `build_pairs.py` validate every indexed alias of a passage hash,
+rather than trusting one arbitrary `GROUP BY` row. In strict mode, an eval
+expected-answer page excludes the entire shared content hash, including aliases
+under non-evaluation paths. Query sampling with `--exclude-paths` also excludes
+every matching hash. A passage is rejected if any indexed source for its hash
+lacks a declared repository, commit or explicitly supported documentation
+licence (MIT or CC-BY-4.0). Synthetic and indexed questions require a declared
+local-model generator and an explicit false third-party-generation flag;
+contradictory declarations are dropped and counted in the generated manifest.
+These declarations are **not independent proof** of source identity, licences,
+model origin or rights. Unknown documents and models require review before
+expanding the allowlists.
+
+The previously committed W10 pair manifests, model runs, evaluation JSON and
+reported measurements remain unchanged. This regression fixture demonstrates
+forward fail-closed decisions on synthetic SQLite indexes; it does **not**
+recreate or authenticate the original GPU training, and the historical W10
+numbers have not been rerun under these stricter rules.

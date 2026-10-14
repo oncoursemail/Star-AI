@@ -1,0 +1,285 @@
+/* Resilience: worst-case data, narrow widths and the shared empty / loading / error states.
+ *
+ * Imported once from Desktop.tsx, after redesign.css, so these rules win without editing the
+ * shared stylesheets that other work is changing. Every rule here fixes something that broke with
+ * the `stress` preview fixture (`?preview=1&fixture=stress`) or failed the 32px touch-target check
+ * at 720 and 390 px. See docs/design and the PR for before/after screenshots.
+ */
+
+/* ---------- Right-to-left and mixed-direction text ----------
+ * User-generated text takes its direction from its own first strong character, per paragraph:
+ * Arabic and Hebrew lines start on the right, English lines on the left, in the same message.
+ * Titles and names carry dir="auto" in the markup; message text (rendered in components.tsx)
+ * gets the CSS equivalent, unicode-bidi: plaintext, which also works per paragraph inside one
+ * pre-wrapped bubble. */
+.shell .msg-bubble,
+.shell .msg-prose :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th),
+.shell .msg-note .note-main p,
+.shell .undo-toast strong {
+  unicode-bidi: plaintext;
+  text-align: start;
+}
+
+/* ---------- Long words, links, paths and names ----------
+ * Unbreakable strings (a 120-character URL, an email, "aaaa…") wrap inside their box instead of
+ * pushing it wider than the screen. */
+.shell .project-card {
+  min-width: 0;
+}
+.shell .project-card strong {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.shell .undo-toast > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.shell .toast > span,
+.shell .dock-banner > span,
+.shell .learn-title p,
+.shell .lesson,
+.shell .integrated-help,
+.shell .conn-facts dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Inline code inside an answer wraps; code blocks and tables keep their own horizontal scroll. */
+.shell .msg-prose :not(pre) > code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.shell .codeblock pre {
+  overflow-wrap: normal;
+  white-space: pre;
+}
+.shell .md-table td,
+.shell .md-table th {
+  min-width: 7ch;
+}
+
+/* ---------- Narrow widths ---------- */
+@media (max-width: 850px) {
+  /* The user's action row was pulled 8px past the column to line up optically; on a narrow
+   * column that 8px became a sideways scroll of the whole conversation. */
+  .shell .msg-user .msg-actions {
+    margin-right: 0;
+  }
+}
+@media (max-width: 600px) {
+  /* One column of grid tracks that can shrink below their content (1fr alone cannot). */
+  .shell .project-grid,
+  .shell .two-up {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* Four stat cards in two columns instead of four screens of zeros. */
+  .shell .dashboard .stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shell .dashboard .metric-card {
+    min-width: 0;
+    padding: var(--star-4);
+  }
+  /* The model name is hidden on phones; its separator dot was left behind ("● · Needs attention"). */
+  .shell .cmp-status-state::before {
+    content: none;
+  }
+}
+
+/* ---------- Touch targets: at least 32px where touch is likely ---------- */
+@media (max-width: 850px), (pointer: coarse) {
+  .shell .msg-actions,
+  .shell .msg-action {
+    height: 32px;
+  }
+  .shell .msg-action {
+    min-width: 32px;
+    justify-content: center;
+  }
+  .shell .rail-chat-more {
+    right: 0;
+    width: 32px;
+    height: 32px;
+  }
+  .shell .bar-back {
+    min-height: 32px;
+    margin-left: -6px;
+    padding: 0 6px;
+  }
+  .shell .learn-button {
+    height: 32px;
+  }
+  .shell .act-step-line {
+    min-height: 32px;
+    align-items: center;
+  }
+  .shell .integrated-switch {
+    min-height: 32px;
+    align-items: center;
+  }
+}
+.shell .integrated-switch input,
+.shell .setting-switch input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+}
+
+/* ---------- Sidebar: the 60-chat window says it is a window ---------- */
+.shell .rail-window-note {
+  margin: var(--star-2) 0 0;
+  padding: 0 var(--star-2);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.5;
+}
+
+/* ---------- Shared states (states.tsx) ---------- */
+.shell .state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--star-3);
+  padding: var(--star-8) var(--star-4);
+  color: var(--star-muted);
+  text-align: center;
+}
+.shell .state-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  color: var(--star-faint);
+}
+.shell .state-copy {
+  display: grid;
+  gap: var(--star-1);
+  max-width: 44ch;
+  min-width: 0;
+}
+.shell .state-title {
+  margin: 0;
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.shell .state-text {
+  margin: 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.shell .state-action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--star-2);
+}
+/* Compact: a quiet line inside a sidebar or a panel, aligned to the start like the text around it. */
+.shell .state.is-compact {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--star-2);
+  padding: var(--star-3) 0;
+  text-align: start;
+}
+.shell .state.is-compact .state-icon {
+  width: auto;
+  height: auto;
+  margin-top: 2px;
+  border: 0;
+  background: none;
+}
+.shell .state.is-compact .state-title {
+  color: var(--star-muted);
+  font-weight: 500;
+}
+.shell .state.is-compact .state-text {
+  color: var(--star-faint);
+}
+.shell .state.is-compact .state-action {
+  justify-content: flex-start;
+}
+.shell .rail .state.is-compact {
+  padding: var(--star-1) var(--star-2);
+}
+.shell .rail .state.is-compact .state-title {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  font-weight: 400;
+}
+.shell .thread-turns .state.is-compact {
+  justify-content: center;
+  padding: var(--star-10) 0;
+}
+/* Error: the same shape, one warm edge, never a red block. */
+.shell .state-error .state-icon {
+  border-color: color-mix(in srgb, var(--star-danger) 35%, transparent);
+  background: var(--star-danger-wash);
+  color: var(--star-danger);
+}
+.shell .state-error.is-compact .state-icon {
+  background: none;
+}
+/* Loading: a calm skeleton. The sheen moves slowly and stops under reduced motion. */
+.shell .state-loading {
+  align-items: stretch;
+}
+.shell .state-skeleton {
+  display: grid;
+  gap: var(--star-2);
+  width: 100%;
+  max-width: 44ch;
+}
+.shell .state-line {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(90deg, var(--star-surface-1) 0%, var(--star-surface-2) 50%, var(--star-surface-1) 100%);
+  background-size: 200% 100%;
+  animation: state-sheen 1.6s var(--star-ease-in-out) infinite;
+}
+.shell .state-line:nth-child(2) {
+  width: 82%;
+}
+.shell .state-line:nth-child(3n) {
+  width: 64%;
+}
+@keyframes state-sheen {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.shell[data-reduced-motion='true'] .state-line {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell .state-line {
+    animation: none;
+  }
+}
+
+/* Timeline rows on phones: a long step title keeps its words together and the role moves under it,
+ * instead of the title breaking into one word per line beside a clipped role. */
+@media (max-width: 600px) {
+  .shell .act-step-line {
+    flex-wrap: wrap;
+  }
+  .shell .act-step-title {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+}

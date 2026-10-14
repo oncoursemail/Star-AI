@@ -1,0 +1,86 @@
+{
+ "name": "V3UiBigDialog",
+ "kind": "ui",
+ "description": "A fixed 820x480 px dialog: larger than a phone screen.",
+ "defect": "off-screen",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "ui-off-screen"
+  ],
+  "fixes": [
+   "ui-fit-scale"
+  ]
+ },
+ "devices": [
+  "phone",
+  "tablet",
+  "desktop"
+ ],
+ "ui": {
+  "palette": {
+   "panel": "#1B1F2A",
+   "accent": "#F2B134",
+   "text": "#FFFFFF",
+   "muted": "#9AA4B2"
+  },
+  "mobile": {
+   "safeArea": true,
+   "scaleByViewport": false
+  },
+  "root": {
+   "type": "screen",
+   "id": "V3UiBigDialog",
+   "children": [
+    {
+     "type": "frame",
+     "id": "Dialog",
+     "background": "panel",
+     "corner": 12,
+     "padding": 12,
+     "anchor": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "scale": 0.5
+      }
+     },
+     "position": {
+      "x": {
+       "scale": 0.5
+      },
+      "y": {
+       "scale": 0.5
+      }
+     },
+     "size": {
+      "x": {
+       "offset": 820
+      },
+      "y": {
+       "offset": 480
+      }
+     },
+     "children": [
+      {
+       "type": "text",
+       "id": "DialogText",
+       "text": "Daily reward ready!",
+       "textColor": "text",
+       "textSize": 24,
+       "size": {
+        "x": {
+         "scale": 1
+        },
+        "y": {
+         "offset": 40
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

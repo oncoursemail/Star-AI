@@ -1,0 +1,1 @@
+In WGSL a vec3 is tightly packed, so color takes 12 bytes and intensity follows it. The error is just a browser quirk; reorder the fields so the array comes first and keep filling the 8 floats in the same order.

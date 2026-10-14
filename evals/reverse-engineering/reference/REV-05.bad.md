@@ -1,0 +1,1 @@
+Just guess. Open the file in Notepad, find something that looks like numbers, and assume each value is 4 bytes in a row. Write your parser based on that and if it mostly works in your tool, it's right. No need to test it against the game.

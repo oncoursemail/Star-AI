@@ -2,7 +2,8 @@ import {Area,AreaChart,CartesianGrid,ResponsiveContainer,Tooltip,XAxis,YAxis} fr
 import type {Analytics} from './types'
 import type {CSSProperties} from 'react'
 import {Activity,BookOpen,CheckCircle2,Clock3,MessageSquareText,ShieldCheck,Terminal,TriangleAlert} from 'lucide-react'
-import {Panel,EmptyState,Tag} from './components'
+import {Panel,Tag} from './components'
+import {EmptyState} from './states'
 import {useStarReducedMotion} from './MotionPolicy'
 
 const formatter=(value:number|null)=>value===null?'—':value<1000?`${value} ms`:`${(value/1000).toFixed(1)} s`
@@ -26,12 +27,12 @@ export function AnalyticsView({data}:{data:Analytics}) {
         ].map(item=><Panel key={item.label} className="metric-card"><div className="metric-top"><span>{item.label}</span>{item.icon}</div><strong>{item.value}</strong><small>{item.meta}</small></Panel>)}
       </div>
       <Panel className="chart-panel"><div className="section-heading"><div><span className="eyebrow">WORKSPACE ACTIVITY</span><h2>Execution trend</h2></div><Tag>Last 14 days</Tag></div>
-        {total===0?<EmptyState icon={<Activity size={24}/>} heading="Your first run starts the story" description="Activity will appear after STAR starts completing real tasks in this workspace."/>:
+        {total===0?<EmptyState icon={<Activity size={18}/>} title="No runs yet" description="Runs appear here after STAR finishes its first task in this project."/>:
         <div className="chart-area" role="img" aria-label="Runs per day over the last 14 days"><ResponsiveContainer width="100%" height="100%"><AreaChart data={points} margin={{top:10,right:5,left:-24,bottom:0}}><defs><linearGradient id="runFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#e9b954" stopOpacity={.25}/><stop offset="98%" stopColor="#e9b954" stopOpacity={0}/></linearGradient></defs><CartesianGrid vertical={false} stroke="#252827" strokeDasharray="3 5"/><XAxis axisLine={false} tickLine={false} dataKey="date" tickFormatter={v=>v.slice(5)} tick={{fill:'#8c9297',fontSize:11}}/><YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{fill:'#8c9297',fontSize:11}}/><Tooltip contentStyle={{background:'#17191b',border:'1px solid #353638',borderRadius:11,color:'#e9edef'}} itemStyle={{color:'#edc36b'}}/><Area type="monotone" dataKey="runs" stroke="#e9b954" strokeWidth={2.4} fill="url(#runFill)" dot={false} activeDot={{r:5}} isAnimationActive={reducedMotion?false:'auto'}/></AreaChart></ResponsiveContainer></div>}
       </Panel>
       <div className="two-up">
         <Panel className="detail-panel"><div className="section-heading"><div><span className="eyebrow">RELIABILITY</span><h2>Task outcomes</h2></div><ShieldCheck size={18}/></div><div className="outcome-chart"><div className="outcome-ring" style={{'--success':`${share}%`} as CSSProperties}><span>{totalOutcomes?`${share}%`:'—'}</span><small>success</small></div><div className="outcome-legend"><p><i className="green-bullet"/>Succeeded <strong>{data.succeeded}</strong></p><p><i className="red-bullet"/>Failed <strong>{data.failed}</strong></p><p><i className="yellow-bullet"/>Tool calls <strong>{data.tools}</strong></p></div></div></Panel>
-        <Panel className="detail-panel"><div className="section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Recent activity</h2></div><Terminal size={18}/></div>{data.recent.length? <div className="event-list">{data.recent.slice(0,5).map((e,i)=><div key={`${e.at}-${i}`} className="event-row"><span className={e.type==='run_failed'?'event-mark failure':'event-mark'}>{e.type==='run_failed'?<TriangleAlert size={14}/>:<CheckCircle2 size={14}/>}</span><div><strong>{e.type.replaceAll('_',' ')}</strong><small>{new Date(e.at).toLocaleString()}</small></div></div>)}</div>:<EmptyState icon={<Terminal size={22}/>} heading="Nothing recorded yet" description="New runs will appear as they happen."/>}</Panel>
+        <Panel className="detail-panel"><div className="section-heading"><div><span className="eyebrow">EVENT LOG</span><h2>Recent activity</h2></div><Terminal size={18}/></div>{data.recent.length? <div className="event-list">{data.recent.slice(0,5).map((e,i)=><div key={`${e.at}-${i}`} className="event-row"><span className={e.type==='run_failed'?'event-mark failure':'event-mark'}>{e.type==='run_failed'?<TriangleAlert size={14}/>:<CheckCircle2 size={14}/>}</span><div><strong>{e.type.replaceAll('_',' ')}</strong><small>{new Date(e.at).toLocaleString()}</small></div></div>)}</div>:<EmptyState icon={<Terminal size={18}/>} title="Nothing recorded yet" description="Finished and failed runs are listed here as they happen."/>}</Panel>
       </div>
       <Panel className="detail-panel learn-stats"><div className="section-heading"><div><span className="eyebrow">LEARNING</span><h2>What STAR kept from your work</h2></div><BookOpen size={18}/></div>
         <p className="learn-stats-note">Lessons are local notes for this project, not model training. Counted on this PC.</p>

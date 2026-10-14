@@ -16,6 +16,11 @@ OLD = ("golden-tasks-creation-v1.json", "golden-tasks-v1.json",
 GOOD_FIXES = json.loads(r'''{"DBG-01":"local rooms = workspace:WaitForChild(\"VaultRooms\")\nlocal door = rooms:WaitForChild(\"VaultDoor\")\ndoor.CanCollide = false","DBG-02":"local gui = script.Parent\ngui.ResetOnSpawn = false\ngui.Enabled = true","DBG-03":"local cooldown = {}\nscript.Parent.Touched:Connect(function(hit)\n local humanoid = hit.Parent:FindFirstChildOfClass(\"Humanoid\")\n if not humanoid or cooldown[humanoid] then return end\n cooldown[humanoid] = true\n humanoid.Health -= 10\n task.delay(1, function() cooldown[humanoid] = nil end)\nend)","DBG-04":"local label = script.Parent.Label\nwhile true do\n label.Text = \"Loading\"\n task.wait(0.5)\nend","DBG-05":"local signal = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"LampToggle\")\nscript.Parent.Activated:Connect(function() signal:FireServer() end)\n-- In the server Script:\nlocal remote = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"LampToggle\")\nremote.OnServerEvent:Connect(function(player)\n local lamp = workspace:FindFirstChild(\"LobbyLamp\")\n if lamp then lamp.Color = Color3.fromRGB(0, 255, 0) end\nend)","DBG-06":"local ts = game:GetService(\"TweenService\")\nlocal tween = ts:Create(script.Parent, TweenInfo.new(1), {Transparency = 1})\ntween:Play()","DBG-07":"local spark = workspace:FindFirstChild(\"Firework\")\ntask.wait(3)\nif spark and spark.Parent then spark.Transparency = 1 end","DBG-08":"local button = script.Parent.Craft\nlocal connection\nlocal function openMenu()\n if connection then connection:Disconnect() end\n connection = button.Activated:Connect(function() print(\"craft\") end)\nend\nlocal function closeMenu()\n if connection then connection:Disconnect(); connection = nil end\nend\nopenMenu()\ncloseMenu()","DBG-09":"local remote = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"TipRemote\")\nremote.OnServerEvent:Connect(function(player, amount)\n if typeof(amount) ~= \"number\" then return end\n print(player.UserId, amount)\nend)","DBG-10":"local prompt = script.Parent:WaitForChild(\"ProximityPrompt\")\nprompt.Triggered:Connect(function(player)\n    local coins = player:WaitForChild(\"leaderstats\"):WaitForChild(\"Coins\")\n    coins.Value += 5\nend)","DBG-11":"local players = game:GetService(\"Players\")\nplayers.PlayerAdded:Connect(function(player) print(player.Name) end)","DBG-12":"local p = game:GetService(\"Players\").LocalPlayer\nlocal function bind(character)\n local hum = character:WaitForChild(\"Humanoid\")\n hum.Running:Connect(function(speed) print(speed) end)\nend\np.CharacterAdded:Connect(bind)\nif p.Character then bind(p.Character) end","DBG-13":"local remote = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"RoundSignal\")\nremote.OnClientEvent:Connect(function(text) print(text) end)","DBG-14":"local button = Instance.new(\"TextButton\")\nbutton.Parent = script.Parent\nbutton.Activated:Connect(function() print(\"Play\") end)","DBG-15":"local store = game:GetService(\"DataStoreService\"):GetDataStore(\"QuestSave\")\ngame:GetService(\"Players\").PlayerRemoving:Connect(function(player)\n local ok, err = pcall(function() store:SetAsync(tostring(player.UserId), 4) end)\n if not ok then warn(err) end\nend)","DBG-16":"local prompt = script.Parent\nprompt.Triggered:Connect(function(player)\n print(player.UserId)\nend)","DBG-17":"local ding = workspace:WaitForChild(\"LevelJingle\")\nding:Play()","DBG-18":"local pad = script.Parent\npad.Color = Color3.fromRGB(255, 128, 0)","DBG-19":"local ts = game:GetService(\"TweenService\")\nlocal tween = ts:Create(script.Parent, TweenInfo.new(2), {Transparency = 1})\ntween:Play()","DBG-20":"local tool = script.Parent\ntool.RequiresHandle = false\ntool.Activated:Connect(function() print(\"Cast\") end)","DBG-21":"local sparks = script.Parent\nsparks.Rate = 0\nsparks.Enabled = false\nsparks:Emit(20)","DBG-22":"local tool = script.Parent\nlocal oldSpeed, activeHumanoid\ntool.Equipped:Connect(function()\n activeHumanoid = tool.Parent:FindFirstChildOfClass(\"Humanoid\")\n if activeHumanoid then oldSpeed = activeHumanoid.WalkSpeed; activeHumanoid.WalkSpeed = 28 end\nend)\ntool.Unequipped:Connect(function()\n if activeHumanoid and activeHumanoid.Parent and oldSpeed then activeHumanoid.WalkSpeed = oldSpeed end\n activeHumanoid = nil\nend)","DBG-23":"local run = game:GetService(\"RunService\")\nrun.Heartbeat:Connect(function(dt)\n workspace.Sign.Orientation += Vector3.new(0, dt * 30, 0)\nend)","DBG-24":"local gui = game:GetService(\"Players\").LocalPlayer.PlayerGui:WaitForChild(\"PauseGui\")\nlocal function close() gui.Enabled = false end\nlocal function open() gui.Enabled = true end\nclose()\nopen()","DBG-25":"local query = game:GetService(\"ReplicatedStorage\"):WaitForChild(\"GetWave\")\nlocal ok, wave = pcall(function() return query:InvokeServer() end)\nif ok then print(wave) end"}''')
 
 
+# Strict-mode NPC witnesses supplement, rather than change, the original 25.
+NPC_WITNESSES = json.loads((ROOT / "tests" / "fixtures" / "npc_debugging_witnesses.json").read_text(encoding="utf-8"))
+GOOD_FIXES.update({key: pair["fixed"] for key, pair in NPC_WITNESSES.items()})
+
+
 def words(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9_]{3,}", text.lower()))
 
@@ -26,14 +31,14 @@ def normalized(text: str) -> str:
 
 def test_loads_all_debugging_tasks_with_the_existing_loader():
     suite = load_suite(PATH)
-    assert len(suite.tasks) == len(suite.runnable()) == 25
-    assert [t["id"] for t in suite.tasks] == [f"DBG-{n:02d}" for n in range(1, 26)]
+    assert len(suite.tasks) == len(suite.runnable()) == 37
+    assert [t["id"] for t in suite.tasks] == [f"DBG-{n:02d}" for n in range(1, 38)]
 
 
 def test_each_task_has_one_distinct_bug_source_lesson_and_code_checks():
     tasks = load_suite(PATH).tasks
-    assert len({t["category"] for t in tasks}) == 25
-    assert len({normalized(t["goal"]) for t in tasks}) == 25
+    assert len({t["category"] for t in tasks}) == 37
+    assert len({normalized(t["goal"]) for t in tasks}) == 37
     assert set(GOOD_FIXES) == {t["id"] for t in tasks}
     for task in tasks:
         assert task["run_mode"] == "automated" and task["split"] == "development"
@@ -81,3 +86,32 @@ def test_no_copy_or_near_copy_of_any_golden_or_holdout_suite():
             a, b = words(task["prompt"]), words(other["prompt"])
             ratio = len(a & b) / max(1, len(a | b))
             assert ratio < 0.5, (task["id"], other["id"], round(ratio, 3))
+
+
+def test_twelve_npc_witness_pairs_with_production_static_checker():
+    new = load_suite(PATH).tasks[25:]
+    assert len(new) == len(NPC_WITNESSES) == 12
+    for task in new:
+        pair = NPC_WITNESSES[task["id"]]
+        assert [code.rstrip() for code in eval_checks.extract_luau_blocks(task["prompt"])] == [pair["broken"].rstrip()]
+        assert pair["broken"].startswith("--!strict") and pair["fixed"].startswith("--!strict")
+        good = eval_checks.pattern_checks(task["auto"], [pair["fixed"]], "")
+        bad = eval_checks.pattern_checks(task["auto"], [pair["broken"]], "")
+        assert all(result.ok for result in good), task["id"]
+        assert any(not result.ok for result in bad), task["id"]
+        assert task["split"] == "development" and task["auto"]["strict"]
+        assert not task["auto"].get("unit_test")
+
+
+def test_duplicate_npc_ids_rejected_by_real_catalog(tmp_path):
+    from star.evals import load_catalog
+
+    one = load_suite(PATH).tasks[25]
+    duplicate = tmp_path / "duplicate.json"
+    duplicate.write_text(json.dumps([one, one]), encoding="utf-8")
+    try:
+        load_catalog(duplicate)
+    except ValueError as exc:
+        assert "unique ID" in str(exc)
+    else:
+        raise AssertionError("production loader accepted duplicate NPC task IDs")

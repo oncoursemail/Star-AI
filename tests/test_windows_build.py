@@ -256,6 +256,8 @@ def test_successful_offline_command_flow_checks_packaged_artifacts_and_profiles(
     assert [item["stage"] for item in record["events"]] == STAGES
     package = next(item for item in record["events"] if item["stage"] == "PyInstaller")
     assert "star/build-info.json;star" in package["arguments"]
+    # This is the real local builder invoked through the inert PowerShell harness.
+    assert "star/data;star/data" in package["arguments"]
     position = package["arguments"].index("keyring")
     assert package["arguments"][position - 1] == "--collect-submodules"
     stamp = next(item for item in record["events"] if item["stage"] == "Build provenance stamping")
