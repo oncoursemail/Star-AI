@@ -1,6 +1,6 @@
 # Wall-clock and scheduler-sensitive offline tests
 
-Audited **2026-10-13** from the named test modules and shared helpers.
+Audited **2026-10-13** from the named test modules, shared helpers, and targeted follow-up of asynchronous team and benchmark tests.
 Risk H = tight elapsed-time bound/false red on loaded CI; M = bounded
 process/thread scheduling; L = existing fake clock or very generous bound.
 The margin below is the assertion threshold versus its sleep/timeout; n/a
@@ -41,24 +41,35 @@ deadline tests belong to their own PR and are not modified here.
 | test_warmup.py::test_warm_up_stops_when_a_real_request_starts | Cancel Timer(300ms), completion <3s | Timer callback may be delayed | M | Leave: real running request cancellation needs a handshake refactor |
 | test_warmup.py::test_warmer_runs_off_the_calling_thread_and_one_at_a_time | Event.wait(5s) | Slow thread scheduling | M | Leave: event synchronization already present |
 | test_redact.py::test_long_input_is_handled_in_linear_time | 2s perf_counter cap on hostile text | CPU contention can cause false red | H | Leave: a fake clock would invalidate the actual regex worst-case time guard |
+| test_specialist_deadlines.py::test_delegated_team_retains_partial_and_blocks_dependent_stage | 30s stream sleep vs 7.2s deadline | Event-loop scheduling affects expiration | M | Leave: genuine timer expiry must block dependent work |
+| test_team_cancellation.py::test_cancel_team_cleans_up_all_inflight_tasks | 150ms polling window; 1.5s cancel timeout | Slow task startup causes false red | H | FIX asyncio.Event startup barrier; keep 1.5s cancellation and child cleanup |
+| test_server_first_flow.py::test_teams_run_on_the_server_with_its_address_key_and_slots | Fake completion slept 20ms; assert peak 2 | Timing-dependent overlap of mock calls | M | FIX cooperative event-loop yield; still asserts concurrency 2 and 1-slot cap |
+| test_server_first_flow.py::test_parallel_benchmark_can_measure_the_server | Fake completion slept 20ms; assert peak 2 | Slow scheduling could serialize fake calls | M | FIX cooperative event-loop yield; still asserts four successes and peak 2 |
 | test_single_instance.py::test_unreachable_owner_fails_closed | time.sleep monkeypatched to no-op | None: already mocked | L | Leave: existing deterministic test |
 
-**Inventory:** 31 entries, **9 high / 16 medium / 6 low**. The
+**Inventory:** 35 entries, **10 high / 19 medium / 6 low**. The
 tests/voice_fakes.py delay, Event.wait, fake playback and polling mechanisms
 are shared helpers, not standalone cases. tests/conftest.py contributes no
-real-time pass/fail assertion. This lists the timing cases found in the
-specified files and their direct helpers, not all tests in the repository.
+real-time pass/fail assertion. This includes the requested files, their direct helpers, and additional
+asynchronous cancellation, specialist, and server benchmark paths found in
+targeted follow-up; it is not an exhaustive inventory of every test module.
 
 ## Changed-test guarantees and CI measurement
 
-Only three high-risk tests are changed; each uses a fake clock or explicit
-threading event, without introducing a new dependency, deleting/skipping tests,
-or changing production behavior. The real VirtualSpeaker accepts a clock
+Six tests are changed: four high-risk and two medium-risk. They use a fake
+clock, explicit event synchronization, or a zero-duration event-loop yield,
+without introducing a dependency, deleting/skipping tests, or changing
+production behavior. The real VirtualSpeaker accepts a clock
 argument: exact 250ms and 500ms advances still prove recording truncation and
 silence. The real ScriptedBrain stream must still unblock on close from a
 different thread, with bounded Event.wait solely to detect a deadlock.
 The knowledge-client mocked trickle still must fail within a **single 300ms
 total deadline**, despite each byte advancing the virtual clock only 50ms.
+The team cancellation test now awaits a real async startup event instead of
+polling for 150ms, while still requiring cancellation and child cleanup within
+1.5s. Mock server completions now yield one event-loop turn instead of waiting
+20ms; the two real-path tests still require parallelism, slot caps and successful
+responses.
 
 Measure the full Linux pytest suite duration from GitHub before and after
 this PR; the variation includes runner load and is not a controlled speed
