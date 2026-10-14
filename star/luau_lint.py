@@ -79,8 +79,10 @@ def _tokens(code: str) -> list[_Token]:
 
 
 def lint(code: str, *, external: bool | None = None, safety_checks: bool = False,
-         script_class: str | None = None, server_security: bool = False) -> list[Finding]:
-    """Return sorted static findings; the CLI second opinion, lifetime and server-trust checks are OFF by default."""
+         script_class: str | None = None, server_security: bool = False,
+         roblox_rules: bool = False) -> list[Finding]:
+    """Return sorted static findings; the CLI second opinion, lifetime, server-trust and Roblox API
+    rules (star.luau_roblox_rules) are OFF by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -244,6 +246,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
         # Opt in explicitly; default lint behavior remains unchanged.
         from star.luau_server_security import lint_server_trust
         findings.extend(lint_server_trust(code))
+    if roblox_rules:
+        # Opt in explicitly; deprecated engine APIs and client/server mistakes.
+        from .luau_roblox_rules import lint_roblox_rules
+        findings.extend(lint_roblox_rules(code, script_class=script_class))
     if external is None:
         from .luau_analyze import enabled
         external = enabled()
