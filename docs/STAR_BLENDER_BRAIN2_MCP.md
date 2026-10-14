@@ -35,8 +35,7 @@ different rig sizes and multi-frame visual acceptance remain mandatory.
 The R6 preflight explicitly says that R6 rigid Motor6D rigs need their
 own importer and remapping pipeline.
 
-See [STAR Blender Roblox Motion / Causal Motion Twin research]
-(STAR_BLENDER_ROBLOX_MOTION_CAUSAL_TWIN_20261013.md) for the official
+See [STAR Blender Roblox Motion / Causal Motion Twin research](STAR_BLENDER_ROBLOX_MOTION_CAUSAL_TWIN_20261013.md) for the official
 Blender FBX rig/export settings, real animation QA and detailed future
 creative-system experimental plan.
 
