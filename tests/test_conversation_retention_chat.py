@@ -13,6 +13,7 @@ from star import conversation_memory as cm
 from star import desktop_core as core
 from star import agent
 from star.warmup import prefix_request
+from star.context_layout import owner_words
 
 
 class Models:
@@ -305,9 +306,9 @@ def test_real_desktop_request_omits_stopped_and_failed_image_rows(desk):
     messages = desk.models.requests[-1]['messages']
     assert [item['role'] for item in messages] == [
         'system', 'user', 'assistant', 'user']
-    assert messages[1:3] == [
-        {'role': 'user', 'content': 'Good earlier question'},
-        {'role': 'assistant', 'content': 'Good earlier answer'}]
+    # Replayed turns are the owner's words plus the time they were sent (star.clock.sent_line).
+    assert [(m['role'], owner_words(m['content'])) for m in messages[1:3]] == [
+        ('user', 'Good earlier question'), ('assistant', 'Good earlier answer')]
     assert messages[-1]['content'][0]['text'].startswith('what is 2+2?')
     assert 'stop this request' not in json.dumps(messages)
     assert 'generate an image' not in json.dumps(messages)
@@ -323,6 +324,6 @@ def test_real_desktop_request_keeps_a_retried_turn_that_has_a_failure_record(des
     assert turn(desk, 'what did I just ask?') == 'Fixture answer.'
     messages = desk.models.requests[-1]['messages']
     assert [item['role'] for item in messages] == ['system', 'user', 'assistant', 'user']
-    assert messages[1:3] == [{'role': 'user', 'content': 'Retry this question'},
-                             {'role': 'assistant', 'content': 'Answer after retry.'}]
+    assert [(m['role'], owner_words(m['content'])) for m in messages[1:3]] == [
+        ('user', 'Retry this question'), ('assistant', 'Answer after retry.')]
     assert 'Cannot reach STAR Brain' not in json.dumps(messages)

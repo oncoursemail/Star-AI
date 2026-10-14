@@ -13,7 +13,10 @@ from typing import Any
 
 IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 TYPES = {"number", "string", "boolean"}
-RESERVED = {"end", "local", "function", "repeat", "until", "if", "then", "else", "true", "false", "nil"}
+# Every reserved word of Luau: a field name becomes `valid.<name>` and `<name> = {...}` in the
+# generated code, so any of these would make the module fail to compile.
+RESERVED = frozenset({"and", "break", "do", "else", "elseif", "end", "false", "for", "function", "if", "in",
+                      "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"})
 
 
 def _identifier(value: Any) -> bool:

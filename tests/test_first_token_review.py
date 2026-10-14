@@ -6,7 +6,7 @@ turns instead of replaying them with a synthetic assistant response.
 """
 import json
 
-from star.context_layout import NO_REPLY, conversation_window, exchanges
+from star.context_layout import NO_REPLY, conversation_window, exchanges, owner_words
 
 from test_first_token import desk, rendered, text_of   # noqa: F401  (pytest fixture and helpers)
 
@@ -26,7 +26,7 @@ def test_a_stopped_turn_is_excluded_without_changing_the_completed_prefix(desk):
     originals = desk.chats.raw_history_records("STAR", desk.chat)
     messages = desk.turn("make it shorter please", "A short one.")["messages"]
     assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
-    assert [text_of(m) for m in messages[1:]] == ["first", "one", "make it shorter please"]
+    assert [owner_words(text_of(m)) for m in messages[1:]] == ["first", "one", "make it shorter please"]
     for excluded in ("Write a long sword combat script", NO_REPLY, "SECRET-FAILURE-TEXT"):
         assert excluded not in json.dumps(messages)
     cached = rendered(first) + "<|im_start|>assistant\none<|im_end|>\n"
@@ -34,7 +34,7 @@ def test_a_stopped_turn_is_excluded_without_changing_the_completed_prefix(desk):
     # It is ordinary append-only history from then on: the next request starts with the same bytes.
     later = desk.turn("thanks", "You are welcome.")["messages"]
     assert later[:3] == messages[:3]
-    assert [text_of(m) for m in later[3:]] == ["make it shorter please", "A short one.", "thanks"]
+    assert [owner_words(text_of(m)) for m in later[3:]] == ["make it shorter please", "A short one.", "thanks"]
     assert rendered(later).startswith(rendered(messages) + "<|im_start|>assistant\nA short one.<|im_end|>\n")
     assert [m["role"] for m in later] == ["system", "user", "assistant", "user", "assistant", "user"]
     assert desk.chats.raw_history_records("STAR", desk.chat)[:len(originals)] == originals

@@ -15,6 +15,7 @@ from .core import (AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, RateLimi
 from .digest_task import DigestConfig
 from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
 from .service import DiscordService
+from .streaming import LiveReply
 
 _LOG = logging.getLogger(__name__)
 _GOLD = 0xE4B95B
@@ -23,6 +24,7 @@ DM_HELP = (
     "- Type a question: STAR answers (it remembers the last few turns for an hour).\n"
     "- Attach one screenshot (PNG/JPG/WebP) with a question: STAR looks at it (if images are on).\n"
     "- `remember: ...` proposes a lesson you approve later in STAR Desktop (if switched on).\n"
+    "- `wrong: ...` right after an answer saves a correction; approved in STAR Desktop, it becomes a regression test.\n"
     "- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, `/star reset`.\n"
     "STAR cannot touch your files, Roblox Studio, GitHub or a shell from Discord."
 )
@@ -137,8 +139,29 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             _LOG.exception("STAR Discord operation failed")
             await problem(interaction, "STAR could not complete this request. Check the local bot logs and model/voice setup.")
 
+    def slash_live(interaction, title: str = "✦ STAR · Answer") -> LiveReply:
+        """The deferred 'thinking' message becomes the answer and grows as the model writes it."""
+        async def show(text):
+            await interaction.edit_original_response(embed=embed(title, text),
+                                                     allowed_mentions=discord.AllowedMentions.none())
+            return True
+        async def edit(_handle, text):
+            await show(text)
+        return LiveReply(show, edit, interval=1.5, limit=MAX_EMBED_DESCRIPTION)
+
     async def publish_answer(interaction, answer: str, *, ephemeral: bool, key: tuple,
-                             sources: tuple[dict, ...] = ()):
+                             sources: tuple[dict, ...] = (), live: LiveReply | None = None):
+        async def first_message(**options):
+            # A streamed answer already occupies the original response: finish it in place.
+            if live is not None and live.live:
+                try:
+                    await interaction.edit_original_response(**options, allowed_mentions=discord.AllowedMentions.none())
+                    return
+                except Exception as exc:
+                    _LOG.info("Final answer edit failed (%s); sending it as a new message", type(exc).__name__)
+            await interaction.followup.send(**options, ephemeral=ephemeral,
+                                            allowed_mentions=discord.AllowedMentions.none())
+
         chunks = embed_parts(answer)
         # Up to three more embeds continue a long answer in order; beyond that the
         # full reply is delivered as a real file, never silently truncated.
@@ -161,14 +184,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                                    value=" · ".join(links)[:1024], inline=False)
         # discord.py treats file=None as a file and fails, so the file is passed only when there is one.
         if not more:
-            await interaction.followup.send(
-                embed=response,
-                view=AnswerActions(key, answer, allow_public_voice=not ephemeral), ephemeral=ephemeral,
-                allowed_mentions=discord.AllowedMentions.none(),
-            )
+            await first_message(embed=response, view=AnswerActions(key, answer, allow_public_voice=not ephemeral))
             return
-        await interaction.followup.send(embed=response, ephemeral=ephemeral,
-                                        allowed_mentions=discord.AllowedMentions.none())
+        await first_message(embed=response)
         for index, part in enumerate(more):
             last = index == len(more) - 1
             extra = {"file": attach} if (last and attach is not None) else {}
@@ -225,8 +243,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         await interaction.response.defer(thinking=True, ephemeral=private)
         try:
-            answer = await service.ask(key, prompt)
-            await publish_answer(interaction, answer, ephemeral=private, key=key)
+            live = slash_live(interaction)
+            answer = await service.ask(key, prompt, on_delta=live.update, on_status=live.status)
+            await publish_answer(interaction, answer, ephemeral=private, key=key, live=live)
         except Exception as exc:
             await handle_failure(interaction, exc)
 
@@ -476,8 +495,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         await interaction.response.defer(thinking=True, ephemeral=private)
         try:
-            answer = await service.ask(key, prompt)
-            await publish_answer(interaction, answer, ephemeral=private, key=key)
+            live = slash_live(interaction)
+            answer = await service.ask(key, prompt, on_delta=live.update, on_status=live.status)
+            await publish_answer(interaction, answer, ephemeral=private, key=key, live=live)
         except Exception as exc:
             await handle_failure(interaction, exc)
 
@@ -658,10 +678,16 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         if action.kind == "ignored":
             return
+        async def post(text):
+            return await message.channel.send(content=text, allowed_mentions=discord.AllowedMentions.none())
+        async def edit(sent, text):
+            await sent.edit(content=text, allowed_mentions=discord.AllowedMentions.none())
+        live = LiveReply(post, edit)
         try:
             async with message.channel.typing():
                 if action.kind == "text":
-                    reply_text = await service.ask(key, action.prompt)
+                    # The answer appears as soon as the first words arrive and grows in place.
+                    reply_text = await service.ask(key, action.prompt, on_delta=live.update, on_status=live.status)
                 elif action.kind == "image":
                     attachment = message.attachments[0]
                     if attachment.size > MAX_IMAGE_BYTES:
@@ -687,6 +713,14 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                             "STAR did not save this statement as a lesson. "
                             "Check for sensitive data or a permission request."
                         )
+                elif action.kind == "correct":
+                    item, _lesson = await service.propose_dm_correction(
+                        key, message_id=message.id, text=action.prompt, project=config.dm.project)
+                    reply_text = (
+                        f"Correction #{item['id']} saved for the STAR desktop review panel, with your last "
+                        "question and STAR's answer. If you approve it there, it becomes a regression test in "
+                        "STAR's corrections suite (never the blind exam). Nothing changes until then."
+                    )
                 else:
                     return
         except (ValueError, PermissionError) as exc:
@@ -698,7 +732,11 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         # Long answers arrive as several normal messages (code blocks kept intact);
         # anything beyond six messages is attached as a text file instead of truncated.
         parts, overflow = split_message(reply_text)
+        # A live (streamed) message becomes the first part; overflow (>6 parts) is never on part one.
+        start = 1 if parts and live.live and await live.finish(parts[0]) else 0
         for index, part in enumerate(parts):
+            if index < start:
+                continue
             options = {"allowed_mentions": discord.AllowedMentions.none()}
             if overflow and index == len(parts) - 1:
                 options["file"] = discord.File(
