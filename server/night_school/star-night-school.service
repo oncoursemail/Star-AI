@@ -8,6 +8,7 @@ After=network-online.target star-brain.service star-knowledge.service
 # Pause without stopping:  touch /opt/star/learning/data/HOLD      Resume:  rm /opt/star/learning/data/HOLD
 # Log:  journalctl -u star-night-school -n 50      Stop:  systemctl stop star-night-school
 # Optional settings (STAR_NS_...; see nightschool/config.py) go into /opt/star/learning/env, not into this file.
+# STAR_NS_DIAG_MODEL=star-quick (nightschool/real.py) lets the quick model write diagnoses and lesson drafts.
 [Service]
 Type=simple
 User=star

@@ -25,6 +25,10 @@ from .fake import DIAGNOSE_MARK
 from .idle import read_key
 
 PROJECT = "night-school"
+# Role split (docs/research/multi-model-20261014.md, idea 3): the diagnosis and lesson draft may go to another model,
+# e.g. star-quick (2.4x faster); graded answers stay on STAR_NS_MODEL. Unset = STAR_NS_MODEL. A drafted lesson is only
+# a candidate: the engine's own fix check and paired gate decide, unchanged.
+DIAG_MODEL_ENV = "STAR_NS_DIAG_MODEL"
 DIAGNOSE_SYSTEM = (
     "This is a " + DIAGNOSE_MARK + ". You are given a Roblox Luau task, an answer that failed automatic checks, and "
     "the failed checks. Reply with JSON only, no other text: {\"cause\": \"one sentence: why the answer failed\", "
@@ -278,9 +282,22 @@ class RealModel:
         return Result(score.passed, [scrub(r) for r in score.reasons], [c.record() for c in score.checks],
                       answer, seconds, recalled)
 
+    def diagnosis_model(self) -> str:
+        """STAR_NS_DIAG_MODEL when set and it has a slot night school may use, else the answer model."""
+        wanted = os.environ.get(DIAG_MODEL_ENV, "").strip()[:80]
+        if not wanted or wanted == self.settings.model:
+            return self.settings.model
+        try:
+            self.slot_of(wanted)
+        except SlotRefused:
+            self._refusal = ""          # not a refusal of the next answer: the answer model diagnoses instead
+            return self.settings.model
+        return wanted
+
     def diagnose(self, task: dict, result: Result) -> dict:
         from star import providers
         self._ready()
+        model = self.diagnosis_model()
         messages = [
             {"role": "system", "content": DIAGNOSE_SYSTEM},
             {"role": "user", "content": "TASK:\n" + task["prompt"][:1500] + "\n\nFAILED CHECKS:\n"
@@ -289,7 +306,7 @@ class RealModel:
         async def ask(cancel):
             async with providers.open_client(self.app_settings) as client:
                 job = asyncio.ensure_future(client.chat.completions.create(
-                    model=self.settings.model, messages=messages, max_tokens=260, temperature=0.2,
+                    model=model, messages=messages, max_tokens=260, temperature=0.2,
                     extra_body={"cache_prompt": False, "chat_template_kwargs": {"enable_thinking": False}}))
                 while not job.done():
                     if cancel.is_set():
