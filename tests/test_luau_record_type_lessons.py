@@ -106,8 +106,7 @@ def test_quality_smoke_refuses_silent_analyzer_and_bad_repairs(monkeypatch):
         smoke.verify_pure_record_candidates()
 
 def test_loader_accepts_windows_crlf_document(tmp_path: Path):
-    content = lessons.LESSONS_FILE.read_bytes()
-    assert b"\r\n" not in content
+    content = lessons.LESSONS_FILE.read_bytes().replace(b"\r\n", b"\n")
     target = tmp_path / "windows-record-types.md"
     target.write_bytes(content.replace(b"\n", b"\r\n"))
     assert [case.id for case in lessons.load_cases(target)] == [
