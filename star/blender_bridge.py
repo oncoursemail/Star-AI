@@ -336,6 +336,8 @@ def main(argv: list[str] | None = None) -> int:
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--probe", action="store_true")
     actions.add_argument("--scene", type=Path, help="Owner-reviewed JSON scene recipe")
+    actions.add_argument("--preflight-animation", type=Path, help="Read-only R15 or R6 animation check")
+    actions.add_argument("--animation", type=Path, help="Experimental approved R15 FBX draft export")
     actions.add_argument("--inspect", type=str, help="Previous STAR Blender job ID")
     arguments = parser.parse_args(argv)
     if not arguments.settings.is_file():
@@ -352,6 +354,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Choose a regular small local JSON scene file")
             spec = validate_scene(json.loads(file.read_text(encoding="utf-8")))
             report = asyncio.run(controller.build(spec))
+        elif arguments.preflight_animation or arguments.animation:
+            from .blender_animation import analyze_animation, validate_animation
+
+            file = arguments.preflight_animation or arguments.animation
+            if (file.is_symlink() or not file.is_file() or
+                    not 0 < file.stat().st_size <= MAX_SPEC_BYTES):
+                raise ValueError("Choose a regular small local JSON animation recipe")
+            spec = validate_animation(json.loads(file.read_text(encoding="utf-8")))
+            if arguments.preflight_animation:
+                report = analyze_animation(spec)
+            else:
+                report = asyncio.run(controller.animate(spec))
         else:
             report = controller.inspect(arguments.inspect)
     except (ValueError, PermissionError, BlenderUnavailable, BlenderJobError) as exc:
