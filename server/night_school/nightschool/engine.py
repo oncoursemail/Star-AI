@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import threading
 
 from .pool import is_validation
 
@@ -123,7 +124,22 @@ class Engine:
     def __init__(self, settings, pool, store: Store, *, solve, diagnose, check_lesson=None, log=print):
         self.settings, self.pool, self.store = settings, pool, store
         self._solve, self._diagnose, self._check_lesson, self._log = solve, diagnose, check_lesson, log
+        # Parallel lanes (run_batch(lanes=N)): one lock guards the state; it is let go only while a lane waits for
+        # the model (solve / diagnose), so every state change stays one-at-a-time and in the same order as before.
+        self._lock = threading.Lock()
+        self._parallel = False
+        self._in_flight: set[str] = set()
         self.set_pool(pool)
+
+    def _unlocked(self, call, *args):
+        """Call the model with the state lock let go (parallel lanes only)."""
+        if not self._parallel:
+            return call(*args)
+        self._lock.release()
+        try:
+            return call(*args)
+        finally:
+            self._lock.acquire()
 
     def set_pool(self, pool) -> None:
         self.pool = pool
@@ -147,7 +163,7 @@ class Engine:
         return sorted(self.store.lessons("active"), key=lambda l: l.get("promoted", ""))
 
     def _attempt(self, task: dict, lessons: list[dict], purpose: str) -> Result:
-        result = self._solve(task, lessons)
+        result = self._unlocked(self._solve, task, lessons)
         self.store.append("attempts", {
             "ts": utc(), "task": task["id"], "purpose": purpose, "lessons": [l["id"] for l in lessons],
             "recalled": result.recalled, "passed": result.passed, "error": result.error, "reasons": result.reasons[:6],
@@ -178,7 +194,7 @@ class Engine:
             if seen["status"] == "fixed" and waiting:
                 return (seen["tries"] + 50, index)      # its lesson still needs proof from OTHER tasks first
             return (seen["tries"] + (2 if seen["status"] in ("passed_first", "fixed") else 0), index)
-        ordered = sorted(enumerate(self.training), key=priority)
+        ordered = [x for x in sorted(enumerate(self.training), key=priority) if x[1]["id"] not in self._in_flight]
         return ordered[0][1] if ordered else None
 
     # --- one practice task --------------------------------------------------------------------------------
@@ -240,7 +256,7 @@ class Engine:
                 break
         # (b) a new lesson from the model's own diagnosis
         if outcome == "failed":
-            diagnosis = self._diagnose(task, first) or {}
+            diagnosis = self._unlocked(self._diagnose, task, first) or {}
             self.store.count("diagnoses")
             said = " ".join(str(diagnosis.get("cause") or "").split())[:200]
             if said:
@@ -430,18 +446,71 @@ class Engine:
                       f"{check['validation_without']}, p(worse)={run['gate']['p_worse']})")
         self.store.save()
 
-    def run_batch(self, size: int | None = None, *, before_item=lambda: True) -> dict:
+    def _run_lanes(self, size: int, lanes, outcomes: dict) -> None:
+        """`size` practice tasks over parallel lanes. `lanes` = one callable per lane, `lane(work)` runs `work()` in
+        that lane's context (its slot, its gate) and returns False when the lane may not work now. The first
+        exception (e.g. Yielded) ends the batch after the other lanes finish their current task."""
+        left = {"n": size}
+        errors: list[BaseException] = []
+
+        def worker(lane):
+            while True:
+                with self._lock:
+                    if errors or left["n"] <= 0:
+                        return
+                    task = self.next_task()
+                    if task is None:
+                        return
+                    left["n"] -= 1
+                    self._in_flight.add(task["id"])
+
+                def work(task=task):
+                    with self._lock:
+                        try:
+                            outcome = self.run_item(task)
+                            outcomes[outcome] = outcomes.get(outcome, 0) + 1
+                            self.store.state["items_since_recheck"] = self.store.state.get("items_since_recheck", 0) + 1
+                        finally:
+                            self._in_flight.discard(task["id"])
+                try:
+                    if not lane(work):
+                        with self._lock:
+                            self._in_flight.discard(task["id"])
+                            left["n"] += 1
+                        return
+                except BaseException as exc:          # noqa: BLE001 - handed to the caller below
+                    with self._lock:
+                        self._in_flight.discard(task["id"])
+                        errors.append(exc)
+                    return
+        self._parallel = True
+        try:
+            threads = [threading.Thread(target=worker, args=(lane,), daemon=True) for lane in lanes]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+        finally:
+            self._parallel = False
+        if errors:
+            raise errors[0]
+
+    def run_batch(self, size: int | None = None, *, before_item=lambda: True, lanes=None) -> dict:
         """`size` practice tasks, then promotions and (when due) the recheck. `before_item()` is the idle check:
-        it is asked before every task and may block; False stops the batch."""
+        it is asked before every task and may block; False stops the batch. `lanes` (two or more callables, see
+        _run_lanes) practise several tasks at once; promotions and rechecks stay single-lane."""
         outcomes: dict[str, int] = {}
         state = self.store.state
-        for _ in range(size or self.settings.batch):
-            task = self.next_task()
-            if task is None or not before_item():
-                break
-            outcome = self.run_item(task)
-            outcomes[outcome] = outcomes.get(outcome, 0) + 1
-            state["items_since_recheck"] = state.get("items_since_recheck", 0) + 1
+        if lanes and len(lanes) > 1:
+            self._run_lanes(size or self.settings.batch, lanes, outcomes)
+        else:
+            for _ in range(size or self.settings.batch):
+                task = self.next_task()
+                if task is None or not before_item():
+                    break
+                outcome = self.run_item(task)
+                outcomes[outcome] = outcomes.get(outcome, 0) + 1
+                state["items_since_recheck"] = state.get("items_since_recheck", 0) + 1
         if before_item():
             if not state["validation"] and self.validation and state["counters"].get("tasks_tried", 0):
                 self.measure(self.active(), "first baseline")

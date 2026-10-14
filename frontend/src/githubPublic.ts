@@ -76,7 +76,10 @@ const labelNames=(value:unknown):string[]=>Array.isArray(value)
 
 /** Links are only ever followed into this repository on github.com; anything else falls back to the repository page. */
 export function repoUrl(value:unknown,fallback=REPO_URL):string{
- return typeof value==='string'&&value.startsWith(REPO_URL+'/')&&!/[\s"'<>\\]/.test(value)?value:fallback
+ if(typeof value!=='string'||!value.startsWith(REPO_URL+'/')||/[\s"'<>\\]/.test(value))return fallback
+ // The browser resolves dot segments ("/Star-AI/../../other/repo", also spelled %2e%2e) before following a
+ // link, so the prefix alone did not keep a link inside this repository. Judge the resolved address.
+ try{return new URL(value).href.startsWith(REPO_URL+'/')?value:fallback}catch{return fallback}
 }
 const assetUrl=(value:unknown):string|null=>{
  const url=repoUrl(value,'')

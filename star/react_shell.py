@@ -22,7 +22,7 @@ import uuid
 
 from .desktop_core import Settings, Conversations, app_data, run_task, query_models, check_studio
 from .analytics import get_dashboard
-from .brain_overview import brain_snapshot
+from .brain_overview import brain_snapshot, planner_snapshot
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
@@ -43,6 +43,7 @@ from .studio_connections import connection_status, validate_target, select_insta
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
+from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_action as handle_discord_action, start_if_opted_in
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -57,7 +58,7 @@ from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','brainSnapshot','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','brainSnapshot','plannerStatus','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
@@ -72,6 +73,8 @@ ALLOWED_ACTIONS = frozenset({
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
+# Voice actions that make sound must run where Settings → Where STAR generates says (star/media_places.py).
+VOICE_PLACE_ACTIONS = frozenset({'voiceStartCall', 'voicePreviewVoice', 'voiceSpeak'})
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
@@ -87,6 +90,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
+# Settings > Discord: status, Start/Stop and the opt-in autostart for the Discord bot process
+# (star/discord_supervisor.py). Never carries the token, the owner's IDs or any key.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | DISCORD_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -108,8 +114,8 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
-    'instant_route_enabled','web_auto_search','roblox_docs_live_enabled',
-    'knowledge_endpoint',
+    'instant_route_enabled','web_auto_search',
+    'knowledge_endpoint','luau_run_before_answer',
     'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check','roblox_docs_live_enabled',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
@@ -666,8 +672,20 @@ def launch():
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
+            self.discord = DiscordSupervisor(app_data())
+            self.discord.begin()
+            # Opt-in only; a few seconds after launch so the window is not kept waiting.
+            QTimer.singleShot(3_000, self._discord_autostart)
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _discord_autostart(self):
+            if self._closing:
+                return
+            try:
+                start_if_opted_in(self.discord, Settings.load(self.settings_file).discord_autostart)
+            except Exception:
+                pass  # a bad settings file must not stop STAR from opening; the page shows the bot's state
 
         def _research_tick(self):
             """Check due official sources off the GUI thread, at most daily.
@@ -980,10 +998,18 @@ def launch():
                     self._warm(rid)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action in VOICE_ACTIONS:
-                    if action in {'voiceStartCall','voicePreviewVoice'}:
+                    if action in VOICE_PLACE_ACTIONS:
                         # Speech runs where Settings says; a place that does not exist is refused, not replaced.
                         media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
+                if action in DISCORD_ACTIONS:
+                    saved=Settings.load(self.settings_file)
+                    if action=='discordSetAutostart':
+                        enabled=body.get('enabled')
+                        if type(enabled) is not bool:raise ValueError('Choose on or off')
+                        saved.discord_autostart=enabled
+                        saved.save(self.settings_file)
+                    return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
                 if action in MEDIA_ACTIONS:
                     def media_worker():
                         return handle_media_action(
@@ -1016,6 +1042,7 @@ def launch():
                     return json.dumps({'ok':True,'data':research_task()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
+                if action=='plannerStatus':return json.dumps({'ok':True,'data':planner_snapshot(self.settings_file)})
                 if action=='pickFiles':
                     kind=body.get('kind')
                     if kind=='audio':
@@ -1449,6 +1476,7 @@ def launch():
                 record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
+            self.discord.close()            # the Discord bot STAR started (if any) stops with STAR
             self.warmer.cancel()
             self.runtime.stop()
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor

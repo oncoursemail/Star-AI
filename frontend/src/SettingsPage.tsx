@@ -9,6 +9,7 @@ import {RobloxPanel} from './RobloxPanel'
 import {BlenderPanel} from './BlenderPanel'
 import {MediaPlaces} from './MediaPanel'
 import {VoiceSettings} from './VoiceSettings'
+import {DiscordSettings} from './DiscordSettings'
 import {StudioTargetSettings} from './StudioTargetSettings'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import './settings-page.css'
@@ -260,6 +261,7 @@ export function SettingsPage(props:SettingsPageProps) {
    </Block>
    <Block id="voice" keywords="voice speech speak tts read aloud sound audio">
      <VoiceSettings disabled={inactive}/>
+     <DiscordSettings disabled={inactive}/>
    </Block>
    <Block id="blender" keywords="blender 3d model mesh">
      <BlenderPanel draft={draft} onChange={setDraft} status={data.blender} invoke={act} disabled={inactive||busy}/>
