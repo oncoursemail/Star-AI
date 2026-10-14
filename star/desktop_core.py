@@ -35,7 +35,7 @@ from .instant_route import decide_instant_route, loaded_local_model, answer_on_p
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs, roblox_errors
-from . import studio_loop
+from . import studio_loop, studio_tool_examples
 from .studio_connections import default_target, validate_target
 
 
@@ -64,6 +64,7 @@ class Settings:
     # The sandbox rule itself is code (star/studio_loop.py): edits only in a blank unsaved place.
     studio_own_places: bool = False       # ...and, when on, in places owned by STAR's own Roblox account
     studio_luau: bool = False             # let STAR run Luau in that sandbox (needed to create instances)
+    studio_tool_examples: bool = False    # opt-in: one example call appended to each error-prone Studio tool
     workspace_edit: bool = False
     max_calls: int = 12
     context_chars: int = 26000
@@ -174,7 +175,7 @@ class Settings:
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau', 'reverse_engineering_enabled',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2')):
+                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2', 'studio_tool_examples')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -1375,6 +1376,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     # The tool list is the connector's own, read now. What STAR may do in
                                     # the open place is decided in code from what that place is.
                                     discovered = guarded.discovered
+                                    if settings.studio_tool_examples:
+                                        # Description text only; what may run is still decided by policy.
+                                        discovered = studio_tool_examples.with_examples(discovered)
                                     sections = list(kwargs.get('turn_sections') or ())
                                     # The verdict's text can quote the place; like every other section
                                     # it may not look like lessons (guard_sections).
