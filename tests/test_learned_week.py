@@ -305,3 +305,28 @@ def test_bundle_skips_worked_examples_the_importer_refuses(tmp_path):
     report: dict = {}
     data = lw.build_bundle(box, report=report)
     assert len(data["examples"]) == 1 and report["skipped_examples"] == {"Invalid response": 1}
+
+
+def test_a_bundle_never_pushes_a_full_example_corpus_over_the_retrieval_cap(tmp_path, bundle):
+    # worked_examples caps a project at 500 usable rows and select() refuses a larger corpus, so a
+    # bundle applied after a full import must not switch retrieval off; its example is skipped.
+    from star.worked_examples import MAX_ROWS, import_file
+    home = tmp_path / "home"
+    rows = [{"id": f"night-school-case-{i:03d}", "group_id": f"case-{i:03d}", "task_category": "roblox",
+             "instruction": ("Implement PathfindingService pursuit spline sentinel unique" if i == 7
+                             else "Implement generic training rehearsal puzzle"),
+             "response": f"return function() return {i} end\n",
+             "evidence": ["night-school automated checks: luau_check, unit_tests"],
+             "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
+             "lessons_in_context": []} for i in range(MAX_ROWS)]
+    export = tmp_path / "worked-examples.jsonl"
+    export.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert import_file(export, home=home, project="MyGame")["imported"] == MAX_ROWS
+    registry = lw.Registry(home)
+    try:
+        receipt = registry.apply(bundle, project="MyGame")
+    finally:
+        registry.close()
+    assert receipt["examples"] == 0 and receipt["live"] == 1
+    text, used = select(home, "MyGame", rows[7]["instruction"])
+    assert used and used[0].id == rows[7]["id"]
