@@ -635,7 +635,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const serverDraft=usesStarServer(draft)
  const brain=brainStatus(data)
  const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brain,server:data.server,ownHardware:runsOnOwnHardware(data.settings),credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
- const web:Availability=data.credentials?.brave||data.credentials?.tavily?{ok:true}:{ok:false,reason:'Needs a search key'}
+ // STAR Server brings its own search (self-hosted SearXNG, server/searxng); a Brave/Tavily key also works.
+ const web:Availability=data.credentials?.brave||data.credentials?.tavily||(serverMode&&(data.settings as AppSettings&Record<string,unknown>).search_endpoint!=='off')?{ok:true}:{ok:false,reason:'Needs STAR Server or a search key'}
  const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.

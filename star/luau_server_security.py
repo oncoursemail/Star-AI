@@ -107,13 +107,18 @@ def _has(words: list[str], sequence: list[str]) -> bool:
 
 
 def _contexts(words: list[str], start: int, sink: int) -> list[tuple[list[str], str]]:
-    """Prior rejecting guards and positive branches enclosing a sink."""
+    """Prior unconditional rejecting guards and branches actually enclosing a sink.
+
+    A return inside a nested function/conditional does not exit the handler.
+    Likewise a guard in a scope that ends before the sink cannot protect it.
+    """
+    scopes = [(i, _block_end(words, i)) for i in range(start, sink)
+              if words[i] in ("function", "if", "while", "for", "do", "repeat")]
     result: list[tuple[list[str], str]] = []
-    for index in range(start, sink):
-        if words[index] != "if":
+    for index, end in scopes:
+        if words[index] != "if" or end >= len(words):
             continue
-        end = _block_end(words, index)
-        if end >= len(words):
+        if any(opening < index < closing < sink for opening, closing in scopes):
             continue
         then = next((j for j in range(index + 1, end) if words[j] == "then"), end)
         if then == end:
@@ -121,7 +126,12 @@ def _contexts(words: list[str], start: int, sink: int) -> list[tuple[list[str], 
         condition = words[index + 1:then]
         first_else = next((j for j in range(then + 1, end)
                            if words[j] in ("else", "elseif")), end)
-        if end < sink and "return" in words[then + 1:first_else]:
+        direct_return = any(
+            words[j] == "return" and not any(
+                then < opening < j < closing for opening, closing in scopes)
+            for j in range(then + 1, first_else)
+        )
+        if end < sink and direct_return:
             result.append((condition, "reject"))
         elif then < sink < first_else:
             result.append((condition, "accept"))
@@ -144,7 +154,12 @@ def _type_guarded(contexts: list[tuple[list[str], str]], name: str) -> bool:
 
 def _bounded(contexts: list[tuple[list[str], str]], name: str) -> bool:
     signs: set[str] = set()
-    for condition, _ in contexts:
+    for condition, branch in contexts:
+        # Rejecting an in-range AND is not a bounds check; nor is an
+        # accepting OR. These compound forms can let bad values through.
+        if (branch == "reject" and "and" in condition) or (
+                branch == "accept" and "or" in condition):
+            continue
         for index, word in enumerate(condition):
             if word != name:
                 continue
@@ -188,10 +203,11 @@ def _owns_character(words: list[str], start: int, sink: int,
                     instance: str, player: str) -> bool:
     for condition, branch in _contexts(words, start, sink):
         descendant = [instance, ":", "IsDescendantOf", "(", player, ".", "Character", ")"]
-        if _has(condition, descendant):
-            if (branch == "reject" and "not" in condition) or (
-                    branch == "accept" and "not" not in condition):
-                return True
+        # The negation must apply to this exact ownership check. An
+        # unrelated 'not' or an AND-gated rejection is not protection.
+        if (branch == "reject" and condition == ["not", *descendant]) or (
+                branch == "accept" and condition == descendant):
+            return True
         for i in range(len(condition) - 7):
             if condition[i:i + 3] != [instance, ".", "Parent"]:
                 continue
