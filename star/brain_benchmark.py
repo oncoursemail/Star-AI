@@ -119,7 +119,7 @@ def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
                 if type(timings.get("cache_n")) is int and timings["cache_n"] >= 0:
                     prompt_cached = timings["cache_n"]
                 reported_ms = timings.get("prompt_ms")
-                if type(reported_ms) in (int, float) and math.isfinite(reported_ms) and reported_ms >= 0:
+                if isinstance(reported_ms, (int, float)) and not isinstance(reported_ms, bool) and math.isfinite(reported_ms) and reported_ms >= 0:
                     prompt_ms = round(reported_ms, 1)
             choices = item.get("choices")
             if not isinstance(choices, list) or not choices:
@@ -189,8 +189,9 @@ def summarize(measurements: list[dict], *, wall_ms: int | None = None, parallel:
             "requests_per_second": round(len(measurements) * 1000 / wall_ms, 3),
         })
         tokens = [row.get("actual_completion_tokens") for row in measurements]
-        if all(type(n) is int and n >= 0 for n in tokens):
-            report["aggregate_output_tokens_per_second"] = round(sum(tokens) * 1000 / wall_ms, 2)
+        known_tokens = [n for n in tokens if isinstance(n, int) and not isinstance(n, bool) and n >= 0]
+        if len(known_tokens) == len(measurements):
+            report["aggregate_output_tokens_per_second"] = round(sum(known_tokens) * 1000 / wall_ms, 2)
     return report
 
 
