@@ -198,7 +198,7 @@ index 7c274c0..635a679 100644
  
  #ifdef GGML_USE_OPENMP
 diff --git a/src/llama.cpp b/src/llama.cpp
-index 9beb148..504cc93 100644
+index 9beb148..986fb24 100644
 --- a/src/llama.cpp
 +++ b/src/llama.cpp
 @@ -26,6 +26,12 @@
@@ -214,7 +214,7 @@ index 9beb148..504cc93 100644
  
  #if defined(_MSC_VER)
  #pragma warning(disable: 4244 4267) // possible loss of data
-@@ -312,6 +318,102 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
+@@ -312,6 +318,105 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
      return true;
  }
  
@@ -274,10 +274,13 @@ index 9beb148..504cc93 100644
 +    std::vector<size_t> per_node(nn, 0);
 +    for (const auto & it : model->tensors_by_name) {
 +        const ggml_tensor * t = it.second;
-+        if (!t || !t->data || !t->buffer || !ggml_backend_buffer_is_host(t->buffer)) continue;
++        if (!t || !t->data || !t->buffer) continue;
++        // CPU_REPACK buffers (the Q4_K experts, repacked to 8x8 interleaved rows) are plain host memory but do not
++        // report is_host, because their layout differs; they hold most of the weight bytes, so include them.
++        const bool repacked = strstr(ggml_backend_buffer_name(t->buffer), "REPACK") != nullptr;
++        if (!repacked && !ggml_backend_buffer_is_host(t->buffer)) continue;
 +        if ((int64_t) ggml_nbytes(t) < min_bytes || t->ne[1] < 2 * nn) continue;
 +        if (it.first == "token_embd.weight") continue;   // get_rows: one row per token, any node is fine
-+        const bool repacked = strstr(ggml_backend_buffer_name(t->buffer), "REPACK") != nullptr;
 +        const int64_t nslices = t->ne[2] * t->ne[3];
 +        n_t++;
 +        for (int64_t sl = 0; sl < nslices; sl++) {
@@ -317,7 +320,7 @@ index 9beb148..504cc93 100644
  // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
  static std::pair<int, llama_model *> llama_model_load(struct gguf_context * metadata, llama_model_set_tensor_data_t set_tensor_data, void * set_tensor_data_ud,
          const std::string & fname, std::vector<std::string> & splits, FILE * file, llama_model_params & params) {
-@@ -370,6 +472,8 @@ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * meta
+@@ -370,6 +475,8 @@ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * meta
              return {-2, nullptr};
          }
  

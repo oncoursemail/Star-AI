@@ -1,9 +1,19 @@
 # RAMForge ExpertFlow: measured CPU/RAM inference research for STAR (2026-10-13)
 
-Status: DRAFT, being filled in as runs complete. Every number below is labelled "measured" (with time and
+Status: measured 2026-10-14 (S1-S5 of the run plan). Every number below is labelled "measured" (with time and
 command) or "estimate". Nothing here changed the live `star-brain` service.
 
-<!-- RESULTS -->
+## Result (measured 2026-10-14 09:12-11:26Z, quiet lock held per slice, live slots idle; details in section 4)
+
+**NUMA-local placement wins: +6.4% generation in llama-bench and +6.6% in server chat runs, beyond the ~1.5% noise,
+with bit-identical greedy text and unchanged prompt speed and first token.** Variant A1 = `GGML_NUMA_BLOCK=1`
+(thread k on node k*4/n instead of k mod 4) + `LLAMA_RAMFORGE_PLACE=1` (after loading, each node's row block of every
+weight matrix, per expert slice, is bound to that node with `mbind`). It is below the 10% bar this document first set
+for deployment, so it is shipped **opt-in** (`server/ramforge/switch.sh`), not switched on. The two-level barrier adds
+nothing on top. Keeping a node free for background jobs only works with the 3-node layout (model on nodes 0-2 with
+placement: llama-bench equal to today's 4-node baseline, server chat -3%, prompt -9%; a heavy job on node 3 then costs
+the model only 1.7%); pinning a heavy job to node 3 while the model spans all four nodes costs **71%**.
+
 
 ## 1. What RAMForge was, and what was found of it
 
@@ -73,9 +83,62 @@ fifth of the bytes; the lever is where *all* weights sit relative to the cores t
   predicts; dedicated delta-net ops followed. Relevant because 30 of 40 layers here are DeltaNet: the op profile below
   checks how much of each token is not matmul.
 
-<!-- SECTIONS 4+ -->
+## 4. Measurements (2026-10-14, server 1, container `starai`)
 
-## 7. Later phase: an AlphaEvolve-style kernel search loop (design + step-0 prototype)
+Method: `server/ramforge/run_lab.sh` (as user star), RAMForge build of b11541 (`build.sh`; behaves like the live
+binary when no variable is set), same model file and live flags (`numactl --interleave=all`, `--numa distribute`,
+`-t 24`, `-fa 1`, `-lm dio`). Every slice: live slots idle and <=2 busy cores for 40 s (`run_lab.sh quiet`), quiet lock
+held (<=9.5 min), released, >=3 min gap. Afterwards the router journal was checked for live star-fast/star-voice tasks
+inside each lock window: only one (a 34-s chat at 09:38Z, during A3-1's prompt phase); every other run is clean.
+
+### 4.1 Bandwidth suite (`numa_bw`, 6 threads per node, 3 s each)
+
+| Pattern | GB/s |
+|---|---|
+| one node reading its own memory (nodes 0-3) | 17.2-17.5 |
+| one node reading another node's memory | 14.5-15.3 |
+| all 24 cores, each reading its own node | 68.9-69.6 |
+| all 24 cores, page-interleaved (what the live brain does) | 62.4 |
+| all 24 cores, memory on one node | 16.1 |
+
+### 4.2 llama-bench (pp512 / tg128, 3 repeats each; 3-node rows 2 repeats)
+
+| Variant | runs | tg128 tok/s | vs A0 | pp512 tok/s |
+|---|---|---|---|---|
+| A0 baseline (live layout) | 3 | 9.58, 9.58, 9.65 (mean 9.60) | - | 63.7, 64.5, 64.6 |
+| A2 BLOCK thread mapping only | 2 | 9.98, 9.92 | +3.6% | 65.9, 63.3 |
+| **A1 BLOCK + PLACE** | 2 | **10.24, 10.19** | **+6.4%** | 65.0, 65.1 |
+| A3 BLOCK + PLACE + two-level barrier | 1 | 10.22 | +6.5% (= A1) | 65.4 |
+| A1 with dense weights only placed (first build, experts skipped by a bug) | 1 | 10.14 | +5.6% | 64.3 |
+| N3 model on nodes 0-2, 18 threads, interleave | 2 | 8.89, 8.91 | -7.3% | 53.8, 53.6 |
+| N3P nodes 0-2 + BLOCK + PLACE | 2 | 9.61, 9.51 | -0.4% | 54.5, 52.8 |
+| N3P + heavy job on node 3 (6 threads streaming node 3) | 1 | 9.44 | -1.7% | 52.7 |
+| A0 + the same heavy job on node 3 | 1 | **2.75** | **-71%** | 5.9 (pp64) |
+
+Placement moves 18.73 GiB (4,804 MiB per node; every probed page on its intended node) in ~21.6 s at load.
+The first A1 build skipped the expert tensors because CPU_REPACK buffers do not report `is_host`; fixed (the experts
+are 22% of the per-token bytes, which matches the small extra gain from 10.14 to 10.22).
+
+### 4.3 Server runs (`specbench.py`, temp llama-server on 127.0.0.1:8094, -np 1, ctx 32k, -tb 48, greedy, 8 prompts = 2,764 tokens)
+
+| Variant | runs | gen tok/s | prompt tok/s | first token, median of 8 | greedy text = baseline |
+|---|---|---|---|---|---|
+| A0 baseline | 2 | 10.48, 10.52 | 61.1, 59.6 | 1.60, 1.70 s | 8/8 (reference) |
+| **A1 BLOCK + PLACE** | 2 | **11.25, 11.13 (+6.6%)** | 60.9, 60.5 | 1.70, 1.63 s | **8/8, 8/8** |
+| N3P (nodes 0-2, -t 18 -tb 36) | 2 | 10.15, 10.16 (-3.3%) | 54.1, 55.5 (-9%) | 1.79, 1.76 s | 3/8 (fewer threads changes rounding) |
+
+### 4.4 Reading
+
+- Decode is bandwidth-bound per node: local reads are 11% faster than interleaved ones in the raw suite, and placement
+  turns that into +6.4-6.6% tokens/s (the rest of each token is non-matmul ops and barriers).
+- The block mapping alone gives about half of the gain (threads that share a node's L3 and memory controller work on
+  neighbouring rows); placement adds the rest.
+- A heavy CPU job pinned to one node steals that node's cores from the model's 24 threads; every barrier then waits for
+  the slowest thread, so the whole model slows by 71%. Background work belongs either off brain 1, at low priority
+  without pinning (today's behaviour), or on node 3 only together with the 3-node model layout.
+
+
+## 5. Later phase: an AlphaEvolve-style kernel search loop (design + step-0 prototype)
 
 Prompted by AlphaEvolve (an LLM proposer + automatic evaluators found a 23% faster matmul kernel in Gemini, ~1%
 of its training time), AlphaTensor, KernelBench, and the Sakana "AI CUDA Engineer" retraction (its kernels passed
@@ -84,7 +147,7 @@ reported speedups from up to 100x to ~1x). Sources: deepmind.google blog "AlphaE
 "Recent frontier models are reward hacking" (2025-06-05); EvoEngineer (arXiv 2510.03760); Kernel Contracts
 (arXiv 2604.22032); TechCrunch / Sakana's own update on the walk-back.
 
-**When it is worth it here.** Only where a kernel, not memory, is the limit. Measured in section 4.3: the shipped
+**When it is worth it here.** Only where a kernel, not memory, is the limit. Measured with kernel_lab (step-0 table below): the shipped
 AVX2 Q4_K gemv does 5.4-6.5 GB/s per core and six cores of one node already saturate that node's single DDR4
 channel (16 GB/s; compute capacity ~35 GB/s). So today, and even more after NUMA-local placement, decode is
 memory-bound per node and a faster dot product buys almost nothing for `star-fast` generation. Kernel search
@@ -130,3 +193,8 @@ brain 2 / other machines where cores, not channels, are scarce.
 
 Reading: the harness works end to end (generate, compile, check, time), and as expected for a memory-bound
 streaming kernel on Zen 1 none of the prefetch variants is a real win: all within run-to-run noise. Not deployed.
+
+## 6. Not run (optional S6-S8 of the plan)
+
+Speculative decoding on star-fast (S6-S7) and imatrix expert-routing statistics (S8) were not run in this round;
+earlier measurements on this CPU already found speculative decoding slower for star-fast (server-inference.md 2.3).

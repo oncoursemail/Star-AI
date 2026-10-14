@@ -251,10 +251,13 @@ static void ramforge_place_weights(llama_model * model) {
     std::vector<size_t> per_node(nn, 0);
     for (const auto & it : model->tensors_by_name) {
         const ggml_tensor * t = it.second;
-        if (!t || !t->data || !t->buffer || !ggml_backend_buffer_is_host(t->buffer)) continue;
+        if (!t || !t->data || !t->buffer) continue;
+        // CPU_REPACK buffers (the Q4_K experts, repacked to 8x8 interleaved rows) are plain host memory but do not
+        // report is_host, because their layout differs; they hold most of the weight bytes, so include them.
+        const bool repacked = strstr(ggml_backend_buffer_name(t->buffer), "REPACK") != nullptr;
+        if (!repacked && !ggml_backend_buffer_is_host(t->buffer)) continue;
         if ((int64_t) ggml_nbytes(t) < min_bytes || t->ne[1] < 2 * nn) continue;
         if (it.first == "token_embd.weight") continue;   // get_rows: one row per token, any node is fine
-        const bool repacked = strstr(ggml_backend_buffer_name(t->buffer), "REPACK") != nullptr;
         const int64_t nslices = t->ne[2] * t->ne[3];
         n_t++;
         for (int64_t sl = 0; sl < nslices; sl++) {

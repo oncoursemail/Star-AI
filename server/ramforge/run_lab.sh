@@ -78,7 +78,7 @@ PY
     L=$2; shift 2
     ENVS=(); while [ $# -gt 0 ] && [ "$1" != "--" ]; do ENVS+=("$1"); shift; done; [ "${1:-}" = "--" ] && shift
     busy; drop_model_cache
-    env "${ENVS[@]}" GGML_RF_PROFILE="$OUT/$L.prof" numactl --interleave=all "$BIN/llama-server" --host 127.0.0.1 --port $P \
+    env "${ENVS[@]}" GGML_RF_PROFILE="$OUT/$L.prof" ${NUMACMD:-numactl --interleave=all} "$BIN/llama-server" --host 127.0.0.1 --port $P \
       -m "$M" --alias star-fast --jinja --reasoning off -fa on -lm dio -c 32768 -np 1 --numa distribute -t 24 -tb 48 "$@" \
       > "$OUT/$L.server.log" 2>&1 &
     SP=$!
