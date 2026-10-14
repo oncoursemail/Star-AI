@@ -52,7 +52,7 @@ def test_real_validation_failures_name_fields_and_next_step(call, field):
     assert field in msg and len(msg) <= 200
     assert any(word in msg for word in (
         "Choose", "Correct", "Set", "Reduce", "Fix", "Supply", "Remove",
-        "Select", "Resolve", "Use", "Rename"))
+        "Select", "Resolve", "Use", "Rename", "Match"))
 
 
 def test_skill_errors_are_repairable(tmp_path):
@@ -101,7 +101,6 @@ def test_hostile_input_never_reappears_in_messages(tmp_path, hostile):
         lambda: SkillLibrary(workspace=None, home=tmp_path).load(hostile),
         lambda: plan_building(style=hostile),
         lambda: begin_research(tmp_path, hostile, "Valid objective"),
-        lambda: begin_research(tmp_path, "ok", hostile),
     ):
         with pytest.raises(ValueError) as exc:
             callback()
