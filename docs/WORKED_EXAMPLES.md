@@ -43,6 +43,9 @@ the same ID again skips it without rewriting the response or provenance.
 The per-project 500-row limit is enforced under a SQLite write transaction:
 a batch either fits (ignoring existing IDs) or none of its new rows is
 committed. Another project has its own independent limit and evidence keys.
+A weekly learning bundle (star/learned_week.py) respects the same limit: once a
+project holds 500 usable (unexpired) examples, further bundle examples are
+skipped and counted in the receipt instead of switching retrieval off.
 If an older database already contains more than 500 rows for a project,
 both new imports and opt-in retrieval raise an explicit error rather than
 silently considering only the first 500 IDs. The database is not pruned
