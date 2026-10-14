@@ -1399,3 +1399,33 @@
     display: none;
   }
 }
+/* Under an answer marked not helpful: what was wrong (CorrectionBox.tsx). */
+.msg-correction {
+  display: grid;
+  gap: var(--star-2);
+  max-width: 60ch;
+  margin-top: var(--star-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+.msg-correction label {
+  display: grid;
+  gap: var(--star-1);
+}
+.msg-correction textarea {
+  padding: var(--star-2);
+  border: 1px solid var(--star-stroke);
+  border-radius: 6px;
+  background: var(--star-surface-1);
+  color: var(--star-text);
+  font: inherit;
+  resize: vertical;
+}
+.msg-correction .msg-action {
+  justify-self: start;
+}
+.msg-correction-saved {
+  margin: var(--star-2) 0 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}

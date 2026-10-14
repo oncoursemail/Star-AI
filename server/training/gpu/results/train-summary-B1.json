@@ -1,0 +1,10 @@
+{
+ "pairs": 2897,
+ "epochs": 1.0,
+ "lr": 2e-05,
+ "batch": 64,
+ "max_len": 320,
+ "seconds": 263,
+ "peak_vram_gb": 5.25,
+ "base": "unsloth/embeddinggemma-300m"
+}

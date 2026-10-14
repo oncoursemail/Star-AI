@@ -15,7 +15,7 @@ import star.agent as agent
 import star.desktop_core as core
 from star.agent import FAST_RULES, RULES, execute, system_prefix, volatile_context
 from star.context_layout import (CONTEXT_CLOSE, CONTEXT_OPEN, NO_REPLY, TRIM_BLOCK, conversation_window,
-                                 drop_oldest_turns, exchanges, history_chars)
+                                 drop_oldest_turns, exchanges, history_chars, owner_words)
 from star.desktop_core import Conversations, Settings, chat_history, run_task
 from star.providers import PROVIDERS, llama_request_fields, remember_server_limits
 
@@ -122,12 +122,15 @@ def test_request_is_system_then_history_then_the_new_turn_with_context_last():
     asyncio.run(run())
 
 
-def test_plain_chat_without_context_is_sent_exactly_as_typed():
+def test_plain_chat_is_sent_as_typed_plus_only_the_time():
     assert volatile_context([("REVIEWED KNOWLEDGE", "  ")], mode="fast", today="2026-10-10") == ""
     async def run():
-        models = Models([reply("ok")])
-        await execute(client=Client(models), model="m", prompt="hello there", image_paths=[], mode="fast")
-        assert text_of(models.requests[0]["messages"][-1]) == "hello there"
+        models = Models([reply("ok"), reply("ok")])
+        await execute(client=Client(models), model="m", prompt="hello there", image_paths=[], mode="fast",
+                      now="Now: T")
+        assert text_of(models.requests[0]["messages"][-1]) == f"hello there\n\n{CONTEXT_OPEN}\nNow: T\n{CONTEXT_CLOSE}"
+        await execute(client=Client(models), model="m", prompt="hello there", image_paths=[], mode="fast", now="")
+        assert text_of(models.requests[1]["messages"][-1]) == "hello there"
     asyncio.run(run())
 
 
@@ -174,7 +177,8 @@ def test_five_turn_conversation_keeps_a_byte_stable_prefix(desk):
         cached = rendered(before) + f"<|im_start|>assistant\n{said[index][1]}<|im_end|>\n"
         assert rendered(after).startswith(cached)
         assert [m["role"] for m in after] == ["system"] + ["user", "assistant"] * (index + 1) + ["user"]
-        assert text_of(after[-1]) == said[index + 1][0]
+        assert owner_words(text_of(after[-1])) == said[index + 1][0]
+        assert "\nNow: " in text_of(after[-1])          # the time line ends every turn
 
 
 def test_per_turn_notes_reach_only_their_own_turn(desk, monkeypatch):
@@ -186,18 +190,28 @@ def test_per_turn_notes_reach_only_their_own_turn(desk, monkeypatch):
     second = desk.turn("Thanks.", "You are welcome.")["messages"]
     assert "Doors are painted teal." in text_of(first[-1]) and "Doors are painted teal." not in first[0]["content"]
     assert "Doors are painted teal." not in json.dumps(second)
-    # History replays the user's own words; the start of the request is still shared up to them.
-    assert second[1] == {"role": "user", "content": "What colour is the door?"}
+    # History replays the user's own words (and the time they were sent); the start of the request
+    # is still shared up to them.
+    assert second[1]["role"] == "user" and owner_words(second[1]["content"]) == "What colour is the door?"
+    assert "Doors are painted teal." not in second[1]["content"]
     assert rendered(second).startswith(rendered(first[:-1]) + "<|im_start|>user\nWhat colour is the door?")
 
 
-def test_history_marks_an_unanswered_message_and_leaves_out_failure_records(desk):
-    desk.turn("first", "one")
+@pytest.mark.parametrize("status", ["failed", "cancelled", None], ids=["failed", "cancelled", "interrupted"])
+def test_history_drops_unanswered_turns_and_preserves_failure_records_in_storage(desk, status):
+    first = desk.turn("first", "one")["messages"]
     failed = desk.chats.add("STAR", "user", "this one failed", chat_id=desk.chat)
-    desk.chats.add_terminal("STAR", desk.chat, failed, "failed", "SECRET-FAILURE-TEXT")
+    if status is not None:
+        desk.chats.add_terminal("STAR", desk.chat, failed, status, "SECRET-FAILURE-TEXT")
+    originals = desk.chats.raw_history_records("STAR", desk.chat)
     messages = desk.turn("second", "two")["messages"]
-    assert [text_of(m) for m in messages[1:]] == ["first", "one", "this one failed", NO_REPLY, "second"]
-    assert "SECRET-FAILURE-TEXT" not in json.dumps(messages)
+    # The exclusion rule drops the whole orphan, not just its failure event.
+    assert [owner_words(text_of(m)) for m in messages[1:]] == ["first", "one", "second"]
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    for excluded in ("this one failed", NO_REPLY, "SECRET-FAILURE-TEXT"):
+        assert excluded not in json.dumps(messages)
+    assert rendered(messages).startswith(rendered(first) + "<|im_start|>assistant\none<|im_end|>\n")
+    assert desk.chats.raw_history_records("STAR", desk.chat)[:len(originals)] == originals
 
 
 # ------------------------------------------------------------------ trimming
@@ -260,7 +274,7 @@ def test_over_budget_task_drops_oldest_turns_and_keeps_the_prefix(monkeypatch):
     dropped = len(whole) - len(trimmed)
     assert dropped > 0 and dropped % TRIM_BLOCK == 0
     assert trimmed[1:] == whole[1 + dropped:]                    # oldest first, the rest untouched
-    assert trimmed[1]["role"] == "user" and text_of(trimmed[-1]) == "newest question"
+    assert trimmed[1]["role"] == "user" and owner_words(text_of(trimmed[-1])) == "newest question"
 
 
 def test_drop_oldest_turns_never_touches_the_request_being_answered():
@@ -293,10 +307,10 @@ def test_own_llama_servers_get_cache_fields_and_a_steady_slot(desk):
     tools = llama_request_fields(lan, conversation="STAR::chat::a", tools=True)
     assert chat["cache_prompt"] is True and chat["id_slot"] in (0, 1)
     assert chat == llama_request_fields(lan, conversation="STAR::chat::a")   # one conversation, one slot
-    # One conversation, one slot per model: the tool prompt shares it, and the other slot is
-    # kept for background work (tests/test_model_routing.py covers the slot rules).
+    # One conversation, one slot per model: the tool prompt shares it. Background work names
+    # no slot (tests/test_model_routing.py covers the slot rules).
     assert tools["id_slot"] == chat["id_slot"]
-    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True)["id_slot"] == 1 - chat["id_slot"]
+    assert llama_request_fields(lan, conversation="STAR::chat::a", background=True) == local
     remember_server_limits("http://192.168.50.20:8080/v1", "star-fast", 32768, 1)
     assert "id_slot" not in llama_request_fields(lan, conversation="a")
 
@@ -404,7 +418,9 @@ def test_chat_history_is_the_same_for_a_turn_and_for_the_warm_up(desk):
     idle, _ = chat_history(desk.settings, desk.home, desk.chat)            # nothing pending
     desk.chats.add("STAR", "user", "two", chat_id=desk.chat)               # the UI saved the new message
     busy, rows = chat_history(desk.settings, desk.home, desk.chat)
-    assert idle == busy == [{"role": "user", "content": "one"}, {"role": "assistant", "content": "first answer"}]
+    assert idle == busy
+    assert [(m["role"], owner_words(m["content"])) for m in busy] == [("user", "one"), ("assistant", "first answer")]
+    assert "\nNow: " in busy[0]["content"]       # replayed with the time it was sent
     assert rows[-1][:2] == ("user", "two")
 
 
@@ -416,7 +432,7 @@ def test_studio_tools_come_after_the_tools_every_turn_has():
                       studio_id="sandbox", discovered=[schema_tool("script_read")],
                       subagents_enabled=True, web_search_enabled=True)
         names = [tool["function"]["name"] for tool in models.requests[0]["tools"]]
-        assert names == ["star_delegate", "star_web_search", "script_read"]
+        assert names == ["star_delegate", "star_web_search", "star_web_fetch", "script_read"]
     asyncio.run(run())
 
 

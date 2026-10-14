@@ -270,3 +270,28 @@
     flex-wrap: wrap;
   }
 }
+
+/* What STAR learned this week, and the owner's corrections (LearnedThisWeek.tsx). */
+.shell .learn-week {
+  margin-top: var(--star-4);
+  padding-top: var(--star-4);
+  border-top: 1px solid var(--star-stroke);
+}
+.shell .learn-week .learn-title h3 {
+  margin: 0 0 var(--star-1);
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  font-weight: 650;
+}
+.shell .learn-week .learn-subhead {
+  margin-top: var(--star-5);
+}
+/* The same list on the Model page, below the connection cards. */
+.shell .learn-brain {
+  margin-top: var(--star-5);
+}
+.shell .learn-brain .learn-week {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}

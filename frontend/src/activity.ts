@@ -41,6 +41,10 @@ export type ActivityRun = {
   toolCalls?: number
   /** The model this run was sent to; replaced by the name the server reported on the answer. */
   model?: string
+  brain?: 'pc' | 'server' | 'cloud'
+  firstTokenMs?: number
+  tokensPerSecond?: number
+  estimatedTokens?: boolean
 }
 
 /** The sanitized `activity` object from the backend. All fields are enumerated or bounded there. */
@@ -56,6 +60,10 @@ export type ActivityPayload = {
   model?: string
   /** Route only: the chosen model was unavailable and the main model answers instead. */
   fallback?: boolean
+  brain?: 'pc' | 'server' | 'cloud'
+  first_token_ms?: number
+  tokens_per_second?: number
+  estimated_tokens?: boolean
   step?: number
   max_steps?: number
   elapsed_ms?: number
@@ -64,6 +72,8 @@ export type ActivityPayload = {
   steps?: Array<{id?: string; role?: string; needs?: string[]}>
   /** Documentation lookup: how many passages came back. */
   passages?: number
+  /** Local checked practice, only a bounded count, never code or IDs. */
+  count?: number
   /** Luau check: passed | failed | repaired | unavailable. */
   result?: string
   repair?: boolean
@@ -116,6 +126,7 @@ export function toolLabel(name?: string): string {
   if (name === 'workspace_list') return 'Listing workspace files'
   if (name.startsWith('workspace_')) return 'Reading a workspace file'
   if (name.startsWith('star_delegate')) return 'Briefing specialists'
+  if (name === 'star_mcp_registry_search') return 'Searching the public MCP registry'
   if (name.startsWith('star_mcp_')) return 'Using a connected MCP tool'
   if (name.startsWith('star_toolforge_')) return 'Running a reviewed custom tool'
   if (name === 'star_skill_catalog') return 'Listing Agent Skills'
@@ -140,7 +151,7 @@ export function startRun(id: string, mode: RunMode, now: number): ActivityRun {
     outcome: 'running',
     startedAt: now,
     steps: [],
-    phase: mode === 'image' ? 'Creating image' : 'Sending',
+    phase: mode === 'image' ? 'Creating your image on this PC...' : 'Sending',
     streaming: false,
   }
 }
@@ -181,6 +192,21 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
       if (typeof activity.model === 'string' && activity.model) next.model = activity.model
       next.phase = activity.fallback ? 'That model is not available. Using your main model' : 'Choosing how to answer'
       break
+    case 'instant':
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      next.phase = 'Answering on this PC'
+      break
+    case 'instant_fallback':
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      next.phase = 'Using STAR Server'
+      break
+    case 'answer_stats':
+      if (activity.brain === 'pc' || activity.brain === 'server' || activity.brain === 'cloud') next.brain = activity.brain
+      if (typeof activity.model === 'string' && activity.model) next.model = activity.model
+      if (typeof activity.first_token_ms === 'number') next.firstTokenMs = activity.first_token_ms
+      if (typeof activity.tokens_per_second === 'number') next.tokensPerSecond = activity.tokens_per_second
+      next.estimatedTokens = activity.estimated_tokens === true
+      break
     case 'model':
       // The name the server itself put on the answer.
       if (typeof activity.model === 'string' && activity.model) next.model = activity.model
@@ -213,6 +239,18 @@ export function applyProgress(run: ActivityRun, data: ProgressPayload | string |
           index === found ? {...close(step, failed ? 'failed' : 'done', now, typeof activity.elapsed_ms === 'number' ? activity.elapsed_ms : undefined), detail} : step,
         )
         next.phase = failed ? 'Documentation unavailable' : 'Documentation ready'
+      }
+      break
+    }
+    case 'example': {
+      const count = activity.count
+      if (typeof count === 'number' && Number.isInteger(count) && count >= 1 && count <= 2 &&
+          !steps.some(step => step.id === 'checked-example')) {
+        steps = [...steps, {id: 'checked-example', kind: 'search', state: 'done',
+          title: 'Used checked practice example' + (count === 1 ? '' : 's'),
+          detail: 'Checked by automated practice tests, not Roblox Studio or a person.',
+          startedAt: now, endedAt: now}]
+        next.phase = 'Using local practice examples'
       }
       break
     }

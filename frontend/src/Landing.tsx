@@ -10,8 +10,8 @@ import {SiteShowcase} from './SiteShowcase'
 import {SiteChapters,SiteLimits} from './SiteChapters'
 import {SiteProgress} from './SiteProgress'
 import {SiteDownload} from './SiteDownload'
-import {LINKS,SOURCE_VERSION,formatBytes,formatDate,releaseFiles} from './siteContent'
-import {fetchLatestStableRelease,latestStable} from './githubPublic'
+import {LINKS,SOURCE_VERSION,formatBytes,formatDate,modelLabelForRelease,releaseFiles} from './siteContent'
+import {compareVersions,fetchLatestStableRelease,latestStable} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 import {delay,staticMode,useActiveSection,useHeaderState,useProgress,useReveal} from './siteHooks'
 import './site.css'
@@ -88,7 +88,6 @@ export function Landing(){
    <section className="sw-hero" aria-labelledby="sw-hero-title">
     <div className="sw-wrap sw-hero-grid">
      <div className="sw-hero-copy">
-      <p className="sw-kicker sw-enter" style={delay(0)}>STAR INTELLIGENCE / LOCAL-FIRST AI</p>
       <h1 id="sw-hero-title" className="sw-enter" style={delay(0)}>Make the things you&nbsp;imagine.</h1>
       <p className="sw-lede sw-enter" style={delay(90)}>
        STAR is a local-first AI workspace for Windows. Run a model on this PC or your own STAR Server,
@@ -99,9 +98,13 @@ export function Landing(){
        <a className="sw-btn sw-btn-primary" href="#download"><ArrowDown size={18} aria-hidden="true"/> Download for Windows</a>
        <a className="sw-btn sw-btn-quiet" href="#product">See STAR in action</a>
       </div>
-      <ul className="sw-hero-facts sw-enter" style={delay(220)} aria-label="Local workspace essentials">
-       <li>Windows workspace</li><li>Local or LAN model</li><li>Project-scoped context</li>
-      </ul>
+      {latest&&compareVersions(SOURCE_VERSION,latest.tag)>0&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
+       <strong>Published: {latest.tag}.</strong> Later source features shown below are still in development.
+       <a href="#download"> Get the published build</a>.
+      </p>}
+      {!latest&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
+       Release details could not be verified here. <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check GitHub Releases</a>.
+      </p>}
      </div>
      <div className="sw-hero-side">
      <SiteMascotHero/>
@@ -110,7 +113,7 @@ export function Landing(){
       <div><dt>Published</dt><dd>{latest?formatDate(latest.publishedAt):'unavailable'}</dd></div>
       <div><dt>Platform</dt><dd>Windows 11 · x64</dd></div>
       <div><dt>Installer</dt><dd>{files.setup?formatBytes(files.setup.size):'on GitHub'}</dd></div>
-      <div><dt>Model</dt><dd>Local, LAN or opt-in hosted</dd></div>
+      <div><dt>Model</dt><dd>{modelLabelForRelease(latest)}</dd></div>
       <div><dt>Status</dt><dd>Early software</dd></div>
      </dl>
      </div>

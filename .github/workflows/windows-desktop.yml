@@ -86,6 +86,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
           python -m compileall -q star star_desktop.py
       - name: Capture real STAR OLED GUI screens for review
         shell: pwsh
@@ -105,7 +106,7 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name STAR `
             --icon assets/star.ico `
-            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' --add-data 'star/skill_packs;star/skill_packs' `
+            --add-data 'frontend/dist;frontend/dist' --add-data 'star/build-info.json;star' --add-data 'star/skill_packs;star/skill_packs' --add-data 'star/data;star/data' --add-data 'star/blender_worker.py;star' `
             --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebChannel `
             --hidden-import mcp.client.session --hidden-import mcp.client.stdio `
             --hidden-import mcp.types --collect-all faster_whisper `
@@ -195,12 +196,48 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  publish-release:
+  # The PR build receives NO attestation or publishing permissions. Only
+  # verified main-branch artifacts enter this trusted provenance job.
+  attest-release:
     needs: windows-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    steps:
+      - name: Download successfully tested Windows binaries
+        uses: actions/download-artifact@v8
+        with:
+          name: STAR-Windows-vNext
+          path: attest-input
+      - name: Select exactly one Setup and portable binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find attest-input -type f -name 'STAR-Setup-v*.exe' | wc -l)" -eq 1
+          test "$(find attest-input -type f -name 'STAR-Genesis-Windows-x64.zip' | wc -l)" -eq 1
+          SETUP="$(find attest-input -type f -name 'STAR-Setup-v*.exe' -print -quit)"
+          PORTABLE="$(find attest-input -type f -name 'STAR-Genesis-Windows-x64.zip' -print -quit)"
+          test -s "$SETUP" && test -s "$PORTABLE"
+          mkdir -p attest-ready
+          cp "$SETUP" attest-ready/
+          cp "$PORTABLE" attest-ready/
+      - name: Attest exact verified Windows release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: 'attest-ready/*'
+
+  publish-release:
+    needs: [windows-build, attest-release]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      attestations: read
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -242,7 +279,13 @@ jobs:
           mkdir -p release-ready
           cp "$SETUP" "release-ready/STAR-Setup-$TAG.exe"
           cp "$PORTABLE" release-ready/STAR-Genesis-Windows-x64.zip
+          # Verify the repository, signer workflow, source SHA and source ref.
+          # A passing build or a SHA-256 checksum alone is not enough to publish.
+          for artifact in "release-ready/STAR-Setup-$TAG.exe" "release-ready/STAR-Genesis-Windows-x64.zip"; do
+            gh attestation verify "$artifact" --repo "$STAR_REPO" \
+              --signer-workflow "$STAR_REPO/.github/workflows/windows-desktop.yml" \
+              --source-digest "$STAR_COMMIT" --source-ref "refs/heads/main"
+          done
           ( cd release-ready && sha256sum "STAR-Setup-$TAG.exe" STAR-Genesis-Windows-x64.zip ) > release-ready/SHA256SUMS.txt
           gh release create "$TAG" "release-ready/STAR-Setup-$TAG.exe" release-ready/STAR-Genesis-Windows-x64.zip release-ready/SHA256SUMS.txt \
             --repo "$STAR_REPO" --target "$STAR_COMMIT" --title "STAR Intelligence $TAG" --generate-notes
-

@@ -13,7 +13,7 @@ import type {AppSettings, ChatMessage, ChatThread, RetryState, ServerStatus} fro
 import type {ActivityRun} from './activity'
 
 export type FixtureEvent = {wait: number; kind: 'progress' | 'result' | 'error'; data: unknown}
-export type FixtureScript = {action: 'sendMessage' | 'runTeam'; mode?: 'fast' | 'auto' | 'agent'; prompt: string; events: FixtureEvent[]}
+export type FixtureScript = {action: 'sendMessage' | 'runTeam' | 'generateImage'; mode?: 'fast' | 'auto' | 'agent'; prompt: string; events: FixtureEvent[]}
 export type Fixture = {
   messages: ChatMessage[]
   /** Overrides for the preview's settings (the default is a STAR Server on the local network). */
@@ -265,6 +265,20 @@ export const FIXTURES: Record<string, Fixture> = {
         progress(250, {type: 'route', profile: 'roblox'}, 'STAR · Roblox engineering'),
         progress(60, {type: 'turn', step: 1, max_steps: 1}, 'Thinking'),
         {wait: 900, kind: 'error', data: unreachable},
+      ],
+    },
+  },
+  /** Create image from the + menu: the picture is being made on this PC (shape follows the chosen size). */
+  image: {
+    messages: history,
+    script: {
+      action: 'generateImage',
+      prompt: 'A lantern-lit forest clearing at dusk, painterly, for the Ember Hollow loading screen',
+      events: [
+        {wait: 300, kind: 'progress', data: {phase: 'Starting the picture engine on this PC'}},
+        {wait: 1200, kind: 'progress', data: {phase: 'Creating the picture'}},
+        // No picture engine runs in a browser preview, so the scripted turn ends honestly after a long pause.
+        {wait: 45000, kind: 'error', data: 'This browser preview has no picture engine. In STAR Desktop the picture appears here.'},
       ],
     },
   },
