@@ -248,6 +248,27 @@ class Settings:
 TERMINAL_STATUSES = ('failed', 'cancelled')
 
 
+# Gives every project whose pre-upgrade messages (chat_id 'legacy') have no chat row yet its
+# 'Previous conversation' row. Runs on every open, so it must not read the whole messages table:
+# the project names are walked through idx_chat_messages one index seek at a time (a "skip
+# scan"), projects that already have their legacy row are left out (INSERT OR IGNORE would keep
+# them unchanged anyway), and only the remaining projects' legacy rows are read, by index. The
+# rows inserted are exactly those of the plain form
+#   INSERT OR IGNORE ... SELECT ... FROM messages WHERE chat_id='legacy' GROUP BY project
+# which scanned every message on every open.
+LEGACY_CHAT_MIGRATION = (
+    "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
+    "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
+    "FROM messages WHERE chat_id='legacy' AND project IN ("
+    "WITH RECURSIVE projects(name) AS ("
+    "SELECT MIN(project) FROM messages "
+    "UNION ALL SELECT (SELECT MIN(project) FROM messages WHERE project>name) FROM projects WHERE name IS NOT NULL) "
+    "SELECT name FROM projects WHERE name IS NOT NULL "
+    "EXCEPT SELECT project FROM chats WHERE id='legacy') "
+    "GROUP BY project"
+)
+
+
 class Conversations:
     """Persistent, project-scoped chat threads.
 
@@ -298,11 +319,7 @@ class Conversations:
             'value TEXT NOT NULL, updated TEXT NOT NULL)'
         )
         # A pre-upgrade conversation is preserved verbatim under one stable ID.
-        self.connection.execute(
-            "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
-            "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
-            "FROM messages WHERE chat_id='legacy' GROUP BY project"
-        )
+        self.connection.execute(LEGACY_CHAT_MIGRATION)
         self.connection.commit()
 
     def new_chat(self, project: str) -> str:
