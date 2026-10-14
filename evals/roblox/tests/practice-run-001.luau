@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(1), "user_1"))
+check("case 2", deepEqual(fn(42), "user_42"))
+check("case 3", deepEqual(fn(0), nil))
+check("case 4", deepEqual(fn(-2), nil))
+check("case 5", deepEqual(fn(1.5), nil))
+check("case 6", deepEqual(fn(1000), "user_1000"))

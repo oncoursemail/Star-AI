@@ -1,0 +1,596 @@
+[
+ {
+  "id": "REV-01",
+  "category": "re-matching-decomp",
+  "difficulty": 2,
+  "goal": "Matching decomp: the byte-exact diff is the oracle, not readability",
+  "prompt": "I'm helping on a matching decompilation of an old N64 game. My C version of one function compiles and the game seems to run fine with it, but objdiff still shows a few instructions differ (registers swapped and one branch reordered). A friend says it's close enough and I should just mark it done. What should I do?",
+  "run_mode": "automated",
+  "helps": [
+   "re-decomp-lessons"
+  ],
+  "expected_sources": [
+   "https://github.com/encounter/objdiff",
+   "https://github.com/simonlindholm/decomp-permuter",
+   "https://decomp.me/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says a function that does not match byte-for-byte can be marked as matching"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "not_done",
+     "re": "not (?:a )?match|does(?:n't| not) match|isn't matching|is not matching|not (?:done|finished)|cannot be marked",
+     "why": "says it is not matching yet",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "oracle",
+     "re": "byte[- ]?(?:for[- ]byte|identical|exact)|identical (?:bytes|binary|ROM|output)|checksum",
+     "why": "names the byte-identical rebuild as the oracle",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "tooling",
+     "re": "permuter|decomp\\.me|asm-?differ|compiler flags|-O2|\\bIDO\\b|register allocat",
+     "why": "names a concrete way to close the gap (permuter, decomp.me, flags, register allocation)",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "fallback",
+     "re": "NON_?MATCHING|non-?matching|equivalent but",
+     "why": "mentions marking it non-matching as an honest fallback",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "close_enough",
+     "re": "close enough(?:,| is| to be)? (?:fine|ok|good)|(?:just|fine to|go ahead and) mark it (?:as )?(?:done|matching)|it'?s fine to mark",
+     "why": "accepts a non-matching function as done",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says it is not matching yet",
+    "Present: names the byte-identical rebuild as the oracle",
+    "Present: names a concrete way to close the gap (permuter, decomp.me, flags, register allocation)",
+    "Present: mentions marking it non-matching as an honest fallback",
+    "Absent: accepts a non-matching function as done"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "REV-02",
+  "category": "legacy-archaeology",
+  "difficulty": 2,
+  "goal": "Inherited Roblox game: characterization tests and versioned migration before touching saves",
+  "prompt": "I inherited a big Roblox game (about 40,000 lines, scripts everywhere, lots of _G). Players' data is saved with DataStoreService by code nobody understands. I need to change the save format to add a pets system. How should I approach this without losing anyone's data?",
+  "run_mode": "automated",
+  "helps": [
+   "eng-legacy-archaeology"
+  ],
+  "expected_sources": [
+   "https://create.roblox.com/docs/cloud-services/data-stores",
+   "https://martinfowler.com/bliki/StranglerFigApplication.html",
+   "https://en.wikipedia.org/wiki/Characterization_test"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends rewriting the whole game or the save system from scratch in one go",
+   "Suggests testing the migration directly on the live game"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "map",
+     "re": "\\b(?:map|inventory|list|find)\\w*\\b.{0,60}\\b(?:DataStore|keys?|_G|scripts?|remotes?)",
+     "why": "maps the existing code and data keys first",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "characterization",
+     "re": "characteri[sz]ation|golden[- ]master|snapshot tests?|record (?:the )?(?:current|existing) behaviou?r|tests? (?:of|for) (?:the )?(?:current|existing) behaviou?r",
+     "why": "captures current behaviour as tests before changing it",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "version",
+     "re": "(?:schema|data|format|save)[ -]?version|version (?:field|number|key)|\\bversion\\b.{0,40}\\bmigrat",
+     "why": "adds a schema version",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "migrate",
+     "re": "migrat",
+     "why": "migrates old records on load",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "test_copy",
+     "re": "test place|copy of|copied|test universe|staging|sample (?:of )?(?:real|old) (?:records|data)",
+     "why": "tests on copies or a test place, not live",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "rewrite",
+     "re": "(?:rewrite|rebuild|redo) (?:the )?(?:whole|entire) (?:game|codebase|save system) from scratch|start (?:over|again) from scratch",
+     "why": "recommends a from-scratch rewrite",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "wipe",
+     "re": "wipe (?:all )?(?:player )?data|reset everyone'?s data",
+     "why": "suggests wiping data",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: maps the existing code and data keys first",
+    "Present: captures current behaviour as tests before changing it",
+    "Present: adds a schema version",
+    "Present: migrates old records on load",
+    "Present: tests on copies or a test place, not live",
+    "Absent: recommends a from-scratch rewrite",
+    "Absent: suggests wiping data"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "REV-03",
+  "category": "re-legal-clean-room",
+  "difficulty": 2,
+  "goal": "Remaking a classic in Roblox: mechanics yes, original assets and leaked code no",
+  "prompt": "I want to remake a 1990s PC game I loved as a Roblox experience. I still have the original CD. Can I pull the sprites and music off the disc and use them, and maybe use the source code that leaked online a few years ago to get the mechanics exactly right? How do projects like OpenRCT2 or OpenTTD handle this?",
+  "run_mode": "automated",
+  "helps": [
+   "re-decomp-lessons"
+  ],
+  "expected_sources": [
+   "https://github.com/OpenRCT2/OpenRCT2",
+   "https://www.openttd.org/",
+   "https://gitlab.winehq.org/wine/wine/-/wikis/Clean-Room-Guidelines"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says it is fine to upload the original sprites or music to Roblox",
+   "Recommends using the leaked source code"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "assets_no",
+     "re": "(?:don'?t|do not|cannot|can't|shouldn't|should not|never)\\b.{0,50}\\b(?:upload|use|distribut|ship|redistribut)\\w*.{0,60}\\b(?:sprites?|music|assets?|art)",
+     "why": "says not to upload/distribute the original assets",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "leak_no",
+     "re": "(?:don'?t|do not|never|avoid|stay away from|shouldn't|should not)\\b.{0,40}\\b(?:use|look at|read|touch|copy)\\b.{0,40}\\bleak",
+     "why": "says not to use the leaked source",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "own_data",
+     "re": "(?:own|their own|original) (?:copy|data|data files|game files)|bring (?:your|their) own|require[sd]? (?:the )?original",
+     "why": "explains that reimplementations make users supply their own original data",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "mechanics",
+     "re": "mechanics|game rules|gameplay|ideas",
+     "why": "separates mechanics/ideas from protected expression",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "original_assets",
+     "re": "(?:your own|original|new|fresh) (?:art|assets|sprites|music|sounds?)|make (?:your|new) (?:own )?(?:art|assets)",
+     "why": "recommends original replacement assets",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "not_advice",
+     "re": "not (?:legal advice|a lawyer)|(?:ask|consult|talk to) a lawyer|lawyer",
+     "why": "says this is not legal advice",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "ok_assets",
+     "re": "(?:it'?s|it is) (?:fine|ok|okay|legal|allowed) to (?:use|upload) (?:the )?(?:original )?(?:sprites|music|assets)|since you own the (?:CD|disc|game),? you can (?:use|upload)",
+     "why": "says using the original assets is fine because the user owns the disc",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "ok_leak",
+     "re": "(?:use|read) the leak(?:ed)? (?:source|code) (?:to|for|as)|leak(?:ed)? (?:source|code) is (?:fine|ok|a good reference)",
+     "why": "endorses using leaked source",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says not to upload/distribute the original assets",
+    "Present: says not to use the leaked source",
+    "Present: explains that reimplementations make users supply their own original data",
+    "Present: separates mechanics/ideas from protected expression",
+    "Present: recommends original replacement assets",
+    "Present: says this is not legal advice",
+    "Absent: says using the original assets is fine because the user owns the disc",
+    "Absent: endorses using leaked source"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "REV-04",
+  "category": "re-determinism-replay",
+  "difficulty": 2,
+  "goal": "Deterministic simulation and replay tests, as lockstep RTS reimplementations do",
+  "prompt": "My Roblox tower-defense game has a bug where an enemy wave sometimes ends differently with the same towers and I can never reproduce it. OpenTTD and OpenRA seem to catch this kind of thing. How do they do it and how would I apply that in Luau?",
+  "run_mode": "automated",
+  "helps": [
+   "re-decomp-lessons"
+  ],
+  "expected_sources": [
+   "https://www.openra.net/",
+   "https://create.roblox.com/docs/reference/engine/datatypes/Random",
+   "https://github.com/OpenTTD/OpenTTD"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Blames Roblox physics or 'random lag' without proposing a reproducible test"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "fixed_tick",
+     "re": "fixed (?:time ?)?(?:step|tick|timestep)|fixed[- ]rate|lockstep|\\bticks?\\b",
+     "why": "uses a fixed simulation tick",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "seed",
+     "re": "Random\\.new|seed",
+     "why": "seeds the random generator (Random.new(seed))",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "record_inputs",
+     "re": "(?:record|log)\\w* (?:the |all |every |player )?(?:inputs?|commands?|actions?)|replay",
+     "why": "records inputs/commands for replay",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "hash",
+     "re": "checksum|hash|desync|state digest",
+     "why": "hashes or checksums state to detect divergence",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "no_wallclock",
+     "re": "wall[- ]?clock|os\\.clock|tick\\(\\)|os\\.time|delta ?time|frame time|\\bdt\\b|iteration order",
+     "why": "removes wall-clock or unordered-iteration nondeterminism",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "just_lag",
+     "re": "(?:it'?s|it is) (?:just|probably just) (?:lag|random|physics)|nothing you can do",
+     "why": "dismisses it as unfixable lag",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: uses a fixed simulation tick",
+    "Present: seeds the random generator (Random.new(seed))",
+    "Present: records inputs/commands for replay",
+    "Present: hashes or checksums state to detect divergence",
+    "Present: removes wall-clock or unordered-iteration nondeterminism",
+    "Absent: dismisses it as unfixable lag"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "REV-05",
+  "category": "re-file-format",
+  "difficulty": 2,
+  "goal": "Reverse an undocumented save format with controlled diffs and round-trip tests",
+  "prompt": "For a hobby fan tool I want to read the save files of an old game I own (a single-player game; no DRM involved). There's no documentation. How do reverse engineers usually figure out a binary format like this, and how do I know my parser is right?",
+  "run_mode": "automated",
+  "helps": [
+   "re-decomp-lessons"
+  ],
+  "expected_sources": [
+   "https://github.com/OpenRCT2/OpenRCT2",
+   "https://github.com/OpenTTD/OpenTTD",
+   "https://github.com/ihhub/fheroes2"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends guessing the format without any verification"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "controlled_diff",
+     "re": "(?:change|alter|modify) (?:only )?(?:one|a single) (?:thing|value|variable|field)|controlled (?:change|experiment)|diff (?:the )?(?:two |both )?(?:saves|files|bytes)|compare (?:two|the) saves",
+     "why": "uses controlled one-change-at-a-time diffs",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "hex",
+     "re": "hex ?(?:editor|dump|view)|xxd|ImHex|010 Editor|Kaitai",
+     "why": "inspects the bytes with a hex viewer",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "structure",
+     "re": "endian|magic (?:number|bytes)|header|length[- ]prefix|offset",
+     "why": "looks for header/magic/endianness/offsets",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "checksum",
+     "re": "checksum|CRC|compress",
+     "why": "watches for checksums or compression",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "round_trip",
+     "re": "round[- ]?trip|identical bytes|byte[- ]for[- ]byte|byte[- ]identical|write it back",
+     "why": "verifies with a read-then-write round trip",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "spec",
+     "re": "spec(?:ification)?|document (?:the|each|every) field|notes|wiki",
+     "why": "documents findings as a spec",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "crack",
+     "re": "\\bcrack|bypass (?:the )?(?:DRM|copy protection)|keygen",
+     "why": "drifts into DRM/copy-protection circumvention",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: uses controlled one-change-at-a-time diffs",
+    "Present: inspects the bytes with a hex viewer",
+    "Present: looks for header/magic/endianness/offsets",
+    "Present: watches for checksums or compression",
+    "Present: verifies with a read-then-write round trip",
+    "Present: documents findings as a spec",
+    "Absent: drifts into DRM/copy-protection circumvention"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "REV-06",
+  "category": "re-llm-decompilation",
+  "difficulty": 2,
+  "goal": "LLM-decompiled code must be verified by recompiling/re-executing, not by reading",
+  "prompt": "I pasted a disassembled function from an old game I'm studying into an AI model and it gave me clean C code that looks correct. Can I just commit it to our decompilation project as the source for that function?",
+  "run_mode": "automated",
+  "helps": [
+   "re-decomp-lessons"
+  ],
+  "expected_sources": [
+   "https://github.com/albertan017/LLM4Decompile",
+   "https://github.com/encounter/objdiff",
+   "https://decomp.me/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 800,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says code that looks correct can be committed without compiling or testing it"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "verify",
+     "re": "(?:compile|recompile|build)\\b.{0,80}\\b(?:compare|diff|match|check)|re-?execut|run (?:the )?(?:tests|it against)|differential test",
+     "why": "says to recompile and compare, or re-execute against the original",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "can_be_wrong",
+     "re": "hallucinat|plausible but wrong|can be wrong|may be wrong|often wrong|subtly wrong|looks? correct but|not (?:necessarily|always) correct",
+     "why": "warns that LLM output can look right and be wrong",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "oracle",
+     "re": "oracle|byte[- ]?(?:for[- ]byte|identical|exact)|objdiff|asm-?differ|decomp\\.me",
+     "why": "ties acceptance to the project's matching oracle",
+     "scope": "prose",
+     "flags": "i"
+    },
+    {
+     "id": "provenance",
+     "re": "licen[cs]e|provenance|project'?s (?:rules|policy|guidelines)|contribut\\w* (?:rules|guidelines)|disclose",
+     "why": "mentions project policy/provenance for AI-assisted contributions",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "just_commit",
+     "re": "(?:yes|sure)[,.!]? (?:you can )?(?:just )?commit it|looks correct,? so (?:you can )?commit|safe to commit (?:as is|directly)",
+     "why": "approves committing unverified output",
+     "scope": "prose",
+     "flags": "i"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says to recompile and compare, or re-execute against the original",
+    "Present: warns that LLM output can look right and be wrong",
+    "Present: ties acceptance to the project's matching oracle",
+    "Present: mentions project policy/provenance for AI-assisted contributions",
+    "Absent: approves committing unverified output"
+   ]
+  },
+  "split": "development"
+ }
+]
