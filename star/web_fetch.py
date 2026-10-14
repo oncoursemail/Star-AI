@@ -3,7 +3,7 @@
 Any public http(s) URL may be read (no allowlist), with these guards:
 
   * SSRF: the host name is resolved once and EVERY address must be a public (globally routable)
-    unicast address; private, loopback, link-local, shared (100.64/10), multicast, reserved and
+    unicast address; private, loopback, link-local, site-local, shared (100.64/10), multicast, reserved and
     cloud-metadata addresses are refused, as are IPv4-mapped IPv6 spellings of them. The request
     then goes to the checked address itself (Host header and TLS SNI carry the name), so a second
     DNS answer cannot point it somewhere else. The only private address allowed is the configured
@@ -67,8 +67,11 @@ def _address_allowed(address: ipaddress._BaseAddress) -> bool:
     # (::/8); tests/test_web_fetch_hardening.py pins that.
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         return False   # one spelling per destination: never unwrap ::ffff:a.b.c.d
+    # fec0::/10 (deprecated site-local) counts as global in Python's tables, but Windows still
+    # answers on fec0:0:0:ffff::1-3 as its default IPv6 DNS servers: it is a LAN address.
     return bool(address.is_global and not address.is_multicast and not address.is_reserved
-                and not address.is_unspecified and not address.is_loopback and not address.is_link_local)
+                and not address.is_unspecified and not address.is_loopback and not address.is_link_local
+                and not getattr(address, "is_site_local", False))
 
 
 def _resolve(host: str, port: int) -> list[str]:
@@ -227,9 +230,19 @@ def _charset(content_type: str) -> str:
     if not match:
         return "utf-8"
     try:
-        return codecs.lookup(match.group(1)).name
+        info = codecs.lookup(match.group(1))
     except LookupError:
         return "utf-8"
+    # base64/zlib/rot13... are bytes or str transforms, not text encodings: decode() would raise.
+    return info.name if getattr(info, "_is_text_encoding", True) else "utf-8"
+
+
+def _decode(body: bytes, content_type: str) -> str:
+    """Never raises: codecs such as `undefined` or `idna` refuse errors="replace"."""
+    try:
+        return body.decode(_charset(content_type), errors="replace")
+    except (LookupError, UnicodeError):
+        return body.decode("utf-8", errors="replace")
 
 
 async def fetch_page(url: str, *, transport: httpx.AsyncBaseTransport | None = None, resolver=_resolve,
@@ -284,7 +297,7 @@ async def fetch_page(url: str, *, transport: httpx.AsyncBaseTransport | None = N
                 if left <= 0:
                     raise FetchRefused("The page took too long (15 s limit)")
                 await asyncio.wait_for(read_all(), timeout=left)
-                raw = bytes(body).decode(_charset(response.headers.get("content-type", "")), errors="replace")
+                raw = _decode(bytes(body), response.headers.get("content-type", ""))
             finally:
                 await response.aclose()
             if content_type in ("text/html", "application/xhtml+xml") or (not content_type and "<html" in raw[:2000].lower()):

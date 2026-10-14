@@ -36,6 +36,15 @@ def test_ipv6_spellings_of_ipv4_destinations_are_refused(address):
         check_url(f"http://[{address}]/")
 
 
+@pytest.mark.parametrize("address", ["fec0::1", "fec0:0:0:ffff::1", "feff::1"])
+def test_ipv6_site_local_addresses_are_refused(address):
+    # Python reports fec0::/10 as global; Windows uses fec0:0:0:ffff::1-3 for its LAN DNS servers.
+    with pytest.raises(FetchRefused):
+        check_url("http://site.example/", resolver=lambda h, p: [address])
+    with pytest.raises(FetchRefused):
+        check_url(f"http://[{address}]/")
+
+
 def test_ordinary_public_ipv6_is_still_allowed():
     assert check_url("https://site.example/", resolver=lambda h, p: ["2606:4700::6810:84e5"])[2] == "2606:4700::6810:84e5"
 
@@ -79,3 +88,12 @@ def test_an_unknown_charset_does_not_break_the_tool():
     result = asyncio.run(web_fetch.tool_result({"url": "https://site.example/"}, transport=transport,
                                                resolver=public_resolver))
     assert result["isError"] is False and "café" in result["content"][0]["text"]
+
+
+@pytest.mark.parametrize("charset", ["base64", "zlib", "rot_13", "hex", "undefined", "idna"])
+def test_a_non_text_or_strict_only_codec_does_not_break_the_tool(charset):
+    # These codecs exist, but bytes.decode(..., errors="replace") raises for them.
+    transport = serve({"/": (200, {"content-type": f"text/plain; charset={charset}"}, "café".encode())})
+    result = asyncio.run(web_fetch.tool_result({"url": "https://site.example/"}, transport=transport,
+                                               resolver=public_resolver))
+    assert result["isError"] is False and "caf" in result["content"][0]["text"]
