@@ -1,0 +1,9 @@
+{
+  "include": ["star"],
+  "exclude": ["**/__pycache__", "star/skill_packs", "star/studio_lab_specs"],
+  "pythonVersion": "3.12",
+  "pythonPlatform": "Linux",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}

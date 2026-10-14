@@ -4,7 +4,8 @@ The Studio connector's tool list is discovered at runtime (star/studio.py). Only
 here are ever offered to a model; a tool this file does not know is reported and left out.
 """
 from typing import Any
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 READ_TOOLS = frozenset({
     "list_roblox_studios", "get_studio_state", "search_game_tree", "inspect_instance",

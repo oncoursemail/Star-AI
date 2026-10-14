@@ -6,7 +6,8 @@ host, shell, fixture-writing action or ability to activate a proposal.
 """
 from __future__ import annotations
 
-from jsonschema import Draft202012Validator
+from .._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 from .store import SharedBrain, serialize
 

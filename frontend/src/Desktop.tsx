@@ -86,7 +86,7 @@ function groupChats(chats:ChatThread[]):Array<{label:string;chats:ChatThread[]}>
 
 export function Desktop({initial=null,preview=false}:{initial?:BootData|null;preview?:boolean}) {
  const [tab,setTab]=useState<Tab>(()=>initialPreviewTab(preview))
- const [data,setData]=useState<BootData>(initial??{version:'0.9.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
+ const [data,setData]=useState<BootData>(initial??{version:'1.0.0',project:'STAR',projects:[],messages:[],active_chat:'',chats:[],settings:defaultSettings,brain_installed:false,brain_running:false,analytics:emptyAnalytics,release_url:WEBSITE_RELEASES,credentials:{}})
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
@@ -140,6 +140,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const chatMenuTrigger=useRef<HTMLButtonElement>(null)
  const [screenAsk,setScreenAsk]=useState(false)
  const [capturing,setCapturing]=useState(false)
+ const consentConfirmed=useRef(false)
  const [previews,setPreviews]=useState<Record<string,string>>({})
  const [themeMotion,setThemeMotion]=useState(!initial?.settings?.reduced_motion)
  const reducedMotion=useEffectiveReducedMotion(!themeMotion)
@@ -771,7 +772,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                teamMode={teamMode} onTeamMode={on=>{setTeamMode(on);composerRef.current?.focus()}} team={team}
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}
-               onLookAtScreen={()=>setScreenAsk(true)} previews={previews}/>
+               onLookAtScreen={()=>{consentConfirmed.current=false;setScreenAsk(true)}} previews={previews}/>
              {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
                :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
@@ -891,7 +892,11 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          <button type="button" onClick={undoDelete}><Undo2 size={14} aria-hidden="true"/> Undo</button>
        </motion.div>}
      </AnimatePresence>
-     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>void lookAtScreen()} onClosed={()=>composerRef.current?.focus()}/>
+     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>{consentConfirmed.current=true;void lookAtScreen()}} onClosed={()=>{
+       if(consentConfirmed.current)composerRef.current?.focus()
+       else document.querySelector<HTMLButtonElement>('.cmp-icon-button[aria-label="Add files and tools"]')?.focus()
+       consentConfirmed.current=false
+     }}/>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {tab==='chat'&&showStar&&<StarPet state={petState} reducedMotion={reducedMotion} idleEnabled={!inactive}/>}

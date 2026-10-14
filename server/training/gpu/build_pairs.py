@@ -23,6 +23,36 @@ from common import KNOWLEDGE, QUERY_PREFIX, embed_input
 
 EVAL_FILES = ["questions.jsonl", "heldout.jsonl", "golden-task-queries.jsonl"]
 WORD = re.compile(r"[a-z0-9]+")
+# Only the indexed documentation sources and known local model families are
+# eligible. Metadata is an unverified declaration, never an attestation.
+# Exact strings as server/knowledge/corpora.json stores them in the index's sources table (creator-docs is
+# "CC-BY-4.0 (prose), MIT (code samples)"); anything else is untrusted.
+_ALLOWED_LICENCES = frozenset({"CC-BY-4.0", "MIT", "CC-BY-4.0 (prose), MIT (code samples)"})
+_LOCAL_GENERATORS = ("qwen", "mellum", "star-quick", "local-open-model")
+_FORBIDDEN_GENERATORS = ("chatgpt", "claude", "codex", "openai", "anthropic", "gemini", "gpt-")
+
+
+def _trusted_source(source: dict | None) -> bool:
+    return (isinstance(source, dict)
+            and source.get("licence") in _ALLOWED_LICENCES
+            and all(isinstance(source.get(field), str) and source[field].strip()
+                    for field in ("repo", "commit")))
+
+
+def _trusted_generator(name: object) -> bool:
+    if not isinstance(name, str) or not name.strip():
+        return False
+    lowered = name.lower()
+    return (not any(blocked in lowered for blocked in _FORBIDDEN_GENERATORS)
+            and any(allowed in lowered for allowed in _LOCAL_GENERATORS))
+
+
+def _trusted_provenance(prov: object, source: dict, *, model: object = None) -> bool:
+    if not isinstance(prov, dict) or prov.get("claude_or_chatgpt_involved") is not False:
+        return False
+    if "doc_source" in prov and prov["doc_source"] != source:
+        return False
+    return _trusted_generator(model if model is not None else prov.get("generator"))
 
 
 def words(text: str) -> set[str]:
@@ -55,40 +85,65 @@ def main() -> None:
     args = ap.parse_args()
 
     db = sqlite3.connect(args.db)
-    chunk = {r[0]: {"path": r[1], "source": r[2], "input": embed_input(r[3], r[4], r[5])} for r in db.execute(
-        """SELECT c.text_sha, d.path, d.source, d.title, c.heading, c.text FROM chunks c JOIN docs d ON d.id=c.doc_id
-           GROUP BY c.text_sha""")}
+    # GROUP BY text_sha picks an arbitrary document path and silently discards
+    # conflicting lineage. Keep every alias for evaluation and licence checks,
+    # choosing the first indexed chunk only for deterministic positive text.
+    chunk: dict[str, dict] = {}
+    lineage: dict[str, list[tuple[str, str]]] = {}
+    for sha, path, source, title, heading, body in db.execute(
+            """SELECT c.text_sha, d.path, d.source, d.title, c.heading, c.text
+               FROM chunks c JOIN docs d ON d.id=c.doc_id ORDER BY c.id, d.id"""):
+        if sha not in chunk:
+            chunk[sha] = {"path": path, "source": source, "input": embed_input(title, heading, body)}
+        lineage.setdefault(sha, []).append((path, source))
     sources = {r[0]: {"repo": r[1], "commit": r[2], "licence": r[3]} for r in
                db.execute("SELECT name, repo, commit_sha, licence FROM sources")}
     evals = load_eval()
     eval_words = [words(e["question"]) for e in evals]
     eval_grams = set().union(*(ngrams(e["question"]) for e in evals))
     eval_pages = {p for e in evals for p in e["expected"]}
+    # Strict page exclusion applies to the *content hash*, not the path
+    # arbitrarily selected to represent that hash.
+    excluded_shas = {sha for sha, entries in lineage.items()
+                     if any(path in eval_pages for path, _ in entries)}
+    untrusted_shas = {sha for sha, entries in lineage.items()
+                      if any(not _trusted_source(sources.get(source))
+                             for _, source in entries)}
 
-    candidates = []  # (query, text_sha, origin, provenance)
+    candidates = []  # (query, text_sha, origin, provenance, raw model)
     for path in args.queries:
         for line in path.read_text(encoding="utf-8").splitlines():
             row = json.loads(line)
             if not row.get("ok"):
                 continue
             for field in ("question", "task"):
-                candidates.append((row[field], row["text_sha"], f"synthetic-{field}", row["provenance"]))
+                candidates.append((row.get(field), row.get("text_sha"), f"synthetic-{field}",
+                                   row.get("provenance"), None))
     for sha, question, model, created in db.execute(
             "SELECT text_sha, question, model, created_at FROM chunk_questions ORDER BY id"):
         candidates.append((question, sha, "doc2query-index", {
             "generator": f"{model} (STAR star-quick on server 1 = JetBrains/Mellum2.1-12B-A2.5B-Thinking Q4_K_M, Apache-2.0)",
-            "generated_at": created, "claude_or_chatgpt_involved": False}))
+            "generated_at": created, "claude_or_chatgpt_involved": False}, model))
 
     dropped = Counter()
     seen, pairs = set(), []
-    for query, sha, origin, prov in candidates:
+    for query, sha, origin, prov, model in candidates:
+        if not isinstance(query, str) or not query.strip():
+            dropped["invalid query"] += 1
+            continue
         query = " ".join(query.split())
         info = chunk.get(sha)
         if info is None:
             dropped["chunk no longer in index"] += 1
             continue
-        if args.exclude_eval_pages and info["path"] in eval_pages:
+        if args.exclude_eval_pages and sha in excluded_shas:
             dropped["page is an evaluation answer (strict variant)"] += 1
+            continue
+        if sha in untrusted_shas:
+            dropped["untrusted document source"] += 1
+            continue
+        if not _trusted_provenance(prov, sources[info["source"]], model=model):
+            dropped["untrusted query provenance"] += 1
             continue
         qw = words(query)
         if any(len(qw & ew) / max(1, len(qw | ew)) >= args.max_jaccard for ew in eval_words) or (ngrams(query) & eval_grams):

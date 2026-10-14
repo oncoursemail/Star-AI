@@ -24,10 +24,17 @@ export function isSiteBuild(env){
  return env.STAR_SITE_BUILD==='1'||(env.GITHUB_WORKFLOW_REF||'').includes('/.github/workflows/website-pages.yml@')
 }
 
+/** Resource hints React hoists to the front of the markup (the hero image preload); they belong in <head>. */
+const HOISTED=/^(?:<link [^>]*>)*/
+
 /** Puts rendered markup into the built document. Returns null when the document is not the expected shape. */
 export function injectMarkup(document,markup){
- if(document.split(EMPTY_ROOT).length!==2||!markup.startsWith('<div class="sw'))return null
- return document.replace(EMPTY_ROOT,()=>'<div id="root">'+markup+'</div>')
+ const hoisted=markup.match(HOISTED)[0]
+ const page=markup.slice(hoisted.length)
+ if(document.split(EMPTY_ROOT).length!==2||!page.startsWith('<div class="sw'))return null
+ if(hoisted&&document.split('</head>').length!==2)return null
+ const withHints=hoisted?document.replace('</head>',()=>hoisted+'</head>'):document
+ return withHints.replace(EMPTY_ROOT,()=>'<div id="root">'+page+'</div>')
 }
 
 async function main(){
