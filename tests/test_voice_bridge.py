@@ -7,6 +7,7 @@ import pytest
 
 from star.voice.bridge import VOICE_ACTIONS, VoiceBridge
 from star.voice.runtime import Engines
+from star.voice.settings import STAR_VOICE
 from voice_fakes import FakeASR, FakeBrain, FakeSpeaker, FakeTTS, FakeVAD, quiet, speech, wait_for
 
 TEXT = "can you hear me star"
@@ -82,10 +83,11 @@ def kinds(events):
 
 def test_a_call_started_from_the_ui_streams_events_and_saves_the_turn(tmp_path):
     bridge, events, saved, built = make_bridge(tmp_path)
-    started = bridge.handle("voiceStartCall", {"settings": {"voice": "bella", "speed": 0.9}}, "req-7")
+    started = bridge.handle("voiceStartCall", {"settings": {"voice": "bella", "speed": 0.9, "call_mode": "hands-free"},
+                                               "micConsent": True}, "req-7")
     assert started["callId"] == "req-7" and started["settings"]["voice"] == "bella"
     with pytest.raises(RuntimeError, match="already running"):
-        bridge.handle("voiceStartCall", {}, "req-8")
+        bridge.handle("voiceStartCall", {"micConsent": True}, "req-8")
     assert wait_for(lambda: "turn_metrics" in kinds(events))
     assert all(call_id == "req-7" for call_id, _data in events)
     states = [d["state"] for _c, d in events if d["type"] == "state"]
@@ -104,7 +106,7 @@ def test_a_call_started_from_the_ui_streams_events_and_saves_the_turn(tmp_path):
     assert bridge.handle("voiceStatus", {})["inCall"] is False
     assert bridge.handle("voiceStopCall", {}) == {"stopped": False}
 
-    bridge.handle("voiceStartCall", {}, "req-9")                 # second call reuses the loaded engines
+    bridge.handle("voiceStartCall", {"micConsent": True, "settings": {"call_mode": "hands-free"}}, "req-9")                 # second call reuses the loaded engines
     assert wait_for(lambda: ("req-9", {"type": "state", "state": "listening"}) in events)
     bridge.close()
     assert built["engines"] == 1
@@ -112,7 +114,7 @@ def test_a_call_started_from_the_ui_streams_events_and_saves_the_turn(tmp_path):
 
 def test_start_failures_are_reported_as_events_and_leave_no_call_behind(tmp_path):
     bridge, events, _saved, _built = make_bridge(tmp_path, fail_engines=True)
-    bridge.handle("voiceStartCall", {}, "req-1")
+    bridge.handle("voiceStartCall", {"micConsent": True}, "req-1")
     assert wait_for(lambda: kinds(events)[-1:] == ["ended"])
     assert "Voice model file missing" in [d for _c, d in events if d["type"] == "error"][0]["message"]
     assert bridge.handle("voiceStatus", {})["inCall"] is False
@@ -120,7 +122,7 @@ def test_start_failures_are_reported_as_events_and_leave_no_call_behind(tmp_path
 
 def test_actions_are_validated_and_settings_round_trip(tmp_path):
     bridge, _events, _saved, _built = make_bridge(tmp_path)
-    assert "voiceStartCall" in VOICE_ACTIONS and len(VOICE_ACTIONS) == 11
+    assert "voiceStartCall" in VOICE_ACTIONS and len(VOICE_ACTIONS) == 14
     with pytest.raises(PermissionError):
         bridge.handle("deleteEverything", {})
     for action in ("voiceInterrupt", "voiceSetMuted"):
@@ -130,7 +132,7 @@ def test_actions_are_validated_and_settings_round_trip(tmp_path):
         bridge.handle("voiceStartCall", {"settings": {"voice": "../x"}}, "bad")
     assert bridge.handle("voiceStatus", {})["inCall"] is False   # a rejected start leaves nothing running
 
-    assert bridge.handle("voiceGetSettings", {})["settings"]["voice"] == "heart"
+    assert bridge.handle("voiceGetSettings", {})["settings"]["voice"] == STAR_VOICE
     saved = bridge.handle("voiceSaveSettings", {"settings": {"voice": "blend-heart-nicole", "output": "speakers"}})
     assert saved["settings"]["voice"] == "blend-heart-nicole"
     assert json.loads((tmp_path / "voice.json").read_text(encoding="utf-8"))["output"] == "speakers"
@@ -139,7 +141,7 @@ def test_actions_are_validated_and_settings_round_trip(tmp_path):
     with pytest.raises(ValueError):
         bridge.handle("voiceSaveSettings", {"settings": {"speed": 9}})
     (tmp_path / "voice.json").write_text("{broken", encoding="utf-8")
-    assert bridge.handle("voiceGetSettings", {})["settings"]["voice"] == "heart"     # damaged file -> defaults
+    assert bridge.handle("voiceGetSettings", {})["settings"]["voice"] == STAR_VOICE     # damaged file -> defaults
 
     voices = bridge.handle("voiceListVoices", {})["voices"]
     heart = next(v for v in voices if v["id"] == "heart")                # the catalog keeps the audition ids

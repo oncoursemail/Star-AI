@@ -17,7 +17,11 @@ from typing import Any
 from uuid import uuid4
 
 from ._lazy import lazy_attr, lazy_module
-httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 MODERN = "2026-07-28"

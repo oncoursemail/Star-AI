@@ -171,3 +171,45 @@ def test_large_source_rejected_without_tool_lookup(monkeypatch):
                         lambda _: (_ for _ in ()).throw(AssertionError("too large")))
     with pytest.warns(RuntimeWarning, match="oversized"):
         assert luau_analyze.analyze("x" * 20_001) == []
+
+
+def test_lint_warnings_with_exit_zero_are_findings_not_malformed(monkeypatch):
+    # luau-analyze reports lint warnings but exits 0 when there are no errors.
+    fake_analyzer(monkeypatch, status=0, stderr=(
+        "star-check.luau(2,7): LocalUnused: Variable 'points' is never used\n"))
+    evidence = luau_analyze.analyze_evidence(CODE)
+    assert evidence.status == "diagnostics"
+    assert [f.rule_id for f in evidence.findings] == ["luau-analyze-localunused"]
+    assert evidence.findings[0].severity == "review"
+    assert [f.rule_id for f in luau_analyze.analyze(CODE)] == ["luau-analyze-localunused"]
+
+
+def test_error_rows_with_exit_zero_stay_malformed(monkeypatch):
+    fake_analyzer(monkeypatch, status=0, stderr="star-check.luau(1,1): SyntaxError: bad\n")
+    assert luau_analyze.analyze_evidence(CODE).status == "malformed"
+
+
+def test_multiline_type_error_continuations_are_not_malformed(monkeypatch):
+    # Recorded from the checksum-pinned luau-analyze 0.691 --mode=strict.
+    fake_analyzer(monkeypatch, status=1, stderr=(
+        "./star-check.luau(2,1): TypeError: Type 'a' could not be converted into 'A'\n"
+        "caused by:\n"
+        "  Property 'x' is not compatible.\n"
+        "Type 'string' could not be converted into 'number' in an invariant context\n"
+        "./star-check.luau(3,3): TypeError: Type\n"
+        "\t'(string) -> number'\n"
+        "could not be converted into\n"
+        "\t'(number) -> string'\n"
+        "./star-check.luau(2,7): LocalUnused: Variable 'a' is never used\n"))
+    evidence = luau_analyze.analyze_evidence(CODE)
+    assert evidence.status == "diagnostics"
+    assert [(f.rule_id, f.line) for f in evidence.findings] == [
+        ("luau-analyze-localunused", 2), ("luau-analyze-typeerror", 2),
+        ("luau-analyze-typeerror", 3)]
+    assert len(luau_analyze.analyze(CODE)) == 3
+
+
+def test_unparsed_text_before_any_diagnostic_stays_malformed(monkeypatch):
+    fake_analyzer(monkeypatch, status=1, stderr=(
+        "caused by:\n./star-check.luau(2,1): TypeError: bad\n"))
+    assert luau_analyze.analyze_evidence(CODE).status == "malformed"

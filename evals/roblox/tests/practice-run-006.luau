@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(nil), {coins=0,stage=1,soundEnabled=true}))
+check("case 2", deepEqual(fn({coins=3,stage=2,soundEnabled=false,runtime='ignore'}), {coins=3,stage=2,soundEnabled=false}))
+check("case 3", deepEqual(fn({coins=-5,stage=0,soundEnabled=true}), {coins=0,stage=1,soundEnabled=true}))
+check("case 4", deepEqual(fn({coins=8.8,stage=5.5}), {coins=8,stage=5,soundEnabled=true}))
+check("case 5", deepEqual(fn({coins='bad',stage='bad',soundEnabled='x'}), {coins=0,stage=1,soundEnabled=true}))
+check("case 6", deepEqual(fn({coins=0,stage=1,soundEnabled=false}), {coins=0,stage=1,soundEnabled=false}))

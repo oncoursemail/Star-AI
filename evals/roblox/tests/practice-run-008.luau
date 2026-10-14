@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn({}), 0))
+check("case 2", deepEqual(fn({1,9,4}), 9))
+check("case 3", deepEqual(fn({-3,-1}), 0))
+check("case 4", deepEqual(fn({3,'bad',8}), 8))
+check("case 5", deepEqual(fn({7,7,2}), 7))
+check("case 6", deepEqual(fn({1,20,15}), 20))

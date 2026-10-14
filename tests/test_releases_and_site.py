@@ -52,7 +52,7 @@ def test_windows_release_workflow_has_real_windows_installer_and_guarded_release
     assert 'runs-on: windows-latest' in s
     assert 'installer/STAR.iss' in s
     assert 'smoke' in s.lower()
-    assert 'contents: write' in s and 'needs: windows-build' in s
+    assert 'contents: write' in s and 'needs: [windows-build, attest-release]' in s
     assert 'gh release create' in s
 
 

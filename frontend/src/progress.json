@@ -1,9 +1,65 @@
 {
  "schema": 1,
  "repo": "oncoursemail/Star-AI",
- "generatedAt": "2026-10-10T15:26:50.653Z",
+ "generatedAt": "2026-10-14T10:25:33.411Z",
  "raw": {
   "releases": [
+   {
+    "tag_name": "v1.0.0",
+    "name": "STAR Intelligence v1.0.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v1.0.0",
+    "published_at": "2026-10-14T10:10:44Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/SHA256SUMS.txt",
+      "digest": "sha256:57a8c8452930b384544382394b4000d8ccfd471994518fc3cf2d02f431979d04"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 362777362,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:c87e49198ffaa9a76a02b8609dc9c8d0a695f5b6e5ec360bc76dd813a3b8291e"
+     },
+     {
+      "name": "STAR-Setup-v1.0.0.exe",
+      "size": 242119462,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v1.0.0/STAR-Setup-v1.0.0.exe",
+      "digest": "sha256:64cbd15df7e1a328eb6cf7584576bfb25629132065daef3729eb7e03b729817d"
+     }
+    ]
+   },
+   {
+    "tag_name": "v0.9.0",
+    "name": "STAR Intelligence v0.9.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0",
+    "published_at": "2026-10-11T22:34:59Z",
+    "prerelease": false,
+    "draft": false,
+    "assets": [
+     {
+      "name": "SHA256SUMS.txt",
+      "size": 183,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/SHA256SUMS.txt",
+      "digest": "sha256:27e5c3501b1602ea41f7539f471b4accdf274c4c7a38656f4cb0ab0c171e6b99"
+     },
+     {
+      "name": "STAR-Genesis-Windows-x64.zip",
+      "size": 354843908,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/STAR-Genesis-Windows-x64.zip",
+      "digest": "sha256:60098dcc302c9e15efddb5759eeff43ab338058120777c145c74bd83533acfee"
+     },
+     {
+      "name": "STAR-Setup-v0.9.0.exe",
+      "size": 234859854,
+      "browser_download_url": "https://github.com/oncoursemail/Star-AI/releases/download/v0.9.0/STAR-Setup-v0.9.0.exe",
+      "digest": "sha256:974ed2d6d59248bafdbea697e9b41ae41f3fd92eee35088d5688baaf4edd346c"
+     }
+    ]
+   },
    {
     "tag_name": "v0.8.1",
     "name": "STAR Intelligence v0.8.1",
@@ -119,14 +175,14 @@
   ],
   "pulls": [
    {
-    "number": 39,
-    "title": "STAR Ultimate Integration: model fleet, Roblox intelligence, reviewed tool forge and unified chat",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/39",
+    "number": 368,
+    "title": "STAR next: merged work after v1.0.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/368",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T04:02:36Z",
-    "updated_at": "2026-10-10T13:37:28Z",
+    "created_at": "2026-10-14T09:52:36Z",
+    "updated_at": "2026-10-14T10:10:46Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -134,14 +190,479 @@
     "labels": []
    },
    {
-    "number": 38,
-    "title": "STAR Ultimate Brain v2: managed local multi-model router, probes and Windows QA",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/38",
+    "number": 353,
+    "title": "[luau-lint-deprecated-api-rules] Default-off deprecated Roblox Luau API rules",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/353",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T04:15:29Z",
+    "updated_at": "2026-10-14T09:58:04Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 276,
+    "title": "Fix nondeterministic Windows audio deadline test without weakening timeout guarantee",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/276",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T21:43:05Z",
+    "updated_at": "2026-10-14T09:58:02Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 173,
+    "title": "[Draft] Repair #145: reapply sandboxed Luau execution on current integration base",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/173",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-12T08:01:24Z",
+    "updated_at": "2026-10-14T09:58:00Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 147,
+    "title": "Evaluation-driven code generation fixes (draft: gain not proven yet)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/147",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-12T00:47:37Z",
+    "updated_at": "2026-10-14T09:57:58Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 109,
+    "title": "Integration: bounded specialist research, parallel teams and reviewed tool discovery",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/109",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-11T21:04:21Z",
+    "updated_at": "2026-10-14T09:57:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 105,
+    "title": "Integration: source-provenanced Asset Forge tools with deterministic terrain previews",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/105",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-11T20:52:48Z",
+    "updated_at": "2026-10-14T09:57:54Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 68,
+    "title": "feat: integrate Roblox architecture intelligence, Blender assets and quality gates",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/68",
+    "state": "closed",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-11T15:42:32Z",
+    "updated_at": "2026-10-14T09:57:53Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 350,
+    "title": "[claude] docs: refresh START_HERE_WINDOWS11 to current UI labels",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/350",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:57:01Z",
+    "created_at": "2026-10-14T04:11:41Z",
+    "updated_at": "2026-10-14T09:57:02Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 343,
+    "title": "[claude] docs: correct 'Nothing leaves the PC' in STAR_LEARNING.md",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/343",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:56:39Z",
+    "created_at": "2026-10-14T03:42:14Z",
+    "updated_at": "2026-10-14T09:56:40Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 360,
+    "title": "Keep STAR Brain files LF in every checkout",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/360",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:56:17Z",
+    "created_at": "2026-10-14T05:11:19Z",
+    "updated_at": "2026-10-14T09:56:17Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 359,
+    "title": "Evals: --tasks keeps the other results in the result file",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/359",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:55:40Z",
+    "created_at": "2026-10-14T05:11:17Z",
+    "updated_at": "2026-10-14T09:55:40Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 311,
+    "title": "[cloud-improve] Roblox API checker: no misleading 'did you mean' for unrelated names",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/311",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:55:19Z",
+    "created_at": "2026-10-14T02:05:18Z",
+    "updated_at": "2026-10-14T09:55:19Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 309,
+    "title": "[cloud-improve] Corrections store: WAL + 10 s busy timeout (no more 'database is locked' with the Discord bot)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/309",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:54:58Z",
+    "created_at": "2026-10-14T01:54:45Z",
+    "updated_at": "2026-10-14T09:54:58Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 308,
+    "title": "[cloud-improve] Crash-safe settings.json: atomic save, recover from a damaged file",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/308",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:54:36Z",
+    "created_at": "2026-10-14T01:51:28Z",
+    "updated_at": "2026-10-14T09:54:37Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 310,
+    "title": "[claude] Deterministic audio deadline and MCP cancellation tests",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/310",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:54:15Z",
+    "created_at": "2026-10-14T02:01:13Z",
+    "updated_at": "2026-10-14T09:54:15Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 152,
+    "title": "STAR next: merged work after v0.9.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/152",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T09:49:07Z",
+    "created_at": "2026-10-12T01:17:42Z",
+    "updated_at": "2026-10-14T09:49:07Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 367,
+    "title": "[claude] Plain-language voice setup errors",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/367",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T08:45:46Z",
+    "updated_at": "2026-10-14T08:45:46Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 366,
+    "title": "[claude] docs: developer API reference for main star modules (task 010)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/366",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T07:42:19Z",
+    "updated_at": "2026-10-14T07:42:19Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 365,
+    "title": "[claude] helper 009: validate learning bundle format",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/365",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T07:22:08Z",
+    "updated_at": "2026-10-14T07:22:08Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 364,
+    "title": "[claude] helper: repo-wide docs link check (008)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/364",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T06:45:31Z",
+    "updated_at": "2026-10-14T06:45:31Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 363,
+    "title": "[claude] ci: complete Dependabot config (npm, grouping, target star/next)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/363",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T06:20:31Z",
+    "updated_at": "2026-10-14T06:20:31Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 362,
+    "title": "[claude] Add issue and PR templates",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/362",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T05:41:20Z",
+    "updated_at": "2026-10-14T05:41:20Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 361,
+    "title": "[claude] docs: CHANGELOG.md for v0.9.0 to v1.0.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/361",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T05:13:14Z",
+    "updated_at": "2026-10-14T05:13:14Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 333,
+    "title": "[claude] Tests for CLI, llama runtime, media, repo reader, graph build + 5 bug fixes (cloud tests 2/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/333",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T03:17:33Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 321,
+    "title": "[security] Audit 2026-10-13: findings, severities and fix status",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/321",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:31:52Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 318,
+    "title": "[security] Redaction: Discord, HF, AWS, Google, Slack, GitLab, Stripe key formats (L-5)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/318",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:24:28Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 316,
+    "title": "[security] Discord audio: FFmpeg reads only stdin (L-4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/316",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:19:38Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 315,
+    "title": "[security] Web fetch: no gateway via redirect, frame markers, charset fallback (L-1..L-3)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/315",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:19:28Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 314,
+    "title": "[security] Refuse full Luau for the rest of a turn after web content (M-1)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/314",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:19:23Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 313,
+    "title": "[security] Workspace tools: refuse Windows path spellings that bypass protected names (H-1)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/313",
+    "state": "closed",
+    "draft": true,
+    "merged_at": "2026-10-14T04:59:56Z",
+    "created_at": "2026-10-14T02:19:19Z",
+    "updated_at": "2026-10-14T04:59:56Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 254,
+    "title": "Release v1.0.0: version, release notes, website",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/254",
+    "state": "closed",
+    "draft": false,
+    "merged_at": "2026-10-14T04:59:54Z",
+    "created_at": "2026-10-13T15:34:05Z",
+    "updated_at": "2026-10-14T04:59:54Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 355,
+    "title": "[skill-pack-marketplace-receipts-badges] Receipt-safe developer products, passes, badges",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/355",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:51:37Z",
-    "updated_at": "2026-10-10T03:51:37Z",
+    "created_at": "2026-10-14T04:27:36Z",
+    "updated_at": "2026-10-14T04:50:23Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -149,14 +670,14 @@
     "labels": []
    },
    {
-    "number": 35,
-    "title": "Integration: unified STAR chat, Fast Brain, MCP Hub, parallel Teams and reviewed memory",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/35",
+    "number": 356,
+    "title": "[skill-pack-pathfinding-npc-movement] Safe NPC pathfinding and waypoint movement",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/356",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:32:07Z",
-    "updated_at": "2026-10-10T03:49:45Z",
+    "created_at": "2026-10-14T04:29:56Z",
+    "updated_at": "2026-10-14T04:47:44Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -164,14 +685,14 @@
     "labels": []
    },
    {
-    "number": 37,
-    "title": "STAR Agent Forge: real read-only subagents, reviewed custom tools, ranked memory",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/37",
+    "number": 354,
+    "title": "[skill-pack-accuracy-audit-datastores-remotes] Verify official DataStore and remote guidance",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/354",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:37:49Z",
-    "updated_at": "2026-10-10T03:44:15Z",
+    "created_at": "2026-10-14T04:23:08Z",
+    "updated_at": "2026-10-14T04:47:42Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -179,14 +700,44 @@
     "labels": []
    },
    {
-    "number": 36,
-    "title": "STAR Roblox Intelligence — game stats, real images, docs, forums, Place IDs, YouTube research",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/36",
+    "number": 289,
+    "title": "STAR sees Blender on brain 2: star_blender tool + Lab MCP launcher + lantern demo",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/289",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:26:50Z",
+    "updated_at": "2026-10-14T04:47:28Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 358,
+    "title": "[claude] Make roblox_docs_live_enabled a real setting",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/358",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T04:45:02Z",
+    "updated_at": "2026-10-14T04:45:02Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 357,
+    "title": "[claude] Docs: cloud PR review summary 2026-10-13/14",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/357",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:34:07Z",
-    "updated_at": "2026-10-10T03:42:39Z",
+    "created_at": "2026-10-14T04:31:32Z",
+    "updated_at": "2026-10-14T04:31:32Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -194,14 +745,14 @@
     "labels": []
    },
    {
-    "number": 31,
-    "title": "STAR Fast Brain: fast chat, hosted models, web, images, subagents, and integrated Agent Skills",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/31",
+    "number": 338,
+    "title": "Research: scripting, web, shader and data languages (notes, catalog skill packs, golden tasks)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/338",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:11:12Z",
-    "updated_at": "2026-10-10T03:36:38Z",
+    "created_at": "2026-10-14T03:35:58Z",
+    "updated_at": "2026-10-14T04:30:29Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -209,14 +760,14 @@
     "labels": []
    },
    {
-    "number": 34,
-    "title": "STAR Ultimate Brain v1: specialist model routing, honest speed benchmarks, Roblox expert skills and training prep",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/34",
+    "number": 345,
+    "title": "Research: reverse-engineering/decomp/clean-room projects + RE skill packs + REV golden tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/345",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:29:02Z",
-    "updated_at": "2026-10-10T03:34:31Z",
+    "created_at": "2026-10-14T03:58:35Z",
+    "updated_at": "2026-10-14T04:27:56Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -224,14 +775,29 @@
     "labels": []
    },
    {
-    "number": 33,
-    "title": "chore: clean up obsolete public-download mirror and organize STAR source",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/33",
+    "number": 346,
+    "title": "Code health 4/4: five cheap strict TS checks for frontend/",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/346",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T04:01:23Z",
+    "updated_at": "2026-10-14T04:27:55Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 347,
+    "title": "[claude] Research 2026-10: ranked STAR improvements + tolerant edits and lint-on-edit",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/347",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:26:28Z",
-    "updated_at": "2026-10-10T03:31:12Z",
+    "created_at": "2026-10-14T04:03:48Z",
+    "updated_at": "2026-10-14T04:27:53Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -239,14 +805,14 @@
     "labels": []
    },
    {
-    "number": 27,
-    "title": "STAR Quiet Chat: minimal React UI with image generation inside conversations",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/27",
+    "number": 348,
+    "title": "Other game engines: research, 27 opt-in skill packs, 54 golden tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/348",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T02:49:34Z",
-    "updated_at": "2026-10-10T03:28:44Z",
+    "created_at": "2026-10-14T04:04:51Z",
+    "updated_at": "2026-10-14T04:27:52Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -254,14 +820,14 @@
     "labels": []
    },
    {
-    "number": 32,
-    "title": "feat: STAR website intelligence hub, live stats, tool catalog & verified roadmap",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/32",
-    "state": "closed",
+    "number": 349,
+    "title": "[claude] Tests for voice engines, ComfyUI, self-builder, web search + 4 fixes (cloud tests 3/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/349",
+    "state": "open",
     "draft": false,
-    "merged_at": "2026-10-10T03:19:17Z",
-    "created_at": "2026-10-10T03:15:06Z",
-    "updated_at": "2026-10-10T03:19:17Z",
+    "merged_at": null,
+    "created_at": "2026-10-14T04:09:45Z",
+    "updated_at": "2026-10-14T04:27:50Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -269,14 +835,29 @@
     "labels": []
    },
    {
-    "number": 29,
-    "title": "STAR Next Intelligence — real parallel teams, verified memory and measured performance",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/29",
+    "number": 351,
+    "title": "Roblox cutscenes + FaceControls expressions: skill pack, typed Luau modules, Studio lab with frame evidence (stacked on #327)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/351",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T04:14:46Z",
+    "updated_at": "2026-10-14T04:27:47Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 337,
+    "title": "UI: worst-case data, narrow widths and consistent empty/loading/error states",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/337",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:03:36Z",
-    "updated_at": "2026-10-10T03:16:56Z",
+    "created_at": "2026-10-14T03:35:53Z",
+    "updated_at": "2026-10-14T04:17:56Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -284,14 +865,44 @@
     "labels": []
    },
    {
-    "number": 30,
-    "title": "STAR Frontier MCP Hub — 2026/legacy protocols, Obsidian & Graphify, bounded tool search",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/30",
+    "number": 336,
+    "title": "[claude] Frontend tests for progress hook, GitHub reader, messages, composer + 2 fixes (cloud tests 4/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/336",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:35:44Z",
+    "updated_at": "2026-10-14T04:17:55Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 320,
+    "title": "[cloud-improve] Composer: character counter and block prompts the host would refuse",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/320",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:30:24Z",
+    "updated_at": "2026-10-14T04:17:54Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 342,
+    "title": "Settings: seven sections with search, unsaved-changes bar, web search keys",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/342",
     "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T03:10:07Z",
-    "updated_at": "2026-10-10T03:13:45Z",
+    "created_at": "2026-10-14T03:40:50Z",
+    "updated_at": "2026-10-14T04:17:51Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -299,14 +910,14 @@
     "labels": []
    },
    {
-    "number": 28,
-    "title": "Superseded: STAR Fast Brain initial candidate (see #31)",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/28",
-    "state": "closed",
+    "number": 352,
+    "title": "Accessibility: axe-core tests, skip link, one h1 per page, switches and readable small print",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/352",
+    "state": "open",
     "draft": true,
     "merged_at": null,
-    "created_at": "2026-10-10T02:52:13Z",
-    "updated_at": "2026-10-10T03:11:22Z",
+    "created_at": "2026-10-14T04:15:20Z",
+    "updated_at": "2026-10-14T04:27:45Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -314,14 +925,14 @@
     "labels": []
    },
    {
-    "number": 26,
-    "title": "STAR Intelligence: Obsidian notes, Graphify graphs and Agent Skills",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/26",
-    "state": "closed",
+    "number": 335,
+    "title": "Code health 3/4: remove 3 dead functions (vulture + grep + git history evidence)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/335",
+    "state": "open",
     "draft": false,
-    "merged_at": "2026-10-10T02:48:03Z",
-    "created_at": "2026-10-10T02:33:27Z",
-    "updated_at": "2026-10-10T02:48:03Z",
+    "merged_at": null,
+    "created_at": "2026-10-14T03:32:47Z",
+    "updated_at": "2026-10-14T04:09:52Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -329,254 +940,14 @@
     "labels": []
    },
    {
-    "number": 18,
-    "title": "chore(deps): bump actions/setup-python from 6 to 7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/18",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:45:24Z",
-    "created_at": "2026-10-10T02:24:46Z",
-    "updated_at": "2026-10-10T02:45:32Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 19,
-    "title": "chore(deps): bump actions/upload-artifact from 6 to 7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/19",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:45:11Z",
-    "created_at": "2026-10-10T02:24:49Z",
-    "updated_at": "2026-10-10T02:45:21Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 20,
-    "title": "chore(deps): update openai requirement from <3,>=2.0 to >=2.54.0,<3",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/20",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:45:06Z",
-    "created_at": "2026-10-10T02:24:55Z",
-    "updated_at": "2026-10-10T02:45:16Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 21,
-    "title": "chore(deps): bump actions/download-artifact from 7 to 8",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/21",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:44:49Z",
-    "created_at": "2026-10-10T02:24:59Z",
-    "updated_at": "2026-10-10T02:44:58Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 22,
-    "title": "chore(deps-dev): update pytest requirement from <10,>=8 to >=9.1.1,<10",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/22",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:44:45Z",
-    "created_at": "2026-10-10T02:25:02Z",
-    "updated_at": "2026-10-10T02:44:53Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 23,
-    "title": "chore(deps): update jsonschema requirement from <5,>=4.23 to >=4.26.0,<5",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/23",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:44:24Z",
-    "created_at": "2026-10-10T02:25:07Z",
-    "updated_at": "2026-10-10T02:44:32Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 24,
-    "title": "chore(deps): update httpx requirement from <1,>=0.27 to >=0.28.1,<1",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/24",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:44:19Z",
-    "created_at": "2026-10-10T02:25:10Z",
-    "updated_at": "2026-10-10T02:44:28Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 25,
-    "title": "chore(deps): update pillow requirement from <13,>=11 to >=12.3.0,<13",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/25",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:43:55Z",
-    "created_at": "2026-10-10T02:25:16Z",
-    "updated_at": "2026-10-10T02:44:04Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 1,
-    "title": "chore(deps): bump actions/checkout from 4 to 7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/1",
-    "state": "closed",
+    "number": 332,
+    "title": "[claude] Deterministic timing tests + fix tied chat timestamps (cloud tests 1/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/332",
+    "state": "open",
     "draft": false,
     "merged_at": null,
-    "created_at": "2026-10-09T21:52:06Z",
-    "updated_at": "2026-10-10T02:25:40Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 2,
-    "title": "chore(deps): bump actions/upload-pages-artifact from 4 to 5",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/2",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:07Z",
-    "updated_at": "2026-10-10T02:25:38Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 3,
-    "title": "build(deps): bump actions/download-artifact from 4 to 7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/3",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:10Z",
-    "updated_at": "2026-10-10T02:25:11Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 4,
-    "title": "chore(deps): bump actions/upload-artifact from 4 to 7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/4",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:12Z",
-    "updated_at": "2026-10-10T02:25:01Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 6,
-    "title": "build(deps): update faster-whisper requirement from <2,>=1.1 to >=1.2.1,<2",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/6",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:17Z",
-    "updated_at": "2026-10-10T02:25:00Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 9,
-    "title": "build(deps): update pyside6 requirement from <7,>=6.8 to >=6.11.2,<7",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/9",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:32Z",
-    "updated_at": "2026-10-10T02:24:56Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 10,
-    "title": "build(deps): update pyjwt requirement from <3,>=2.9 to >=2.15.1,<3",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/10",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:34Z",
-    "updated_at": "2026-10-10T02:24:55Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 11,
-    "title": "build(deps): update python-dotenv requirement from <2,>=1 to >=1.2.4,<2",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/11",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:37Z",
-    "updated_at": "2026-10-10T02:24:53Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 17,
-    "title": "STAR v0.8.1 maintenance — Node 24 Actions, security and desktop dependencies",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/17",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:23:51Z",
-    "created_at": "2026-10-10T02:05:36Z",
-    "updated_at": "2026-10-10T02:23:51Z",
+    "created_at": "2026-10-14T03:16:49Z",
+    "updated_at": "2026-10-14T04:09:52Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -584,44 +955,14 @@
     "labels": []
    },
    {
-    "number": 7,
-    "title": "build(deps): update mcp requirement from <2,>=1.19 to >=2.3.0,<3",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/7",
-    "state": "closed",
+    "number": 331,
+    "title": "Bundled Roblox API dataset (Studio 0.742) with an official-source refresh script",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/331",
+    "state": "open",
     "draft": false,
     "merged_at": null,
-    "created_at": "2026-10-09T21:52:23Z",
-    "updated_at": "2026-10-10T02:10:14Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 8,
-    "title": "build(deps): update openai requirement from <3,>=2.0 to >=3.26.0,<4",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/8",
-    "state": "closed",
-    "draft": false,
-    "merged_at": null,
-    "created_at": "2026-10-09T21:52:31Z",
-    "updated_at": "2026-10-10T02:10:10Z",
-    "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
-    },
-    "labels": []
-   },
-   {
-    "number": 16,
-    "title": "STAR Genesis v0.8 RC — Qwen 500 fix, live chat, React website and Windows build",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/16",
-    "state": "closed",
-    "draft": false,
-    "merged_at": "2026-10-10T02:01:15Z",
-    "created_at": "2026-10-10T01:08:21Z",
-    "updated_at": "2026-10-10T02:01:15Z",
+    "created_at": "2026-10-14T03:16:47Z",
+    "updated_at": "2026-10-14T04:09:48Z",
     "user": {
      "login": "oncoursemail",
      "type": "User"
@@ -629,232 +970,1884 @@
     "labels": []
    },
    {
-    "number": 5,
-    "title": "build(deps): bump actions/configure-pages from 5 to 6",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/5",
-    "state": "closed",
+    "number": 329,
+    "title": "Ten opt-in Roblox skill packs: combat, pathfinding, physics, tags, input, audio, specs, purchases, teleport, Open Cloud",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/329",
+    "state": "open",
     "draft": false,
     "merged_at": null,
-    "created_at": "2026-10-09T21:52:13Z",
-    "updated_at": "2026-10-09T22:56:47Z",
+    "created_at": "2026-10-14T03:15:10Z",
+    "updated_at": "2026-10-14T04:09:46Z",
     "user": {
-     "login": "dependabot[bot]",
-     "type": "Bot"
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 328,
+    "title": "Code health 2/4: pyright basic for star/ with baseline gate in CI (+2 bug fixes)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/328",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:08:56Z",
+    "updated_at": "2026-10-14T04:09:45Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 327,
+    "title": "STAR VFX Studio: style-agnostic ability VFX (skill pack, composer, Studio lab with frame evidence)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/327",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:05:26Z",
+    "updated_at": "2026-10-14T04:09:43Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 326,
+    "title": "Code health 1/4: ruff correctness lint for star/ in CI (+ testBlender NameError fix)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/326",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:49:29Z",
+    "updated_at": "2026-10-14T04:09:42Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 324,
+    "title": "[cloud-improve] Don't resend a prompt the server refused as too large (1 request, not 3)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/324",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:44:07Z",
+    "updated_at": "2026-10-14T04:09:40Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 323,
+    "title": "[claude] User guide for non-programmers (docs/guide) with link-check test",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/323",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:36:17Z",
+    "updated_at": "2026-10-14T04:09:39Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 319,
+    "title": "[claude] Faster CI (parallel Windows shards, caches, SHA pins, docs-only skip) and complete Windows packaging",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/319",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:26:20Z",
+    "updated_at": "2026-10-14T04:09:36Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 305,
+    "title": "[tests-clock-and-corrections] Fixed-time and owner-correction regressions",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/305",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T01:11:39Z",
+    "updated_at": "2026-10-14T04:08:11Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 303,
+    "title": "[a11y-control-names-and-dialog-focus] Test control names and focus",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/303",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T01:05:25Z",
+    "updated_at": "2026-10-14T04:08:08Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 301,
+    "title": "[a11y-colour-token-contrast] Assert WCAG AA on live desktop color pairs",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/301",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T01:00:02Z",
+    "updated_at": "2026-10-14T04:08:05Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 304,
+    "title": "[luau-module-type-alias-lesson-witnesses] Candidate named record and ModuleScript corrections",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/304",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T01:05:29Z",
+    "updated_at": "2026-10-14T04:03:17Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 283,
+    "title": "Discord bot autostart: Settings > Discord supervisor, single-instance lock, Task Scheduler script",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/283",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:08:27Z",
+    "updated_at": "2026-10-14T04:02:32Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 181,
+    "title": "Run and repair Luau before answering (replaces #145)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/181",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-12T09:44:14Z",
+    "updated_at": "2026-10-14T04:01:40Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 266,
+    "title": "Resource planner: live admission across brain 1, brain 2 and the PC (wires #206/#207)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/266",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T18:54:45Z",
+    "updated_at": "2026-10-14T03:54:30Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 287,
+    "title": "Discord: owner Studio Lab screenshots, reference-image critiques and visual corrections",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/287",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:16:23Z",
+    "updated_at": "2026-10-14T03:51:55Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 281,
+    "title": "Discord: opt-in rotating STAR bot activity without privacy leaks or reconnect spam",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/281",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T22:49:27Z",
+    "updated_at": "2026-10-14T03:51:45Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 294,
+    "title": "Voice: Star mum persona, read-aloud, push-to-talk calls",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/294",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:45:39Z",
+    "updated_at": "2026-10-14T03:51:32Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 344,
+    "title": "[claude] Local reverse-engineering capability (defensive, workspace-confined)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/344",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:50:44Z",
+    "updated_at": "2026-10-14T04:09:57Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 330,
+    "title": "Opt-in Roblox Luau rules: deprecated APIs, pcall misuse, InvokeClient, leaks, client-trusted values",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/330",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:16:15Z",
+    "updated_at": "2026-10-14T03:50:34Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 334,
+    "title": "[claude] Discord: create discord-settings.env when missing; align docs defaults",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/334",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:17:37Z",
+    "updated_at": "2026-10-14T03:50:31Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 148,
+    "title": "Training-data generator and curation pipeline (draft: no kept examples yet)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/148",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-12T00:47:39Z",
+    "updated_at": "2026-10-14T03:49:32Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 322,
+    "title": "[claude] perf: Luau lint 2-5x faster (linear block matching, one tokenization per script)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/322",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:32:47Z",
+    "updated_at": "2026-10-14T03:48:59Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 341,
+    "title": "[claude] perf: open conversations.sqlite3 without a full scan (open 6.8x faster, chat turn ~20% less Python time)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/341",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:37:41Z",
+    "updated_at": "2026-10-14T04:09:55Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 286,
+    "title": "[tests-flaky-fresh-chats-ordering] Make tied chat updates deterministic",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/286",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:14:21Z",
+    "updated_at": "2026-10-14T03:36:49Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 340,
+    "title": "UI: honest states (image setup, web search, single learned-this-week, user-facing wording)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/340",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:36:31Z",
+    "updated_at": "2026-10-14T04:17:53Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 339,
+    "title": "[claude] perf: desktop start-up loads jsonschema/httpx/anyio on first use (-35-40% import CPU)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/339",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T03:36:08Z",
+    "updated_at": "2026-10-14T04:09:54Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 252,
+    "title": "[practice-tasks-beginner-v2] Thirty new checkable beginner Roblox practice tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/252",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T14:57:42Z",
+    "updated_at": "2026-10-14T03:35:50Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 245,
+    "title": "[practice-tasks-with-real-tests] 30 executable Roblox exercises (replaces #242)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/245",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T14:19:08Z",
+    "updated_at": "2026-10-14T03:35:48Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 244,
+    "title": "[npc-luau-types-practice-extension] Strict Luau NPC exercises (replaces #241)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/244",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T14:19:06Z",
+    "updated_at": "2026-10-14T03:35:45Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 284,
+    "title": "Roblox field-lesson skill packs from the Paintball port (opt-in) + practice proposals",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/284",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:11:35Z",
+    "updated_at": "2026-10-14T03:35:41Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 302,
+    "title": "[luau-findings-contract-test] Source-derived rule documentation and executable witnesses",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/302",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T01:01:30Z",
+    "updated_at": "2026-10-14T03:35:34Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 291,
+    "title": "[luau-lint-rule-test-matrix] Exhaustive rule cases and local-function shadow fix",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/291",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:37:04Z",
+    "updated_at": "2026-10-14T03:35:25Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 282,
+    "title": "[roblox-worked-examples-stateful-adversarial-tests] Test multi-step obby and shop rules",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/282",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T22:51:20Z",
+    "updated_at": "2026-10-14T03:35:22Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 293,
+    "title": "[roblox-module-require-graph-preflight] Optional bounded static ModuleScript dependencies",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/293",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:43:20Z",
+    "updated_at": "2026-10-14T03:35:20Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 280,
+    "title": "[roblox-preflight-native-analyzer-evidence] Explicit fail-closed Luau analyzer evidence",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/280",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T22:23:46Z",
+    "updated_at": "2026-10-14T03:35:17Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 273,
+    "title": "[worked-example-import-provenance-bounds] Bound project corpus and preserve declared evidence",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/273",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T20:49:01Z",
+    "updated_at": "2026-10-14T03:35:10Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 296,
+    "title": "[pr-board-triage-report] Open PR board snapshot and dependency triage",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/296",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T00:35:44Z",
+    "updated_at": "2026-10-14T03:34:13Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 325,
+    "title": "[cloud-improve] Ranked improvement proposals (25 items, 6 implemented as PRs)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/325",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:46:38Z",
+    "updated_at": "2026-10-14T03:50:41Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 295,
+    "title": "[windows-package-data-completeness] Audit static package reads and PyInstaller parity",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/295",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:55:32Z",
+    "updated_at": "2026-10-14T03:33:57Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 317,
+    "title": "Website v1.0 + README v1.0 + STAR's brain map (Graphify)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/317",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:21:11Z",
+    "updated_at": "2026-10-14T04:17:58Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 297,
+    "title": "STAR Motion Forge: Blender R15 draft animation, R6 preflight and Causal Motion Twin research",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/297",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T00:36:32Z",
+    "updated_at": "2026-10-14T03:33:36Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 312,
+    "title": "[cloud-improve] Stopping STAR Brain no longer freezes the window (wait outside the runtime lock)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/312",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-14T02:15:48Z",
+    "updated_at": "2026-10-14T03:31:09Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 300,
+    "title": "[luau-checker-false-positive-corpus] Guard real-world Luau checker precision",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/300",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-14T00:58:02Z",
+    "updated_at": "2026-10-14T03:35:29Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 288,
+    "title": "[tests-wall-clock-sensitive-audit] Replace sleeping tests with controlled clocks and events",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/288",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T23:21:21Z",
+    "updated_at": "2026-10-14T03:30:58Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 269,
+    "title": "Brain 1 host tuning + scoped sudo allowlist (owner-run)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/269",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T19:49:46Z",
+    "updated_at": "2026-10-14T03:29:01Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 240,
+    "title": "[AP-KZD9BN-M2] Finish Roblox UI compiler review on current next",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/240",
+    "state": "open",
+    "draft": true,
+    "merged_at": null,
+    "created_at": "2026-10-13T14:01:10Z",
+    "updated_at": "2026-10-14T03:35:01Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
+    },
+    "labels": []
+   },
+   {
+    "number": 277,
+    "title": "Studio Lab v2: parallel Studios (2x tested results/h), smarter fixes, 17-spec suite, UI specs",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/277",
+    "state": "open",
+    "draft": false,
+    "merged_at": null,
+    "created_at": "2026-10-13T21:48:08Z",
+    "updated_at": "2026-10-14T03:23:26Z",
+    "user": {
+     "login": "oncoursemail",
+     "type": "User"
     },
     "labels": []
    }
   ],
   "issues": [
    {
-    "number": 39,
-    "title": "STAR Ultimate Integration: model fleet, Roblox intelligence, reviewed tool forge and unified chat",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/39",
+    "number": 368,
+    "title": "STAR next: merged work after v1.0.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/368",
     "state": "open",
-    "created_at": "2026-10-10T04:02:36Z",
-    "updated_at": "2026-10-10T13:37:28Z",
+    "created_at": "2026-10-14T09:52:36Z",
+    "updated_at": "2026-10-14T10:10:46Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 38,
-    "title": "STAR Ultimate Brain v2: managed local multi-model router, probes and Windows QA",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/38",
+    "number": 367,
+    "title": "[claude] Plain-language voice setup errors",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/367",
     "state": "open",
-    "created_at": "2026-10-10T03:51:37Z",
-    "updated_at": "2026-10-10T03:51:37Z",
+    "created_at": "2026-10-14T08:45:46Z",
+    "updated_at": "2026-10-14T08:45:46Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 37,
-    "title": "STAR Agent Forge: real read-only subagents, reviewed custom tools, ranked memory",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/37",
+    "number": 366,
+    "title": "[claude] docs: developer API reference for main star modules (task 010)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/366",
     "state": "open",
-    "created_at": "2026-10-10T03:37:49Z",
-    "updated_at": "2026-10-10T03:44:15Z",
+    "created_at": "2026-10-14T07:42:19Z",
+    "updated_at": "2026-10-14T07:42:19Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 36,
-    "title": "STAR Roblox Intelligence — game stats, real images, docs, forums, Place IDs, YouTube research",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/36",
+    "number": 365,
+    "title": "[claude] helper 009: validate learning bundle format",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/365",
     "state": "open",
-    "created_at": "2026-10-10T03:34:07Z",
-    "updated_at": "2026-10-10T03:42:39Z",
+    "created_at": "2026-10-14T07:22:08Z",
+    "updated_at": "2026-10-14T07:22:08Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 35,
-    "title": "Integration: unified STAR chat, Fast Brain, MCP Hub, parallel Teams and reviewed memory",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/35",
+    "number": 364,
+    "title": "[claude] helper: repo-wide docs link check (008)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/364",
     "state": "open",
-    "created_at": "2026-10-10T03:32:07Z",
-    "updated_at": "2026-10-10T03:49:45Z",
+    "created_at": "2026-10-14T06:45:31Z",
+    "updated_at": "2026-10-14T06:45:31Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 34,
-    "title": "STAR Ultimate Brain v1: specialist model routing, honest speed benchmarks, Roblox expert skills and training prep",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/34",
+    "number": 363,
+    "title": "[claude] ci: complete Dependabot config (npm, grouping, target star/next)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/363",
     "state": "open",
-    "created_at": "2026-10-10T03:29:02Z",
-    "updated_at": "2026-10-10T03:34:31Z",
+    "created_at": "2026-10-14T06:20:31Z",
+    "updated_at": "2026-10-14T06:20:31Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 33,
-    "title": "chore: clean up obsolete public-download mirror and organize STAR source",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/33",
+    "number": 362,
+    "title": "[claude] Add issue and PR templates",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/362",
     "state": "open",
-    "created_at": "2026-10-10T03:26:28Z",
-    "updated_at": "2026-10-10T03:31:12Z",
+    "created_at": "2026-10-14T05:41:20Z",
+    "updated_at": "2026-10-14T05:41:20Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 361,
+    "title": "[claude] docs: CHANGELOG.md for v0.9.0 to v1.0.0",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/361",
+    "state": "open",
+    "created_at": "2026-10-14T05:13:14Z",
+    "updated_at": "2026-10-14T05:13:14Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 358,
+    "title": "[claude] Make roblox_docs_live_enabled a real setting",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/358",
+    "state": "open",
+    "created_at": "2026-10-14T04:45:02Z",
+    "updated_at": "2026-10-14T04:45:02Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 357,
+    "title": "[claude] Docs: cloud PR review summary 2026-10-13/14",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/357",
+    "state": "open",
+    "created_at": "2026-10-14T04:31:32Z",
+    "updated_at": "2026-10-14T04:31:32Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 356,
+    "title": "[skill-pack-pathfinding-npc-movement] Safe NPC pathfinding and waypoint movement",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/356",
+    "state": "open",
+    "created_at": "2026-10-14T04:29:56Z",
+    "updated_at": "2026-10-14T04:47:44Z",
+    "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 355,
+    "title": "[skill-pack-marketplace-receipts-badges] Receipt-safe developer products, passes, badges",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/355",
+    "state": "open",
+    "created_at": "2026-10-14T04:27:36Z",
+    "updated_at": "2026-10-14T04:50:23Z",
     "comments": 1,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 31,
-    "title": "STAR Fast Brain: fast chat, hosted models, web, images, subagents, and integrated Agent Skills",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/31",
+    "number": 354,
+    "title": "[skill-pack-accuracy-audit-datastores-remotes] Verify official DataStore and remote guidance",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/354",
     "state": "open",
-    "created_at": "2026-10-10T03:11:12Z",
-    "updated_at": "2026-10-10T03:36:38Z",
+    "created_at": "2026-10-14T04:23:08Z",
+    "updated_at": "2026-10-14T04:47:42Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 352,
+    "title": "Accessibility: axe-core tests, skip link, one h1 per page, switches and readable small print",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/352",
+    "state": "open",
+    "created_at": "2026-10-14T04:15:20Z",
+    "updated_at": "2026-10-14T04:27:45Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 351,
+    "title": "Roblox cutscenes + FaceControls expressions: skill pack, typed Luau modules, Studio lab with frame evidence (stacked on #327)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/351",
+    "state": "open",
+    "created_at": "2026-10-14T04:14:46Z",
+    "updated_at": "2026-10-14T04:27:47Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 349,
+    "title": "[claude] Tests for voice engines, ComfyUI, self-builder, web search + 4 fixes (cloud tests 3/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/349",
+    "state": "open",
+    "created_at": "2026-10-14T04:09:45Z",
+    "updated_at": "2026-10-14T04:27:50Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 348,
+    "title": "Other game engines: research, 27 opt-in skill packs, 54 golden tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/348",
+    "state": "open",
+    "created_at": "2026-10-14T04:04:51Z",
+    "updated_at": "2026-10-14T04:27:52Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 347,
+    "title": "[claude] Research 2026-10: ranked STAR improvements + tolerant edits and lint-on-edit",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/347",
+    "state": "open",
+    "created_at": "2026-10-14T04:03:48Z",
+    "updated_at": "2026-10-14T04:27:53Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 346,
+    "title": "Code health 4/4: five cheap strict TS checks for frontend/",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/346",
+    "state": "open",
+    "created_at": "2026-10-14T04:01:23Z",
+    "updated_at": "2026-10-14T04:27:55Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 345,
+    "title": "Research: reverse-engineering/decomp/clean-room projects + RE skill packs + REV golden tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/345",
+    "state": "open",
+    "created_at": "2026-10-14T03:58:35Z",
+    "updated_at": "2026-10-14T04:27:56Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 344,
+    "title": "[claude] Local reverse-engineering capability (defensive, workspace-confined)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/344",
+    "state": "open",
+    "created_at": "2026-10-14T03:50:44Z",
+    "updated_at": "2026-10-14T04:09:57Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 342,
+    "title": "Settings: seven sections with search, unsaved-changes bar, web search keys",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/342",
+    "state": "open",
+    "created_at": "2026-10-14T03:40:50Z",
+    "updated_at": "2026-10-14T04:17:51Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 341,
+    "title": "[claude] perf: open conversations.sqlite3 without a full scan (open 6.8x faster, chat turn ~20% less Python time)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/341",
+    "state": "open",
+    "created_at": "2026-10-14T03:37:41Z",
+    "updated_at": "2026-10-14T04:09:55Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 340,
+    "title": "UI: honest states (image setup, web search, single learned-this-week, user-facing wording)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/340",
+    "state": "open",
+    "created_at": "2026-10-14T03:36:31Z",
+    "updated_at": "2026-10-14T04:17:53Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 339,
+    "title": "[claude] perf: desktop start-up loads jsonschema/httpx/anyio on first use (-35-40% import CPU)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/339",
+    "state": "open",
+    "created_at": "2026-10-14T03:36:08Z",
+    "updated_at": "2026-10-14T04:09:54Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 338,
+    "title": "Research: scripting, web, shader and data languages (notes, catalog skill packs, golden tasks)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/338",
+    "state": "open",
+    "created_at": "2026-10-14T03:35:58Z",
+    "updated_at": "2026-10-14T04:30:29Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 337,
+    "title": "UI: worst-case data, narrow widths and consistent empty/loading/error states",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/337",
+    "state": "open",
+    "created_at": "2026-10-14T03:35:53Z",
+    "updated_at": "2026-10-14T04:17:56Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 336,
+    "title": "[claude] Frontend tests for progress hook, GitHub reader, messages, composer + 2 fixes (cloud tests 4/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/336",
+    "state": "open",
+    "created_at": "2026-10-14T03:35:44Z",
+    "updated_at": "2026-10-14T04:17:55Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 335,
+    "title": "Code health 3/4: remove 3 dead functions (vulture + grep + git history evidence)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/335",
+    "state": "open",
+    "created_at": "2026-10-14T03:32:47Z",
+    "updated_at": "2026-10-14T04:09:52Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 334,
+    "title": "[claude] Discord: create discord-settings.env when missing; align docs defaults",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/334",
+    "state": "open",
+    "created_at": "2026-10-14T03:17:37Z",
+    "updated_at": "2026-10-14T03:50:31Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 332,
+    "title": "[claude] Deterministic timing tests + fix tied chat timestamps (cloud tests 1/4)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/332",
+    "state": "open",
+    "created_at": "2026-10-14T03:16:49Z",
+    "updated_at": "2026-10-14T04:09:52Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 331,
+    "title": "Bundled Roblox API dataset (Studio 0.742) with an official-source refresh script",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/331",
+    "state": "open",
+    "created_at": "2026-10-14T03:16:47Z",
+    "updated_at": "2026-10-14T04:09:48Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 330,
+    "title": "Opt-in Roblox Luau rules: deprecated APIs, pcall misuse, InvokeClient, leaks, client-trusted values",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/330",
+    "state": "open",
+    "created_at": "2026-10-14T03:16:15Z",
+    "updated_at": "2026-10-14T03:50:34Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 329,
+    "title": "Ten opt-in Roblox skill packs: combat, pathfinding, physics, tags, input, audio, specs, purchases, teleport, Open Cloud",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/329",
+    "state": "open",
+    "created_at": "2026-10-14T03:15:10Z",
+    "updated_at": "2026-10-14T04:09:46Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 328,
+    "title": "Code health 2/4: pyright basic for star/ with baseline gate in CI (+2 bug fixes)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/328",
+    "state": "open",
+    "created_at": "2026-10-14T03:08:56Z",
+    "updated_at": "2026-10-14T04:09:45Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 327,
+    "title": "STAR VFX Studio: style-agnostic ability VFX (skill pack, composer, Studio lab with frame evidence)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/327",
+    "state": "open",
+    "created_at": "2026-10-14T03:05:26Z",
+    "updated_at": "2026-10-14T04:09:43Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 326,
+    "title": "Code health 1/4: ruff correctness lint for star/ in CI (+ testBlender NameError fix)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/326",
+    "state": "open",
+    "created_at": "2026-10-14T02:49:29Z",
+    "updated_at": "2026-10-14T04:09:42Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 325,
+    "title": "[cloud-improve] Ranked improvement proposals (25 items, 6 implemented as PRs)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/325",
+    "state": "open",
+    "created_at": "2026-10-14T02:46:38Z",
+    "updated_at": "2026-10-14T03:50:41Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 324,
+    "title": "[cloud-improve] Don't resend a prompt the server refused as too large (1 request, not 3)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/324",
+    "state": "open",
+    "created_at": "2026-10-14T02:44:07Z",
+    "updated_at": "2026-10-14T04:09:40Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 323,
+    "title": "[claude] User guide for non-programmers (docs/guide) with link-check test",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/323",
+    "state": "open",
+    "created_at": "2026-10-14T02:36:17Z",
+    "updated_at": "2026-10-14T04:09:39Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 322,
+    "title": "[claude] perf: Luau lint 2-5x faster (linear block matching, one tokenization per script)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/322",
+    "state": "open",
+    "created_at": "2026-10-14T02:32:47Z",
+    "updated_at": "2026-10-14T03:48:59Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 320,
+    "title": "[cloud-improve] Composer: character counter and block prompts the host would refuse",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/320",
+    "state": "open",
+    "created_at": "2026-10-14T02:30:24Z",
+    "updated_at": "2026-10-14T04:17:54Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 319,
+    "title": "[claude] Faster CI (parallel Windows shards, caches, SHA pins, docs-only skip) and complete Windows packaging",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/319",
+    "state": "open",
+    "created_at": "2026-10-14T02:26:20Z",
+    "updated_at": "2026-10-14T04:09:36Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 317,
+    "title": "Website v1.0 + README v1.0 + STAR's brain map (Graphify)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/317",
+    "state": "open",
+    "created_at": "2026-10-14T02:21:11Z",
+    "updated_at": "2026-10-14T04:17:58Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 312,
+    "title": "[cloud-improve] Stopping STAR Brain no longer freezes the window (wait outside the runtime lock)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/312",
+    "state": "open",
+    "created_at": "2026-10-14T02:15:48Z",
+    "updated_at": "2026-10-14T03:31:09Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 307,
+    "title": "STAR Knowledge Fabric: benchmark Docling, Chroma and time-aware memory without duplicating retrieval",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/307",
+    "state": "open",
+    "created_at": "2026-10-14T01:25:07Z",
+    "updated_at": "2026-10-14T08:13:17Z",
+    "comments": 1,
+    "labels": []
+   },
+   {
+    "number": 306,
+    "title": "STAR Knowledge Fabric: deep RAG research and privacy/freshness-aware retrieval quality gate",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/306",
+    "state": "open",
+    "created_at": "2026-10-14T01:22:34Z",
+    "updated_at": "2026-10-14T03:18:35Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 305,
+    "title": "[tests-clock-and-corrections] Fixed-time and owner-correction regressions",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/305",
+    "state": "open",
+    "created_at": "2026-10-14T01:11:39Z",
+    "updated_at": "2026-10-14T04:08:11Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 304,
+    "title": "[luau-module-type-alias-lesson-witnesses] Candidate named record and ModuleScript corrections",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/304",
+    "state": "open",
+    "created_at": "2026-10-14T01:05:29Z",
+    "updated_at": "2026-10-14T04:03:17Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 303,
+    "title": "[a11y-control-names-and-dialog-focus] Test control names and focus",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/303",
+    "state": "open",
+    "created_at": "2026-10-14T01:05:25Z",
+    "updated_at": "2026-10-14T04:08:08Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 302,
+    "title": "[luau-findings-contract-test] Source-derived rule documentation and executable witnesses",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/302",
+    "state": "open",
+    "created_at": "2026-10-14T01:01:30Z",
+    "updated_at": "2026-10-14T03:35:34Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 301,
+    "title": "[a11y-colour-token-contrast] Assert WCAG AA on live desktop color pairs",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/301",
+    "state": "open",
+    "created_at": "2026-10-14T01:00:02Z",
+    "updated_at": "2026-10-14T04:08:05Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 300,
+    "title": "[luau-checker-false-positive-corpus] Guard real-world Luau checker precision",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/300",
+    "state": "open",
+    "created_at": "2026-10-14T00:58:02Z",
+    "updated_at": "2026-10-14T03:35:29Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 299,
+    "title": "[error-message-clarity-validation] Explain validator failures with safe fixes",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/299",
+    "state": "open",
+    "created_at": "2026-10-14T00:55:01Z",
+    "updated_at": "2026-10-14T03:18:08Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 298,
+    "title": "Causal Motion Twin: use multi-frame native Studio evidence to improve Blender-authored animation and VFX",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/298",
+    "state": "open",
+    "created_at": "2026-10-14T00:39:50Z",
+    "updated_at": "2026-10-14T08:13:19Z",
+    "comments": 1,
+    "labels": []
+   },
+   {
+    "number": 297,
+    "title": "STAR Motion Forge: Blender R15 draft animation, R6 preflight and Causal Motion Twin research",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/297",
+    "state": "open",
+    "created_at": "2026-10-14T00:36:32Z",
+    "updated_at": "2026-10-14T03:33:36Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 296,
+    "title": "[pr-board-triage-report] Open PR board snapshot and dependency triage",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/296",
+    "state": "open",
+    "created_at": "2026-10-14T00:35:44Z",
+    "updated_at": "2026-10-14T03:34:13Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 295,
+    "title": "[windows-package-data-completeness] Audit static package reads and PyInstaller parity",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/295",
+    "state": "open",
+    "created_at": "2026-10-13T23:55:32Z",
+    "updated_at": "2026-10-14T03:33:57Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 294,
+    "title": "Voice: Star mum persona, read-aloud, push-to-talk calls",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/294",
+    "state": "open",
+    "created_at": "2026-10-13T23:45:39Z",
+    "updated_at": "2026-10-14T03:51:32Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 293,
+    "title": "[roblox-module-require-graph-preflight] Optional bounded static ModuleScript dependencies",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/293",
+    "state": "open",
+    "created_at": "2026-10-13T23:43:20Z",
+    "updated_at": "2026-10-14T03:35:20Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 292,
+    "title": "Studio Lab v3: 3-Studio measurement, measured jump limits, UI fix loop, 43 specs, nightly timer",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/292",
+    "state": "open",
+    "created_at": "2026-10-13T23:39:12Z",
+    "updated_at": "2026-10-14T03:23:19Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 291,
+    "title": "[luau-lint-rule-test-matrix] Exhaustive rule cases and local-function shadow fix",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/291",
+    "state": "open",
+    "created_at": "2026-10-13T23:37:04Z",
+    "updated_at": "2026-10-14T03:35:25Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 290,
+    "title": "Wire Brain 2 Studio/Blender evidence and verified learning events to owner Discord DMs",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/290",
+    "state": "open",
+    "created_at": "2026-10-13T23:27:36Z",
+    "updated_at": "2026-10-14T08:13:21Z",
+    "comments": 1,
+    "labels": []
+   },
+   {
+    "number": 289,
+    "title": "STAR sees Blender on brain 2: star_blender tool + Lab MCP launcher + lantern demo",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/289",
+    "state": "open",
+    "created_at": "2026-10-13T23:26:50Z",
+    "updated_at": "2026-10-14T04:47:28Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 288,
+    "title": "[tests-wall-clock-sensitive-audit] Replace sleeping tests with controlled clocks and events",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/288",
+    "state": "open",
+    "created_at": "2026-10-13T23:21:21Z",
+    "updated_at": "2026-10-14T03:30:58Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 287,
+    "title": "Discord: owner Studio Lab screenshots, reference-image critiques and visual corrections",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/287",
+    "state": "open",
+    "created_at": "2026-10-13T23:16:23Z",
+    "updated_at": "2026-10-14T03:51:55Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 286,
+    "title": "[tests-flaky-fresh-chats-ordering] Make tied chat updates deterministic",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/286",
+    "state": "open",
+    "created_at": "2026-10-13T23:14:21Z",
+    "updated_at": "2026-10-14T03:36:49Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 285,
+    "title": "[lessons-docs-schema-validator] Validate all unreviewed lesson documents",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/285",
+    "state": "open",
+    "created_at": "2026-10-13T23:12:03Z",
+    "updated_at": "2026-10-14T03:23:21Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 284,
+    "title": "Roblox field-lesson skill packs from the Paintball port (opt-in) + practice proposals",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/284",
+    "state": "open",
+    "created_at": "2026-10-13T23:11:35Z",
+    "updated_at": "2026-10-14T03:35:41Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 283,
+    "title": "Discord bot autostart: Settings > Discord supervisor, single-instance lock, Task Scheduler script",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/283",
+    "state": "open",
+    "created_at": "2026-10-13T23:08:27Z",
+    "updated_at": "2026-10-14T04:02:32Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 282,
+    "title": "[roblox-worked-examples-stateful-adversarial-tests] Test multi-step obby and shop rules",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/282",
+    "state": "open",
+    "created_at": "2026-10-13T22:51:20Z",
+    "updated_at": "2026-10-14T03:35:22Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 281,
+    "title": "Discord: opt-in rotating STAR bot activity without privacy leaks or reconnect spam",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/281",
+    "state": "open",
+    "created_at": "2026-10-13T22:49:27Z",
+    "updated_at": "2026-10-14T03:51:45Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 280,
+    "title": "[roblox-preflight-native-analyzer-evidence] Explicit fail-closed Luau analyzer evidence",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/280",
+    "state": "open",
+    "created_at": "2026-10-13T22:23:46Z",
+    "updated_at": "2026-10-14T03:35:17Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 279,
+    "title": "[roblox-api-confusion-advisory-preflight] Optional source-linked method advisories",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/279",
+    "state": "open",
+    "created_at": "2026-10-13T22:23:31Z",
+    "updated_at": "2026-10-14T03:35:15Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 278,
+    "title": "STAR Intelligence Accelerator: free APIs, verified learning, memory, creator engines and performance roadmap",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/278",
+    "state": "open",
+    "created_at": "2026-10-13T22:16:53Z",
+    "updated_at": "2026-10-13T22:52:46Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 30,
-    "title": "STAR Frontier MCP Hub — 2026/legacy protocols, Obsidian & Graphify, bounded tool search",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/30",
+    "number": 277,
+    "title": "Studio Lab v2: parallel Studios (2x tested results/h), smarter fixes, 17-spec suite, UI specs",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/277",
     "state": "open",
-    "created_at": "2026-10-10T03:10:07Z",
-    "updated_at": "2026-10-10T03:13:45Z",
+    "created_at": "2026-10-13T21:48:08Z",
+    "updated_at": "2026-10-14T03:23:26Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 275,
+    "title": "STAR self-play, sealed skill evolution, and verified-rights training foundations",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/275",
+    "state": "open",
+    "created_at": "2026-10-13T21:25:10Z",
+    "updated_at": "2026-10-13T23:26:38Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 29,
-    "title": "STAR Next Intelligence — real parallel teams, verified memory and measured performance",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/29",
+    "number": 274,
+    "title": "Experimental CAG warm-up KV banks: scoped, opt-in slot checkpoints",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/274",
     "state": "open",
-    "created_at": "2026-10-10T03:03:36Z",
-    "updated_at": "2026-10-10T03:16:56Z",
+    "created_at": "2026-10-13T21:12:38Z",
+    "updated_at": "2026-10-13T21:38:51Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 27,
-    "title": "STAR Quiet Chat: minimal React UI with image generation inside conversations",
-    "html_url": "https://github.com/oncoursemail/Star-AI/pull/27",
+    "number": 273,
+    "title": "[worked-example-import-provenance-bounds] Bound project corpus and preserve declared evidence",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/273",
     "state": "open",
-    "created_at": "2026-10-10T02:49:34Z",
-    "updated_at": "2026-10-10T03:28:44Z",
+    "created_at": "2026-10-13T20:49:01Z",
+    "updated_at": "2026-10-14T03:35:10Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 272,
+    "title": "[gpu-pair-lineage-contamination-regressions] Fail closed on training pair lineage and eval aliases",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/272",
+    "state": "open",
+    "created_at": "2026-10-13T20:42:37Z",
+    "updated_at": "2026-10-14T03:23:18Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 271,
+    "title": "STAR Creator Intelligence: glTF, game-engine dependencies, REA binary evidence + roadmap",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/271",
+    "state": "open",
+    "created_at": "2026-10-13T20:19:30Z",
+    "updated_at": "2026-10-13T23:16:44Z",
     "comments": 0,
     "labels": [],
     "pull_request": true
    },
    {
-    "number": 15,
-    "title": "P0 — Real Windows 11 acceptance of STAR v0.8, GPU, AI and updater",
-    "html_url": "https://github.com/oncoursemail/Star-AI/issues/15",
+    "number": 270,
+    "title": "Best-of-N for code: generate several, test, keep what works (opt-in)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/270",
     "state": "open",
-    "created_at": "2026-10-09T22:48:36Z",
-    "updated_at": "2026-10-10T02:15:44Z",
+    "created_at": "2026-10-13T20:09:24Z",
+    "updated_at": "2026-10-14T02:36:14Z",
     "comments": 0,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 269,
+    "title": "Brain 1 host tuning + scoped sudo allowlist (owner-run)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/269",
+    "state": "open",
+    "created_at": "2026-10-13T19:49:46Z",
+    "updated_at": "2026-10-14T03:29:01Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 268,
+    "title": "STAR Studio Lab: plan, apply, playtest, look, fix loop in a real Studio",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/268",
+    "state": "open",
+    "created_at": "2026-10-13T19:12:25Z",
+    "updated_at": "2026-10-14T03:23:23Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 266,
+    "title": "Resource planner: live admission across brain 1, brain 2 and the PC (wires #206/#207)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/266",
+    "state": "open",
+    "created_at": "2026-10-13T18:54:45Z",
+    "updated_at": "2026-10-14T03:54:30Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 259,
+    "title": "[roblox-place-serialization-regressions] Verify Roblox place XML and source boundaries",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/259",
+    "state": "open",
+    "created_at": "2026-10-13T16:52:30Z",
+    "updated_at": "2026-10-14T03:35:07Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 252,
+    "title": "[practice-tasks-beginner-v2] Thirty new checkable beginner Roblox practice tasks",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/252",
+    "state": "open",
+    "created_at": "2026-10-13T14:57:42Z",
+    "updated_at": "2026-10-14T03:35:50Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 249,
+    "title": "[first-token-speed-audit] Instrument real first-word stages with offline fake",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/249",
+    "state": "open",
+    "created_at": "2026-10-13T14:46:55Z",
+    "updated_at": "2026-10-14T03:50:22Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 245,
+    "title": "[practice-tasks-with-real-tests] 30 executable Roblox exercises (replaces #242)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/245",
+    "state": "open",
+    "created_at": "2026-10-13T14:19:08Z",
+    "updated_at": "2026-10-14T03:35:48Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 244,
+    "title": "[npc-luau-types-practice-extension] Strict Luau NPC exercises (replaces #241)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/244",
+    "state": "open",
+    "created_at": "2026-10-13T14:19:06Z",
+    "updated_at": "2026-10-14T03:35:45Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 240,
+    "title": "[AP-KZD9BN-M2] Finish Roblox UI compiler review on current next",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/240",
+    "state": "open",
+    "created_at": "2026-10-13T14:01:10Z",
+    "updated_at": "2026-10-14T03:35:01Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 233,
+    "title": "[apply-review-pr68] Reapply architecture/Blender prototype with opt-in and portability fixes",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/233",
+    "state": "open",
+    "created_at": "2026-10-13T13:02:38Z",
+    "updated_at": "2026-10-14T03:50:16Z",
+    "comments": 3,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 217,
+    "title": "Issue 120: refuse cleanly and roll back when an upgrade cannot replace STAR",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/217",
+    "state": "open",
+    "created_at": "2026-10-13T11:30:47Z",
+    "updated_at": "2026-10-14T03:18:41Z",
+    "comments": 1,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 185,
+    "title": "Repair PR 147 on verified star/next (supersedes #184)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/185",
+    "state": "open",
+    "created_at": "2026-10-12T12:02:51Z",
+    "updated_at": "2026-10-14T03:49:39Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 181,
+    "title": "Run and repair Luau before answering (replaces #145)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/181",
+    "state": "open",
+    "created_at": "2026-10-12T09:44:14Z",
+    "updated_at": "2026-10-14T04:01:40Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 148,
+    "title": "Training-data generator and curation pipeline (draft: no kept examples yet)",
+    "html_url": "https://github.com/oncoursemail/Star-AI/pull/148",
+    "state": "open",
+    "created_at": "2026-10-12T00:47:39Z",
+    "updated_at": "2026-10-14T03:49:32Z",
+    "comments": 2,
+    "labels": [],
+    "pull_request": true
+   },
+   {
+    "number": 122,
+    "title": "Exercise v0.9.0 voice output and in-app updater on Windows",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/122",
+    "state": "open",
+    "created_at": "2026-10-11T23:24:29Z",
+    "updated_at": "2026-10-14T08:13:24Z",
+    "comments": 2,
+    "labels": []
+   },
+   {
+    "number": 121,
+    "title": "Investigate administrator prompt on all-users upgrades",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/121",
+    "state": "open",
+    "created_at": "2026-10-11T23:24:27Z",
+    "updated_at": "2026-10-14T08:13:26Z",
+    "comments": 3,
+    "labels": []
+   },
+   {
+    "number": 120,
+    "title": "Handle running STAR safely during installer upgrade",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/120",
+    "state": "open",
+    "created_at": "2026-10-11T23:24:26Z",
+    "updated_at": "2026-10-14T08:13:28Z",
+    "comments": 3,
+    "labels": []
+   },
+   {
+    "number": 118,
+    "title": "Prevent two STAR Server clients from colliding on one model slot",
+    "html_url": "https://github.com/oncoursemail/Star-AI/issues/118",
+    "state": "open",
+    "created_at": "2026-10-11T23:24:22Z",
+    "updated_at": "2026-10-14T08:13:29Z",
+    "comments": 3,
     "labels": []
    }
   ],
   "commits": [
    {
-    "sha": "f05f292d7ca94efc088d6db456fe2b02e2253fa3",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/f05f292d7ca94efc088d6db456fe2b02e2253fa3",
+    "sha": "42f9e44d70388cb987d7e9510c79c082b87a0cca",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/42f9e44d70388cb987d7e9510c79c082b87a0cca",
     "commit": {
-     "message": "feat(site): launch STAR public intelligence dashboard and roadmap (#32)",
+     "message": "STAR Intelligence v1.0.0: self-learning, server brain speed, security fixes, Roblox tools, redesigned chat (#152)",
      "committer": {
-      "date": "2026-10-10T03:19:17Z"
+      "date": "2026-10-14T09:49:06Z"
      }
     }
    },
    {
-    "sha": "19b7f78ba3d920369ec6a92798e626fbb7f69ef0",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/19b7f78ba3d920369ec6a92798e626fbb7f69ef0",
+    "sha": "cb5e9dfcfc010f592b680a47ea783a7dc03fd295",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/cb5e9dfcfc010f592b680a47ea783a7dc03fd295",
     "commit": {
-     "message": "STAR Intelligence: Obsidian notes, Graphify graphs and Agent Skills (#26)",
+     "message": "STAR Intelligence v0.9.0: server brain, redesigned chat, Roblox knowledge and Studio access, skills, evaluation gate, voice, images (#40)",
      "committer": {
-      "date": "2026-10-10T02:48:03Z"
+      "date": "2026-10-11T22:18:48Z"
      }
     }
    },
    {
-    "sha": "9931e0b4fd069543bf59f08f32cbfed5e5d4f61d",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/9931e0b4fd069543bf59f08f32cbfed5e5d4f61d",
+    "sha": "5b097149bd91cee95f24ebd53ff2519f05653109",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/5b097149bd91cee95f24ebd53ff2519f05653109",
     "commit": {
-     "message": "chore(deps): bump actions/setup-python from 6 to 7 (#18)",
+     "message": "[claude] Shell acceptance: Retry after a restart stores no second question (PR 63); the Model page may offer STAR Server but must not claim one is in use",
      "committer": {
-      "date": "2026-10-10T02:45:23Z"
+      "date": "2026-10-11T22:01:22Z"
      }
     }
    },
    {
-    "sha": "87e946657df4495cbee996fdfb67b2f34f62008b",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/87e946657df4495cbee996fdfb67b2f34f62008b",
+    "sha": "ba72a5ee4838c00514ea5f66f653151e3122f3d8",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/ba72a5ee4838c00514ea5f66f653151e3122f3d8",
     "commit": {
-     "message": "chore(deps): bump actions/upload-artifact from 6 to 7 (#19)",
+     "message": "[claude] Tests: the Agent-mode tool catalogue by name, and a scripted model that calls star_skill_catalog through run_task",
      "committer": {
-      "date": "2026-10-10T02:45:11Z"
+      "date": "2026-10-11T22:01:22Z"
      }
     }
    },
    {
-    "sha": "e031996b1b5f39a55dc176255a0ff75bcf02b5e3",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/e031996b1b5f39a55dc176255a0ff75bcf02b5e3",
+    "sha": "7def230199e8d445ba1274dfbd98562262ecf187",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/7def230199e8d445ba1274dfbd98562262ecf187",
     "commit": {
-     "message": "chore(deps): update openai requirement from <3,>=2.0 to >=2.54.0,<3 (#20)",
+     "message": "[claude] Settings > Roblox Studio: state and Test only; the server connection cannot be typed, stored or removed (v0.9.0)",
      "committer": {
-      "date": "2026-10-10T02:45:06Z"
+      "date": "2026-10-11T20:54:15Z"
      }
     }
    },
    {
-    "sha": "142e1ac428163d9feff9eaf66dba39ff4dc2844e",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/142e1ac428163d9feff9eaf66dba39ff4dc2844e",
+    "sha": "3ce77815adbb2d4f1002eaedcc0d0d0484df3a9a",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/3ce77815adbb2d4f1002eaedcc0d0d0484df3a9a",
     "commit": {
-     "message": "chore(deps): bump actions/download-artifact from 7 to 8 (#21)",
+     "message": "[claude] Merge star/settings-ui-20261011 (a7a36a3): Settings > Voice, Settings > Roblox Studio, two acceptance phases",
      "committer": {
-      "date": "2026-10-10T02:44:49Z"
+      "date": "2026-10-11T20:50:26Z"
      }
     }
    },
    {
-    "sha": "c328ca1f71a5ef05f337b301e552589df4822f22",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/c328ca1f71a5ef05f337b301e552589df4822f22",
+    "sha": "243fa32bf4fa3a0a6810f1c4b4cc2342b7751795",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/243fa32bf4fa3a0a6810f1c4b4cc2342b7751795",
     "commit": {
-     "message": "chore(deps-dev): update pytest requirement from <10,>=8 to >=9.1.1,<10 (#22)",
+     "message": "[claude] Merge star/eval-holdout-20261011 (18da6e1): the frozen blind Roblox test suite",
      "committer": {
-      "date": "2026-10-10T02:44:44Z"
+      "date": "2026-10-11T20:46:01Z"
      }
     }
    },
    {
-    "sha": "d891fecb903f5f5f7635ca5287c9c4b144cdd153",
-    "html_url": "https://github.com/oncoursemail/Star-AI/commit/d891fecb903f5f5f7635ca5287c9c4b144cdd153",
+    "sha": "28add88d63ea9830348530344523a37c648cb5d3",
+    "html_url": "https://github.com/oncoursemail/Star-AI/commit/28add88d63ea9830348530344523a37c648cb5d3",
     "commit": {
-     "message": "chore(deps): update jsonschema requirement from <5,>=4.23 to >=4.26.0,<5 (#23)",
+     "message": "[claude] Merge PR 53 (Codex, 333b8e3): verify source and isolate local Windows package builds",
      "committer": {
-      "date": "2026-10-10T02:44:23Z"
+      "date": "2026-10-11T20:43:29Z"
      }
     }
    }

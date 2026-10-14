@@ -1,6 +1,5 @@
 """File-driven calls: the scripted caller, the virtual speaker, and the loudspeaker-echo simulation."""
 import json
-import time
 
 from star.voice.call import CallConfig, CallSession
 from star.voice.filecall import FileCall, VirtualSpeaker, nearest_resample, read_wav, write_wav
@@ -74,21 +73,22 @@ def test_loudspeaker_echo_makes_star_interrupt_herself_unless_the_echo_gate_is_o
 
 
 def test_virtual_speaker_plays_in_real_time_and_stop_cuts_the_recording():
-    speaker = VirtualSpeaker()
-    origin = time.monotonic()
+    clock = [100.0]
+    speaker = VirtualSpeaker(clock=lambda: clock[0])
+    origin = clock[0]
     tone = b"\x10\x00" * 8000                       # 0.5 s at 16 kHz
     speaker.play(tone, 16000)
     speaker.play(tone, 16000)
-    assert 0.9 < speaker.pending_seconds() <= 1.0 and speaker.played_seconds() < 0.1
-    time.sleep(0.25)
+    assert speaker.pending_seconds() == 1.0 and speaker.played_seconds() == 0
+    clock[0] += 0.25
     assert speaker.level() > 0
-    assert rms(speaker.audible(time.monotonic(), 0.032, 16000)) > 0
+    assert rms(speaker.audible(clock[0], 0.032, 16000)) > 0
     speaker.stop()
-    assert speaker.pending_seconds() == 0 and 0.2 < speaker.played_seconds() < 0.45
+    assert speaker.pending_seconds() == 0 and speaker.played_seconds() == 0.25
     recording, rate = speaker.recording(origin)
-    assert rate == 16000 and 0.2 < len(recording) / 2 / rate < 0.45   # only what was heard before the stop
-    time.sleep(0.5)
-    assert speaker.level() == 0 and rms(speaker.audible(time.monotonic(), 0.032, 16000)) == 0
+    assert rate == 16000 and len(recording) == 8000  # exactly 250 ms of PCM16, not queued 1 s
+    clock[0] += 0.5
+    assert speaker.level() == 0 and rms(speaker.audible(clock[0], 0.032, 16000)) == 0
     speaker.reset()
     assert speaker.played_seconds() == 0
 

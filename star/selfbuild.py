@@ -4,7 +4,6 @@ Autonomous routine edits; no per-operation prompts. The model CANNOT write
 core permissions, security files, tests, credentials or workflow definitions.
 Generated code is only syntax checked, never executed by this builder.
 """
-import asyncio
 from datetime import datetime, timezone
 import json
 from pathlib import Path, PurePosixPath
@@ -54,7 +53,9 @@ def write_source(workspace: Path, name: str, source: str) -> str:
     if name.endswith(".py"):
         compile(source, str(p), "exec")  # syntax verification, NOT execution
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(source, encoding="utf-8")
+    # Exactly the text the model wrote: Windows text mode turned every "\n" into "\r\n", and the
+    # publishing path uploads the file's bytes, so skill files reached GitHub with CRLF line endings.
+    p.write_text(source, encoding="utf-8", newline="")
     return f"Wrote {name} ({len(source)} chars); Python syntax check passed if applicable."
 
 
