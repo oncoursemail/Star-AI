@@ -34,6 +34,29 @@ class ApiFinding:
     name: str
     suggestion: str | None
 
+    @property
+    def severity(self) -> str:
+        """Normalized advisory severity; API spelling guesses are not engine proof."""
+        return "warning"
+
+    @property
+    def message(self) -> str:
+        """A bounded statement without echoing untrusted names."""
+        if self.rule_id == "unknown-class":
+            return "Unknown Roblox class in Instance.new; check against the local API dump."
+        if self.rule_id == "unknown-service":
+            return "Unknown service in GetService; check against the local API dump."
+        return "Possible unknown class member; verify its receiver and the local API dump."
+
+    @property
+    def suggested_fix(self) -> str:
+        """A repair action, not an unverified automatic rename."""
+        if self.rule_id == "unknown-class":
+            return "Use a class listed in the validated local Roblox API dump."
+        if self.rule_id == "unknown-service":
+            return "Use a service listed in the validated local Roblox API dump."
+        return "Confirm the inferred class and choose a documented member from the local API dump."
+
 
 @dataclass(frozen=True)
 class _Token:
