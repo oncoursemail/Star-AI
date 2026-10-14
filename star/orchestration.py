@@ -73,8 +73,8 @@ class TaskPlan:
                 or not finished <= self.tasks.keys()):
             raise ValueError("Unknown task status")
         slots = max(0, self.max_parallel - len(running))
-        locked_writes = [res for id in running for res in self.tasks[id].writes]
-        locked_reads = [res for id in running for res in self.tasks[id].reads]
+        locked_writes = [res for task_id in running for res in self.tasks[task_id].writes]
+        locked_reads = [res for task_id in running for res in self.tasks[task_id].reads]
         output = []
         for t in self.tasks.values():
             if (t.id in completed or t.id in running or t.id in finished

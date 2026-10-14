@@ -1,0 +1,134 @@
+{
+ "name": "V3LowCeiling",
+ "kind": "map",
+ "description": "A roof slab 4 studs above the jump P1 -> P2.",
+ "defect": "roof-over-jump",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "raise-overhead"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3LowCeiling",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    65.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -19.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -24.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -10.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     3.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   },
+   {
+    "name": "Slab",
+    "position": [
+     -21.0,
+     10.5,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     16.0
+    ],
+    "role": "roof",
+    "color": "#7F8C8D"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ]
+  }
+ }
+}

@@ -1,0 +1,134 @@
+{
+ "name": "V3PostInGap",
+ "kind": "map",
+ "description": "A tall decor post rises from below into the middle of the second gap.",
+ "defect": "decor-in-gap",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3PostInGap",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    62.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -21.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -25.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -12.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     0.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   },
+   {
+    "name": "Post",
+    "position": [
+     -23.5,
+     8.0,
+     150.0
+    ],
+    "size": [
+     1.0,
+     12.0,
+     1.0
+    ],
+    "role": "decor",
+    "color": "#C0392B"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ]
+  }
+ }
+}

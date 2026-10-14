@@ -81,11 +81,16 @@ def raw_records(connection, project: str, chat: str | None, *, through_id: int |
             connection.rollback()  # Ends only the read snapshot opened above.
 
 
+# json.dumps with these options builds a new JSONEncoder on every call; one shared encoder
+# produces the same text (encode() is what dumps() calls) and keeps no state between calls.
+_DIGEST_ENCODER = json.JSONEncoder(ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+
+
 def source_digest(records: list[dict]) -> str:
     digest = hashlib.sha256()
+    encode = _DIGEST_ENCODER.encode
     for record in records:
-        digest.update(json.dumps({key: record[key] for key in _FIELDS}, ensure_ascii=False,
-                                 sort_keys=True, separators=(',', ':')).encode('utf-8'))
+        digest.update(encode({key: record[key] for key in _FIELDS}).encode('utf-8'))
         digest.update(b'\n')
     return digest.hexdigest()
 
@@ -241,6 +246,23 @@ def _validate_source(checkpoint: Checkpoint, records: list[dict]):
         raise _error('covered original records changed or are missing')
 
 
+def read_checkpoint_connection(connection: sqlite3.Connection, project: str, chat: str | None,
+                               *, records=None) -> Checkpoint | None:
+    """Perform the same integrity-checked read on the conversation's open SQLite connection.
+
+    The caller owns and closes the connection. This function never writes rows.
+    """
+    project, chat = scope(project, chat)
+    try:
+        checkpoint = _checkpoint(_row(connection, project, chat), project, chat)
+        if checkpoint is not None:
+            _validate_source(checkpoint, records if records is not None else
+                             raw_records(connection, project, chat, through_id=checkpoint.through_id))
+        return checkpoint
+    except sqlite3.Error as exc:
+        raise _error(f'cannot read saved prefix state ({type(exc).__name__})') from exc
+
+
 def read_checkpoint(path: Path, project: str, chat: str | None, *, records=None) -> Checkpoint | None:
     """Read-only lookup and source-integrity check; never creates any file/table."""
     project, chat = scope(project, chat)
@@ -250,11 +272,7 @@ def read_checkpoint(path: Path, project: str, chat: str | None, *, records=None)
     try:
         connection = sqlite3.connect(path.as_uri() + '?mode=ro', uri=True)
         try:
-            checkpoint = _checkpoint(_row(connection, project, chat), project, chat)
-            if checkpoint is not None:
-                _validate_source(checkpoint, records if records is not None else
-                                 raw_records(connection, project, chat, through_id=checkpoint.through_id))
-            return checkpoint
+            return read_checkpoint_connection(connection, project, chat, records=records)
         finally:
             connection.close()
     except sqlite3.Error as exc:

@@ -2,6 +2,7 @@ import {useEffect, useRef, useState} from 'react'
 import type {KeyboardEvent as ReactKeyboardEvent, ReactNode, RefObject} from 'react'
 import {AnimatePresence, motion} from 'motion/react'
 import {ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, File as FileIcon, Globe, ImagePlus, Mic, MonitorUp, Paperclip, Plus, Square, Users, X} from 'lucide-react'
+import {VoiceCallButton} from './VoiceCall'
 import type {Connection} from './connection'
 import {menuIn} from './motion'
 import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
@@ -104,7 +105,7 @@ function MenuItem({icon, label, hint, checked, availability, onSelect}: {icon: R
     >
       <span className="cmp-menu-icon">{icon}</span>
       <span className="cmp-menu-text">{label}</span>
-      {checked ? <Check size={15} className="cmp-menu-check" aria-hidden="true" /> : (blocked ? availability?.reason : hint) && <small>{blocked ? availability?.reason : hint}</small>}
+      {checked ? <Check size={15} className="cmp-menu-check" aria-hidden="true" /> : (blocked ? availability?.reason : hint) && <small title={blocked ? availability?.reason : hint}>{blocked ? availability?.reason : hint}</small>}
     </button>
   )
 }
@@ -397,6 +398,7 @@ export function Composer(props: ComposerProps) {
               )}
             </AnimatePresence>
           </div>
+          <VoiceCallButton disabled={busy} />
           {busy ? (
             <button type="button" className="cmp-send is-stop" title="Stop" aria-label="Stop response" disabled={stopping} onClick={event => {
               // Send turns into Stop under the pointer, so the second click of a double-click lands here.

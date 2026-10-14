@@ -1,0 +1,1 @@
+The JavaScript garbage collector freed your array because nothing in JS held a reference to the Rust Vec. Keep a global reference to `pos` so it is not collected, and call `world.free()` only at the end.
