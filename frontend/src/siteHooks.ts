@@ -25,6 +25,12 @@ export type ProgressState={snapshot:ProgressSnapshot|null;status:ProgressStatus;
 export const builtSnapshot:ProgressSnapshot|null=parseStoredProgress(buildSnapshot as unknown,'build')
 
 const MIN_MANUAL_GAP_MS=15_000
+/**
+ * How often an open tab looks at the age of what it shows. It asks GitHub only when the answer is stale and
+ * the last attempt is `FRESH_MS` old, so a failing network is still retried at most every `FRESH_MS`.
+ * (Checking only every `FRESH_MS` found the answer a moment short of stale each time: a 20-minute refresh.)
+ */
+export const RECHECK_MS=60_000
 
 const noSubscription=()=>()=>undefined
 /**
@@ -83,7 +89,9 @@ export function useProgress():ProgressState{
   const onVisible=()=>{if(document.visibilityState==='visible')load(false)}
   document.addEventListener('visibilitychange',onVisible)
   // An open tab re-checks on its own, so the board follows the repository without a reload.
-  const timer=window.setInterval(()=>{if(document.visibilityState==='visible')load(false)},FRESH_MS)
+  const timer=window.setInterval(()=>{
+   if(document.visibilityState==='visible'&&Date.now()-lastAttempt.current>=FRESH_MS)load(false)
+  },RECHECK_MS)
   return ()=>{
    if(canIdle)window.cancelIdleCallback(idle)
    else window.clearTimeout(idle)
