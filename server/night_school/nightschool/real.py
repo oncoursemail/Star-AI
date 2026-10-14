@@ -25,6 +25,12 @@ from .fake import DIAGNOSE_MARK
 from .idle import read_key
 
 PROJECT = "night-school"
+# Failing answers (docs/research/multi-model-20261014.md, idea 10): passes already go to examples.jsonl; failures go to
+# data/failures.jsonl so pass/fail pairs exist for preference training and routing. Server-only (never exported),
+# scrubbed, joinable to attempts.jsonl by answer_sha256. Read by nothing in the engine or the gate.
+FAILURES_FILE = "failures.jsonl"
+FAILURES_MAX_BYTES = 50 * 1024 * 1024
+FAILURE_ANSWER_CHARS = 8000
 DIAGNOSE_SYSTEM = (
     "This is a " + DIAGNOSE_MARK + ". You are given a Roblox Luau task, an answer that failed automatic checks, and "
     "the failed checks. Reply with JSON only, no other text: {\"cause\": \"one sentence: why the answer failed\", "
@@ -212,6 +218,26 @@ class RealModel:
             if cancel.is_set():
                 raise Yielded(why["text"])
 
+    def keep_failure(self, task: dict, answer: str, reasons: list[str], recalled: list[str]) -> None:
+        """Append one failing answer to data/failures.jsonl; a full file or a write problem only skips it."""
+        import hashlib
+        from .engine import utc
+        from .pool import is_validation
+        path = Path(self.settings.data) / FAILURES_FILE
+        try:
+            if path.exists() and path.stat().st_size >= FAILURES_MAX_BYTES:
+                return
+            row = {"ts": utc(), "task": task["id"], "category": task.get("category", ""),
+                   "validation": is_validation(task["id"], self.settings.validation_percent),
+                   "prompt": scrub(task["prompt"]), "answer": scrub(answer[:FAILURE_ANSWER_CHARS]),
+                   "answer_sha256": hashlib.sha256(answer.encode("utf-8")).hexdigest(),
+                   "reasons": [scrub(r) for r in reasons[:6]], "lessons": list(recalled)}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        except (OSError, ValueError, KeyError):
+            return
+
     def check_lesson(self, text: str) -> str:
         """The app's own rule for a lesson text (no secret, no grant of permissions); "" when refused."""
         from star.lessons import LessonRefused, check_lesson_text
@@ -275,8 +301,10 @@ class RealModel:
             score = self.score(task, answer)
         except checks.InfraError as exc:
             return Result(error=scrub(str(exc))[:200], answer=answer, seconds=seconds, recalled=recalled)
-        return Result(score.passed, [scrub(r) for r in score.reasons], [c.record() for c in score.checks],
-                      answer, seconds, recalled)
+        reasons = [scrub(r) for r in score.reasons]
+        if not score.passed and answer.strip():
+            self.keep_failure(task, answer, reasons, recalled)
+        return Result(score.passed, reasons, [c.record() for c in score.checks], answer, seconds, recalled)
 
     def diagnose(self, task: dict, result: Result) -> dict:
         from star import providers
