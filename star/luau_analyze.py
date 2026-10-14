@@ -158,6 +158,10 @@ def analyze_evidence(source: str, *, tools_root: Path | None = None) -> Analyzer
         if not line.strip():
             continue
         match = _DIAGNOSTIC.fullmatch(line)
+        if match is None and diagnostic_rows:
+            # luau-analyze 0.691 prints multi-line TypeErrors ("caused by:",
+            # tab-indented types) after a diagnostic header line.
+            continue
         if (match is None or Path(match["file"]).name != _STAGED_NAME
                 or not 1 <= int(match["line"]) <= max_line
                 or int(match["column"]) < 1):
