@@ -13,10 +13,10 @@ def utc_now():
 class Memory:
     def __init__(self, db: Path):
         db.parent.mkdir(parents=True, exist_ok=True)
-        # Opened by the desktop and by background work at the same time: wait for a lock, read during a write.
+        # Opened by the desktop and by background work at the same time: wait up to 10 s for a lock. Not WAL:
+        # the warm-up reads this file read-only (star/warmup.py) and must not leave -wal/-shm files behind.
         self.db = sqlite3.connect(db, timeout=10)
         self.db.execute("PRAGMA busy_timeout=10000")
-        self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("CREATE TABLE IF NOT EXISTS checkpoints (project TEXT PRIMARY KEY, summary TEXT NOT NULL, updated TEXT NOT NULL)")
         self.db.execute("CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, project TEXT, event TEXT NOT NULL, at TEXT NOT NULL)")
         self.db.commit()

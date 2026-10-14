@@ -1,4 +1,4 @@
-"""The corrections and checkpoint stores are shared between STAR processes (desktop, Discord bot).
+"""The corrections store is shared between STAR processes (desktop, Discord bot); checkpoints wait for locks.
 
 With the old rollback journal, a commit has to wait until every open read in another process has
 finished, and gives up with "database is locked". WAL lets a writer commit while another
@@ -39,16 +39,13 @@ def test_corrections_commit_while_another_process_is_reading(tmp_path):
         store.close()
 
 
-def test_memory_checkpoint_commit_while_another_process_is_reading(tmp_path):
-    path = tmp_path / "checkpoints.sqlite3"
-    memory = Memory(path)
-    reader = _hold_open_read(path)
+def test_memory_waits_for_a_lock_and_keeps_the_rollback_journal(tmp_path):
+    memory = Memory(tmp_path / "checkpoints.sqlite3")
     try:
-        assert memory.db.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal"
-        memory.db.execute("PRAGMA busy_timeout=200")
+        assert memory.db.execute("PRAGMA busy_timeout").fetchone()[0] == 10000
+        # WAL would make the warm-up's read-only probe leave -wal/-shm files (tests/test_warmup.py).
+        assert memory.db.execute("PRAGMA journal_mode").fetchone()[0].lower() == "delete"
         memory.put("Default", "summary one")
-        memory.event("Default", {"kind": "test"})
         assert memory.get("Default") == "summary one"
     finally:
-        reader.close()
         memory.close()
