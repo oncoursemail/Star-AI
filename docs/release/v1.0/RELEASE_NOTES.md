@@ -62,6 +62,14 @@ Other
 - Release provenance: the published Setup and ZIP are attested by GitHub (`attest-release`) and verified before the
   release is created.
 
+Security fixes (audit of October 13, 2026: `docs/security/AUDIT-20261013.md`)
+- Workspace tools refuse Windows path spellings that could reach protected names (H-1).
+- After a turn has read web content, full Luau execution is refused for the rest of that turn (M-1).
+- Web fetch: no gateway access through redirects, clear frame markers around fetched text, charset fallback (L-1..L-3).
+- Discord audio: FFmpeg reads only from standard input (L-4). More key formats are redacted from logs (L-5).
+- `star ask` / `star self-build`: the "local model only" check accepted `http://localhost:1234@example.com` (prompts
+  would have gone to example.com); it now requires a real loopback address.
+
 ## Off by default (you turn these on)
 
 Settings switches, all off in a new profile: Asset Forge, Blender tools and Blender editing, Tailscale / CGNAT
