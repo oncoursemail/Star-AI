@@ -20,7 +20,9 @@ import secrets
 import time
 from pathlib import Path
 
-from PIL import Image, ImageFilter
+from ._lazy import lazy_attr, lazy_module
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+ImageFilter = lazy_module("PIL.ImageFilter")
 
 from . import media_places, references
 from .chat_images import NAME, PREFIX, preview_image

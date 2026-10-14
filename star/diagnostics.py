@@ -19,7 +19,8 @@ import sqlite3
 import tempfile
 import zipfile
 
-from PIL import Image
+from ._lazy import lazy_attr
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
 
 from .providers import credential_status
 from .version import __version__

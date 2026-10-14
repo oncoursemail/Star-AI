@@ -20,7 +20,10 @@ import uuid
 from pathlib import Path
 from typing import Callable
 
-from PIL import Image, ImageChops, ImageDraw, ImageOps, ImageStat
+from ._lazy import lazy_attr, lazy_module
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+ImageChops, ImageDraw = lazy_module("PIL.ImageChops"), lazy_module("PIL.ImageDraw")
+ImageOps, ImageStat = lazy_module("PIL.ImageOps"), lazy_module("PIL.ImageStat")
 
 MAX_REFERENCES = 12                 # per project
 MAX_SIDE = 2048                     # stored copy; larger images are scaled down

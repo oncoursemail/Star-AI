@@ -220,7 +220,7 @@ class ApprovedVisual:
                 hashlib.sha256(data).hexdigest() != self.digest):
             raise ValueError("Screenshot changed after approval")
         # Image validation is defensive; no arbitrary path or render from a bot command.
-        from PIL import Image
+        from ..pil_safe import Image
         import io
         with Image.open(io.BytesIO(data)) as img:
             if img.format not in {"PNG", "JPEG"} or img.width * img.height > MAX_IMAGE_PIXELS:
