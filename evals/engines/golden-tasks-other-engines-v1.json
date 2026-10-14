@@ -1,0 +1,4236 @@
+[
+ {
+  "id": "OE-ALTERNATIVES-2026-01",
+  "category": "engine-alternatives-2026",
+  "difficulty": 1,
+  "goal": "Ebitengine 2.10 game loop with current vector API",
+  "prompt": "In Ebitengine 2.10 (Go): write a complete main.go that opens a 320x240 game, moves a 16x16 white square with the arrow keys, and draws it with the vector package.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-alternatives-2026"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "rungame",
+     "re": "ebiten\\.RunGame\\(",
+     "why": "ebiten.RunGame",
+     "scope": "raw"
+    },
+    {
+     "id": "layout",
+     "re": "\\)\\s*Layout\\(\\s*\\w+\\s*,\\s*\\w+\\s+int\\s*\\)",
+     "why": "Layout(outsideWidth, outsideHeight int) method",
+     "scope": "raw"
+    },
+    {
+     "id": "fillrect",
+     "re": "vector\\.FillRect\\(",
+     "why": "vector.FillRect (2.9+)",
+     "scope": "raw"
+    },
+    {
+     "id": "v2-import",
+     "re": "\\\"github\\.com/hajimehoshi/ebiten/v2\\\"",
+     "why": "ebiten/v2 import path",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-deprecated-rect",
+     "re": "ebitenutil\\.DrawRect\\(|vector\\.DrawFilledRect\\(",
+     "why": "deprecated ebitenutil.DrawRect / vector.DrawFilledRect",
+     "scope": "raw"
+    },
+    {
+     "id": "no-v1-run",
+     "re": "ebiten\\.Run\\(",
+     "why": "Ebitengine v1 ebiten.Run",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: ebiten.RunGame",
+    "Present: Layout(outsideWidth, outsideHeight int) method",
+    "Present: vector.FillRect (2.9+)",
+    "Present: ebiten/v2 import path",
+    "Absent: deprecated ebitenutil.DrawRect / vector.DrawFilledRect",
+    "Absent: Ebitengine v1 ebiten.Run"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "`vector.FillRect` replaced `vector.DrawFilledRect` in 2.9.\n\n```go\npackage main\n\nimport (\n\t\"image/color\"\n\t\"log\"\n\n\t\"github.com/hajimehoshi/ebiten/v2\"\n\t\"github.com/hajimehoshi/ebiten/v2/vector\"\n)\n\ntype Game struct{ x, y float32 }\n\nfunc (g *Game) Update() error {\n\tif ebiten.IsKeyPressed(ebiten.KeyArrowLeft) {\n\t\tg.x -= 2\n\t}\n\tif ebiten.IsKeyPressed(ebiten.KeyArrowRight) {\n\t\tg.x += 2\n\t}\n\tif ebiten.IsKeyPressed(ebiten.KeyArrowUp) {\n\t\tg.y -= 2\n\t}\n\tif ebiten.IsKeyPressed(ebiten.KeyArrowDown) {\n\t\tg.y += 2\n\t}\n\treturn nil\n}\n\nfunc (g *Game) Draw(screen *ebiten.Image) {\n\tvector.FillRect(screen, g.x, g.y, 16, 16, color.White, false)\n}\n\nfunc (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {\n\treturn 320, 240\n}\n\nfunc main() {\n\tebiten.SetWindowSize(640, 480)\n\tif err := ebiten.RunGame(&Game{x: 40, y: 40}); err != nil {\n\t\tlog.Fatal(err)\n\t}\n}\n```\n",
+  "bad_answer": "Ebitengine v1 code.\n\n```go\npackage main\n\nimport (\n\t\"image/color\"\n\n\t\"github.com/hajimehoshi/ebiten\"\n\t\"github.com/hajimehoshi/ebiten/ebitenutil\"\n)\n\nvar x, y float64 = 40, 40\n\nfunc update(screen *ebiten.Image) error {\n\tif ebiten.IsKeyPressed(ebiten.KeyLeft) {\n\t\tx -= 2\n\t}\n\tebitenutil.DrawRect(screen, x, y, 16, 16, color.White)\n\treturn nil\n}\n\nfunc main() {\n\tebiten.Run(update, 320, 240, 2, \"Game\")\n}\n```\n"
+ },
+ {
+  "id": "OE-ALTERNATIVES-2026-02",
+  "category": "engine-alternatives-2026",
+  "difficulty": 2,
+  "goal": "Excalibur 0.32 keyboard movement with current input names",
+  "prompt": "In Excalibur.js 0.32 (TypeScript): create an Engine and a Player actor that moves left/right with the arrow keys at 150 px/s using velocity, then start the game.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-alternatives-2026"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "ex-keys",
+     "re": "\\bex\\.Keys\\.(?:Left|Right|ArrowLeft|ArrowRight)\\b",
+     "why": "ex.Keys.* (promoted from ex.Input in 0.30)",
+     "scope": "raw"
+    },
+    {
+     "id": "isheld",
+     "re": "\\.keyboard\\.isHeld\\(",
+     "why": "engine.input.keyboard.isHeld",
+     "scope": "raw"
+    },
+    {
+     "id": "preupdate",
+     "re": "\\bonPreUpdate\\s*\\(",
+     "why": "onPreUpdate override",
+     "scope": "raw"
+    },
+    {
+     "id": "start",
+     "re": "\\.start\\(",
+     "why": "game.start()",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-input-ns",
+     "re": "\\bex\\.Input\\.",
+     "why": "ex.Input.* namespace (removed in 0.30)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-goto",
+     "re": "\\.goto\\(",
+     "why": "engine.goto (removed in 0.30)",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: ex.Keys.* (promoted from ex.Input in 0.30)",
+    "Present: engine.input.keyboard.isHeld",
+    "Present: onPreUpdate override",
+    "Present: game.start()",
+    "Absent: ex.Input.* namespace (removed in 0.30)",
+    "Absent: engine.goto (removed in 0.30)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Excalibur 0.30 moved input types to `ex.Keys`.\n\n```ts\nimport * as ex from 'excalibur';\n\nclass Player extends ex.Actor {\n  constructor() {\n    super({ x: 100, y: 300, width: 32, height: 32, color: ex.Color.Azure });\n  }\n\n  onPreUpdate(engine: ex.Engine, elapsed: number) {\n    this.vel = ex.vec(0, 0);\n    if (engine.input.keyboard.isHeld(ex.Keys.Left)) this.vel.x = -150;\n    if (engine.input.keyboard.isHeld(ex.Keys.Right)) this.vel.x = 150;\n  }\n}\n\nconst game = new ex.Engine({ width: 800, height: 600 });\ngame.add(new Player());\ngame.start();\n```\n",
+  "bad_answer": "Pre-0.30 Excalibur names.\n\n```ts\nimport * as ex from 'excalibur';\n\nconst game = new ex.Engine({ width: 800, height: 600 });\nconst player = new ex.Actor({ x: 100, y: 300, width: 32, height: 32 });\nplayer.on('preupdate', () => {\n  if (game.input.keyboard.isHeld(ex.Input.Keys.Left)) player.vel.x = -150;\n});\ngame.add(player);\ngame.goto('root');\ngame.start();\n```\n"
+ },
+ {
+  "id": "OE-BABYLONJS-01",
+  "category": "engine-babylonjs",
+  "difficulty": 2,
+  "goal": "Babylon.js 9 falling sphere with Havok physics V2 (PhysicsAggregate) and ES6 imports.",
+  "prompt": "In Babylon.js 9: using the @babylonjs/core ES6 packages, make a sphere fall and bounce on a ground plane with physics. Show the full setup including physics engine initialization.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-babylonjs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "havok-init",
+     "re": "HavokPhysics\\(\\s*\\)",
+     "why": "Havok WASM must be initialized",
+     "scope": "raw"
+    },
+    {
+     "id": "havok-plugin",
+     "re": "new\\s+HavokPlugin\\(",
+     "why": "Physics V2 uses HavokPlugin",
+     "scope": "raw"
+    },
+    {
+     "id": "aggregate",
+     "re": "new\\s+PhysicsAggregate\\(",
+     "why": "V2 bodies via PhysicsAggregate",
+     "scope": "raw"
+    },
+    {
+     "id": "shape-type",
+     "re": "PhysicsShapeType\\.(?:SPHERE|BOX)",
+     "why": "V2 shape enum",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "v1-physics",
+     "re": "PhysicsImpostor|CannonJSPlugin|AmmoJSPlugin|OimoJSPlugin",
+     "why": "legacy Physics V1 API",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: HavokPhysics(), new HavokPlugin, new PhysicsAggregate, PhysicsShapeType",
+    "Absent: PhysicsImpostor / Cannon / Ammo / Oimo plugins"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Babylon.js 9 with Havok physics V2 and ES6 imports:\n\n```ts\nimport { Engine } from \"@babylonjs/core/Engines/engine\";\nimport { Scene } from \"@babylonjs/core/scene\";\nimport { FreeCamera } from \"@babylonjs/core/Cameras/freeCamera\";\nimport { HemisphericLight } from \"@babylonjs/core/Lights/hemisphericLight\";\nimport { Vector3 } from \"@babylonjs/core/Maths/math.vector\";\nimport { MeshBuilder } from \"@babylonjs/core/Meshes/meshBuilder\";\nimport { HavokPlugin } from \"@babylonjs/core/Physics/v2/Plugins/havokPlugin\";\nimport { PhysicsAggregate } from \"@babylonjs/core/Physics/v2/physicsAggregate\";\nimport { PhysicsShapeType } from \"@babylonjs/core/Physics/v2/IPhysicsEnginePlugin\";\nimport \"@babylonjs/core/Physics/physicsEngineComponent\";\nimport HavokPhysics from \"@babylonjs/havok\";\n\nconst canvas = document.getElementById(\"renderCanvas\") as HTMLCanvasElement;\nconst engine = new Engine(canvas, true);\nconst scene = new Scene(engine);\nconst camera = new FreeCamera(\"cam\", new Vector3(0, 5, -12), scene);\ncamera.setTarget(Vector3.Zero());\nnew HemisphericLight(\"light\", new Vector3(0, 1, 0), scene);\n\nconst havok = await HavokPhysics();\nscene.enablePhysics(new Vector3(0, -9.81, 0), new HavokPlugin(true, havok));\n\nconst ground = MeshBuilder.CreateGround(\"ground\", { width: 10, height: 10 }, scene);\nnew PhysicsAggregate(ground, PhysicsShapeType.BOX, { mass: 0 }, scene);\nconst sphere = MeshBuilder.CreateSphere(\"sphere\", { diameter: 1 }, scene);\nsphere.position.y = 6;\nnew PhysicsAggregate(sphere, PhysicsShapeType.SPHERE, { mass: 1, restitution: 0.75 }, scene);\n\nengine.runRenderLoop(() => scene.render());\n```\n",
+  "bad_answer": "```js\nscene.enablePhysics(new BABYLON.Vector3(0, -9.81, 0), new BABYLON.CannonJSPlugin());\nvar sphere = BABYLON.Mesh.CreateSphere(\"sphere\", 16, 1, scene);\nsphere.physicsImpostor = new BABYLON.PhysicsImpostor(sphere, BABYLON.PhysicsImpostor.SphereImpostor, { mass: 1, restitution: 0.9 }, scene);\nvar ground = BABYLON.Mesh.CreateGround(\"ground\", 10, 10, 2, scene);\nground.physicsImpostor = new BABYLON.PhysicsImpostor(ground, BABYLON.PhysicsImpostor.BoxImpostor, { mass: 0 }, scene);\n```\n"
+ },
+ {
+  "id": "OE-BABYLONJS-02",
+  "category": "engine-babylonjs",
+  "difficulty": 1,
+  "goal": "Babylon.js 9 rotating box via MeshBuilder and onBeforeRenderObservable with a GUI toggle button.",
+  "prompt": "In Babylon.js 9: create a box that rotates every frame at a frame-rate independent speed, and a fullscreen GUI button that pauses/resumes the rotation. Use ES6 imports.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-babylonjs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "meshbuilder",
+     "re": "MeshBuilder\\.CreateBox\\(",
+     "why": "MeshBuilder is the current mesh factory",
+     "scope": "raw"
+    },
+    {
+     "id": "observable",
+     "re": "onBeforeRenderObservable\\.add\\(",
+     "why": "per-frame code via observable",
+     "scope": "raw"
+    },
+    {
+     "id": "gui",
+     "re": "AdvancedDynamicTexture\\.CreateFullscreenUI\\(",
+     "why": "fullscreen GUI texture",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-mesh",
+     "re": "\\bMesh\\.Create(?:Box|Sphere|Ground)\\(",
+     "why": "Mesh.CreateX deprecated, use MeshBuilder",
+     "scope": "raw"
+    },
+    {
+     "id": "register-before-render",
+     "re": "registerBeforeRender\\(",
+     "why": "use onBeforeRenderObservable",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: MeshBuilder.CreateBox, onBeforeRenderObservable.add, AdvancedDynamicTexture.CreateFullscreenUI",
+    "Absent: Mesh.CreateBox, registerBeforeRender"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```ts\nimport { Engine } from \"@babylonjs/core/Engines/engine\";\nimport { Scene } from \"@babylonjs/core/scene\";\nimport { ArcRotateCamera } from \"@babylonjs/core/Cameras/arcRotateCamera\";\nimport { HemisphericLight } from \"@babylonjs/core/Lights/hemisphericLight\";\nimport { Vector3 } from \"@babylonjs/core/Maths/math.vector\";\nimport { MeshBuilder } from \"@babylonjs/core/Meshes/meshBuilder\";\nimport { AdvancedDynamicTexture } from \"@babylonjs/gui/2D/advancedDynamicTexture\";\nimport { Button } from \"@babylonjs/gui/2D/controls/button\";\n\nconst canvas = document.getElementById(\"renderCanvas\") as HTMLCanvasElement;\nconst engine = new Engine(canvas, true);\nconst scene = new Scene(engine);\nnew ArcRotateCamera(\"cam\", -Math.PI / 2, 1.2, 6, Vector3.Zero(), scene).attachControl(canvas, true);\nnew HemisphericLight(\"light\", new Vector3(0, 1, 0), scene);\n\nconst box = MeshBuilder.CreateBox(\"box\", { size: 1 }, scene);\nlet speed = 1;\nscene.onBeforeRenderObservable.add(() => {\n  box.rotation.y += speed * engine.getDeltaTime() / 1000;\n});\n\nconst ui = AdvancedDynamicTexture.CreateFullscreenUI(\"ui\");\nconst button = Button.CreateSimpleButton(\"toggle\", \"Pause\");\nbutton.width = \"150px\";\nbutton.height = \"40px\";\nbutton.color = \"white\";\nbutton.onPointerUpObservable.add(() => { speed = speed ? 0 : 1; });\nui.addControl(button);\n\nengine.runRenderLoop(() => scene.render());\n```\n",
+  "bad_answer": "```js\nvar box = BABYLON.Mesh.CreateBox(\"box\", 1, scene);\nscene.registerBeforeRender(function () { box.rotation.y += 0.01; });\nvar ui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI(\"ui\");\nvar button = BABYLON.GUI.Button.CreateSimpleButton(\"toggle\", \"Pause\");\nui.addControl(button);\n```\n"
+ },
+ {
+  "id": "OE-BEVY-01",
+  "category": "engine-bevy",
+  "difficulty": 1,
+  "goal": "Write a current Bevy app that spawns a 2D player and moves it with arrow keys using frame time.",
+  "prompt": "In Bevy 0.20: write a complete main.rs that spawns a 2D camera and a colored square player, and moves the player with the arrow keys at 250 units per second.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-bevy"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "add_systems_update",
+     "re": "\\.add_systems\\(\\s*Update\\s*,",
+     "why": "Systems are registered with add_systems(Update, ...)",
+     "scope": "raw"
+    },
+    {
+     "id": "button_input",
+     "re": "Res<\\s*ButtonInput<\\s*KeyCode\\s*>\\s*>",
+     "why": "Keyboard input is ButtonInput<KeyCode> since 0.13",
+     "scope": "raw"
+    },
+    {
+     "id": "delta_secs",
+     "re": "\\.delta_secs\\(\\)",
+     "why": "Time::delta_secs (renamed in 0.15)",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "old_add_system",
+     "re": "\\.add_(?:startup_)?system\\(",
+     "why": "add_system/add_startup_system were removed in 0.11",
+     "scope": "raw"
+    },
+    {
+     "id": "bundles",
+     "re": "\\b(?:SpriteBundle|Camera2dBundle|NodeBundle|TextBundle)\\b",
+     "why": "Bundles were replaced by required components",
+     "scope": "raw"
+    },
+    {
+     "id": "old_input_time",
+     "re": "\\bInput<\\s*KeyCode\\s*>|\\.delta_seconds\\(\\)",
+     "why": "Input<KeyCode> and delta_seconds() are pre-0.15 names",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: add_systems(Update, ...)",
+    "Present: ButtonInput<KeyCode>",
+    "Present: time.delta_secs()",
+    "Absent: add_system(",
+    "Absent: SpriteBundle/Camera2dBundle",
+    "Absent: Input<KeyCode> or delta_seconds()"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Bevy 0.20 registers systems with `add_systems` and reads keys from `ButtonInput<KeyCode>`.\n\n```rust\nuse bevy::prelude::*;\n\n#[derive(Component)]\nstruct Player;\n\nfn main() {\n    App::new()\n        .add_plugins(DefaultPlugins)\n        .add_systems(Startup, setup)\n        .add_systems(Update, move_player)\n        .run();\n}\n\nfn setup(mut commands: Commands) {\n    commands.spawn(Camera2d);\n    commands.spawn((Player, Sprite::from_color(Color::srgb(0.2, 0.6, 1.0), Vec2::splat(32.0)), Transform::default()));\n}\n\nfn move_player(keys: Res<ButtonInput<KeyCode>>, time: Res<Time>, mut player: Single<&mut Transform, With<Player>>) {\n    let mut dir = Vec2::ZERO;\n    if keys.pressed(KeyCode::ArrowLeft) { dir.x -= 1.0; }\n    if keys.pressed(KeyCode::ArrowRight) { dir.x += 1.0; }\n    if keys.pressed(KeyCode::ArrowUp) { dir.y += 1.0; }\n    if keys.pressed(KeyCode::ArrowDown) { dir.y -= 1.0; }\n    player.translation += (dir.normalize_or_zero() * 250.0 * time.delta_secs()).extend(0.0);\n}\n```\n",
+  "bad_answer": "```rust\nuse bevy::prelude::*;\n\n#[derive(Component)]\nstruct Player;\n\nfn main() {\n    App::new()\n        .add_plugins(DefaultPlugins)\n        .add_startup_system(setup)\n        .add_system(move_player)\n        .run();\n}\n\nfn setup(mut commands: Commands) {\n    commands.spawn(Camera2dBundle::default());\n    commands.spawn((Player, SpriteBundle::default()));\n}\n\nfn move_player(keys: Res<Input<KeyCode>>, time: Res<Time>, mut q: Query<&mut Transform, With<Player>>) {\n    let mut t = q.single_mut();\n    if keys.pressed(KeyCode::Left) { t.translation.x -= 250.0 * time.delta_seconds(); }\n}\n```\n"
+ },
+ {
+  "id": "OE-BEVY-02",
+  "category": "engine-bevy",
+  "difficulty": 2,
+  "goal": "Use Bevy 0.17+ Messages for buffered gameplay events and a 0.20 lifecycle observer.",
+  "prompt": "In Bevy 0.20: when Space is pressed, send a CoinCollected event with a value from one system and add it to a Score resource in another system. Also log a line whenever a Player component is added to an entity.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-bevy"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "derive_message",
+     "re": "#\\[derive\\([^)]*\\bMessage\\b",
+     "why": "Buffered events derive Message since 0.17",
+     "scope": "raw"
+    },
+    {
+     "id": "message_writer",
+     "re": "MessageWriter<",
+     "why": "EventWriter was renamed MessageWriter in 0.17",
+     "scope": "raw"
+    },
+    {
+     "id": "add_message",
+     "re": "\\.add_message::<",
+     "why": "add_event became add_message",
+     "scope": "raw"
+    },
+    {
+     "id": "observer_020",
+     "re": "On<\\s*Add<\\s*Player\\s*>\\s*>",
+     "why": "0.20 lifecycle observers are On<Add<T>>",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "event_rw",
+     "re": "\\bEvent(?:Writer|Reader)<|\\.add_event::<",
+     "why": "EventWriter/EventReader/add_event are pre-0.17",
+     "scope": "raw"
+    },
+    {
+     "id": "old_observer",
+     "re": "\\bTrigger<|\\bOnAdd\\b",
+     "why": "Trigger/OnAdd were renamed On/Add in 0.17",
+     "scope": "raw"
+    },
+    {
+     "id": "observer_017_form",
+     "re": "On<\\s*Add\\s*,",
+     "why": "On<Add, T> is the 0.17-0.19 form; 0.20 uses On<Add<T>>",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: #[derive(Message)]",
+    "Present: MessageWriter",
+    "Present: add_message",
+    "Present: On<Add<Player>>",
+    "Absent: EventWriter/add_event",
+    "Absent: Trigger/OnAdd",
+    "Absent: On<Add, Player>"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "In Bevy 0.17+ buffered events are Messages, and 0.20 lifecycle observers use `On<Add<T>>`.\n\n```rust\nuse bevy::prelude::*;\n\n#[derive(Component)]\nstruct Player;\n\n#[derive(Message)]\nstruct CoinCollected { value: u32 }\n\n#[derive(Resource, Default)]\nstruct Score(u32);\n\nfn main() {\n    App::new()\n        .add_plugins(DefaultPlugins)\n        .init_resource::<Score>()\n        .add_message::<CoinCollected>()\n        .add_observer(|_add: On<Add<Player>>| info!(\"player spawned\"))\n        .add_systems(Startup, |mut commands: Commands| { commands.spawn(Player); })\n        .add_systems(Update, (send_coins, apply_coins).chain())\n        .run();\n}\n\nfn send_coins(keys: Res<ButtonInput<KeyCode>>, mut writer: MessageWriter<CoinCollected>) {\n    if keys.just_pressed(KeyCode::Space) {\n        writer.write(CoinCollected { value: 1 });\n    }\n}\n\nfn apply_coins(mut reader: MessageReader<CoinCollected>, mut score: ResMut<Score>) {\n    for msg in reader.read() {\n        score.0 += msg.value;\n    }\n}\n```\n",
+  "bad_answer": "```rust\nuse bevy::prelude::*;\n\n#[derive(Component)]\nstruct Player;\n\n#[derive(Event)]\nstruct CoinCollected { value: u32 }\n\nfn main() {\n    App::new()\n        .add_plugins(DefaultPlugins)\n        .add_event::<CoinCollected>()\n        .add_observer(|trigger: Trigger<OnAdd, Player>| info!(\"spawned {}\", trigger.target()))\n        .add_systems(Update, send_coins)\n        .run();\n}\n\nfn send_coins(mut writer: EventWriter<CoinCollected>) {\n    writer.send(CoinCollected { value: 1 });\n}\n```\n"
+ },
+ {
+  "id": "OE-COCOS-CREATOR-01",
+  "category": "engine-cocos-creator",
+  "difficulty": 1,
+  "goal": "Write a Cocos Creator 3.8 TypeScript component that moves its node with the keyboard.",
+  "prompt": "In Cocos Creator 3.8: write a TypeScript component that moves its node left/right with the A and D keys at a speed editable in the Inspector.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-cocos-creator"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "import-cc",
+     "re": "from\\s+['\\\"]cc['\\\"]",
+     "why": "3.x imports from 'cc'",
+     "scope": "raw"
+    },
+    {
+     "id": "ccclass",
+     "re": "@ccclass\\(\\s*['\\\"]\\w+['\\\"]\\s*\\)",
+     "why": "component registered with @ccclass",
+     "scope": "raw"
+    },
+    {
+     "id": "input-on",
+     "re": "input\\.on\\(\\s*Input\\.EventType\\.KEY_DOWN",
+     "why": "3.4+ global input API",
+     "scope": "raw"
+    },
+    {
+     "id": "set-position",
+     "re": "\\.setPosition\\(",
+     "why": "position must be set with setPosition",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-api",
+     "re": "systemEvent|cc\\.Class\\(|cc\\.find\\(|SystemEvent\\.EventType",
+     "why": "systemEvent deprecated since 3.4; cc.Class is 2.x",
+     "scope": "raw"
+    },
+    {
+     "id": "node-x",
+     "re": "this\\.node\\.x\\s*[+\\-]?=|this\\.node\\.position\\.x\\s*[+\\-]?=",
+     "why": "direct x writes do not apply in 3.x",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: import from 'cc', @ccclass, input.on(Input.EventType.KEY_DOWN), setPosition",
+    "Absent: systemEvent, cc.Class, node.x writes"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Cocos Creator 3.8 component:\n\n```ts\nimport { _decorator, Component, Vec3, input, Input, EventKeyboard, KeyCode } from 'cc';\nconst { ccclass, property } = _decorator;\n\n@ccclass('KeyMover')\nexport class KeyMover extends Component {\n  @property\n  speed = 300;\n\n  private dir = 0;\n  private tmp = new Vec3();\n\n  onLoad() {\n    input.on(Input.EventType.KEY_DOWN, this.onDown, this);\n    input.on(Input.EventType.KEY_UP, this.onUp, this);\n  }\n  onDestroy() {\n    input.off(Input.EventType.KEY_DOWN, this.onDown, this);\n    input.off(Input.EventType.KEY_UP, this.onUp, this);\n  }\n  private onDown(e: EventKeyboard) {\n    if (e.keyCode === KeyCode.KEY_A) this.dir = -1;\n    if (e.keyCode === KeyCode.KEY_D) this.dir = 1;\n  }\n  private onUp(e: EventKeyboard) {\n    if (e.keyCode === KeyCode.KEY_A || e.keyCode === KeyCode.KEY_D) this.dir = 0;\n  }\n  update(dt: number) {\n    this.node.getPosition(this.tmp);\n    this.tmp.x += this.dir * this.speed * dt;\n    this.node.setPosition(this.tmp);\n  }\n}\n```\n",
+  "bad_answer": "2.x style:\n\n```js\ncc.Class({\n  extends: cc.Component,\n  properties: { speed: 300 },\n  onLoad() {\n    cc.systemEvent.on(cc.SystemEvent.EventType.KEY_DOWN, this.onKeyDown, this);\n  },\n  onKeyDown(e) { if (e.keyCode === cc.macro.KEY.d) this.dir = 1; },\n  update(dt) { this.node.x += this.dir * this.speed * dt; },\n});\n```\n"
+ },
+ {
+  "id": "OE-COCOS-CREATOR-02",
+  "category": "engine-cocos-creator",
+  "difficulty": 2,
+  "goal": "Handle 2D physics contact in Cocos Creator 3.8 to collect a coin.",
+  "prompt": "In Cocos Creator 3.8 with Box2D 2D physics: when the player's collider touches a node named 'Coin', destroy the coin and add 1 to the score. Show the component.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-cocos-creator"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "contact-register",
+     "re": "\\.on\\(\\s*Contact2DType\\.BEGIN_CONTACT",
+     "why": "3.x contact callbacks must be registered",
+     "scope": "raw"
+    },
+    {
+     "id": "collider2d",
+     "re": "getComponent\\(\\s*(?:Collider2D|BoxCollider2D|CircleCollider2D)\\s*\\)",
+     "why": "uses 3.x 2D collider classes",
+     "scope": "raw"
+    },
+    {
+     "id": "contact-listener",
+     "re": "enabledContactListener\\s*=\\s*true",
+     "why": "RigidBody2D must enable the contact listener",
+     "scope": "raw"
+    },
+    {
+     "id": "deferred-destroy",
+     "re": "scheduleOnce\\(",
+     "why": "destroy outside the physics callback",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-physics",
+     "re": "getPhysicsManager\\(|cc\\.(?:RigidBody|PhysicsBoxCollider|PhysicsCollider)\\b|getCollisionManager\\(",
+     "why": "2.x physics API",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: collider.on(Contact2DType.BEGIN_CONTACT), Collider2D, enabledContactListener = true, scheduleOnce",
+    "Absent: getPhysicsManager / cc.RigidBody"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Cocos Creator 3.8:\n\n```ts\nimport { _decorator, Component, Collider2D, Contact2DType, IPhysics2DContact, RigidBody2D } from 'cc';\nconst { ccclass } = _decorator;\n\n@ccclass('CoinPicker')\nexport class CoinPicker extends Component {\n  private score = 0;\n\n  onLoad() {\n    const body = this.getComponent(RigidBody2D);\n    if (body) body.enabledContactListener = true;\n    const col = this.getComponent(Collider2D);\n    col?.on(Contact2DType.BEGIN_CONTACT, this.onBegin, this);\n  }\n\n  private onBegin(self: Collider2D, other: Collider2D, contact: IPhysics2DContact | null) {\n    if (other.node.name !== 'Coin') return;\n    const coin = other.node;\n    this.score += 1;\n    this.scheduleOnce(() => { if (coin.isValid) coin.destroy(); }, 0);\n  }\n}\n```\n",
+  "bad_answer": "2.x style:\n\n```js\ncc.Class({\n  extends: cc.Component,\n  onLoad() { cc.director.getPhysicsManager().enabled = true; this.score = 0; },\n  onBeginContact(contact, self, other) {\n    if (other.node.name === 'Coin') { other.node.destroy(); this.score++; }\n  },\n});\n```\n"
+ },
+ {
+  "id": "OE-CONSTRUCT3-01",
+  "category": "engine-construct3",
+  "difficulty": 1,
+  "goal": "Main-script movement loop using the current Construct 3 scripting lifecycle",
+  "prompt": "In Construct 3 (r495 stable), write the main JavaScript script file that moves the Player sprite with the arrow keys at 200 pixels per second, frame-rate independent. The project has a Player Sprite and the Keyboard plugin.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-construct3"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "run-on-startup",
+     "re": "runOnStartup\\(",
+     "why": "runOnStartup entry point",
+     "scope": "raw"
+    },
+    {
+     "id": "before-project-start",
+     "re": "addEventListener\\(\\s*[\\\"']beforeprojectstart[\\\"']",
+     "why": "objects accessed after beforeprojectstart",
+     "scope": "raw"
+    },
+    {
+     "id": "tick-event",
+     "re": "addEventListener\\(\\s*[\\\"']tick[\\\"']",
+     "why": "runtime tick event",
+     "scope": "raw"
+    },
+    {
+     "id": "uses-dt",
+     "re": "runtime\\.dt\\b",
+     "why": "runtime.dt for frame-rate independence",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-c2-sdk",
+     "re": "\\bcr\\.(?:plugins_|behaviors|system_object)|\\bthis\\.runtime\\.tickcount",
+     "why": "Construct 2 SDK code (cr.plugins_, tickcount)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-numeric-keycodes",
+     "re": "isKeyDown\\(\\s*\\d",
+     "why": "deprecated numeric key codes in isKeyDown",
+     "scope": "raw"
+    },
+    {
+     "id": "no-raf-loop",
+     "re": "requestAnimationFrame\\(|setInterval\\(",
+     "why": "own game loop instead of the runtime tick event",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: runOnStartup entry point",
+    "Present: objects accessed after beforeprojectstart",
+    "Present: runtime tick event",
+    "Present: runtime.dt for frame-rate independence",
+    "Absent: Construct 2 SDK code (cr.plugins_, tickcount)",
+    "Absent: deprecated numeric key codes in isKeyDown",
+    "Absent: own game loop instead of the runtime tick event"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Use the runtime lifecycle: objects exist only from `beforeprojectstart`, logic runs on `tick`.\n\n```js\n// main.js (Purpose: Main script)\nconst SPEED = 200;\n\nrunOnStartup(async runtime => {\n  runtime.addEventListener(\"beforeprojectstart\", () => onBeforeProjectStart(runtime));\n});\n\nfunction onBeforeProjectStart(runtime) {\n  runtime.addEventListener(\"tick\", () => tick(runtime));\n}\n\nfunction tick(runtime) {\n  const player = runtime.objects.Player.getFirstInstance();\n  if (!player) return;\n  const kb = runtime.keyboard;\n  const step = SPEED * runtime.dt;\n  if (kb.isKeyDown(\"ArrowLeft\")) player.x -= step;\n  if (kb.isKeyDown(\"ArrowRight\")) player.x += step;\n  if (kb.isKeyDown(\"ArrowUp\")) player.y -= step;\n  if (kb.isKeyDown(\"ArrowDown\")) player.y += step;\n}\n```\n",
+  "bad_answer": "Here is a loop:\n\n```js\nconst player = runtime.objects.Player.getFirstInstance();\nfunction loop() {\n  if (runtime.keyboard.isKeyDown(37)) player.x -= 3;\n  if (runtime.keyboard.isKeyDown(39)) player.x += 3;\n  requestAnimationFrame(loop);\n}\nrequestAnimationFrame(loop);\n```\n"
+ },
+ {
+  "id": "OE-CONSTRUCT3-02",
+  "category": "engine-construct3",
+  "difficulty": 2,
+  "goal": "Spawn instances and persist a high score with the TypeScript runtime APIs",
+  "prompt": "In Construct 3 r495 using TypeScript: write a function that spawns an Enemy instance on the layer named \"Game\" at a random x position, and functions to save and load a high score using Construct's storage API so it works in worker mode.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-construct3"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "iruntime-type",
+     "re": ":\\s*IRuntime\\b",
+     "why": "runtime annotated as IRuntime",
+     "scope": "raw"
+    },
+    {
+     "id": "create-instance-layer",
+     "re": "createInstance\\(\\s*[\\\"'][^\\\"']+[\\\"']\\s*,",
+     "why": "createInstance(layer, x, y)",
+     "scope": "raw"
+    },
+    {
+     "id": "storage-set",
+     "re": "runtime\\.storage\\.setItem\\(",
+     "why": "runtime.storage.setItem",
+     "scope": "raw"
+    },
+    {
+     "id": "storage-get-await",
+     "re": "await\\s+runtime\\.storage\\.getItem\\(",
+     "why": "await runtime.storage.getItem",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-localstorage",
+     "re": "\\blocalStorage\\.",
+     "why": "window localStorage (missing in worker mode)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-two-arg-create",
+     "re": "createInstance\\(\\s*[^,()\\\"']+,\\s*[^,()]+\\)",
+     "why": "createInstance without a layer argument",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: runtime annotated as IRuntime",
+    "Present: createInstance(layer, x, y)",
+    "Present: runtime.storage.setItem",
+    "Present: await runtime.storage.getItem",
+    "Absent: window localStorage (missing in worker mode)",
+    "Absent: createInstance without a layer argument"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Spawn with `createInstance(layer, x, y)` and persist with the async `runtime.storage` API (works in worker mode).\n\n```ts\nexport function spawnEnemy(runtime: IRuntime): InstanceType.Enemy {\n  const x = runtime.random() * runtime.viewportWidth;\n  return runtime.objects.Enemy.createInstance(\"Game\", x, 0);\n}\n\nexport async function saveHighScore(runtime: IRuntime, score: number): Promise<void> {\n  try {\n    await runtime.storage.setItem(\"highScore\", score);\n  } catch (err) {\n    console.warn(\"Could not save high score\", err);\n  }\n}\n\nexport async function loadHighScore(runtime: IRuntime): Promise<number> {\n  const value = await runtime.storage.getItem(\"highScore\");\n  return typeof value === \"number\" ? value : 0;\n}\n```\n",
+  "bad_answer": "Use localStorage:\n\n```ts\nfunction spawnEnemy(runtime: IRuntime) {\n  return runtime.objects.Enemy.createInstance(Math.random() * 640, 0);\n}\nfunction saveHighScore(score: number) {\n  localStorage.setItem(\"highScore\", String(score));\n}\n```\n"
+ },
+ {
+  "id": "OE-DEFOLD-01",
+  "category": "engine-defold",
+  "difficulty": 2,
+  "goal": "Keyboard movement with input focus and hashed action ids",
+  "prompt": "In Defold 1.14: write player.script that moves the game object left/right with the actions \"left\" and \"right\" from the input bindings at a speed exposed as a script property.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-defold"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "input-focus",
+     "re": "msg\\.post\\(\\s*[\\\"']\\.[\\\"']\\s*,\\s*[\\\"']acquire_input_focus[\\\"']",
+     "why": "on_input needs input focus"
+    },
+    {
+     "id": "on-input",
+     "re": "function\\s+on_input\\s*\\(\\s*self\\s*,\\s*action_id\\s*,\\s*action\\s*\\)",
+     "why": "Correct callback signature"
+    },
+    {
+     "id": "hash-compare",
+     "re": "hash\\(\\s*[\\\"'](?:left|right)[\\\"']\\s*\\)",
+     "why": "action ids are hashes"
+    },
+    {
+     "id": "go-property",
+     "re": "^go\\.property\\(\\s*[\\\"']speed[\\\"']",
+     "why": "Top-level script property"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-string-compare",
+     "re": "action_id\\s*==\\s*[\\\"']",
+     "why": "action_id is a hash, never equal to a string"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: msg.post('.', 'acquire_input_focus')",
+    "Present: on_input(self, action_id, action)",
+    "Present: hash(\"left\")",
+    "Present: top-level go.property(\"speed\"",
+    "Absent: action_id == \"...\""
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\ngo.property(\"speed\", 200)\n\nlocal LEFT = hash(\"left\")\nlocal RIGHT = hash(\"right\")\n\nfunction init(self)\n    msg.post(\".\", \"acquire_input_focus\")\n    self.dir = 0\nend\n\nfunction update(self, dt)\n    local p = go.get_position()\n    p.x = p.x + self.dir * self.speed * dt\n    go.set_position(p)\n    self.dir = 0\nend\n\nfunction on_input(self, action_id, action)\n    if action_id == LEFT then\n        self.dir = -1\n    elseif action_id == RIGHT then\n        self.dir = 1\n    end\nend\n```\n",
+  "bad_answer": "```lua\nfunction init(self)\n    self.speed = 200\nend\n\nfunction on_input(self, action_id, action)\n    local p = go.get_position()\n    if action_id == \"left\" then p.x = p.x - self.speed end\n    if action_id == \"right\" then p.x = p.x + self.speed end\n    go.set_position(p)\nend\n```\n"
+ },
+ {
+  "id": "OE-DEFOLD-02",
+  "category": "engine-defold",
+  "difficulty": 2,
+  "goal": "Spawn enemies with a factory and handle a message",
+  "prompt": "In Defold 1.14: a spawner.script should create an enemy from the factory component \"#enemyfactory\" every 2 seconds with an hp property of 3, and react to a \"stop_spawning\" message.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-defold"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "factory-create",
+     "re": "factory\\.create\\(\\s*[\\\"']#enemyfactory[\\\"']",
+     "why": "Factory spawn"
+    },
+    {
+     "id": "timer-delay",
+     "re": "timer\\.delay\\(\\s*2",
+     "why": "Engine timer for repeating spawn"
+    },
+    {
+     "id": "hash-message",
+     "re": "message_id\\s*==\\s*(?:hash\\(\\s*[\\\"']stop_spawning[\\\"']\\s*\\)|[A-Z_]+)",
+     "why": "Compare hashed message ids"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-string-message",
+     "re": "message_id\\s*==\\s*[\\\"']",
+     "why": "message_id arrives hashed"
+    },
+    {
+     "id": "no-collectionproxy-for-spawn",
+     "re": "collectionproxy\\.",
+     "why": "Proxies load worlds, not spawn objects"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: factory.create(\"#enemyfactory\"",
+    "Present: timer.delay(2",
+    "Present: message_id == hash(...)",
+    "Absent: message_id == \"...\""
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\nlocal STOP = hash(\"stop_spawning\")\n\nlocal function spawn(self)\n    local pos = go.get_position() + vmath.vector3(math.random(-100, 100), 0, 0)\n    factory.create(\"#enemyfactory\", pos, nil, { hp = 3 })\nend\n\nfunction init(self)\n    self.handle = timer.delay(2, true, spawn)\nend\n\nfunction on_message(self, message_id, message, sender)\n    if message_id == STOP then\n        timer.cancel(self.handle)\n    end\nend\n```\n\nenemy.script must declare `go.property(\"hp\", 1)` at top level so the spawn table can override it.",
+  "bad_answer": "```lua\nfunction init(self)\n    self.t = 0\nend\n\nfunction update(self, dt)\n    self.t = self.t + dt\n    if self.t > 2 then\n        self.t = 0\n        local id = factory.create(\"#enemyfactory\")\n        go.set(id, \"hp\", 3)\n    end\nend\n\nfunction on_message(self, message_id, message, sender)\n    if message_id == \"stop_spawning\" then self.stopped = true end\nend\n```\n"
+ },
+ {
+  "id": "OE-FLAX-01",
+  "category": "engine-flax",
+  "difficulty": 1,
+  "goal": "Move a Flax CharacterController with WASD from a Script using Flax lifecycle and input names.",
+  "prompt": "In Flax Engine 1.12 (C#): write a script for the player's CharacterController that moves it with W/A/S/D.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-flax"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "script-base",
+     "re": ":\\s*Script\\b",
+     "why": "Flax scripts derive FlaxEngine.Script",
+     "scope": "raw"
+    },
+    {
+     "id": "override-update",
+     "re": "public\\s+override\\s+void\\s+On(?:Fixed)?Update\\s*\\(\\s*\\)",
+     "why": "Flax tick is overridden OnUpdate/OnFixedUpdate",
+     "scope": "raw"
+    },
+    {
+     "id": "flax-keys",
+     "re": "Input\\.GetKey\\(\\s*KeyboardKeys\\.",
+     "why": "Flax keys use KeyboardKeys",
+     "scope": "raw"
+    },
+    {
+     "id": "cc-move",
+     "re": "\\.(?:Simple)?Move\\(",
+     "why": "CharacterController.Move / SimpleMove",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "unity-mono",
+     "re": "\\bMonoBehaviour\\b",
+     "why": "Unity base class",
+     "scope": "raw"
+    },
+    {
+     "id": "unity-keycode",
+     "re": "\\bKeyCode\\.",
+     "why": "Unity KeyCode enum",
+     "scope": "raw"
+    },
+    {
+     "id": "unity-time",
+     "re": "Time\\.deltaTime",
+     "why": "Flax uses Time.DeltaTime",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: : Script, override OnUpdate, Input.GetKey(KeyboardKeys.*), Move/SimpleMove",
+    "Absent: MonoBehaviour, KeyCode., Time.deltaTime"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Put the script on the `CharacterController` actor. Flax units are centimeters, so the speed is in cm/s.\n\n```csharp\nusing FlaxEngine;\n\npublic class PlayerMove : Script\n{\n    public float Speed = 600.0f;\n    private CharacterController _controller;\n\n    public override void OnStart()\n    {\n        _controller = Actor.As<CharacterController>();\n    }\n\n    public override void OnUpdate()\n    {\n        var input = new Vector3(\n            (Input.GetKey(KeyboardKeys.D) ? 1 : 0) - (Input.GetKey(KeyboardKeys.A) ? 1 : 0),\n            0,\n            (Input.GetKey(KeyboardKeys.W) ? 1 : 0) - (Input.GetKey(KeyboardKeys.S) ? 1 : 0));\n        if (input.LengthSquared > 1) input.Normalize();\n        _controller.SimpleMove(input * Speed);\n    }\n}\n```\n",
+  "bad_answer": "```csharp\nusing UnityEngine;\n\npublic class PlayerMove : MonoBehaviour\n{\n    void Update()\n    {\n        if (Input.GetKey(KeyCode.W))\n            GetComponent<CharacterController>().Move(Vector3.forward * Time.deltaTime);\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-FLAX-02",
+  "category": "engine-flax",
+  "difficulty": 2,
+  "goal": "Handle a Flax trigger by subscribing to Collider.TriggerEnter in OnEnable and unsubscribing in OnDisable.",
+  "prompt": "In Flax Engine 1.12: write a C# script for a coin (a SphereCollider with Is Trigger) that adds score when the player's CharacterController enters it and then destroys the coin.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-flax"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "subscribe",
+     "re": "TriggerEnter\\s*\\+=",
+     "why": "Subscribe to Collider.TriggerEnter",
+     "scope": "raw"
+    },
+    {
+     "id": "unsubscribe",
+     "re": "TriggerEnter\\s*-=",
+     "why": "Unsubscribe in OnDisable",
+     "scope": "raw"
+    },
+    {
+     "id": "collider-actor",
+     "re": "PhysicsColliderActor",
+     "why": "Trigger handler receives PhysicsColliderActor",
+     "scope": "raw"
+    },
+    {
+     "id": "on-enable",
+     "re": "override\\s+void\\s+OnEnable\\s*\\(",
+     "why": "Register events in OnEnable",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "magic-override",
+     "re": "override\\s+void\\s+OnTriggerEnter",
+     "why": "Flax has no OnTriggerEnter virtual",
+     "scope": "raw"
+    },
+    {
+     "id": "unity-signature",
+     "re": "OnTriggerEnter\\s*\\(\\s*Collider\\s+\\w+\\s*\\)",
+     "why": "Unity trigger signature",
+     "scope": "raw"
+    },
+    {
+     "id": "unity-mono",
+     "re": "\\bMonoBehaviour\\b",
+     "why": "Unity base class",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: TriggerEnter +=, TriggerEnter -=, PhysicsColliderActor, override OnEnable",
+    "Absent: override OnTriggerEnter, OnTriggerEnter(Collider x), MonoBehaviour"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Put the script on the trigger collider actor and subscribe to its C# event.\n\n```csharp\nusing FlaxEngine;\n\npublic class Coin : Script\n{\n    public static int Score;\n\n    public override void OnEnable()\n    {\n        Actor.As<Collider>().TriggerEnter += OnEntered;\n    }\n\n    public override void OnDisable()\n    {\n        Actor.As<Collider>().TriggerEnter -= OnEntered;\n    }\n\n    private void OnEntered(PhysicsColliderActor other)\n    {\n        if (other is CharacterController)\n        {\n            Score++;\n            Debug.Log(\"Score: \" + Score);\n            Destroy(Actor);\n        }\n    }\n}\n```\n",
+  "bad_answer": "```csharp\nusing FlaxEngine;\n\npublic class Coin : Script\n{\n    public override void OnTriggerEnter(Collider other)\n    {\n        Destroy(Actor);\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-GAMEMAKER-01",
+  "category": "engine-gamemaker",
+  "difficulty": 1,
+  "goal": "Spawn a bullet instance with current GMS2+/LTS 2026 API",
+  "prompt": "In GameMaker LTS 2026.0 (GML Code): when the player presses Space, spawn an obj_bullet at the player's position on the \"Instances\" layer, moving in the direction the player faces at speed 10.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-gamemaker"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "create-layer-or-depth",
+     "re": "instance_create_(?:layer|depth)\\(",
+     "why": "Current spawn functions"
+    },
+    {
+     "id": "pressed-check",
+     "re": "keyboard_check_pressed\\(\\s*vk_space\\s*\\)",
+     "why": "One-shot key press"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-gms1-instance-create",
+     "re": "\\binstance_create\\s*\\(",
+     "why": "instance_create is GMS1 and does not exist in GMS2+"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: instance_create_layer or instance_create_depth",
+    "Present: keyboard_check_pressed(vk_space)",
+    "Absent: instance_create("
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Put this in obj_player's Step event:\n\n```gml\nif (keyboard_check_pressed(vk_space)) {\n    var _b = instance_create_layer(x, y, \"Instances\", obj_bullet, {\n        direction: image_angle,\n        speed: 10\n    });\n}\n```\n\nThe struct sets `direction` and `speed` before obj_bullet's Create event runs.",
+  "bad_answer": "In the Step event:\n\n```gml\nif (keyboard_check_pressed(vk_space)) {\n    var b = instance_create(x, y, obj_bullet);\n    b.direction = image_angle;\n    b.speed = 10;\n}\n```\n"
+ },
+ {
+  "id": "OE-GAMEMAKER-02",
+  "category": "engine-gamemaker",
+  "difficulty": 2,
+  "goal": "Model an inventory with constructors and arrays (2.3+ GML)",
+  "prompt": "In GameMaker LTS 2026.0: write an Item constructor (name, value) and an Inventory constructor with add(item) and total_value() methods using arrays, then print the total.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-gamemaker"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "constructor",
+     "re": "function\\s+\\w+\\s*\\([^)]*\\)\\s*constructor",
+     "why": "2.3+ constructor syntax"
+    },
+    {
+     "id": "new-keyword",
+     "re": "\\bnew\\s+\\w+\\(",
+     "why": "Instantiate structs with new"
+    },
+    {
+     "id": "array-length",
+     "re": "\\barray_length\\(",
+     "why": "Current array length function"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-array-length-1d",
+     "re": "\\barray_(?:length_1d|length_2d|height_2d)\\(",
+     "why": "Deprecated since 2.3"
+    },
+    {
+     "id": "no-argument-vars",
+     "re": "\\bargument(?:\\d|\\[)",
+     "why": "Pre-2.3 script argument style"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: function X(...) constructor",
+    "Present: new X(",
+    "Present: array_length(",
+    "Absent: array_length_1d(",
+    "Absent: argument0 / argument[i]"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Script asset `scr_inventory`:\n\n```gml\nfunction Item(_name, _value) constructor {\n    name = _name;\n    value = _value;\n}\n\nfunction Inventory() constructor {\n    items = [];\n    static add = function(_item) {\n        array_push(items, _item);\n    };\n    static total_value = function() {\n        var _sum = 0;\n        for (var _i = 0; _i < array_length(items); _i++) {\n            _sum += items[_i].value;\n        }\n        return _sum;\n    };\n}\n\n// usage, e.g. in a Create event\nvar _inv = new Inventory();\n_inv.add(new Item(\"Sword\", 10));\n_inv.add(new Item(\"Shield\", 7));\nshow_debug_message(_inv.total_value());\n```\n",
+  "bad_answer": "Old style scripts:\n\n```gml\n/// scr_inventory_total(list)\nvar arr = argument0;\nvar sum = 0;\nfor (var i = 0; i < array_length_1d(arr); i++) {\n    sum += arr[i];\n}\nreturn sum;\n```\n"
+ },
+ {
+  "id": "OE-HEAPS-01",
+  "category": "engine-heaps",
+  "difficulty": 1,
+  "goal": "Frame-rate independent 2D movement in a Heaps hxd.App",
+  "prompt": "In Heaps 2.1 (Haxe 4.3, HashLink): write a minimal hxd.App that shows a blue 16x16 square on s2d and moves it with the arrow keys at 120 pixels per second.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-heaps"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "extends-app",
+     "re": "extends\\s+hxd\\.App\\b",
+     "why": "class extends hxd.App",
+     "scope": "raw"
+    },
+    {
+     "id": "override-update-dt",
+     "re": "override\\s+function\\s+update\\s*\\(\\s*dt\\s*:\\s*Float\\s*\\)",
+     "why": "override function update(dt:Float)",
+     "scope": "raw"
+    },
+    {
+     "id": "key-isdown",
+     "re": "hxd\\.Key\\.isDown\\(\\s*hxd\\.Key\\.(?:LEFT|RIGHT|UP|DOWN)\\s*\\)",
+     "why": "hxd.Key.isDown(hxd.Key.LEFT...)",
+     "scope": "raw"
+    },
+    {
+     "id": "h2d-bitmap",
+     "re": "new\\s+h2d\\.(?:Bitmap|Graphics)\\(",
+     "why": "an h2d.Bitmap or h2d.Graphics drawable",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-h2d-sprite",
+     "re": "\\bh2d\\.Sprite\\b",
+     "why": "h2d.Sprite (renamed h2d.Object in Heaps 1.5)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-tmod",
+     "re": "hxd\\.Timer\\.tmod|dt\\s*\\*\\s*60\\b",
+     "why": "frame-based tmod or dt*60 (dt is seconds)",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: class extends hxd.App",
+    "Present: override function update(dt:Float)",
+    "Present: hxd.Key.isDown(hxd.Key.LEFT...)",
+    "Present: an h2d.Bitmap or h2d.Graphics drawable",
+    "Absent: h2d.Sprite (renamed h2d.Object in Heaps 1.5)",
+    "Absent: frame-based tmod or dt*60 (dt is seconds)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "`update(dt)` receives seconds in Heaps 1.5+, so speed is pixels per second.\n\n```haxe\nclass Main extends hxd.App {\n    var box : h2d.Bitmap;\n\n    override function init() {\n        box = new h2d.Bitmap(h2d.Tile.fromColor(0x3080FF, 16, 16), s2d);\n        box.setPosition(100, 100);\n    }\n\n    override function update(dt:Float) {\n        var speed = 120.0; // pixels per second, dt is in seconds\n        if (hxd.Key.isDown(hxd.Key.LEFT)) box.x -= speed * dt;\n        if (hxd.Key.isDown(hxd.Key.RIGHT)) box.x += speed * dt;\n        if (hxd.Key.isDown(hxd.Key.UP)) box.y -= speed * dt;\n        if (hxd.Key.isDown(hxd.Key.DOWN)) box.y += speed * dt;\n    }\n\n    static function main() {\n        new Main();\n    }\n}\n```\n",
+  "bad_answer": "Old-style Heaps code using h2d.Sprite and tmod.\n\n```haxe\nclass Main extends hxd.App {\n    var box : h2d.Sprite;\n\n    override function init() {\n        box = new h2d.Bitmap(h2d.Tile.fromColor(0x3080FF, 16, 16), s2d);\n    }\n\n    override function update(dt:Float) {\n        if (hxd.Key.isDown(hxd.Key.LEFT)) box.x -= 2 * hxd.Timer.tmod;\n        if (hxd.Key.isDown(hxd.Key.RIGHT)) box.x += 2 * hxd.Timer.tmod;\n    }\n\n    static function main() { new Main(); }\n}\n```\n"
+ },
+ {
+  "id": "OE-HEAPS-02",
+  "category": "engine-heaps",
+  "difficulty": 2,
+  "goal": "Use Heaps 2.x vector types and a directional light",
+  "prompt": "In Heaps 2.1: in my hxd.App init(), add a red cube mesh to s3d, a directional light pointing down and to the side, and keep a tint color with alpha in a 4-component vector field.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-heaps"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "vector4",
+     "re": "h3d\\.Vector4\\b",
+     "why": "h3d.Vector4 for 4 components",
+     "scope": "raw"
+    },
+    {
+     "id": "mesh-cube",
+     "re": "new\\s+h3d\\.prim\\.Cube\\(",
+     "why": "h3d.prim.Cube primitive",
+     "scope": "raw"
+    },
+    {
+     "id": "mesh",
+     "re": "new\\s+h3d\\.scene\\.Mesh\\(",
+     "why": "h3d.scene.Mesh",
+     "scope": "raw"
+    },
+    {
+     "id": "dirlight",
+     "re": "new\\s+h3d\\.scene\\.(?:fwd|pbr)\\.DirLight\\(",
+     "why": "h3d.scene.fwd/pbr.DirLight",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-4arg-vector",
+     "re": "new\\s+h3d\\.Vector\\s*\\(\\s*[^,()]+,\\s*[^,()]+,\\s*[^,()]+,\\s*[^,()]+\\)",
+     "why": "4-argument h3d.Vector (3 components since Heaps 2.0)",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: h3d.Vector4 for 4 components",
+    "Present: h3d.prim.Cube primitive",
+    "Present: h3d.scene.Mesh",
+    "Present: h3d.scene.fwd/pbr.DirLight",
+    "Absent: 4-argument h3d.Vector (3 components since Heaps 2.0)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Since Heaps 2.0 `h3d.Vector` has x, y, z only; use `h3d.Vector4` when you need w.\n\n```haxe\nclass Main extends hxd.App {\n    var tint : h3d.Vector4;\n\n    override function init() {\n        tint = new h3d.Vector4(1, 0.5, 0.5, 0.8);\n        var prim = new h3d.prim.Cube(1, 1, 1, true);\n        prim.unindex();\n        prim.addNormals();\n        var cube = new h3d.scene.Mesh(prim, s3d);\n        cube.material.color.setColor(0xFF2020);\n        new h3d.scene.fwd.DirLight(new h3d.Vector(0.5, 0.5, -1), s3d);\n        s3d.camera.pos.set(4, 4, 3);\n    }\n\n    static function main() { new Main(); }\n}\n```\n",
+  "bad_answer": "Heaps 1.x style 4-component Vector.\n\n```haxe\nclass Main extends hxd.App {\n    var tint : h3d.Vector;\n\n    override function init() {\n        tint = new h3d.Vector(1, 0.5, 0.5, 0.8);\n        var cube = new h3d.scene.Mesh(new h3d.prim.Cube(), s3d);\n        new h3d.scene.fwd.DirLight(new h3d.Vector(0.5, 0.5, -1, 0), s3d);\n    }\n\n    static function main() { new Main(); }\n}\n```\n"
+ },
+ {
+  "id": "OE-LOVE2D-01",
+  "category": "engine-love2d",
+  "difficulty": 1,
+  "goal": "Draw colored shapes with the 11.x 0-1 color range",
+  "prompt": "In LÖVE 11.5: draw an orange square that follows the mouse and a white score text in the top-left corner.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-love2d"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "love-draw",
+     "re": "function\\s+love\\.draw\\s*\\(",
+     "why": "Draw callback"
+    },
+    {
+     "id": "unit-color",
+     "re": "love\\.graphics\\.setColor\\(\\s*(?:0?\\.\\d+|[01](?:\\.\\d+)?)\\s*,\\s*(?:0?\\.\\d+|[01](?:\\.\\d+)?)\\s*,\\s*(?:0?\\.\\d+|[01](?:\\.\\d+)?)",
+     "why": "0-1 color components"
+    },
+    {
+     "id": "mouse",
+     "re": "love\\.mouse\\.get(?:Position|X)\\(",
+     "why": "Mouse position API"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-byte-colors",
+     "re": "setColor\\(\\s*(?:[2-9]\\d|1\\d\\d|2[0-5]\\d)\\b",
+     "why": "0-255 colors are pre-11.0"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: function love.draw",
+    "Present: setColor with 0-1 values",
+    "Present: love.mouse.getPosition",
+    "Absent: setColor(255, ...)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\nlocal score = 0\n\nfunction love.draw()\n    local mx, my = love.mouse.getPosition()\n    love.graphics.setColor(1, 0.5, 0)\n    love.graphics.rectangle(\"fill\", mx - 16, my - 16, 32, 32)\n    love.graphics.setColor(1, 1, 1)\n    love.graphics.print(\"Score: \" .. score, 10, 10)\nend\n```\n",
+  "bad_answer": "```lua\nfunction love.draw()\n    local mx, my = love.mouse.getPosition()\n    love.graphics.setColor(255, 128, 0)\n    love.graphics.rectangle(\"fill\", mx - 16, my - 16, 32, 32)\n    love.graphics.setColor(255, 255, 255)\n    love.graphics.print(\"Score: 0\", 10, 10)\nend\n```\n"
+ },
+ {
+  "id": "OE-LOVE2D-02",
+  "category": "engine-love2d",
+  "difficulty": 2,
+  "goal": "Persist a high score in the save directory with current filesystem API",
+  "prompt": "In LÖVE 11.5: save the player's best score to a file when the game quits and load it at startup if the file exists.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-love2d"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "fs-write",
+     "re": "love\\.filesystem\\.write\\(",
+     "why": "Write into the save directory"
+    },
+    {
+     "id": "fs-getinfo",
+     "re": "love\\.filesystem\\.getInfo\\(",
+     "why": "Existence check in 11.x"
+    },
+    {
+     "id": "quit-cb",
+     "re": "function\\s+love\\.quit\\s*\\(",
+     "why": "Save on quit"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-removed-fs",
+     "re": "love\\.filesystem\\.(?:isFile|isDirectory|getSize|getLastModified)\\(",
+     "why": "Deprecated in 11, removed in 12"
+    },
+    {
+     "id": "no-io-open",
+     "re": "\\bio\\.open\\(",
+     "why": "Bypasses the save directory"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: love.filesystem.write",
+    "Present: love.filesystem.getInfo",
+    "Present: function love.quit",
+    "Absent: love.filesystem.isFile",
+    "Absent: io.open"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\n-- conf.lua: function love.conf(t) t.identity = \"mygame\" end\nlocal best = 0\n\nfunction love.load()\n    if love.filesystem.getInfo(\"best.txt\", \"file\") then\n        best = tonumber(love.filesystem.read(\"best.txt\")) or 0\n    end\nend\n\nfunction love.quit()\n    love.filesystem.write(\"best.txt\", tostring(best))\nend\n```\n",
+  "bad_answer": "```lua\nlocal best = 0\nfunction love.load()\n    if love.filesystem.isFile(\"best.txt\") then\n        best = tonumber(love.filesystem.read(\"best.txt\"))\n    end\nend\nfunction love.quit()\n    local f = io.open(\"best.txt\", \"w\")\n    f:write(best)\n    f:close()\nend\n```\n"
+ },
+ {
+  "id": "OE-MINECRAFT-01",
+  "category": "engine-minecraft",
+  "difficulty": 2,
+  "goal": "Register an item on Fabric for 26.3 with Mojang names",
+  "prompt": "For Minecraft 26.3 using a Fabric mod: register a new item called ruby in my mod (id rubymod) and add it to the Ingredients creative tab.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-minecraft"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "identifier",
+     "re": "Identifier\\.fromNamespaceAndPath\\(",
+     "why": "26.x name for ids (ResourceLocation was renamed)"
+    },
+    {
+     "id": "set_id",
+     "re": "\\.setId\\(",
+     "why": "Item.Properties needs setId since 1.21.2"
+    },
+    {
+     "id": "tab_events",
+     "re": "CreativeModeTabEvents\\.modifyOutputEvent\\(",
+     "why": "Fabric API name under Mojang mappings"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "yarn_tab",
+     "re": "ItemGroupEvents|ItemGroups\\.",
+     "why": "Yarn-era Fabric names"
+    },
+    {
+     "id": "old_ctor",
+     "re": "new\\s+(?:Identifier|ResourceLocation)\\s*\\(",
+     "why": "Constructor is not public"
+    },
+    {
+     "id": "yarn_settings",
+     "re": "new\\s+Item\\.Settings\\(",
+     "why": "Yarn name for Item.Properties"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: Identifier.fromNamespaceAndPath(, .setId(, CreativeModeTabEvents.modifyOutputEvent(",
+    "Absent: ItemGroupEvents/ItemGroups., new Identifier(/new ResourceLocation(, new Item.Settings("
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Mojang names on 26.3.\n\n```java\nimport net.fabricmc.api.ModInitializer;\nimport net.fabricmc.fabric.api.creativetab.v1.CreativeModeTabEvents;\nimport net.minecraft.core.Registry;\nimport net.minecraft.core.registries.BuiltInRegistries;\nimport net.minecraft.core.registries.Registries;\nimport net.minecraft.resources.Identifier;\nimport net.minecraft.resources.ResourceKey;\nimport net.minecraft.world.item.CreativeModeTabs;\nimport net.minecraft.world.item.Item;\n\npublic class RubyMod implements ModInitializer {\n    public static final ResourceKey<Item> RUBY_KEY =\n        ResourceKey.create(Registries.ITEM, Identifier.fromNamespaceAndPath(\"rubymod\", \"ruby\"));\n    public static final Item RUBY = Registry.register(BuiltInRegistries.ITEM, RUBY_KEY,\n        new Item(new Item.Properties().setId(RUBY_KEY)));\n\n    @Override\n    public void onInitialize() {\n        CreativeModeTabEvents.modifyOutputEvent(CreativeModeTabs.INGREDIENTS).register(tab -> tab.accept(RUBY));\n    }\n}\n```\n",
+  "bad_answer": "Yarn-era code.\n\n```java\npublic class RubyMod implements ModInitializer {\n    public static final Item RUBY = Registry.register(Registries.ITEM, new Identifier(\"rubymod\", \"ruby\"), new Item(new Item.Settings()));\n    public void onInitialize() {\n        ItemGroupEvents.modifyEntriesEvent(ItemGroups.INGREDIENTS).register(e -> e.add(RUBY));\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-MINECRAFT-02",
+  "category": "engine-minecraft",
+  "difficulty": 2,
+  "goal": "Bedrock Script API 2.x startup/worldLoad flow",
+  "prompt": "Minecraft Bedrock 26.50 add-on, Script API @minecraft/server 2.10: every second, show each player's coins (a dynamic property) on the action bar, starting once the world has loaded.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-minecraft"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "import",
+     "re": "from\\s+[\\\"']@minecraft/server[\\\"']",
+     "why": "Import the server module"
+    },
+    {
+     "id": "world_load",
+     "re": "world\\.afterEvents\\.worldLoad\\.subscribe\\(",
+     "why": "2.x replacement for worldInitialize"
+    },
+    {
+     "id": "interval",
+     "re": "system\\.runInterval\\(",
+     "why": "Repeating timer"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "world_init",
+     "re": "worldInitialize",
+     "why": "Removed/renamed in Script API 2.0"
+    },
+    {
+     "id": "cmd_async",
+     "re": "runCommandAsync",
+     "why": "Removed in 2.0"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: @minecraft/server import, world.afterEvents.worldLoad.subscribe(, system.runInterval(",
+    "Absent: worldInitialize, runCommandAsync"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Wait for worldLoad (early execution in 2.x).\n\n```js\nimport { world, system } from \"@minecraft/server\";\n\nworld.afterEvents.worldLoad.subscribe(() => {\n  system.runInterval(() => {\n    for (const player of world.getPlayers()) {\n      const coins = player.getDynamicProperty(\"coins\") ?? 0;\n      player.onScreenDisplay.setActionBar(`Coins: ${coins}`);\n    }\n  }, 20);\n});\n```\n",
+  "bad_answer": "1.x habits.\n\n```js\nimport { world, system } from \"@minecraft/server\";\nworld.afterEvents.worldInitialize.subscribe(() => {\n  system.runInterval(() => world.getDimension(\"overworld\").runCommandAsync(\"title @a actionbar coins\"), 20);\n});\n```\n"
+ },
+ {
+  "id": "OE-MONOGAME-01",
+  "category": "engine-monogame",
+  "difficulty": 1,
+  "goal": "Write a MonoGame Game subclass that loads a texture through the content pipeline and moves it with frame time.",
+  "prompt": "In MonoGame 3.8.6 (DesktopGL): write Game1 that loads a player texture from the content pipeline (asset Textures/player.png), moves it with the arrow keys at 250 pixels per second, and draws it with SpriteBatch.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-monogame"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "game_subclass",
+     "re": "class\\s+\\w+\\s*:\\s*Game\\b",
+     "why": "Games subclass Microsoft.Xna.Framework.Game",
+     "scope": "raw"
+    },
+    {
+     "id": "keyboard_state",
+     "re": "\\bKeyboard\\.GetState\\(\\)",
+     "why": "Keyboard input is polled with Keyboard.GetState()",
+     "scope": "raw"
+    },
+    {
+     "id": "load_no_ext",
+     "re": "Content\\.Load<\\s*Texture2D\\s*>\\(\\s*\\\"[^\\\".]+\\\"\\s*\\)",
+     "why": "Content.Load uses the asset name without extension",
+     "scope": "raw"
+    },
+    {
+     "id": "elapsed",
+     "re": "ElapsedGameTime\\.TotalSeconds",
+     "why": "Movement scaled by elapsed time",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "load_with_ext",
+     "re": "Content\\.Load<\\s*\\w+\\s*>\\(\\s*\\\"[^\\\"]*\\.(?:png|jpg|jpeg|wav|ogg|xnb|mp3)\\\"",
+     "flags": "i",
+     "why": "Asset names have no file extension",
+     "scope": "raw"
+    },
+    {
+     "id": "content_prefix",
+     "re": "Content\\.Load<\\s*\\w+\\s*>\\(\\s*\\\"Content/",
+     "why": "Names are relative to Content.RootDirectory",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: class Game1 : Game",
+    "Present: Keyboard.GetState()",
+    "Present: Content.Load<Texture2D>(\"Textures/player\")",
+    "Present: ElapsedGameTime.TotalSeconds",
+    "Absent: Content.Load with file extension",
+    "Absent: \"Content/\" prefix in asset name"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "MonoGame 3.8.6: load by asset name (no extension) and scale movement by elapsed time.\n\n```csharp\nusing Microsoft.Xna.Framework;\nusing Microsoft.Xna.Framework.Graphics;\nusing Microsoft.Xna.Framework.Input;\n\npublic class Game1 : Game\n{\n    private readonly GraphicsDeviceManager _graphics;\n    private SpriteBatch _spriteBatch;\n    private Texture2D _player;\n    private Vector2 _position = new(100, 100);\n\n    public Game1()\n    {\n        _graphics = new GraphicsDeviceManager(this);\n        Content.RootDirectory = \"Content\";\n    }\n\n    protected override void LoadContent()\n    {\n        _spriteBatch = new SpriteBatch(GraphicsDevice);\n        _player = Content.Load<Texture2D>(\"Textures/player\");\n    }\n\n    protected override void Update(GameTime gameTime)\n    {\n        var kb = Keyboard.GetState();\n        float dt = (float)gameTime.ElapsedGameTime.TotalSeconds;\n        Vector2 dir = Vector2.Zero;\n        if (kb.IsKeyDown(Keys.Left)) dir.X -= 1;\n        if (kb.IsKeyDown(Keys.Right)) dir.X += 1;\n        if (kb.IsKeyDown(Keys.Up)) dir.Y -= 1;\n        if (kb.IsKeyDown(Keys.Down)) dir.Y += 1;\n        if (dir != Vector2.Zero) dir.Normalize();\n        _position += dir * 250f * dt;\n        base.Update(gameTime);\n    }\n\n    protected override void Draw(GameTime gameTime)\n    {\n        GraphicsDevice.Clear(Color.CornflowerBlue);\n        _spriteBatch.Begin();\n        _spriteBatch.Draw(_player, _position, Color.White);\n        _spriteBatch.End();\n        base.Draw(gameTime);\n    }\n}\n```\n",
+  "bad_answer": "```csharp\nusing Microsoft.Xna.Framework;\nusing Microsoft.Xna.Framework.Graphics;\nusing Microsoft.Xna.Framework.Input;\n\npublic class Game1 : Game\n{\n    GraphicsDeviceManager graphics;\n    SpriteBatch spriteBatch;\n    Texture2D player;\n    Vector2 position;\n\n    public Game1() { graphics = new GraphicsDeviceManager(this); }\n\n    protected override void LoadContent()\n    {\n        spriteBatch = new SpriteBatch(GraphicsDevice);\n        player = Content.Load<Texture2D>(\"Content/player.png\");\n    }\n\n    protected override void Update(GameTime gameTime)\n    {\n        if (Keyboard.GetState().IsKeyDown(Keys.Left)) position.X -= 4;\n        base.Update(gameTime);\n    }\n\n    protected override void Draw(GameTime gameTime)\n    {\n        spriteBatch.Draw(player, position, Color.White);\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-MONOGAME-02",
+  "category": "engine-monogame",
+  "difficulty": 2,
+  "goal": "Configure content with the MonoGame 3.8.6 code-based Content Builder.",
+  "prompt": "In MonoGame 3.8.6 using the new Content Builder project: write the Builder class that builds every file in Assets, excludes raw .ttf font files under Fonts/, and builds Textures/hero.png with premultiplied alpha turned off.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-monogame"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "content_builder",
+     "re": ":\\s*ContentBuilder\\b",
+     "why": "The builder class derives from ContentBuilder",
+     "scope": "raw"
+    },
+    {
+     "id": "get_collection",
+     "re": "\\bGetContentCollection\\s*\\(",
+     "why": "Rules are returned from GetContentCollection()",
+     "scope": "raw"
+    },
+    {
+     "id": "wildcard_include",
+     "re": "\\.Include<\\s*WildcardRule\\s*>\\(",
+     "why": "Wildcard rules use Include<WildcardRule>",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "mgcb_syntax",
+     "re": "^\\s*(?:#begin\\b|/build:|/importer:|/processor:)",
+     "why": "That is legacy .mgcb syntax, not the 3.8.6 Content Builder",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: : ContentBuilder",
+    "Present: GetContentCollection()",
+    "Present: Include<WildcardRule>",
+    "Absent: .mgcb directives (#begin, /build:)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "MonoGame 3.8.6 Content Builder: rules are C# in `Builder.cs` instead of a `.mgcb` file.\n\n```csharp\nusing Microsoft.Xna.Framework.Content.Pipeline;\nusing Microsoft.Xna.Framework.Content.Pipeline.Processors;\nusing MonoGame.Framework.Content.Pipeline.Builder;\n\npublic class Builder : ContentBuilder\n{\n    public override IContentCollection GetContentCollection()\n    {\n        var contentCollection = new ContentCollection();\n\n        // Build every asset under Assets/ with its default importer and processor.\n        contentCollection.Include<WildcardRule>(\"*\");\n\n        // Raw .ttf files are only referenced by .spritefont descriptions.\n        contentCollection.Exclude<WildcardRule>(\"Fonts/*.ttf\");\n\n        // Pixel-art sprites: keep alpha straight.\n        contentCollection.Include(\"Textures/hero.png\", new TextureImporter(), new TextureProcessor { PremultiplyAlpha = false });\n\n        return contentCollection;\n    }\n}\n```\n",
+  "bad_answer": "```text\n#----------------------------- Global Properties ----------------------------#\n/outputDir:bin/$(Platform)\n/platform:DesktopGL\n\n#-------------------------------- References --------------------------------#\n\n#---------------------------------- Content ---------------------------------#\n#begin Textures/hero.png\n/importer:TextureImporter\n/processor:TextureProcessor\n/processorParam:PremultiplyAlpha=False\n/build:Textures/hero.png\n```\n"
+ },
+ {
+  "id": "OE-O3DE-01",
+  "category": "engine-o3de",
+  "difficulty": 1,
+  "goal": "Write an O3DE Lua Script component that rotates its entity every frame with a TickBus handler that is disconnected on deactivate.",
+  "prompt": "In O3DE 26.05: write a Lua script for the Lua Script component that spins its entity around Z at a speed set in the Inspector (degrees per second). Clean up properly when the entity deactivates.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-o3de"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "tickbus-connect",
+     "re": "TickBus\\.Connect\\(\\s*self\\s*\\)",
+     "why": "Per-frame updates in O3DE Lua come from TickBus.Connect(self)",
+     "scope": "raw"
+    },
+    {
+     "id": "ontick",
+     "re": "function\\s+\\w+:OnTick\\(\\s*\\w+\\s*,\\s*\\w+\\s*\\)",
+     "why": "Handler must be OnTick(deltaTime, timePoint)",
+     "scope": "raw"
+    },
+    {
+     "id": "disconnect",
+     "re": ":Disconnect\\(\\s*\\)",
+     "why": "Handlers must be disconnected in OnDeactivate",
+     "scope": "raw"
+    },
+    {
+     "id": "returns-table",
+     "re": "^\\s*return\\s+\\w+\\s*$",
+     "why": "Lua component scripts return their script table",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "unity-style-callbacks",
+     "re": "function\\s+\\w+[:.](?:Update|Start|OnUpdate|Awake)\\s*\\(",
+     "why": "O3DE Lua has no Update/Start callbacks",
+     "scope": "raw"
+    },
+    {
+     "id": "cryengine",
+     "re": "\\bgEnv\\b|\\bCryLog\\b|\\bSystem\\.GetCVar\\b",
+     "why": "Lumberyard/CryEngine APIs are legacy",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: TickBus.Connect(self), OnTick(deltaTime, timePoint), :Disconnect(), return table",
+    "Absent: Update/Start callbacks, gEnv/CryLog"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Attach this with a **Lua Script** component. `Properties` show in the Inspector, and the tick handler is released in `OnDeactivate`.\n\n```lua\nlocal Spinner = {\n    Properties = {\n        DegreesPerSecond = { default = 90.0, suffix = \"deg/s\", description = \"Spin speed\" },\n    }\n}\n\nfunction Spinner:OnActivate()\n    self.radPerSec = Math.DegToRad(self.Properties.DegreesPerSecond)\n    self.tickBusHandler = TickBus.Connect(self)\nend\n\nfunction Spinner:OnTick(deltaTime, timePoint)\n    TransformBus.Event.RotateAroundLocalZ(self.entityId, self.radPerSec * deltaTime)\nend\n\nfunction Spinner:OnDeactivate()\n    if self.tickBusHandler then\n        self.tickBusHandler:Disconnect()\n        self.tickBusHandler = nil\n    end\nend\n\nreturn Spinner\n```\n",
+  "bad_answer": "```lua\nSpinner = {}\nfunction Spinner:Start()\n    CryLog(\"start\")\nend\nfunction Spinner:Update(dt)\n    local e = gEnv.pEntitySystem\nend\n```\n"
+ },
+ {
+  "id": "OE-O3DE-02",
+  "category": "engine-o3de",
+  "difficulty": 2,
+  "goal": "Write an O3DE C++ component that connects to AZ::TickBus only while active.",
+  "prompt": "In O3DE 26.05 (C++): write the header for a gem component `SpinComponent` that rotates its entity every frame. Use the engine's tick system and connect/disconnect correctly.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-o3de"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "az-component",
+     "re": "AZ_COMPONENT\\(",
+     "why": "Components declare type info with AZ_COMPONENT",
+     "scope": "raw"
+    },
+    {
+     "id": "tick-handler",
+     "re": "public\\s+AZ::TickBus::Handler",
+     "why": "Ticking components derive AZ::TickBus::Handler",
+     "scope": "raw"
+    },
+    {
+     "id": "ontick-sig",
+     "re": "OnTick\\(\\s*float\\s+\\w+\\s*,\\s*AZ::ScriptTimePoint",
+     "why": "OnTick(float deltaTime, AZ::ScriptTimePoint time)",
+     "scope": "raw"
+    },
+    {
+     "id": "disconnect",
+     "re": "BusDisconnect\\(\\s*\\)",
+     "why": "Disconnect in Deactivate",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "cryengine",
+     "re": "\\bgEnv\\b|\\bIEntitySystem\\b|\\bCryLog\\b|IGameObjectExtension",
+     "why": "CryEngine/Lumberyard legacy APIs",
+     "scope": "raw"
+    },
+    {
+     "id": "unity-update",
+     "re": "void\\s+Update\\s*\\(\\s*float",
+     "why": "No Update(float) virtual in AZ::Component",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: AZ_COMPONENT, AZ::TickBus::Handler, OnTick(float, AZ::ScriptTimePoint), BusDisconnect()",
+    "Absent: gEnv/IEntitySystem/CryLog, Update(float)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Register `SpinComponent::CreateDescriptor()` in the gem module and generate a fresh UUID.\n\n```cpp\n#pragma once\n#include <AzCore/Component/Component.h>\n#include <AzCore/Component/TickBus.h>\n\nnamespace MyGem\n{\n    class SpinComponent\n        : public AZ::Component\n        , public AZ::TickBus::Handler\n    {\n    public:\n        AZ_COMPONENT(MyGem::SpinComponent, \"{6B1F4C9E-2D3A-4E5B-9C7D-8E0F1A2B3C4D}\");\n        static void Reflect(AZ::ReflectContext* context);\n\n    protected:\n        void Activate() override { AZ::TickBus::Handler::BusConnect(); }\n        void Deactivate() override { AZ::TickBus::Handler::BusDisconnect(); }\n\n        // AZ::TickBus::Handler\n        void OnTick(float deltaTime, AZ::ScriptTimePoint time) override;\n\n        float m_degreesPerSecond = 90.0f;\n    };\n}\n```\n",
+  "bad_answer": "```cpp\n#include <IEntitySystem.h>\nclass CSpin : public IGameObjectExtension\n{\n    void Update(float frameTime) { gEnv->pLog->Log(\"tick\"); }\n};\n```\n"
+ },
+ {
+  "id": "OE-PHASER-01",
+  "category": "engine-phaser",
+  "difficulty": 1,
+  "goal": "Write a Phaser 4 scene with Arcade physics, cursor-key movement and a static ground collider.",
+  "prompt": "In Phaser 4.2: write a TypeScript scene where a player sprite moves left/right with the arrow keys, jumps when on the ground, and collides with a static ground platform using Arcade physics. Include the game config.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-phaser"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "game-config",
+     "re": "new Phaser\\.Game\\(\\s*\\{",
+     "why": "Phaser 3/4 boots from a config object",
+     "scope": "raw"
+    },
+    {
+     "id": "physics-factory",
+     "re": "this\\.physics\\.add\\.(?:sprite|staticGroup)\\(",
+     "why": "physics objects come from the scene's physics factory",
+     "scope": "raw"
+    },
+    {
+     "id": "collider",
+     "re": "this\\.physics\\.add\\.collider\\(",
+     "why": "ground must be a collider, not an overlap",
+     "scope": "raw"
+    },
+    {
+     "id": "cursors",
+     "re": "createCursorKeys\\(\\)",
+     "why": "keyboard via scene input plugin",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "phaser2-api",
+     "re": "game\\.add\\.sprite|game\\.physics\\.startSystem|game\\.physics\\.arcade\\.enable|new Phaser\\.Game\\(\\s*\\d",
+     "why": "Phaser 2/CE API",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: new Phaser.Game({...}), this.physics.add.*, collider, createCursorKeys",
+    "Absent: Phaser 2 game.add / startSystem / positional Game constructor"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Phaser 4 scene with Arcade physics:\n\n```ts\nimport Phaser from 'phaser';\n\nclass Play extends Phaser.Scene {\n  private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;\n  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;\n  constructor() { super('Play'); }\n  preload() {\n    this.load.image('hero', 'assets/hero.png');\n    this.load.image('ground', 'assets/ground.png');\n  }\n  create() {\n    const ground = this.physics.add.staticGroup();\n    ground.create(400, 580, 'ground');\n    this.player = this.physics.add.sprite(100, 400, 'hero');\n    this.player.setCollideWorldBounds(true);\n    this.physics.add.collider(this.player, ground);\n    this.cursors = this.input.keyboard!.createCursorKeys();\n  }\n  update() {\n    if (this.cursors.left.isDown) this.player.setVelocityX(-200);\n    else if (this.cursors.right.isDown) this.player.setVelocityX(200);\n    else this.player.setVelocityX(0);\n    if (this.cursors.up.isDown && this.player.body.blocked.down) this.player.setVelocityY(-330);\n  }\n}\n\nnew Phaser.Game({\n  type: Phaser.AUTO, width: 800, height: 600,\n  physics: { default: 'arcade', arcade: { gravity: { x: 0, y: 400 } } },\n  scene: [Play],\n});\n```\n",
+  "bad_answer": "Old Phaser 2 style:\n\n```js\nvar game = new Phaser.Game(800, 600, Phaser.AUTO, '', { preload: preload, create: create, update: update });\nvar player, cursors;\nfunction preload() { game.load.image('hero', 'assets/hero.png'); }\nfunction create() {\n  game.physics.startSystem(Phaser.Physics.ARCADE);\n  player = game.add.sprite(100, 400, 'hero');\n  game.physics.arcade.enable(player);\n  cursors = game.input.keyboard.createCursorKeys();\n}\nfunction update() { player.body.velocity.x = cursors.left.isDown ? -200 : 0; }\n```\n"
+ },
+ {
+  "id": "OE-PHASER-02",
+  "category": "engine-phaser",
+  "difficulty": 2,
+  "goal": "Flash a sprite solid red on damage in Phaser 4 using the v4 tint API.",
+  "prompt": "In Phaser 4: when the player takes damage, make the sprite flash solid red for 100 ms and then return to normal. Show the code.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-phaser"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "set-tint",
+     "re": "\\.setTint\\(\\s*0x[fF]{2}0000",
+     "why": "red tint color",
+     "scope": "raw"
+    },
+    {
+     "id": "tint-mode-fill",
+     "re": "setTintMode\\(\\s*Phaser\\.TintModes\\.FILL\\s*\\)",
+     "why": "v4 replaces setTintFill with setTintMode(FILL)",
+     "scope": "raw"
+    },
+    {
+     "id": "scene-timer",
+     "re": "this\\.time\\.delayedCall\\(",
+     "why": "use scene clock, not setTimeout",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "tint-fill-removed",
+     "re": "setTintFill\\(|\\btintFill\\s*=",
+     "why": "setTintFill/tintFill removed in Phaser 4",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: setTint(0xff0000) + setTintMode(Phaser.TintModes.FILL) + this.time.delayedCall",
+    "Absent: setTintFill / tintFill"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Phaser 4 removed setTintFill; use a tint mode:\n\n```ts\nflashDamage(sprite: Phaser.GameObjects.Sprite) {\n  sprite.setTint(0xff0000).setTintMode(Phaser.TintModes.FILL);\n  this.time.delayedCall(100, () => {\n    sprite.clearTint();\n    sprite.setTintMode(Phaser.TintModes.MULTIPLY);\n  });\n}\n```\n",
+  "bad_answer": "Using the Phaser 3 API:\n\n```ts\nflashDamage(sprite: Phaser.GameObjects.Sprite) {\n  sprite.setTintFill(0xff0000);\n  this.time.delayedCall(100, () => sprite.clearTint());\n}\n```\n"
+ },
+ {
+  "id": "OE-PICO8-01",
+  "category": "engine-pico8",
+  "difficulty": 1,
+  "goal": "60 fps movement with PICO-8 callbacks and built-ins",
+  "prompt": "In PICO-8 0.2.7: write a cart that runs at 60 fps, moves a player sprite (sprite 1) with the arrow keys, keeps it on screen, and draws it every frame.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-pico8"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "update60",
+     "re": "function\\s+_update60\\s*\\(",
+     "why": "function _update60()",
+     "scope": "raw"
+    },
+    {
+     "id": "draw",
+     "re": "function\\s+_draw\\s*\\(",
+     "why": "function _draw()",
+     "scope": "raw"
+    },
+    {
+     "id": "btn",
+     "re": "\\bbtn\\(\\s*[0-3]\\s*\\)",
+     "why": "btn(0..3) arrow buttons",
+     "scope": "raw"
+    },
+    {
+     "id": "spr",
+     "re": "\\bspr\\(\\s*1\\s*,",
+     "why": "spr(1, x, y)",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-math-lib",
+     "re": "\\bmath\\.\\w+",
+     "why": "math.* standard library (not in PICO-8)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-love",
+     "re": "\\blove\\.\\w+",
+     "why": "LOVE APIs",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: function _update60()",
+    "Present: function _draw()",
+    "Present: btn(0..3) arrow buttons",
+    "Present: spr(1, x, y)",
+    "Absent: math.* standard library (not in PICO-8)",
+    "Absent: LOVE APIs"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "`_update60` runs at 60 fps; `mid` clamps without the math library.\n\n```lua\nfunction _init()\n  x,y=60,60\nend\n\nfunction _update60()\n  if (btn(0)) x-=1\n  if (btn(1)) x+=1\n  if (btn(2)) y-=1\n  if (btn(3)) y+=1\n  x=mid(0,x,120)\n  y=mid(0,y,120)\nend\n\nfunction _draw()\n  cls()\n  spr(1,x,y)\nend\n```\n",
+  "bad_answer": "Uses the Lua math library, which PICO-8 does not have.\n\n```lua\nfunction _init()\n  x,y=60,60\nend\n\nfunction _update()\n  if btn(0) then x=x-1 end\n  if btn(1) then x=x+1 end\n  x=math.max(0,math.min(x,120))\nend\n\nfunction _draw()\n  cls()\n  spr(1,x,y)\nend\n```\n"
+ },
+ {
+  "id": "OE-PICO8-02",
+  "category": "engine-pico8",
+  "difficulty": 2,
+  "goal": "Persist a high score with cartdata",
+  "prompt": "In PICO-8 0.2.7: save and load a high score so it survives restarting the cart. Show the best score on screen.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-pico8"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "cartdata",
+     "re": "\\bcartdata\\(\\s*\\\"[a-z0-9_]+\\\"\\s*\\)",
+     "why": "cartdata(\"id\") with a legal id",
+     "scope": "raw"
+    },
+    {
+     "id": "dget",
+     "re": "\\bdget\\(\\s*\\d+\\s*\\)",
+     "why": "dget(index)",
+     "scope": "raw"
+    },
+    {
+     "id": "dset",
+     "re": "\\bdset\\(\\s*\\d+\\s*,",
+     "why": "dset(index, value)",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-files",
+     "re": "\\bio\\.open\\b|love\\.filesystem|\\bstring\\.format\\b|\\bpmem\\(",
+     "why": "io/love/string.format/pmem (not PICO-8)",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: cartdata(\"id\") with a legal id",
+    "Present: dget(index)",
+    "Present: dset(index, value)",
+    "Absent: io/love/string.format/pmem (not PICO-8)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Call `cartdata` once before `dget`/`dset`; 64 numbers are available.\n\n```lua\nfunction _init()\n  cartdata(\"star_highscore_demo\")\n  best=dget(0)\n  score=0\nend\n\nfunction _update60()\n  if btnp(4) then\n    score+=1\n    if score>best then\n      best=score\n      dset(0,best)\n    end\n  end\nend\n\nfunction _draw()\n  cls()\n  print(\"score \"..score,2,2,7)\n  print(\"best \"..best,2,10,10)\nend\n```\n",
+  "bad_answer": "Uses file IO and string.format, neither exists in PICO-8.\n\n```lua\nfunction _init()\n  local f=io.open(\"save.txt\",\"r\")\n  best=f and tonumber(f:read(\"*a\")) or 0\n  score=0\nend\n\nfunction _draw()\n  cls()\n  print(string.format(\"best %d\",best),2,2,7)\nend\n```\n"
+ },
+ {
+  "id": "OE-PIXIJS-01",
+  "category": "engine-pixijs",
+  "difficulty": 1,
+  "goal": "Create a PixiJS v8 application and draw a filled rectangle with the v8 Graphics API.",
+  "prompt": "In PixiJS v8: create an 800x600 application, add its canvas to the page, and draw a red 100x50 rectangle with a white 2px outline at (50, 50).",
+  "run_mode": "automated",
+  "helps": [
+   "engine-pixijs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "async-init",
+     "re": "await\\s+app\\.init\\(",
+     "why": "v8 Application must be initialized with await app.init",
+     "scope": "raw"
+    },
+    {
+     "id": "rect-fill",
+     "re": "\\.rect\\([^)]*\\)\\s*\\.fill\\(",
+     "why": "v8 Graphics: shape then fill",
+     "scope": "raw"
+    },
+    {
+     "id": "canvas",
+     "re": "app\\.canvas\\b",
+     "why": "v8 renamed app.view to app.canvas",
+     "scope": "raw"
+    },
+    {
+     "id": "stroke-obj",
+     "re": "\\.stroke\\(\\s*\\{",
+     "why": "v8 stroke takes an options object",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "v7-graphics",
+     "re": "beginFill\\(|drawRect\\(|lineStyle\\(|endFill\\(",
+     "why": "v7 Graphics API",
+     "scope": "raw"
+    },
+    {
+     "id": "app-view",
+     "re": "app\\.view\\b",
+     "why": "v7 app.view",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: await app.init, rect().fill(), stroke({...}), app.canvas",
+    "Absent: beginFill/drawRect/lineStyle, app.view"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "PixiJS v8:\n\n```ts\nimport { Application, Graphics } from 'pixi.js';\n\nconst app = new Application();\nawait app.init({ width: 800, height: 600, background: '#000000' });\ndocument.body.appendChild(app.canvas);\n\nconst box = new Graphics()\n  .rect(50, 50, 100, 50)\n  .fill(0xff0000)\n  .stroke({ width: 2, color: 0xffffff });\napp.stage.addChild(box);\n```\n",
+  "bad_answer": "PixiJS v7 style:\n\n```ts\nimport { Application, Graphics } from 'pixi.js';\n\nconst app = new Application({ width: 800, height: 600 });\ndocument.body.appendChild(app.view);\nconst box = new Graphics();\nbox.lineStyle(2, 0xffffff);\nbox.beginFill(0xff0000);\nbox.drawRect(50, 50, 100, 50);\nbox.endFill();\napp.stage.addChild(box);\n```\n"
+ },
+ {
+  "id": "OE-PIXIJS-02",
+  "category": "engine-pixijs",
+  "difficulty": 2,
+  "goal": "Load a texture with Assets and rotate a sprite frame-rate independently with the v8 ticker.",
+  "prompt": "In PixiJS v8: load 'bunny.png', show it centered as a sprite, and rotate it smoothly every frame regardless of frame rate.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-pixijs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "assets-load",
+     "re": "await\\s+Assets\\.load\\(",
+     "why": "v8 loads textures through Assets",
+     "scope": "raw"
+    },
+    {
+     "id": "ticker-delta",
+     "re": "ticker\\.deltaTime|ticker\\.deltaMS",
+     "why": "v8 ticker callback receives the Ticker",
+     "scope": "raw"
+    },
+    {
+     "id": "single-pkg",
+     "re": "from\\s+['\\\"]pixi\\.js['\\\"]",
+     "why": "v8 single package import",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "old-loader",
+     "re": "PIXI\\.Loader|app\\.loader|Loader\\.shared|from\\s+['\\\"]@pixi/(?:app|loaders|sprite|core)['\\\"]",
+     "why": "removed loader / v7 sub-packages",
+     "scope": "raw"
+    },
+    {
+     "id": "texture-from-url",
+     "re": "Texture\\.from\\(\\s*['\\\"][^'\\\"]+\\.(?:png|jpg)['\\\"]",
+     "why": "v8 Texture.from no longer loads URLs",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: await Assets.load, ticker.deltaTime, import from 'pixi.js'",
+    "Absent: Loader/app.loader/@pixi sub-packages, Texture.from(url)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "PixiJS v8:\n\n```ts\nimport { Application, Assets, Sprite } from 'pixi.js';\n\nconst app = new Application();\nawait app.init({ resizeTo: window });\ndocument.body.appendChild(app.canvas);\n\nconst texture = await Assets.load('bunny.png');\nconst bunny = new Sprite(texture);\nbunny.anchor.set(0.5);\nbunny.position.set(app.screen.width / 2, app.screen.height / 2);\napp.stage.addChild(bunny);\n\napp.ticker.add((ticker) => {\n  bunny.rotation += 0.05 * ticker.deltaTime;\n});\n```\n",
+  "bad_answer": "Old style:\n\n```ts\nimport * as PIXI from 'pixi.js';\n\nconst app = new PIXI.Application();\ndocument.body.appendChild(app.view);\nconst bunny = new PIXI.Sprite(PIXI.Texture.from('bunny.png'));\napp.stage.addChild(bunny);\napp.ticker.add((delta) => { bunny.rotation += 0.05 * delta; });\n```\n"
+ },
+ {
+  "id": "OE-PLAYCANVAS-01",
+  "category": "engine-playcanvas",
+  "difficulty": 1,
+  "goal": "PlayCanvas 2.x ESM script moving an entity with WASD and an editor attribute.",
+  "prompt": "In PlayCanvas engine 2.23: write an ESM script (.mjs) that moves its entity with WASD at a speed that is editable in the Editor.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-playcanvas"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "esm-import",
+     "re": "import\\s*\\{[^}]*\\bScript\\b[^}]*\\}\\s*from\\s*['\\\"]playcanvas['\\\"]",
+     "why": "ESM scripts import Script from playcanvas",
+     "scope": "raw"
+    },
+    {
+     "id": "extends-script",
+     "re": "extends\\s+Script\\b",
+     "why": "ESM scripts extend Script",
+     "scope": "raw"
+    },
+    {
+     "id": "script-name",
+     "re": "static\\s+scriptName\\s*=",
+     "why": "ESM scripts declare static scriptName",
+     "scope": "raw"
+    },
+    {
+     "id": "attribute-tag",
+     "re": "@attribute\\b",
+     "why": "ESM attributes use the JSDoc @attribute tag",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "classic-script",
+     "re": "pc\\.createScript\\(|\\.attributes\\.add\\(",
+     "why": "Classic script format, not ESM",
+     "scope": "raw"
+    },
+    {
+     "id": "script-type",
+     "re": "extends\\s+(?:pc\\.)?ScriptType\\b",
+     "why": "ScriptType deprecated, use Script",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: import { Script } from 'playcanvas', extends Script, static scriptName, @attribute",
+    "Absent: pc.createScript / attributes.add / ScriptType"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "PlayCanvas 2.x ESM script (`playerMove.mjs`):\n\n```js\nimport { Script, Vec3, KEY_W, KEY_A, KEY_S, KEY_D } from 'playcanvas';\n\nexport class PlayerMove extends Script {\n    static scriptName = 'playerMove';\n\n    /**\n     * Units per second.\n     *\n     * @attribute\n     */\n    speed = 5;\n\n    initialize() {\n        this.dir = new Vec3();\n    }\n\n    update(dt) {\n        const kb = this.app.keyboard;\n        this.dir.set(\n            (kb.isPressed(KEY_D) ? 1 : 0) - (kb.isPressed(KEY_A) ? 1 : 0),\n            0,\n            (kb.isPressed(KEY_S) ? 1 : 0) - (kb.isPressed(KEY_W) ? 1 : 0)\n        );\n        if (this.dir.lengthSq() > 0) {\n            this.dir.normalize().mulScalar(this.speed * dt);\n            this.entity.translate(this.dir);\n        }\n    }\n}\n```\n",
+  "bad_answer": "```js\nvar PlayerMove = pc.createScript('playerMove');\nPlayerMove.attributes.add('speed', { type: 'number', default: 5 });\nPlayerMove.prototype.update = function (dt) {\n    if (this.app.keyboard.isPressed(pc.KEY_W)) this.entity.translate(0, 0, -this.speed * dt);\n};\n```\n"
+ },
+ {
+  "id": "OE-PLAYCANVAS-02",
+  "category": "engine-playcanvas",
+  "difficulty": 2,
+  "goal": "PlayCanvas 2.x engine-only physics with ammo.js loaded, rigidbody/collision components and a collisionstart handler.",
+  "prompt": "In PlayCanvas 2.23 engine-only (npm, no Editor): drop a dynamic ball onto a static ground using the built-in physics and log a score when it hits the ground. Include loading the physics module.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-playcanvas"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "ammo-config",
+     "re": "WasmModule\\.setConfig\\(\\s*['\\\"]Ammo['\\\"]",
+     "why": "ammo.js must be loaded before physics works",
+     "scope": "raw"
+    },
+    {
+     "id": "rigidbody",
+     "re": "addComponent\\(\\s*['\\\"]rigidbody['\\\"]",
+     "why": "rigidbody component",
+     "scope": "raw"
+    },
+    {
+     "id": "collision-event",
+     "re": "collision\\.on\\(\\s*['\\\"]collisionstart['\\\"]",
+     "why": "collision events on the collision component",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "set-gravity",
+     "re": "\\.setGravity\\(",
+     "why": "setGravity deprecated; use systems.rigidbody.gravity",
+     "scope": "raw"
+    },
+    {
+     "id": "model-component",
+     "re": "addComponent\\(\\s*['\\\"]model['\\\"]",
+     "why": "use the render component for primitives",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: WasmModule.setConfig('Ammo'), addComponent('rigidbody'), collision.on('collisionstart')",
+    "Absent: setGravity, model component"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Engine-only PlayCanvas 2.x with ammo.js:\n\n```js\nimport * as pc from 'playcanvas';\n\npc.WasmModule.setConfig('Ammo', {\n    glueUrl: '/ammo/ammo.wasm.js',\n    wasmUrl: '/ammo/ammo.wasm.wasm',\n    fallbackUrl: '/ammo/ammo.js'\n});\nawait new Promise((resolve) => pc.WasmModule.getInstance('Ammo', resolve));\n\nconst app = new pc.Application(document.getElementById('application'));\napp.systems.rigidbody.gravity.set(0, -9.81, 0);\n\nconst ground = new pc.Entity('ground');\nground.addComponent('render', { type: 'box' });\nground.addComponent('collision', { type: 'box', halfExtents: new pc.Vec3(10, 0.5, 10) });\nground.addComponent('rigidbody', { type: 'static' });\nground.setLocalScale(20, 1, 20);\napp.root.addChild(ground);\n\nlet score = 0;\nconst ball = new pc.Entity('ball');\nball.addComponent('render', { type: 'sphere' });\nball.addComponent('collision', { type: 'sphere', radius: 0.5 });\nball.addComponent('rigidbody', { type: 'dynamic', mass: 1, restitution: 0.6 });\nball.setPosition(0, 5, 0);\napp.root.addChild(ball);\nball.collision.on('collisionstart', (result) => {\n    if (result.other === ground) console.log('score', ++score);\n});\n\nconst camera = new pc.Entity('camera');\ncamera.addComponent('camera');\ncamera.setPosition(0, 6, 14);\ncamera.lookAt(pc.Vec3.ZERO);\napp.root.addChild(camera);\napp.start();\n```\n",
+  "bad_answer": "```js\nvar app = new pc.Application(canvas);\napp.systems.rigidbody.setGravity(0, -9.81, 0);\nvar ball = new pc.Entity();\nball.addComponent('model', { type: 'sphere' });\nball.addComponent('collision', { type: 'sphere' });\nball.addComponent('rigidbody', { type: 'dynamic' });\nball.collision.on('collisionstart', function () { score++; });\n```\n"
+ },
+ {
+  "id": "OE-RAYLIB-01",
+  "category": "engine-raylib",
+  "difficulty": 1,
+  "goal": "Write a raylib 6.0 C program with a 2D follow camera and frame-time movement.",
+  "prompt": "In raylib 6.0 (C): make a window where a square moves left/right with the arrow keys using frame time, and a 2D camera follows it. Draw a UI label that does not move with the camera.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-raylib"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "init_window",
+     "re": "\\bInitWindow\\(",
+     "why": "Window must be created first",
+     "scope": "raw"
+    },
+    {
+     "id": "frame_time",
+     "re": "\\bGetFrameTime\\(\\)",
+     "why": "Movement should use frame time",
+     "scope": "raw"
+    },
+    {
+     "id": "mode2d",
+     "re": "\\bBeginMode2D\\(",
+     "why": "2D camera mode is BeginMode2D",
+     "scope": "raw"
+    },
+    {
+     "id": "drawing",
+     "re": "\\bBeginDrawing\\(\\)[\\s\\S]*\\bEndDrawing\\(\\)",
+     "why": "Frame drawing is wrapped in BeginDrawing/EndDrawing",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "old_mode",
+     "re": "\\b(?:Begin|End)2dMode\\b",
+     "why": "Begin2dMode/End2dMode are pre-2.0 names",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: InitWindow",
+    "Present: GetFrameTime",
+    "Present: BeginMode2D/EndMode2D",
+    "Present: BeginDrawing/EndDrawing",
+    "Absent: Begin2dMode/End2dMode"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "raylib 6.0 uses `Camera2D` with `BeginMode2D`/`EndMode2D` inside `BeginDrawing`/`EndDrawing`.\n\n```c\n#include \"raylib.h\"\n#include \"raymath.h\"\n\nint main(void)\n{\n    InitWindow(800, 450, \"follow camera\");\n    SetTargetFPS(60);\n    Vector2 player = { 0, 0 };\n    Camera2D cam = { 0 };\n    cam.offset = (Vector2){ 400, 225 };\n    cam.zoom = 1.0f;\n\n    while (!WindowShouldClose())\n    {\n        float dt = GetFrameTime();\n        if (IsKeyDown(KEY_RIGHT)) player.x += 200 * dt;\n        if (IsKeyDown(KEY_LEFT))  player.x -= 200 * dt;\n        cam.target = player;\n\n        BeginDrawing();\n            ClearBackground(RAYWHITE);\n            BeginMode2D(cam);\n                DrawRectangle(-400, 100, 2000, 20, GRAY);\n                DrawRectangleV(player, (Vector2){ 32, 32 }, BLUE);\n            EndMode2D();\n            DrawText(\"Arrows to move\", 10, 10, 20, DARKGRAY);\n        EndDrawing();\n    }\n    CloseWindow();\n    return 0;\n}\n```\n",
+  "bad_answer": "```c\n#include \"raylib.h\"\n\nint main(void)\n{\n    InitWindow(800, 450, \"follow camera\");\n    Vector2 player = { 0, 0 };\n    Camera2D cam = { 0 };\n    while (!WindowShouldClose())\n    {\n        if (IsKeyDown(KEY_RIGHT)) player.x += 4;\n        cam.target = player;\n        BeginDrawing();\n        Begin2dMode(cam);\n        DrawRectangleV(player, (Vector2){ 32, 32 }, BLUE);\n        End2dMode();\n        EndDrawing();\n    }\n    CloseWindow();\n    return 0;\n}\n```\n"
+ },
+ {
+  "id": "OE-RAYLIB-02",
+  "category": "engine-raylib",
+  "difficulty": 2,
+  "goal": "Play a glTF skeletal animation with the raylib 6.0 animation API.",
+  "prompt": "In raylib 6.0 (C): load an animated .glb model, play its first animation at 30 frames per second using frame time, loop it, and draw it in 3D.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-raylib"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "load_anims",
+     "re": "\\bLoadModelAnimations\\(",
+     "why": "Animations are loaded with LoadModelAnimations",
+     "scope": "raw"
+    },
+    {
+     "id": "update_anim",
+     "re": "\\bUpdateModelAnimation\\(",
+     "why": "UpdateModelAnimation applies the pose",
+     "scope": "raw"
+    },
+    {
+     "id": "keyframe_count",
+     "re": "\\.keyframeCount\\b",
+     "why": "6.0 renamed ModelAnimation.frameCount to keyframeCount",
+     "scope": "raw"
+    },
+    {
+     "id": "mode3d",
+     "re": "\\bBeginMode3D\\(",
+     "why": "3D drawing needs BeginMode3D",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "bones_fn",
+     "re": "\\bUpdateModelAnimationBones\\(",
+     "why": "UpdateModelAnimationBones does not exist in 6.0",
+     "scope": "raw"
+    },
+    {
+     "id": "old_frame_count",
+     "re": "\\.frameCount\\b",
+     "why": "ModelAnimation.frameCount is the 5.x field",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: LoadModelAnimations",
+    "Present: UpdateModelAnimation with float frame",
+    "Present: .keyframeCount",
+    "Present: BeginMode3D",
+    "Absent: UpdateModelAnimationBones",
+    "Absent: .frameCount"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "raylib 6.0 redesigned skeletal animation: `keyframeCount` and a float frame for `UpdateModelAnimation`.\n\n```c\n#include \"raylib.h\"\n\nint main(void)\n{\n    InitWindow(800, 450, \"animated model\");\n    Camera3D cam = { { 6, 6, 6 }, { 0, 1, 0 }, { 0, 1, 0 }, 45.0f, CAMERA_PERSPECTIVE };\n    Model model = LoadModel(\"resources/robot.glb\");\n    int animCount = 0;\n    ModelAnimation *anims = LoadModelAnimations(\"resources/robot.glb\", &animCount);\n    float frame = 0.0f;\n    SetTargetFPS(60);\n\n    while (!WindowShouldClose())\n    {\n        if (animCount > 0)\n        {\n            frame += 30.0f * GetFrameTime();\n            if (frame >= (float)anims[0].keyframeCount) frame = 0.0f;\n            UpdateModelAnimation(model, anims[0], frame);\n        }\n        BeginDrawing();\n            ClearBackground(RAYWHITE);\n            BeginMode3D(cam);\n                DrawModel(model, (Vector3){ 0, 0, 0 }, 1.0f, WHITE);\n                DrawGrid(10, 1.0f);\n            EndMode3D();\n        EndDrawing();\n    }\n    UnloadModelAnimations(anims, animCount);\n    UnloadModel(model);\n    CloseWindow();\n    return 0;\n}\n```\n",
+  "bad_answer": "```c\n#include \"raylib.h\"\n\nint main(void)\n{\n    InitWindow(800, 450, \"animated model\");\n    Model model = LoadModel(\"resources/robot.glb\");\n    int animCount = 0;\n    ModelAnimation *anims = LoadModelAnimations(\"resources/robot.glb\", &animCount);\n    int frame = 0;\n    while (!WindowShouldClose())\n    {\n        frame = (frame + 1) % anims[0].frameCount;\n        UpdateModelAnimationBones(model, anims[0], frame);\n        BeginDrawing();\n        DrawModel(model, (Vector3){ 0, 0, 0 }, 1.0f, WHITE);\n        EndDrawing();\n    }\n    CloseWindow();\n    return 0;\n}\n```\n"
+ },
+ {
+  "id": "OE-RENPY-01",
+  "category": "engine-renpy",
+  "difficulty": 1,
+  "goal": "Track a changing score with default and a menu",
+  "prompt": "In Ren'Py 8.5: write a short scene where the player chooses between two answers in a menu; the kind answer adds 1 affection point. The affection must survive saving and loading and reset on a new game. Show the value at the end.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-renpy"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "default-var",
+     "re": "^\\s*default\\s+\\w+\\s*=",
+     "why": "default statement for changing state",
+     "scope": "raw"
+    },
+    {
+     "id": "label-start",
+     "re": "^\\s*label\\s+start\\s*:",
+     "why": "label start",
+     "scope": "raw"
+    },
+    {
+     "id": "menu",
+     "re": "^\\s*menu\\s*:",
+     "why": "menu statement",
+     "scope": "raw"
+    },
+    {
+     "id": "increment",
+     "re": "^\\s*\\$\\s*\\w+\\s*\\+=\\s*1",
+     "why": "$ var += 1",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-define-state",
+     "re": "^\\s*define\\s+\\w*(?:affection|points|score|love|trust)\\w*\\s*=\\s*\\d",
+     "flags": "i",
+     "why": "define used for a changing variable",
+     "scope": "raw"
+    },
+    {
+     "id": "no-init-python-state",
+     "re": "^\\s*init\\s+python\\s*:\\s*\\n(?:\\s*#.*\\n)*\\s+\\w*(?:affection|points|score)\\w*\\s*=\\s*\\d",
+     "flags": "i",
+     "why": "game state set in init python",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: default statement for changing state",
+    "Present: label start",
+    "Present: menu statement",
+    "Present: $ var += 1",
+    "Absent: define used for a changing variable",
+    "Absent: game state set in init python"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Changing state must use `default` (saved, rolls back, reset per new game); `define` is for constants like characters.\n\n```renpy\ndefine e = Character(\"Eileen\")\ndefault affection = 0\n\nlabel start:\n    e \"Do you like the rain?\"\n    menu:\n        \"I love it, it sounds calming.\":\n            $ affection += 1\n            e \"Me too!\"\n        \"Not really.\":\n            e \"Oh, okay.\"\n    e \"Affection: [affection]\"\n    return\n```\n",
+  "bad_answer": "Use define:\n\n```renpy\ndefine e = Character(\"Eileen\")\ndefine affection = 0\n\nlabel start:\n    menu:\n        \"Kind\":\n            $ affection += 1\n        \"Rude\":\n            pass\n    e \"[affection]\"\n    return\n```\n"
+ },
+ {
+  "id": "OE-RENPY-02",
+  "category": "engine-renpy",
+  "difficulty": 2,
+  "goal": "Screen-language choice screen with call screen and Return",
+  "prompt": "In Ren'Py 8.5: make a custom screen with two buttons (\"Sword\" and \"Shield\") that the script waits on; store the player's pick and say which one they chose.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-renpy"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "screen-decl",
+     "re": "^\\s*screen\\s+\\w+\\(.*\\)\\s*:",
+     "why": "screen statement with parentheses",
+     "scope": "raw"
+    },
+    {
+     "id": "return-action",
+     "re": "textbutton\\s+\\\"[^\\\"]*\\\"\\s+action\\s+Return\\(",
+     "why": "textbutton ... action Return(...)",
+     "scope": "raw"
+    },
+    {
+     "id": "call-screen",
+     "re": "^\\s*call\\s+screen\\s+\\w+",
+     "why": "call screen",
+     "scope": "raw"
+    },
+    {
+     "id": "uses-return-var",
+     "re": "\\b_return\\b",
+     "why": "_return holds the screen result",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-legacy-ui",
+     "re": "\\bui\\.(?:textbutton|vbox|hbox|close|interact|text)\\(",
+     "why": "legacy ui.* functions",
+     "scope": "raw"
+    },
+    {
+     "id": "no-py2-print",
+     "re": "^\\s*\\$?\\s*print\\s+[\\\"']",
+     "why": "Python 2 print statement",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: screen statement with parentheses",
+    "Present: textbutton ... action Return(...)",
+    "Present: call screen",
+    "Present: _return holds the screen result",
+    "Absent: legacy ui.* functions",
+    "Absent: Python 2 print statement"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Use screen language and `call screen`; the value given to `Return()` lands in `_return`.\n\n```renpy\nscreen pick_gear():\n    modal True\n    vbox:\n        align (0.5, 0.5)\n        spacing 12\n        textbutton \"Sword\" action Return(\"sword\")\n        textbutton \"Shield\" action Return(\"shield\")\n\ndefault gear = None\n\nlabel start:\n    \"Choose your gear.\"\n    call screen pick_gear\n    $ gear = _return\n    \"You chose the [gear].\"\n    return\n```\n",
+  "bad_answer": "Legacy UI:\n\n```renpy\nlabel start:\n    python:\n        ui.vbox()\n        ui.textbutton(\"Sword\", clicked=ui.returns(\"sword\"))\n        ui.textbutton(\"Shield\", clicked=ui.returns(\"shield\"))\n        ui.close()\n        gear = ui.interact()\n    \"You chose [gear].\"\n    return\n```\n"
+ },
+ {
+  "id": "OE-RPGMAKER-MZ-01",
+  "category": "engine-rpgmaker-mz",
+  "difficulty": 1,
+  "goal": "Define an MZ plugin command with annotations and registerCommand",
+  "prompt": "In RPG Maker MZ 1.10: write a plugin file AddGold.js with a plugin command \"Add Gold\" that takes an amount argument (number, default 50) and adds that much gold to the party.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-rpgmaker-mz"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "target-mz",
+     "re": "@target\\s+MZ\\b",
+     "why": "@target MZ header",
+     "scope": "raw"
+    },
+    {
+     "id": "command-annotation",
+     "re": "@command\\s+\\w+",
+     "why": "@command annotation",
+     "scope": "raw"
+    },
+    {
+     "id": "arg-annotation",
+     "re": "@arg\\s+\\w+",
+     "why": "@arg annotation",
+     "scope": "raw"
+    },
+    {
+     "id": "register-command",
+     "re": "PluginManager\\.registerCommand\\(",
+     "why": "PluginManager.registerCommand",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-mv-plugincommand",
+     "re": "Game_Interpreter\\.prototype\\.pluginCommand\\s*=",
+     "why": "MV-style Game_Interpreter.prototype.pluginCommand override",
+     "scope": "raw"
+    },
+    {
+     "id": "no-array-args",
+     "re": "\\bargs\\[\\s*\\d+\\s*\\]",
+     "why": "MV-style positional args[0]",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: @target MZ header",
+    "Present: @command annotation",
+    "Present: @arg annotation",
+    "Present: PluginManager.registerCommand",
+    "Absent: MV-style Game_Interpreter.prototype.pluginCommand override",
+    "Absent: MV-style positional args[0]"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "MZ plugin commands are declared with `@command`/`@arg` and implemented with `PluginManager.registerCommand`; `args` is an object of strings.\n\n```js\n/*:\n * @target MZ\n * @plugindesc Adds gold to the party from a plugin command.\n * @author STAR\n *\n * @command addGold\n * @text Add Gold\n * @desc Adds gold to the party.\n *\n * @arg amount\n * @text Amount\n * @type number\n * @min 1\n * @default 50\n */\n(() => {\n  \"use strict\";\n  const pluginName = \"AddGold\";\n\n  PluginManager.registerCommand(pluginName, \"addGold\", args => {\n    $gameParty.gainGold(Number(args.amount));\n  });\n})();\n```\n",
+  "bad_answer": "Override pluginCommand:\n\n```js\n/*:\n * @plugindesc Add gold\n */\nconst _pc = Game_Interpreter.prototype.pluginCommand;\nGame_Interpreter.prototype.pluginCommand = function(command, args) {\n  _pc.call(this, command, args);\n  if (command === \"AddGold\") $gameParty.gainGold(Number(args[0]));\n};\n```\n"
+ },
+ {
+  "id": "OE-RPGMAKER-MZ-02",
+  "category": "engine-rpgmaker-mz",
+  "difficulty": 2,
+  "goal": "Alias Scene_Map to add an MZ-style window built from a Rectangle",
+  "prompt": "In RPG Maker MZ: write a plugin that shows a small window in the top-left of the map displaying the party's gold, created when the map scene builds its windows. Keep compatibility with other plugins.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-rpgmaker-mz"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "alias-create-all-windows",
+     "re": "const\\s+_\\w+\\s*=\\s*Scene_Map\\.prototype\\.createAllWindows\\b",
+     "why": "alias of Scene_Map.prototype.createAllWindows",
+     "scope": "raw"
+    },
+    {
+     "id": "call-original",
+     "re": "_\\w+\\.(?:apply|call)\\(\\s*this\\b",
+     "why": "aliased original called with this",
+     "scope": "raw"
+    },
+    {
+     "id": "rectangle-ctor",
+     "re": "new\\s+Rectangle\\(",
+     "why": "window built from new Rectangle(...)",
+     "scope": "raw"
+    },
+    {
+     "id": "add-window",
+     "re": "\\.addWindow\\(",
+     "why": "addWindow on the scene",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-mv-window-signature",
+     "re": "initialize\\s*(?:=\\s*function\\s*)?\\(\\s*x\\s*,\\s*y\\s*,\\s*width\\s*,\\s*height\\s*\\)",
+     "why": "MV window initialize(x, y, width, height)",
+     "scope": "raw"
+    },
+    {
+     "id": "no-mv-core-files",
+     "re": "\\brpg_(?:core|windows|scenes|managers|objects|sprites)\\.js\\b",
+     "why": "MV core file names rpg_*.js",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: alias of Scene_Map.prototype.createAllWindows",
+    "Present: aliased original called with this",
+    "Present: window built from new Rectangle(...)",
+    "Present: addWindow on the scene",
+    "Absent: MV window initialize(x, y, width, height)",
+    "Absent: MV core file names rpg_*.js"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Alias `createAllWindows`, call the original, and build the window from a `Rectangle` (MZ constructor).\n\n```js\n/*:\n * @target MZ\n * @plugindesc Shows party gold on the map.\n * @author STAR\n */\n(() => {\n  \"use strict\";\n\n  class Window_MapGold extends Window_Base {\n    initialize(rect) {\n      super.initialize(rect);\n      this._gold = -1;\n      this.refresh();\n    }\n    update() {\n      super.update();\n      if (this._gold !== $gameParty.gold()) this.refresh();\n    }\n    refresh() {\n      this._gold = $gameParty.gold();\n      this.contents.clear();\n      this.drawText(this._gold + \" \" + TextManager.currencyUnit, 0, 0, this.innerWidth, \"right\");\n    }\n  }\n  window.Window_MapGold = Window_MapGold;\n\n  const _Scene_Map_createAllWindows = Scene_Map.prototype.createAllWindows;\n  Scene_Map.prototype.createAllWindows = function() {\n    _Scene_Map_createAllWindows.apply(this, arguments);\n    const rect = new Rectangle(0, 0, 240, this.calcWindowHeight(1, false));\n    this._mapGoldWindow = new Window_MapGold(rect);\n    this.addWindow(this._mapGoldWindow);\n  };\n})();\n```\n",
+  "bad_answer": "MV style:\n\n```js\nfunction Window_MapGold() { this.initialize.apply(this, arguments); }\nWindow_MapGold.prototype = Object.create(Window_Base.prototype);\nWindow_MapGold.prototype.initialize = function(x, y, width, height) {\n  Window_Base.prototype.initialize.call(this, x, y, width, height);\n};\nScene_Map.prototype.createAllWindows = function() {\n  this.addWindow(new Window_MapGold(0, 0, 240, 72));\n};\n```\n"
+ },
+ {
+  "id": "OE-SBOX-01",
+  "category": "engine-sbox",
+  "difficulty": 2,
+  "goal": "Networked s&box component using [Sync] and [Rpc.*] with an IsProxy ownership gate (scene system, not the old entity system).",
+  "prompt": "In s&box (2026 scene system): write a networked component for a player that moves with the move input only on the owning client and keeps a host-authoritative score that any client can ask the host to increase.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-sbox"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "component",
+     "re": ":\\s*Component\\b",
+     "why": "Scene-system code derives Component",
+     "scope": "raw"
+    },
+    {
+     "id": "sync",
+     "re": "\\[Sync\\b",
+     "why": "Networked state uses [Sync]",
+     "scope": "raw"
+    },
+    {
+     "id": "rpc",
+     "re": "\\[Rpc\\.(?:Host|Broadcast|Owner)\\b",
+     "why": "RPCs use [Rpc.Host]/[Rpc.Broadcast]/[Rpc.Owner]",
+     "scope": "raw"
+    },
+    {
+     "id": "isproxy",
+     "re": "\\bIsProxy\\b",
+     "why": "Owner-only input must check IsProxy",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-net",
+     "re": "\\[Net\\]",
+     "why": "[Net] belongs to the removed entity system",
+     "scope": "raw"
+    },
+    {
+     "id": "legacy-rpc",
+     "re": "\\[(?:ClientRpc|ServerRpc|ServerCmd|Broadcast)\\b",
+     "why": "Old RPC attributes; use [Rpc.*]",
+     "scope": "raw"
+    },
+    {
+     "id": "legacy-simulate",
+     "re": "\\bSimulate\\s*\\(\\s*IClient",
+     "why": "Simulate(IClient) is the old entity pawn API",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: : Component, [Sync, [Rpc.Host|Broadcast|Owner], IsProxy",
+    "Absent: [Net], [ClientRpc]/[ServerRpc]/[Broadcast], Simulate(IClient)"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "The owner moves the player. `Score` is host-owned (`SyncFlags.FromHost`), and clients ask the host through `[Rpc.Host]`.\n\n```csharp\nusing Sandbox;\n\npublic sealed class Mover : Component\n{\n    [Property] public float Speed { get; set; } = 300f;\n    [Sync( SyncFlags.FromHost )] public int Score { get; set; }\n\n    protected override void OnFixedUpdate()\n    {\n        if ( IsProxy ) return;\n        var move = Input.AnalogMove;\n        if ( !move.IsNearZeroLength )\n            WorldPosition += move.Normal * Speed * Time.Delta;\n    }\n\n    [Rpc.Host]\n    public void AddScore()\n    {\n        Score++;\n    }\n}\n```\n",
+  "bad_answer": "```csharp\nusing Sandbox;\n\npublic partial class Player : AnimatedEntity\n{\n    [Net] public int Score { get; set; }\n\n    public override void Simulate( IClient cl )\n    {\n        Position += Input.AnalogMove * 300f * Time.Delta;\n    }\n\n    [ClientRpc]\n    public void AddScore() { Score++; }\n}\n```\n"
+ },
+ {
+  "id": "OE-SBOX-02",
+  "category": "engine-sbox",
+  "difficulty": 2,
+  "goal": "s&box Razor HUD as a PanelComponent that rebuilds via BuildHash.",
+  "prompt": "In s&box: make a HUD that shows the local player's health and updates when it changes. Use the current UI system.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-sbox"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "panelcomponent",
+     "re": "@inherits\\s+PanelComponent",
+     "why": "Root UI is a Razor PanelComponent",
+     "scope": "raw"
+    },
+    {
+     "id": "buildhash",
+     "re": "BuildHash\\s*\\(\\s*\\)",
+     "why": "Panels rebuild only when BuildHash changes",
+     "scope": "raw"
+    },
+    {
+     "id": "root",
+     "re": "<root>",
+     "why": "Razor panels render inside <root>",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-hud",
+     "re": "HudEntity|Local\\.Hud|Game\\.RootPanel",
+     "why": "Entity-era HUD APIs are gone",
+     "scope": "raw"
+    },
+    {
+     "id": "legacy-entity",
+     "re": "\\bLocal\\.Pawn\\b",
+     "why": "Local.Pawn is entity-system API",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: @inherits PanelComponent, BuildHash(), <root>",
+    "Absent: HudEntity/Local.Hud/Game.RootPanel, Local.Pawn"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Add this `PanelComponent` to a GameObject that has a `ScreenPanel`, and point `Target` at the player's health component.\n\n```razor\n@using Sandbox;\n@using Sandbox.UI;\n@inherits PanelComponent\n\n<root>\n    <div class=\"health\">HP: @(Target?.Health ?? 0)</div>\n</root>\n\n@code\n{\n    [Property] public PlayerHealth Target { get; set; }\n\n    protected override int BuildHash() => System.HashCode.Combine( Target?.Health );\n}\n```\n",
+  "bad_answer": "```csharp\npublic partial class Hud : HudEntity<RootPanel>\n{\n    public Hud()\n    {\n        RootPanel.AddChild<Label>().Text = $\"HP: {Local.Pawn.Health}\";\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-SDL3-01",
+  "category": "engine-sdl3",
+  "difficulty": 2,
+  "goal": "Write an SDL3 program using the main-callback model, renamed events and float renderer rects.",
+  "prompt": "In SDL3 (3.4) using the SDL_main callbacks: open an 800x450 window with a renderer, move a filled rectangle left/right with the arrow keys using delta time, and quit on window close or Escape.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-sdl3"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "callbacks_define",
+     "re": "#define\\s+SDL_MAIN_USE_CALLBACKS",
+     "why": "Callback model needs SDL_MAIN_USE_CALLBACKS",
+     "scope": "raw"
+    },
+    {
+     "id": "app_iterate",
+     "re": "\\bSDL_AppIterate\\s*\\(",
+     "why": "Per-frame work goes in SDL_AppIterate",
+     "scope": "raw"
+    },
+    {
+     "id": "event_quit",
+     "re": "\\bSDL_EVENT_QUIT\\b",
+     "why": "SDL3 quit event is SDL_EVENT_QUIT",
+     "scope": "raw"
+    },
+    {
+     "id": "fill_rect",
+     "re": "\\bSDL_RenderFillRect\\s*\\(",
+     "why": "Draw the rectangle with SDL_RenderFillRect (SDL_FRect)",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "sdl2_events",
+     "re": "\\bSDL_(?:QUIT|KEYDOWN|KEYUP|WINDOWEVENT)\\b",
+     "why": "SDL2 event names were renamed SDL_EVENT_*",
+     "scope": "raw"
+    },
+    {
+     "id": "keysym",
+     "re": "\\bkeysym\\b",
+     "why": "event.key.keysym.sym became event.key.key",
+     "scope": "raw"
+    },
+    {
+     "id": "sdl2_render",
+     "re": "\\bSDL_RenderCopy(?:Ex)?\\b|\\bSDL_INIT_EVERYTHING\\b|\\bSDL_RENDERER_ACCELERATED\\b",
+     "why": "Removed SDL2 renderer/init names",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: #define SDL_MAIN_USE_CALLBACKS",
+    "Present: SDL_AppIterate",
+    "Present: SDL_EVENT_QUIT",
+    "Present: SDL_RenderFillRect",
+    "Absent: SDL_QUIT/SDL_KEYDOWN",
+    "Absent: keysym",
+    "Absent: SDL_RenderCopy/SDL_INIT_EVERYTHING"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "SDL3 main callbacks with SDL_Renderer; events are `SDL_EVENT_*` and functions return bool.\n\n```c\n#define SDL_MAIN_USE_CALLBACKS 1\n#include <SDL3/SDL.h>\n#include <SDL3/SDL_main.h>\n\nstatic SDL_Window *window;\nstatic SDL_Renderer *renderer;\nstatic SDL_FRect player = { 100, 100, 32, 32 };\nstatic Uint64 last;\n\nSDL_AppResult SDL_AppInit(void **appstate, int argc, char **argv)\n{\n    if (!SDL_Init(SDL_INIT_VIDEO)) return SDL_APP_FAILURE;\n    if (!SDL_CreateWindowAndRenderer(\"move\", 800, 450, 0, &window, &renderer)) return SDL_APP_FAILURE;\n    last = SDL_GetTicksNS();\n    return SDL_APP_CONTINUE;\n}\n\nSDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)\n{\n    if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;\n    if (event->type == SDL_EVENT_KEY_DOWN && event->key.key == SDLK_ESCAPE) return SDL_APP_SUCCESS;\n    return SDL_APP_CONTINUE;\n}\n\nSDL_AppResult SDL_AppIterate(void *appstate)\n{\n    Uint64 now = SDL_GetTicksNS();\n    float dt = (float)(now - last) / 1e9f;\n    last = now;\n    const bool *keys = SDL_GetKeyboardState(NULL);\n    if (keys[SDL_SCANCODE_LEFT])  player.x -= 250.0f * dt;\n    if (keys[SDL_SCANCODE_RIGHT]) player.x += 250.0f * dt;\n    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);\n    SDL_RenderClear(renderer);\n    SDL_SetRenderDrawColor(renderer, 60, 150, 255, 255);\n    SDL_RenderFillRect(renderer, &player);\n    SDL_RenderPresent(renderer);\n    return SDL_APP_CONTINUE;\n}\n\nvoid SDL_AppQuit(void *appstate, SDL_AppResult result) { }\n```\n",
+  "bad_answer": "```c\n#include <SDL.h>\n\nint main(int argc, char **argv)\n{\n    if (SDL_Init(SDL_INIT_EVERYTHING) < 0) return 1;\n    SDL_Window *w = SDL_CreateWindow(\"move\", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 450, SDL_WINDOW_SHOWN);\n    SDL_Renderer *r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED);\n    SDL_Rect player = { 100, 100, 32, 32 };\n    SDL_Event e;\n    int running = 1;\n    while (running) {\n        while (SDL_PollEvent(&e)) {\n            if (e.type == SDL_QUIT) running = 0;\n            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_LEFT) player.x -= 5;\n        }\n        SDL_RenderClear(r);\n        SDL_RenderFillRect(r, &player);\n        SDL_RenderPresent(r);\n    }\n    SDL_Quit();\n    return 0;\n}\n```\n"
+ },
+ {
+  "id": "OE-SDL3-02",
+  "category": "engine-sdl3",
+  "difficulty": 2,
+  "goal": "Render text with SDL3_ttf 3.x and draw it with the SDL3 renderer.",
+  "prompt": "In SDL3 (3.4) with SDL3_ttf: write a function that renders the text \"Score: N\" with a TTF font into a texture and draws it at the top-left of an SDL_Renderer.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-sdl3"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "open_font",
+     "re": "\\bTTF_OpenFont\\s*\\(",
+     "why": "Fonts are opened with TTF_OpenFont",
+     "scope": "raw"
+    },
+    {
+     "id": "render_text_len",
+     "re": "\\bTTF_RenderText_Blended\\s*\\(\\s*\\w+\\s*,\\s*[^,()]+,\\s*\\w+\\s*,",
+     "why": "SDL3_ttf TTF_RenderText_Blended takes (font, text, length, color)",
+     "scope": "raw"
+    },
+    {
+     "id": "render_texture",
+     "re": "\\bSDL_RenderTexture\\s*\\(",
+     "why": "SDL_RenderCopy became SDL_RenderTexture",
+     "scope": "raw"
+    },
+    {
+     "id": "destroy_surface",
+     "re": "\\bSDL_DestroySurface\\s*\\(",
+     "why": "SDL_FreeSurface became SDL_DestroySurface",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "utf8_render",
+     "re": "\\bTTF_RenderUTF8_\\w+",
+     "why": "TTF_RenderUTF8_* was renamed TTF_RenderText_* in SDL3_ttf",
+     "scope": "raw"
+    },
+    {
+     "id": "free_surface",
+     "re": "\\bSDL_FreeSurface\\b",
+     "why": "SDL_FreeSurface is SDL2",
+     "scope": "raw"
+    },
+    {
+     "id": "render_copy",
+     "re": "\\bSDL_RenderCopy\\b",
+     "why": "SDL_RenderCopy is SDL2",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: TTF_OpenFont",
+    "Present: TTF_RenderText_Blended with length",
+    "Present: SDL_RenderTexture",
+    "Present: SDL_DestroySurface",
+    "Absent: TTF_RenderUTF8_*",
+    "Absent: SDL_FreeSurface",
+    "Absent: SDL_RenderCopy"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "SDL3_ttf: `TTF_OpenFont` takes a float size and `TTF_RenderText_Blended` takes a length (0 = NUL-terminated).\n\n```c\n#include <SDL3/SDL.h>\n#include <SDL3_ttf/SDL_ttf.h>\n\nstatic SDL_Texture *make_score_texture(SDL_Renderer *renderer, TTF_Font *font, int score, float *w, float *h)\n{\n    char text[32];\n    SDL_snprintf(text, sizeof(text), \"Score: %d\", score);\n    SDL_Color white = { 255, 255, 255, 255 };\n    SDL_Surface *surface = TTF_RenderText_Blended(font, text, 0, white);\n    if (!surface) { SDL_Log(\"render text: %s\", SDL_GetError()); return NULL; }\n    SDL_Texture *tex = SDL_CreateTextureFromSurface(renderer, surface);\n    *w = (float)surface->w;\n    *h = (float)surface->h;\n    SDL_DestroySurface(surface);\n    return tex;\n}\n\nstatic void draw_score(SDL_Renderer *renderer, int score)\n{\n    static TTF_Font *font;\n    if (!font) {\n        if (!TTF_Init()) return;\n        font = TTF_OpenFont(\"assets/font.ttf\", 24.0f);\n        if (!font) return;\n    }\n    float w = 0, h = 0;\n    SDL_Texture *tex = make_score_texture(renderer, font, score, &w, &h);\n    if (!tex) return;\n    SDL_FRect dst = { 10.0f, 10.0f, w, h };\n    SDL_RenderTexture(renderer, tex, NULL, &dst);\n    SDL_DestroyTexture(tex);\n}\n```\n",
+  "bad_answer": "```c\n#include <SDL.h>\n#include <SDL_ttf.h>\n\nvoid draw_score(SDL_Renderer *renderer, int score)\n{\n    TTF_Font *font = TTF_OpenFont(\"assets/font.ttf\", 24);\n    char text[32];\n    sprintf(text, \"Score: %d\", score);\n    SDL_Color white = { 255, 255, 255, 255 };\n    SDL_Surface *surface = TTF_RenderUTF8_Blended(font, text, white);\n    SDL_Texture *tex = SDL_CreateTextureFromSurface(renderer, surface);\n    SDL_Rect dst = { 10, 10, surface->w, surface->h };\n    SDL_FreeSurface(surface);\n    SDL_RenderCopy(renderer, tex, NULL, &dst);\n}\n```\n"
+ },
+ {
+  "id": "OE-SOLAR2D-01",
+  "category": "engine-solar2d",
+  "difficulty": 2,
+  "goal": "Composer scene with proper lifecycle and cleanup",
+  "prompt": "In Solar2D (2026 build): write a Composer scene file game.lua that creates a background and a score text in create, starts an enterFrame listener when shown, and removes it when hidden.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-solar2d"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "new-scene",
+     "re": "composer\\.newScene\\(",
+     "why": "Composer scene"
+    },
+    {
+     "id": "create-listener",
+     "re": "scene:addEventListener\\(\\s*[\\\"']create[\\\"']",
+     "why": "Register create"
+    },
+    {
+     "id": "remove-runtime",
+     "re": "Runtime:removeEventListener\\(\\s*[\\\"']enterFrame[\\\"']",
+     "why": "Cleanup on hide"
+    },
+    {
+     "id": "return-scene",
+     "re": "^return\\s+scene\\s*$",
+     "why": "Module returns the scene"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-storyboard",
+     "re": "storyboard|createScene|enterScene",
+     "why": "Storyboard API was removed; Composer replaced it"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: composer.newScene()",
+    "Present: scene:addEventListener(\"create\"",
+    "Present: Runtime:removeEventListener(\"enterFrame\"",
+    "Absent: storyboard"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\nlocal composer = require(\"composer\")\nlocal scene = composer.newScene()\n\nlocal scoreText\nlocal function onFrame(event)\n    -- per-frame game logic\nend\n\nfunction scene:create(event)\n    local sceneGroup = self.view\n    local bg = display.newRect(sceneGroup, display.contentCenterX, display.contentCenterY,\n        display.actualContentWidth, display.actualContentHeight)\n    bg:setFillColor(0.1, 0.1, 0.2)\n    scoreText = display.newText({ parent = sceneGroup, text = \"Score: 0\", x = 80, y = 30, fontSize = 20 })\nend\n\nfunction scene:show(event)\n    if event.phase == \"did\" then\n        Runtime:addEventListener(\"enterFrame\", onFrame)\n    end\nend\n\nfunction scene:hide(event)\n    if event.phase == \"will\" then\n        Runtime:removeEventListener(\"enterFrame\", onFrame)\n    end\nend\n\nscene:addEventListener(\"create\", scene)\nscene:addEventListener(\"show\", scene)\nscene:addEventListener(\"hide\", scene)\nreturn scene\n```\n",
+  "bad_answer": "```lua\nlocal storyboard = require(\"storyboard\")\nlocal scene = storyboard.newScene()\n\nfunction scene:createScene(event)\n    local group = self.view\n    local bg = display.newRect(group, 0, 0, 320, 480)\n    bg:setReferencePoint(display.TopLeftReferencePoint)\nend\n\nfunction scene:enterScene(event)\n    Runtime:addEventListener(\"enterFrame\", onFrame)\nend\n\nscene:addEventListener(\"createScene\", scene)\nscene:addEventListener(\"enterScene\", scene)\nreturn scene\n```\n"
+ },
+ {
+  "id": "OE-SOLAR2D-02",
+  "category": "engine-solar2d",
+  "difficulty": 2,
+  "goal": "Physics pickup without modifying bodies inside the collision event",
+  "prompt": "In Solar2D: make a dynamic player box and a static sensor coin; when they collide, add 1 to the score and move the coin to a random position. Use anchors so the score text is left-aligned.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-solar2d"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "add-body",
+     "re": "physics\\.addBody\\(",
+     "why": "Physics bodies"
+    },
+    {
+     "id": "began-phase",
+     "re": "event\\.phase\\s*==\\s*[\\\"']began[\\\"']",
+     "why": "Collision phase check"
+    },
+    {
+     "id": "deferred",
+     "re": "timer\\.performWithDelay\\(",
+     "why": "Defer body changes out of the collision step"
+    },
+    {
+     "id": "anchor",
+     "re": "\\.anchorX\\s*=\\s*0\\b",
+     "why": "Graphics 2.0 anchors"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no-reference-point",
+     "re": "setReferencePoint|ReferencePoint\\b",
+     "why": "Removed with Graphics 2.0"
+    },
+    {
+     "id": "no-0-255-colors",
+     "re": "setFillColor\\(\\s*(?:\\d{2,3})\\s*,",
+     "why": "Colors are 0-1"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: physics.addBody",
+    "Present: event.phase == \"began\"",
+    "Present: timer.performWithDelay",
+    "Present: anchorX = 0",
+    "Absent: setReferencePoint",
+    "Absent: 0-255 setFillColor"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```lua\nlocal physics = require(\"physics\")\nphysics.start()\nphysics.setGravity(0, 0)\n\nlocal score = 0\nlocal label = display.newText({ text = \"Score: 0\", x = 10, y = 20, fontSize = 18 })\nlabel.anchorX = 0\n\nlocal player = display.newRect(160, 240, 32, 32)\nplayer:setFillColor(0.2, 0.7, 1)\nphysics.addBody(player, \"dynamic\")\n\nlocal coin = display.newCircle(60, 120, 10)\ncoin:setFillColor(1, 0.85, 0)\nphysics.addBody(coin, \"static\", { radius = 10, isSensor = true })\ncoin.name = \"coin\"\n\nlocal function moveCoin()\n    coin.x = math.random(20, display.contentWidth - 20)\n    coin.y = math.random(60, display.contentHeight - 20)\nend\n\nfunction player:collision(event)\n    if event.phase == \"began\" and event.other.name == \"coin\" then\n        score = score + 1\n        label.text = \"Score: \" .. score\n        timer.performWithDelay(1, moveCoin)\n    end\nend\nplayer:addEventListener(\"collision\")\n```\n",
+  "bad_answer": "```lua\nlocal physics = require(\"physics\")\nphysics.start()\nlocal label = display.newText(\"Score: 0\", 10, 20, native.systemFont, 18)\nlabel:setReferencePoint(display.TopLeftReferencePoint)\nlocal player = display.newRect(160, 240, 32, 32)\nplayer:setFillColor(50, 180, 255)\nphysics.addBody(player, \"dynamic\")\nlocal coin = display.newCircle(60, 120, 10)\nphysics.addBody(coin, \"static\", { radius = 10, isSensor = true })\nfunction player:collision(event)\n    if event.phase == \"began\" then\n        coin.x = math.random(20, 300)\n    end\nend\nplayer:addEventListener(\"collision\")\n```\n"
+ },
+ {
+  "id": "OE-STRIDE-01",
+  "category": "engine-stride",
+  "difficulty": 2,
+  "goal": "Move a Bepu CharacterComponent with WASD from a SyncScript using the Bepu API (Move/TryJump).",
+  "prompt": "In Stride 4.4 with Bepu physics: write a C# script that moves the player's character with WASD and jumps with Space.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-stride"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "bepu-using",
+     "re": "using\\s+Stride\\.BepuPhysics\\s*;",
+     "why": "Bepu types live in Stride.BepuPhysics",
+     "scope": "raw"
+    },
+    {
+     "id": "syncscript",
+     "re": ":\\s*SyncScript\\b",
+     "why": "Per-frame logic uses SyncScript",
+     "scope": "raw"
+    },
+    {
+     "id": "keys",
+     "re": "Input\\.IsKeyDown\\(\\s*Keys\\.",
+     "why": "Stride key polling is Input.IsKeyDown(Keys.X)",
+     "scope": "raw"
+    },
+    {
+     "id": "bepu-move",
+     "re": "\\.Move\\(",
+     "why": "Bepu CharacterComponent is driven by Move(Vector3)",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "bullet-velocity",
+     "re": "\\.SetVelocity\\(",
+     "why": "SetVelocity is the Bullet (Stride.Physics) character API",
+     "scope": "raw"
+    },
+    {
+     "id": "bullet-namespace",
+     "re": "using\\s+Stride\\.Physics\\s*;",
+     "why": "Stride.Physics is the Bullet stack being phased out",
+     "scope": "raw"
+    },
+    {
+     "id": "xenko",
+     "re": "\\b(?:Xenko|SiliconStudio)\\b",
+     "why": "Xenko namespaces were renamed to Stride in 4.0",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: using Stride.BepuPhysics, SyncScript, Input.IsKeyDown(Keys.*), .Move(",
+    "Absent: SetVelocity, using Stride.Physics, Xenko/SiliconStudio"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Assign the entity's Bepu `CharacterComponent` to `Character` in Game Studio. `Move` takes a direction local to the character's orientation (+Z forward, +X left).\n\n```csharp\nusing Stride.BepuPhysics;\nusing Stride.Core.Mathematics;\nusing Stride.Engine;\nusing Stride.Input;\n\npublic class PlayerController : SyncScript\n{\n    public required CharacterComponent Character { get; set; }\n    public float Speed { get; set; } = 6f;\n\n    public override void Update()\n    {\n        var move = Vector3.Zero;\n        if (Input.IsKeyDown(Keys.W)) move.Z += 1;\n        if (Input.IsKeyDown(Keys.S)) move.Z -= 1;\n        if (Input.IsKeyDown(Keys.A)) move.X += 1;\n        if (Input.IsKeyDown(Keys.D)) move.X -= 1;\n        if (move != Vector3.Zero) move.Normalize();\n\n        Character.Speed = Speed;\n        Character.Move(move);\n        if (Input.IsKeyPressed(Keys.Space)) Character.TryJump();\n    }\n}\n```\n",
+  "bad_answer": "```csharp\nusing Stride.Engine;\nusing Stride.Physics;\nusing Stride.Input;\nusing Stride.Core.Mathematics;\n\npublic class PlayerController : SyncScript\n{\n    public override void Update()\n    {\n        var character = Entity.Get<CharacterComponent>();\n        var v = Vector3.Zero;\n        if (Input.IsKeyDown(Keys.W)) v.Z -= 5;\n        character.SetVelocity(v);\n        if (Input.IsKeyPressed(Keys.Space)) character.Jump();\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-STRIDE-02",
+  "category": "engine-stride",
+  "difficulty": 2,
+  "goal": "Make a Bepu trigger in Stride with IContactHandler and NoContactResponse.",
+  "prompt": "In Stride 4.4 using Bepu physics: write a coin trigger script that logs and removes the coin when something touches it, without the coin blocking movement.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-stride"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "contact-handler",
+     "re": "IContactHandler",
+     "why": "Bepu contact events come through IContactHandler",
+     "scope": "raw"
+    },
+    {
+     "id": "no-contact-response",
+     "re": "NoContactResponse\\s*=>\\s*true",
+     "why": "Trigger behavior = NoContactResponse true",
+     "scope": "raw"
+    },
+    {
+     "id": "started-touching",
+     "re": "OnStartedTouching<\\s*TManifold\\s*>",
+     "why": "Bepu callback is OnStartedTouching<TManifold>",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "bullet-newcollision",
+     "re": "NewCollision\\s*\\(",
+     "why": "NewCollision() is the Bullet PhysicsComponent API",
+     "scope": "raw"
+    },
+    {
+     "id": "bullet-process",
+     "re": "ProcessCollisions",
+     "why": "ProcessCollisions is Bullet-only",
+     "scope": "raw"
+    },
+    {
+     "id": "bullet-namespace",
+     "re": "using\\s+Stride\\.Physics\\s*;",
+     "why": "Bullet namespace, not Bepu",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: IContactHandler, NoContactResponse => true, OnStartedTouching<TManifold>",
+    "Absent: NewCollision(), ProcessCollisions, using Stride.Physics"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Put this script on the coin entity, which has a Bepu `StaticComponent` (or a kinematic body) with a collider, and bind it as the contact event handler.\n\n```csharp\nusing Stride.BepuPhysics;\nusing Stride.BepuPhysics.Definitions.Contacts;\nusing Stride.Engine;\n\npublic class CoinTrigger : StartupScript, IContactHandler\n{\n    public bool NoContactResponse => true;\n\n    void IContactHandler.OnStartedTouching<TManifold>(Contacts<TManifold> contacts)\n    {\n        Log.Info($\"{contacts.Other.Entity.Name} collected {Entity.Name}\");\n        Entity.Scene = null;\n    }\n\n    void IContactHandler.OnStoppedTouching<TManifold>(Contacts<TManifold> contacts) { }\n}\n```\n",
+  "bad_answer": "```csharp\nusing Stride.Engine;\nusing Stride.Physics;\nusing System.Threading.Tasks;\n\npublic class CoinTrigger : AsyncScript\n{\n    public override async Task Execute()\n    {\n        var trigger = Entity.Get<PhysicsComponent>();\n        trigger.ProcessCollisions = true;\n        while (Game.IsRunning)\n        {\n            var c = await trigger.NewCollision();\n            Entity.Scene = null;\n        }\n    }\n}\n```\n"
+ },
+ {
+  "id": "OE-THREEJS-01",
+  "category": "engine-threejs",
+  "difficulty": 1,
+  "goal": "Three.js r186 textured rotating cube with ES modules, current color management and setAnimationLoop.",
+  "prompt": "In Three.js r186: write main.js (ES modules, npm + Vite) that shows a textured cube rotating at a frame-rate independent speed, with correct sRGB color management for the texture and output.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-threejs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "es-import",
+     "re": "import\\s+\\*\\s+as\\s+THREE\\s+from\\s+['\\\"]three(?:/webgpu)?['\\\"]",
+     "why": "ES module import of three",
+     "scope": "raw"
+    },
+    {
+     "id": "box-geometry",
+     "re": "\\bBoxGeometry\\(",
+     "why": "current geometry class name",
+     "scope": "raw"
+    },
+    {
+     "id": "anim-loop",
+     "re": "\\.setAnimationLoop\\(",
+     "why": "renderer.setAnimationLoop is the current loop API",
+     "scope": "raw"
+    },
+    {
+     "id": "color-space",
+     "re": "\\bSRGBColorSpace\\b",
+     "why": "r152+ color space constant",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy-geometry",
+     "re": "\\bTHREE\\.Geometry\\b|new\\s+Geometry\\(|\\b[A-Z][A-Za-z]*BufferGeometry\\(",
+     "why": "Geometry removed r125; *BufferGeometry aliases removed",
+     "scope": "raw"
+    },
+    {
+     "id": "legacy-encoding",
+     "re": "outputEncoding|sRGBEncoding|LinearEncoding|\\.encoding\\s*=",
+     "why": "encoding API replaced by colorSpace in r152",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: import * as THREE from 'three', BoxGeometry, setAnimationLoop, SRGBColorSpace",
+    "Absent: THREE.Geometry, *BufferGeometry aliases, outputEncoding/sRGBEncoding"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Three.js r186 with ES modules and current color management:\n\n```js\nimport * as THREE from 'three';\n\nconst renderer = new THREE.WebGLRenderer({ antialias: true });\nrenderer.setSize(innerWidth, innerHeight);\nrenderer.outputColorSpace = THREE.SRGBColorSpace; // default, shown for clarity\ndocument.body.appendChild(renderer.domElement);\n\nconst scene = new THREE.Scene();\nconst camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);\ncamera.position.z = 3;\nscene.add(new THREE.AmbientLight(0xffffff, 1), new THREE.DirectionalLight(0xffffff, 3));\n\nconst tex = new THREE.TextureLoader().load('/crate.jpg');\ntex.colorSpace = THREE.SRGBColorSpace;\nconst cube = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ map: tex }));\nscene.add(cube);\n\nconst timer = new THREE.Timer();\nrenderer.setAnimationLoop((t) => {\n  timer.update(t);\n  cube.rotation.y += timer.getDelta();\n  renderer.render(scene, camera);\n});\n```\n",
+  "bad_answer": "```js\nvar renderer = new THREE.WebGLRenderer();\nrenderer.outputEncoding = THREE.sRGBEncoding;\nvar geometry = new THREE.BoxBufferGeometry(1, 1, 1);\nvar texture = new THREE.TextureLoader().load('crate.jpg');\ntexture.encoding = THREE.sRGBEncoding;\nvar cube = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ map: texture }));\nfunction animate() { requestAnimationFrame(animate); cube.rotation.y += 0.01; renderer.render(scene, camera); }\nanimate();\n```\n"
+ },
+ {
+  "id": "OE-THREEJS-02",
+  "category": "engine-threejs",
+  "difficulty": 2,
+  "goal": "Three.js r186 shadows plus OrbitControls imported from three/addons without removed shadow types.",
+  "prompt": "In Three.js r186: set up a scene with a directional light casting soft-looking shadows onto a floor from a box, and add OrbitControls. Use ES modules.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-threejs"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "addons-import",
+     "re": "from\\s+['\\\"]three/(?:addons|examples/jsm)/controls/OrbitControls\\.js['\\\"]",
+     "why": "OrbitControls is an ES module addon",
+     "scope": "raw"
+    },
+    {
+     "id": "shadow-enabled",
+     "re": "shadowMap\\.enabled\\s*=\\s*true",
+     "why": "shadows must be enabled on the renderer",
+     "scope": "raw"
+    },
+    {
+     "id": "cast-shadow",
+     "re": "castShadow\\s*=\\s*true",
+     "why": "light and caster need castShadow",
+     "scope": "raw"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "pcfsoft",
+     "re": "PCFSoftShadowMap",
+     "why": "PCFSoftShadowMap removed in r186",
+     "scope": "raw"
+    },
+    {
+     "id": "global-addon",
+     "re": "THREE\\.OrbitControls|examples/js/|three\\.min\\.js",
+     "why": "examples/js globals removed in r148; minified build removed",
+     "scope": "raw"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: three/addons OrbitControls import, shadowMap.enabled, castShadow",
+    "Absent: PCFSoftShadowMap, THREE.OrbitControls / examples/js / three.min.js"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "```js\nimport * as THREE from 'three';\nimport { OrbitControls } from 'three/addons/controls/OrbitControls.js';\n\nconst renderer = new THREE.WebGLRenderer({ antialias: true });\nrenderer.setSize(innerWidth, innerHeight);\nrenderer.shadowMap.enabled = true;\nrenderer.shadowMap.type = THREE.PCFShadowMap;\ndocument.body.appendChild(renderer.domElement);\n\nconst scene = new THREE.Scene();\nconst camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 100);\ncamera.position.set(4, 4, 6);\nconst controls = new OrbitControls(camera, renderer.domElement);\n\nconst sun = new THREE.DirectionalLight(0xffffff, 3);\nsun.position.set(5, 8, 5);\nsun.castShadow = true;\nsun.shadow.mapSize.set(2048, 2048);\nsun.shadow.radius = 4;\nscene.add(sun);\n\nconst box = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial({ color: 0x4488ff }));\nbox.position.y = 1;\nbox.castShadow = true;\nconst floor = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshStandardMaterial());\nfloor.rotation.x = -Math.PI / 2;\nfloor.receiveShadow = true;\nscene.add(box, floor);\n\nrenderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });\n```\n",
+  "bad_answer": "```html\n<script src=\"js/three.min.js\"></script>\n<script src=\"examples/js/controls/OrbitControls.js\"></script>\n<script>\nrenderer.shadowMap.enabled = true;\nrenderer.shadowMap.type = THREE.PCFSoftShadowMap;\nlight.castShadow = true;\nvar controls = new THREE.OrbitControls(camera, renderer.domElement);\n</script>\n```\n"
+ },
+ {
+  "id": "OE-UEFN-VERSE-01",
+  "category": "engine-uefn-verse",
+  "difficulty": 2,
+  "goal": "Verse device that counts button presses per player and saves the best count with persistence",
+  "prompt": "In UEFN 42.30 with Verse: write a creative_device that counts how many times each player presses a button_device and saves each player's best count so it survives between sessions.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-uefn-verse"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "device_class",
+     "re": "class\\(\\s*creative_device\\s*\\)",
+     "why": "Placeable Verse device"
+    },
+    {
+     "id": "persist_map",
+     "re": "weak_map\\(\\s*player\\s*,",
+     "why": "Per-player persistence uses weak_map(player, T)"
+    },
+    {
+     "id": "persistable_class",
+     "re": "class<final><persistable>",
+     "why": "Persisted class must be final and persistable"
+    },
+    {
+     "id": "subscribe",
+     "re": "InteractedWithEvent\\.Subscribe\\(",
+     "why": "Device events are subscribed"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "lua_wait",
+     "re": "\\bwait\\s*\\(",
+     "why": "Roblox/Lua wait() does not exist in Verse"
+    },
+    {
+     "id": "call_failable_parens",
+     "re": "GetFortCharacter\\(\\)",
+     "why": "Failable functions are called with []"
+    },
+    {
+     "id": "datastore",
+     "re": "DataStore",
+     "why": "No DataStoreService in Verse"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: class(creative_device), weak_map(player, ...), class<final><persistable>, InteractedWithEvent.Subscribe(",
+    "Absent: wait(, GetFortCharacter(), DataStore"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Use a module-scope persistable weak_map.\n\n```verse\nusing { /Fortnite.com/Devices }\nusing { /Verse.org/Simulation }\n\npress_save := class<final><persistable>:\n    Best : int = 0\n\nvar SavedPresses : weak_map(player, press_save) = map{}\n\npress_counter_device := class(creative_device):\n    @editable\n    Button : button_device = button_device{}\n    var Presses : [player]int = map{}\n\n    OnBegin<override>()<suspends>:void =\n        Button.InteractedWithEvent.Subscribe(OnPressed)\n\n    OnPressed(Agent : agent):void =\n        if (P := player[Agent]):\n            N := (if (V := Presses[P]) then V else 0) + 1\n            if (set Presses[P] = N) {}\n            Old := if (S := SavedPresses[P]) then S.Best else 0\n            if (N > Old, set SavedPresses[P] = press_save{Best := N}) {}\n```\n",
+  "bad_answer": "Lua-style answer.\n\n```verse\npress_counter_device := class(creative_device):\n    OnBegin<override>()<suspends>:void =\n        loop:\n            wait(1)\n            Store := DataStore.Get(\"presses\")\n```\n"
+ },
+ {
+  "id": "OE-UEFN-VERSE-02",
+  "category": "engine-uefn-verse",
+  "difficulty": 2,
+  "goal": "Round timer that ends early with race",
+  "prompt": "In Fortnite UEFN (Verse): run a 60 second round that ends early if a trigger_device fires, then print which one finished first.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-uefn-verse"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "race",
+     "re": "\\brace:\\s*$",
+     "why": "Structured concurrency: race the timer against the event"
+    },
+    {
+     "id": "sleep",
+     "re": "Sleep\\(\\s*60(?:\\.0)?\\s*\\)",
+     "why": "Sleep takes seconds as float in a suspends context"
+    },
+    {
+     "id": "await",
+     "re": "TriggeredEvent\\.Await\\(\\)",
+     "why": "Await the device event"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "lua_wait",
+     "re": "\\bwait\\s*\\(",
+     "why": "No wait() in Verse"
+    },
+    {
+     "id": "task_lib",
+     "re": "\\btask\\.",
+     "why": "Roblox task library does not exist"
+    },
+    {
+     "id": "delay_spawn",
+     "re": "\\bdelay\\s*\\(",
+     "why": "No delay() in Verse"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: race:, Sleep(60.0), TriggeredEvent.Await()",
+    "Absent: wait(, task., delay("
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Race the timer against the trigger.\n\n```verse\nusing { /Fortnite.com/Devices }\nusing { /Verse.org/Simulation }\nusing { /UnrealEngine.com/Temporary/Diagnostics }\n\nround_device := class(creative_device):\n    @editable\n    EndTrigger : trigger_device = trigger_device{}\n\n    OnBegin<override>()<suspends>:void =\n        Winner := race:\n            block:\n                Sleep(60.0)\n                \"timer\"\n            block:\n                EndTrigger.TriggeredEvent.Await()\n                \"trigger\"\n        Print(\"Round ended by {Winner}\")\n```\n",
+  "bad_answer": "Roblox habit.\n\n```verse\nround_device := class(creative_device):\n    OnBegin<override>()<suspends>:void =\n        task.wait(60)\n        Print(\"done\")\n```\n"
+ },
+ {
+  "id": "OE-UGC-PLATFORMS-01",
+  "category": "engine-ugc-platforms",
+  "difficulty": 2,
+  "goal": "Horizon Worlds TypeScript component with props and trigger event",
+  "prompt": "In Meta Horizon Worlds (desktop editor, TypeScript): make a component for a trigger that logs the entering player's name and has an editable points property.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-ugc-platforms"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "component",
+     "re": "extends\\s+(?:hz\\.)?Component<\\s*typeof\\s+\\w+\\s*>",
+     "why": "Horizon scripts extend Component<typeof X>"
+    },
+    {
+     "id": "props",
+     "re": "static\\s+propsDefinition\\s*=",
+     "why": "Editor-visible props"
+    },
+    {
+     "id": "connect",
+     "re": "connectCodeBlockEvent\\(",
+     "why": "Built-in events are connected via connectCodeBlockEvent"
+    },
+    {
+     "id": "register",
+     "re": "Component\\.register\\(",
+     "why": "Component must be registered"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "luau",
+     "re": "script\\.Parent|game:GetService|:Connect\\(",
+     "why": "Roblox Luau does not run in Horizon Worlds"
+    },
+    {
+     "id": "codeblock_case",
+     "re": "CodeblockEvents",
+     "why": "Exact casing is CodeBlockEvents"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: extends Component<typeof X>, static propsDefinition, connectCodeBlockEvent(, Component.register(",
+    "Absent: script.Parent / game:GetService / :Connect(, CodeblockEvents"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "TypeScript component.\n\n```ts\nimport { Component, PropTypes, CodeBlockEvents, Player } from 'horizon/core';\n\nclass PointsTrigger extends Component<typeof PointsTrigger> {\n  static propsDefinition = {\n    points: { type: PropTypes.Number, default: 1 },\n  };\n\n  preStart() {\n    this.connectCodeBlockEvent(this.entity, CodeBlockEvents.OnPlayerEnterTrigger, (player: Player) => {\n      console.log(`${player.name.get()} entered (+${this.props.points})`);\n    });\n  }\n\n  start() {}\n}\nComponent.register(PointsTrigger);\n```\n",
+  "bad_answer": "Roblox code pasted in.\n\n```lua\nscript.Parent.Touched:Connect(function(hit)\n  print(hit.Parent.Name)\nend)\n```\n"
+ },
+ {
+  "id": "OE-UGC-PLATFORMS-02",
+  "category": "engine-ugc-platforms",
+  "difficulty": 1,
+  "goal": "HYTOPIA server entry that spawns players and loads UI",
+  "prompt": "Using the HYTOPIA SDK 0.15: when a player joins, spawn their character above the map and load their HTML UI.",
+  "run_mode": "automated",
+  "helps": [
+   "engine-ugc-platforms"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 0,
+   "output_tokens": 900,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Uses an API removed or renamed in the current version"
+  ],
+  "fixture_status": "implemented",
+  "fixtures": [],
+  "auto": {
+   "require": [
+    {
+     "id": "start",
+     "re": "startServer\\(",
+     "why": "Entry point"
+    },
+    {
+     "id": "join",
+     "re": "PlayerEvent\\.JOINED_WORLD",
+     "why": "Join event"
+    },
+    {
+     "id": "spawn",
+     "re": "\\.spawn\\(\\s*world\\s*,",
+     "why": "Entities spawn into a world with a position"
+    },
+    {
+     "id": "ui",
+     "re": "player\\.ui\\.load\\(",
+     "why": "Per-player HTML UI"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "roblox",
+     "re": "game\\.Players|PlayerAdded:Connect|Instance\\.new",
+     "why": "Roblox APIs do not exist in HYTOPIA"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: startServer(, PlayerEvent.JOINED_WORLD, .spawn(world, player.ui.load(",
+    "Absent: game.Players / PlayerAdded:Connect / Instance.new"
+   ]
+  },
+  "split": "development",
+  "reference_answer": "Server entry.\n\n```ts\nimport { startServer, DefaultPlayerEntity, PlayerEvent } from 'hytopia';\nimport worldMap from './assets/map.json';\n\nstartServer(world => {\n  world.loadMap(worldMap);\n  world.on(PlayerEvent.JOINED_WORLD, ({ player }) => {\n    const entity = new DefaultPlayerEntity({ player, name: 'Player' });\n    entity.spawn(world, { x: 0, y: 10, z: 0 });\n    player.ui.load('ui/index.html');\n  });\n});\n```\n",
+  "bad_answer": "Roblox habits.\n\n```lua\ngame.Players.PlayerAdded:Connect(function(p)\n  local m = Instance.new(\"Model\")\nend)\n```\n"
+ }
+]

@@ -16,6 +16,8 @@ from ._lazy import lazy_attr
 Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 from .asset_forge import PolyHavenCatalog, plan_building, preview_terrain
+from .architecture_pipeline import PALETTES, make_plan, validate_brief
+from .architecture_quality import design_summary
 from .agent_skills import SkillLibrary, install_starters
 from .skill_packs import PACKS_DIR
 from .brain_router import is_roblox_dev_prompt
@@ -138,6 +140,36 @@ ROBLOX_VIDEO_TOOLS = (
     _tool("star_roblox_youtube_search", "Find Roblox-related public YouTube video metadata using a locally configured API key; otherwise return an explicit YouTube search link.", {"query": _s(140), "limit": _limit(10, 6)}, ("query",)),
     _tool("star_roblox_youtube_video", "Inspect one YouTube video's public metadata, thumbnail and statistics if available. This does NOT watch the footage or download captions.", {"video_id": {"type": "string", "pattern": "^[A-Za-z0-9_-]{11}$"}}, ("video_id",)),
 )
+ARCHITECTURE_TOOLS = (
+    _tool("star_architecture_preview",
+          "Create a deterministic, read-only architectural shell plan for a Roblox building. "
+          "Returns real facade/roof metrics, palette, opening counts and validation warnings. "
+          "Does NOT use Blender, upload assets or edit Studio. Styles are prototypes, not AAA renders.",
+          {
+              "name": _s(48),
+              "style": {"type": "string", "enum": list(PALETTES)},
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+          },
+          ("name", "style", "width_studs", "depth_studs", "floors", "bays")),
+    _tool("star_architecture_compare_styles",
+          "Compare 2-8 procedural architectural art grammars for one Roblox building brief. "
+          "Runs only deterministic local geometry. Does not render or claim visual acceptance.",
+          {
+              "name": _s(48),
+              "width_studs": {"type": "integer", "minimum": 24, "maximum": 96},
+              "depth_studs": {"type": "integer", "minimum": 16, "maximum": 80},
+              "floors": {"type": "integer", "minimum": 1, "maximum": 4},
+              "bays": {"type": "integer", "minimum": 2, "maximum": 8},
+              "story_height_studs": {"type": "integer", "minimum": 12, "maximum": 18},
+              "styles": {"type": "array", "items": {"type": "string", "enum": list(PALETTES)},
+                         "minItems": 2, "maxItems": 8, "uniqueItems": True},
+          },
+          ("name", "width_studs", "depth_studs", "floors", "bays")),
+)
 _ID = {"type": "integer", "minimum": 1}
 # Roblox Open Cloud with the owner's API key (star/roblox_cloud.py). The first five only read. The two
 # "request" tools never touch Roblox: they queue an action the owner approves or rejects in Settings.
@@ -182,6 +214,19 @@ MAP_PLAN_TOOLS = (
           "ordered apply operations (and Luau if include_luau). Nothing is applied.",
           {"plan": {"type": "object"}, "include_luau": {"type": "boolean", "default": False}}, ("plan",)),
 )
+# STAR Studio Lab (star/studio_lab.py): build a map plan in STAR Test Place on the STAR Studio server, playtest it,
+# screenshot it, fix and repeat. Opt-in: setting studio_lab_enabled or STAR_STUDIO_LAB=1; off by default.
+STUDIO_LAB_TOOLS = (
+    _tool("star_roblox_studio_lab",
+          "Build a map plan (same shape as star_roblox_map_plan; it must pass that dry run and name its route surfaces "
+          "in plan.route.waypoints) for real in STAR Test Place on the STAR Studio server, under "
+          "Workspace/MapDrafts/<mapName>, as one undo step; read it back and compare; playtest it with a probe that "
+          "walks and jumps the character along the route; take fixed-camera screenshots; fix found defects in the plan "
+          "and repeat (at most max_iterations). Returns per-iteration results, defects, fixes and the evidence folder. "
+          "Never saves or publishes. Takes one to several minutes.",
+          {"plan": {"type": "object"}, "max_iterations": {"type": "integer", "minimum": 1, "maximum": 5, "default": 3},
+           "vision": {"type": "boolean", "default": False}}, ("plan",)),
+)
 # Live retrieval from create.roblox.com/docs (star/roblox_docs_live.py). Opt-in: off unless enabled.
 ROBLOX_DOCS_LIVE_TOOLS = (
     _tool("star_roblox_docs_live_search",
@@ -212,10 +257,20 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *STUDIO_LAB_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS, *ARCHITECTURE_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 _SHARED_TOOL_NAMES = frozenset(tool["name"] for tool in RUNTIME_TOOLS)
 _LEGACY_GRAPH_READ_NAMES = frozenset({"star_graphify_query", "star_graphify_stats"})
+
+_ARCHITECTURE_TRIGGER = re.compile(
+    r"\b(?:blender|buildings?|facades?|floorplans?|gables?|"
+    r"warehouses?|roofs?|shopfronts?|3d.meshes|gltf|glb)\b", re.I)
+
+
+def _architecture_tools_on() -> bool:
+    """Keep architecture tool schemas off unless the owner explicitly opts in."""
+    return os.environ.get("STAR_ARCHITECTURE_TOOLS", "").strip().lower() in {"1", "on", "true", "yes"}
+
 
 _ASSET_TRIGGER = re.compile(r"\b(assets?|meshes?|textures?|pbr|blender|terrain|biomes?|poly.?haven)\b|"
                             r"\b(?:building|floor|house)\s+plan\b|"
@@ -238,7 +293,7 @@ class LocalIntelligence:
                  obsidian_vault: Path | None = None, skills_enabled: bool = True,
                  graphify_enabled: bool = True, roblox_research_enabled: bool = True,
                  asset_forge_enabled: bool = False, docs=None, cloud=None, design_enabled: bool = True,
-                 map_plans_enabled: bool = True,
+                 map_plans_enabled: bool = True, studio_lab_enabled: bool = False,
                  docs_live: RobloxDocsLive | None = None,
                  registered_workspaces: Iterable[Path | str] = (),
                  graph_boundary_check: Callable[[], bool] | None = None):
@@ -246,6 +301,7 @@ class LocalIntelligence:
         self.workspace = workspace
         self.design_enabled = design_enabled
         self.map_plans_enabled = map_plans_enabled
+        self.studio_lab_enabled = studio_lab_enabled is True
         self.docs_live = docs_live   # None unless the owner enabled live Roblox docs retrieval
         self.docs = docs   # star.doc_knowledge.KnowledgeClient, or None when not configured
         # star.roblox_cloud.RobloxCloud: reads with the owner's key; writes only as approved actions.
@@ -327,6 +383,8 @@ class LocalIntelligence:
             "design": {"enabled": self.design_enabled, "read_only": True, "offline": True,
                        "tools": [tool["name"] for tool in DESIGN_TOOLS] if self.design_enabled else []},
             "map_plans": {"enabled": self.map_plans_enabled, "offline": True, "applies_nothing": True},
+            "studio_lab": {"enabled": self.studio_lab_enabled, "target": "STAR Test Place only",
+                           "note": "Opt-in: setting studio_lab_enabled or STAR_STUDIO_LAB=1."},
             "roblox_docs_live": {"enabled": self.docs_live is not None, "read_only": True,
                                  "host": "create.roblox.com",
                                  "note": "Opt-in: setting roblox_docs_live_enabled or STAR_ROBLOX_DOCS_LIVE=1."},
@@ -361,6 +419,8 @@ class LocalIntelligence:
             result.extend(DESIGN_TOOLS)
         if self.map_plans_enabled and roblox_prompt and _MAP_TRIGGER.search(prompt):
             result.extend(MAP_PLAN_TOOLS)
+            if self.studio_lab_enabled:
+                result.extend(STUDIO_LAB_TOOLS)
         if self.docs_live is not None and roblox_prompt and _DOCS_TRIGGER.search(prompt):
             result.extend(ROBLOX_DOCS_LIVE_TOOLS)
         if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I)):
@@ -376,8 +436,11 @@ class LocalIntelligence:
             if _CLOUD_TRIGGER.search(prompt):
                 if self.cloud is not None and self.cloud.status()["key_present"]:
                     result.extend(ROBLOX_CLOUD_TOOLS)
-                elif __import__("os").environ.get("STAR_ROBLOX_READ_API_KEY"):
+                elif os.environ.get("STAR_ROBLOX_READ_API_KEY"):
                     result.extend(ROBLOX_CLOUD_TOOLS[:1])
+        if _architecture_tools_on() and _ARCHITECTURE_TRIGGER.search(prompt) and (
+                _ROBLOX_TRIGGER.search(prompt) or is_roblox_dev_prompt(prompt)):
+            result.extend(ARCHITECTURE_TOOLS)
         return result
 
     @staticmethod
@@ -388,6 +451,27 @@ class LocalIntelligence:
         if self._closed or name not in enabled or name not in ALL_TOOLS or not isinstance(args, dict):
             raise PermissionError("Intelligence tool is not enabled for this task")
         Draft202012Validator(ALL_TOOLS[name]["inputSchema"]).validate(args)
+        if name == "star_architecture_preview":
+            return design_summary(make_plan(validate_brief(args)))
+        if name == "star_architecture_compare_styles":
+            names = args.get("styles", list(PALETTES))
+            variants = []
+            for style in names:
+                brief = {key: value for key, value in args.items() if key != "styles"}
+                brief["style"] = style
+                summary = design_summary(make_plan(validate_brief(brief)))
+                variants.append({
+                    "style": style, "roof": summary["roof"],
+                    "grammar": summary["style_grammar"],
+                    "estimated_triangles": summary["audit"]["metrics"]["triangles"],
+                    "prototype_parts": summary["audit"]["metrics"]["parts"],
+                    "static_valid": summary["audit"]["valid"],
+                })
+            return {
+                "variants": variants,
+                "rendered": False, "studio_imported": False,
+                "note": "These are deterministic design prototypes, not ranked visual-quality results.",
+            }
         if name in _ASSET_TOOL_NAMES:
             if not self.asset_forge_enabled:
                 raise PermissionError("Enable Asset Forge in Tools before using its tools")
@@ -436,6 +520,10 @@ class LocalIntelligence:
             if not self.map_plans_enabled:
                 raise PermissionError("Map plans are disabled")
             return self._map_plan_call(args)
+        if name == "star_roblox_studio_lab":
+            if not self.studio_lab_enabled:
+                raise PermissionError("The Studio lab is off (setting studio_lab_enabled or STAR_STUDIO_LAB=1)")
+            return self._studio_lab_call(args)
         if name in _DOCS_LIVE_NAMES:
             if self.docs_live is None:
                 raise PermissionError("Live Roblox docs retrieval is not enabled")
@@ -473,7 +561,13 @@ class LocalIntelligence:
             }
             return handlers[name]()
         if name == "star_skill_catalog":
-            return self.skills.list()
+            # ~100 bundled packs: full descriptions alone would fill most of a 25,000-character request.
+            listed = self.skills.list()
+            for skill in listed["skills"]:
+                if len(skill["description"]) > 100:
+                    skill["description"] = skill["description"][:99].rstrip() + "…"
+            listed["note"] = "Descriptions are shortened; star_skill_load returns a skill's full instructions."
+            return listed
         if name == "star_skill_load":
             return self.skills.load(args["name"])
         if name == "star_skill_reference":
@@ -554,6 +648,27 @@ class LocalIntelligence:
             else:
                 report["luau"] = luau
         return report
+
+    def _studio_lab_call(self, args: dict) -> dict:
+        from . import studio_lab
+        import time as _time
+        plan = args["plan"]
+        spec, problems = studio_lab.check_spec({"name": plan.get("mapName") if isinstance(plan, dict) else None,
+                                                "plan": plan, "maxIterations": args.get("max_iterations", 3)})
+        if spec is None:
+            return {"ok": False, "applied": False, "problems": problems,
+                    "note": "Nothing was built. Fix the plan (star_roblox_map_plan shows the dry run) and try again."}
+        base = Path(self.home) / "studio-lab"
+        out = base / "runs" / f"{spec['name'].replace(' ', '_')}-{_time.strftime('%Y%m%dT%H%M%SZ', _time.gmtime())}"
+        critic = studio_lab.BrainCritic() if args.get("vision") else None
+        report = studio_lab.run_lab_sync(Path(self.home), spec, out, critic=critic)
+        summary = studio_lab.public_summary(report, out)
+        if report.get("lesson"):
+            try:
+                summary["outbox"] = studio_lab.write_outbox(base / "outbox", [report["lesson"]])
+            except Exception as error:
+                summary["outbox"] = {"error": type(error).__name__}
+        return summary
 
     def _cloud_call(self, name: str, args: dict) -> dict:
         """Roblox Open Cloud. A refusal reaches the model as text (CloudError is a ValueError)."""
@@ -642,6 +757,8 @@ def for_settings(settings, home: Path) -> LocalIntelligence:
         design_enabled=getattr(settings, "design_tools_enabled", True) is not False and _env_on("STAR_DESIGN_TOOLS"),
         map_plans_enabled=(getattr(settings, "map_plans_enabled", True) is not False
                            and _env_on("STAR_MAP_PLAN_TOOLS")),
+        studio_lab_enabled=(getattr(settings, "studio_lab_enabled", False) is True
+                            or _env_on("STAR_STUDIO_LAB", default=False)),
         docs_live=(RobloxDocsLive(cache_dir=Path(home) / "cache" / "roblox-docs")
                    if live_enabled(settings) else None),
     )

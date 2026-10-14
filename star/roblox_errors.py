@@ -57,9 +57,9 @@ class ExplainedError:
     explanation: ErrorRule
 
 
-def _rule(id: str, pattern: str, causes: tuple[str, ...], check: str,
+def _rule(rule_id: str, pattern: str, causes: tuple[str, ...], check: str,
           fix: str, example: str, severity: Severity = "error") -> ErrorRule:
-    return ErrorRule(id, re.compile(pattern, re.I), causes, check, fix, example, severity)
+    return ErrorRule(rule_id, re.compile(pattern, re.I), causes, check, fix, example, severity)
 
 
 # Match complete diagnostic messages, never substrings in conversational prose.

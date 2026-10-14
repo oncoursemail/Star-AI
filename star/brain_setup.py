@@ -22,7 +22,11 @@ import sys
 import zipfile
 
 from ._lazy import lazy_module
-httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from .version import __version__
 
@@ -148,7 +152,7 @@ def _select_engine_release(client: httpx.Client, callback: Callable[[dict], None
                     return candidate, _engine_asset(candidate)
                 except ValueError:
                     continue
-    except (httpx.HTTPError, ValueError, TypeError, KeyError) as error:
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
         callback({'phase': 'GitHub metadata unavailable; using a checksum-pinned official build'})
     callback({'phase': 'Using a known official Windows Vulkan build'})
     return _fallback_engine_release()

@@ -12,7 +12,11 @@ import time
 
 from ._lazy import lazy_module
 from .validation_messages import describe_invalid
-httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 _API = "https://api.polyhaven.com"
 _SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}\Z")

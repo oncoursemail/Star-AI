@@ -331,6 +331,10 @@ def test_switch_lists_both_places_for_every_capability_with_honest_notes(tmp_pat
     video = {option['id']: option for option in shown['video']['options']}
     assert not video['servers']['available'] and 'no STAR Server is connected' in video['servers']['reason']
     assert not video['pc']['available'] and 'on-device brain is not installed' in video['pc']['reason']
+    # Settings can make video places available; images and voice on the servers cannot exist here.
+    assert video['servers']['fixable'] and video['pc']['fixable']
+    assert images['servers']['fixable'] is False and voice['servers']['fixable'] is False
+    assert images['pc']['fixable'] and voice['pc']['fixable']
 
 
 def test_an_unavailable_place_is_refused_never_replaced(tmp_path, monkeypatch):

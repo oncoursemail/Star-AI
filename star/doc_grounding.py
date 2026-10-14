@@ -16,6 +16,7 @@ Honesty rules:
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 import re
 from time import monotonic
@@ -194,6 +195,18 @@ async def prepare_async(settings, route, prompt: str, prior_user_turns: list[str
                         on_event=None, *, mode: str = "auto", client=_UNSET) -> Grounding:
     """`prepare` off the event loop (it does blocking HTTP), with its progress events delivered
     on the loop's own thread, in order, like every other event of the turn."""
+    # Experimental opt-in: when even referential follow-up grounding is off,
+    # prepare() returns this exact empty result without accessing the client.
+    # Avoid scheduling a needless worker thread for that common fast route.
+    if os.environ.get("STAR_FAST_GROUNDING_NOOP") == "1":
+        try:
+            plan = getattr(route, "grounding", NO_GROUNDING) or NO_GROUNDING
+            if plan.retrieve == "none":
+                follow, _ = followup_grounding(prompt, prior_user_turns, mode=mode)
+                if follow.retrieve == "none":
+                    return Grounding(plan=plan)
+        except Exception:
+            pass  # Unusual route data must retain the original prepare() path.
     loop = asyncio.get_running_loop()
 
     def relay(event: dict) -> None:
