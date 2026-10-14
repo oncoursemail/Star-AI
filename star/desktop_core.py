@@ -21,6 +21,7 @@ from .memory import Memory
 from . import conversation_memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .reverse_engineering import for_settings as reverse_engineering_for
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
@@ -95,6 +96,9 @@ class Settings:
     asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
+    # Local reverse-engineering tools (star/reverse_engineering.py). Off by default; opt-in.
+    # Defensive, workspace-confined analysis of your own/permitted binaries only.
+    reverse_engineering_enabled: bool = False
     specialist_parallelism: int = 1
     team_timeout_min: int = 30      # bounded specialist request deadline, seconds
     team_timeout_max: int = 900     # allows slow on-device and STAR Server inference
@@ -105,6 +109,7 @@ class Settings:
     blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
     blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
     blender_executable: str = ''           # installed local executable; '' = discover without downloading
+    blender_brain2: bool = False           # use the Blender on brain 2 (the second STAR server) instead of a local one
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
@@ -116,6 +121,7 @@ class Settings:
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    luau_run_before_answer: bool = False  # explicit opt-in, remote sandbox only
     # STAR search (self-hosted SearXNG behind star-search-gateway, server/searxng): '' = the STAR
     # Server's host on port 8093, 'off' = never ask it. Used when no Brave/Tavily key is set.
     search_endpoint: str = ''
@@ -167,8 +173,8 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau', 'reverse_engineering_enabled',
+                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -185,6 +191,8 @@ class Settings:
             raise ValueError('Invalid local Graphify MCP port')
         if self.blender_edit and not self.blender_enabled:
             raise ValueError('Enable Blender before enabling Blender scene creation')
+        if self.blender_brain2 and not self.blender_enabled:
+            raise ValueError('Enable Blender before choosing the Blender on brain 2')
         if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
                 or '\x00' in self.blender_executable
                 or self.blender_executable.startswith(('\\\\', '//'))
@@ -985,6 +993,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
+    # With consent, keep unreviewed code off the screen until review completes.
+    stream_tokens = stream_tokens and not settings.luau_run_before_answer
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
     if not settings.model.strip():
@@ -1148,6 +1158,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             from .blender_mcp import wants_blender
             allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        reverse_engineering = (reverse_engineering_for(settings, home)
+                               if use_tools and settings.reverse_engineering_enabled else None)
         # Searchable public metadata only; no connector is installed or approved.
         from .mcp_registry import RegistryDiscovery
         mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
@@ -1325,6 +1337,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
+                if reverse_engineering is not None:
+                    kwargs['reverse_engineering'] = reverse_engineering
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
                     nonlocal prepared_conversation
@@ -1345,7 +1359,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             async with AsyncExitStack() as connections:
                                 tool_kwargs = dict(kwargs)
                                 if allow_blender:
-                                    from .blender_mcp import connect_blender
+                                    if settings.blender_brain2 is True:
+                                        from .blender_brain2 import connect_brain2_blender as connect_blender
+                                    else:
+                                        from .blender_mcp import connect_blender
                                     tool_kwargs["blender"] = await connections.enter_async_context(
                                         connect_blender(settings, home))
                                 if allow_studio:
@@ -1415,7 +1432,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     result = await answer_with(settings.model)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
                 return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
-                                                    started=started, on_event=audited_event)
+                                                    started=started, on_event=audited_event, settings=settings)
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
