@@ -39,7 +39,7 @@ export type BuildInfo = {stamped:boolean; source_commit:string; head_commit:stri
 export type BootData = { version:string; build?:BuildInfo; project:string; projects:string[]; messages:ChatMessage[]; active_chat:string; chats:ChatThread[]; settings:AppSettings; brain_installed:boolean; brain_running:boolean; model_router_running?:boolean; analytics:Analytics; release_url:string; intelligence?:IntelligenceStatus; credentials:Record<string,boolean>; mcp?:McpStatus; blender?:BlenderStatus; tool_workshop?:WorkshopStatus; server?:ServerStatus; retry?:RetryState|null; learning?:LessonCounts; roblox?:RobloxStatus; studio?:StudioConnectionStatus }
 /** Where a media capability runs: the STAR Brains (servers) or this PC's graphics card (star/media_places.py). */
 export type MediaPlace = 'servers'|'pc'
-export type MediaOption = { id: MediaPlace; label: string; available: boolean; note: string; reason: string }
+export type MediaOption = { id: MediaPlace; label: string; available: boolean; note: string; reason: string; /** false: this install can never offer it (not a setting away); older hosts omit it. */ fixable?: boolean }
 export type MediaCapability = { id: 'images'|'voice'|'video'; title: string; field: string; chosen: MediaPlace; options: MediaOption[] }
 export type MediaStatus = { places: MediaCapability[]; images: { running: boolean; ready: boolean; missing: string[]; model: string; message: string; version?: string }; sizes: Array<{id: string; label: string}>; can_start: boolean; detected_home?: string; ffmpeg: { found: boolean; message: string }; measured_on: string; references: number }
 export type MediaReference = { id: string; label: string; note: string; width: number; height: number; added: string; preview: string }

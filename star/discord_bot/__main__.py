@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from .bot import BotConfig, create_bot
-from .local_config import config_dir, load_merged_env
+from .local_config import config_dir, ensure_settings_file, load_merged_env
 
 EXIT_CONFIG, EXIT_MISSING_LIBRARY, EXIT_ALREADY_RUNNING = 2, 3, 4
 LOG_BYTES, LOG_BACKUPS = 1_000_000, 3
@@ -108,6 +108,8 @@ def main() -> int:
     if args not in ([], ["doctor"], ["smoke"]):
         print("Usage: python -m star.discord_bot [--log-file PATH] [doctor | smoke]", file=sys.stderr)
         return 2
+    if ensure_settings_file():
+        print("Created a settings template (discord-settings.env) in your .star folder; fill in your IDs.")
     try:
         env = load_merged_env()
     except ValueError as exc:

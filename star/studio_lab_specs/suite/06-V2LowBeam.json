@@ -1,0 +1,135 @@
+{
+ "name": "V2LowBeam",
+ "kind": "map",
+ "description": "A roof beam 4 studs above the second jump.",
+ "defect": "beam-over-jump",
+ "expect": {
+  "first_pass": null,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "raise-overhead"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2LowBeam",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    57.0,
+    40,
+    40.0
+   ],
+   "center": [
+    -23.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -27.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -16.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     -5.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   },
+   {
+    "name": "Beam",
+    "position": [
+     -21.5,
+     11.0,
+     150.0
+    ],
+    "size": [
+     2,
+     1,
+     14
+    ],
+    "material": "Wood",
+    "color": "#8B5A2B",
+    "role": "roof"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ]
+  }
+ }
+}

@@ -286,12 +286,27 @@
 .shell .learn-week .learn-subhead {
   margin-top: var(--star-5);
 }
-/* The same list on the Model page, below the connection cards. */
+/* On the Model page: one line that links to "What STAR learned this week" on the Projects page. */
 .shell .learn-brain {
   margin-top: var(--star-5);
 }
-.shell .learn-brain .learn-week {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
+.shell .learn-brain .learn-head {
+  align-items: center;
+  margin-bottom: 0;
+}
+.shell .learn-brain .learn-title h2 {
+  font-size: var(--star-fs-ui);
+}
+/* A how-to for people who run STAR from source; closed by default (LearningPanel.tsx). */
+.shell .learn-advanced {
+  margin: var(--star-2) 0 var(--star-3);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+.shell .learn-advanced summary {
+  width: fit-content;
+  cursor: pointer;
+}
+.shell .learn-advanced summary:hover {
+  color: var(--star-text);
 }
