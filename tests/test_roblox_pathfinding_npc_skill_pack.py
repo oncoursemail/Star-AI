@@ -20,6 +20,12 @@ def test_new_pack_is_registered_bounded_and_requires_opt_in(tmp_path):
     assert skill_packs.enabled_names({skill_packs.ENV_VAR: NAME}) == {NAME}
     assert skill_packs.matching_names(PROMPT) == []
     assert skill_packs.matching_names(PROMPT, enabled={NAME}) == [NAME]
+    assert skill_packs.matching_names(
+        "In Roblox Studio, listen to Path.Blocked on the NPC", enabled={NAME}
+    ) == [NAME]  # Regression: dotted event name alone must route.
+    assert skill_packs.matching_names(
+        r"In Roblox Studio, listen to Path\xBlocked on the NPC", enabled={NAME}
+    ) == []
     assert skill_packs.matching_names("Path for a web page", enabled={NAME}) == []
     assert skill_packs.matching_names("In Roblox Studio, build an unrelated lobby", enabled={NAME}) == []
     assert skill_packs.render(skill_packs.select(PROMPT, enabled={NAME})) == p.body + "\n"
