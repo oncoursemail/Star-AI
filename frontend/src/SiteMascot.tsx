@@ -12,6 +12,9 @@ import {motion,useSpring} from 'motion/react'
 import {StarMark} from './SiteBrand'
 import {staticMode} from './siteHooks'
 
+/** The one shipped copy of the approved art; the page asks for resized webp copies of it in ./site via srcSet, and the
+ * original stays the `src` fallback for browsers without srcset (tests/test_mascot_assets.py checks both). */
+const assets='./assets/mascot'
 const site='./site'
 
 type MascotArtProps={src:string;srcSet?:string;sizes?:string;alt:string;width:number;height:number;className?:string;
@@ -106,7 +109,7 @@ export function SiteMascotHero(){
   <motion.span className="sw-star-lean" style={{x,y,rotate}}>
    <span className="sw-star-float">
     <span className="sw-star-body" ref={body}>
-     <MascotArt className="sw-star-art" eager src={site+'/star-hero-480.webp'}
+     <MascotArt className="sw-star-art" eager src={assets+'/star-hero.png'}
       srcSet={site+'/star-hero-480.webp 480w, '+site+'/star-hero-900.webp 900w'}
       sizes="(max-width: 860px) 80vw, 450px" width={900} height={1200}
       alt="Star, STAR's mascot: a cheerful chibi girl in a black dress with gold bows, holding up a small glowing star"/>
@@ -123,8 +126,8 @@ export function SiteMascotFooter(){
  return <div className="sw-footer-star" role="img" aria-label="Star waves hello on hover or keyboard focus"
   tabIndex={0} data-can-wave={canWave}>
   <span className="sw-footer-star-poses" aria-hidden="true">
-   <MascotArt className="sw-footer-pose sw-footer-pose-stand" src={site+'/pose-stand.webp'} width={160} height={200} alt="Star standing"/>
-   <MascotArt className="sw-footer-pose sw-footer-pose-wave" src={site+'/pose-wave-a.webp'} width={160} height={200} alt="Star waving" onReady={setCanWave}/>
+   <MascotArt className="sw-footer-pose sw-footer-pose-stand" src={assets+'/poses/stand.png'} srcSet={site+'/pose-stand.webp 160w'} sizes="64px" width={160} height={200} alt="Star standing"/>
+   <MascotArt className="sw-footer-pose sw-footer-pose-wave" src={assets+'/poses/wave-a.png'} srcSet={site+'/pose-wave-a.webp 160w'} sizes="64px" width={160} height={200} alt="Star waving" onReady={setCanWave}/>
   </span>
  </div>
 }

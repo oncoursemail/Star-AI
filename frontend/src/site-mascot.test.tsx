@@ -14,7 +14,9 @@ describe('Star mascot on the public site',()=>{
  it('uses resized copies of the approved art, with dimensions and alt text',()=>{
   const page=new DOMParser().parseFromString(renderToString(<Landing/>),'text/html')
   const hero=page.querySelector('.sw-star img')!
-  expect(hero.getAttribute('src')).toBe('./site/star-hero-480.webp')
+  // The resized webp copies are what browsers fetch; the approved original is only the no-srcset fallback.
+  expect(hero.getAttribute('src')).toBe('./assets/mascot/star-hero.png')
+  expect(hero.getAttribute('srcset')).toContain('./site/star-hero-480.webp 480w')
   expect(hero.getAttribute('srcset')).toContain('./site/star-hero-900.webp 900w')
   expect(hero.getAttribute('alt')).toMatch(/^Star, STAR's mascot/)
   // The hero is the largest image above the fold: never lazy, and visible from the prerendered first paint.
