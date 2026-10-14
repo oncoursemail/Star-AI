@@ -258,12 +258,22 @@ class Registry:
             self.db.rollback()
             raise
         if data["examples"]:
+            from .worked_examples import MAX_ROWS
             examples = self._examples()
             try:
                 with examples:
+                    # The same per-project cap as worked_examples.import_file: retrieval refuses a
+                    # corpus over MAX_ROWS usable (unexpired) rows, so a full corpus takes no more.
+                    usable = examples.execute(
+                        "SELECT COUNT(*) FROM worked_examples WHERE project=? AND id NOT IN "
+                        "(SELECT id FROM example_expiry WHERE project=? AND expires_at<=?)",
+                        (project, project, stamp)).fetchone()[0]
                     for row in data["examples"]:
                         if self.db.execute("SELECT 1 FROM learned_items WHERE project=? AND kind='example' AND ref=?",
                                            (project, row["id"])).fetchone():
+                            receipt["skipped"] += 1
+                            continue
+                        if usable >= MAX_ROWS:
                             receipt["skipped"] += 1
                             continue
                         values = (project, row["id"], row["group_id"], row["task_category"], row["instruction"],
@@ -280,6 +290,7 @@ class Registry:
                             (project, "example", row["id"], row["instruction"][:300],
                              "; ".join(row["evidence"])[:1200], "{}", stamp, expires, "live",
                              json.dumps(list(values)), info["digest"][:12]))
+                        usable += 1
                         receipt["examples"] += 1
                 self.db.commit()
             finally:
