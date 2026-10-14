@@ -94,7 +94,7 @@ def _api_report(source: str, dump: ApiDump) -> list[dict]:
 def _lint_report(source: str, script_class: str) -> list[dict]:
     results: list[dict] = []
     for found in lint(source, safety_checks=True, script_class=script_class,
-                      server_security=(script_class == "Script")):
+                      server_security=(script_class == "Script"), roblox_rules=True):
         results.append({
             "line": found.line, "rule": found.rule_id,
             "severity": found.severity, "checker": "luau-static",
@@ -136,7 +136,7 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None) -> dict
             if len(code.encode("utf-8")) > MAX_CHECK_SOURCE_BYTES:
                 warnings.append("Source exceeds 20 KB per-file static-check budget")
             else:
-                scopes.extend(("luau-patterns", "lifetime-safety"))
+                scopes.extend(("luau-patterns", "lifetime-safety", "roblox-api-rules"))
                 if script_class == "Script":
                     scopes.append("inline-server-remote-trust")
                 findings.extend(_lint_report(code, script_class))
