@@ -150,6 +150,11 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Style-agnostic ability VFX (style profiles + timeline composer + typed Luau modules). OFF until evaluated.
+    "roblox-vfx-composer": re.compile(
+        r"\b(?:ability (?:vfx|effects?)|anime (?:vfx|effects?|ability)|vfx style|art style|style profiles?|"
+        r"screen flash|camera shake|shockwave rings?|ground cracks?|vortex|energy pillar|charge-?up|aura|"
+        r"colou?r inversion|flash frames?|dissipat\w*|impact frames?)\b", re.IGNORECASE),
 }
 
 

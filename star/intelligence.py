@@ -181,6 +181,24 @@ MAP_PLAN_TOOLS = (
           "ordered apply operations (and Luau if include_luau). Nothing is applied.",
           {"plan": {"type": "object"}, "include_luau": {"type": "boolean", "default": False}}, ("plan",)),
 )
+# STAR VFX Studio (star/roblox_vfx_studio.py). Opt-in: off unless the owner enables it.
+VFX_TOOLS = (
+    _tool("star_roblox_vfx_make",
+          "Design a Roblox ability VFX in any art style. A style profile (anime energy, soft cartoon, realistic "
+          "fire/smoke/magic, sci-fi neon, pixel retro; recoloured by colour words or a reference image's palette) is "
+          "picked from 'style' and 'prompt'; an ability (built-in energy burst or hit, or a generated cue list for "
+          "heal/aura or explosion) is picked from 'prompt'. action 'plan' (default) returns the choice, the generated "
+          "Luau and STAR's lint findings, applying nothing. action 'build' also installs it in STAR Test Place only, "
+          "plays it in a slow-motion playtest through the real RemoteEvent path, captures frames and returns frame "
+          "files, a contact sheet and a measured critique (nothing is saved or published). 'reference_image' is a "
+          "path inside the workspace folder; only its colours are used.",
+          {"prompt": _s(300), "style": _s(200), "reference_image": _s(260),
+           "action": {"type": "string", "enum": ["plan", "build"], "default": "plan"},
+           "speed": {"type": "number", "minimum": 0.1, "maximum": 1, "default": 0.25}},
+          ("prompt",)),
+)
+_VFX_TRIGGER = re.compile(r"\b(?:vfx|visual effects?|particles?|ability effects?|effects? for|spell effects?|explosion "
+                          r"effects?|aura|shockwave|energy burst)\b", re.I)
 # Live retrieval from create.roblox.com/docs (star/roblox_docs_live.py). Opt-in: off unless enabled.
 ROBLOX_DOCS_LIVE_TOOLS = (
     _tool("star_roblox_docs_live_search",
@@ -211,7 +229,8 @@ _CLOUD_TRIGGER = re.compile(r"\b(open.?cloud|owned.universe|owner.analytics|auth
                             r"(?:place|experience|universe).(?:info\w*|id))\b", re.I)
 ALL_TOOLS = {tool["name"]: tool for tool in (*SKILL_TOOLS, *OBSIDIAN_TOOLS, *GRAPHIFY_TOOLS,
              *ROBLOX_GAME_TOOLS, *ROBLOX_KNOWLEDGE_TOOLS, *DOC_KNOWLEDGE_TOOLS, *ROBLOX_VIDEO_TOOLS,
-             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS)}
+             *ROBLOX_CLOUD_TOOLS, *CRAFT_TOOLS, *ASSET_TOOLS, *DESIGN_TOOLS, *MAP_PLAN_TOOLS, *ROBLOX_DOCS_LIVE_TOOLS, *RUNTIME_TOOLS,
+             *VFX_TOOLS)}
 _DOC_TOOL_NAMES = frozenset(tool["name"] for tool in DOC_KNOWLEDGE_TOOLS)
 _SHARED_TOOL_NAMES = frozenset(tool["name"] for tool in RUNTIME_TOOLS)
 _LEGACY_GRAPH_READ_NAMES = frozenset({"star_graphify_query", "star_graphify_stats"})
@@ -238,6 +257,7 @@ class LocalIntelligence:
                  graphify_enabled: bool = True, roblox_research_enabled: bool = True,
                  asset_forge_enabled: bool = False, docs=None, cloud=None, design_enabled: bool = True,
                  map_plans_enabled: bool = True,
+                 vfx_studio_enabled: bool = False,
                  docs_live: RobloxDocsLive | None = None,
                  registered_workspaces: Iterable[Path | str] = (),
                  graph_boundary_check: Callable[[], bool] | None = None):
@@ -245,6 +265,7 @@ class LocalIntelligence:
         self.workspace = workspace
         self.design_enabled = design_enabled
         self.map_plans_enabled = map_plans_enabled
+        self.vfx_studio_enabled = vfx_studio_enabled is True
         self.docs_live = docs_live   # None unless the owner enabled live Roblox docs retrieval
         self.docs = docs   # star.doc_knowledge.KnowledgeClient, or None when not configured
         # star.roblox_cloud.RobloxCloud: reads with the owner's key; writes only as approved actions.
@@ -360,6 +381,8 @@ class LocalIntelligence:
             result.extend(DESIGN_TOOLS)
         if self.map_plans_enabled and roblox_prompt and _MAP_TRIGGER.search(prompt):
             result.extend(MAP_PLAN_TOOLS)
+        if self.vfx_studio_enabled and roblox_prompt and _VFX_TRIGGER.search(prompt):
+            result.extend(VFX_TOOLS)
         if self.docs_live is not None and roblox_prompt and _DOCS_TRIGGER.search(prompt):
             result.extend(ROBLOX_DOCS_LIVE_TOOLS)
         if self.roblox and (_ROBLOX_TRIGGER.search(prompt) or re.search(r"https://(?:www\.)?roblox\.com/games/", prompt, re.I)):
@@ -435,6 +458,10 @@ class LocalIntelligence:
             if not self.map_plans_enabled:
                 raise PermissionError("Map plans are disabled")
             return self._map_plan_call(args)
+        if name == "star_roblox_vfx_make":
+            if not self.vfx_studio_enabled:
+                raise PermissionError("STAR VFX Studio is not enabled")
+            return self._vfx_call(args)
         if name in _DOCS_LIVE_NAMES:
             if self.docs_live is None:
                 raise PermissionError("Live Roblox docs retrieval is not enabled")
@@ -554,6 +581,40 @@ class LocalIntelligence:
                 report["luau"] = luau
         return report
 
+    def _vfx_image(self, relative: str | None) -> bytes | None:
+        """A reference image from inside the workspace folder only (bounded), or None."""
+        if not relative:
+            return None
+        if self.workspace is None:
+            raise PermissionError("A reference image needs a workspace folder")
+        root = Path(self.workspace).resolve()
+        target = (root / relative).resolve()
+        if root not in target.parents or target.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+            raise PermissionError("The reference image must be a picture inside the workspace folder")
+        if not target.is_file() or target.stat().st_size > 8_000_000:
+            raise ValueError("Reference image not found or larger than 8 MB")
+        return target.read_bytes()
+
+    def _vfx_call(self, args: dict) -> dict:
+        from . import roblox_vfx_studio as vfx
+        image = self._vfx_image(args.get("reference_image"))
+        speed = float(args.get("speed", 0.25))
+        if args.get("action", "plan") != "build":
+            result = vfx.plan(args["prompt"], style_description=args.get("style", ""), image=image, speed=speed)
+            luau = result.pop("generated_luau")
+            result["generated_luau"] = luau if len(luau) <= MAX_TOOL_TEXT else luau[:MAX_TOOL_TEXT]
+            result["note"] = ("Plan only: nothing was applied. The runtime modules are the roblox-vfx-composer skill "
+                              "pack's luau/ files (VfxStyles, VfxPrimitives, VfxComposer, VfxClient, VfxService).")
+            return result
+        import time as _time
+        spec = vfx.make_spec(args["prompt"], style_description=args.get("style", ""), image=image, speed=speed)
+        spec["label"] = "vfx"
+        out = Path(self.home) / "vfx-lab" / _time.strftime("%Y%m%dT%H%M%SZ", _time.gmtime())
+        report = vfx.run_vfx_lab_sync(self.home, [spec], out, timeout=600.0)
+        summary = vfx.public_summary(report)
+        summary["evidence_folder"] = str(out)
+        return summary
+
     def _cloud_call(self, name: str, args: dict) -> dict:
         """Roblox Open Cloud. A refusal reaches the model as text (CloudError is a ValueError)."""
         from .roblox_cloud import MAX_SCRIPT_CHARS, CloudError
@@ -641,6 +702,8 @@ def for_settings(settings, home: Path) -> LocalIntelligence:
         design_enabled=getattr(settings, "design_tools_enabled", True) is not False and _env_on("STAR_DESIGN_TOOLS"),
         map_plans_enabled=(getattr(settings, "map_plans_enabled", True) is not False
                            and _env_on("STAR_MAP_PLAN_TOOLS")),
+        vfx_studio_enabled=(getattr(settings, "vfx_studio_enabled", False) is True
+                            or _env_on("STAR_VFX_STUDIO", default=False)),
         docs_live=(RobloxDocsLive(cache_dir=Path(home) / "cache" / "roblox-docs")
                    if live_enabled(settings) else None),
     )
