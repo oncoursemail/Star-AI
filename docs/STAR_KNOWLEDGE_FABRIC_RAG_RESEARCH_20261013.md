@@ -160,11 +160,17 @@ Inputs: v1 JSON with sources (id, project, SHA-256, reviewed, active) and cases 
 
 Metrics: Recall@1/@5/@10, MRR@10, no-answer (abstention) accuracy, mean/p95 latency and violation counts. Review gate rejects scope/trust leaks or lower quality/major p95 regression, remains inconclusive on small sample (<20 paired cases, <10 answerable or <3 negative cases), and can only mark an improvement a **candidate_for_owner_review**. There is NO automatic backend switch, skill promotion, learning, model training or index migration. An operator independently supplies trusted freeze/test artifacts; an AI-generated manifest with fabricated gold labels has no authority.
 
-Run on the explicit, operator-reviewed fixture manifest when one is available:
+A **purely synthetic** demonstration file is included at examples/rag/synthetic_quality_fixture.json. Its digest fields are mock test values, not hashes of actual documents. It can demonstrate the gate's rejection/review logic and CLI without revealing private prompts; passing it is not a retrieval result.
+
+Run the synthetic demonstration or an independently frozen real fixture:
 
 ~~~text
+python -m star.rag_quality --manifest examples/rag/synthetic_quality_fixture.json
 python -m star.rag_quality --manifest /absolute/operator-reviewed/retrieval-fixtures.json
 ~~~
+
+For real comparisons each source SHA-256 MUST be computed from an actual immutable source revision; labels and outcomes must be authored outside the candidate model. Operator-reviewed or blind heldouts must not be candidate-generated.
+
 
 The CLI reads only that file (1 MiB bound), outputs aggregate numbers without document bodies/source IDs, and never connects to the internet. Synthetic offline tests cover policy, privacy, missing/stale sources, negative questions, exact review flags, duplicates, latency, and manipulated manifests. Passing synthetic tests verifies the GATE, **not a real Chroma/Khoj/pgvector search**. Existing server/knowledge/starkb/evaluate.py continues to handle true retrieval tests on the actual indexed Roblox corpus. Connect the two in a separate reviewed PR after pinning actual source revision IDs and test split.
 
