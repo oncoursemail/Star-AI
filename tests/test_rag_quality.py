@@ -114,12 +114,16 @@ def test_quality_or_p95_regression_is_rejected_even_when_one_metric_improves():
     slow = manifest()
     slow["cases"][-1]["candidate"]["latency_ms"] = 120_000
     result = compare(slow)
-    assert result["decision"] == "reject"
+    # p95 intentionally ignores the slowest 1/20 observations; retain the
+    # maximum separately so this one-time outlier remains visible.
+    assert result["decision"] == "candidate_for_owner_review"
     assert result["candidate"]["latency_ms"]["p95"] == 125
-    # p95 is robust to one very slow tail in 20 examples. With more
-    # than 5% of cases slow, p95 should detect a tail latency regression.
+    assert result["candidate"]["latency_ms"]["max"] == 120_000
+    # At 2/20 slow observations, p95 must catch the real tail regression.
     slow["cases"][-2]["candidate"]["latency_ms"] = 120_000
-    assert compare(slow)["decision"] == "reject"
+    result = compare(slow)
+    assert result["candidate"]["latency_ms"]["p95"] == 120_000
+    assert result["decision"] == "reject"
 
 
 def test_requires_sufficient_paired_cases_and_rejects_weak_or_identical_tweaks():
