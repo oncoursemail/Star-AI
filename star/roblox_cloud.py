@@ -141,6 +141,11 @@ ENDPOINTS: tuple[Endpoint, ...] = (
     Endpoint("asset_get", "GET", "/assets/v1/assets/{asset}", "asset:read", "120", _ASSETS, used=False),
     Endpoint("asset_create", "POST", "/assets/v1/assets", "asset:read + asset:write", "120", _ASSETS,
              write=True, used=False, note="Answers an operation: GET /assets/v1/operations/{operation} (300)."),
+    # The one asset write STAR makes: a reviewed, procedurally generated particle texture uploaded as a Decal to
+    # the key's own account (star/roblox_vfx_textures.py). Never any other asset type.
+    Endpoint("asset_upload_texture", "POST", "/assets/v1/assets", "asset:read + asset:write", "120", _ASSETS,
+             write=True, note="multipart: request JSON (assetType Decal) + fileContent image/png. Answers an operation."),
+    Endpoint("asset_operation", "GET", "/assets/v1/operations/{operation}", "asset:read", "300", _ASSETS),
     Endpoint("place_instances", "GET",
              "/cloud/v2/universes/{universe}/places/{place}/instances/{instance}:listChildren",
              "universe.place.instance:read", "45", _PLACES, used=False, note="Beta."),
@@ -292,10 +297,13 @@ class OpenCloud:
             self._client = None
 
     def call(self, endpoint: str, *, params: dict | None = None, body: dict | None = None,
-             content: bytes | None = None, content_type: str = "", timeout: float = 20.0, **ids) -> Reply:
+             content: bytes | None = None, content_type: str = "", timeout: float = 20.0,
+             files: dict | None = None, **ids) -> Reply:
         spec = _BY_ID.get(endpoint)
         if spec is None or not spec.used:
             raise CloudError("That Roblox endpoint is not enabled in STAR")
+        if (files is not None) != (endpoint == "asset_upload_texture"):
+            raise CloudError("Only the texture upload sends a file form")
         values = {}
         for name, value in ids.items():
             if name in ("universe", "place", "version", "user"):
@@ -318,7 +326,7 @@ class OpenCloud:
             headers["Content-Type"] = content_type
         try:
             with self._client.stream(spec.method, API + path, params=params, json=body, content=content,
-                                     headers=headers, timeout=httpx.Timeout(timeout, connect=8.0),
+                                     files=files, headers=headers, timeout=httpx.Timeout(timeout, connect=8.0),
                                      follow_redirects=False) as response:
                 chunks, size = [], 0
                 for chunk in response.iter_bytes():
@@ -535,7 +543,8 @@ class RobloxCloud:
         if universe and place:
             first = ask("read the test experience", "universe", universe=universe)
             second = ask("read the test place", "place", universe=universe, place=place)
-            read_status["experience_info"] = (second or first).status if (second or first) else None
+            reply = second or first
+            read_status["experience_info"] = reply.status if reply else None
             if scope_allows(scopes, "universe-datastores.control", "list", universe):
                 stores = ask("list its data stores", "data_stores", universe=universe, params={"maxPageSize": 1})
                 read_status["list_data_stores"] = stores.status if stores else None
@@ -693,6 +702,45 @@ class RobloxCloud:
             raise CloudError("The connected key belongs to another account than the test experience. "
                              "Choose the test experience again.")
         return self.check_experience(chosen["universe_id"], chosen["place_id"], account=account)
+
+    # ---- texture upload (STAR's own account; star/roblox_vfx_textures.py reviews every image first)
+    def upload_image_asset(self, data: bytes, *, display_name: str, description: str = "",
+                           wait_seconds: float = 30.0) -> dict:
+        """Upload one PNG as a private Decal owned by the key's own account, which must be the owner of the chosen
+        test experience (STAR's own account). Returns {ok, asset_id?, operation, moderation?}. Never prints the key."""
+        if not isinstance(data, bytes) or not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 4_000_000:
+            raise CloudError("Only a PNG under 4 MB is uploaded")
+        if not re.fullmatch(r"[A-Za-z0-9 _-]{3,50}", display_name or "") or len(description) > 200:
+            raise CloudError("Asset name must be 3..50 letters, digits, spaces, - or _")
+        chosen = self.require_test_experience()
+        account = self._account_id()
+        if chosen.get("owner_user_id") != account:
+            raise CloudError("The key's account is not the owner of the test experience: nothing uploaded")
+        if not scope_allows(self._scopes, "asset", "write"):
+            raise CloudError("The key lacks asset:write")
+        request = {"assetType": "Decal", "displayName": display_name, "description": description,
+                   "creationContext": {"creator": {"userId": str(account)}}}
+        files = {"request": (None, json.dumps(request), "application/json"),
+                 "fileContent": ("texture.png", data, "image/png")}
+        reply = self._cloud().call("asset_upload_texture", files=files, timeout=60.0)
+        info = reply.data if isinstance(reply.data, dict) else {}
+        operation = str(info.get("operationId") or str(info.get("path", "")).rsplit("/", 1)[-1] or "")
+        if reply.status != 200 or not operation:
+            return {"ok": False, "http_status": reply.status, "detail": _error_text(reply)[:200]}
+        result = info if info.get("done") else {}
+        deadline = self.now() + wait_seconds
+        while not result.get("done") and self.now() < deadline:
+            self.sleep(2.0)
+            polled = self._cloud().call("asset_operation", operation=operation)
+            result = polled.data if polled.status == 200 and isinstance(polled.data, dict) else {}
+        got = result.get("response")
+        response = got if isinstance(got, dict) else {}
+        asset_id = response.get("assetId")
+        got = response.get("moderationResult")
+        moderation = got if isinstance(got, dict) else {}
+        return {"ok": bool(asset_id), "asset_id": str(asset_id) if asset_id else None, "operation": operation,
+                "done": bool(result.get("done")), "moderation": moderation.get("moderationState"),
+                "sha256": hashlib.sha256(data).hexdigest()}
 
     # ---- writes (reached only through an approved action, or the owner's own command line)
     def publish_place(self, data: bytes, *, xml: bool = True, version_type: str = "Saved",
@@ -882,7 +930,8 @@ class RobloxCloud:
         if not approved:
             return public_action(action, full=True)
         # The approval is for the place the action named when the owner saw it, and for no other.
-        named = action.get("target") if isinstance(action.get("target"), dict) else {}
+        target = action.get("target")
+        named = target if isinstance(target, dict) else {}
         only = (named.get("universe_id"), named.get("place_id"))
         try:
             if action["kind"] == "publish":

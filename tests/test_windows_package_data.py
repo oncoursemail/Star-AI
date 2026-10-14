@@ -33,6 +33,7 @@ PACKAGE_DATA_SITES = {
     "star/reverse_engineering.py": "star/re_scripts",  # Ghidra scripts (PR #344), not in the PyInstaller lists
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
     "star/roblox_api_dataset.py": "data/roblox_api/roblox_api.json",
+    "star/roblox_vfx_studio.py": "star/skill_packs",  # roblox-vfx-composer pack luau/ (PR #327)
     "star/skill_packs/__init__.py": "star/skill_packs",
     "star/studio_milestones.py": "evals/studio",
     "star/voice/catalog.py": "star/voice/voices.json",
