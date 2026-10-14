@@ -69,8 +69,13 @@ async function openSettings() {
   await user.click(screen.getByRole('button', {name: /^settings/i}))
   return user
 }
-const voiceSection = () => screen.findByRole('region', {name: 'Star\'s voice'})
-const studioSection = () => screen.findByRole('region', {name: 'Roblox Studio'})
+/** Settings shows one section at a time; open the one that holds the panel under test. */
+async function showSection(name: string) {
+  const tab = await screen.findByRole('tab', {name})
+  if (tab.getAttribute('aria-selected') !== 'true') await userEvent.setup().click(tab)
+}
+const voiceSection = async () => { await showSection('Images, voice & 3D'); return screen.findByRole('region', {name: 'Star\'s voice'}) }
+const studioSection = async () => { await showSection('Roblox & Studio'); return screen.findByRole('region', {name: 'Roblox Studio'}) }
 const report = (target: string, over: Record<string, unknown> = {}) => ({
   target, label: '', state: 'connected', checked_at: '2026-10-11T14:30:00+00:00', tool_count: 30,
   instances: [{id: 'studio-1', name: 'STAR Test Place'}], selected_id: '', selected_valid: false, reason_code: '',
@@ -273,10 +278,11 @@ describe('Settings > Roblox Studio', () => {
     expect(desktop.sent('discoverStudio')).toHaveLength(0)
   })
 
-  it('sits in the same Settings page as the where-to-generate choice and the voice picker', async () => {
+  it('sits in Roblox & Studio, next to the other sections of the same Settings page', async () => {
     studioHost(); voiceHost()
     await openSettings()
     await studioSection()
+    await showSection('Images, voice & 3D')
     expect(screen.getByRole('region', {name: 'Where STAR generates'})).toBeTruthy()
     expect(screen.getByRole('region', {name: 'Star\'s voice'})).toBeTruthy()
   })

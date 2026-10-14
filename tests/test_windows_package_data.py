@@ -30,6 +30,7 @@ PACKAGE_DATA_SITES = {
     "star/luau_record_type_lessons.py": "docs/lessons/luau-record-types.md",
     "star/lesson_import.py": "star/skill_packs",
     "star/react_shell.py": "frontend/dist",
+    "star/reverse_engineering.py": "star/re_scripts",  # Ghidra scripts (PR #344), not in the PyInstaller lists
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
     "star/roblox_api_dataset.py": "data/roblox_api/roblox_api.json",
     "star/roblox_vfx_studio.py": "star/skill_packs",  # roblox-vfx-composer pack luau/ (PR #327)
@@ -50,6 +51,7 @@ OTHER_FILE_ANCHORS = {
     "star/shared_brain/improve.py": "development verifier source hash",
 }
 PENDING_OWNER_REVIEW = frozenset({
+    "star/re_scripts",
     "docs/lessons/roblox-character-lifecycle.md",
     "docs/lessons/luau-record-types.md",
     "examples/roblox-templates",
@@ -110,7 +112,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 25
+    assert len(discovered) == 26
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
@@ -152,7 +154,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(PACKAGE_DATA_SITES) == 15
+    assert len(PACKAGE_DATA_SITES) == 16
     assert len(bundled) == 6  # two optional readers share the skill-pack directory
 
 
