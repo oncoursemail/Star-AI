@@ -108,7 +108,7 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
-    'instant_route_enabled',
+    'instant_route_enabled','web_auto_search','roblox_docs_live_enabled',
     'knowledge_endpoint',
     'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
