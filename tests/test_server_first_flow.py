@@ -308,7 +308,7 @@ class Completions:
         self.requests.append(kwargs)
         self.active += 1
         self.peak = max(self.active, self.peak)
-        await asyncio.sleep(.02)
+        await asyncio.sleep(0)  # yield to concurrent calls without wall-clock delay
         self.active -= 1
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content="finding"))])
 

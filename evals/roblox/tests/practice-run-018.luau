@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(0,{},'r1'), {coins=25,claimed={r1=true}}))
+check("case 2", deepEqual(fn(50,{r1=true},'r1'), {coins=50,claimed={r1=true}}))
+check("case 3", deepEqual(fn(75,{r1=true},'r2'), {coins=100,claimed={r1=true,r2=true}}))
+check("case 4", deepEqual(fn(0,{r2=true},'r3'), {coins=25,claimed={r2=true,r3=true}}))
+check("case 5", deepEqual(fn(10,{},'x'), {coins=35,claimed={x=true}}))
+check("case 6", deepEqual(fn(100,{a=true,b=true},'b'), {coins=100,claimed={a=true,b=true}}))

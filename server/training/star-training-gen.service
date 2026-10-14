@@ -1,0 +1,48 @@
+[Unit]
+Description=STAR training-data generator (verified Roblox/Luau examples from the owner's own open-weight models)
+Documentation=file:/opt/star/training/app/README.md
+After=network-online.target star-brain.service star-knowledge.service
+
+# Start:   systemctl start star-training-gen        Stop: systemctl stop star-training-gen   (clean, loses at most
+#          the candidate in flight)               Status: bash /opt/star/training/app/trainctl.sh status
+# Pause without stopping:  touch /opt/star/training/PAUSE     Resume:  rm /opt/star/training/PAUSE
+# Not enabled at boot on purpose: `systemctl enable star-training-gen` makes it start with the container.
+# One request at a time to the brain; pauses while /opt/star/lock exists, while somebody else is using any model
+# (slot check every few seconds, then 120 quiet seconds), and outside STAR_TRAIN_WINDOW_UTC when that is set.
+[Service]
+Type=simple
+User=star
+Group=star
+WorkingDirectory=/opt/star/training/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=STAR_TRAIN_HOME=/opt/star/training
+Environment=STAR_BRAIN_URL=http://127.0.0.1:8080
+Environment=STAR_BRAIN_KEY_FILE=/opt/star/secrets/api_keys
+Environment=STAR_KB_APP=/opt/star/knowledge/app
+Environment=STAR_KB_DB=/opt/star/knowledge/data/kb.sqlite3
+Environment=STAR_LUAU_TOOLS=/opt/star/knowledge/tools
+Environment=STAR_LUAU_VM=/opt/star/bench/tools/luau/build/release/luau
+# Optional nightly window (UTC), for example 04:00-10:00; empty = any time. Put it in a drop-in, not here.
+EnvironmentFile=-/opt/star/training/env
+ExecStart=/usr/bin/python3 -m startrain run
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=5
+Restart=on-failure
+RestartSec=300
+TimeoutStopSec=90
+KillMode=mixed
+MemoryMax=2G
+TasksMax=96
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/opt/star/training
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

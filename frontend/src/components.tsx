@@ -1,4 +1,5 @@
 import {CorrectionBox} from './CorrectionBox'
+import {LiveAnswerMarker, ReadAloudButton} from './ReadAloud'
 import {splitSources, type AnswerSource} from './sources'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
@@ -283,11 +284,13 @@ export function Message(props: MessageProps) {
         <div className="msg-actions is-live" aria-hidden="true">
           <LoaderCircle size={14} className="act-spin" />
           <span>Writing</span>
+          {entry.role === 'assistant' && <LiveAnswerMarker />}
         </div>
       )}
       {!partial && (
         <div className="msg-actions">
           <CopyButton text={entry.text} label={isUser ? 'Copy your message' : 'Copy response'} className="msg-action" />
+          {!isUser && entry.role === 'assistant' && <ReadAloudButton id={entry.id} text={entry.text} newest={pinned} />}
           {onEdit && (
             <button type="button" className="msg-action" title="Put this message back in the composer" onClick={onEdit}>
               <Pencil size={14} aria-hidden="true" />

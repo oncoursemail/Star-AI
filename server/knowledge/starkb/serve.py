@@ -39,7 +39,7 @@ import sys
 import threading
 import time
 
-from . import luaucheck
+from . import luaucheck, luaurun
 from .client import Brain, DEFAULT_KEY_FILE
 from .search import Searcher, VectorCache, built_stamp
 from .store import now
@@ -223,6 +223,7 @@ class Service:
         self.started = time.time()
         self.inflight = threading.BoundedSemaphore(MAX_INFLIGHT)
         self.luau_slots = threading.BoundedSemaphore(MAX_LUAU_INFLIGHT)
+        self.luau_runs = luaurun.RunService()
         self.counters: dict[str, int] = {}
         self._count_lock = threading.Lock()
         self.log_queries = os.environ.get("STAR_KB_LOG_QUERIES") == "1"
@@ -373,6 +374,7 @@ ROUTES = {
     ("POST", "/search"): ("search", True, MAX_BODY),
     ("POST", "/api-lookup"): ("lookup", True, MAX_BODY),
     ("POST", "/luau/check"): ("luau", True, MAX_LUAU_BODY),
+    ("POST", "/luau/run"): ("luau_run", True, MAX_LUAU_BODY),
 }
 
 
@@ -459,6 +461,8 @@ def make_handler(service: Service):
                     status, reply = 200, service.health()
                 elif name == "stats":
                     status, reply = 200, service.stats()
+                elif name == "luau_run":
+                    status, reply = service.luau_runs.handle(body, str(self.client_address[0]))
                 else:
                     status, reply = getattr(service, name)(body)
                     if name == "search" and service.log_queries and isinstance(body.get("query"), str):

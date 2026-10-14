@@ -1,0 +1,13 @@
+[Unit]
+Description=STAR Studio Lab nightly (rotating specs on 1-3 Studios, lesson candidates to the night-school outbox)
+After=star-studio.service
+Requires=star-studio.service
+
+[Service]
+Type=oneshot
+Environment=STUDIO_LAB_STUDIOS=2 STUDIO_LAB_ROTATE=16 STUDIO_LAB_MAX_MINUTES=45 STUDIO_LAB_KEEP=14
+ExecStart=/bin/bash /opt/star/studio-lab/app/server/studio_lab/studio-lab-nightly.sh
+# Hard cap: lock wait (30 min) + run cap (45 min) + start/stop; the script's EXIT trap stops the extra Studios.
+TimeoutStartSec=100min
+KillSignal=SIGINT
+Nice=5
