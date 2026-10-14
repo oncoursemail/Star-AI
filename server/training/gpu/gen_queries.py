@@ -48,8 +48,19 @@ def sample_chunks(db: sqlite3.Connection, n: int, seed: int, exclude_paths: set[
     rows = db.execute("""SELECT c.text_sha, c.kind, d.source, d.path, d.title, c.heading, c.text
                          FROM chunks c JOIN docs d ON d.id=c.doc_id
                          WHERE c.kind != 'news' AND length(c.text) >= 200
-                         GROUP BY c.text_sha ORDER BY c.id""").fetchall()
-    rows = [r for r in rows if r[3] not in exclude_paths]
+                         ORDER BY c.id""").fetchall()
+    # If any document holding this content is excluded, every alias of the
+    # same content hash is excluded, including aliases with different paths.
+    excluded_shas = set()
+    if exclude_paths:
+        excluded_shas = {sha for sha, path in db.execute(
+            "SELECT c.text_sha, d.path FROM chunks c JOIN docs d ON d.id=c.doc_id")
+            if path in exclude_paths}
+    unique: dict[str, tuple] = {}
+    for row in rows:
+        if row[3] not in exclude_paths and row[0] not in excluded_shas:
+            unique.setdefault(row[0], row)
+    rows = list(unique.values())
     rng = random.Random(seed)
     # stratify: guides and API pages roughly as in the index, but cap enum chunks (little prose)
     by_kind: dict[str, list] = {}

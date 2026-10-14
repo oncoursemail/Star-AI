@@ -1,4 +1,5 @@
 """Redaction replaces credentials only: ordinary prose and source code pass through unchanged."""
+import base64
 import json
 import time
 
@@ -119,3 +120,39 @@ def test_a_finished_turn_keeps_the_answer_exact_for_the_user_and_redacts_only_th
     for store in home.rglob("*.sqlite3"):
         if store.name != "conversations.sqlite3":                                # the chat itself keeps the exact answer
             assert secret.encode() not in store.read_bytes(), store.name
+
+
+# Security audit 2026-10-13 (docs/security/AUDIT-20261013.md, L-5): more well-known key formats.
+# Values are assembled from pieces so the source holds no credential-shaped literal.
+# A Discord token's first part is the bot's numeric user id in base64 (24 characters for 18 digits).
+_B64 = base64.urlsafe_b64encode(("1234" * 5)[:18].encode()).decode().rstrip("=")
+_FORMATS = [
+    ("hf_" + "Ab3d" * 9, "Ab3d" * 9),
+    ("AKIA" + "Q7ZT" * 4, "Q7ZT" * 4),
+    ("AIza" + "Sy9_" * 8 + "abc", "Sy9_" * 8),
+    ("xoxb-" + "1234-5678-" + "aBcD" * 4, "aBcD" * 4),
+    ("glpat-" + "Zq8-" * 6, "Zq8-" * 6),
+    ("rk_" + "live_" + "Mn4p" * 6, "Mn4p" * 6),
+    (_B64 + "." + "Gq1w2e" + "." + "Hm9" * 10, "Hm9" * 10),
+    ("Authorization: Bot " + "c3Vw" * 6, "c3Vw" * 6),
+]
+
+
+@pytest.mark.parametrize(("text", "secret"), _FORMATS)
+def test_more_key_formats_are_replaced(text, secret):
+    safe = redact_text("seen " + text + " here")
+    assert secret not in safe and "[REDACTED]" in safe
+    assert safe.startswith("seen ") and safe.endswith(" here")
+
+
+@pytest.mark.parametrize("text", [
+    "The bot configuration_settings_file is loaded at start.",
+    "Module.Something.Method(Instance.new('Part'))",
+    "local hf_value = 3  -- AKIA prefix explained",
+    "See https://example.invalid/docs/xox for details",
+    "xoxo-gossip-girl-fans and xoxa-love-from-the-team",
+    "require(NetworkReplicationController.Shared.AnimationControllerServiceModule)",
+    "OnPlayerCharacterAddedEvent.Signal.ConnectParallelSomethingLongerName:Wait()",
+])
+def test_new_formats_leave_prose_alone(text):
+    assert redact_text(text) == text
