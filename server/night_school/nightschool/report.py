@@ -52,11 +52,14 @@ def build(state: dict, *, status: str = "") -> str:
         f"{c.get('candidates_kept', 0)} | discarded (task still failed): {c.get('lessons_discarded', 0)}",
         f"promoted to active: {c.get('lessons_promoted', 0)} | held back by validation: "
         f"{c.get('lessons_held_back', 0)} | retired later: {c.get('lessons_retired', 0)}",
+        f"paired gate inconclusive (below the noise floor, kept as candidate): {c.get('lessons_inconclusive', 0)}",
     ]
     for lesson in sorted(by_status.get("active", []), key=lambda l: l.get("promoted", ""))[-6:]:
         proof = lesson.get("promotion", {})
         lines.append(f"- active {lesson['id']}: {lesson['text'][:170]} (fixed {len(set(lesson['fixed']))} tasks; "
-                     f"validation {proof.get('validation_before', '?')} -> {proof.get('validation_with', '?')})")
+                     f"validation {proof.get('validation_before', '?')} -> {proof.get('validation_with', '?')}"
+                     + (f", p={proof['gate'].get('p_better')}" if isinstance(proof.get("gate"), dict) else ", old rule")
+                     + ")")
     for lesson in sorted(by_status.get("candidate", []), key=lambda l: -len(l["fixed"]))[:4]:
         lines.append(f"- candidate {lesson['id']}: {lesson['text'][:140]} (fixed {len(set(lesson['fixed']))})")
     for lesson in by_status.get("retired", [])[-3:]:

@@ -51,6 +51,14 @@ ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_
                 "star_roblox_cloud_request_test"]
 # Prompt-scoped craft tools; not part of the ordered general-prompt lists below.
 CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
+# Experimental Asset Forge (star/intelligence.py ASSET_TOOLS); owner opt-in required.
+ASSET = ["star_asset_search", "star_building_plan", "star_terrain_preview"]
+# Prepared shared stores only: not in ordered general-prompt tool expectations.
+SHARED_BRAIN = ["shared_brain_query", "shared_brain_stats"]
+# Prompt-scoped design and map-plan tools, and the opt-in live Roblox docs (off unless enabled); not part
+# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating).
+DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan",
+               "star_roblox_docs_live_search", "star_roblox_docs_live_page"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
 WORKSPACE_WRITE = ["workspace_write"]
@@ -67,7 +75,7 @@ WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_tes
 SPECIALISTS = ["star_delegate_research"]
 CALCULATOR = ["star_calculate"]
 # Composer switches: research (web search) and the STAR source reader.
-WEB = ["star_web_search"]
+WEB = ["star_web_search", "star_web_fetch"]   # star_web_fetch (star/web_fetch.py) comes with search
 GITHUB = ["star_github_tree", "star_github_read"]
 
 
@@ -214,7 +222,9 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 
 
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
-    names = everything_on(desk, monkeypatch, knowledge=False)
+    # Every source on is more tool text than the default 26,000-character request budget (the web
+    # page reader, star_web_fetch, tipped it over); this test is about which tools are offered.
+    names = everything_on(desk, monkeypatch, knowledge=False, context_chars=40000)
     expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
                 + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
@@ -245,7 +255,8 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
                                              + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
-                                             + CRAFT)
+                                             + CRAFT + ASSET + SHARED_BRAIN + DESIGN_MAPS)
+    assert [tool["name"] for tool in intelligence.ASSET_TOOLS] == ASSET
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN
     assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)

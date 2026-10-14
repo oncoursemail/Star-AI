@@ -288,8 +288,110 @@ def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, p
                 del held[name]
         held[conversation] = slot
     if not prime:
+        busy = _busy_slots_now(key)
+        if slot in busy:
+            # Issue 118: another client (or a helper the server placed there) is generating in this
+            # chat's slot right now, so a request naming it would wait for that whole reply. Move the
+            # chat to the next idle slot and keep it there: its next turns find this prompt cached.
+            idle = [(slot + step) % slots for step in range(1, slots) if (slot + step) % slots not in busy]
+            if idle:
+                slot = held[conversation] = idle[0]
         table["active"] = conversation   # a real turn: this is the chat the owner is in
     return slot
+
+# Slots a model's server reported as generating, per (server, model), from `GET /slots` just before
+# a chat turn (see `look_for_busy_slots`). Read once by that turn's slot choice, then forgotten.
+_BUSY_SLOTS: dict[tuple[str, str], tuple[float, frozenset]] = {}
+_BUSY_SLOTS_FRESH_S = 5.0
+# Servers that answered `GET /slots` with "not here" (llama.cpp started with --no-slots, or not
+# llama.cpp at all): not asked again by this process.
+_NO_SLOTS_PAGE: set[str] = set()
+# Tests replace this with an httpx mock transport; None means the real network.
+_SLOT_PROBE_TRANSPORT = None
+SLOT_PROBE_TIMEOUT_S = 0.4
+
+def _busy_slots_now(key: tuple[str, str]) -> frozenset:
+    import time
+    seen = _BUSY_SLOTS.pop(key, None)
+    if not seen or time.monotonic() - seen[0] > _BUSY_SLOTS_FRESH_S:
+        return frozenset()
+    return seen[1]
+
+def _slot_probe_wanted() -> bool:
+    """`STAR_SERVER_SLOT_PROBE=off` skips the look at the server's slots before a turn. On unless set."""
+    return os.environ.get("STAR_SERVER_SLOT_PROBE", "").strip().lower() not in ("off", "0", "false", "no")
+
+def _busy_from_report(report) -> frozenset | None:
+    """Slot ids that are generating, from llama.cpp's `/slots` list; None when it is not such a list."""
+    if not isinstance(report, list):
+        return None
+    busy = set()
+    for row in report:
+        if not isinstance(row, dict) or type(row.get("id")) is not int:
+            continue
+        processing = row.get("is_processing")
+        if processing is None:                      # older llama.cpp builds: state 0 = idle
+            processing = row.get("state") not in (None, 0)
+        if processing is True:
+            busy.add(row["id"])
+    return frozenset(busy)
+
+async def look_for_busy_slots(settings, model: str = "", *, conversation: str = "") -> frozenset:
+    """Before a chat turn on STAR Server, ask the server which slots of `model` are generating.
+
+    Issue 118: two STAR clients share nothing but the server, so their chats can hash to the same
+    slot, and a turn that names a busy slot waits although another slot is free. The answer is kept
+    for a few seconds and read once by this turn's `llama_request_fields`, which then moves the chat
+    to an idle slot (and keeps it there). Only when the request would be pinned at all (STAR Server,
+    two or more slots, a conversation, pinning not switched off).
+
+    Never raises and never delays a turn by more than `SLOT_PROBE_TIMEOUT_S`: any failure (no
+    answer, an error status, an unreadable page) leaves the slot choice exactly as it was. Sends the
+    server key only to the validated server address (`connection_for`), without any system proxy.
+    Two turns sent at the very same moment can both see the slot idle; this narrows the collision to
+    the few milliseconds between the look and the request, it does not lock anything on the server.
+    `GET /slots?model=X` on a llama.cpp router asks the instance of X, the model this turn is about to use.
+    """
+    if (provider_kind(settings) != "lan" or not conversation or _server_places_every_request()
+            or not _slot_probe_wanted() or server_slots(settings, model or None) < 2):
+        return frozenset()
+    import time
+    import httpx
+    key = _instance(settings, model or None)
+    try:
+        endpoint, api_key = connection_for(settings)
+        endpoint = endpoint.rstrip("/")
+        if endpoint in _NO_SLOTS_PAGE:
+            return frozenset()
+        root = endpoint[:-len("/v1")] if endpoint.endswith("/v1") else endpoint
+        async with httpx.AsyncClient(trust_env=False, timeout=SLOT_PROBE_TIMEOUT_S,
+                                     transport=_SLOT_PROBE_TRANSPORT) as http:
+            answer = await http.get(root + "/slots", params={"model": key[1]},
+                                    headers={"Authorization": f"Bearer {api_key}"})
+        if answer.status_code in (404, 405, 501):
+            _NO_SLOTS_PAGE.add(endpoint)
+            return frozenset()
+        busy = _busy_from_report(answer.json()) if answer.status_code == 200 else None
+    except Exception:
+        return frozenset()
+    if busy is None:
+        return frozenset()
+    _BUSY_SLOTS[key] = (time.monotonic(), busy)
+    return busy
+
+async def model_slots_full(settings, model: str, *, probe=None) -> bool:
+    """True when every slot of `model` on STAR Server is generating right now (so a new request would queue).
+
+    One `look_for_busy_slots` question (<= `SLOT_PROBE_TIMEOUT_S`). False whenever it cannot tell: not STAR
+    Server, slot count unknown, probe switched off or failed. Used to keep interactive chat off a main model
+    whose slots are all held by background answers (docs/agents/chat-speed-20261013.md).
+    """
+    try:
+        busy = await (probe or look_for_busy_slots)(settings, model, conversation="interactive-busy-check")
+        slots = server_slots(settings, model or None)
+    except Exception:
+        return False
+    return bool(slots) and len(busy) >= slots
 
 def _server_places_every_request() -> bool:
     """`STAR_SERVER_SLOT_PINNING=off`: name no slot at all (see `llama_request_fields`). Off unless set."""
@@ -335,10 +437,13 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
         plain prompt of one chat share its slot; the server's RAM prompt cache
         brings back whichever was replaced (1.3-1.6 s, measured).
 
-    Known limit of the default. Two STAR clients share nothing but the server,
-    so the chats of two clients can have the same slot number (a hash, with two
-    slots: one pair in two). When both send a turn at the same moment the second
-    waits for the first one's request although another slot is free. Setting the
+    Two STAR clients share nothing but the server, so the chats of two clients
+    can have the same slot number (a hash, with two slots: one pair in two).
+    Before a chat turn the app asks the server which slots are generating
+    (`look_for_busy_slots`, issue 118); when the chat's slot is busy and another
+    is idle, the turn goes to the idle one and the chat stays there. Two turns
+    sent at the very same moment can still both see the slot idle, and then the
+    second waits for the first one's request. Setting the
     environment variable `STAR_SERVER_SLOT_PINNING=off` (read for every request,
     off unless set) removes `id_slot` from every request: the server then places
     the chat's turns too, and no client waits while a slot is free. The price:

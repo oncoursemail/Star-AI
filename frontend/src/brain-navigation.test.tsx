@@ -23,6 +23,9 @@ describe('Brain sidebar navigation',()=>{
   expect(boot.data).toBeTruthy()
   render(<Desktop initial={boot.data!}/>)
   const nav=within(screen.getByRole('navigation',{name:'Workspace'}))
+  // Brain, Model, Analytics and Library are folded under "More" so the sidebar stays about chats.
+  expect(nav.queryByRole('button',{name:'Brain'})).toBeNull()
+  await userEvent.click(nav.getByRole('button',{name:'More'}))
   const brain=nav.getByRole('button',{name:'Brain'})
   const model=nav.getByRole('button',{name:'Model'})
   expect(nav.getByRole('button',{name:'Analytics'}).nextElementSibling).toBe(brain)
@@ -45,6 +48,7 @@ describe('Brain sidebar navigation',()=>{
  })
  it('keeps preview navigation offline instead of requesting a real snapshot',async()=>{
   render(<Desktop preview/>)
+  await userEvent.click(screen.getByRole('button',{name:'More'}))
   await userEvent.click(screen.getByRole('button',{name:'Brain'}))
   expect(await screen.findByRole('region',{name:'STAR Brain overview'})).toBeTruthy()
   expect(screen.getAllByText('not set up').length).toBeGreaterThanOrEqual(6)

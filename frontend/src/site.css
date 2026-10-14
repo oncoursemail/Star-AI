@@ -106,6 +106,8 @@
 .sw-hero-facts{display:flex;flex-wrap:wrap;gap:9px 22px;margin-top:23px!important;font-size:.8125rem;color:var(--sw-faint)}
 .sw-hero-facts li{display:flex;align-items:center;gap:8px}
 .sw-hero-facts li::before{content:"";width:4px;height:4px;background:var(--sw-gold-soft);border-radius:50%}
+.sw .sw-hero-shipping{max-width:56ch;margin-top:16px;font-size:.8125rem;line-height:1.55;color:var(--sw-faint)}
+.sw .sw-hero-shipping strong{color:var(--sw-text);font-weight:600}
 .sw-hero-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,288px);gap:40px clamp(40px,6vw,96px);align-items:end}
 .sw-hero h1{max-width:11em}
 .sw-hero .sw-lede{margin-top:clamp(20px,2.4vw,30px)}
@@ -558,3 +560,47 @@
  .sw-mascot-blink-alt{opacity:0!important}
  .sw-mascot-face-card .sw-mascot-tile-art>img,.sw-mascot-face-card .sw-mascot-tile-art>.sw-mascot-fallback{transform:none!important;transition:none!important}
 }
+
+/* ---------- Redesign 2026-10-13: less "template", more product (docs/design/REDESIGN_20261013.md) ----------
+ * Monospace was used for about thirty labels, which reads as terminal-chic decoration. Mono now stays where the
+ * content really is code (paths, commit ids, file names); every label uses the text face, sentence case, no tracking.
+ * Crop marks around captures are gone: the product shot needs no frame-within-a-frame. Star's gallery is one row. */
+.sw-kicker{gap:0;margin-bottom:14px;font:500 .875rem/1.4 var(--sw-body);color:var(--sw-gold-soft);letter-spacing:0}
+.sw-kicker::before{content:none}
+.sw-showcase-head .sw-kicker{font-size:.875rem;letter-spacing:0}
+.sw-spec,.sw-tab-number,.sw-workbench-bar,.sw-tour-index,.sw-tour-points,.sw-routes-origin,.sw-route-note,.sw-status,
+.sw-scopes h3 span,.sw-ledger thead th,.sw-step-number,.sw-steps .sw-step-fact,.sw-reqs dt,.sw-sync-line,.sw-rail-flag,
+.sw-count,.sw-chip,.sw-milestones h3,.sw-activity h3,.sw-file-facts dt,.sw-hash-label,.sw-footer h2,.sw-rail-tag,.sw-row-id{
+ font-family:var(--sw-body);letter-spacing:0;font-variant-numeric:tabular-nums}
+.sw-spec{font-size:.875rem}
+.sw-tour-index{font-size:.75rem;letter-spacing:0}
+.sw-footer h2{font-weight:600;color:var(--sw-muted)}
+.sw-crop{display:none}
+.sw-eval-line{margin-top:20px}
+
+/* Star: eight faces in one row that react to the pointer, instead of eight boxed cards. */
+.sw-mascot-faces{grid-template-columns:repeat(8,minmax(0,1fr));gap:12px;margin-top:32px!important}
+.sw-mascot-face-card{padding:0;border:0;border-radius:16px;background:transparent;text-align:center;outline-offset:4px}
+.sw-mascot-face-card:hover,.sw-mascot-face-card:focus-visible{background:transparent}
+.sw-mascot-face-card .sw-mascot-tile-art{border-radius:50%;background:radial-gradient(circle at 50% 60%,rgba(232,191,118,.10),transparent 68%);transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
+.sw-mascot-face-card:hover .sw-mascot-tile-art,.sw-mascot-face-card:focus-visible .sw-mascot-tile-art{transform:translateY(-6px) rotate(-3deg)}
+.sw-mascot-faces li:nth-child(even) .sw-mascot-face-card:hover .sw-mascot-tile-art{transform:translateY(-6px) rotate(3deg)}
+.sw-mascot-face-card figcaption{justify-content:center;margin-top:8px;font-size:.8125rem;color:var(--sw-muted)}
+.sw-mascot-face-card figcaption span{display:none}
+.sw-mascot-face-card:hover figcaption,.sw-mascot-face-card:focus-visible figcaption{color:var(--sw-text)}
+
+/* Progress: the release line is for everyone; the full board opens on request. */
+.sw-progress-more{margin-top:28px;border-top:1px solid var(--sw-stroke-soft)}
+.sw-progress-more>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;padding:18px 0;cursor:pointer;list-style:none;font:600 1rem/1.4 var(--sw-body);color:var(--sw-text)}
+.sw-progress-more>summary::-webkit-details-marker{display:none}
+.sw-progress-more>summary::after{content:"";width:8px;height:8px;margin-left:auto;border-right:1.5px solid var(--sw-muted);border-bottom:1.5px solid var(--sw-muted);transform:rotate(45deg);transition:transform .2s cubic-bezier(.23,1,.32,1)}
+.sw-progress-more[open]>summary::after{transform:rotate(225deg)}
+.sw-progress-counts{font:400 .875rem/1.4 var(--sw-body);color:var(--sw-faint);font-variant-numeric:tabular-nums}
+@media (max-width:900px){.sw-mascot-faces{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){.sw-mascot-face-card .sw-mascot-tile-art{transition:none}.sw-mascot-face-card:hover .sw-mascot-tile-art{transform:none}}
+.sw-still .sw-mascot-face-card .sw-mascot-tile-art{transition:none}
+.sw-eval{margin-top:28px}
+.sw-eval>summary{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;padding:16px 0;border-top:1px solid var(--sw-stroke-soft);cursor:pointer;list-style:none}
+.sw-eval>summary::-webkit-details-marker{display:none}
+.sw-eval>summary h3{margin:0!important}
+.sw-eval>summary span{font-size:.875rem;color:var(--sw-faint)}

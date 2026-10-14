@@ -1,0 +1,22 @@
+{
+  "name": "UI UX Pro Max design data (subset)",
+  "source_repository": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+  "source_commit": "7246805992a42b7bba37d4cac83b01416f0c6c44",
+  "source_commit_date": "2026-10-12T11:08:03Z",
+  "source_directory": "src/ui-ux-pro-max/data/",
+  "license": "MIT",
+  "license_file": "LICENSE",
+  "copyright": "Copyright (c) 2024 Next Level Builder",
+  "vendored_at": "2026-10-13",
+  "vendored_by": "STAR (Claude Code session, branch star/design-roblox-tools-20261013)",
+  "modifications": "None. Files are byte-for-byte copies of the upstream files at the commit above.",
+  "not_vendored": "google-fonts.csv, google-font-licenses.json, icons.csv, phosphor-icons-upstream.json, products.csv, ui-reasoning.csv, charts.csv, landing.csv, motion.csv, stacks/, scripts/ (size, or separate upstream licences).",
+  "notes": "Font names refer to Google Fonts families (each under its own licence, mostly SIL OFL); the data only names them and links to fonts.googleapis.com. No brand-derived DESIGN.md files are included.",
+  "files": {
+    "styles.csv": {"sha256": "a93a4d9d7025856575d7b7583bda020be9043013432c5af7c58af9dbdfb206b7", "rows": 88},
+    "colors.csv": {"sha256": "8162429222bce22df62b564085946a30d07cc9722c58d0a3a494bd0d1d00841c", "rows": 192},
+    "typography.csv": {"sha256": "321fc446e89024488ebae96dda93efc4d2307bd8bddb240857ad51364f6782c8", "rows": 74},
+    "ux-guidelines.csv": {"sha256": "ff81ec613f70ba9fc3fcce52dbe4ae35d44b2079dbe6dc066d2d6e38c28facd5", "rows": 119},
+    "LICENSE": {"sha256": "738f69dfa83db5c347c678fb9d90e560877059f0de93a327c39001bff92dc014"}
+  }
+}

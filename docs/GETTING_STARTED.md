@@ -1,15 +1,38 @@
 # Getting started with STAR v0.9.0
 
-STAR v0.9.0 is a **source release candidate**, not a confirmed public Windows installer. Use [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest) to find the latest published installer. At the time of the release acceptance document, the public installer was v0.8.1. Some features below need a separate setup or real Windows test.
+**Release status (checked October 12, 2026):** STAR v0.9.0 was published on October 11, 2026 with a Windows Setup installer, portable ZIP and SHA-256 manifest. Use [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest) to check the latest published installer. This guide describes the v0.9.0 release; newer source-branch features may not be in that installer. Hardware and Roblox workflows still require their own verification.
 
 ## 1. Install or upgrade from v0.8
 
 1. Download the Windows Setup from [GitHub Releases](https://github.com/oncoursemail/Star-AI/releases/latest). Do not treat a branch build or pull request as a published installer.
 2. Before upgrading, close STAR and copy `%APPDATA%\STAR` somewhere safe.
-3. When a v0.9.0 Setup has actually been released, install it over the older version. Do not delete your data folder.
+3. Install the published v0.9.0 Setup over the older version. Do not delete your data folder.
 4. Open STAR and check old conversations, references, projects, settings and downloaded models.
 
-The installer is designed to preserve `%APPDATA%\STAR`, including conversations, references, model files and settings. Migration of single-stream chat history into threads is designed to keep old user messages. A real v0.8-to-v0.9.0 upgrade on the user's Windows profile is **not confirmed**. The old desktop interface can be launched with `STAR.exe --legacy-ui` where that executable is installed.
+The installer is designed to preserve `%APPDATA%\STAR`, including conversations, references, model files and settings. Migration of single-stream chat history into threads is designed to keep old user messages. The [published v0.9.0 release notes](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0), dated October 11, 2026, report one real v0.8.0-to-v0.9.0 upgrade on Windows 11 with unchanged personal-file hashes and no lost chat database rows or columns. That is a reported one-machine acceptance run, **not** verification of every Windows profile, v0.8.1 upgrade or GPU. The old desktop interface can be launched with `STAR.exe --legacy-ui` where that executable is installed.
+
+### Administrator rights on Windows
+
+Setup defaults to installing STAR **just for your Windows account (per-user)**, with **no administrator rights required** for installation or upgrades. You may instead choose **all users** in the installer dialog; this needs administrator approval. If STAR was already installed for all users, a newer Setup upgrades that shared installation in the same mode, and Windows asks for administrator approval **on every upgrade**. That prompt is expected. Do not disable Windows UAC to avoid it. When you install an update from inside STAR, the update progress line says so before Setup starts if the running copy is an all-users installation. STAR finds this out by reading its own Windows uninstall entry, without changing it.
+
+Why the prompt cannot be removed: an all-users copy lives in a machine-wide folder and is registered for the whole machine, and only an administrator may change either one. Setup therefore upgrades it in the same administrative mode (Inno Setup's `UsePreviousPrivileges`). Choosing per-user instead would leave the all-users copy in place and install a second copy beside it. To stop the prompts for good, uninstall the all-users copy (Windows asks for approval one last time) and install STAR again with the default per-user choice. Your chats, models and settings in `%APPDATA%\STAR` are not part of the installation folder and stay where they are.
+
+To tell which kind of installation you have, open **Windows PowerShell** (no administrator rights needed) and run this **read-only** check:
+
+```powershell
+$scopes = @(
+  @{ Scope = 'Per-user'; Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' },
+  @{ Scope = 'All-users'; Path = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*' },
+  @{ Scope = 'All-users'; Path = 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' }
+)
+foreach ($scope in $scopes) {
+  Get-ItemProperty -Path $scope.Path -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -eq 'STAR Intelligence' } |
+    ForEach-Object { [pscustomobject]@{ 'Install type' = $scope.Scope; 'Install folder' = $_.InstallLocation } }
+}
+```
+
+**Per-user** means the uninstall entry belongs to your Windows account (`HKEY_CURRENT_USER`); **all-users** means it is registered for the machine (`HKEY_LOCAL_MACHINE`). If both appear, more than one install may be registered: confirm which copy you intend to upgrade. If neither appears, you may be running the portable ZIP or STAR may be installed under a different Windows account.
 
 ## 2. Choose a brain: STAR Server or this PC
 
@@ -28,7 +51,7 @@ Choose a mode in the **Chat** composer.
 - **Auto:** STAR chooses a route based on the request. This is the initial chat mode.
 - **Agent:** STAR plans steps, uses permitted tools and checks the result. It may take longer. Permissions still apply.
 
-The chat **+** menu also offers **Use a team**: four read-only reasoning stages, with text-only input, on your own hardware. It does not give Studio write access.
+The chat **+** menu also offers **Use a team**: four read-only reasoning stages, with text-only input. The model runs on your selected local PC or STAR Server; this does not give Studio write access. **Search the web** is a separate, off-by-default switch. When Team and Web are both on, STAR sends a bounded portion of your objective and derived search queries to your configured Brave/Tavily search provider; snippets and citations return to the locally or LAN-run model. Leave Web off to keep a Team run local-only.
 
 ## 4. Ask Roblox questions
 

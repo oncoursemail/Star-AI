@@ -4,5 +4,10 @@
 # Node scripts imported by the vitest suite carry a shebang; with CRLF the shebang line fails to parse there.
 *.mjs text eol=lf
 
+# Frozen source and evidence fixtures must not depend on Windows checkout settings.
+tests/fixtures/shared_brain_retrieval.json text eol=lf
+tests/fixtures/shared_brain_runtime_source_validation.json text eol=lf
+tests/fixtures/shared_brain_sources/**/*.py text eol=lf
+
 # Shell scripts run under bash (Git Bash on Windows, Linux servers): a CR at the end of a line breaks them.
 *.sh text eol=lf

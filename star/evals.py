@@ -55,9 +55,12 @@ def summarize_verdicts(cases: list[Case], verdicts: dict[str, str]) -> dict:
 
 
 def main(argv=None) -> int:
-    """`python -m star.evals run|selftest|list|gate ...` (see star/eval_runner.py and star/eval_gate.py)."""
+    """`python -m star.evals run|selftest|list|gate|ledger ...` (see star/eval_runner.py and star/eval_gate.py)."""
     import sys
     args = list(sys.argv[1:] if argv is None else argv)
+    if args and args[0] == "ledger":
+        from .failure_ledger import main as ledger_main
+        return ledger_main(args[1:])
     if args and args[0] == "gate":
         from .eval_gate import main as gate_main
         return gate_main(args[1:])

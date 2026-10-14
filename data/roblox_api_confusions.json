@@ -1,0 +1,482 @@
+[
+  {
+    "wrong": ":FindChild(",
+    "right": ":FindFirstChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindFirstChildren(",
+    "right": ":FindFirstChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindFirstChilds(",
+    "right": ":FindFirstChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindTheFirstChild(",
+    "right": ":FindFirstChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindChildOfClass(",
+    "right": ":FindFirstChildOfClass(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindFirstChildClass(",
+    "right": ":FindFirstChildOfClass(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindFirstChildrenOfClass(",
+    "right": ":FindFirstChildOfClass(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":FindFirstChildsOfClass(",
+    "right": ":FindFirstChildOfClass(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetChild(",
+    "right": ":GetChildren(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetAllChildren(",
+    "right": ":GetChildren(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetChildrens(",
+    "right": ":GetChildren(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetAllChild(",
+    "right": ":GetChildren(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetDescendant(",
+    "right": ":GetDescendants(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetAllDescendants(",
+    "right": ":GetDescendants(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetDescendents(",
+    "right": ":GetDescendants(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetAllDescendents(",
+    "right": ":GetDescendants(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":WaitChild(",
+    "right": ":WaitForChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":WaitForChildren(",
+    "right": ":WaitForChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":WaitForChilds(",
+    "right": ":WaitForChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":WaitUntilChild(",
+    "right": ":WaitForChild(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsClass(",
+    "right": ":IsA(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsType(",
+    "right": ":IsA(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsInstanceOf(",
+    "right": ":IsA(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsAClass(",
+    "right": ":IsA(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsDescendant(",
+    "right": ":IsDescendantOf(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsChildOf(",
+    "right": ":IsDescendantOf(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsDescendentOf(",
+    "right": ":IsDescendantOf(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":IsDescendantsOf(",
+    "right": ":IsDescendantOf(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":Copy(",
+    "right": ":Clone(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":Duplicate(",
+    "right": ":Clone(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":CloneInstance(",
+    "right": ":Clone(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":Clones(",
+    "right": ":Clone(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Instance"
+  },
+  {
+    "wrong": ":GetAllPlayers(",
+    "right": ":GetPlayers(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetPlayerList(",
+    "right": ":GetPlayers(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetConnectedPlayers(",
+    "right": ":GetPlayers(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetPlayersList(",
+    "right": ":GetPlayers(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetPlayerByCharacter(",
+    "right": ":GetPlayerFromCharacter(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetCharacterPlayer(",
+    "right": ":GetPlayerFromCharacter(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetPlayerForCharacter(",
+    "right": ":GetPlayerFromCharacter(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":GetPlayerFromChar(",
+    "right": ":GetPlayerFromCharacter(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Players"
+  },
+  {
+    "wrong": ":MoveToPosition(",
+    "right": ":MoveTo(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":MoveTowards(",
+    "right": ":MoveTo(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":MoveToTarget(",
+    "right": ":MoveTo(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":MoveToPoint(",
+    "right": ":MoveTo(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":ApplyDamage(",
+    "right": ":TakeDamage(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":DealDamage(",
+    "right": ":TakeDamage(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":InflictDamage(",
+    "right": ":TakeDamage(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":TakeDammage(",
+    "right": ":TakeDamage(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":SetState(",
+    "right": ":ChangeState(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":ChangeHumanoidState(",
+    "right": ":ChangeState(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":SetHumanoidState(",
+    "right": ":ChangeState(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":SwitchState(",
+    "right": ":ChangeState(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+  },
+  {
+    "wrong": ":SendServer(",
+    "right": ":FireServer(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":SendToServer(",
+    "right": ":FireServer(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireToServer(",
+    "right": ":FireServer(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireOnServer(",
+    "right": ":FireServer(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":SendClient(",
+    "right": ":FireClient(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireToClient(",
+    "right": ":FireClient(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":EmitClient(",
+    "right": ":FireClient(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireOneClient(",
+    "right": ":FireClient(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":BroadcastClients(",
+    "right": ":FireAllClients(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireClients(",
+    "right": ":FireAllClients(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":SendAllClients(",
+    "right": ":FireAllClients(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":FireToAllClients(",
+    "right": ":FireAllClients(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/RemoteEvent"
+  },
+  {
+    "wrong": ":UpdateDataAsync(",
+    "right": ":UpdateAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":UpdateKeyAsync(",
+    "right": ":UpdateAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":UpdateDataStoreAsync(",
+    "right": ":UpdateAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":UpdateAsyncData(",
+    "right": ":UpdateAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":FetchAsync(",
+    "right": ":GetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":ReadDataAsync(",
+    "right": ":GetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":GetDataAsync(",
+    "right": ":GetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":GetKeyAsync(",
+    "right": ":GetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":WriteDataAsync(",
+    "right": ":SetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":SaveDataAsync(",
+    "right": ":SetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":SetDataAsync(",
+    "right": ":SetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":SetKeyAsync(",
+    "right": ":SetAsync(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/GlobalDataStore"
+  },
+  {
+    "wrong": ":CastRay(",
+    "right": ":Raycast(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/WorldRoot"
+  },
+  {
+    "wrong": ":RayCast(",
+    "right": ":Raycast(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/WorldRoot"
+  },
+  {
+    "wrong": ":PerformRaycast(",
+    "right": ":Raycast(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/WorldRoot"
+  },
+  {
+    "wrong": ":RaycastFrom(",
+    "right": ":Raycast(",
+    "kind": "method",
+    "source_url": "https://create.roblox.com/docs/reference/engine/classes/WorldRoot"
+  }
+]

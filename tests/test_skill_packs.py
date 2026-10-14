@@ -9,7 +9,7 @@ from star import desktop_core, doc_grounding, skill_packs
 from star.agent_skills import SkillLibrary
 from star.desktop_core import Settings, run_task
 
-NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
+NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-physics-and-input", "godot-ui-and-themes", "roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "roblox-animation-tools", "roblox-performance-streaming",
          "roblox-animation-craft", "roblox-vfx", "roblox-building-layout", "roblox-ui-styles",
          "roblox-environment-art",
@@ -17,8 +17,12 @@ NAMES = ["roblox-ui-layout", "roblox-secure-remotes", "roblox-datastore-safety",
          "game-inventory", "game-npc-quests",
          "eng-debugging", "eng-test-first", "eng-verify-before-done", "roblox-game-math",
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
-         "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games"]
+         "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
+         "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
+         "roblox-tweenservice-easing"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
+CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
+                      "roblox-tweenservice-easing"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
 
@@ -43,11 +47,14 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
         # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
-        if pack.name in ENGINEERING or pack.name.startswith("design-"):
+        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS:
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
-        assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
-        assert "verified with the knowledge service /api-lookup" in sources, pack.name
+        if pack.name in skill_packs.GODOT_PACKS:
+            assert sources.count("https://docs.godotengine.org/en/stable/") >= 5, pack.name
+        else:
+            assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
+            assert "verified with the knowledge service /api-lookup" in sources, pack.name
         assert "http://" not in sources and "10.17" not in sources
 
 
@@ -231,3 +238,84 @@ def test_new_game_packs_are_registered_but_switched_off_pending_evaluation():
 def test_new_game_pack_routing_requires_explicit_opt_in(name, prompt):
     assert skill_packs.matching_names(prompt) == [] or name not in skill_packs.matching_names(prompt)
     assert skill_packs.matching_names(prompt, enabled={name}) == [name]
+
+
+@pytest.mark.parametrize(("name", "prompt"), (
+    ("roblox-datastore-service-patterns",
+     "In Roblox Studio, implement DataStoreService UpdateAsync with StandardRead budgets."),
+    ("roblox-remote-event-function-patterns",
+     "In Roblox Studio, implement RemoteFunction OnServerInvoke with per-player validation."),
+    ("roblox-tweenservice-easing",
+     "In Roblox Studio, implement TweenService with TweenInfo and EasingDirection."),
+))
+def test_run_task_delivers_service_pack_only_when_enabled(monkeypatch, tmp_path, name, prompt):
+    monkeypatch.setenv(skill_packs.ENV_VAR, name)
+    messages, text, events = run_turn(monkeypatch, tmp_path, prompt)
+    assert text.startswith(prompt) and "## Three correct Luau examples" in text
+    injected = [e for e in events if e["event"] == "skill_packs"]
+    assert len(injected) == 1 and injected[0]["names"] == [name]
+    assert "## Three correct Luau examples" not in messages[0]["content"]
+
+    monkeypatch.setenv(skill_packs.ENV_VAR, "off")
+    off_messages, off_text, off_events = run_turn(monkeypatch, tmp_path, prompt)
+    assert skill_packs.BLOCK_HEADING not in off_text
+    assert not any(e["event"] == "skill_packs" for e in off_events)
+    assert messages[0] == off_messages[0]
+
+
+@pytest.mark.parametrize(("name", "prompt"), (
+    ("godot-scenes-and-nodes", "In Godot 4 how do I instantiate a PackedScene and add_child?"),
+    ("godot-gdscript-typing-and-signals", "In Godot 4 GDScript how do typed signals connect?"),
+    ("godot-physics-and-input", "In Godot 4 CharacterBody2D how do physics and move_and_slide work?"),
+    ("godot-ui-and-themes", "In Godot 4 how do Control UI themes and anchors work?"),
+))
+def test_godot_packs_are_off_and_route_only_after_opt_in(name, prompt):
+    assert name not in skill_packs.DEFAULT_ENABLED
+    assert name not in skill_packs.enabled_names({})
+    assert skill_packs.matching_names(prompt) == []
+    assert skill_packs.matching_names(prompt, enabled={name}) == [name]
+    assert skill_packs.matching_names("In Roblox Studio how do I build an inventory UI?", enabled={name}) == []
+
+
+def test_debugging_strict_luau_pack_is_opt_in_bounded_and_source_backed(monkeypatch, tmp_path):
+    from urllib.parse import urlparse
+    from re import findall
+
+    name = "eng-debugging"
+    pack = next(p for p in skill_packs.available() if p.name == name)
+    assert name not in skill_packs.DEFAULT_ENABLED
+    assert len(pack.body) <= skill_packs.MAX_BODY_CHARS
+    assert "Unknown type NPC" in pack.body and "type NPC = Model" in pack.body
+    rows = findall(r"^\| (\d+) \| \x60(.+?)\x60.*?\| \x60(.+?)\x60 \| ([S\d,]+) \|$",
+                   pack.body, flags=__import__("re").MULTILINE)
+    assert [int(number) for number, _, _, _ in rows] == list(range(1, 13))
+    assert all(wrong != correct and wrong and correct for _, wrong, correct, _ in rows)
+    source_text = (pack.file.parent / "references" / "type_sources.md").read_text(encoding="utf-8")
+    import re
+    ids = set(re.findall(r"^- (S\d+) — ", source_text, re.MULTILINE))
+    assert ids == {f"S{i}" for i in range(1, 7)}
+    assert all(set(re.findall(r"S\d+", sources)) <= ids for _, _, _, sources in rows)
+    links = re.findall(r"https://[^\s)]+", source_text)
+    assert len(links) == 6
+    assert all(urlparse(url).hostname in {"luau.org", "create.roblox.com"} for url in links)
+
+    library = SkillLibrary(workspace=None, home=tmp_path, bundled=skill_packs.PACKS_DIR)
+    loaded = library.load(name)
+    assert loaded["instructions"].strip() == pack.body
+    assert "references/type_sources.md" in loaded["references"]
+    assert len(skill_packs.render([pack])) <= skill_packs.MAX_BLOCK_CHARS
+
+    prompt = "In Roblox Studio debug the Unknown type NPC error in my Luau model"
+    monkeypatch.delenv(skill_packs.ENV_VAR, raising=False)
+    assert skill_packs.matching_names(prompt) == []
+    monkeypatch.setenv(skill_packs.ENV_VAR, name)
+    assert skill_packs.matching_names(prompt) == [name]
+    _, actual, events = run_turn(monkeypatch, tmp_path, prompt)
+    assert actual.startswith(prompt) and "Unknown type NPC" in actual
+    assert any(event["event"] == "skill_packs" and event["names"] == [name] for event in events)
+    assert skill_packs.matching_names("Please debug my Python CLI exception", enabled={name}) == []
+    assert skill_packs.matching_names("In Roblox Studio, build an unrelated lobby", enabled={name}) == []
+    monkeypatch.setenv(skill_packs.ENV_VAR, "off")
+    _, actual_off, off_events = run_turn(monkeypatch, tmp_path, prompt)
+    assert "Twelve paired diagnostics" not in actual_off
+    assert not any(event["event"] == "skill_packs" for event in off_events)

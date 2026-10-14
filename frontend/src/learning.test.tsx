@@ -238,6 +238,36 @@ describe('reviewing lessons', () => {
     expect(host.sent('reviewLesson')[1].params).toEqual({op: 'reject', id: 1, approved: true})
   })
 
+  it('shows STAR practice provenance and offers the opt-in bundle switch', async () => {
+    const host = lessonHost([lesson({id: 23, kind: 'correction', source_type: 'practice',
+      source: 'night-school:ns-a', text: 'Check RemoteEvent arguments on the server.', status: 'candidate',
+      origin: 'Imported from STAR practice (awaiting your review)'})])
+    const {user, refresh} = open(host, {practice_lessons_enabled: false})
+    expect(await screen.findByText('Check RemoteEvent arguments on the server.')).toBeTruthy()
+    expect(screen.getByText(/1 lesson has been imported from STAR’s own practice/)).toBeTruthy()
+    expect(screen.getByText(/python -m star.lessons import lessons.json/)).toBeTruthy()
+    const enabled = screen.getByRole('checkbox', {name: /Import bundled STAR practice lessons/i}) as HTMLInputElement
+    expect(enabled.checked).toBe(false)
+    await user.click(enabled)
+    await waitFor(() => expect(host.sent('saveSettings')).toHaveLength(1))
+    expect(host.sent('saveSettings')[0].params).toEqual({settings: {practice_lessons_enabled: true}})
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('renders the lesson provenance from the fake desktop bridge on Projects', async () => {
+    const found = [lesson({id: 9, kind: 'correction', status: 'candidate', source_type: 'practice',
+      source: 'night-school:ns-b', text: 'Use WaitForChild for replicated client instances.',
+      origin: 'Imported from STAR practice (awaiting your review)'})]
+    desktop.onAction('listLessons', () => ({ok: true, data: {
+      lessons: found, counts: {...counted(found), practice: 1}
+    }}))
+    render(<App/>)
+    await screen.findByRole('textbox', {name: /message star/i})
+    await userEvent.setup().click(screen.getByRole('button', {name: /projects/i}))
+    expect(await screen.findByText(/1 lesson has been imported from STAR’s own practice/)).toBeTruthy()
+    expect(screen.getByText('Use WaitForChild for replicated client instances.')).toBeTruthy()
+  })
+
   it('saves the review-everything choice at once and exports on request', async () => {
     const host = lessonHost(stored())
     const {user, refresh} = open(host)
