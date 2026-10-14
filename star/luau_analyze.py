@@ -151,6 +151,7 @@ def analyze_evidence(source: str, *, tools_root: Path | None = None) -> Analyzer
     if result.stdout.strip():
         return AnalyzerEvidence("malformed")
     diagnostic_rows = 0
+    error_rows = 0
     suppressed = 0
     max_line = source.count("\n") + 1
     for line in output.splitlines():
@@ -162,6 +163,7 @@ def analyze_evidence(source: str, *, tools_root: Path | None = None) -> Analyzer
                 or int(match["column"]) < 1):
             return AnalyzerEvidence("malformed")
         diagnostic_rows += 1
+        error_rows += match["kind"] in {"SyntaxError", "TypeError"}
         symbol = _UNKNOWN_SYMBOL.match(match["message"])
         if (match["kind"] == "TypeError" and symbol
                 and symbol["name"] in _ROBLOX_SYMBOLS):
@@ -170,7 +172,13 @@ def analyze_evidence(source: str, *, tools_root: Path | None = None) -> Analyzer
         # The existing parser caps output; never disguise incomplete results.
         return AnalyzerEvidence("truncated", tuple(parse_diagnostics(output)), suppressed)
     if result.returncode == 0:
-        return AnalyzerEvidence("malformed") if diagnostic_rows else AnalyzerEvidence("checked")
+        # luau-analyze prints lint warnings (e.g. LocalUnused) and still exits 0;
+        # only syntax/type errors with a zero exit are inconsistent evidence.
+        if error_rows:
+            return AnalyzerEvidence("malformed")
+        if not diagnostic_rows:
+            return AnalyzerEvidence("checked")
+        return AnalyzerEvidence("diagnostics", tuple(parse_diagnostics(output)), suppressed)
     if not diagnostic_rows:
         return AnalyzerEvidence("malformed")
     findings = tuple(parse_diagnostics(output))

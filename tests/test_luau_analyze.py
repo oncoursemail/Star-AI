@@ -171,3 +171,19 @@ def test_large_source_rejected_without_tool_lookup(monkeypatch):
                         lambda _: (_ for _ in ()).throw(AssertionError("too large")))
     with pytest.warns(RuntimeWarning, match="oversized"):
         assert luau_analyze.analyze("x" * 20_001) == []
+
+
+def test_lint_warnings_with_exit_zero_are_findings_not_malformed(monkeypatch):
+    # luau-analyze reports lint warnings but exits 0 when there are no errors.
+    fake_analyzer(monkeypatch, status=0, stderr=(
+        "star-check.luau(2,7): LocalUnused: Variable 'points' is never used\n"))
+    evidence = luau_analyze.analyze_evidence(CODE)
+    assert evidence.status == "diagnostics"
+    assert [f.rule_id for f in evidence.findings] == ["luau-analyze-localunused"]
+    assert evidence.findings[0].severity == "review"
+    assert [f.rule_id for f in luau_analyze.analyze(CODE)] == ["luau-analyze-localunused"]
+
+
+def test_error_rows_with_exit_zero_stay_malformed(monkeypatch):
+    fake_analyzer(monkeypatch, status=0, stderr="star-check.luau(1,1): SyntaxError: bad\n")
+    assert luau_analyze.analyze_evidence(CODE).status == "malformed"
