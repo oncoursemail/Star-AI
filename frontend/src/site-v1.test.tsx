@@ -8,7 +8,9 @@ import {Landing} from './Landing'
 import {SiteDownload} from './SiteDownload'
 import {SiteFeatures} from './SiteFeatures'
 import media from './siteMedia.json'
-import {LINKS,brainCounts,evaluation,featureGroups,learnSteps,limits,releaseFiles} from './siteContent'
+import {LINKS,PUBLISHED_FLOOR,brainCounts,currentRelease,evaluation,featureGroups,learnSteps,limits,releaseFiles} from './siteContent'
+import {compareVersions,latestStable} from './githubPublic'
+import {builtSnapshot} from './siteHooks'
 import type {ReleaseInfo} from './githubPublic'
 
 afterEach(()=>cleanup())
@@ -128,6 +130,32 @@ describe('site navigation, assets and accessibility',()=>{
   expect(css).toContain('.sw-skip:focus')
   expect(css).toContain('@media (prefers-reduced-motion:reduce)')
   expect(html).toContain('aria-label="Main"')
+ })
+})
+
+describe('the release the page names',()=>{
+ const snapshot=latestStable(builtSnapshot)
+ it('never names a release older than the newest one known to be published',()=>{
+  // README names the previous published release; the floor and the committed snapshot must not be behind it.
+  const previous=readFileSync(resolve(process.cwd(),'..','README.md'),'utf8').match(/The previous\s+(?:>\s*)?release, v(\d+\.\d+\.\d+)/)?.[1]
+  expect(previous).toBeTruthy()
+  expect(compareVersions(PUBLISHED_FLOOR,previous!)).toBeGreaterThanOrEqual(0)
+  expect(snapshot,'committed release snapshot').not.toBeNull()
+  expect(compareVersions(snapshot!.tag,PUBLISHED_FLOOR),'refresh src/progress.json: STAR_REFRESH_PROGRESS=1 node scripts/build-progress.mjs --pages-only').toBeGreaterThanOrEqual(0)
+ })
+ it('drops a stale snapshot instead of naming it, and prefers GitHub\'s live answer',()=>{
+  expect(currentRelease(null,release('v0.8.1'))).toBeNull()
+  expect(currentRelease(null,release('v'+PUBLISHED_FLOOR))?.tag).toBe('v'+PUBLISHED_FLOOR)
+  expect(currentRelease(release('v1.0.0'),release('v0.8.1'))?.tag).toBe('v1.0.0')
+ })
+ it('shows the snapshot release in the prerendered hero and download, not an older one',()=>{
+  const hero=page.querySelector('.sw-hero-meta')?.textContent||''
+  expect(hero).toContain(snapshot!.tag)
+  for(const stale of ['v0.8.0','v0.8.1'])expect(hero).not.toContain(stale)
+  // The updating note may mention the tested v0.8.0 to v0.9.0 upgrade; the offered download must not be older.
+  const download=page.querySelector('#download')?.textContent||''
+  expect(download).not.toMatch(/Setup v0\.8|STAR-Setup-v0\.8/)
+  expect(download).toContain('Download Setup '+snapshot!.tag)
  })
 })
 

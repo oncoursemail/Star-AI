@@ -11,7 +11,7 @@ import {SiteLearning} from './SiteLearning'
 import {SiteBrain} from './SiteBrain'
 import {SiteHonest} from './SiteHonest'
 import {SiteDownload} from './SiteDownload'
-import {LINKS,SOURCE_VERSION,formatDate,releaseFiles} from './siteContent'
+import {LINKS,SOURCE_VERSION,currentRelease,formatDate,releaseFiles} from './siteContent'
 import {compareVersions,fetchLatestStableRelease,latestStable} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 import {builtSnapshot,delay,staticMode,useActiveSection,useHeaderState,useReveal} from './siteHooks'
@@ -37,7 +37,7 @@ export function Landing(){
   fetchLatestStableRelease(controller.signal).then(release=>{if(release)setLiveRelease(release)}).catch(()=>undefined)
   return ()=>controller.abort()
  },[])
- const latest=useMemo(()=>liveRelease||latestStable(builtSnapshot),[liveRelease])
+ const latest=useMemo(()=>currentRelease(liveRelease,latestStable(builtSnapshot)),[liveRelease])
  const files=useMemo(()=>releaseFiles(latest),[latest])
  const header=useHeaderState(menu)
  const active=useActiveSection(sectionIds)

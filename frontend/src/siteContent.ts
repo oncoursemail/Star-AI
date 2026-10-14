@@ -7,7 +7,7 @@
  * "Coming soon" items are open pull requests; they are never shown as available.
  */
 import pkg from '../package.json'
-import {REPO_URL,availability} from './githubPublic'
+import {REPO_URL,availability,compareVersions} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 
 /** Version of the source this site was built from. It can be ahead of the latest published release. */
@@ -37,6 +37,20 @@ export const LINKS={
  media:doc('docs/STAR_MEDIA.md'),
  acceptance:REPO_URL+'/issues/15',
 } as const
+
+/**
+ * The newest release known to be published when this source was written (README: "The previous release, v0.9.0").
+ * The build-time snapshot is refreshed by the website deployment, but if that refresh fails the committed copy can be
+ * days old; a snapshot older than this floor is stale and is never named on the page. Raise it with every release.
+ */
+export const PUBLISHED_FLOOR='0.9.0'
+
+/** The release the page may name: GitHub's live answer, else the build snapshot if it is not older than the floor. */
+export function currentRelease(live:ReleaseInfo|null,snapshot:ReleaseInfo|null):ReleaseInfo|null{
+ if(live)return live
+ if(snapshot&&compareVersions(snapshot.tag,PUBLISHED_FLOOR)>=0)return snapshot
+ return null
+}
 
 /** Only label capabilities as shipped when a stable published release confirms them. */
 export function modelLabelForRelease(latest:ReleaseInfo|null):string{
