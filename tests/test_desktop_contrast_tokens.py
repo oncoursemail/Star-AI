@@ -154,6 +154,17 @@ def test_source_palette_is_not_duplicated_and_has_one_shipped_dark_scheme():
     assert _ratio(next(p for p in PAIRS if p.name == "composer-focus"), tokens) >= 3
 
 
+def test_composer_focus_edge_differs_from_its_resting_edge():
+    """The composer hides the text-field ring and shows focus only on its edge (desktop-styles.test.ts),
+    so the focused edge must stay clearly brighter than the resting control border, not the same colour."""
+    tokens = _token_values(TOKEN_FILE.read_text(encoding="utf-8"))
+    assert "var(--star-stroke-control)" in _rule("chat.css", ".cmp")["border"]
+    assert "var(--star-stroke-focus)" in _rule("chat.css", ".cmp:focus-within")["border-color"]
+    rest, focus = tokens["--star-stroke-control"], tokens["--star-stroke-focus"]
+    assert rest.lower() != focus.lower()
+    assert contrast_ratio(focus, rest) >= 2.0, f"focus edge only {contrast_ratio(focus, rest):.2f}:1 against rest"
+
+
 def test_contrast_gate_fails_on_mutated_source_token():
     tokens = _token_values(TOKEN_FILE.read_text(encoding="utf-8"))
     healthy = next(p for p in PAIRS if p.name == "preview-ribbon")

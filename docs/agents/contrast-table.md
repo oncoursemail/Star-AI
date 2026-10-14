@@ -69,8 +69,8 @@ Failures were interactive control boundaries / focus, not default text.
 | composer-border (`chat.css`) | border | `--star-stroke-control` | `--star-surface-2` | 3.0 | 1.24 | 3.56 |
 | correction-border (`chat.css`) | border | `--star-stroke-control` | `--star-surface-1` | 3.0 | 1.33 | 3.82 |
 | jump-border (`chat.css`) | border | `--star-stroke-control` | `--star-surface-3` | 3.0 | 1.45 | 3.21 |
-| composer-focus (`chat.css`) | focus | `--star-stroke-focus` | `--star-surface-2` | 3.0 | 2.70 | 3.56 |
-| menu-focus (`redesign.css`) | focus | `--star-stroke-focus` | `--star-surface-3` | 3.0 | 2.43 | 3.21 |
+| composer-focus (`chat.css`) | focus | `--star-stroke-focus` | `--star-surface-2` | 3.0 | 2.70 | 7.63 |
+| menu-focus (`redesign.css`) | focus | `--star-stroke-focus` | `--star-surface-3` | 3.0 | 2.43 | 6.86 |
 | rename-gold-line (`redesign.css`) | border | `--star-gold-line` | `--star-surface-2` | 3.0 | 3.04 | 3.04 |
 
 ## Minimal corrective changes
@@ -79,8 +79,11 @@ Failures were interactive control boundaries / focus, not default text.
   control borders now use it instead of dim decorative strokes
   (`--star-stroke` / `--star-stroke-strong`). Existing dividers
   and brand colours are unchanged.
-- Lightened `--star-stroke-focus` from `#59616a` to `#6b747d`
-  for the compositor border and menu focus affordance (see before/after rows).
+- Lightened `--star-stroke-focus` from `#59616a` to `#a7afb7`
+  for the composer border and menu focus affordance (see before/after rows).
+  It must stay brighter than `--star-stroke-control` (2.14:1 against it): the
+  composer's resting edge now uses the control stroke, and its focus is shown
+  only by the edge colour, so equal tokens would hide focus entirely.
 - The `--star-faint` text on the raised third surface still clears
   4.5:1 (smallest text margin); no unnecessary palette change.
 - Color-only contrast does not establish keyboard accessibility, icon
