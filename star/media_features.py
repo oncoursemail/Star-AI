@@ -1,8 +1,10 @@
 """Optional offline media integrations; costly models are loaded only when requested."""
 from __future__ import annotations
 from pathlib import Path
+import json
 import shutil
 import subprocess
+import tempfile
 
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi'}
 AUDIO_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.aac'}
