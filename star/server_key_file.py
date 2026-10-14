@@ -19,9 +19,9 @@ def key_file_status(home: Path | None = None) -> dict:
     return {'found': path.is_file() and not path.is_symlink()}
 
 
-def read_key_file(home: Path | None = None) -> str:
-    """The key in the key file, for the caller's memory only. Never print or log the result."""
-    path = _key_file(home)
+def read_key_file(home: Path | None = None, *, path: Path | None = None) -> str:
+    """The key in the key file (or in `path`), for the caller's memory only. Never print or log the result."""
+    path = path or _key_file(home)
     try:
         if path.is_symlink() or not path.is_file():
             raise OSError('not a regular file')

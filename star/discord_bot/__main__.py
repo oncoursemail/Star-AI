@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from .bot import BotConfig, create_bot
-from .local_config import config_dir, ensure_settings_file, load_merged_env
+from .local_config import SERVER_MARKER, bot_host, config_dir, ensure_settings_file, load_merged_env
 
 EXIT_CONFIG, EXIT_MISSING_LIBRARY, EXIT_ALREADY_RUNNING = 2, 3, 4
 LOG_BYTES, LOG_BACKUPS = 1_000_000, 3
@@ -87,8 +87,9 @@ def _fail(message: str, code: int) -> int:
     return code
 
 
-def _server_key_fallback() -> None:
-    """Use ~/.star/server_api_key when neither the environment nor the keyring holds the brain key.
+def _server_key_fallback(folder: Path) -> None:
+    """Use server_api_key in the bot's settings folder (~/.star on the PC, STAR_DISCORD_CONFIG_DIR on a
+    server) when neither the environment nor the keyring holds the brain key.
 
     The key stays in this process's memory; it is not printed or logged.
     """
@@ -97,7 +98,7 @@ def _server_key_fallback() -> None:
         if get_api_key(STAR_SERVER):
             return
         from ..server_key_file import read_key_file
-        os.environ["STAR_SERVER_API_KEY"] = read_key_file()
+        os.environ["STAR_SERVER_API_KEY"] = read_key_file(path=folder / "server_api_key")
     except Exception:
         return  # no key file: the bot still starts and says so when a model answer needs it
 
@@ -136,13 +137,17 @@ def _run(config: BotConfig, env: dict) -> int:
     from .instance_lock import InstanceLock
     from .runtime_status import StatusReporter
     folder = config_dir(env)
+    if bot_host(env) == "pc" and (folder / SERVER_MARKER).is_file():
+        return _fail(f"STAR's Discord bot runs on a STAR server now ({SERVER_MARKER} is in {folder}); not "
+                     "starting a second copy on this PC. To move it back: stop the server copy, delete that file "
+                     "(docs/STAR_DISCORD_SETUP.md, 'Run it on a STAR server').", EXIT_CONFIG)
     lock = InstanceLock(folder)
     if not lock.acquire():
         return _fail("Another STAR Discord bot is already running for this account; not starting a second one.",
                      EXIT_ALREADY_RUNNING)
     status = StatusReporter(folder)
     try:
-        _server_key_fallback()
+        _server_key_fallback(folder)
         status.write("starting")
         create_bot(config, reporter=status).run(config.token, log_handler=None)
         return 0

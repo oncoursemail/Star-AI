@@ -44,9 +44,25 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
     "STAR_DISCORD_PRESENCE", "STAR_DISCORD_PRESENCE_MINUTES",
     "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
+    "STAR_DISCORD_HOST",
 })
 # The token may only come from the secret file or the process environment.
 _SECRET_KEYS = frozenset({"STAR_DISCORD_BOT_TOKEN"})
+
+
+# Where the bot runs. 'server': a STAR server (server/discord/), which has no graphics card for drawing
+# and no screen to capture, so those features say they need the PC instead of trying.
+HOSTS = ("pc", "server")
+# On the PC: this file in ~/.star means the bot runs on a server now, so the PC must not start a second copy.
+SERVER_MARKER = "discord-runs-on-server"
+
+
+def bot_host(env: Mapping[str, str] | None = None) -> str:
+    source = os.environ if env is None else env
+    value = str(source.get("STAR_DISCORD_HOST", "pc")).strip().lower() or "pc"
+    if value not in HOSTS:
+        raise ValueError("STAR_DISCORD_HOST must be pc or server")
+    return value
 
 
 def config_dir(env: Mapping[str, str] | None = None) -> Path:
@@ -132,6 +148,8 @@ STAR_DISCORD_LAB_REPORT=
 STAR_DISCORD_DRAW=1
 STAR_DISCORD_DRAW_ANYONE=0
 STAR_DISCORD_DRAW_TIMEOUT=240
+# Where this bot runs: pc (default) or server (a STAR server: drawing and /screen then say they need the PC).
+STAR_DISCORD_HOST=pc
 # 1 = answer @STAR mentions in your approved server (Discord then sends the bot server message events;
 # it still only sees the text of messages that mention it).
 STAR_DISCORD_MENTIONS=0
