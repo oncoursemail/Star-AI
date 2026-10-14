@@ -217,6 +217,7 @@ class DiscordSupervisor:
             self._spawn(now)
 
     def _watch(self, now: float) -> None:
+        assert self._process is not None  # tick() only calls this with a process
         code = self._process.poll()
         if code is None:
             if now - self._started_at >= STABLE_SECONDS:
@@ -321,8 +322,8 @@ class DiscordSupervisor:
             }
             process = self._process
             if process is not None and process.poll() is None:
-                own = bool(report) and report["pid"] == getattr(process, "pid", None) and fresh
-                connected = own and report["state"] == "connected"
+                own = bool(report and report["pid"] == getattr(process, "pid", None) and fresh)
+                connected = bool(own and report and report["state"] == "connected")
                 return {**base, "state": "connected" if connected else "starting", "running": True,
                         "connected": connected,
                         "message": "STAR is connected to Discord." if connected
