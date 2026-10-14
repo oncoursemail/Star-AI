@@ -5,6 +5,7 @@ import {ArrowRight, ArrowUp, BookOpen, Check, ChevronDown, File as FileIcon, Glo
 import type {Connection} from './connection'
 import {menuIn} from './motion'
 import {useMotionVariants,useStarReducedMotion} from './MotionPolicy'
+import {COUNTER_FROM,PROMPT_LIMITS,overLimitMessage,promptKind,promptLength} from './promptLimits'
 
 export type ChatMode = 'fast' | 'auto' | 'agent'
 /** A capability that is either usable now or says exactly why it is not. */
@@ -205,7 +206,13 @@ export function Composer(props: ComposerProps) {
     setComposerMenu(false)
     action()
   }
-  const canSend = value.trim().length > 0 && !busy
+  // The host refuses a prompt over its limit (promptLimits.ts); say so here instead of sending a turn that fails.
+  const kind = promptKind(imageMode, teamMode)
+  const limit = PROMPT_LIMITS[kind]
+  const length = promptLength(value)
+  const tooLong = overLimitMessage(value, kind)
+  const showCount = length >= limit * COUNTER_FROM
+  const canSend = length > 0 && !busy && !tooLong
   const special = imageMode || teamMode
 
   return (
@@ -233,6 +240,8 @@ export function Composer(props: ComposerProps) {
         rows={1}
         placeholder={imageMode ? (files.length > 1 ? 'Describe what should appear in the masked area' : files.length === 1 ? 'Describe how to change the attached picture' : 'Describe the image you want to create') : teamMode ? 'Give the team an objective' : 'Message STAR'}
         value={value}
+        aria-invalid={tooLong ? true : undefined}
+        aria-describedby={showCount ? 'cmp-limit' : undefined}
         onChange={event => onChange(event.target.value)}
         onKeyDown={event => {
           // Enter sends; Shift+Enter adds a line; never send in the middle of IME composition.
@@ -242,6 +251,12 @@ export function Composer(props: ComposerProps) {
           }
         }}
       />
+      {showCount && (
+        <p id="cmp-limit" className={'cmp-limit' + (tooLong ? ' is-over' : '')} role={tooLong ? 'alert' : undefined}>
+          <span className="cmp-limit-count">{length.toLocaleString('en-US')} / {limit.toLocaleString('en-US')}</span>
+          {tooLong && <span className="cmp-limit-note">{tooLong}</span>}
+        </p>
+      )}
       <div className="cmp-bar">
         <div className="cmp-bar-left">
           <div className="cmp-pop-wrap" ref={menuWrap}>

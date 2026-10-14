@@ -26,6 +26,7 @@ import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesSt
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
+import {overLimitMessage,promptKind} from './promptLimits'
 import {StarPet,type PetState} from './StarPet'
 import {StarFace,type StarMood} from './StarFace'
 import {ChatRow} from './ChatRow'
@@ -377,6 +378,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
    const value=text.trim();if(busy||sending.current||!value)return
    if(inactive){setNotice('This preview is not connected to a model. Open STAR Desktop to chat.');return}
+   // Retry and Edit resend old text: the host would refuse it, so keep it in place with the reason instead.
+   const tooLong=overLimitMessage(value,promptKind(imageMode,teamMode));if(tooLong){setNotice(tooLong);return}
    const selected=attachments.slice()
    if(imageMode&&selected.length>2){setNotice('To change a picture, attach the picture and, if you want, one mask. Remove the other attachments.');return}
    if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
