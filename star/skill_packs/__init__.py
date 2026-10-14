@@ -150,6 +150,10 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    "roblox-purchases-badges": re.compile(
+        r"\b(?:ProcessReceipt|PurchaseId|PromptProductPurchase|PromptGamePassPurchase|UserOwnsGamePassAsync|"
+        r"BadgeService|AwardBadgeAsync|UserHasBadgeAsync|developer products?|game passes?|purchase receipts?|leaderstats)\b",
+        re.IGNORECASE),
 }
 
 
