@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import re
 from time import monotonic
+from typing import Any
 
 from .luau_run_review import _record, source_spans
 
@@ -153,7 +154,7 @@ def _note(answer: str, item: dict, count: int) -> str:
 
 
 async def review(answer: str, settings, route, *, prompt: str = "",
-                 model_client=None, runner=_UNSET, checker=None,
+                 model_client=None, runner: Any = _UNSET, checker=None,
                  writer=None, fixer=None, started: float | None = None,
                  on_event=None) -> tuple[str, list[dict]]:
     """One pure module, two to four assertions, initial run plus <=2 repairs.
@@ -197,11 +198,13 @@ async def review(answer: str, settings, route, *, prompt: str = "",
     if checker is None:
         checker = getattr(runner, "luau_check", None)
     if writer is None:
-        async def writer(source: str) -> str:
+        async def default_writer(source: str) -> str:
             return await _write(model_client, route.model, prompt, source)
+        writer = default_writer
     if fixer is None and model_client is not None:
-        async def fixer(source: str, failure: str) -> str:
+        async def default_fixer(source: str, failure: str) -> str:
             return await _fix(model_client, route.model, prompt, source, tests, failure)
+        fixer = default_fixer
 
     try:
         reply = await asyncio.wait_for(writer(code), timeout=min(MODEL_SECONDS, left()))

@@ -11,6 +11,7 @@ import asyncio
 import math
 import re
 from time import monotonic
+from typing import Any
 
 MAX_BLOCKS = 2
 MAX_SOURCE_BYTES = 65_536
@@ -74,7 +75,8 @@ def _record(report: dict) -> dict:
         raise ValueError("Missing sandbox usage")
     for key in ("wall_seconds", "cpu_seconds"):
         value = usage.get(key)
-        if type(value) not in (int, float) or not 0 <= value < 3600 or not math.isfinite(value):
+        if (not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= value < 3600
+                or not math.isfinite(value)):
             raise ValueError("Invalid sandbox usage")
     for key, maximum in (("max_rss_bytes", 2**50), ("output_bytes", MAX_SOURCE_BYTES)):
         value = usage.get(key)
@@ -98,7 +100,7 @@ def _record(report: dict) -> dict:
 
 
 async def review(answer: str, settings, route, *, started: float | None = None,
-                 on_event=None, client=_UNSET) -> tuple[str, list[dict]]:
+                 on_event=None, client: Any = _UNSET) -> tuple[str, list[dict]]:
     """Run at most two independent snippets after explicit consent, never by default.
 
     Missing/disabled service and transport failures keep the answer and report no

@@ -49,7 +49,8 @@ def run(client, code: str, *, tests: str = "", time_limit_s: float = 3.0,
         malformed()
     for field in ("wall_seconds", "cpu_seconds"):
         value = usage.get(field)
-        if type(value) not in (int, float) or not 0 <= value < 3600 or not math.isfinite(value):
+        if (not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= value < 3600
+                or not math.isfinite(value)):
             malformed()
     for field in ("max_rss_bytes", "output_bytes"):
         value = usage.get(field)
