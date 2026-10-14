@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import os
-from typing import Callable, Mapping
+from typing import Awaitable, Callable, Mapping
 
 
 MIN_INTERVAL_MINUTES = 10
@@ -54,7 +54,7 @@ def activity_at(index: int) -> tuple[str, str]:
 
 async def rotate_presence(bot, settings: PresenceSettings, *,
                           activity_factory: Callable[[str, str], object],
-                          sleep: Callable[[float], object] = asyncio.sleep,
+                          sleep: Callable[[float], Awaitable[object]] = asyncio.sleep,
                           on_error: Callable[[str], None] | None = None) -> None:
     """Periodically rotate fixed bot activity only when an opted-in bot is ready.
 

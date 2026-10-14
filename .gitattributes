@@ -11,3 +11,7 @@ tests/fixtures/shared_brain_sources/**/*.py text eol=lf
 
 # Shell scripts run under bash (Git Bash on Windows, Linux servers): a CR at the end of a line breaks them.
 *.sh text eol=lf
+
+# STAR Brain files are copied to the Linux server as they are: with CRLF, models.ini paths end in a carriage return and
+# server/brain/apply.sh check reports every model file as missing (seen 2026-10-14).
+server/brain/** text eol=lf

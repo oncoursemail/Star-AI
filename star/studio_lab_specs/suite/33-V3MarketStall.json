@@ -1,0 +1,153 @@
+{
+ "name": "V3MarketStall",
+ "kind": "map",
+ "description": "A market stall (prop, 5x5x3) blocks plaza A's walking line.",
+ "defect": "prop-in-walkway",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3MarketStall",
+  "style": "medieval",
+  "bounds": {
+   "size": [
+    70.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -17.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "PlazaA",
+    "position": [
+     -26.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     14.0,
+     1.0,
+     14.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Bridge",
+    "position": [
+     -15.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     4.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "PlazaB",
+    "position": [
+     -4.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     14.0,
+     1.0,
+     14.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     8.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   },
+   {
+    "name": "Stall",
+    "position": [
+     -26.0,
+     9.0,
+     150.0
+    ],
+    "size": [
+     3.0,
+     5.0,
+     5.0
+    ],
+    "role": "prop",
+    "color": "#8E5B3A"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "PlazaA",
+    "Bridge",
+    "PlazaB",
+    "Goal"
+   ]
+  }
+ }
+}

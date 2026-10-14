@@ -107,11 +107,6 @@ def load_merged_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     return merged
 
 
-def token_file_present(env: Mapping[str, str] | None = None) -> bool:
-    """Existence only; the file content is not read here."""
-    return (config_dir(env) / TOKEN_FILE).is_file()
-
-
 SETTINGS_TEMPLATE = """# STAR Discord bot: nonsecret local settings (never commit; the bot token goes in discord.env).
 # Discord: User Settings > Advanced > Developer Mode, then right-click yourself / your server > Copy ID.
 DISCORD_OWNER_ID=
