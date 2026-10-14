@@ -881,6 +881,9 @@ def launch():
                         learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
                                        replaced=int(e.get('replaced',0)),not_kept=int(e.get('not_kept',0)))
                         return
+                    if e.get('event')=='lessons_capture_failed':
+                        learned.update(capture_failed=1)
+                        return
                     self._emit(request_id,'progress',sanitize_event(e))
                 if settings.session_capabilities_prompt:
                     full_prompt = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '

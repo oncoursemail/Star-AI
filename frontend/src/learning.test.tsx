@@ -121,6 +121,17 @@ describe('rating an answer', () => {
     expect(await screen.findByText(/That was not kept as a lesson: it reads like a permission or setting/)).toBeTruthy()
     expect(screen.queryByText(/Noted for this project/)).toBeNull()
   })
+
+  it('says so when the lesson store failed, instead of silently learning nothing', async () => {
+    const user = userEvent.setup()
+    render(<App/>)
+    const box = await screen.findByRole('textbox', {name: /message star/i})
+    await user.type(box, 'Always use camelCase here.')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    await desktop.emitRaw(desktop.requestOf('sendMessage'), 'result', {answer: 'Understood.', learned: {capture_failed: 1}})
+    expect(await screen.findByText(/STAR could not save what this turn taught/)).toBeTruthy()
+  })
 })
 
 describe('reviewing lessons', () => {

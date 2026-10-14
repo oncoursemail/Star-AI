@@ -1065,8 +1065,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                           'candidates': summary['candidates'],
                           **({'replaced': summary['replaced']} if summary['replaced'] else {}),
                           **({'not_kept': summary['not_kept']} if summary.get('not_kept') else {})})
-        except Exception:
-            pass
+        except Exception as exc:
+            # Never fail the turn, but never stop learning silently either. Type name only:
+            # the message can carry a file path or the owner's words.
+            _log.warning('Lesson capture failed (%s); this turn taught nothing', type(exc).__name__)
+            if on_event:
+                try:
+                    on_event({'event': 'lessons_capture_failed', 'error': type(exc).__name__})
+                except Exception:
+                    pass
     try:
         # Evidence is attached only to this project and conversation. Later turns
         # can retrieve it without reopening files elsewhere on the computer.
