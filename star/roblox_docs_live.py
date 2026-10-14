@@ -31,7 +31,8 @@ import tempfile
 import time
 from urllib.parse import quote, urlsplit
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 HOST = "create.roblox.com"
 BASE = "https://" + HOST

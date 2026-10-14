@@ -231,7 +231,6 @@ _VIDEO_LINK = re.compile(
     r'https?://(?:www\.|m\.)?(?:youtube\.com|youtu\.be|vimeo\.com|tiktok\.com|twitch\.tv|dailymotion\.com|'
     r'streamable\.com|x\.com|twitter\.com|facebook\.com|instagram\.com)/\S+'
     r'|https?://\S+\.(?:mp4|mov|mkv|webm|avi)\b', re.I)
-_VIDEO_WORDS = re.compile(r'\b(?:watch(?:ed|ing)?|video|clip|episode|trailer|stream|vod|footage|movie|film)\b', re.I)
 
 LINK_RULE = ('The message refers to a video, but no video file is attached, so you have no frames and no '
              'sound from it. You have NOT watched it. Do not describe, summarise or judge its content, and '
@@ -247,7 +246,3 @@ def link_only_note(prompt: str, has_video_file: bool) -> str:
     if _VIDEO_LINK.search(prompt):
         return LINK_RULE
     return ''
-
-
-def mentions_video(prompt: str) -> bool:
-    return bool(_VIDEO_WORDS.search(prompt or '') or _VIDEO_LINK.search(prompt or ''))

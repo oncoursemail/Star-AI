@@ -467,7 +467,7 @@ def import_bundled(home: Path, version: str, *, auto_live: bool = True, bundle: 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=(__doc__ or "").split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     make = sub.add_parser("bundle", help="package night school's outbox as a reviewed bundle (for a draft PR)")
     make.add_argument("--outbox", required=True, type=Path)

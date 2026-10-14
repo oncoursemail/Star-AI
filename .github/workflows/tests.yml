@@ -81,3 +81,26 @@ jobs:
           path: react-qa/*.png
           if-no-files-found: ignore
           retention-days: 30
+
+  pyright:
+    name: Python types (pyright basic, baseline gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      # No third-party packages on purpose: their stubs change between releases, so the
+      # baseline stays stable and only STAR's own code is judged.
+      - name: Run pyright on star/ (settings in pyrightconfig.json)
+        run: npx --yes pyright@1.1.414 --pythonpath "$(command -v python)" --outputjson > pyright.json || test -s pyright.json
+      - name: Fail on errors beyond scripts/pyright_baseline.json
+        run: python scripts/pyright_baseline.py check pyright.json

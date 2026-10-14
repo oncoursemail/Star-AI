@@ -21,7 +21,8 @@ import shutil
 import sys
 import zipfile
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from .version import __version__
 

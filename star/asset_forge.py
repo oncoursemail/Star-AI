@@ -10,7 +10,9 @@ import math
 import re
 import time
 
-import httpx
+from ._lazy import lazy_module
+from .validation_messages import describe_invalid
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 _API = "https://api.polyhaven.com"
 _SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}\Z")
@@ -68,30 +70,30 @@ class PolyHavenCatalog:
                 for chunk in response.iter_bytes():
                     received += len(chunk)
                     if received > _MAX_RESPONSE:
-                        raise ValueError("Poly Haven response exceeded the metadata limit")
+                        raise ValueError("Poly Haven response exceeded the metadata limit: metadata response must fit 160000 bytes. Refine the search or retry.")
                     chunks.append(chunk)
         except httpx.HTTPError as exc:
             raise ValueError(f"Poly Haven metadata request failed: {type(exc).__name__}") from None
         try:
             data = json.loads(b"".join(chunks))
         except (ValueError, UnicodeDecodeError):
-            raise ValueError("Poly Haven returned invalid JSON") from None
+            raise ValueError("Poly Haven returned invalid JSON: metadata must be a JSON object. Retry the catalog search.") from None
         if not isinstance(data, dict):
-            raise ValueError("Poly Haven returned unexpected metadata")
+            raise ValueError("Poly Haven returned unexpected metadata: metadata must be a JSON object. Retry with valid catalog data.")
         return data
 
     def search(self, query: str, *, kind: str = "models", limit: int = 4) -> dict:
         if not isinstance(query, str) or not 1 <= len(query.strip()) <= 100:
-            raise ValueError("search query must have 1–100 characters")
+            raise ValueError(f"search query must have 1–100 characters: query must be nonblank text in that range (got {describe_invalid(query)}). Enter a shorter search phrase.")
         if kind not in _KINDS:
-            raise ValueError("asset type must be models, textures, or hdris")
+            raise ValueError("asset type must be models, textures, or hdris: kind must be one of those choices. Select a supported type.")
         _between("limit", limit, 1, 6)
         terms = query.strip().lower()
         deadline = time.monotonic() + 15.0  # soft bound; an in-flight request may take up to 8s more
         data = self._get("/search", {"q": terms, "t": kind, "limit": limit, "future": "false"})
         ranked = data.get("results")
         if not isinstance(ranked, list):
-            raise ValueError("Poly Haven search response lacks ranked results")
+            raise ValueError("Poly Haven search response lacks ranked results: results must be a JSON list. Retry or refine the catalog query.")
         matches = []
         truncated = False
         for row in ranked[:limit]:
@@ -136,7 +138,7 @@ def plan_building(*, width_bays: int = 4, depth_bays: int = 4, floors: int = 2,
     _between("floors", floors, 1, 3)
     _between("seed", seed, 0, 2_147_483_647)
     if style not in _STYLES:
-        raise ValueError("unknown style preset")
+        raise ValueError(f"unknown style preset: style must be classic-studs, stylized-fantasy, grounded-realism or anime-toon (got {describe_invalid(style)}). Choose one.")
     width, depth = width_bays * _BAY, depth_bays * _BAY
     entry = width_bays // 2
     # Alternate stair flights so each slab opens above the preceding stair, not the next one.
@@ -208,7 +210,7 @@ def terrain_height(x: float, z: float, *, seed: int = 1, biome: str = "temperate
     """Sample world-space coordinates so adjacent exported chunks share exact edges."""
     _between("seed", seed, 0, 2_147_483_647)
     if biome not in _BIOMES:
-        raise ValueError("unknown biome")
+        raise ValueError("unknown biome: biome must be temperate, desert, alpine or alien. Choose one.")
     base = 16 + 30 * _noise(x, z, seed, 160) + 12 * _noise(x, z, seed + 73, 48)
     fine = 4 * _noise(x, z, seed + 137, 12)
     if biome == "alpine":
