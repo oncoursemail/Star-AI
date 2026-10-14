@@ -27,6 +27,10 @@ fi
 
 tar -C "$HERE" --exclude='__pycache__' --exclude='eval/results' --exclude='.env' --exclude='.pytest_cache' -cf - . |
   ssh -o BatchMode=yes "$HOST" "lxc exec $CT -- bash -c 'mkdir -p /opt/star/knowledge/app && tar -xf - -C /opt/star/knowledge/app --no-same-owner && chown -R star:star /opt/star/knowledge/app'"
+# The resource planner's client (standard library only) goes next to starkb, so the batch jobs can be paced by it.
+if [ -f "$HERE/../../star/planner_client.py" ]; then
+  ssh -o BatchMode=yes "$HOST" "lxc exec $CT -- bash -c 'cat > /opt/star/knowledge/app/starkb/_planner_client.py && chown star:star /opt/star/knowledge/app/starkb/_planner_client.py'" < "$HERE/../../star/planner_client.py"
+fi
 remote <<'REMOTE'
 set -eu
 cd /opt/star/knowledge

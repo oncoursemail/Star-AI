@@ -41,6 +41,10 @@ jobs:
       - name: Compile Python sources
         if: ${{ steps.scope.outputs.docs_only != 'true' }}
         run: python -m compileall -q star main.py
+      - name: Lint star/ with ruff (correctness rules in pyproject.toml)
+        run: |
+          python -m pip install ruff==0.16.9
+          ruff check star --output-format=github
       - name: Validate research evaluation catalog
         if: ${{ steps.scope.outputs.docs_only != 'true' }}
         run: python -m pytest -q tests/test_star_research.py
@@ -120,13 +124,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
       # No third-party packages on purpose: their stubs change between releases, so the

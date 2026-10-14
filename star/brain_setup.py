@@ -152,7 +152,7 @@ def _select_engine_release(client: httpx.Client, callback: Callable[[dict], None
                     return candidate, _engine_asset(candidate)
                 except ValueError:
                     continue
-    except (httpx.HTTPError, ValueError, TypeError, KeyError) as error:
+    except (httpx.HTTPError, ValueError, TypeError, KeyError):
         callback({'phase': 'GitHub metadata unavailable; using a checksum-pinned official build'})
     callback({'phase': 'Using a known official Windows Vulkan build'})
     return _fallback_engine_release()

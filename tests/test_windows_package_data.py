@@ -18,7 +18,7 @@ FLAGS = ("--add-data", "--hidden-import", "--collect-all", "--collect-submodules
 LOCAL_EXTRA_COLLECTIONS: frozenset[str] = frozenset()  # CI collects the office libraries too since #319
 GENERATED = frozenset({"frontend/dist", "star/build-info.json"})
 
-# Every AST __file__ root anchor in the 195 reviewed star/**/*.py modules.
+# Every AST __file__ root anchor in the reviewed star/**/*.py modules.
 # This catalogue is intentionally explicit: new resource readers demand review.
 PACKAGE_DATA_SITES = {
     "star/blender_bridge.py": "star/blender_worker.py",
@@ -27,15 +27,19 @@ PACKAGE_DATA_SITES = {
     "star/character_lifecycle_lessons.py": "docs/lessons/roblox-character-lifecycle.md",
     "star/design_db.py": "star/data/design/ui-ux-pro-max",
     "star/learned_week.py": "star/skill_packs",
+    "star/luau_record_type_lessons.py": "docs/lessons/luau-record-types.md",
     "star/lesson_import.py": "star/skill_packs",
     "star/react_shell.py": "frontend/dist",
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
+    "star/roblox_api_dataset.py": "data/roblox_api/roblox_api.json",
     "star/skill_packs/__init__.py": "star/skill_packs",
     "star/studio_milestones.py": "evals/studio",
     "star/voice/catalog.py": "star/voice/voices.json",
 }
 OTHER_FILE_ANCHORS = {
+    "star/architecture_pipeline.py": "opt-in Blender export runs scripts/blender_building.py from a source checkout",
     "star/cli.py": "source-only CLI",
+    "star/discord_supervisor.py": "source checkout of the Discord bot (STAR_CHECKOUT for the packaged app)",
     "star/eval_gate.py": "developer-only evaluation result files",
     "star/eval_runner.py": "developer-only evaluation fixtures",
     "star/failure_ledger.py": "developer-only evaluation prelude",
@@ -46,8 +50,10 @@ OTHER_FILE_ANCHORS = {
 }
 PENDING_OWNER_REVIEW = frozenset({
     "docs/lessons/roblox-character-lifecycle.md",
+    "docs/lessons/luau-record-types.md",
     "examples/roblox-templates",
     "data/roblox_api_confusions.json",
+    "data/roblox_api/roblox_api.json",  # bundled API dump (#331): not packaged yet
     "evals/studio",  # do not bundle protected evaluation manifests blindly
 })
 
@@ -103,7 +109,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 20
+    assert len(discovered) == 24
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
@@ -145,7 +151,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(PACKAGE_DATA_SITES) == 12
+    assert len(PACKAGE_DATA_SITES) == 14
     assert len(bundled) == 6  # two optional readers share the skill-pack directory
 
 

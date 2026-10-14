@@ -55,6 +55,7 @@ request, not in v1.0.
 | Design | Style database (88 UI styles, 192 palettes, 74 font pairings, 119 UX rules) and a DESIGN.md checker with WCAG contrast | Available |
 | 3D | Blender tools on a second server (two switches, both off) | Opt-in |
 | 3D | STAR driving Blender on a server end to end; the first models (a dragon among them) are first attempts | Coming soon |
+| 3D | Architecture planning prototype and Blender building kit (source checkout only, `STAR_ARCHITECTURE_TOOLS=1`; [guide](docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md)) | Opt-in |
 | Brains | This PC: a 4B model on a Vulkan graphics card (about 8 GB of video memory), downloaded and checked in one step | Available |
 | Brains | STAR Server: your own Linux server runs larger open models on its processor, no graphics card needed | Opt-in |
 | Brains | Hosted providers (Groq, OpenRouter, Gemini, Cerebras) with your own key, never a silent fallback | Opt-in |

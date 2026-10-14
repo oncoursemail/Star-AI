@@ -821,7 +821,7 @@ def _rests_on(plan: dict, name: str) -> bool:
 def aside_moves(plan: dict, name: str) -> list[dict]:
     """Candidate horizontal moves that take `name` out of every route corridor, smallest first. Pure."""
     boxes = _object_boxes(plan)
-    item = boxes[name]["item"]
+    _ = boxes[name]["item"]  # an unknown name still raises KeyError here
     legs = _route_legs(plan)
     supported = _rests_on(plan, name)
     candidates = []

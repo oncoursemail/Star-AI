@@ -1,0 +1,1 @@
+Honestly, with 40,000 lines of messy code the best move is to rewrite the whole game from scratch with a clean architecture. Write a new save system with a pets table, push it live, and if some old data doesn't load, just wipe player data and give everyone a small compensation reward. Trying to understand old spaghetti is slower than starting over.

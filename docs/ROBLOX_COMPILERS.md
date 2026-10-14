@@ -561,13 +561,17 @@ Pure Python: `from star.roblox_ui_compiler import compile_ui, validate, SpecErro
 
 Top-level object: `palette` maps symbolic names to `#RRGGBB`; `root` is a screen node; optional `mobile` accepts `safeArea` (boolean), `minTouchSize` (44..200), `referenceWidth` (320..3840), `scaleByViewport` (boolean).
 
-Nodes require `id` (unique alphanumeric/underscore identifier starting with letter) and `type` (`screen`, `frame`, `scroll`, `grid`, `text`, `button`, `image`, `input`, `toggle`, `progress`). Container nodes accept nested `children`. Optional node properties: `name`, `size`, `position`, `anchor`, `background`, `transparency`, `visible`, `padding`, `corner`, `stroke`, `text`, `font`, `textSize`, `textColor`, `textWrapped`, `image`, `layout`, `states`, `minSize`, `maxSize`, `aspectRatio`, `value`, `placeholder`, `enabled`.
+Nodes require `id` (unique alphanumeric/underscore identifier starting with letter) and `type` (`screen`, `frame`, `scroll`, `grid`, `text`, `button`, `image`, `input`, `toggle`, `progress`). Container nodes accept nested `children`. Properties are **class-specific**: a screen accepts `name`, `enabled`, and `children` in addition to its identity; only images accept `image`; only inputs accept `placeholder`; only text-capable nodes accept font and text properties; only interactive nodes accept `states`. Non-screen GUI nodes support appropriate GuiObject sizing, positioning, appearance and constraints.
 
 Dimensions use `{"scale":0.5,"offset":12}` and vectors use `{"x":{"scale":0.5},"y":{"offset":40}}`. `stroke` accepts `color` (palette name), `thickness`, `transparency`. `layout.kind` is `list` or `grid`; optional attributes include `direction`, `spacing`, `columns`, `cellSize`, `cellPadding`, alignments and sort order. Interactive `states` include `hover`, `pressed`, `disabled`, `selected`, with palette colors, `transparency`, `duration`, TweenService `easing` and `direction`.
 
 Example: `{"palette":{"light":"#FFFFFF","dark":"#111111"},"root":{"type":"screen","id":"ui","children":[{"type":"text","id":"title","text":"Hello","textColor":"light","background":"dark"}]}}`.
 
 Unknown keys, out-of-range values, duplicate ids and duplicate JSON keys are errors. A contrast ratio below 4.5:1 creates a warning. Diagnostics carry a JSON path and source line/column; positions are best-effort for repeated object names, while JSON decoding errors use exact parser positions.
+
+Validation limits a spec to 150 nodes and depth 32 to stay below Luau's local-variable limit. Layout horizontal alignment permits Left/Center/Right; vertical alignment permits Top/Center/Bottom. Minimum touch dimensions and authored size constraints are combined into a single UISizeConstraint. The viewport UIScale compensates the full-screen host dimensions; visual behavior still needs a real Roblox Studio check.
+
+Strings use fixed-width UTF-8 decimal byte escapes, including control characters. The checksum-pinned official Luau CLI parses representative generated modules in the **Luau template specs** GitHub Actions workflow; syntax verification is not the same as a Roblox-engine GUI test.
 
 Generated code must only display client data. Never authorize purchases, inventory grants or game-state changes based on LocalPlayer or UI handles. Studio visual and runtime testing is still required: Python tests cannot execute the Roblox engine.
 
