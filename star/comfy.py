@@ -11,7 +11,8 @@ from pathlib import Path
 import re
 import time
 from urllib.parse import urlencode
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 LOCAL_CLASSES = frozenset({
     'CheckpointLoaderSimple', 'CLIPTextEncode', 'EmptyLatentImage', 'KSampler',

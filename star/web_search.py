@@ -10,7 +10,8 @@ No authenticated browsing or implicit credential forwarding; reading one page is
 from __future__ import annotations
 import re
 from urllib.parse import urlparse, urlsplit
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from . import providers
 from .providers import STAR_SERVER, validate_lan_endpoint

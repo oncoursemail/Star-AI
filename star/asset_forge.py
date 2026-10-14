@@ -10,7 +10,8 @@ import math
 import re
 import time
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 _API = "https://api.polyhaven.com"
 _SLUG = re.compile(r"[a-z0-9][a-z0-9_-]{0,79}\Z")

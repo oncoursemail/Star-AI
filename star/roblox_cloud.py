@@ -26,7 +26,8 @@ import threading
 import time
 from typing import Any
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 API = "https://apis.roblox.com"
 DOCS = "https://create.roblox.com/docs/cloud/"
@@ -58,7 +59,9 @@ class OutcomeUnknown(CloudError):
 
 
 # With these the request never left this machine, so a write certainly did not happen.
-_NOT_SENT = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
+# A function, so that httpx is imported on the first request rather than with this module.
+def _not_sent() -> tuple:
+    return (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout, httpx.UnsupportedProtocol)
 
 
 # --------------------------------------------------------------------------- endpoints
@@ -322,7 +325,7 @@ class OpenCloud:
                 status = response.status_code
         except httpx.HTTPError as exc:
             # The exception text can hold the URL, never a header; the type name is enough.
-            if spec.write and not isinstance(exc, _NOT_SENT):
+            if spec.write and not isinstance(exc, _not_sent()):
                 raise OutcomeUnknown(f"no answer came back from Roblox ({type(exc).__name__})") from None
             raise CloudError(f"Roblox could not be reached ({type(exc).__name__})") from None
         try:
