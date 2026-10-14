@@ -62,6 +62,11 @@ def test_opt_in_ten_turn_before_after_matches_prompts_answers(monkeypatch):
     # the old 30ms-per-turn assertion failed under Windows scheduling noise.
     for name in ("STAR_FAST_FIRST_DELTA", "STAR_FAST_GROUNDING_NOOP", "STAR_FAST_HISTORY_SNAPSHOT"):
         monkeypatch.delenv(name, raising=False)
+    # Every request carries the time line (star.clock); four runs can straddle a minute boundary, which would change
+    # the request bytes compared below. Fix the lines so only the opt-in flags can make a difference.
+    from star import clock
+    monkeypatch.setattr(clock, "now_line", lambda *args, **kwargs: "Now: (fixed for this test).")
+    monkeypatch.setattr(clock, "sent_line", lambda *args, **kwargs: "Sent: (fixed for this test).")
     baseline = audit()
     monkeypatch.setenv("STAR_FAST_FIRST_DELTA", "1")
     first_delta = audit()
