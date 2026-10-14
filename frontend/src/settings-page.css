@@ -1,0 +1,397 @@
+/* Settings: sections on the left, one section at a time on the right, search across all of them.
+ * Tokens only (tokens.css). The cards, switches and buttons inside are the shared ones; this file only lays
+ * out the page and adds what the shared skin does not have (tabs, search, save bar). */
+.shell .page-wrap.settings-page {
+  max-width: 1080px;
+  padding-bottom: 0;
+}
+.settings-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.settings-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--star-6);
+  margin-bottom: var(--star-6);
+}
+.shell .settings-head .page-intro {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* ---- search ---- */
+.settings-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 1 300px;
+  min-width: 0;
+}
+.settings-search > svg {
+  position: absolute;
+  left: var(--star-3);
+  color: var(--star-faint);
+  pointer-events: none;
+}
+.shell .settings-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 34px 0 34px;
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+  color: var(--star-text);
+  font: inherit;
+  font-size: var(--star-fs-nav);
+  transition: border-color var(--star-dur-hover) var(--star-ease), background-color var(--star-dur-hover) var(--star-ease);
+}
+.shell .settings-search input::placeholder {
+  color: var(--star-faint);
+}
+.shell .settings-search input:hover {
+  border-color: var(--star-stroke-strong);
+}
+.shell .settings-search input:focus-visible {
+  border-color: var(--star-gold-line);
+  outline-offset: 1px;
+}
+.settings-search input::-webkit-search-cancel-button {
+  display: none;
+}
+.shell .settings-search-clear {
+  position: absolute;
+  right: 4px;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-muted);
+  cursor: pointer;
+}
+.shell .settings-search-clear:hover {
+  background: var(--star-veil);
+  color: var(--star-text);
+}
+
+/* ---- body: nav + panels ---- */
+.settings-body {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: var(--star-8);
+  align-items: start;
+  flex: 1;
+}
+.settings-nav {
+  position: sticky;
+  top: var(--star-4);
+}
+.settings-nav [role='tablist'] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.shell .settings-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--star-3);
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--star-3);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-muted);
+  font: inherit;
+  font-size: var(--star-fs-nav);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--star-dur-hover) var(--star-ease), color var(--star-dur-hover) var(--star-ease), transform var(--star-dur-press) var(--star-ease);
+}
+.shell .settings-tab > svg {
+  flex: none;
+  color: var(--star-faint);
+  transition: color var(--star-dur-hover) var(--star-ease);
+}
+.shell .settings-tab > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (hover: hover) {
+  .shell .settings-tab:hover {
+    background: var(--star-surface-1);
+    color: var(--star-text);
+  }
+}
+.shell .settings-tab:active {
+  transform: scale(0.98);
+}
+.shell .settings-tab.is-current {
+  background: var(--star-surface-2);
+  color: var(--star-text);
+}
+.shell .settings-tab.is-current > svg {
+  color: var(--star-gold);
+}
+.settings-nav .is-searching .settings-tab {
+  color: var(--star-faint);
+}
+
+.settings-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-8);
+  min-width: 0;
+  max-width: 760px;
+}
+.settings-panel[hidden] {
+  display: none;
+}
+.settings-panel-head {
+  margin-bottom: var(--star-4);
+}
+.shell .settings-panel-head h2 {
+  margin: 0;
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: var(--star-fs-h3);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.shell .settings-panel-head p {
+  margin: var(--star-1) 0 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  line-height: 1.5;
+}
+.settings-panel:not([hidden]) {
+  animation: settings-panel-in var(--star-dur-page) var(--star-ease);
+}
+@keyframes settings-panel-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+:root[data-star-reduced-motion='true'] .settings-panel:not([hidden]) {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-panel:not([hidden]) { animation: none; }
+  .shell .settings-tab:active { transform: none; }
+}
+.settings-block[hidden] {
+  display: none;
+}
+.shell .settings-group-title {
+  margin: 0 0 var(--star-1);
+  color: var(--star-text);
+  font-size: var(--star-fs-ui);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+.shell .settings-section .section-heading .settings-group-title + p {
+  margin-top: var(--star-1);
+}
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+}
+.shell .settings-actions .secondary-button {
+  margin-top: 0;
+}
+.settings-badge {
+  display: inline-block;
+  margin-left: var(--star-2);
+  padding: 1px 6px;
+  border: 1px solid var(--star-stroke);
+  border-radius: 999px;
+  color: var(--star-muted);
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: 1px;
+}
+.settings-field-static {
+  display: flex;
+  flex-direction: column;
+  gap: var(--star-2);
+  min-width: 0;
+}
+.settings-field-static > span {
+  color: var(--star-body);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+}
+.shell .settings-field-static .secondary-button {
+  align-self: flex-start;
+  margin-top: 0;
+}
+
+/* ---- web search keys ---- */
+.settings-key-row {
+  display: grid;
+  gap: var(--star-2);
+  padding: var(--star-4) 0;
+  border-top: 1px solid var(--star-stroke-soft);
+}
+.settings-key-row > label {
+  color: var(--star-body);
+  font-size: var(--star-fs-meta);
+  font-weight: 600;
+}
+.settings-key-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--star-2);
+}
+.shell .settings-key-controls input {
+  flex: 1 1 220px;
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: var(--star-fs-meta);
+}
+.shell .settings-key-controls .secondary-button {
+  margin-top: 0;
+}
+.settings-key-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-1);
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.settings-key-state.is-on {
+  color: var(--star-success);
+}
+
+/* ---- search states ---- */
+.shell .settings-search-summary {
+  margin: 0 0 calc(var(--star-4) - var(--star-8));
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+.shell .settings-search-summary:empty {
+  display: none;
+}
+.settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--star-2);
+  padding: var(--star-8) var(--star-6);
+  border: 1px dashed var(--star-stroke);
+  border-radius: var(--star-r-md);
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+}
+.settings-empty > svg {
+  color: var(--star-faint);
+}
+.settings-empty strong {
+  color: var(--star-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.shell .settings-empty .secondary-button {
+  margin-top: var(--star-2);
+}
+
+/* ---- save bar: always reachable, says when something is unsaved ---- */
+.settings-savebar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--star-4);
+  margin-top: var(--star-8);
+  padding: var(--star-3) 0 var(--star-4);
+  border-top: 1px solid var(--star-stroke-soft);
+  background: color-mix(in srgb, var(--star-bg) 88%, transparent);
+  backdrop-filter: blur(8px);
+}
+.settings-savebar-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.settings-savebar.is-dirty .settings-savebar-state {
+  color: var(--star-gold);
+}
+.settings-savebar-actions {
+  display: flex;
+  gap: var(--star-2);
+  flex: none;
+}
+.shell .settings-savebar .save-button,
+.shell .settings-savebar .secondary-button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+/* ---- narrow: sections become a scrolling row above the content ---- */
+@media (max-width: 900px) {
+  .settings-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--star-4);
+  }
+  .settings-search {
+    flex-basis: auto;
+  }
+  .settings-body {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--star-5);
+  }
+  .settings-nav {
+    position: static;
+    margin: 0 calc(var(--star-4) * -1);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--star-4), #000 calc(100% - var(--star-6)), transparent);
+    mask-image: linear-gradient(90deg, transparent 0, #000 var(--star-4), #000 calc(100% - var(--star-6)), transparent);
+  }
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+  .settings-nav [role='tablist'] {
+    flex-direction: row;
+    gap: var(--star-1);
+    width: max-content;
+    padding: 0 var(--star-4);
+  }
+  .shell .settings-tab {
+    width: auto;
+    min-height: 34px;
+    border: 1px solid var(--star-stroke-soft);
+    border-radius: 999px;
+  }
+  .shell .settings-tab.is-current {
+    border-color: var(--star-stroke-strong);
+  }
+}
+@media (max-width: 600px) {
+  .settings-savebar:not(.is-dirty) .settings-savebar-state {
+    display: none;
+  }
+  .settings-savebar.is-dirty .settings-save-word {
+    display: none;
+  }
+  .settings-savebar-actions {
+    flex: 1;
+    justify-content: flex-end;
+  }
+}

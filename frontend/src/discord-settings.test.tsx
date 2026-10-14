@@ -48,7 +48,12 @@ async function openSettings() {
   await user.click(screen.getByRole('button', {name: /^settings/i}))
   return user
 }
-const section = () => screen.findByRole('region', {name: 'Discord'})
+/** Settings shows one section at a time (#342); Discord sits with voice under 'Images, voice & 3D'. */
+const section = async () => {
+  const tab = await screen.findByRole('tab', {name: 'Images, voice & 3D'})
+  if (tab.getAttribute('aria-selected') !== 'true') await userEvent.setup().click(tab)
+  return screen.findByRole('region', {name: 'Discord'})
+}
 const statusLine = (box: HTMLElement) => within(box).getByText(/^Status:/)
 
 describe('Settings > Discord', () => {
