@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 import os
 from pathlib import Path
 import tempfile
+import time
 
 
 def atomic_write_text(path: Path | str, text: str, *, encoding: str = "utf-8") -> None:
@@ -29,11 +30,27 @@ def atomic_write_text(path: Path | str, text: str, *, encoding: str = "utf-8") -
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(temporary, target)
+        _replace(temporary, target)
         temporary = None
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
+
+
+def _replace(source: Path, target: Path, attempts: int = 10) -> None:
+    """os.replace, retried briefly when Windows refuses because another handle has `target` open.
+
+    Python opens files on Windows without FILE_SHARE_DELETE, so while another STAR thread or process is
+    reading the old file the swap fails with PermissionError for a moment. The old in-place write did not.
+    """
+    for attempt in range(attempts):
+        try:
+            os.replace(source, target)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.02 * (attempt + 1))
 
 
 def move_aside(path: Path | str, *, now: datetime | None = None) -> Path | None:

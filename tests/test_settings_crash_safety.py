@@ -126,3 +126,37 @@ def test_a_locked_settings_file_is_not_treated_as_damaged(tmp_path, monkeypatch)
 
     monkeypatch.setattr(Path, "read_text", briefly_locked)
     assert Settings.load(target).model == "kept"
+
+
+def test_swap_waits_out_a_brief_windows_sharing_lock(tmp_path, monkeypatch):
+    # On Windows, os.replace fails with PermissionError while another handle has the old file open.
+    target = tmp_path / "settings.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+    real, refusals = atomic_io.os.replace, []
+
+    def locked_twice(source, destination):
+        if len(refusals) < 2:
+            refusals.append(destination)
+            raise PermissionError(13, "The process cannot access the file")
+        return real(source, destination)
+
+    monkeypatch.setattr(atomic_io.os, "replace", locked_twice)
+    monkeypatch.setattr(atomic_io.time, "sleep", lambda _seconds: None)
+    atomic_write_text(target, '{"new": true}')
+    assert len(refusals) == 2 and json.loads(target.read_text(encoding="utf-8")) == {"new": True}
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+
+def test_a_lasting_lock_still_fails_and_keeps_the_old_file(tmp_path, monkeypatch):
+    target = tmp_path / "settings.json"
+    target.write_text('{"old": true}', encoding="utf-8")
+
+    def always_locked(source, destination):
+        raise PermissionError(13, "The process cannot access the file")
+
+    monkeypatch.setattr(atomic_io.os, "replace", always_locked)
+    monkeypatch.setattr(atomic_io.time, "sleep", lambda _seconds: None)
+    with pytest.raises(PermissionError):
+        atomic_write_text(target, '{"new": true}')
+    assert json.loads(target.read_text(encoding="utf-8")) == {"old": True}
+    assert [p.name for p in tmp_path.iterdir()] == ["settings.json"]
