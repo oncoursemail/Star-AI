@@ -20,6 +20,9 @@ OutputBaseFilename=STAR-Setup-v{#StarVersion}
 SetupIconFile=..\assets\star.ico
 Compression=lzma2
 SolidCompression=yes
+; Multi-threaded LZMA2 (CI runners have 4 cores): same files, ~2-3x faster compile, slightly larger Setup.
+LZMAUseSeparateProcess=yes
+LZMANumBlockThreads=4
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog

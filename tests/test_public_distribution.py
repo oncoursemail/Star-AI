@@ -74,7 +74,7 @@ def test_public_web_version_and_download_location():
 
 def test_release_workflow_has_no_separate_public_mirror_job():
     job=(ROOT/'.github/workflows/windows-desktop.yml').read_text()
-    assert 'publish-release:' in job and 'needs: windows-build' in job
+    assert 'publish-release:' in job and 'needs: [windows-build, attest-release]' in job
     assert 'gh release create' in job and 'SHA256SUMS.txt' in job
     assert 'publish-public:' not in job
     assert 'STAR_PUBLIC_REPO' not in job and 'STAR_PUBLIC_RELEASE_TOKEN' not in job

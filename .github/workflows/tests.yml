@@ -9,18 +9,58 @@ concurrency:
   group: star-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  # Documentation-only changes skip the test jobs (they then report "skipped", which satisfies a
+  # required check). scripts/ci_changed_scope.py fails towards running everything, and a document
+  # that any test or source file names (README.md, release checklists, agent notes...) still runs
+  # the tests. If this job itself breaks, the tests run (`!cancelled()` below).
+  changes:
+    name: Changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.scope.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Classify the change
+        id: scope
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          list="$RUNNER_TEMP/changed.txt"
+          : > "$list"
+          if [ "$EVENT" = pull_request ]; then
+            # HEAD is the pull request merge commit; HEAD^1 is the base it merges into.
+            git diff --name-only --no-renames HEAD^1 HEAD > "$list" || : > "$list"
+          elif [ "$EVENT" = push ] && [ -n "$BEFORE" ] && [ "$BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            if git fetch --no-tags --depth=1 origin "$BEFORE"; then
+              git diff --name-only --no-renames "$BEFORE" HEAD > "$list" || : > "$list"
+            fi
+          fi
+          python3 scripts/ci_changed_scope.py --root . --files "$list" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
+
   checks:
-    name: Offline Python checks
+    name: Offline Python checks (${{ matrix.shard }}/2)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
           cache: 'pip'
+          cache-dependency-path: requirements.txt
       - name: Install reviewed dependencies and pytest
         run: python -m pip install -r requirements.txt pytest
       - name: Compile Python sources
@@ -28,21 +68,43 @@ jobs:
       - name: Validate research evaluation catalog
         run: python -m pytest -q tests/test_star_research.py
       - name: Run all offline regression tests
+        env:
+          STAR_TEST_SHARD: ${{ matrix.shard }}/2
         run: python -m pytest -q
+
+  # Stable check name for both shards. Skipped (like the shards) for documentation-only changes.
+  checks-gate:
+    name: Offline Python checks
+    needs: [changes, checks]
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.checks.result }}
+        run: |
+          echo "checks: $RESULT"
+          test "$RESULT" = success
 
   react:
     name: React UI compile and tests
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package.json
       - name: Install reviewed frontend dependencies
         run: npm install --prefix frontend --no-audit --no-fund
       - name: Typecheck React and validate components
@@ -75,7 +137,7 @@ jobs:
           test -s react-qa/chat-desktop.png
       - name: Upload actual React browser renders
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: STAR-v08-React-Visual-QA
           path: react-qa/*.png
