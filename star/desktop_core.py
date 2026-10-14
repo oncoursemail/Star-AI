@@ -19,6 +19,7 @@ from .memory import Memory
 from . import conversation_memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .reverse_engineering import for_settings as reverse_engineering_for
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
@@ -93,6 +94,9 @@ class Settings:
     asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
+    # Local reverse-engineering tools (star/reverse_engineering.py). Off by default; opt-in.
+    # Defensive, workspace-confined analysis of your own/permitted binaries only.
+    reverse_engineering_enabled: bool = False
     specialist_parallelism: int = 1
     team_timeout_min: int = 30      # bounded specialist request deadline, seconds
     team_timeout_max: int = 900     # allows slow on-device and STAR Server inference
@@ -160,7 +164,8 @@ class Settings:
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
-                            'specialists_enabled', 'learning_auto_accept', 'learning_digest',
+                            'specialists_enabled', 'reverse_engineering_enabled',
+                            'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
@@ -1066,6 +1071,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             from .blender_mcp import wants_blender
             allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        reverse_engineering = (reverse_engineering_for(settings, home)
+                               if use_tools and settings.reverse_engineering_enabled else None)
         # Searchable public metadata only; no connector is installed or approved.
         from .mcp_registry import RegistryDiscovery
         mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
@@ -1243,6 +1250,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
+                if reverse_engineering is not None:
+                    kwargs['reverse_engineering'] = reverse_engineering
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
                     nonlocal prepared_conversation
