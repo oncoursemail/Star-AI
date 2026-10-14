@@ -1,0 +1,673 @@
+/* STAR desktop, redesign 2026-10-13 (docs/design/REDESIGN_20261013.md).
+ *
+ * Layered after chat.css and stellar-ui.css. Same rule as they follow: every colour, radius,
+ * space and duration comes from tokens.css (a test checks this file has no colour literal).
+ * What lives here: the sidebar chat menu and Undo, the folded "More" group, the mode picker,
+ * the screenshot consent dialog, Star's face, the image placeholder and the press feedback.
+ */
+
+/* ---------- Press feedback: the interface heard you (Emil Kowalski: scale 0.97 on :active) ---------- */
+.rail-item:not(:disabled):active,
+.starter:active,
+.cmp-icon-button:not(:disabled):active,
+.cmp-mode-trigger:not(:disabled):active,
+.bar-action:not(:disabled):active,
+.consent-button:not(:disabled):active,
+.undo-toast button:active {
+  transform: scale(0.97);
+}
+.rail-item,
+.starter,
+.cmp-icon-button,
+.bar-action {
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-press) var(--star-ease);
+}
+
+/* ---------- Sidebar: chats are the list; everything else is one quiet line ---------- */
+.rail-group[aria-label='Workspace'] {
+  margin-bottom: var(--star-3);
+}
+.rail-more > svg {
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.rail-more > svg.is-open {
+  transform: rotate(90deg);
+}
+.rail-more-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: var(--star-3);
+}
+.rail-chat-slot {
+  overflow: visible;
+}
+.rail-chat-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--star-r-sm);
+}
+.rail-chat-row > .rail-chat {
+  padding-right: 34px;
+}
+.rail-chat-more {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--star-faint);
+  opacity: 0;
+  transform: translateY(-50%);
+  transition:
+    opacity var(--star-dur-hover) var(--star-ease),
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease);
+}
+.rail-chat-row:hover .rail-chat-more,
+.rail-chat-row.is-current .rail-chat-more,
+.rail-chat-row.is-menu .rail-chat-more,
+.rail-chat-more:focus-visible {
+  opacity: 1;
+}
+.rail-chat-more:hover,
+.rail-chat-row.is-menu .rail-chat-more {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+@media (hover: none) {
+  .rail-chat-more {
+    opacity: 1;
+  }
+}
+.rail-chat-menu,
+.bar-menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 176px;
+  padding: var(--star-1);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+}
+.rail-chat-menu {
+  top: calc(100% + 2px);
+  right: 0;
+  transform-origin: top right;
+}
+.rail-chat-menu-item,
+.bar-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 var(--star-2);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: transparent;
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  text-align: left;
+}
+.rail-chat-menu-item > svg,
+.bar-menu-item > svg {
+  color: var(--star-muted);
+}
+.rail-chat-menu-item:not(:disabled):hover,
+.rail-chat-menu-item:focus-visible,
+.bar-menu-item:not(:disabled):hover,
+.bar-menu-item:focus-visible {
+  background: var(--star-veil);
+}
+.shell :is(.rail-chat-menu-item, .bar-menu-item, .cmp-menu-item):focus-visible,
+.shell .cmp-mode-pop .cmp-mode:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 1px var(--star-stroke-focus);
+}
+.shell :is(.rail-rename, .bar-rename):focus-visible {
+  outline: 0;
+}
+.rail-chat-menu-item.is-danger,
+.rail-chat-menu-item.is-danger > svg,
+.bar-menu-item.is-danger,
+.bar-menu-item.is-danger > svg {
+  color: var(--star-danger);
+}
+.rail-chat-row.is-editing {
+  padding: 1px 0;
+}
+.shell .rail-rename,
+.shell .bar-rename {
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--star-2);
+  border: 1px solid var(--star-gold-line);
+  border-radius: var(--star-r-sm);
+  outline: 0;
+  background: var(--star-surface-2);
+  color: var(--star-text);
+  font: inherit;
+  font-size: var(--star-fs-nav);
+}
+.shell .bar-rename {
+  width: min(360px, 50vw);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Top bar: one "…" menu instead of a row of icons ---------- */
+.bar-menu-wrap {
+  position: relative;
+}
+.bar-menu {
+  top: calc(100% + var(--star-1));
+  right: 0;
+  transform-origin: top right;
+}
+
+/* ---------- Undo after delete ---------- */
+.shell .undo-toast {
+  position: fixed;
+  bottom: calc(var(--star-16) + var(--star-2));
+  left: var(--star-3);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: var(--star-3);
+  max-width: min(420px, calc(100vw - 32px));
+  padding: var(--star-2) var(--star-2) var(--star-2) var(--star-3);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+  color: var(--star-body);
+  font-size: var(--star-fs-nav);
+}
+.undo-toast > svg {
+  flex: 0 0 auto;
+  color: var(--star-muted);
+}
+.undo-toast > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.undo-toast strong {
+  color: var(--star-text);
+  font-weight: 600;
+}
+.undo-toast button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 var(--star-3);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+  color: var(--star-gold);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-press) var(--star-ease);
+}
+.undo-toast button:hover {
+  background: var(--star-bg);
+}
+
+/* ---------- Composer: quieter row, mode picker as one small pill ---------- */
+.cmp {
+  border-radius: 20px;
+  padding: var(--star-3) var(--star-3) 10px;
+}
+.cmp-mode-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--star-1);
+  height: 32px;
+  padding: 0 10px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--star-muted);
+  font-size: var(--star-fs-nav);
+  font-weight: 500;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    color var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-press) var(--star-ease);
+}
+.cmp-mode-trigger:not(:disabled):hover,
+.cmp-mode-trigger.is-open {
+  background: var(--star-surface-3);
+  color: var(--star-text);
+}
+.cmp-mode-trigger > svg {
+  color: var(--star-faint);
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.cmp-mode-trigger.is-open > svg {
+  transform: rotate(180deg);
+}
+.cmp-mode-pop {
+  position: absolute;
+  bottom: calc(100% + var(--star-2));
+  left: 0;
+  z-index: 30;
+  width: 288px;
+  padding: var(--star-1);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-3);
+  box-shadow: var(--star-shadow-float);
+  transform-origin: bottom left;
+}
+.cmp-mode-pop[data-side='below'] {
+  top: calc(100% + var(--star-2));
+  bottom: auto;
+  transform-origin: top left;
+}
+.cmp-mode-pop .cmp-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: auto;
+  padding: 0;
+  background: transparent;
+}
+.cmp-mode-pop .cmp-mode {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  height: auto;
+  min-height: 48px;
+  padding: 6px var(--star-2);
+  border-radius: var(--star-r-sm);
+  text-align: left;
+}
+.cmp-mode-pop .cmp-mode.is-on {
+  background: transparent;
+}
+.cmp-mode-pop .cmp-mode:not(:disabled):hover,
+.cmp-mode-pop .cmp-mode:focus-visible {
+  background: var(--star-veil);
+}
+.cmp-mode-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cmp-mode-label {
+  color: var(--star-text);
+  font-weight: 600;
+}
+.cmp-mode-text small {
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+}
+.cmp-mode-check {
+  flex: 0 0 auto;
+  color: var(--star-gold);
+}
+.cmp-menu-more .cmp-menu-icon svg {
+  transform: rotate(-90deg);
+  transition: transform var(--star-dur-menu) var(--star-ease);
+}
+.cmp-menu-more .cmp-menu-icon svg.is-open {
+  transform: rotate(0deg);
+}
+.cmp-menu-more .cmp-menu-text {
+  color: var(--star-muted);
+}
+.cmp-file.has-preview {
+  height: 40px;
+  padding-left: var(--star-1);
+}
+.cmp-file-thumb {
+  width: 48px;
+  height: 32px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+.cmp-status-state {
+  display: none;
+}
+.cmp-status.is-offline .cmp-status-state,
+.cmp-status.is-attention .cmp-status-state {
+  display: inline;
+}
+
+/* ---------- Empty chat: Star says hello ---------- */
+.thread-hello {
+  gap: var(--star-3);
+}
+.thread-hello-star {
+  margin-bottom: var(--star-1);
+}
+/* Star's dark hair would melt into the OLED canvas: a faint warm pool of light sits behind her. */
+.thread-hello-star::before {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 58%, var(--star-gold-wash) 0%, transparent 62%);
+  content: '';
+}
+.thread-hello h2 {
+  font-size: 26px;
+  letter-spacing: -0.02em;
+}
+.starters {
+  gap: 6px;
+}
+.starter {
+  min-height: 34px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--star-stroke-soft);
+}
+.starter:hover {
+  background: var(--star-surface-1);
+  box-shadow: inset 0 0 0 1px var(--star-stroke);
+}
+
+/* ---------- Star's face ---------- */
+.star-face {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  pointer-events: none;
+  user-select: none;
+}
+.star-face-lean {
+  position: absolute;
+  inset: 0;
+  display: block;
+  will-change: transform;
+}
+.star-face-body {
+  position: absolute;
+  inset: 0;
+  display: block;
+  transform-origin: 50% 88%;
+  animation: star-face-breathe 4.6s var(--star-ease-in-out) infinite;
+}
+.star-face[data-mood='thinking'] .star-face-body {
+  animation: star-face-ponder 2.6s var(--star-ease-in-out) infinite;
+}
+.star-face[data-mood='writing'] .star-face-body {
+  animation: star-face-breathe 2.2s var(--star-ease-in-out) infinite;
+}
+.star-face[data-mood='happy'] .star-face-body,
+.star-face[data-mood='listening'] .star-face-body {
+  animation:
+    star-face-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both,
+    star-face-breathe 4.6s var(--star-ease-in-out) 420ms infinite;
+}
+.star-face-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.star-face-img.is-entering {
+  animation: star-face-in 220ms var(--star-ease) both;
+}
+.star-face-img.is-leaving {
+  animation: star-face-out 220ms var(--star-ease) both;
+}
+.star-face-blink {
+  opacity: 0;
+  animation: star-face-blink 6.2s steps(1, end) 1.4s infinite;
+}
+.star-face[data-still] .star-face-body,
+.star-face[data-still] .star-face-img {
+  animation: none;
+}
+@keyframes star-face-breathe {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-1.5%) scale(1.012); }
+}
+@keyframes star-face-ponder {
+  0%, 100% { transform: rotate(-3deg) translateY(0); }
+  50% { transform: rotate(3deg) translateY(-2%); }
+}
+@keyframes star-face-pop {
+  0% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+@keyframes star-face-in {
+  from { opacity: 0; filter: blur(2px); transform: scale(0.97); }
+  to { opacity: 1; filter: blur(0); transform: scale(1); }
+}
+@keyframes star-face-out {
+  from { opacity: 1; filter: blur(0); }
+  to { opacity: 0; filter: blur(2px); }
+}
+@keyframes star-face-blink {
+  0%, 96.6% { opacity: 0; }
+  97%, 98.6% { opacity: 1; }
+  99%, 100% { opacity: 0; }
+}
+
+/* ---------- Thinking: Star plus a shimmer on the phase word (no fake progress) ---------- */
+.thread-status {
+  gap: 10px;
+}
+.thread-status-star {
+  margin: -10px 0 -10px -6px;
+}
+.thread-status-phase {
+  background: linear-gradient(90deg, var(--star-muted) 0%, var(--star-muted) 40%, var(--star-text) 50%, var(--star-muted) 60%, var(--star-muted) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: star-shimmer 2.4s linear infinite;
+}
+.shell[data-reduced-motion='true'] .thread-status-phase {
+  background: none;
+  color: var(--star-muted);
+}
+@media (prefers-reduced-motion: reduce) {
+  .thread-status-phase {
+    background: none;
+    color: var(--star-muted);
+  }
+}
+@keyframes star-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+
+/* ---------- Image being created: a frame of the right shape, honest label, gentle sheen ---------- */
+.image-pending {
+  position: relative;
+  width: min(420px, 100%);
+  aspect-ratio: 1 / 1;
+  margin: var(--star-2) 0 var(--star-4);
+  overflow: hidden;
+  border-radius: var(--star-r-lg);
+  background: var(--star-surface-1);
+  box-shadow: inset 0 0 0 1px var(--star-stroke-soft);
+}
+.image-pending.is-wide {
+  width: min(560px, 100%);
+  aspect-ratio: 16 / 9;
+}
+.image-pending.is-tall {
+  width: min(280px, 100%);
+  aspect-ratio: 9 / 16;
+}
+.image-pending.is-draft {
+  width: min(280px, 100%);
+}
+.image-pending-sheen {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 30%, var(--star-veil) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: star-shimmer 1.8s linear infinite;
+}
+.image-pending-label {
+  position: absolute;
+  bottom: var(--star-3);
+  left: var(--star-3);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+
+/* ---------- Your message: screenshots you attached show as pictures ---------- */
+.msg-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.msg-thumbs img {
+  max-width: min(280px, 70%);
+  max-height: 180px;
+  border-radius: var(--star-r-md);
+  box-shadow: inset 0 0 0 1px var(--star-stroke);
+  object-fit: cover;
+}
+
+/* ---------- "Look at my screen": the per-use question ---------- */
+.star-layer.consent-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--star-scrim);
+  animation: consent-fade 160ms var(--star-ease) both;
+}
+.star-layer.consent-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 81;
+  width: min(440px, calc(100vw - 32px));
+  padding: var(--star-6);
+  border: 1px solid var(--star-stroke-strong);
+  border-radius: var(--star-r-lg);
+  background: var(--star-surface-2);
+  box-shadow: var(--star-shadow-float);
+  color: var(--star-body);
+  font-family: var(--star-font);
+  font-size: var(--star-fs-ui);
+  line-height: 1.55;
+  transform: translate(-50%, -50%);
+  animation: consent-in 200ms var(--star-ease) both;
+}
+.consent-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--star-4);
+  border-radius: var(--star-r-md);
+  background: var(--star-gold-wash);
+  color: var(--star-gold);
+}
+.consent-title {
+  margin: 0 0 var(--star-2);
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: var(--star-fs-h3);
+  font-weight: 600;
+}
+.consent-text {
+  margin: 0 0 var(--star-3);
+}
+.consent-text strong {
+  color: var(--star-text);
+}
+.consent-note {
+  display: flex;
+  gap: var(--star-2);
+  margin: 0 0 var(--star-6);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.5;
+}
+.consent-note > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--star-success);
+}
+.consent-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--star-2);
+}
+.consent-button {
+  height: 36px;
+  padding: 0 var(--star-4);
+  border: 0;
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-3);
+  color: var(--star-text);
+  font: inherit;
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+  transition:
+    background-color var(--star-dur-hover) var(--star-ease),
+    transform var(--star-dur-press) var(--star-ease);
+}
+.consent-button:hover {
+  background: var(--star-stroke-strong);
+}
+.consent-button.is-primary {
+  background: var(--star-gold);
+  color: var(--star-on-gold);
+}
+.consent-button.is-primary:not(:disabled):hover {
+  background: var(--star-gold-hover);
+}
+.star-layer .consent-button:focus-visible {
+  outline: 2px solid var(--star-gold);
+  outline-offset: 2px;
+}
+@keyframes consent-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes consent-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (max-width: 850px) {
+  .thread-hello h2 {
+    font-size: 23px;
+  }
+  .shell .undo-toast {
+    right: var(--star-4);
+    bottom: calc(var(--star-16) + var(--star-12));
+    max-width: none;
+  }
+}

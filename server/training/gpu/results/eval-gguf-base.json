@@ -1,0 +1,443 @@
+{
+ "model": "llama.cpp b11538 server on the PC GPU, Q8_0 GGUF",
+ "tag": "gguf-base",
+ "sets": {
+  "dev": {
+   "summary": {
+    "vector": {
+     "n": 30,
+     "recall@1": 0.6667,
+     "recall@3": 0.9,
+     "recall@5": 0.9,
+     "recall@10": 0.9333,
+     "mrr@10": 0.77,
+     "hits@5": 27,
+     "recall@5_by_type": {
+      "howto": "10/10",
+      "identifier": "10/10",
+      "paraphrase": "7/10"
+     },
+     "latency_ms": {
+      "mean": 28.3,
+      "median": 13.5,
+      "p95": 37.6,
+      "max": 290.6
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 17.3,
+      "vector_ms": 2.0
+     },
+     "missed@5": [
+      "pa-02",
+      "pa-04",
+      "pa-07"
+     ]
+    },
+    "hybrid": {
+     "n": 30,
+     "recall@1": 0.7,
+     "recall@3": 0.8,
+     "recall@5": 0.8667,
+     "recall@10": 0.8667,
+     "mrr@10": 0.7611,
+     "hits@5": 26,
+     "recall@5_by_type": {
+      "howto": "10/10",
+      "identifier": "10/10",
+      "paraphrase": "6/10"
+     },
+     "latency_ms": {
+      "mean": 29.0,
+      "median": 26.6,
+      "p95": 45.7,
+      "max": 47.2
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 19.5,
+      "vector_ms": 2.1,
+      "bm25_ms": 6.6
+     },
+     "missed@5": [
+      "pa-01",
+      "pa-02",
+      "pa-04",
+      "pa-07"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "id-01": 1,
+     "id-02": 1,
+     "id-03": 1,
+     "id-04": 1,
+     "id-05": 1,
+     "id-06": 1,
+     "id-07": 1,
+     "id-08": 1,
+     "id-09": 2,
+     "id-10": 1,
+     "pa-01": 1,
+     "pa-02": null,
+     "pa-03": 1,
+     "pa-04": 10,
+     "pa-05": 1,
+     "pa-06": 1,
+     "pa-07": null,
+     "pa-08": 1,
+     "pa-09": 1,
+     "pa-10": 3,
+     "ho-01": 2,
+     "ho-02": 3,
+     "ho-03": 1,
+     "ho-04": 2,
+     "ho-05": 1,
+     "ho-06": 1,
+     "ho-07": 1,
+     "ho-08": 3,
+     "ho-09": 2,
+     "ho-10": 1
+    },
+    "hybrid": {
+     "id-01": 1,
+     "id-02": 1,
+     "id-03": 1,
+     "id-04": 1,
+     "id-05": 1,
+     "id-06": 1,
+     "id-07": 1,
+     "id-08": 1,
+     "id-09": 2,
+     "id-10": 1,
+     "pa-01": null,
+     "pa-02": null,
+     "pa-03": 1,
+     "pa-04": null,
+     "pa-05": 1,
+     "pa-06": 4,
+     "pa-07": null,
+     "pa-08": 1,
+     "pa-09": 1,
+     "pa-10": 1,
+     "ho-01": 4,
+     "ho-02": 3,
+     "ho-03": 1,
+     "ho-04": 2,
+     "ho-05": 1,
+     "ho-06": 1,
+     "ho-07": 1,
+     "ho-08": 1,
+     "ho-09": 1,
+     "ho-10": 1
+    }
+   }
+  },
+  "heldout": {
+   "summary": {
+    "vector": {
+     "n": 40,
+     "recall@1": 0.675,
+     "recall@3": 0.875,
+     "recall@5": 0.9,
+     "recall@10": 0.925,
+     "mrr@10": 0.7752,
+     "hits@5": 36,
+     "recall@5_by_type": {
+      "howto": "9/10",
+      "identifier": "10/10",
+      "paraphrase": "8/10",
+      "task": "9/10"
+     },
+     "latency_ms": {
+      "mean": 26.0,
+      "median": 15.1,
+      "p95": 38.6,
+      "max": 263.3
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 17.5,
+      "vector_ms": 2.1
+     },
+     "missed@5": [
+      "h-how-07",
+      "h-para-06",
+      "h-para-10",
+      "h-task-02"
+     ]
+    },
+    "hybrid": {
+     "n": 40,
+     "recall@1": 0.675,
+     "recall@3": 0.8,
+     "recall@5": 0.85,
+     "recall@10": 0.875,
+     "mrr@10": 0.7446,
+     "hits@5": 34,
+     "recall@5_by_type": {
+      "howto": "9/10",
+      "identifier": "10/10",
+      "paraphrase": "7/10",
+      "task": "8/10"
+     },
+     "latency_ms": {
+      "mean": 34.8,
+      "median": 34.7,
+      "p95": 55.1,
+      "max": 63.0
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 20.8,
+      "vector_ms": 2.1,
+      "bm25_ms": 11.1
+     },
+     "missed@5": [
+      "h-how-09",
+      "h-para-05",
+      "h-para-06",
+      "h-para-10",
+      "h-task-01",
+      "h-task-02"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "h-id-01": 1,
+     "h-id-02": 1,
+     "h-id-03": 1,
+     "h-id-04": 1,
+     "h-id-05": 1,
+     "h-id-06": 1,
+     "h-id-07": 1,
+     "h-id-08": 1,
+     "h-id-09": 1,
+     "h-id-10": 2,
+     "h-how-01": 2,
+     "h-how-02": 1,
+     "h-how-03": 1,
+     "h-how-04": 1,
+     "h-how-05": 1,
+     "h-how-06": 2,
+     "h-how-07": null,
+     "h-how-08": 1,
+     "h-how-09": 2,
+     "h-how-10": 2,
+     "h-para-01": 1,
+     "h-para-02": 1,
+     "h-para-03": 1,
+     "h-para-04": 1,
+     "h-para-05": 3,
+     "h-para-06": null,
+     "h-para-07": 1,
+     "h-para-08": 1,
+     "h-para-09": 3,
+     "h-para-10": null,
+     "h-task-01": 5,
+     "h-task-02": 7,
+     "h-task-03": 1,
+     "h-task-04": 1,
+     "h-task-05": 1,
+     "h-task-06": 2,
+     "h-task-07": 1,
+     "h-task-08": 1,
+     "h-task-09": 1,
+     "h-task-10": 1
+    },
+    "hybrid": {
+     "h-id-01": 1,
+     "h-id-02": 1,
+     "h-id-03": 1,
+     "h-id-04": 1,
+     "h-id-05": 1,
+     "h-id-06": 1,
+     "h-id-07": 1,
+     "h-id-08": 1,
+     "h-id-09": 1,
+     "h-id-10": 2,
+     "h-how-01": 1,
+     "h-how-02": 2,
+     "h-how-03": 1,
+     "h-how-04": 1,
+     "h-how-05": 1,
+     "h-how-06": 1,
+     "h-how-07": 2,
+     "h-how-08": 1,
+     "h-how-09": null,
+     "h-how-10": 1,
+     "h-para-01": 3,
+     "h-para-02": 1,
+     "h-para-03": 4,
+     "h-para-04": 1,
+     "h-para-05": null,
+     "h-para-06": null,
+     "h-para-07": 1,
+     "h-para-08": 5,
+     "h-para-09": 3,
+     "h-para-10": null,
+     "h-task-01": 6,
+     "h-task-02": null,
+     "h-task-03": 1,
+     "h-task-04": 1,
+     "h-task-05": 1,
+     "h-task-06": 1,
+     "h-task-07": 1,
+     "h-task-08": 1,
+     "h-task-09": 1,
+     "h-task-10": 1
+    }
+   }
+  },
+  "golden": {
+   "summary": {
+    "vector": {
+     "n": 25,
+     "recall@1": 0.24,
+     "recall@3": 0.44,
+     "recall@5": 0.56,
+     "recall@10": 0.84,
+     "mrr@10": 0.3966,
+     "hits@5": 14,
+     "recall@5_by_type": {
+      "animation": "1/1",
+      "datastore": "0/1",
+      "economy": "0/1",
+      "gameplay": "0/1",
+      "luau": "3/5",
+      "npc": "1/1",
+      "remote": "3/3",
+      "rig": "1/1",
+      "server": "0/1",
+      "studio": "0/2",
+      "ui": "5/8"
+     },
+     "latency_ms": {
+      "mean": 41.9,
+      "median": 36.1,
+      "p95": 48.4,
+      "max": 257.5
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 30.0,
+      "vector_ms": 2.0
+     },
+     "missed@5": [
+      "LUA-03",
+      "LUA-04",
+      "NET-05",
+      "UI-01",
+      "UI-03",
+      "UI-07",
+      "SYS-01",
+      "SYS-03",
+      "SYS-04",
+      "STU-01",
+      "STU-02"
+     ]
+    },
+    "hybrid": {
+     "n": 25,
+     "recall@1": 0.32,
+     "recall@3": 0.44,
+     "recall@5": 0.52,
+     "recall@10": 0.64,
+     "mrr@10": 0.4113,
+     "hits@5": 13,
+     "recall@5_by_type": {
+      "animation": "1/1",
+      "datastore": "0/1",
+      "economy": "0/1",
+      "gameplay": "1/1",
+      "luau": "1/5",
+      "npc": "1/1",
+      "remote": "3/3",
+      "rig": "1/1",
+      "server": "0/1",
+      "studio": "0/2",
+      "ui": "5/8"
+     },
+     "latency_ms": {
+      "mean": 55.2,
+      "median": 59.2,
+      "p95": 68.7,
+      "max": 68.8
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 32.7,
+      "vector_ms": 2.1,
+      "bm25_ms": 19.6
+     },
+     "missed@5": [
+      "LUA-01",
+      "LUA-02",
+      "LUA-03",
+      "LUA-04",
+      "NET-05",
+      "UI-01",
+      "UI-03",
+      "UI-04",
+      "SYS-01",
+      "SYS-03",
+      "STU-01",
+      "STU-02"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "LUA-01": 5,
+     "LUA-02": 4,
+     "LUA-03": 7,
+     "LUA-04": 9,
+     "LUA-05": 3,
+     "NET-01": 1,
+     "NET-03": 1,
+     "NET-04": 2,
+     "NET-05": 10,
+     "UI-01": null,
+     "UI-02": 1,
+     "UI-03": 6,
+     "UI-04": 1,
+     "UI-05": 4,
+     "UI-06": 2,
+     "UI-07": 9,
+     "UI-08": 2,
+     "SYS-01": 8,
+     "SYS-02": 1,
+     "SYS-03": null,
+     "SYS-04": null,
+     "STU-01": 8,
+     "STU-02": null,
+     "ANI-01": 2,
+     "ANI-02": 1
+    },
+    "hybrid": {
+     "LUA-01": 6,
+     "LUA-02": null,
+     "LUA-03": null,
+     "LUA-04": null,
+     "LUA-05": 2,
+     "NET-01": 1,
+     "NET-03": 1,
+     "NET-04": 1,
+     "NET-05": null,
+     "UI-01": null,
+     "UI-02": 1,
+     "UI-03": 6,
+     "UI-04": 6,
+     "UI-05": 4,
+     "UI-06": 1,
+     "UI-07": 2,
+     "UI-08": 1,
+     "SYS-01": null,
+     "SYS-02": 1,
+     "SYS-03": null,
+     "SYS-04": 3,
+     "STU-01": null,
+     "STU-02": null,
+     "ANI-01": 5,
+     "ANI-02": 1
+    }
+   }
+  }
+ }
+}

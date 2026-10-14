@@ -1,0 +1,16 @@
+{
+ "model": "google/gemma-4-E2B-it",
+ "trainable_params_m": 24.2,
+ "rank": 16,
+ "max_len": 1024,
+ "accum": 8,
+ "steps_done": 1,
+ "stopped": "free RAM below 6.0 GB",
+ "load_seconds": 16.5,
+ "median_step_seconds": 15.72,
+ "examples_seen": 8,
+ "peak_vram_gb": 6.93,
+ "heldout_loss_before": 4.0325,
+ "heldout_loss_after": 3.7754,
+ "note": "feasibility only: passage-recall SFT, not a coding-quality measurement"
+}

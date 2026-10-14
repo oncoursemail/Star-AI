@@ -75,7 +75,7 @@ def test_one_token_source_and_no_orphan_desktop_stylesheets():
         assert name + ":" in tokens
     # Chat and shell styles take every colour from the tokens: no palette of their own.
     import re
-    for sheet in ("chat.css", "stellar-ui.css"):
+    for sheet in ("chat.css", "stellar-ui.css", "redesign.css"):
         css = read("frontend/src/" + sheet)
         assert not re.findall(r"#[0-9a-fA-F]{3,8}|rgba?\(", css), sheet
     # Stylesheets that nothing imported were removed rather than left to drift.

@@ -35,6 +35,8 @@ from .chat_images import chat_image, generate_chat_image, latest_generated_path
 from .comfy import ComfyError
 from .warmup import Warmer
 from .diagnostics import export_review_bundle
+from .screen_capture import (require_consent as require_screen_consent, store_capture as store_screen_capture,
+                             describe as describe_screen_capture, preview_url as screen_preview_url)
 from .mcp_connections import MCPGateway
 from .blender_bridge import status as blender_status
 from .studio_connections import connection_status, validate_target, select_instance
@@ -43,6 +45,8 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
+from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
+from .corrections import CORRECTION_ACTIONS, handle_action as handle_correction_action
 from .lesson_digest import Digester, may_start_automatic
 from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
@@ -62,12 +66,18 @@ ALLOWED_ACTIONS = frozenset({
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
     'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
+    # Sidebar chat menu (rename, delete after the Undo window) and the composer's
+    # "Look at my screen", which needs the owner's per-use consent (star/screen_capture.py).
+    'renameChat','deleteChat','captureScreen',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
+# What STAR learned this week (undo / restore / keep) and owner corrections that may become regression tests
+# (star/learned_week.py, star/corrections.py, docs/SELF_LEARNING_LOOP.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | LEARNED_ACTIONS | CORRECTION_ACTIONS
 # Media: where images, voice and video run, the image engine on this PC, and a project's
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
@@ -83,7 +93,7 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 WARM_UP_STOPPERS = frozenset({
     'sendMessage','runTeam','generateImage','testServer','testModel','testModelTeam','listModels',
     'startModelRouter','stopBrain','startBrain','installBrain','saveSettings','switchProject',
-    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender',
+    'saveProviderKey','clearProviderKey','newChat','switchChat','testBlender','deleteChat',
 })
 
 # Settings the React interface may change. Never a credential: provider and
@@ -98,8 +108,9 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
+    'instant_route_enabled',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','research_auto_check',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -107,14 +118,18 @@ PERMITTED_SETTINGS = frozenset({
 
 def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
     """Stage an official verified Setup and record it before asking Qt to exit."""
-    from .updates import stage_installer, get_latest, select_downloaded_installer
+    from .updates import ADMIN_PROMPT_NOTE, install_scope, stage_installer, get_latest, select_downloaded_installer
     result = get_latest()
     if not result.available:
         raise RuntimeError('No newer update is available')
-    bridge._emit(request_id, 'progress', {'phase': 'Downloading and verifying STAR Setup',
+    # Issue 121: an all-users copy is upgraded in administrative mode, so Windows will ask for
+    # approval. That prompt is required; say so before it appears instead of surprising the owner.
+    admin_prompt = install_scope() == 'all-users'
+    note = (' ' + ADMIN_PROMPT_NOTE) if admin_prompt else ''
+    bridge._emit(request_id, 'progress', {'phase': 'Downloading and verifying STAR Setup' + note,
                                            'downloaded': 0, 'total': 0})
     candidate = stage_installer(result, home, progress=lambda done, total:
-        bridge._emit(request_id, 'progress', {'phase': 'Downloading verified update',
+        bridge._emit(request_id, 'progress', {'phase': 'Downloading verified update' + note,
                                                'downloaded': done, 'total': total}))
     if not candidate.checksum_verified or not candidate.expected_sha256:
         raise PermissionError('Automatic restart requires a checksum-verified installer')
@@ -124,7 +139,7 @@ def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
     select_downloaded_installer(candidate.path)
     bridge.pending_update = candidate
     bridge.shutdownRequested.emit()
-    return {'status': 'pending_restart', 'version': candidate.version}
+    return {'status': 'pending_restart', 'version': candidate.version, 'administrator_prompt': admin_prompt}
 
 
 def finish_desktop_update(shell, instance) -> None:
@@ -314,12 +329,42 @@ def sanitize_event(event: dict) -> dict:
             activity['model']=event['model']       # the model this message is sent to
         return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90],
                 'activity':activity}
+    if kind == 'instant_selected':
+        activity = {'type': 'instant'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'Answering on this PC', 'activity': activity}
+    if kind == 'instant_fallback':
+        activity = {'type': 'instant_fallback'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'On-device answer unavailable; using STAR Server', 'activity': activity}
+    if kind == 'answer_stats':
+        activity = {'type': 'answer_stats'}
+        if event.get('brain') in {'pc', 'server', 'cloud'}:
+            activity['brain'] = event['brain']
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        first = _bounded_int(event.get('first_token_ms'), 3_600_000)
+        if first is not None:
+            activity['first_token_ms'] = first
+        rate = event.get('tokens_per_second')
+        if type(rate) in (int, float) and 0 <= rate <= 10000:
+            activity['tokens_per_second'] = round(float(rate), 1)
+        activity['estimated_tokens'] = event.get('estimated_tokens') is True
+        return {'phase': 'Answer complete', 'activity': activity}
     if kind == 'route_fallback':
         # The model chosen for this job is missing or did not load; the configured one answers.
         activity={'type':'route','fallback':True}
         if _model_name(event.get('model')):
             activity['model']=event['model']
         return {'phase':'That model is not available. Using your main model','activity':activity}
+    if kind == 'worked_example_used':
+        count = _bounded_int(event.get('count'), 2)
+        if count is not None and count > 0:
+            return {'phase':f'Using {count} checked practice example' + ('s' if count != 1 else ''),
+                    'activity':{'type':'example','count':count}}
+        return {'phase':'Reviewing local reference data'}
     if kind == 'model_answered':
         # The model name the server itself reported on the answer.
         activity={'type':'model'}
@@ -497,6 +542,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
     except (OSError, ValueError, sqlite3.Error) as exc:
         lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
+    try:
+        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
+                                                 project=settings.project)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -538,6 +588,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'analytics':get_dashboard(home,settings.project),
         'learning':learning_status(home,settings.project),
         'lesson_bundle':lesson_bundle,
+        'learning_bundle':learning_bundle,
         'credentials':credential_status(),
         'server':server_status(settings),
         'roblox':roblox_state(home),
@@ -703,6 +754,39 @@ def launch():
             payload={'requestId':request_id,'kind':kind,'data':data}
             self.event.emit(json.dumps(payload,default=str))
 
+        def _capture_screen(self) -> dict:
+            """Hide STAR, grab the screen it is on, show STAR again, and store one PNG."""
+            from PySide6.QtCore import QBuffer, QByteArray, QEventLoop, QIODevice, QTimer as _Timer, Qt
+            from PySide6.QtGui import QGuiApplication
+            window=self.host
+            screen=window.screen() if hasattr(window,'screen') else None
+            screen=screen or QGuiApplication.primaryScreen()
+            if screen is None:
+                raise RuntimeError('No screen is available to capture')
+            visible=window.isVisible()
+            if visible:
+                window.hide()  # STAR itself is not what the owner wants it to look at
+                pause=QEventLoop()
+                _Timer.singleShot(320,pause.quit)
+                pause.exec()
+            try:
+                pixmap=screen.grabWindow(0)
+            finally:
+                if visible:
+                    window.show();window.raise_();window.activateWindow()
+            if pixmap.isNull():
+                raise RuntimeError('Windows did not return a picture of the screen')
+            def encode(image,fmt,quality=-1)->bytes:
+                data=QByteArray();buffer=QBuffer(data);buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                ok=image.save(buffer,fmt,quality);buffer.close()
+                if not ok:raise RuntimeError('Could not encode the screenshot')
+                return bytes(data)
+            path=store_screen_capture(encode(pixmap,'PNG'),app_data())
+            self.allowed_files.add(path)
+            thumb=pixmap.scaledToWidth(min(480,pixmap.width()),Qt.TransformationMode.SmoothTransformation)
+            return describe_screen_capture(path,pixmap.width(),pixmap.height(),
+                                           screen_preview_url(encode(thumb,'JPEG',78),'image/jpeg'))
+
         def _run(self, request_id: str, action: str, worker):
             def task():
                 try:
@@ -760,7 +844,11 @@ def launch():
                 full_prompt=media.prompt(prompt)
                 documents=media.documents
                 learned={}
+                instant_used=False
                 def relay(e):
+                    nonlocal instant_used
+                    if e.get('event') == 'instant_selected':
+                        instant_used = True
                     # What the turn taught is reported with the result, not as a progress step.
                     if e.get('event')=='lessons_captured':
                         learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
@@ -772,13 +860,13 @@ def launch():
                                    'Other features depend on the current setup.\n\n' + full_prompt)
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt, studio_configuration_home=self.settings_file.parent,
+                    owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
             if self.cancel_chat.is_set():
                 raise RuntimeError('cancelled by user')
-            if provider_kind(settings)=='lan':
+            if provider_kind(settings)=='lan' and not instant_used:
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
             try:
@@ -788,7 +876,8 @@ def launch():
             # While the owner reads the answer, let the server read it too: the next
             # message then starts from a fully cached conversation. Cancelled by any request.
             # Once that is done the server is idle, which is when raw captures get reworded.
-            self._warm(check=False,then=self._digest_when_idle)
+            if not instant_used:
+                self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
         def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None, retry_id=None):
@@ -834,7 +923,7 @@ def launch():
                 chats.close()
             return {'answer':result['answer'],'image':result['image']}
 
-        def _run_team(self, request_id: str, prompt: str):
+        def _run_team(self, request_id: str, prompt: str, research: bool = False):
             """One user request, four bounded read-only specialists, one stored answer."""
             from .team_service import run_research_team
             import asyncio
@@ -855,7 +944,7 @@ def launch():
             async def run():
                 return await run_until_cancelled(
                     run_research_team(
-                        settings=settings, prompt=prompt, home=home,
+                        settings=settings, prompt=prompt, home=home, research=research,
                         on_event=lambda event: self._emit(
                             request_id, 'progress', sanitize_event(event)),
                     ),
@@ -969,6 +1058,32 @@ def launch():
                     if not self.active_task:self._warm(check=False)
                     busy=bool(self.active_task and self.turn is not None and self.turn.chat_id==chat_id)
                     return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=busy)})
+                if action=='renameChat':
+                    chat_id=str(body.get('chatId',''))[:80]
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: title=conversations.rename_chat(settings.project,chat_id,str(body.get('title',''))[:400])
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':{'chatId':chat_id,'title':title}})
+                if action=='deleteChat':
+                    # The interface waits out its Undo window before sending this; the owner chose it.
+                    chat_id=str(body.get('chatId',''))[:80]
+                    if self.active_task and self.turn is not None and self.turn.chat_id==chat_id:
+                        raise RuntimeError('Stop the answer in this chat before deleting it')
+                    settings=Settings.load(self.settings_file)
+                    conversations=Conversations(app_data()/'conversations.sqlite3')
+                    try: conversations.delete_chat(settings.project,chat_id)
+                    finally: conversations.close()
+                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                if action=='captureScreen':
+                    # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
+                    require_screen_consent(body)
+                    return json.dumps({'ok':True,'data':self._capture_screen()})
+                if action in LEARNED_ACTIONS or action in CORRECTION_ACTIONS:
+                    # Owner clicks in What STAR learned this week / corrections; `approved` is the click itself.
+                    settings=Settings.load(self.settings_file)
+                    handler=handle_learned_action if action in LEARNED_ACTIONS else handle_correction_action
+                    return json.dumps({'ok':True,'data':handler(app_data(),settings.project,action,body)},default=str)
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)
@@ -1110,10 +1225,13 @@ def launch():
                         raise ValueError('Team prompt must be 2–12,000 characters')
                     if body.get('files'):
                         raise ValueError('STAR Teams currently supports text only. Turn off Team mode to attach files.')
+                    research = body.get('research', False)
+                    if type(research) is not bool:
+                        raise ValueError('Team Research mode must be true or false')
                     self.cancel_chat = threading.Event()
                     self.active_task=True
                     try:
-                        self._run(rid,action,lambda:self._run_team(rid,prompt))
+                        self._run(rid,action,lambda:self._run_team(rid,prompt,research))
                     except Exception:
                         self.active_task=False
                         raise

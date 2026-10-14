@@ -37,13 +37,13 @@ def validate_example(row: dict) -> dict:
         raise ValueError("Example requires explicit human review and rights confirmation")
     if not isinstance(row.get("id"), str) or not _ID.fullmatch(row["id"]):
         raise ValueError("Example needs a stable safe ID")
-    if row.get("category") not in _CATEGORIES:
+    if not isinstance(row.get("category"), str) or row["category"] not in _CATEGORIES:
         raise ValueError("Unsupported Roblox training category")
     if not isinstance(row.get("group_id"), str) or not _ID.fullmatch(row["group_id"]):
         raise ValueError("Stable group_id required to keep related examples in the same split")
     if not isinstance(row.get("evidence"), list) or not 1 <= len(row["evidence"]) <= 10:
         raise ValueError("Record a real test, review or screenshot evidence reference")
-    if any(not isinstance(s, str) or not 1 <= len(s) <= 200 for s in row["evidence"]):
+    if any(not isinstance(s, str) or not s.strip() or len(s) > 200 for s in row["evidence"]):
         raise ValueError("Evidence identifiers must be short strings")
     for key, length in (("instruction", 12000), ("response", 32000)):
         value = row.get(key)
@@ -57,21 +57,32 @@ def validate_example(row: dict) -> dict:
     }
 
 
+def _instruction_fingerprint(instruction: str) -> str:
+    """Hash only exact matches after case-folding and collapsing whitespace."""
+    normalized = " ".join(instruction.split()).casefold()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def split_examples(rows: list[dict], *, holdout_percent: int = 20) -> dict:
-    """Group-stable split. Never include evaluation answers in training JSONL."""
+    """Group-stable split; reject normalized instructions reused across groups."""
     if not isinstance(rows, list) or len(rows) > 5000:
         raise ValueError("Expected at most 5000 explicitly supplied examples")
     if not isinstance(holdout_percent, int) or not 5 <= holdout_percent <= 40:
         raise ValueError("Evaluation holdout must be 5..40 percent")
     train, evaluation = [], []
     seen_ids, seen_pairs = set(), set()
+    instruction_groups: dict[str, str] = {}
     for raw in rows:
         item = validate_example(raw)
         if item["id"] in seen_ids:
             raise ValueError("Duplicate training example ID")
         seen_ids.add(item["id"])
+        fingerprint = _instruction_fingerprint(item["instruction"])
+        previous_group = instruction_groups.setdefault(fingerprint, item["group_id"])
+        if previous_group != item["group_id"]:
+            raise ValueError("Identical normalized instruction found in different groups")
         pair = hashlib.sha256(
-            (item["instruction"].casefold() + "\x00" + item["response"]).encode("utf-8")
+            (fingerprint + "\x00" + item["response"]).encode("utf-8")
         ).hexdigest()
         if pair in seen_pairs:
             raise ValueError("Duplicate instruction/answer example")

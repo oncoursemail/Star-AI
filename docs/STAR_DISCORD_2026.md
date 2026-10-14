@@ -1,5 +1,7 @@
 # STAR Intelligence × Discord — research and rollout (October 2026)
 
+> Owner setup (Developer Portal, minimal intents, invite link, local token file): `docs/STAR_DISCORD_SETUP.md`.
+
 This is a source-grounded plan plus an **opt-in prototype**. It is not evidence that an actual Discord bot token, model, voice channel, live Discord message, or Roblox Studio was tested. The code is in `star/discord_bot/`, the optional dependencies in `requirements-discord.txt`.
 
 ## Product and security boundaries

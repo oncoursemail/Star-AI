@@ -49,6 +49,9 @@ describe('Studio connection in the downloaded app',()=>{
  it('opens the guided local Studio connection directly from the chat dock',async()=>{
    desktop.reset()
    render(<Desktop/> )
+   // The Studio shortcut appears only when the message is about Studio, so the dock stays quiet otherwise.
+   expect(screen.queryByRole('button',{name:/Studio: this PC/})).toBeNull()
+   await userEvent.type(screen.getByRole('textbox',{name:'Message STAR'}),'Check my Roblox Studio place')
    await userEvent.click(await screen.findByRole('button',{name:/Studio: this PC/}))
    expect(await screen.findByLabelText('Studio connection')).toBeTruthy()
    expect(screen.getByRole('button',{name:'Test & discover Studio'})).toBeTruthy()

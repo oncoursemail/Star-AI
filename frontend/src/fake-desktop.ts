@@ -20,13 +20,13 @@ type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; crea
 export const backendSettings = {
   endpoint: 'http://127.0.0.1:8080/v1', provider: 'local', model: 'qwen-test', fast_model: '',
   reasoning_model: '', roblox_model: '', vision_model: '', router_models_dir: '', router_context: 4096,
-  gpu_layers: 25, project: 'STAR', workspace: '', studio_id: '', studio_target: 'local_pc', studio_edit: false, workspace_edit: false,
+  gpu_layers: 25, instant_route_enabled: false, project: 'STAR', workspace: '', studio_id: '', studio_target: 'local_pc', studio_edit: false, workspace_edit: false,
   max_calls: 12, context_chars: 26000, reduced_motion: true, obsidian_vault: '', obsidian_enabled: false,
   skills_enabled: true, graphify_enabled: true, comfy_workflow: '', comfy_prompt_node: '6', comfy_port: 8188,
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
   blender_enabled: false, blender_edit: false, blender_executable: '',
   roblox_research_enabled: true, asset_forge_enabled: false, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
-  practice_lessons_enabled: false,
+  practice_lessons_enabled: false, worked_examples_enabled: false,
 }
 
 const analytics = {started: 0, succeeded: 0, failed: 0, tools: 0, rejected: 0, median_ms: null, messages: 0,
