@@ -946,7 +946,13 @@ def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[di
         defects.append({"code": "route-failed", "fix": None, "evidence": failed})
         return defects
     index = route.index(target)
-    source = route[index - 1] if index > 0 else route[0]
+    if index == 0:
+        # The first leg runs from the spawn onto the route's first surface: there is no earlier route surface to
+        # measure a gap from or move toward, so report it (a fix would wrap around to the last surface).
+        defects.append({"code": "route-failed", "fix": None, "object": target, "evidence": {"leg": f"spawn -> {target}",
+                                                                                            "probe": failed}})
+        return defects
+    source = route[index - 1]
     a, b = boxes[source], boxes[target]
     gap, rise = _leg(a, b)
     evidence = {"leg": f"{source} -> {target}", "gap": round(gap, 2), "rise": round(rise, 2), "probe": failed}
@@ -1136,6 +1142,9 @@ def fix_plan(plan: dict, defects: list[dict]) -> tuple[dict, list[dict]]:
         elif fix in ("close-gap", "lower-rest"):
             boxes = _object_boxes(new)
             index = route.index(defect["object"])
+            if index == 0:      # no earlier route surface (route[-1] would be the goal): never move the course
+                changes.append({"fix": None, "object": defect["object"], "why": "first route surface"})
+                continue
             a, b = boxes[route[index - 1]], boxes[route[index]]
             gap, rise = _leg(a, b)
             if fix == "close-gap":
@@ -1603,10 +1612,17 @@ class Lab:
             if _failed(started):
                 return {"ok": False, "started": False, "detail": _text(started)[:300], "probe": probe, "errors": []}
             settle_until = time.monotonic() + self.settle
-            while time.monotonic() < settle_until and not probe["started"]:
-                await self.sleep(min(self.poll, 1.0))
-                console = _text(await self._read("get_console_output"))
-                probe = parse_probe(console, run)
+            try:
+                while time.monotonic() < settle_until and not probe["started"]:
+                    await self.sleep(min(self.poll, 1.0))
+                    console = _text(await self._read("get_console_output"))
+                    probe = parse_probe(console, run)
+            except BaseException:
+                # Never leave Studio in Play (GuardedStudio would refuse every later edit): stop while still
+                # holding the lock, then let the error go on.
+                await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                 "is_start": False})
+                raise
         deadline = time.monotonic() + seconds
         try:
             while time.monotonic() < deadline and not probe["finished"]:

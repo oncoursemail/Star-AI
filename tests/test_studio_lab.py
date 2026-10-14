@@ -242,6 +242,19 @@ def test_fix_close_gap_moves_the_rest_of_the_route():
     assert moved["P1"] == 83 and moved["P2"] == 93.0 and moved["Goal"] == 112.5
 
 
+def test_failed_first_leg_from_the_spawn_is_reported_not_fixed():
+    # A route that starts on a part (not the spawn): the probe's first leg is spawn -> StartFloor. A failure there has
+    # no previous route surface; the fixer must not wrap around to the LAST surface and move the whole course.
+    plan = clean_plan()
+    plan["route"]["waypoints"] = ["StartFloor", "P1", "P2", "P3", "Goal"]
+    probe = studio_lab.parse_probe(probe_lines("abcd1234", [{"name": "StartFloor", "reached": False}]), "abcd1234")
+    defects = studio_lab.diagnose(plan, {"ok": True}, probe, [])
+    assert [d["code"] for d in defects] == ["route-failed"] and defects[0]["fix"] is None
+    for fix in ("close-gap", "lower-rest"):
+        fixed, changes = studio_lab.fix_plan(plan, [{"code": "x", "fix": fix, "object": "StartFloor"}])
+        assert fixed == plan and changes[0]["fix"] is None
+
+
 def test_fix_shift_map_clears_foreign_parts():
     plan = clean_plan()
     defects = [{"code": "foreign-overlap", "fix": "shift-map",
@@ -529,3 +542,23 @@ def test_for_settings_switch(tmp_path, monkeypatch):
     assert intelligence.for_settings(settings, tmp_path).studio_lab_enabled is False
     monkeypatch.setenv("STAR_STUDIO_LAB", "1")
     assert intelligence.for_settings(settings, tmp_path).studio_lab_enabled is True
+
+
+def test_playtest_stops_play_when_reading_the_output_fails_while_settling(tmp_path):
+    # The settle wait (holding the play lock) reads the console; if that read raises, Play must still be stopped.
+    class Broken(StandInStudio):
+        async def call_tool(self, name, arguments):
+            if name == "get_console_output":
+                raise RuntimeError("connector gone")
+            return await super().call_tool(name, arguments)
+
+    studio = Broken()
+    studio.config, studio.token = {"waypoints": []}, "abcd1234"
+
+    async def no_sleep(_):
+        return None
+
+    lab = studio_lab.Lab(studio, tmp_path, log=lambda *_: None, sleep=no_sleep, poll=0)
+    with pytest.raises(RuntimeError):
+        asyncio.run(lab.playtest("abcd1234", 10, tmp_path))
+    assert studio.calls.count("start_stop_play") == 2 and studio.playing is False
