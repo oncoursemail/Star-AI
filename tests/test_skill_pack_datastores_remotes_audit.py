@@ -87,4 +87,4 @@ def test_all_six_real_pack_luau_code_blocks_are_lint_clean():
     assert len(examples) == 6
     for name, code in examples:
         assert lint(code) == [], name
-    assert lint("local x = (") != []
+    assert any(f.rule_id == "deprecated-task-global" for f in lint("wait(1)"))
