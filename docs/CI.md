@@ -16,11 +16,13 @@ The two PyInstaller commands (this workflow and `scripts/build_windows.ps1`) mus
 packaged.
 
 ## STAR offline checks (`tests.yml`)
-- `changes` decides whether a change is documentation only (`scripts/ci_changed_scope.py`). Only
+- `Offline Python checks` and `React UI compile and tests` first decide whether the change is
+  documentation only (`.github/actions/changed-scope` running `scripts/ci_changed_scope.py`). Only
   Markdown at the repository root or under `docs/` (not `docs/lessons/`) that no test, script or
   source file names counts. Anything else, or any doubt, runs everything.
-- `Offline Python checks` and `React UI compile and tests` are skipped for documentation-only changes
-  (a skipped job satisfies a required check).
+- For a documentation-only change the remaining steps are skipped and the job reports success, so a
+  required check is satisfied. The decision is a step, not a separate job, so code changes do not
+  wait for an extra runner.
 
 ## Conventions
 - Actions are pinned to full commit SHAs with the version in a comment
