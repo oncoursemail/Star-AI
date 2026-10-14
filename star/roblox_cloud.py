@@ -27,7 +27,11 @@ import time
 from typing import Any
 
 from ._lazy import lazy_module
-httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 API = "https://apis.roblox.com"
 DOCS = "https://create.roblox.com/docs/cloud/"

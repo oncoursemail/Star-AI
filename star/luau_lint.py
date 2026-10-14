@@ -189,14 +189,14 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
     protected = [(j, end_of(j + 1)) for j in range(len(v) - 1)
                  if v[j] in ("pcall", "xpcall") and v[j + 1] == "("]
 
-    # Where `local wait` or `local function wait` (or spawn/delay) first appears: a later bare call is the
-    # local, not the global.
+    # Where `local wait` / `local function wait` (or spawn/delay) first appears: a later bare call is the local,
+    # not the global.
     first_local: dict[str, int] = {}
     for k in range(len(v) - 1):
-        if v[k] == "local" and v[k + 1] in ("wait", "spawn", "delay"):
-            first_local.setdefault(v[k + 1], k)
-        elif v[k:k + 2] == ["local", "function"] and v[k + 2:k + 3] and v[k + 2] in ("wait", "spawn", "delay"):
-            first_local.setdefault(v[k + 2], k)
+        if v[k] == "local":
+            name = v[k + 2] if v[k + 1] == "function" and k + 2 < len(v) else v[k + 1]
+            if name in ("wait", "spawn", "delay"):
+                first_local.setdefault(name, k)
 
     for i, word in enumerate(v):
         prev = v[i - 1] if i else ""
@@ -229,7 +229,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
                    w == "Wait" and j > 0 and body[j - 1] == ":"
                    for j, w in enumerate(body))
 
-    loops = [(i, block_end(i)) for i, w in enumerate(v) if w in ("while", "repeat", "for")]
+    # Generic `for ... in` loops usually wire each element once (not a leak); numeric
+    # `for i = ...` loops and while/repeat loops can connect the same signal repeatedly.
+    loops = [(i, block_end(i)) for i, w in enumerate(v)
+             if w in ("while", "repeat") or (w == "for" and v[i + 2:i + 3] == ["="])]
     for i, word in enumerate(v):
         if word == "while" and v[i + 1:i + 3] == ["true", "do"]:
             end = block_end(i)
@@ -277,7 +280,8 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             fn = next((j for j in range(i + 1, len(v)) if v[j] == "function"), -1)
             if fn >= 0:
                 body = [w.lower() for w in v[fn:block_end(fn)]]
-                if not any(w in body for w in ("debounce", "cooldown", "busy", "active", "canhit", "hitonce")):
+                if not (any(w in body for w in ("debounce", "cooldown", "busy", "active", "canhit", "hitonce"))
+                        or ("lasthit" in body and "cooldown_seconds" in body and "if" in body)):
                     add("touched-debounce", i, "Touched handler lacks an obvious state guard.",
                         "Add a debounce or per-object cooldown.", "review")
         if word in ("OnServerEvent", "OnServerInvoke"):
