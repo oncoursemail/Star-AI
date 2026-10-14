@@ -24,7 +24,7 @@ packaged.
   required check is satisfied. The decision is a step, not a separate job, so code changes do not
   wait for an extra runner.
 
-## Conventions
+## Conventions (keep in sync with the workflows)
 - Actions are pinned to full commit SHAs with the version in a comment
   (`tests/test_workflow_action_pins.py`). To update one, resolve the new tag to its commit and change
   both.
