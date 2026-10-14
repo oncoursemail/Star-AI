@@ -354,3 +354,9 @@ def test_file_driven_push_to_talk_call_holds_the_key_per_line_and_measures_from_
     assert first.interrupted and first.interrupt_reason == "push_to_talk"     # pressing the key cut her off
     assert second.user_text == TEXTS[3] and second.reply_text == "Okay, a story it is."
     assert all(m.stages()["endpoint"] < 0.3 for m in result.turns)            # only the 160 ms release tail
+
+
+def test_read_aloud_is_held_to_the_chosen_voice_place_like_calls_and_previews():
+    # A voice set to run elsewhere in Settings is refused for read-aloud too, never spoken on the PC instead.
+    from star.react_shell import VOICE_PLACE_ACTIONS
+    assert {"voiceStartCall", "voicePreviewVoice", "voiceSpeak"} <= VOICE_PLACE_ACTIONS <= VOICE_ACTIONS

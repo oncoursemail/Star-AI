@@ -72,6 +72,8 @@ ALLOWED_ACTIONS = frozenset({
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
+# Voice actions that make sound must run where Settings → Where STAR generates says (star/media_places.py).
+VOICE_PLACE_ACTIONS = frozenset({'voiceStartCall', 'voicePreviewVoice', 'voiceSpeak'})
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
@@ -981,7 +983,7 @@ def launch():
                     self._warm(rid)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action in VOICE_ACTIONS:
-                    if action in {'voiceStartCall','voicePreviewVoice'}:
+                    if action in VOICE_PLACE_ACTIONS:
                         # Speech runs where Settings says; a place that does not exist is refused, not replaced.
                         media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
