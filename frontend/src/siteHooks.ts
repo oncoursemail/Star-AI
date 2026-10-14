@@ -1,108 +1,21 @@
-import {startTransition,useCallback,useEffect,useRef,useState,useSyncExternalStore} from 'react'
+import {useEffect,useState} from 'react'
 import type {CSSProperties} from 'react'
 import buildSnapshot from './progress.json'
-import {
- FRESH_MS,RateLimitError,fetchLiveProgress,isFresh,newest,parseStoredProgress,
- readCachedProgress,readRetryAt,writeCachedProgress,writeRetryAt
-} from './githubPublic'
+import {parseStoredProgress} from './githubPublic'
 import type {ProgressSnapshot} from './githubPublic'
 
 /** `?visualqa` renders every final state immediately, for screenshots and audits. */
 export const staticMode=()=>typeof window!=='undefined'&&new URLSearchParams(window.location.search).has('visualqa')
 const prefersReducedMotion=()=>typeof window!=='undefined'&&window.matchMedia?.('(prefers-reduced-motion: reduce)').matches===true
 
-/* ---------- progress data ---------- */
+/* ---------- release data ---------- */
 
-export type ProgressStatus=
- |{kind:'snapshot'}                       // last known data; no live answer yet
- |{kind:'loading'}                        // asking GitHub; last known data stays on screen
- |{kind:'live';partial:boolean}           // read from GitHub within the last few minutes
- |{kind:'limited';retryAt:number}         // GitHub's anonymous rate limit; showing last known data
- |{kind:'failed'}                         // could not reach GitHub; showing last known data
-export type ProgressState={snapshot:ProgressSnapshot|null;status:ProgressStatus;refresh:()=>void}
-
-/** The snapshot written at build time. Always present, so the page is never empty. */
+/**
+ * The public repository snapshot written at build time (scripts/build-progress.mjs). The page reads only its latest
+ * stable release, so the download section is complete before any network request; Landing then asks GitHub for the
+ * latest release directly.
+ */
 export const builtSnapshot:ProgressSnapshot|null=parseStoredProgress(buildSnapshot as unknown,'build')
-
-const MIN_MANUAL_GAP_MS=15_000
-/**
- * How often an open tab looks at the age of what it shows. It asks GitHub only when the answer is stale and
- * the last attempt is `FRESH_MS` old, so a failing network is still retried at most every `FRESH_MS`.
- * (Checking only every `FRESH_MS` found the answer a moment short of stale each time: a 20-minute refresh.)
- */
-export const RECHECK_MS=60_000
-
-const noSubscription=()=>()=>undefined
-/**
- * False while React is hydrating prerendered HTML, true afterwards (and always true without prerendering).
- * Anything that depends on the visitor's clock or time zone waits for it, so server and browser markup agree.
- */
-export const useHydrated=()=>useSyncExternalStore(noSubscription,()=>true,()=>false)
-
-export function useProgress():ProgressState{
- // The first render always uses the build-time snapshot, which is also what the prerendered HTML contains.
- const [snapshot,setSnapshotNow]=useState<ProgressSnapshot|null>(builtSnapshot)
- const [status,setStatusNow]=useState<ProgressStatus>({kind:'snapshot'})
- // Transitions let sections that are still hydrating finish first instead of being re-rendered from scratch.
- const snapshotRef=useRef<ProgressSnapshot|null>(builtSnapshot)
- const setSnapshot=useCallback((value:ProgressSnapshot|null)=>{
-  snapshotRef.current=value
-  startTransition(()=>setSnapshotNow(value))
- },[])
- const setStatus=useCallback((value:ProgressStatus)=>startTransition(()=>setStatusNow(value)),[])
- const busy=useRef(false)
- const lastAttempt=useRef(0)
-
- const load=useCallback((manual:boolean)=>{
-  const now=Date.now()
-  if(busy.current)return
-  // A copy this browser read more recently than the site was built replaces the build-time snapshot.
-  const cached=readCachedProgress()
-  if(cached&&newest(snapshotRef.current,cached)===cached)setSnapshot(cached)
-  const retryAt=readRetryAt(now)
-  if(retryAt){setStatus({kind:'limited',retryAt});return}
-  if(!manual&&isFresh(snapshotRef.current,now)){setStatus({kind:'live',partial:false});return}
-  if(manual&&now-lastAttempt.current<MIN_MANUAL_GAP_MS)return
-  busy.current=true
-  lastAttempt.current=now
-  setStatus({kind:'loading'})
-  fetchLiveProgress().then(result=>{
-   // A partial answer never replaces a complete last-known state; it would make open work look finished.
-   if(!result.partial||!snapshotRef.current){
-    writeCachedProgress(result)
-    setSnapshot(result.snapshot)
-    setStatus({kind:'live',partial:result.partial})
-   }else setStatus({kind:'failed'})
-  }).catch((error:unknown)=>{
-   if(error instanceof RateLimitError){writeRetryAt(error.retryAt);setStatus({kind:'limited',retryAt:error.retryAt})}
-   else setStatus({kind:'failed'})
-  }).finally(()=>{busy.current=false})
- },[setSnapshot,setStatus])
-
- useEffect(()=>{
-  if(staticMode()){return}
-  // Wait for the first paint, then ask GitHub. The page already shows the build-time snapshot.
-  const canIdle='requestIdleCallback' in window
-  const idle=canIdle
-   ?window.requestIdleCallback(()=>load(false),{timeout:2500})
-   :window.setTimeout(()=>load(false),1200)
-  const onVisible=()=>{if(document.visibilityState==='visible')load(false)}
-  document.addEventListener('visibilitychange',onVisible)
-  // An open tab re-checks on its own, so the board follows the repository without a reload.
-  const timer=window.setInterval(()=>{
-   if(document.visibilityState==='visible'&&Date.now()-lastAttempt.current>=FRESH_MS)load(false)
-  },RECHECK_MS)
-  return ()=>{
-   if(canIdle)window.cancelIdleCallback(idle)
-   else window.clearTimeout(idle)
-   document.removeEventListener('visibilitychange',onVisible)
-   window.clearInterval(timer)
-  }
- },[load])
-
- const refresh=useCallback(()=>load(true),[load])
- return {snapshot,status,refresh}
-}
 
 /* ---------- motion ---------- */
 

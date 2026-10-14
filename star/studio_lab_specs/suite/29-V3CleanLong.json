@@ -1,0 +1,160 @@
+{
+ "name": "V3CleanLong",
+ "kind": "map",
+ "description": "Control: six comfortable jumps with small rises and drops.",
+ "defect": "none",
+ "expect": {
+  "first_pass": true
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3CleanLong",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    90.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -7.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -26.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -15.0,
+     7.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P3",
+    "position": [
+     -4.5,
+     8.0,
+     150.0
+    ],
+    "size": [
+     5.0,
+     1.0,
+     5.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P4",
+    "position": [
+     6.0,
+     7.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P5",
+    "position": [
+     16.5,
+     9.0,
+     150.0
+    ],
+    "size": [
+     5.0,
+     1.0,
+     5.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     28.0,
+     9.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "P3",
+    "P4",
+    "P5",
+    "Goal"
+   ]
+  }
+ }
+}

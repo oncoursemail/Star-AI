@@ -1,0 +1,1442 @@
+[
+  {
+    "id": "practice-run-001",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: profile key",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Return 'user_<id>' for a strictly positive integer userId; otherwise nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-001.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-001.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-001"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-002",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: profile defaults",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Normalize a possibly absent stored record to {coins = nonnegative integer, xp = nonnegative integer}; invalid fields become 0. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-002.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-002.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-002"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-003",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: profile migration",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Migrate old version 1 {gold,level} or version 2 {coins,rank} into {version=2,coins>=0 integer,rank>=1 integer}; nil defaults. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-003.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-003.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-003"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-004",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: merge checkpoints",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Combine two saved progress records {checkpoint,trophies} using the maximum nonnegative value of each field; either input may be nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-004.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-004.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-004"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-005",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: clamped save delta",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Apply an integer signed delta to a saved balance, clamp between 0 and 500, and ignore a noninteger delta. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-005.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-005.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-005"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-006",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: save payload selection",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Save only sanitized coins (nonnegative integer), stage (>=1 integer) and soundEnabled (boolean, default true) from a live record; omit runtime fields. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-006.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-006.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-006"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-007",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: recent reward receipts",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Append a nonempty receipt ID to an ordered recent-ID list if absent; retain only last 3 and preserve input; invalid or repeated IDs leave list unchanged. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-007.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-007.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-007"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-008",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: best saved score",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Return the highest nonnegative number from a list of saved scores, skipping malformed values; default 0. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-008.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-008.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-008"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-009",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: daily streak update",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: For integer calendar days, preserve streak if today==lastDay, increment only if today==lastDay+1, otherwise reset streak to 1; disallow future lastDay by leaving streak unchanged. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-009.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-009.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-009"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-010",
+    "category": "roblox-practice-run-data-saving",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox data and saving helper: reject stale save version",
+    "prompt": "Implement a server-authoritative Roblox data saving helper as a standalone Luau ModuleScript returning ONE pure function: Choose the save record with higher version; if versions tie preserve existing record, and treat missing records as version 0. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/cloud-services/data-stores/best-practices.md",
+      "content/en-us/tutorials/use-case-tutorials/data-storage/save-player-data.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-010.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Validate, normalize and version server-owned persistent player records before DataStore writes.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-010.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-010"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-011",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: round phase transitions",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Given a round phase and event, accept Lobby/start=>Playing, Playing/finish=>Results, Results/reset=>Lobby; all other combinations leave phase unchanged. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-011.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-011.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-011"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-012",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: countdown clamping",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Advance remaining round seconds by nonnegative dt, clamping remaining at zero; a negative dt must leave remaining unchanged. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-012.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-012.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-012"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-013",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: deterministic score winner",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: For a map of player labels to numeric scores, choose highest-scoring label and break ties lexicographically smallest; return nil for empty. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-013.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-013.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-013"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-014",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: round minimum population",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Return true only if player count is a whole number between 2 and 12 inclusive. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-014.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-014.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-014"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-015",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: round combo score",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Award nonnegative integer base * combo with combo clamped 1..5; return 0 for a negative or fractional base. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-015.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-015.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-015"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-016",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: lobby only join",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Return a fresh ordered list with new player ID appended once only during Lobby; any other phase or duplicate ID leaves list unchanged. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-016.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-016.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-016"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-017",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: friendly fire protection",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Damage is permitted only when round is active, both teams are nonempty and attacker team differs from victim team. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-017.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-017.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-017"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-018",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: idempotent round reward",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Return a new {coins, claimed} record awarding exactly 25 coins only if roundId is not in claimed map; preserve previous claims. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-018.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-018.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-018"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-019",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: rotating spawn index",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: Given a zero-based spawn slot cursor and a positive integer number of spawns, return the next 1-based slot (round robin); invalid count returns nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-019.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-019.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-019"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-020",
+    "category": "roblox-practice-run-round-state",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox round and game state helper: overtime winner",
+    "prompt": "Implement a server-authoritative Roblox round game-state helper as a standalone Luau ModuleScript returning ONE pure function: If remaining seconds are positive return nil; at time zero return 'red', 'blue', or 'draw' by comparing team scores. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-020.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Use deterministic and authoritative round-state transitions, timeout handling, and idempotent rewards.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-020.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-020"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-021",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: upgrade price growth",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Upgrade price is floor(basePrice * 1.25^tier) for nonnegative whole-number tier and positive whole base price; otherwise nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-021.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-021.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-021"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-022",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: purchase affordability",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Return true if nonnegative integer wallet balance is at least positive integer price; invalid or fractional inputs reject. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-022.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-022.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-022"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-023",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: wallet cap after grant",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Return integer wallet balance after a nonnegative grant, capped by server wallet cap; negative grants are ignored. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-023.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-023.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-023"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-024",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: shop sell floor",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Sell count items of the same type for exactly floor(unitPrice * count * 0.6) server currency; invalid count returns nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-024.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-024.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-024"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-025",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: discounted bundle price",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Sum nonnegative integer item prices, apply integer discount percent between 0 and 50 inclusive, then floor once after the full sum; invalid percent returns nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-025.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-025.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-025"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-026",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: weighted loot selection",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: From positive integer rarity weights and a 1-based integer roll, return the 1-based bucket index whose cumulative weight includes the roll; invalid rolls return nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-026.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-026.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-026"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-027",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: craft atomic recipe",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Return a new inventory with all recipe material counts deducted when every material is available; otherwise nil without changing inputs. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-027.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-027.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-027"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-028",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: stack capacity limit",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Add nonnegative item count to a stack, capping the stack at limit; negative additions are ignored. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-028.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-028.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-028"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-029",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: trade preserves item count",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Transfer exactly one unit of named inventory item from source to destination, returning {from=...,to=...}; return nil if source has none. Never duplicate counts. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-029.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-029.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-029"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "practice-run-030",
+    "category": "roblox-practice-run-inventory-economy",
+    "difficulty": 2,
+    "goal": "Implement executable Roblox inventory and economy helper: escrow conservation",
+    "prompt": "Implement a server-authoritative Roblox inventory economy helper as a standalone Luau ModuleScript returning ONE pure function: Split nonnegative integer escrow total into buyer payment and seller remainder with no currency creation or loss; invalid or overspending portions return nil. Use ordinary Luau tables, numbers, strings and math only, not Roblox services. The helper will be run by a server Script; the offline evaluator executes its behavior with six unit assertions. Provide one fenced Luau block and explain the edge cases.",
+    "run_mode": "automated",
+    "helps": [],
+    "expected_sources": [
+      "content/en-us/scripting/security/client-server-boundary.md",
+      "content/en-us/cloud-services/data-stores/best-practices.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 5,
+      "output_tokens": 750,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A unit test fails, does not execute, or crashes"
+    ],
+    "fixtures": [
+      "tests/practice-run-030.luau"
+    ],
+    "fixture_status": "implemented",
+    "teaches": "Apply conservative integer arithmetic and transactional inventory updates on the Roblox server.",
+    "auto": {
+      "compile": false,
+      "unit_test": {
+        "file": "tests/practice-run-030.luau",
+        "checks": 6
+      }
+    },
+    "pass_conditions": [
+      "All six independent unit assertions execute and pass in the Luau VM"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "unit_test",
+      "checks": [
+        "Six executed Luau VM assertions: practice-run-030"
+      ]
+    },
+    "split": "development"
+  }
+]

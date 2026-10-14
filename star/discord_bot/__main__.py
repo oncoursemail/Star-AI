@@ -1,4 +1,7 @@
-"""Run: python -m star.discord_bot [doctor | smoke]
+"""Run: python -m star.discord_bot [--log-file PATH] [doctor | smoke]
+
+Exit codes: 0 stopped normally, 2 configuration problem (do not retry), 3 Discord library missing
+(do not retry), 4 another STAR Discord bot is already running (do not start a second one).
 
 Settings come from the process environment, then ~/.star/discord.env (the bot token,
 written by the owner) and ~/.star/discord-settings.env (IDs and opt-in switches).
@@ -8,10 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import logging.handlers
+import os
 import sys
+from pathlib import Path
 
 from .bot import BotConfig, create_bot
-from .local_config import load_merged_env
+from .local_config import config_dir, ensure_settings_file, load_merged_env
+
+EXIT_CONFIG, EXIT_MISSING_LIBRARY, EXIT_ALREADY_RUNNING = 2, 3, 4
+LOG_BYTES, LOG_BACKUPS = 1_000_000, 3
 
 
 async def smoke(config: BotConfig) -> int:
@@ -48,17 +57,63 @@ async def smoke(config: BotConfig) -> int:
         await client.close()
 
 
+def _take_log_file(args: list[str]) -> tuple[list[str], str]:
+    """Split ``--log-file PATH`` off the arguments."""
+    if "--log-file" not in args:
+        return args, ""
+    index = args.index("--log-file")
+    if index + 1 >= len(args):
+        return args, ""
+    return args[:index] + args[index + 2:], args[index + 1]
+
+
+def _setup_logging(log_file: str) -> None:
+    fmt = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+    if not log_file:
+        logging.basicConfig(level=logging.INFO, format=fmt)
+        return
+    path = Path(log_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handler = logging.handlers.RotatingFileHandler(path, maxBytes=LOG_BYTES, backupCount=LOG_BACKUPS,
+                                                   encoding="utf-8")
+    handler.setFormatter(logging.Formatter(fmt))
+    logging.basicConfig(level=logging.INFO, handlers=[handler])
+
+
+def _fail(message: str, code: int) -> int:
+    """Say it on the console and in the log file (a windowless start has no console)."""
+    print(message, file=sys.stderr)
+    logging.getLogger(__name__).error("%s", message)
+    return code
+
+
+def _server_key_fallback() -> None:
+    """Use ~/.star/server_api_key when neither the environment nor the keyring holds the brain key.
+
+    The key stays in this process's memory; it is not printed or logged.
+    """
+    try:
+        from ..providers import STAR_SERVER, get_api_key
+        if get_api_key(STAR_SERVER):
+            return
+        from ..server_key_file import read_key_file
+        os.environ["STAR_SERVER_API_KEY"] = read_key_file()
+    except Exception:
+        return  # no key file: the bot still starts and says so when a model answer needs it
+
+
 def main() -> int:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-    args = sys.argv[1:]
+    args, log_file = _take_log_file(sys.argv[1:])
+    _setup_logging(log_file)
     if args not in ([], ["doctor"], ["smoke"]):
-        print("Usage: python -m star.discord_bot [doctor | smoke]", file=sys.stderr)
+        print("Usage: python -m star.discord_bot [--log-file PATH] [doctor | smoke]", file=sys.stderr)
         return 2
+    if ensure_settings_file():
+        print("Created a settings template (discord-settings.env) in your .star folder; fill in your IDs.")
     try:
         env = load_merged_env()
     except ValueError as exc:
-        print(f"STAR Discord configuration error: {exc}", file=sys.stderr)
-        return 2
+        return _fail(f"STAR Discord configuration error: {exc}", EXIT_CONFIG)
     if args == ["doctor"]:
         from .health import doctor_snapshot, format_checks
         checks = doctor_snapshot(env)
@@ -68,16 +123,32 @@ def main() -> int:
     try:
         config = BotConfig.from_env(env)
     except (ValueError, PermissionError) as exc:
-        print(f"STAR Discord configuration error: {exc}", file=sys.stderr)
-        return 2
+        return _fail(f"STAR Discord configuration error: {exc}", EXIT_CONFIG)
     try:
         if args == ["smoke"]:
             return asyncio.run(smoke(config))
-        create_bot(config).run(config.token, log_handler=None)
+        return _run(config, env)
     except ImportError:
-        print("Install requirements-discord.txt before running the Discord bot", file=sys.stderr)
-        return 3
-    return 0
+        return _fail("Install requirements-discord.txt before running the Discord bot", EXIT_MISSING_LIBRARY)
+
+
+def _run(config: BotConfig, env: dict) -> int:
+    from .instance_lock import InstanceLock
+    from .runtime_status import StatusReporter
+    folder = config_dir(env)
+    lock = InstanceLock(folder)
+    if not lock.acquire():
+        return _fail("Another STAR Discord bot is already running for this account; not starting a second one.",
+                     EXIT_ALREADY_RUNNING)
+    status = StatusReporter(folder)
+    try:
+        _server_key_fallback()
+        status.write("starting")
+        create_bot(config, reporter=status).run(config.token, log_handler=None)
+        return 0
+    finally:
+        status.write("stopped")
+        lock.release()
 
 
 if __name__ == "__main__":

@@ -1,16 +1,18 @@
 /**
  * Editorial content for the public website.
  *
- * Nothing here states a version as "available". Each capability names the first release that contains it
- * (`since`), and the page compares that with the latest published GitHub release at view time. A feature that
- * exists only in source or in a draft pull request therefore reads "In development" until a release catches up.
+ * Every feature carries an honest status (available, opt-in, coming soon) and, when it is in the source, the first
+ * release that contains it (`since`). The page compares `since` with the latest *published* GitHub release at view
+ * time, so a feature that is only in the source reads "Not in a published release yet" until a release catches up.
+ * "Coming soon" items are open pull requests; they are never shown as available.
  */
 import pkg from '../package.json'
-import {REPO_URL,availability} from './githubPublic'
+import {REPO_URL,availability,compareVersions} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
 
 /** Version of the source this site was built from. It can be ahead of the latest published release. */
 export const SOURCE_VERSION:string=pkg.version
+const doc=(path:string)=>REPO_URL+'/blob/main/'+path
 export const LINKS={
  repo:REPO_URL,
  releases:REPO_URL+'/releases',
@@ -20,51 +22,35 @@ export const LINKS={
  pulls:REPO_URL+'/pulls',
  commits:REPO_URL+'/commits/main',
  docs:REPO_URL+'/tree/main/docs',
- start:REPO_URL+'/blob/main/START_HERE_WINDOWS11.md',
- security:REPO_URL+'/blob/main/docs/SECURITY_AND_AUTONOMY.md',
- server:REPO_URL+'/blob/main/docs/STAR_MODEL_ROUTER_WINDOWS.md',
- robloxAccess:REPO_URL+'/blob/main/docs/ROBLOX_ACCESS.md',
- knowledge:REPO_URL+'/blob/main/docs/ROBLOX_KNOWLEDGE.md',
- evals:REPO_URL+'/blob/main/docs/evals.md',
- learning:REPO_URL+'/blob/main/docs/STAR_LEARNING.md',
- voice:REPO_URL+'/blob/main/docs/STAR_VOICE_CALLS.md',
- media:REPO_URL+'/blob/main/docs/STAR_MEDIA.md',
- documents:REPO_URL+'/blob/main/star/documents.py',
+ readme:REPO_URL+'#readme',
+ notes:doc('docs/release/v1.0/RELEASE_NOTES.md'),
+ start:doc('START_HERE_WINDOWS11.md'),
+ security:doc('docs/SECURITY_AND_AUTONOMY.md'),
+ server:doc('docs/STAR_MODEL_ROUTER_WINDOWS.md'),
+ robloxAccess:doc('docs/ROBLOX_ACCESS.md'),
+ knowledge:doc('docs/ROBLOX_KNOWLEDGE.md'),
+ evals:doc('docs/evals.md'),
+ learning:doc('docs/SELF_LEARNING_LOOP.md'),
+ discord:doc('docs/STAR_DISCORD_SETUP.md'),
+ design:doc('docs/DESIGN_AND_MAP_TOOLS.md'),
+ voice:doc('docs/STAR_VOICE_CALLS.md'),
+ media:doc('docs/STAR_MEDIA.md'),
  acceptance:REPO_URL+'/issues/15',
- robloxMcp:'https://create.roblox.com/docs/studio/mcp',
- // When live release data is unavailable, use the official release page rather than guessing an asset URL.
 } as const
 
-export type TourId='chat'|'brain'|'tools'|'projects'|'analytics'
-export type TourView={id:TourId;tab:string;title:string;body:string;points:string[]}
-/** Each view is a capture of the real interface (see scripts/capture-site-media.mjs), not a drawing. */
-export const tour:TourView[]=[
- {id:'chat',tab:'Chat',title:'Ask, attach, build.',
-  body:'A quiet conversation view. Replies stream in from your model, code blocks copy in one click, and screenshots or files ride along with the message.',
-  points:['Streaming replies','Image and file references','Copyable code blocks']},
- {id:'brain',tab:'Brain',title:'Your model, installed in one step.',
-  body:'STAR Brain downloads a verified engine and model, then asks it for a real reply, so you know it works before you rely on it.',
-  points:['About 3.4 GB estimated (v0.9.0 file sizes, October 2026)','SHA-256 checks on engine and weights','Runs on loopback, on your PC']},
- {id:'tools',tab:'Tools',title:'Exactly the access a task needs.',
-  body:'Connect Roblox Studio and a project folder. Studio inspection starts read-only; editing a disposable test place requires a separate permission.',
-  points:['Official Studio MCP','Read-only Studio inspection','Scoped edits are opt-in']},
- {id:'projects',tab:'Projects',title:'Every project keeps its own context.',
-  body:'Conversations and references stay with the workspace they belong to, so a Roblox obby and a research notebook do not bleed into each other.',
-  points:['Separate workspaces','Saved conversations','Stored on your disk']},
- {id:'analytics',tab:'Analytics',title:'Numbers from your own runs.',
-  body:'Task runs, outcomes and response times, recorded locally. A fresh install shows zeros, because nothing here is invented.',
-  points:['Local SQLite, no cloud tracking','Honest empty states','Median response time']}
-]
+/**
+ * The newest release known to be published when this source was written (v1.0.0, published October 14, 2026).
+ * The build-time snapshot is refreshed by the website deployment, but if that refresh fails the committed copy can be
+ * days old; a snapshot older than this floor is stale and is never named on the page. Raise it with every release.
+ */
+export const PUBLISHED_FLOOR='1.0.0'
 
-export type BrainRoute={id:string;icon:'pc'|'server'|'cloud';title:string;body:string;since:string;note?:string}
-export const brainRoutes:BrainRoute[]=[
- {id:'pc',icon:'pc',title:'This PC',since:'0.8.0',note:'Default',
-  body:'A managed llama.cpp engine with Qwen 3.5 4B. The v0.9.0 setup targets a Vulkan GPU with about 8 GB VRAM; this is guidance, not a hardware benchmark.'},
- {id:'lan',icon:'server',title:'STAR Server, on your network',since:'0.9.0',
-  body:'A model server you run on another machine at home. STAR reaches it at a private network address, keeps its key in Windows Credential Manager, and needs no model download on this PC.'},
- {id:'hosted',icon:'cloud',title:'A hosted provider, with your key',since:'0.9.0',note:'Optional',
-  body:'Groq, OpenRouter, Gemini or Cerebras. Off until you add a key, and local chat never falls back to it silently.'}
-]
+/** The release the page may name: GitHub's live answer, else the build snapshot if it is not older than the floor. */
+export function currentRelease(live:ReleaseInfo|null,snapshot:ReleaseInfo|null):ReleaseInfo|null{
+ if(live)return live
+ if(snapshot&&compareVersions(snapshot.tag,PUBLISHED_FLOOR)>=0)return snapshot
+ return null
+}
 
 /** Only label capabilities as shipped when a stable published release confirms them. */
 export function modelLabelForRelease(latest:ReleaseInfo|null):string{
@@ -74,101 +60,116 @@ export function modelLabelForRelease(latest:ReleaseInfo|null):string{
  return 'Check GitHub'
 }
 
-export const studioScopes=[
- {level:'Inspect',state:'Read-only when connected',body:'STAR can read instances, scripts and structure in the test place you connect.'},
- {level:'Edit',state:'Off until you enable it',body:'Scoped changes inside that test place. You review what changed.'},
- {level:'Open Cloud',state:'Separate approval',body:'Studio does not publish. Open Cloud may save a version in your approved private test experience, only after you approve that action.'}
-] as const
+export type FeatureStatus='available'|'opt-in'|'soon'
+export const STATUS_LABEL:Record<FeatureStatus,string>={available:'Available','opt-in':'Opt-in',soon:'Coming soon'}
+export type Feature={name:string;what:string;status:FeatureStatus;since?:string;doc?:string}
+export type FeatureGroup={id:string;title:string;features:Feature[]}
 
-/** The real layout of %APPDATA%\STAR, as written by the desktop app. */
-export const dataFolder=[
- {name:'conversations.sqlite3',what:'Your chats'},
- {name:'checkpoints.sqlite3',what:'Project memory'},
- {name:'analytics.sqlite3',what:'Local run statistics'},
- {name:'settings.json',what:'Preferences'},
- {name:'models\\',what:'Downloaded model weights'},
- {name:'engines\\',what:'The llama.cpp runtime'},
- {name:'runs\\',what:'Transcripts of finished tasks'}
-] as const
-
-export type Connection={name:string;what:string;since:string}
-export const connections:Connection[]=[
- {name:'Roblox Studio',what:'Inspect a disposable test place; scoped editing is opt-in',since:'0.8.0'},
- {name:'Roblox Open Cloud',what:'Owner-approved saved test-place versions and Luau test runs; no live publishing',since:'0.9.0'},
- {name:'STAR Knowledge',what:'Cited official Roblox documentation and static Luau checks on your STAR Server',since:'0.9.0'},
- {name:'Project folder',what:'Read a folder you choose; write only when you allow it',since:'0.8.0'},
- {name:'Images, video and audio',what:'Attach references to a message',since:'0.8.0'},
- {name:'Obsidian vault',what:'Read-only search across your Markdown notes',since:'0.9.0'},
- {name:'Graphify graph',what:'Explore an exported knowledge graph',since:'0.9.0'},
- {name:'Agent Skills',what:'Load reviewed, task-specific instructions',since:'0.9.0'},
- {name:'Web research',what:'Search with sources, using your Brave or Tavily key',since:'0.9.0'},
- {name:'ComfyUI',what:'Generate images in chat with your local ComfyUI',since:'0.9.0'},
- {name:'STAR Teams',what:'Bounded specialist agents on one task',since:'0.9.0'}
+/**
+ * The feature index. Sources: docs/release/v1.0/RELEASE_NOTES.md and the merged pull requests it lists.
+ * "Coming soon" means an open pull request on GitHub that is not part of the release.
+ */
+export const featureGroups:FeatureGroup[]=[
+ {id:'chat',title:'Chat',features:[
+  {name:'Chats you can manage',status:'available',since:'1.0.0',
+   what:'Saved chats grouped by day, search, rename, and delete with six seconds to undo. An answer keeps streaming when you switch chats.'},
+  {name:'Look at my screen',status:'available',since:'1.0.0',
+   what:'STAR asks first, every time, then takes one screenshot that waits in your message until you send or remove it.'},
+  {name:'Create image',status:'available',since:'1.0.0',doc:LINKS.media,
+   what:'Ask for a picture in the same box. Needs a picture engine (ComfyUI) on this PC or on your STAR Server.'},
+  {name:'Web search with sources',status:'opt-in',since:'1.0.0',
+   what:'Through the self-hosted SearXNG search on your STAR Server (no paid key), or your own Brave or Tavily key. Answers link their sources.'},
+  {name:'Knows the date and time',status:'available',since:'1.0.0',
+   what:'Answers get the current local date and time, so “today” and “this week” mean what you think.'},
+ ]},
+ {id:'make',title:'Making things',features:[
+  {name:'Roblox help with sources',status:'available',since:'0.9.0',doc:LINKS.knowledge,
+   what:'Answers cite the official Roblox and Luau documentation, retrieved by STAR Knowledge on your server.'},
+  {name:'Roblox map plans',status:'available',since:'1.0.0',doc:LINKS.design,
+   what:'Blockout and level-layout plans as a dry run, offline and read-only.'},
+  {name:'Luau checkers',status:'opt-in',since:'1.0.0',doc:LINKS.robloxAccess,
+   what:'An API name check against the full API dump, StyLua, the official Luau analyzer, and server/client trust checks on generated code.'},
+  {name:'Roblox Studio, read-only first',status:'opt-in',since:'0.8.0',doc:LINKS.robloxAccess,
+   what:'Connect a test place through the official Studio MCP. Inspection is read-only; editing needs a separate switch.'},
+  {name:'Design tools',status:'available',since:'1.0.0',doc:LINKS.design,
+   what:'A searchable style database (88 UI styles, 192 palettes, 74 font pairings) and a DESIGN.md checker with WCAG contrast.'},
+  {name:'Studio Lab',status:'soon',
+   what:'STAR builds in a test place, playtests it, looks at the result and fixes it, with several Studios in parallel.'},
+  {name:'Blender on a server',status:'soon',
+   what:'STAR drives Blender on a second server. The first models, a dragon among them, are first attempts, not finished art.'},
+ ]},
+ {id:'where',title:'Where STAR runs',features:[
+  {name:'STAR Server',status:'opt-in',since:'0.9.0',doc:LINKS.server,
+   what:'Your own Linux server runs the brain on its processor, no graphics card needed. The key stays in Windows Credential Manager.'},
+  {name:'This PC',status:'available',since:'0.8.0',
+   what:'A 4B model on your graphics card (Vulkan, about 8 GB of video memory), downloaded and checked in one step.'},
+  {name:'Discord bot',status:'opt-in',since:'1.0.0',doc:LINKS.discord,
+   what:'A separate program that answers only you, in DMs: /ask, /image, /status, and /screen, which stays off until you allow it and asks each time.'},
+  {name:'Hosted providers',status:'opt-in',since:'0.9.0',
+   what:'Groq, OpenRouter, Gemini or Cerebras with your own key. Never a silent fallback.'},
+  {name:'Voice',status:'soon',doc:LINKS.voice,
+   what:'A warmer “Star” voice, read-aloud and push-to-talk calls. Basic optional voice calls have existed since v0.9.0.'},
+ ]},
 ]
 
-/** Code-backed v0.9.0 features; release badges are driven only by published GitHub tags. */
-export const capabilities=[
- {name:'STAR Server on your network',since:'0.9.0',doc:LINKS.server,
-  what:'Use a model server at a private network address. Its key stays in the OS credential store; this PC needs no local model download.'},
- {name:'Roblox answers with sources',since:'0.9.0',doc:LINKS.knowledge,
-  what:'STAR Knowledge retrieves and cites official Roblox and Luau documentation. Static compile/type checks do not playtest code or fully validate Roblox APIs.'},
- {name:'Studio and Open Cloud',since:'0.9.0',doc:LINKS.robloxAccess,
-  what:'Studio inspection is read-only first. Separate Open Cloud actions save versions to an owner-approved private test place or run Luau tests, each requiring approval.'},
- {name:'Skills and the evaluation gate',since:'0.9.0',doc:LINKS.evals,
-  what:'Eighteen task-specific skill packs ship, five on by default; the six game-type packs stay off until the gate has measured them. The gate checks for regressions using fixed automated tasks; it does not judge visual quality in Studio.'},
- {name:'Project learning',since:'0.9.0',doc:LINKS.learning,
-  what:'Source-linked local lessons are scoped to a project. Inferred lessons await review; the model is not retrained.'},
- {name:'Voice calls',since:'0.9.0',doc:LINKS.voice,
-  what:'Optional on-PC speech recognition and Kokoro speech, with interruption controls. Extra voice packages and models are not bundled; real microphones remain untested.'},
- {name:'Images and video',since:'0.9.0',doc:LINKS.media,
-  what:'Optional local ComfyUI creates or edits images. Video answers use up to four sampled frames and, with voice extras, a limited audio transcript; not full video playback.'},
- {name:'Documents and tables',since:'0.9.0',doc:LINKS.documents,
-  what:'Bounded reading and source-linked search of attached PDF, DOCX, PPTX, XLSX, CSV and text files, with exact table calculations. Files and macros are not executed.'}
+/** "How STAR learns": the loop drawn in SiteLearning. Source: docs/SELF_LEARNING_LOOP.md. */
+export const learnSteps=[
+ {id:'practise',title:'Practise',body:'While your server is idle, night school works through 300 practice tasks, each with a runnable check.'},
+ {id:'check',title:'Check',body:'Answers are scored by the same scorer the evaluation uses.'},
+ {id:'propose',title:'Propose',body:'A repeated mistake becomes a lesson: plain text, with its evidence attached.'},
+ {id:'gate',title:'Gate',body:'A paired statistical test on held-out tasks. A lesson stays only if it wins; inconclusive means no.'},
+ {id:'decide',title:'You decide',body:'“What STAR learned this week” puts a lesson on a 14-day trial, with Undo and Keep.'},
 ] as const
+export const learnCorrections={title:'Your corrections',body:'Mark an answer “Not helpful” and say why. You can turn it into a test STAR has to pass.'} as const
 
-/** Baselines only: not a measure of Roblox Studio gameplay or a combined skill-pack run. */
-/** Dated observed runs, not a reproducible best score or combined benchmark. */
-export const evalResults=[
- {suite:'Roblox v2 scripting (October 12 and earlier runs)',passed:'13–18 / 34',rate:'varies by run'},
- {suite:'Creation v1 (earlier; not reproduced on v0.9.0)',passed:'11 / 23 (historical)',rate:'unverified on release'}
-] as const
+/**
+ * Measured on STAR Server (model star-fast, mode auto, skill packs off), one run per task, October 2026.
+ * Source: docs/release/v1.0/RELEASE_NOTES.md and docs/agents/release-v1.0.md. Never replace a result with a
+ * better-looking one from another run.
+ */
+export const evaluation={
+ rows:[
+  {suite:'Roblox scripting, development set',before:'13 / 34',after:'16 / 34',note:''},
+  {suite:'Creation tasks',before:'11 / 23',after:'10 / 23',note:''},
+  {suite:'Blind holdout, never used for tuning',before:'8 / 24',after:'9 / 24',
+   note:'3 tasks stopped by server timeouts on the first pass were run once more on a quiet server.'},
+ ],
+ setup:'STAR Server, model star-fast, auto mode, skill packs off. One run per task, v0.9.0 and v1.0.0 measured a day apart in October 2026.',
+} as const
 
-export const steps=[
- {title:'Download STAR',fact:'installer',
-  body:'One Setup file from GitHub Releases. Per-user installation normally needs no administrator approval; an all-users installation or upgrade may require it.'},
- {title:'Start STAR Brain',fact:'v0.9.0 estimate (Oct 2026): ~3.4 GB download; 4.3 GB free-space check',
-  body:'Open STAR Brain and press Download and start. STAR fetches the engine and model, checks every file, then runs a test reply.'},
- {title:'Start creating',fact:'Works offline after setup',
-  body:'Open Chat and ask for what you need. Attach a screenshot or a file when it helps.'},
- {title:'Connect tools, if you want',fact:'Optional · read-only first',
-  body:'Roblox Studio and a project folder live under Developer tools. Begin with an unpublished test place.'}
+/**
+ * Counts from STAR's learning systems, next to the code map. Sources (no server access needed):
+ * skill packs = folders in star/skill_packs; practice tasks = PR #255 (300 tasks, 300/300 verified on the server
+ * harness); worked examples = night school's outbox export of October 13, 2026 (docs/agents/self-learning-loop-20261013.md);
+ * lessons = star/skill_packs/lessons_bundled.json; knowledge = docs/agents/knowledge-study.md.
+ */
+declare const __STAR_SKILL_PACKS__: string   // vite.config.ts: folders in star/skill_packs at build time
+
+export const brainCounts={
+ asOf:'Counted October 13, 2026, from the repository and the project notes.',
+ items:[
+  {label:'Skill packs',value:__STAR_SKILL_PACKS__,note:' task-specific instruction packs; most are opt-in'},
+  {label:'Practice tasks',value:'300',note:' with runnable checks, all 300 verified on the server'},
+  {label:'Worked examples',value:'137',note:' checked practice answers in night school’s outbox; 64 pass the app’s import checks'},
+  {label:'Lessons promoted',value:'0',note:' so far: none has passed the paired gate, and the 1.0 lesson file is empty'},
+  {label:'Knowledge',value:'18,133',note:' passages of official Roblox documentation, indexed and embedded on the server'},
+ ],
+} as const
+
+export const limits=[
+ {title:'It is early software.',body:'Most testing happened on one Windows 11 PC. Other graphics cards and Windows setups are largely untested.',link:{href:LINKS.acceptance,label:'Acceptance issue #15'}},
+ {title:'Not everything was tried for real.',body:'Installing over v0.9.0 with Setup was tried on one PC. Not yet tested end to end: the in-app Install & restart from v0.9.0, a real Look at my screen capture, pictures from the installed app, voice with sound, and the Discord bot on Discord.',link:{href:LINKS.notes,label:'What was and was not tested'}},
+ {title:'The installer is not code-signed.',body:'Windows may show a publisher warning. Compare the SHA-256 checksum before you run it.'},
+ {title:'It makes mistakes.',body:'The 4B model on a PC is not a frontier model, and neither are the server models. Check anything that matters.'},
+ {title:'Roblox work needs your review.',body:'STAR helps inside your test place. It does not ship a finished game, and what it writes needs playtesting.'},
+ {title:'Windows only, no licence file yet.',body:'The source is public to read; an open-source licence has not been published.',link:{href:LINKS.security,label:'Security and autonomy notes'}},
 ] as const
 
 export const requirements=[
  {term:'System',detail:'Windows 11, 64-bit. Windows 10 is untested.'},
- {term:'Graphics',detail:'The v0.9.0 local-model guidance targets a Vulkan GPU with about 8 GB VRAM; hardware coverage is limited.'},
- {term:'Disk',detail:'v0.9.0 checks for 4.3 GB free before downloading STAR Brain (October 2026 source), plus space for the app.'},
- {term:'Internet',detail:'Needed to download the model and to check for updates. Local chat then works offline.'},
- {term:'Account',detail:'None. No sign-in, no API key for the local brain.'}
-] as const
-
-export const limits=[
- {title:'It is early software.',body:'Testing on real Windows 11 machines, graphics cards and the updater is still open.',link:{href:LINKS.acceptance,label:'Acceptance issue #15'}},
- {title:'The installer is not code-signed.',body:'Windows may show a publisher warning. Compare the SHA-256 below before you run it.'},
- {title:'A 4B local model is not a frontier model.',body:'On-device prompts stay on this PC; speed varies with hardware. The model makes mistakes, so check what matters.'},
- {title:'Roblox work needs your review.',body:'STAR assists inside a Studio session. It does not ship a finished game, and what it writes needs playtesting.'},
- {title:'Windows only, no licence file yet.',body:'The source is public to read. An open-source licence has not been published.',link:{href:LINKS.security,label:'Security and autonomy notes'}}
-] as const
-
-export const faqs=[
- {q:'Do I need to pay for a cloud model?',
-  a:'No. You can use an on-device model or a STAR Server on your own network. Hosted providers are optional and need their own keys.'},
- {q:'Will updating remove my chats or models?',
-  a:'The tested v0.8.0-to-v0.9.0 upgrade preserved chats, models and settings in %APPDATA%\\STAR. Keep backups before installing an update.'},
- {q:'Where do the numbers on this page come from?',
-  a:'Release and project progress come from public GitHub data. Separately, docs/evals.md reports measured automated Roblox task pass rates; those do not measure Studio game quality.'},
- {q:'Does this website track me?',
-  a:'It sets no cookies and runs no analytics. Your browser requests public release and progress data from GitHub; progress answers are cached briefly in browser storage.'}
+ {term:'Model on this PC',detail:'A Vulkan graphics card with about 8 GB of video memory, and 4.3 GB free for the download.'},
+ {term:'Or STAR Server',detail:'Your own Linux machine on your network, with plenty of memory. No graphics card needed.'},
+ {term:'Account',detail:'None. No sign-in and no API key for a model you run yourself.'},
 ] as const
 
 /* ---------- formatting ---------- */
@@ -184,25 +185,6 @@ export function formatDate(value:string|null|undefined,style:'short'|'long'='sho
  const date=new Date(value)
  if(Number.isNaN(date.getTime()))return 'date unavailable'
  return date.toLocaleDateString('en',{month:style==='long'?'long':'short',day:'numeric',year:'numeric',timeZone:'UTC'})
-}
-export function formatDateTime(value:string|null|undefined):string{
- if(!value)return 'unknown time'
- const date=new Date(value)
- if(Number.isNaN(date.getTime()))return 'unknown time'
- return date.toLocaleString('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})
-}
-/** "3 hours ago" with a coarse, honest granularity. */
-export function formatAgo(value:string|null|undefined,now=Date.now()):string{
- const time=value?Date.parse(value):NaN
- if(Number.isNaN(time))return ''
- const minutes=Math.max(0,Math.round((now-time)/60_000))
- if(minutes<1)return 'just now'
- if(minutes<60)return minutes+' min ago'
- const hours=Math.round(minutes/60)
- if(hours<24)return hours+(hours===1?' hour ago':' hours ago')
- const days=Math.round(hours/24)
- if(days<30)return days+(days===1?' day ago':' days ago')
- return formatDate(value)
 }
 
 export type ReleaseFiles={setup:ReleaseInfo['assets'][number]|null;zip:ReleaseInfo['assets'][number]|null;sums:ReleaseInfo['assets'][number]|null}

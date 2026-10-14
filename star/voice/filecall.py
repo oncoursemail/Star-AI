@@ -8,6 +8,7 @@ A scenario is a list of steps played against the wall clock, exactly as a caller
         {"say": "q2.wav"},
         {"wait": "speaking", "then_seconds": 1.5},      wait until Star is audibly talking, then 1.5 s more
         {"say": "interrupt.wav"},                       ...and talk over her (barge-in test)
+        {"say": "q3.wav", "ptt": false},                push-to-talk calls: speak without holding the key
         {"wait": "reply_done"}
     ]}
 
@@ -269,8 +270,15 @@ class FileCall:
                     pcm, rate = read_wav(self.base_dir / step["say"])
                     if rate != SAMPLE_RATE:
                         pcm = nearest_resample(pcm, rate, SAMPLE_RATE)
+                    # Push-to-talk calls: the pretend caller holds the key for the whole file and lets go after
+                    # its last frame ("ptt": false = talk without the key, e.g. talking over Star).
+                    ptt = getattr(session.config, "push_to_talk", False) and step.get("ptt", True)
+                    if ptt:
+                        session.push_to_talk(True)
                     for frame in frames(pcm):
                         self._feed(frame)
+                    if ptt:
+                        session.push_to_talk(False)
                     self.result.said.append((step["say"], time.monotonic() - self._origin))
                 elif step.get("wait") == "reply_done":
                     done_before = len(session.turns)

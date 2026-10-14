@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn(nil), {coins=0,xp=0}))
+check("case 2", deepEqual(fn({coins=4,xp=7}), {coins=4,xp=7}))
+check("case 3", deepEqual(fn({coins=-1,xp=9}), {coins=0,xp=9}))
+check("case 4", deepEqual(fn({coins=8.5,xp=2}), {coins=0,xp=2}))
+check("case 5", deepEqual(fn({coins=4,xp='bad'}), {coins=4,xp=0}))
+check("case 6", deepEqual(fn("invalid"), {coins=0,xp=0}))

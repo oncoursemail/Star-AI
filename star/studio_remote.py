@@ -32,6 +32,7 @@ import os
 from pathlib import Path
 import sys
 import time
+from typing import Any
 
 from . import studio, studio_loop
 from .policy import classify
@@ -168,9 +169,15 @@ class PinnedSession:
     nothing from it: whatever calls `call_tool` gets the pin.
     """
 
-    def __init__(self, session):
+    def __init__(self, session, planner: Any = None):
         self._session = session
         self.refusals = 0
+        # STAR's resource planner (optional, star/planner_client.py): a playtest holds a "studio-test" lease on
+        # brain 2, so two STAR processes never run tests in the same Studio and brain 2's RAM is checked first.
+        # Not configured or unreachable: playtests start exactly as before.
+        self.planner = planner
+        self.place = None              # (universe, place) of the last pin answer
+        self._play_grant = None
 
     def __getattr__(self, name):
         return getattr(self._session, name)
@@ -180,8 +187,35 @@ class PinnedSession:
         result = await self._session.call_tool("execute_luau", arguments={
             "studio_id": studio_id, "datamodel_type": "Edit", "code": PIN_QUESTION})
         text = studio_loop.result_text(result)
-        answers = (f"{PIN_OK} {TEST_PLACE_ID} {TEST_UNIVERSE_ID}", f"{PIN_OK} 0 0")
-        return not studio_loop.result_failed(result) and any(answer in text for answer in answers)
+        answers = {f"{PIN_OK} {TEST_PLACE_ID} {TEST_UNIVERSE_ID}": (TEST_UNIVERSE_ID, TEST_PLACE_ID),
+                   f"{PIN_OK} 0 0": (0, 0)}
+        if studio_loop.result_failed(result):
+            return False
+        for answer, place in answers.items():
+            if answer in text:
+                self.place = place
+                return True
+        return False
+
+    def _admit_playtest(self) -> str:
+        """"" when the playtest may start (planner admitted it, or no planner), else the planner's reason."""
+        if self.planner is None or not getattr(self.planner, "enabled", False):
+            return ""
+        from .planner_client import holding
+        if holding("studio-test"):                # e.g. a Studio Lab run in this process already holds the Studio
+            return ""
+        universe, place = self.place or (0, 0)
+        grant = self.planner.admit("studio-test", "studio-remote", "playtest", universe_id=universe, place_id=place,
+                                   identity_verified=self.place is not None)
+        if grant.action in ("wait", "yield", "refuse"):
+            return grant.reason or grant.action
+        self._play_grant = grant if grant.planned else None
+        return ""
+
+    def _end_playtest(self) -> None:
+        if self._play_grant is not None:
+            self.planner.release(self._play_grant)
+            self._play_grant = None
 
     async def call_tool(self, name: str, arguments: dict | None = None):
         arguments = dict(arguments or {})
@@ -199,7 +233,30 @@ class PinnedSession:
             if not allowed:
                 self.refusals += 1
                 return _Refused("Refused: " + PIN_REFUSAL)
+            if _starts_playtest(name, arguments):
+                busy = self._admit_playtest()
+                if busy:
+                    return _Refused("Not started: the STAR Studio server is busy (" + busy + "); try again shortly")
+        if name == "start_stop_play" and arguments.get("is_start") is False:
+            try:
+                return await self._session.call_tool(name, arguments=arguments)
+            finally:
+                self._end_playtest()
+        if self._play_grant is not None and self._play_grant.planned:
+            self._play_grant = self.planner.renew(self._play_grant)      # keep the lease of a long playtest alive
+            if not self._play_grant.planned:
+                self._play_grant = None
         return await self._session.call_tool(name, arguments=arguments)
+
+
+def _planner():
+    """The resource planner client when one is configured ($STAR_PLANNER_URL or ~/.star/planner_url), else None."""
+    try:
+        from .planner_client import PlannerClient
+        client = PlannerClient(timeout=3.0)
+    except Exception:
+        return None
+    return client if client.enabled else None
 
 
 async def open_server(session, discovered: list[dict], *, home, opted_in: bool = True,
@@ -211,7 +268,7 @@ async def open_server(session, discovered: list[dict], *, home, opted_in: bool =
         facts["problem"] = ("No Studio is attached to the connector (is the place open and Studio's MCP switch on?)"
                             if not listed else "More than one Studio is attached: STAR uses the server only with one")
         return None, facts
-    pinned = PinnedSession(session)
+    pinned = PinnedSession(session, planner=_planner())
     guarded = await studio_loop.open_guarded(
         pinned, discovered, studio_id=listed[0]["id"], opted_in=opted_in, own_places=True,
         own_account_id=studio_loop.own_account_id(home))
