@@ -16,8 +16,9 @@ import re
 from typing import Any
 from uuid import uuid4
 
-import httpx
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr, lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"

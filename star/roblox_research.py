@@ -20,7 +20,8 @@ import sqlite3
 import time
 import uuid
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from . import roblox_cloud
 from PIL import Image, ImageOps, UnidentifiedImageError
