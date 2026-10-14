@@ -43,6 +43,7 @@ from .studio_connections import connection_status, validate_target, select_insta
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
+from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_action as handle_discord_action, start_if_opted_in
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -87,6 +88,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
+# Settings > Discord: status, Start/Stop and the opt-in autostart for the Discord bot process
+# (star/discord_supervisor.py). Never carries the token, the owner's IDs or any key.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | DISCORD_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -666,8 +670,20 @@ def launch():
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
+            self.discord = DiscordSupervisor(app_data())
+            self.discord.begin()
+            # Opt-in only; a few seconds after launch so the window is not kept waiting.
+            QTimer.singleShot(3_000, self._discord_autostart)
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _discord_autostart(self):
+            if self._closing:
+                return
+            try:
+                start_if_opted_in(self.discord, Settings.load(self.settings_file).discord_autostart)
+            except Exception:
+                pass  # a bad settings file must not stop STAR from opening; the page shows the bot's state
 
         def _research_tick(self):
             """Check due official sources off the GUI thread, at most daily.
@@ -984,6 +1000,14 @@ def launch():
                         # Speech runs where Settings says; a place that does not exist is refused, not replaced.
                         media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
+                if action in DISCORD_ACTIONS:
+                    saved=Settings.load(self.settings_file)
+                    if action=='discordSetAutostart':
+                        enabled=body.get('enabled')
+                        if type(enabled) is not bool:raise ValueError('Choose on or off')
+                        saved.discord_autostart=enabled
+                        saved.save(self.settings_file)
+                    return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
                 if action in MEDIA_ACTIONS:
                     def media_worker():
                         return handle_media_action(
@@ -1449,6 +1473,7 @@ def launch():
                 record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
+            self.discord.close()            # the Discord bot STAR started (if any) stops with STAR
             self.warmer.cancel()
             self.runtime.stop()
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor

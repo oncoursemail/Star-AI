@@ -73,6 +73,61 @@ On the first start keep `STAR_DISCORD_SYNC_COMMANDS=global` so Discord learns th
 The bot uses the **same model STAR Desktop uses** (Settings > model / fast model; vision model for
 images), including the STAR Brain server when that is your provider. Choose those in STAR Desktop first.
 
+## 4b. Start it automatically (optional)
+
+Running the bot in a terminal tab works, but it stops when the tab closes. There are two ways to keep it
+running. Pick one; both are off until you switch them on.
+
+**Only one bot runs at a time.** The bot takes a lock file in `%USERPROFILE%\.star` when it starts, so a second
+start (terminal, STAR Desktop or Task Scheduler) exits at once instead of answering every message twice.
+A bot started before this feature existed does not take the lock: restart it once with the current code
+(Ctrl+C, then `scripts\star_discord.cmd`) before you turn on either option below.
+
+### A. With STAR Desktop (Settings > Discord)
+
+Settings > Discord shows the bot's state (Connected, Starting, Not configured, Error, or Running in another
+window), a Start and a Stop button, and the switch **Start the Discord bot with STAR** (off by default).
+
+- With the switch on, STAR starts the bot a few seconds after it opens, starts it again after a crash (waiting
+  5, 10, 20, 40, 80, 160 and then 300 seconds between tries; a run of two minutes or more resets this), and
+  stops it when STAR closes. After 10 quick crashes in a row it gives up and says so; press Start to try again.
+- A wrong configuration (exit code 2) or a missing Discord library (exit code 3) is not retried: the page says
+  what to fix.
+- The page never shows the token, your Discord IDs or the server key. The bot reads the token and IDs from
+  `discord.env` / `discord-settings.env` and the STAR Server key from STAR's saved key (Windows credential
+  store) or, failing that, `%USERPROFILE%\.star\server_api_key`. "Not configured" lists which setting is missing.
+- Turning the switch off leaves a running bot alone (use Stop). If the bot already runs in a terminal or in Task
+  Scheduler, STAR shows "Running in another window", starts nothing, and takes over only if that bot stops.
+- Logs are in STAR's log folder (`%APPDATA%\STAR\logs`): `discord-bot.log` (rotating, 1 MB x 4) and
+  `discord-bot-console.log` (start-up errors).
+- Which Python runs the bot: `STAR_DISCORD_PYTHON` if set, else the Python STAR itself runs on when it has
+  discord.py, else `.venv` in the checkout, else `discord-venv` in STAR's data folder. The installed (packaged)
+  STAR cannot run the bot by itself: set `STAR_DISCORD_PYTHON` (a Python with `requirements-discord.txt`) and
+  `STAR_CHECKOUT` (a STAR checkout) as Windows user environment variables.
+- If STAR is killed without closing (crash, Task Manager), the bot keeps running; the next STAR start shows it as
+  running in another window.
+
+### B. At Windows sign-in, without STAR Desktop (Task Scheduler)
+
+`scripts\star_discord_autostart.cmd` creates one scheduled task, **STAR Discord bot**, for your account. You run it
+yourself; nothing installs it for you. It needs no PowerShell and no administrator rights, and stores no password.
+
+```
+scripts\star_discord_autostart.cmd print     show the task without creating anything
+scripts\star_discord_autostart.cmd install   create (or replace) the task
+scripts\star_discord_autostart.cmd status    is it installed, when did it last run
+scripts\star_discord_autostart.cmd start     run it now         stop    end the running task
+scripts\star_discord_autostart.cmd remove    delete the task
+```
+
+The task runs 30 seconds after you sign in, in your own session (`InteractiveToken`, ordinary rights), with
+`pythonw.exe` so no console window appears, and Windows restarts it up to 99 times a minute apart if it fails.
+It uses the Python found by the script (`STAR_DISCORD_PYTHON`, else `.venv` in the checkout, else `py -3.12`),
+so run the script from the checkout you want to keep (after the code is merged, a stable one, not a temporary
+worktree) and install `requirements-discord.txt` into that Python first. The log is the same `discord-bot.log`.
+The task only runs while you are signed in; "run whether signed in or not" would need your Windows password
+and is deliberately not used. Use A or B, or both: if both start, the second one steps aside.
+
 ## 5. Use it
 
 - **DM the bot** like a normal chat: click the bot in your server's member list > **Message**.
