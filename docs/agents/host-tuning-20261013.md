@@ -1,7 +1,7 @@
 # Host tuning for brain 1 (Claude, board item #85 host-tuning-20261013)
 
 Status: FILES WRITTEN, PR #269 open (board #85); owner steps pending. Branch `star/host-tuning-20261013`, worktree `worktrees/host-tuning`.
-Task: write reviewable files the owner runs once at the brain-1 console (tune.sh, star-sudoers, README). Nothing was
+Task: write reviewable files the owner runs once at the brain-1 console (tune.sh and README; the star-sudoers allowlist was dropped in a46575c at the owner's request). Nothing was
 run with sudo and no host setting was changed by this item.
 
 ## What was read on the host (read-only, no sudo, 2026-10-13)
@@ -47,3 +47,5 @@ run with sudo and no host setting was changed by this item.
 - Open questions: (1) whether to also set a BIOS power profile (owner, maintenance window). (2) THP=always A/B: only
   worth doing if llama.cpp ever allocates anonymous memory for weights (`-lm dio` does) and only with the lock.
 - 19:55Z PR #269 opened against star/next (ready); full pytest 6336 passed, 243 skipped. Claim marked done.
+- 2026-10-14 cloud review (Claude): no sudoers file is in the PR any more (dropped in a46575c); lock file moved from the
+  world-writable /run/lock to /run (root-only). Re-ran apply/apply/status/rollback in a scratch root (Git Bash): restored.
