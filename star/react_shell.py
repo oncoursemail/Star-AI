@@ -45,6 +45,8 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
+from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
+from .corrections import CORRECTION_ACTIONS, handle_action as handle_correction_action
 from .lesson_digest import Digester, may_start_automatic
 from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
@@ -73,6 +75,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
+# What STAR learned this week (undo / restore / keep) and owner corrections that may become regression tests
+# (star/learned_week.py, star/corrections.py, docs/SELF_LEARNING_LOOP.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | LEARNED_ACTIONS | CORRECTION_ACTIONS
 # Media: where images, voice and video run, the image engine on this PC, and a project's
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
@@ -105,7 +110,7 @@ PERMITTED_SETTINGS = frozenset({
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
     'instant_route_enabled',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','research_auto_check',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -537,6 +542,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
     except (OSError, ValueError, sqlite3.Error) as exc:
         lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
+    try:
+        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
+                                                 project=settings.project)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -578,6 +588,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'analytics':get_dashboard(home,settings.project),
         'learning':learning_status(home,settings.project),
         'lesson_bundle':lesson_bundle,
+        'learning_bundle':learning_bundle,
         'credentials':credential_status(),
         'server':server_status(settings),
         'roblox':roblox_state(home),
@@ -1068,6 +1079,11 @@ def launch():
                     # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
                     require_screen_consent(body)
                     return json.dumps({'ok':True,'data':self._capture_screen()})
+                if action in LEARNED_ACTIONS or action in CORRECTION_ACTIONS:
+                    # Owner clicks in What STAR learned this week / corrections; `approved` is the click itself.
+                    settings=Settings.load(self.settings_file)
+                    handler=handle_learned_action if action in LEARNED_ACTIONS else handle_correction_action
+                    return json.dumps({'ok':True,'data':handler(app_data(),settings.project,action,body)},default=str)
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)
