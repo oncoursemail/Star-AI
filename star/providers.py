@@ -12,7 +12,7 @@ Every provider has a typed kind, and callers branch on the kind, never on the id
 
 The LAN address is typed by the owner in Settings. It is validated here, at the
 one place every model call passes through, so the server key can only ever be
-sent to a private IP literal.
+sent only to a validated private address with no DNS lookup.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -44,8 +44,8 @@ PROVIDERS: dict[str, Provider] = {
 }
 LOCAL = "local"
 STAR_SERVER = "star_server"
-# Private providers never leave the owner's machines. Their address comes from
-# Settings (loopback for local, a validated private IP for the LAN server).
+# Private providers use owner-entered endpoints. The LAN endpoint is checked
+# before STAR reads the server credential.
 PRIVATE_PROVIDERS: dict[str, Provider] = {
     LOCAL: Provider("On-device (private)", "", "", "", kind="local",
                     base_url_from_settings=True, requires_key=False,
@@ -59,24 +59,28 @@ SEARCH_KEYS = {"brave": "BRAVE_SEARCH_API_KEY", "tavily": "TAVILY_API_KEY"}
 KEY_ENV = {**{name: provider.env_var for name, provider in ALL_PROVIDERS.items()
               if provider.requires_key}, **SEARCH_KEYS}
 
-# RFC 1918, loopback and link-local only. `ipaddress.is_private` is wider than
-# this (it also accepts 0.0.0.0/8, documentation ranges and 240.0.0.0/4).
+# Use explicit ranges: ipaddress.is_private also includes non-LAN addresses.
+# Left out on purpose: link-local (169.254.0.0/16, fe80::/10), where cloud metadata services
+# answer, and carrier-grade NAT (100.64.0.0/10), which is opt-in and
+# holds a cloud metadata service (100.100.100.200).
 _LAN_NETWORKS = tuple(ipaddress.ip_network(block) for block in (
-    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",   # RFC 1918 private
-    "127.0.0.0/8", "169.254.0.0/16",                   # loopback, link-local
-    "::1/128", "fc00::/7", "fe80::/10",                # IPv6 loopback, ULA, link-local
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",  # RFC 1918
+    "127.0.0.0/8",                                    # loopback
+    "::1/128", "fc00::/7",                            # IPv6 loopback, ULA
 ))
+# A metadata service that sits inside an allowed range (the IPv6 unique local block).
+_METADATA_ADDRESSES = frozenset({ipaddress.ip_address("fd00:ec2::254"),
+                                 ipaddress.ip_address("100.100.100.200")})
+_CGNAT_NETWORK = ipaddress.ip_network("100.64.0.0/10")
 _LAN_HINT = "Use your server's private IP address, for example http://192.168.1.20:8080/v1"
 
-def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server") -> str:
-    """Return the canonical private `scheme://ip:port/v1` URL, or raise ValueError.
 
-    Fail closed: an IP literal only (no hostnames, so DNS cannot redirect the
-    key), a private/loopback/link-local address, an explicit unprivileged port,
-    the exact path /v1, and no credentials, query or fragment.
+def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server",
+                          allow_cgnat: bool = False) -> str:
+    """Return a canonical local-network URL or raise ValueError.
 
-    `path` and `label` let another owner-entered LAN service (STAR Knowledge,
-    served from the root) reuse this one rule with its own fixed path and name.
+    Allow only explicitly listed private IP ranges; hostnames are refused until
+    connection-level DNS pinning prevents credential exfiltration via rebinding.
     """
     hint = _LAN_HINT if path == "/v1" else _LAN_HINT.replace(":8080/v1", ":8091")
     if not isinstance(value, str) or not value.strip():
@@ -97,17 +101,20 @@ def validate_lan_endpoint(value, *, path: str = "/v1", label: str = "STAR Server
     try:
         address = ipaddress.ip_address(url.hostname or "")
     except ValueError as exc:
-        raise ValueError(f"{label} address must use an IP address, not a host name. " + hint) from exc
-    if not any(address in network for network in _LAN_NETWORKS):
+        raise ValueError(f"{label} must use a private IP literal, not a hostname. " + hint) from exc
+    # One spelling per destination: an IPv4-mapped IPv6 literal (::ffff:a.b.c.d) is in none of
+    # the ranges above and is refused, never unwrapped to its IPv4 address.
+    if address in _METADATA_ADDRESSES or not (any(address in network for network in _LAN_NETWORKS)
+                                              or (allow_cgnat is True and address in _CGNAT_NETWORK)):
         raise ValueError(f"{label} must be on your private network (10.x, 172.16-31.x, 192.168.x, "
-                         "127.x or link-local). Public addresses are refused.")
+                         "127.x or an IPv6 unique local address). Public, link-local, shared "
+                         "(100.64.x unless explicitly enabled) and cloud metadata addresses are refused.")
+    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     if port is None or not 1024 <= port <= 65535:
         raise ValueError(f"{label} address needs a port from 1024 to 65535, for example :"
                          + ("8080" if path == "/v1" else "8091"))
-    host = f"[{address.compressed}]" if address.version == 6 else address.compressed
     canonical = f"{url.scheme}://{host}:{port}{path}"
-    # What was validated must be exactly what is used: no odd encodings, extra
-    # path segments, leading zeros or anything urlsplit silently normalised.
+    # Check what will actually be used, not a silently normalised URL.
     if value not in (canonical, canonical + "/"):
         raise ValueError(f"{label} address must look exactly like {canonical}")
     return canonical
@@ -191,7 +198,8 @@ def connection_for(settings) -> tuple[str, str]:
     if spec.kind == "local":
         return settings.endpoint, "local-only"
     if spec.kind == "lan":
-        endpoint = validate_lan_endpoint(getattr(settings, "server_endpoint", ""))
+        endpoint = validate_lan_endpoint(getattr(settings, "server_endpoint", ""),
+                                         allow_cgnat=getattr(settings, "allow_cgnat", False))
         key = get_api_key(STAR_SERVER)
         if not key:
             raise ValueError("STAR Server needs its API key. Add it in Settings → STAR Server.")
@@ -264,21 +272,15 @@ def server_slots(settings, model: str | None = None) -> int:
 _SLOT_TABLE: dict[tuple[str, str], dict] = {}
 _SLOT_TABLE_CHATS = 64
 
-def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, background: bool,
-                       prime: bool) -> int:
+def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, prime: bool) -> int:
+    """The slot of a conversation's own requests (a turn, or the warm-up of that turn)."""
     import zlib
     table = _SLOT_TABLE.setdefault(key, {"active": None, "slot": {}})
     held: dict = table["slot"]
-    home = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
     active = table["active"]
-    if background:
-        # Summaries, sub-agents and repairs have prompts of their own. They go to the slot
-        # next to the one the open chat uses, never into it.
-        keep = held.get(active) if active is not None else None
-        return ((held.get(conversation, home) if keep is None else keep) + 1) % slots
     slot = held.get(conversation)
     if slot is None or slot >= slots:
-        slot = home
+        slot = zlib.crc32(str(conversation).encode("utf-8", "replace")) % slots
         if active is not None and active != conversation and held.get(active) == slot:
             slot = (slot + 1) % slots   # another chat is open there: leave its prompt alone
         if len(held) >= _SLOT_TABLE_CHATS:
@@ -286,8 +288,114 @@ def _conversation_slot(key: tuple[str, str], conversation: str, slots: int, *, b
                 del held[name]
         held[conversation] = slot
     if not prime:
+        busy = _busy_slots_now(key)
+        if slot in busy:
+            # Issue 118: another client (or a helper the server placed there) is generating in this
+            # chat's slot right now, so a request naming it would wait for that whole reply. Move the
+            # chat to the next idle slot and keep it there: its next turns find this prompt cached.
+            idle = [(slot + step) % slots for step in range(1, slots) if (slot + step) % slots not in busy]
+            if idle:
+                slot = held[conversation] = idle[0]
         table["active"] = conversation   # a real turn: this is the chat the owner is in
     return slot
+
+# Slots a model's server reported as generating, per (server, model), from `GET /slots` just before
+# a chat turn (see `look_for_busy_slots`). Read once by that turn's slot choice, then forgotten.
+_BUSY_SLOTS: dict[tuple[str, str], tuple[float, frozenset]] = {}
+_BUSY_SLOTS_FRESH_S = 5.0
+# Servers that answered `GET /slots` with "not here" (llama.cpp started with --no-slots, or not
+# llama.cpp at all): not asked again by this process.
+_NO_SLOTS_PAGE: set[str] = set()
+# Tests replace this with an httpx mock transport; None means the real network.
+_SLOT_PROBE_TRANSPORT = None
+SLOT_PROBE_TIMEOUT_S = 0.4
+
+def _busy_slots_now(key: tuple[str, str]) -> frozenset:
+    import time
+    seen = _BUSY_SLOTS.pop(key, None)
+    if not seen or time.monotonic() - seen[0] > _BUSY_SLOTS_FRESH_S:
+        return frozenset()
+    return seen[1]
+
+def _slot_probe_wanted() -> bool:
+    """`STAR_SERVER_SLOT_PROBE=off` skips the look at the server's slots before a turn. On unless set."""
+    return os.environ.get("STAR_SERVER_SLOT_PROBE", "").strip().lower() not in ("off", "0", "false", "no")
+
+def _busy_from_report(report) -> frozenset | None:
+    """Slot ids that are generating, from llama.cpp's `/slots` list; None when it is not such a list."""
+    if not isinstance(report, list):
+        return None
+    busy = set()
+    for row in report:
+        if not isinstance(row, dict) or type(row.get("id")) is not int:
+            continue
+        processing = row.get("is_processing")
+        if processing is None:                      # older llama.cpp builds: state 0 = idle
+            processing = row.get("state") not in (None, 0)
+        if processing is True:
+            busy.add(row["id"])
+    return frozenset(busy)
+
+async def look_for_busy_slots(settings, model: str = "", *, conversation: str = "") -> frozenset:
+    """Before a chat turn on STAR Server, ask the server which slots of `model` are generating.
+
+    Issue 118: two STAR clients share nothing but the server, so their chats can hash to the same
+    slot, and a turn that names a busy slot waits although another slot is free. The answer is kept
+    for a few seconds and read once by this turn's `llama_request_fields`, which then moves the chat
+    to an idle slot (and keeps it there). Only when the request would be pinned at all (STAR Server,
+    two or more slots, a conversation, pinning not switched off).
+
+    Never raises and never delays a turn by more than `SLOT_PROBE_TIMEOUT_S`: any failure (no
+    answer, an error status, an unreadable page) leaves the slot choice exactly as it was. Sends the
+    server key only to the validated server address (`connection_for`), without any system proxy.
+    Two turns sent at the very same moment can both see the slot idle; this narrows the collision to
+    the few milliseconds between the look and the request, it does not lock anything on the server.
+    `GET /slots?model=X` on a llama.cpp router asks the instance of X, the model this turn is about to use.
+    """
+    if (provider_kind(settings) != "lan" or not conversation or _server_places_every_request()
+            or not _slot_probe_wanted() or server_slots(settings, model or None) < 2):
+        return frozenset()
+    import time
+    import httpx
+    key = _instance(settings, model or None)
+    try:
+        endpoint, api_key = connection_for(settings)
+        endpoint = endpoint.rstrip("/")
+        if endpoint in _NO_SLOTS_PAGE:
+            return frozenset()
+        root = endpoint[:-len("/v1")] if endpoint.endswith("/v1") else endpoint
+        async with httpx.AsyncClient(trust_env=False, timeout=SLOT_PROBE_TIMEOUT_S,
+                                     transport=_SLOT_PROBE_TRANSPORT) as http:
+            answer = await http.get(root + "/slots", params={"model": key[1]},
+                                    headers={"Authorization": f"Bearer {api_key}"})
+        if answer.status_code in (404, 405, 501):
+            _NO_SLOTS_PAGE.add(endpoint)
+            return frozenset()
+        busy = _busy_from_report(answer.json()) if answer.status_code == 200 else None
+    except Exception:
+        return frozenset()
+    if busy is None:
+        return frozenset()
+    _BUSY_SLOTS[key] = (time.monotonic(), busy)
+    return busy
+
+async def model_slots_full(settings, model: str, *, probe=None) -> bool:
+    """True when every slot of `model` on STAR Server is generating right now (so a new request would queue).
+
+    One `look_for_busy_slots` question (<= `SLOT_PROBE_TIMEOUT_S`). False whenever it cannot tell: not STAR
+    Server, slot count unknown, probe switched off or failed. Used to keep interactive chat off a main model
+    whose slots are all held by background answers (docs/agents/chat-speed-20261013.md).
+    """
+    try:
+        busy = await (probe or look_for_busy_slots)(settings, model, conversation="interactive-busy-check")
+        slots = server_slots(settings, model or None)
+    except Exception:
+        return False
+    return bool(slots) and len(busy) >= slots
+
+def _server_places_every_request() -> bool:
+    """`STAR_SERVER_SLOT_PINNING=off`: name no slot at all (see `llama_request_fields`). Off unless set."""
+    return os.environ.get("STAR_SERVER_SLOT_PINNING", "").strip().lower() in ("off", "0", "false", "no")
 
 def llama_request_fields(settings, *, conversation: str = "", tools: bool = False, model: str = "",
                          background: bool = False, prime: bool = False) -> dict:
@@ -304,33 +412,63 @@ def llama_request_fields(settings, *, conversation: str = "", tools: bool = Fals
                           (Qwen templates otherwise re-render them differently, which
                           makes the server read every previous answer again)
       id_slot             one conversation stays on one slot of each model. Sent only
-                          when that model has reported two or more slots.
+                          for the conversation's own requests (a turn and its
+                          warm-up), and only when that model has reported two or
+                          more slots.
 
-    Slot rules (measured in docs/research/server-inference.md 2.4):
+    Slot rules:
 
       * `model` is the model this request goes to; slots belong to a model, so
         the same chat has one slot on the quick model and one on the main model.
       * A chat keeps its slot. A chat that is opened while another one is in use
         takes a different slot, so switching back finds the first one cached.
-      * `background=True` (summaries, sub-agents, code repairs: prompts of their
-        own) always goes to the slot next to the open chat's, never into it.
-      * `prime=True` is the cache warm-up: it takes the chat's slot without
-        declaring that chat the one in use.
-      * `tools` no longer moves a request to the other slot. The tool prompt and
-        the plain prompt of one chat share its slot; the server's RAM prompt
-        cache brings back whichever was replaced (1.3-1.6 s, measured), and the
-        second slot stays free for background work.
+      * `prime=True` is the cache warm-up: it takes the chat's slot (the turn it
+        prepares is sent there) without declaring that chat the one in use.
+      * `background=True` (summaries, sub-agents, code repairs, the lesson digest,
+        a voice call: prompts of their own) carries no `id_slot`. A request with
+        `id_slot` waits for that one slot even while another is free, so helpers
+        pinned to one slot queued behind each other and behind another client
+        (issue 118). The server now places them itself. The price: nothing keeps
+        the server from putting such a request into the slot that holds the
+        chat's prompt, and the chat's next turn then reads its prompt again or
+        gets it back from the server's RAM prompt cache.
+      * A request without a conversation name is not pinned either.
+      * `tools` does not move a request to another slot. The tool prompt and the
+        plain prompt of one chat share its slot; the server's RAM prompt cache
+        brings back whichever was replaced (1.3-1.6 s, measured).
 
-    Verified against llama.cpp build 11541 (router mode) on the owner's server.
+    Two STAR clients share nothing but the server, so the chats of two clients
+    can have the same slot number (a hash, with two slots: one pair in two).
+    Before a chat turn the app asks the server which slots are generating
+    (`look_for_busy_slots`, issue 118); when the chat's slot is busy and another
+    is idle, the turn goes to the idle one and the chat stays there. Two turns
+    sent at the very same moment can still both see the slot idle, and then the
+    second waits for the first one's request. Setting the
+    environment variable `STAR_SERVER_SLOT_PINNING=off` (read for every request,
+    off unless set) removes `id_slot` from every request: the server then places
+    the chat's turns too, and no client waits while a slot is free. The price:
+    a conversation finds its cached prompt only through the server's own choice,
+    and two chats with the same system prompt take turns in one slot.
+
+    Pinned requests were verified against llama.cpp build 11541 (router mode) on
+    the owner's server. Where the server puts a request without `id_slot` was
+    measured there once with a probe script (research notes, server inference
+    2.4): the idle slot whose cached prompt shares the longest start with the
+    request (above 10 %), otherwise the least recently used one; the next turn
+    of a conversation reused its cached prompt that way. It has not been
+    measured with STAR's own helpers running or with two clients. That a
+    request with `id_slot` waits while its slot is busy is how the llama.cpp
+    server queues work (it defers the task); the tests reproduce it with a fake
+    server, and it was not timed on the owner's server for this change.
     """
     kind = provider_kind(settings)
     if kind == "cloud":
         return {}
     fields: dict = {"cache_prompt": True, "chat_template_kwargs": {"preserve_thinking": True}}
     slots = server_slots(settings, model or None) if kind == "lan" else 0
-    if slots >= 2:
+    if slots >= 2 and conversation and not background and not _server_places_every_request():
         fields["id_slot"] = _conversation_slot(_instance(settings, model or None), str(conversation), slots,
-                                               background=background, prime=prime)
+                                               prime=prime)
     return fields
 
 def model_unavailable(exc: BaseException) -> bool:
@@ -374,9 +512,12 @@ def background_client(client, settings, *, conversation: str = ""):
     """The client for model calls that are not the conversation itself.
 
     On STAR Server every such call carries `llama_request_fields(...,
-    background=True)`: the slot next to the open chat's, so a summary or a
-    sub-agent never replaces the chat's cached prompt. For a cloud provider and
-    the on-PC brain (no slot count known) this is the plain client.
+    background=True)`: the prompt-cache fields without `id_slot`, so the server
+    chooses the slot and two helpers never wait for the same one. That also
+    means a helper is no longer kept out of the chat's slot (see
+    `llama_request_fields`). `conversation` is accepted for the callers and
+    does not select anything. For a cloud provider and the on-PC brain this is
+    the plain client.
     """
     if provider_kind(settings) != "lan":
         return client

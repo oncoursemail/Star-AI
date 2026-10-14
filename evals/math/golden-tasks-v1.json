@@ -1,0 +1,468 @@
+{
+  "schema_version": 1,
+  "name": "roblox-game-math",
+  "harness_owned": true,
+  "scope": "Standalone development fixtures; not registered in existing suites or scoring.",
+  "tasks": [
+    {
+      "id": "MATH-01",
+      "category": "game-math",
+      "topic": "vectors",
+      "goal": "Normalize a direction without dividing by zero",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return normalize(v) for {x,y,z}; return nil when its magnitude is <= 1e-12, otherwise return a fresh unit vector. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\ncheck(\"zero has no direction\", f({x=0,y=0,z=0}) == nil)\ncheck(\"tiny has no direction\", f({x=1e-13,y=0,z=0}) == nil)\ncheck(\"threshold is inclusive\", f({x=1e-12,y=0,z=0}) == nil)\ncheck(\"small nonzero survives\", vnear(f({x=1e-10,y=0,z=0}), {x=1,y=0,z=0}))\ncheck(\"three four normalizes\", vnear(f({x=3,y=4,z=0}), {x=0.6,y=0.8,z=0}))\ncheck(\"signs survive\", vnear(f({x=0,y=-3,z=4}), {x=0,y=-0.6,z=0.8}))\nlocal p = {x=2,y=-2,z=1}\nlocal q = f(p)\ncheck(\"fresh result and no input mutation\", q ~= p and p.x == 2 and p.y == -2 and p.z == 1)\ncheck(\"unit magnitude\", near(q.x*q.x+q.y*q.y+q.z*q.z, 1))\n"
+      },
+      "reference_answer": "local function normalize(v)\n    local m = math.sqrt(v.x*v.x + v.y*v.y + v.z*v.z)\n    if m <= 1e-12 then return nil end\n    return {x=v.x/m, y=v.y/m, z=v.z/m}\nend\nreturn normalize\n",
+      "bad_answer": "local function normalize(v)\n    local m = v.x*v.x + v.y*v.y + v.z*v.z\n    if m <= 1e-12 then return nil end\n    return {x=v.x/m, y=v.y/m, z=v.z/m}\nend\nreturn normalize\n",
+      "bad_answer_reason": "Divides by squared length instead of length.",
+      "bad_answer_fails": [
+        "three four normalizes"
+      ]
+    },
+    {
+      "id": "MATH-02",
+      "category": "game-math",
+      "topic": "dot-product",
+      "goal": "Test whether a target lies in a facing cone",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return inCone(forward, offset, halfAngle) for {x,y,z} vectors and halfAngle in [0,pi]. A zero offset is inside; otherwise a zero forward is outside. Test the normalized dot product >= cos(halfAngle), including the boundary. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 10,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal x = {x=1,y=0,z=0}\ncheck(\"ahead is inside\", f(x, {x=2,y=0,z=0}, 0.2) == true)\ncheck(\"behind is outside\", f(x, {x=-2,y=0,z=0}, 0.2) == false)\ncheck(\"side is outside narrow cone\", f(x, {x=0,y=5,z=0}, math.pi/3) == false)\ncheck(\"normalizes both vectors\", f({x=10,y=0,z=0}, {x=1,y=3,z=0}, math.pi/4) == false)\ncheck(\"zero offset is inside\", f(x, {x=0,y=0,z=0}, 0) == true)\ncheck(\"zero forward is outside\", f({x=0,y=0,z=0}, x, 1) == false)\ncheck(\"zero width includes forward\", f(x, x, 0) == true)\ncheck(\"full cone includes backward\", f(x, {x=-1,y=0,z=0}, math.pi) == true)\ncheck(\"input remains unchanged\", x.x == 1 and x.y == 0 and x.z == 0)\n"
+      },
+      "reference_answer": "local function inCone(forward, offset, halfAngle)\n    local a = forward.x^2 + forward.y^2 + forward.z^2\n    local b = offset.x^2 + offset.y^2 + offset.z^2\n    if b == 0 then return true end\n    if a == 0 then return false end\n    local dot = forward.x*offset.x + forward.y*offset.y + forward.z*offset.z\n    return dot / math.sqrt(a*b) >= math.cos(halfAngle)\nend\nreturn inCone\n",
+      "bad_answer": "local function inCone(forward, offset, halfAngle)\n    local a = forward.x^2 + forward.y^2 + forward.z^2\n    local b = offset.x^2 + offset.y^2 + offset.z^2\n    if b == 0 then return true end\n    if a == 0 then return false end\n    local dot = forward.x*offset.x + forward.y*offset.y + forward.z*offset.z\n    return dot >= math.cos(halfAngle)\nend\nreturn inCone\n",
+      "bad_answer_reason": "Uses a raw dot product, making the cone depend on vector lengths.",
+      "bad_answer_fails": [
+        "normalizes both vectors"
+      ]
+    },
+    {
+      "id": "MATH-03",
+      "category": "game-math",
+      "topic": "cross-product",
+      "goal": "Compute an oriented surface normal",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return cross(a,b) for {x,y,z}. Compute a cross b in right-handed coordinates, not a normalized result. Parallel inputs produce the zero vector. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 8,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal x, y = {x=1,y=0,z=0}, {x=0,y=1,z=0}\ncheck(\"right handed order\", vnear(f(x,y), {x=0,y=0,z=1}))\ncheck(\"reversing order negates\", vnear(f(y,x), {x=0,y=0,z=-1}))\ncheck(\"parallel vectors\", vnear(f(x,{x=2,y=0,z=0}), {x=0,y=0,z=0}))\ncheck(\"not normalized\", vnear(f({x=2,y=0,z=0},{x=0,y=3,z=0}), {x=0,y=0,z=6}))\ncheck(\"all components\", vnear(f({x=1,y=2,z=3},{x=4,y=-5,z=6}), {x=27,y=6,z=-13}))\nlocal q = f(x,y)\ncheck(\"fresh result\", q ~= x and q ~= y)\ncheck(\"inputs unchanged\", x.x == 1 and x.y == 0 and y.x == 0 and y.y == 1)\n"
+      },
+      "reference_answer": "local function cross(a, b)\n    return {x=a.y*b.z-a.z*b.y, y=a.z*b.x-a.x*b.z, z=a.x*b.y-a.y*b.x}\nend\nreturn cross\n",
+      "bad_answer": "local function cross(a, b)\n    return {x=a.y*b.z-a.z*b.y, y=a.x*b.z-a.z*b.x, z=a.x*b.y-a.y*b.x}\nend\nreturn cross\n",
+      "bad_answer_reason": "Gets the middle component sign wrong.",
+      "bad_answer_fails": [
+        "all components"
+      ]
+    },
+    {
+      "id": "MATH-04",
+      "category": "game-math",
+      "topic": "cframe-composition",
+      "goal": "Compose two rigid coordinate frames in the right order",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return compose(a,b) representing a*b. Each frame is {p={x,y,z}, r={r11,r12,r13,r21,r22,r23,r31,r32,r33}} with a row-major orthonormal rotation. For column vectors, pOut=a.p+a.r*b.p and rOut=a.r*b.r. Return fresh p and r tables. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 8,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal I = {p={x=0,y=0,z=0},r={1,0,0,0,1,0,0,0,1}}\nlocal A = {p={x=10,y=20,z=30},r={0,-1,0,1,0,0,0,0,1}}\nlocal B = {p={x=2,y=3,z=4},r={1,0,0,0,0,-1,0,1,0}}\nlocal C = f(A,B)\ncheck(\"translation is rotated by parent\", vnear(C.p,{x=7,y=22,z=34}))\nlocal expected, rotationOK = {0,0,1,1,0,0,0,1,0}, true\nfor i=1,9 do rotationOK = rotationOK and near(C.r[i],expected[i]) end\ncheck(\"rotation uses ordered matrix product\", rotationOK)\ncheck(\"left identity\", vnear(f(I,A).p,A.p))\ncheck(\"right identity\", vnear(f(A,I).p,A.p))\ncheck(\"composition is not commutative\", not vnear(f(B,A).p,C.p))\ncheck(\"fresh nested tables\", C ~= A and C ~= B and C.p ~= A.p and C.p ~= B.p and C.r ~= A.r and C.r ~= B.r)\ncheck(\"inputs unchanged\", A.p.x == 10 and A.r[2] == -1 and B.p.y == 3 and B.r[6] == -1)\n"
+      },
+      "reference_answer": "local function compose(a, b)\n    local r = {}\n    for i=0,2 do\n        for j=1,3 do\n            local s = 0\n            for k=1,3 do s = s + a.r[i*3+k]*b.r[(k-1)*3+j] end\n            r[i*3+j] = s\n        end\n    end\n    local p = b.p\n    return {p={x=a.p.x+a.r[1]*p.x+a.r[2]*p.y+a.r[3]*p.z,\n        y=a.p.y+a.r[4]*p.x+a.r[5]*p.y+a.r[6]*p.z,\n        z=a.p.z+a.r[7]*p.x+a.r[8]*p.y+a.r[9]*p.z}, r=r}\nend\nreturn compose\n",
+      "bad_answer": "local function compose(a, b)\n    local r = {}\n    for i=0,2 do\n        for j=1,3 do\n            local s = 0\n            for k=1,3 do s = s + a.r[i*3+k]*b.r[(k-1)*3+j] end\n            r[i*3+j] = s\n        end\n    end\n    local p = b.p\n    return {p={x=a.p.x+p.x,\n        y=a.p.y+a.r[4]*p.x+a.r[5]*p.y+a.r[6]*p.z,\n        z=a.p.z+a.r[7]*p.x+a.r[8]*p.y+a.r[9]*p.z}, r=r}\nend\nreturn compose\n",
+      "bad_answer_reason": "Adds the child x translation in world space instead of parent space.",
+      "bad_answer_fails": [
+        "translation is rotated by parent"
+      ]
+    },
+    {
+      "id": "MATH-05",
+      "category": "game-math",
+      "topic": "look-at",
+      "goal": "Construct a stable look-at basis with Roblox forward convention",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return lookAt(eye,target,up) as {p=eye copy, right={x,y,z}, up={x,y,z}, back={x,y,z}}. Local -Z faces target, so back=unit(eye-target), right=unit(up cross back), correctedUp=back cross right. Return nil for eye==target (distance <=1e-12). Normalize up before testing it. For zero up or |unitUp cross back| <=1e-6, use world Y if abs(back.y)<0.999, otherwise world X. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal O, Y = {x=0,y=0,z=0}, {x=0,y=1,z=0}\nlocal c = f(O,{x=0,y=0,z=-5},Y)\ncheck(\"minus Z is forward\", vnear(c.back,{x=0,y=0,z=1}))\ncheck(\"canonical right and up\", vnear(c.right,{x=1,y=0,z=0}) and vnear(c.up,Y))\nlocal side = f({x=2,y=3,z=4},{x=9,y=3,z=4},{x=0,y=7,z=0})\ncheck(\"looks toward positive X\", vnear(side.back,{x=-1,y=0,z=0}) and vnear(side.right,{x=0,y=0,z=1}))\ncheck(\"coincident target\", f(O,O,Y) == nil)\nlocal vertical = f(O,Y,Y)\ncheck(\"parallel up has deterministic fallback\", vnear(vertical.right,{x=0,y=0,z=-1}) and vnear(vertical.up,{x=1,y=0,z=0}))\nlocal zeroUp = f(O,{x=0,y=0,z=-2},O)\ncheck(\"zero up has fallback\", vnear(zeroUp.right,{x=1,y=0,z=0}))\nlocal tilted = f(O,{x=1,y=2,z=3},{x=1,y=9,z=1})\nlocal function dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end\ncheck(\"orthonormal basis\", near(dot(tilted.right,tilted.up),0) and near(dot(tilted.up,tilted.back),0) and near(dot(tilted.back,tilted.right),0) and near(dot(tilted.right,tilted.right),1) and near(dot(tilted.up,tilted.up),1) and near(dot(tilted.back,tilted.back),1))\ncheck(\"fresh position and unchanged inputs\", c.p ~= O and vnear(c.p,O) and Y.y == 1)\n"
+      },
+      "reference_answer": "local function cross(a,b)\n    return {x=a.y*b.z-a.z*b.y,y=a.z*b.x-a.x*b.z,z=a.x*b.y-a.y*b.x}\nend\nlocal function unit(v)\n    local m = math.sqrt(v.x^2+v.y^2+v.z^2)\n    if m <= 1e-12 then return nil end\n    return {x=v.x/m,y=v.y/m,z=v.z/m}\nend\nlocal function lookAt(eye,target,up)\n    local back = unit({x=eye.x-target.x,y=eye.y-target.y,z=eye.z-target.z})\n    if not back then return nil end\n    local u = unit(up)\n    local right = u and cross(u,back) or {x=0,y=0,z=0}\n    if right.x^2+right.y^2+right.z^2 <= 1e-12 then\n        if math.abs(back.y) < 0.999 then u={x=0,y=1,z=0} else u={x=1,y=0,z=0} end\n        right = cross(u,back)\n    end\n    right = unit(right)\n    return {p={x=eye.x,y=eye.y,z=eye.z},right=right,up=cross(back,right),back=back}\nend\nreturn lookAt\n",
+      "bad_answer": "local function cross(a,b)\n    return {x=a.y*b.z-a.z*b.y,y=a.z*b.x-a.x*b.z,z=a.x*b.y-a.y*b.x}\nend\nlocal function unit(v)\n    local m = math.sqrt(v.x^2+v.y^2+v.z^2)\n    if m <= 1e-12 then return nil end\n    return {x=v.x/m,y=v.y/m,z=v.z/m}\nend\nlocal function lookAt(eye,target,up)\n    local back = unit({x=eye.x-target.x,y=eye.y-target.y,z=eye.z-target.z})\n    if not back then return nil end\n    local u = unit(up)\n    local right = u and cross(u,back) or {x=0,y=0,z=0}\n    if right.x^2+right.y^2+right.z^2 <= 1e-12 then\n        if math.abs(back.y) < 0.999 then u={x=0,y=1,z=0} else u={x=1,y=0,z=0} end\n        right = cross(u,back)\n    end\n    right = unit(right)\n    return {p={x=eye.x,y=eye.y,z=eye.z},right=right,up=cross(right,back),back=back}\nend\nreturn lookAt\n",
+      "bad_answer_reason": "Reverses the corrected-up cross product and mirrors the basis.",
+      "bad_answer_fails": [
+        "canonical right and up"
+      ]
+    },
+    {
+      "id": "MATH-06",
+      "category": "game-math",
+      "topic": "lerp",
+      "goal": "Interpolate and extrapolate scalars",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return lerp(a,b,t)=a+(b-a)*t. Do not clamp t; values outside [0,1] extrapolate. Return exact a and b at t=0 and t=1. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 8,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\ncheck(\"start endpoint\", f(10,20,0) == 10)\ncheck(\"end endpoint\", f(10,20,1) == 20)\ncheck(\"quarter point\", near(f(10,20,0.25),12.5))\ncheck(\"falling range\", near(f(5,-5,0.25),2.5))\ncheck(\"extrapolates beyond end\", near(f(2,6,1.5),8))\ncheck(\"extrapolates before start\", near(f(2,6,-0.5),0))\ncheck(\"constant range\", near(f(-4,-4,12),-4))\n"
+      },
+      "reference_answer": "local function lerp(a,b,t)\n    if t == 0 then return a end\n    if t == 1 then return b end\n    return a+(b-a)*t\nend\nreturn lerp\n",
+      "bad_answer": "local function lerp(a,b,t)\n    if t == 0 then return a end\n    if t == 1 then return b end\n    return a+(b-a)*math.max(0,math.min(1,t))\nend\nreturn lerp\n",
+      "bad_answer_reason": "Clamps a deliberately unclamped interpolation parameter.",
+      "bad_answer_fails": [
+        "extrapolates beyond end"
+      ]
+    },
+    {
+      "id": "MATH-07",
+      "category": "game-math",
+      "topic": "easing-polynomial",
+      "goal": "Implement power easing families with direction",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return ease(t,power,direction) with power an integer 2..5 and direction \"in\", \"out\" or \"inOut\"; raise errors for other powers/directions. Clamp t to [0,1]. In=t^power, Out=1-(1-t)^power, InOut uses half of In(2*t) on the first half and 1-half*In(2*(1-t)) on the second. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\ncheck(\"quadratic in\", near(f(0.5,2,\"in\"),0.25))\ncheck(\"cubic out\", near(f(0.5,3,\"out\"),0.875))\ncheck(\"quartic inOut first half\", near(f(0.25,4,\"inOut\"),0.03125))\ncheck(\"quintic inOut second half\", near(f(0.75,5,\"inOut\"),0.984375))\nlocal endpoints = true\nfor p=2,5 do\n    for _,d in ipairs({\"in\",\"out\",\"inOut\"}) do\n        endpoints = endpoints and near(f(-2,p,d),0) and near(f(3,p,d),1)\n    end\nend\ncheck(\"all families clamp endpoints\", endpoints)\ncheck(\"midpoint is continuous\", near(f(0.5,5,\"inOut\"),0.5))\ncheck(\"invalid power rejected\", not pcall(f,0.5,1,\"in\") and not pcall(f,0.5,2.5,\"in\"))\ncheck(\"invalid direction rejected\", not pcall(f,0.5,2,\"sideways\"))\n"
+      },
+      "reference_answer": "local function ease(t,power,direction)\n    assert(power >= 2 and power <= 5 and power == math.floor(power), \"power\")\n    assert(direction == \"in\" or direction == \"out\" or direction == \"inOut\", \"direction\")\n    t=math.max(0,math.min(1,t))\n    if direction == \"in\" then return t^power end\n    if direction == \"out\" then return 1-(1-t)^power end\n    if t < 0.5 then return (2*t)^power/2 end\n    return 1-(2*(1-t))^power/2\nend\nreturn ease\n",
+      "bad_answer": "local function ease(t,power,direction)\n    assert(power >= 2 and power <= 5 and power == math.floor(power), \"power\")\n    assert(direction == \"in\" or direction == \"out\" or direction == \"inOut\", \"direction\")\n    t=math.max(0,math.min(1,t))\n    if direction == \"in\" then return t^power end\n    if direction == \"out\" then return 1-(1-t)^power end\n    if t < 0.5 then return (2*t)^power/2 end\n    return (2*t)^power/2\nend\nreturn ease\n",
+      "bad_answer_reason": "Uses the first-half formula after the midpoint.",
+      "bad_answer_fails": [
+        "quintic inOut second half"
+      ]
+    },
+    {
+      "id": "MATH-08",
+      "category": "game-math",
+      "topic": "easing-transcendental",
+      "goal": "Implement sine and exponential easing",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return ease(t,family,direction), with family \"sine\" or \"expo\" and direction \"in\", \"out\", \"inOut\"; reject unknown values. Clamp input t. Define InSine(t)=1-cos(pi*t/2). Define InExpo(t)=2^(10*(t-1)), with exact endpoints 0 and 1 for every function. Out(t)=1-In(1-t); InOut(t)=In(2*t)/2 below 0.5 and 1-In(2*(1-t))/2 otherwise. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 10,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\ncheck(\"sine in midpoint\", near(f(0.5,\"sine\",\"in\"),1-math.sqrt(0.5)))\ncheck(\"sine out midpoint\", near(f(0.5,\"sine\",\"out\"),math.sqrt(0.5)))\ncheck(\"sine inOut quarter\", near(f(0.25,\"sine\",\"inOut\"),(1-math.sqrt(0.5))/2))\ncheck(\"expo in midpoint\", near(f(0.5,\"expo\",\"in\"),0.03125))\ncheck(\"expo out midpoint\", near(f(0.5,\"expo\",\"out\"),0.96875))\ncheck(\"expo inOut second half\", near(f(0.75,\"expo\",\"inOut\"),0.984375))\nlocal exact = true\nfor _,family in ipairs({\"sine\",\"expo\"}) do\n    for _,d in ipairs({\"in\",\"out\",\"inOut\"}) do\n        exact = exact and f(-1,family,d) == 0 and f(2,family,d) == 1\n    end\nend\ncheck(\"exact clamped endpoints\", exact)\ncheck(\"unknown family rejected\", not pcall(f,0.5,\"unknown\",\"in\"))\ncheck(\"unknown direction rejected\", not pcall(f,0.5,\"sine\",\"sideways\"))\n"
+      },
+      "reference_answer": "local function ease(t,family,direction)\n    assert(family == \"sine\" or family == \"expo\", \"family\")\n    assert(direction == \"in\" or direction == \"out\" or direction == \"inOut\", \"direction\")\n    t=math.max(0,math.min(1,t))\n    if t == 0 or t == 1 then return t end\n    local function inward(x)\n        if family == \"sine\" then return 1-math.cos(math.pi*x/2) end\n        return 2^(10*(x-1))\n    end\n    if direction == \"in\" then return inward(t) end\n    if direction == \"out\" then return 1-inward(1-t) end\n    if t < 0.5 then return inward(2*t)/2 end\n    return 1-inward(2*(1-t))/2\nend\nreturn ease\n",
+      "bad_answer": "local function ease(t,family,direction)\n    assert(family == \"sine\" or family == \"expo\", \"family\")\n    assert(direction == \"in\" or direction == \"out\" or direction == \"inOut\", \"direction\")\n    t=math.max(0,math.min(1,t))\n    -- Incorrectly omits exact endpoint handling.\n    local function inward(x)\n        if family == \"sine\" then return 1-math.cos(math.pi*x/2) end\n        return 2^(10*(x-1))\n    end\n    if direction == \"in\" then return inward(t) end\n    if direction == \"out\" then return 1-inward(1-t) end\n    if t < 0.5 then return inward(2*t)/2 end\n    return 1-inward(2*(1-t))/2\nend\nreturn ease\n",
+      "bad_answer_reason": "Leaves exponential endpoint residuals instead of returning exact 0 and 1.",
+      "bad_answer_fails": [
+        "exact clamped endpoints"
+      ]
+    },
+    {
+      "id": "MATH-09",
+      "category": "game-math",
+      "topic": "critical-spring",
+      "goal": "Advance a critically damped spring analytically",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return spring(x,v,target,omega,dt) -> newX,newV for constant target, omega>=0 (radians/second) and dt>=0. Solve x''+2*omega*x'+omega^2*(x-target)=0 exactly over dt. omega=0 means free motion x+v*dt. Reject negative omega or dt; do not clamp velocity or overshoot. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 10,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal x,v = f(10,0,0,2,0.5)\ncheck(\"analytical displacement\", near(x,20/math.exp(1)))\ncheck(\"analytical velocity\", near(v,-20/math.exp(1)))\nlocal a,b = f(3,-4,1,2,0)\ncheck(\"zero dt preserves state\", a == 3 and b == -4)\na,b = f(3,-4,99,0,0.5)\ncheck(\"zero frequency is free motion\", near(a,1) and near(b,-4))\nlocal h1,hv1 = f(3,-4,1,2,0.125)\nlocal h2,hv2 = f(h1,hv1,1,2,0.375)\nlocal whole,wv = f(3,-4,1,2,0.5)\ncheck(\"time partition invariance\", near(h2,whole) and near(hv2,wv))\na,b = f(7,0,7,4,3)\ncheck(\"equilibrium stays still\", near(a,7) and near(b,0))\na,b = f(10,0,0,2,100)\ncheck(\"long step remains stable\", near(a,0) and near(b,0))\ncheck(\"negative time rejected\", not pcall(f,1,0,0,2,-1))\ncheck(\"negative frequency rejected\", not pcall(f,1,0,0,-2,1))\n"
+      },
+      "reference_answer": "local function spring(x,v,target,omega,dt)\n    assert(omega >= 0 and dt >= 0, \"nonnegative omega and dt\")\n    local y=x-target\n    local j=v+omega*y\n    local e=math.exp(-omega*dt)\n    return target+(y+j*dt)*e, (v-omega*j*dt)*e\nend\nreturn spring\n",
+      "bad_answer": "local function spring(x,v,target,omega,dt)\n    assert(omega >= 0 and dt >= 0, \"nonnegative omega and dt\")\n    local y=x-target\n    local j=v+omega*omega*y\n    local e=math.exp(-omega*dt)\n    return target+(y+j*dt)*e, (v-omega*j*dt)*e\nend\nreturn spring\n",
+      "bad_answer_reason": "Uses omega squared in the analytical transient coefficient.",
+      "bad_answer_fails": [
+        "analytical displacement"
+      ]
+    },
+    {
+      "id": "MATH-10",
+      "category": "game-math",
+      "topic": "bezier-quadratic",
+      "goal": "Evaluate a quadratic Bezier path",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return bezier(p0,p1,p2,t) for {x,y,z}: (1-t)^2*p0+2*(1-t)*t*p1+t^2*p2. Do not clamp t, including extrapolation. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 8,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal a,b,c = {x=0,y=0,z=2},{x=2,y=4,z=4},{x=4,y=0,z=6}\ncheck(\"start endpoint\", vnear(f(a,b,c,0),a))\ncheck(\"end endpoint\", vnear(f(a,b,c,1),c))\ncheck(\"midpoint includes control weight\", vnear(f(a,b,c,0.5),{x=2,y=2,z=4}))\ncheck(\"quarter curve point\", vnear(f(a,b,c,0.25),{x=1,y=1.5,z=3}))\ncheck(\"extrapolates\", vnear(f(a,b,c,1.5),{x=6,y=-6,z=8}))\ncheck(\"constant controls stay constant\", vnear(f(b,b,b,0.37),b))\nlocal p=f(a,b,c,0)\ncheck(\"fresh result and no mutation\", p ~= a and a.z == 2 and b.y == 4 and c.x == 4)\n"
+      },
+      "reference_answer": "local function bezier(p0,p1,p2,t)\n    local s=1-t\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do out[k]=s*s*p0[k]+2*s*t*p1[k]+t*t*p2[k] end\n    return out\nend\nreturn bezier\n",
+      "bad_answer": "local function bezier(p0,p1,p2,t)\n    local s=1-t\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do out[k]=s*s*p0[k]+s*t*p1[k]+t*t*p2[k] end\n    return out\nend\nreturn bezier\n",
+      "bad_answer_reason": "Omits the factor two on the quadratic control point.",
+      "bad_answer_fails": [
+        "midpoint includes control weight"
+      ]
+    },
+    {
+      "id": "MATH-11",
+      "category": "game-math",
+      "topic": "bezier-cubic",
+      "goal": "Evaluate a cubic Bezier path",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return bezier(p0,p1,p2,p3,t) for {x,y,z}: (1-t)^3*p0+3*(1-t)^2*t*p1+3*(1-t)*t^2*p2+t^3*p3. Do not clamp t. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal a,b,c,d = {x=0,y=0,z=0},{x=0,y=4,z=1},{x=4,y=4,z=2},{x=4,y=0,z=3}\ncheck(\"start endpoint\", vnear(f(a,b,c,d,0),a))\ncheck(\"end endpoint\", vnear(f(a,b,c,d,1),d))\ncheck(\"midpoint\", vnear(f(a,b,c,d,0.5),{x=2,y=3,z=1.5}))\ncheck(\"quarter point\", vnear(f(a,b,c,d,0.25),{x=0.625,y=2.25,z=0.75}))\ncheck(\"extrapolates\", vnear(f(a,b,c,d,1.5),{x=0,y=-9,z=4.5}))\ncheck(\"reversal symmetry\", vnear(f(a,b,c,d,0.3),f(d,c,b,a,0.7)))\ncheck(\"constant controls\", vnear(f(b,b,b,b,0.29),b))\nlocal p=f(a,b,c,d,1)\ncheck(\"fresh result and no mutation\", p ~= d and b.y == 4 and c.z == 2 and d.x == 4)\n"
+      },
+      "reference_answer": "local function bezier(p0,p1,p2,p3,t)\n    local s=1-t\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        out[k]=s^3*p0[k]+3*s*s*t*p1[k]+3*s*t*t*p2[k]+t^3*p3[k]\n    end\n    return out\nend\nreturn bezier\n",
+      "bad_answer": "local function bezier(p0,p1,p2,p3,t)\n    local s=1-t\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        out[k]=s^3*p0[k]+3*s*s*t*p1[k]+3*s*s*t*p2[k]+t^3*p3[k]\n    end\n    return out\nend\nreturn bezier\n",
+      "bad_answer_reason": "Reuses the first control coefficient for the second control.",
+      "bad_answer_fails": [
+        "quarter point"
+      ]
+    },
+    {
+      "id": "MATH-12",
+      "category": "game-math",
+      "topic": "projectile-motion",
+      "goal": "Evaluate a projectile under constant gravity",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return projectile(p0,v0,g,t) -> position,velocity, all vectors {x,y,z}; g is the full acceleration vector, not a positive scalar. Position=p0+v0*t+0.5*g*t^2; velocity=v0+g*t. t>=0. Reject negative t. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal o,v,g = {x=1,y=2,z=3},{x=4,y=10,z=-2},{x=0,y=-10,z=0}\nlocal p,w=f(o,v,g,1)\ncheck(\"half gravity displacement\", vnear(p,{x=5,y=7,z=1}))\ncheck(\"velocity at apex\", vnear(w,{x=4,y=0,z=-2}))\np,w=f(o,v,g,2)\ncheck(\"two second position\", vnear(p,{x=9,y=2,z=-1}))\ncheck(\"descending velocity\", vnear(w,{x=4,y=-10,z=-2}))\np,w=f(o,v,g,0)\ncheck(\"zero time and fresh values\", vnear(p,o) and vnear(w,v) and p ~= o and w ~= v)\np,w=f(o,v,{x=2,y=0,z=-4},0.5)\ncheck(\"arbitrary gravity direction\", vnear(p,{x=3.25,y=7,z=1.5}) and vnear(w,{x=5,y=10,z=-4}))\ncheck(\"negative time rejected\", not pcall(f,o,v,g,-1))\ncheck(\"inputs unchanged\", o.y == 2 and v.y == 10 and g.y == -10)\n"
+      },
+      "reference_answer": "local function projectile(p0,v0,g,t)\n    assert(t >= 0, \"time\")\n    local p,v={},{}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        p[k]=p0[k]+v0[k]*t+0.5*g[k]*t*t\n        v[k]=v0[k]+g[k]*t\n    end\n    return p,v\nend\nreturn projectile\n",
+      "bad_answer": "local function projectile(p0,v0,g,t)\n    assert(t >= 0, \"time\")\n    local p,v={},{}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        p[k]=p0[k]+v0[k]*t+g[k]*t*t\n        v[k]=v0[k]+g[k]*t\n    end\n    return p,v\nend\nreturn projectile\n",
+      "bad_answer_reason": "Omits the one-half acceleration factor.",
+      "bad_answer_fails": [
+        "half gravity displacement"
+      ]
+    },
+    {
+      "id": "MATH-13",
+      "category": "game-math",
+      "topic": "projectile-launch",
+      "goal": "Solve a launch velocity for a specified flight time",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return launch(origin,target,g,time) as {x,y,z} so constant-acceleration flight reaches target exactly at time>0. Use (target-origin-0.5*g*time^2)/time. Reject time<=0. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 8,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal o,t,g = {x=1,y=2,z=3},{x=9,y=2,z=-1},{x=0,y=-10,z=0}\nlocal v=f(o,t,g,2)\ncheck(\"compensates downward gravity\", vnear(v,{x=4,y=10,z=-2}))\ncheck(\"arrives at target\", near(o.x+v.x*2+0.5*g.x*4,t.x) and near(o.y+v.y*2+0.5*g.y*4,t.y) and near(o.z+v.z*2+0.5*g.z*4,t.z))\ncheck(\"zero gravity is constant velocity\", vnear(f(o,t,{x=0,y=0,z=0},4),{x=2,y=0,z=-1}))\ncheck(\"stationary target still needs upward launch\", vnear(f(o,o,g,2),{x=0,y=10,z=0}))\ncheck(\"sideways gravity\", vnear(f(o,t,{x=2,y=0,z=0},2),{x=2,y=0,z=-2}))\ncheck(\"nonpositive times rejected\", not pcall(f,o,t,g,0) and not pcall(f,o,t,g,-1))\ncheck(\"fresh result and no mutation\", v ~= o and v ~= t and o.x == 1 and t.x == 9 and g.y == -10)\n"
+      },
+      "reference_answer": "local function launch(origin,target,g,time)\n    assert(time > 0, \"positive flight time\")\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        out[k]=(target[k]-origin[k]-0.5*g[k]*time*time)/time\n    end\n    return out\nend\nreturn launch\n",
+      "bad_answer": "local function launch(origin,target,g,time)\n    assert(time > 0, \"positive flight time\")\n    local out={}\n    for _,k in ipairs({\"x\",\"y\",\"z\"}) do\n        out[k]=(target[k]-origin[k]+0.5*g[k]*time*time)/time\n    end\n    return out\nend\nreturn launch\n",
+      "bad_answer_reason": "Adds gravity instead of compensating for it.",
+      "bad_answer_fails": [
+        "compensates downward gravity"
+      ]
+    },
+    {
+      "id": "MATH-14",
+      "category": "game-math",
+      "topic": "angle-wrap",
+      "goal": "Wrap radians with an explicit half-open interval",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return wrap(angle) in [-pi,pi). Use modulo semantics that handle negative angles; both +pi and -pi map to -pi. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\ncheck(\"zero\", near(f(0),0))\ncheck(\"positive pi maps negative\", near(f(math.pi),-math.pi))\ncheck(\"negative pi stays negative\", near(f(-math.pi),-math.pi))\ncheck(\"positive overflow\", near(f(3*math.pi/2),-math.pi/2))\ncheck(\"negative overflow\", near(f(-3*math.pi/2),math.pi/2))\ncheck(\"many negative turns\", near(f(-20*math.pi+0.25),0.25))\ncheck(\"many positive turns\", near(f(22*math.pi-0.4),-0.4))\nlocal ok=true\nfor i=-40,40 do local x=f(i*0.73); ok=ok and x >= -math.pi and x < math.pi and near(f(x),x) end\ncheck(\"range and idempotence\", ok)\n"
+      },
+      "reference_answer": "local function wrap(angle)\n    return (angle+math.pi)%(2*math.pi)-math.pi\nend\nreturn wrap\n",
+      "bad_answer": "local function wrap(angle)\n    return math.fmod(angle+math.pi,2*math.pi)-math.pi\nend\nreturn wrap\n",
+      "bad_answer_reason": "Uses fmod, which retains the negative dividend sign.",
+      "bad_answer_fails": [
+        "negative overflow"
+      ]
+    },
+    {
+      "id": "MATH-15",
+      "category": "game-math",
+      "topic": "angular-lerp",
+      "goal": "Interpolate angles along the shortest arc",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return angleLerp(a,b,t) with t clamped to [0,1]. Wrap b-a to [-pi,pi), so an exact pi tie turns negative. Return the interpolated angle wrapped to [-pi,pi). Inputs and output are radians. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal d=math.pi/180\ncheck(\"crosses seam by short arc\", near(f(170*d,-170*d,0.5),-math.pi))\ncheck(\"seam quarter point\", near(f(170*d,-170*d,0.25),175*d))\ncheck(\"reverse seam quarter\", near(f(-170*d,170*d,0.25),-175*d))\ncheck(\"pi tie turns negative\", near(f(0,math.pi,0.5),-math.pi/2))\ncheck(\"clamps below start\", near(f(0,1,-2),0))\ncheck(\"clamps after end\", near(f(0,1,2),1))\ncheck(\"wrapped equivalent endpoints\", near(f(8*math.pi,2*math.pi+1,0.5),0.5))\ncheck(\"identical angles\", near(f(0.7,0.7,0.5),0.7))\n"
+      },
+      "reference_answer": "local function wrap(a) return (a+math.pi)%(2*math.pi)-math.pi end\nlocal function angleLerp(a,b,t)\n    t=math.max(0,math.min(1,t))\n    return wrap(a+wrap(b-a)*t)\nend\nreturn angleLerp\n",
+      "bad_answer": "local function wrap(a) return (a+math.pi)%(2*math.pi)-math.pi end\nlocal function angleLerp(a,b,t)\n    t=math.max(0,math.min(1,t))\n    return wrap(a+(b-a)*t)\nend\nreturn angleLerp\n",
+      "bad_answer_reason": "Interpolates raw angles across the long arc at the seam.",
+      "bad_answer_fails": [
+        "crosses seam by short arc"
+      ]
+    },
+    {
+      "id": "MATH-16",
+      "category": "game-math",
+      "topic": "ray-plane",
+      "goal": "Intersect a finite ray with a plane",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return rayPlane(origin,direction,planePoint,normal,maxT) -> t,point or nil. The ray is origin+t*direction, with 0<=t<=maxT; direction need not be unit length. Reject negative maxT. Zero direction/normal or abs(dot(direction,normal))<=1e-12*|direction|*|normal| is parallel and yields nil. Reject intersections behind the origin or beyond maxT. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 11,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\nlocal function vnear(a, b)\n    return type(a) == \"table\" and near(a.x, b.x) and near(a.y, b.y) and near(a.z, b.z)\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal o,d,p,n = {x=1,y=4,z=2},{x=0,y=-2,z=0},{x=0,y=0,z=0},{x=0,y=3,z=0}\nlocal t,q=f(o,d,p,n,3)\ncheck(\"nonunit direction gives ray parameter\", near(t,2))\ncheck(\"intersection position\", vnear(q,{x=1,y=0,z=2}))\ncheck(\"behind origin is rejected\", f(o,{x=0,y=2,z=0},p,n,10) == nil)\ncheck(\"beyond segment is rejected\", f(o,d,p,n,1) == nil)\ncheck(\"end boundary is included\", near(f(o,d,p,n,2),2))\ncheck(\"parallel is rejected\", f(o,{x=1,y=0,z=0},p,n,10) == nil)\ncheck(\"zero vectors are rejected\", f(o,p,p,n,3) == nil and f(o,d,p,p,3) == nil)\ncheck(\"origin on plane\", near(f(p,d,p,n,0),0))\ncheck(\"negative range rejected\", not pcall(f,o,d,p,n,-1))\ncheck(\"inputs unchanged\", o.y == 4 and d.y == -2 and n.y == 3)\n"
+      },
+      "reference_answer": "local function dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end\nlocal function rayPlane(o,d,p,n,maxT)\n    assert(maxT >= 0, \"maxT\")\n    local denom=dot(d,n)\n    if math.abs(denom) <= 1e-12*math.sqrt(dot(d,d)*dot(n,n)) then return nil end\n    local delta={x=p.x-o.x,y=p.y-o.y,z=p.z-o.z}\n    local t=dot(delta,n)/denom\n    if t < 0 or t > maxT then return nil end\n    return t,{x=o.x+t*d.x,y=o.y+t*d.y,z=o.z+t*d.z}\nend\nreturn rayPlane\n",
+      "bad_answer": "local function dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end\nlocal function rayPlane(o,d,p,n,maxT)\n    assert(maxT >= 0, \"maxT\")\n    local denom=dot(d,n)\n    if math.abs(denom) <= 1e-12*math.sqrt(dot(d,d)*dot(n,n)) then return nil end\n    local delta={x=p.x-o.x,y=p.y-o.y,z=p.z-o.z}\n    local t=dot(delta,n)/denom\n    if t > maxT then return nil end\n    return t,{x=o.x+t*d.x,y=o.y+t*d.y,z=o.z+t*d.z}\nend\nreturn rayPlane\n",
+      "bad_answer_reason": "Accepts plane hits behind the ray origin.",
+      "bad_answer_fails": [
+        "behind origin is rejected"
+      ]
+    },
+    {
+      "id": "MATH-17",
+      "category": "game-math",
+      "topic": "ray-sphere",
+      "goal": "Find the first nonnegative ray-sphere intersection",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return raySphere(origin,direction,center,radius) -> smallest t>=0 or nil for origin+t*direction hitting the sphere. Direction need not be normalized. A ray starting inside returns its exit, a surface start returns 0, tangency counts, zero direction returns nil. Reject radius<0. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 11,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal O={x=0,y=0,z=0}\ncheck(\"nearest forward hit\", near(f({x=-5,y=0,z=0},{x=1,y=0,z=0},O,1),4))\ncheck(\"nonunit direction\", near(f({x=-5,y=0,z=0},{x=2,y=0,z=0},O,1),2))\ncheck(\"inside exits sphere\", near(f(O,{x=0,y=0,z=2},O,1),0.5))\ncheck(\"tangent hit\", near(f({x=-5,y=1,z=0},{x=1,y=0,z=0},O,1),5))\ncheck(\"miss\", f({x=-5,y=2,z=0},{x=1,y=0,z=0},O,1) == nil)\ncheck(\"sphere behind ray\", f({x=5,y=0,z=0},{x=1,y=0,z=0},O,1) == nil)\ncheck(\"surface begins at zero\", near(f({x=1,y=0,z=0},{x=1,y=0,z=0},O,1),0))\ncheck(\"zero direction\", f(O,O,O,1) == nil)\ncheck(\"translated sphere\", near(f({x=0,y=0,z=0},{x=0,y=1,z=0},{x=0,y=5,z=0},2),3))\ncheck(\"negative radius rejected\", not pcall(f,O,{x=1,y=0,z=0},O,-1))\n"
+      },
+      "reference_answer": "local function dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end\nlocal function raySphere(o,d,center,radius)\n    assert(radius >= 0, \"radius\")\n    local a=dot(d,d)\n    if a == 0 then return nil end\n    local m={x=o.x-center.x,y=o.y-center.y,z=o.z-center.z}\n    local b=dot(m,d)\n    local c=dot(m,m)-radius*radius\n    local disc=b*b-a*c\n    if disc < 0 then return nil end\n    local root=math.sqrt(disc)\n    local first=(-b-root)/a\n    if first >= 0 then return first end\n    local last=(-b+root)/a\n    if last >= 0 then return last end\n    return nil\nend\nreturn raySphere\n",
+      "bad_answer": "local function dot(a,b) return a.x*b.x+a.y*b.y+a.z*b.z end\nlocal function raySphere(o,d,center,radius)\n    assert(radius >= 0, \"radius\")\n    local a=dot(d,d)\n    if a == 0 then return nil end\n    local m={x=o.x-center.x,y=o.y-center.y,z=o.z-center.z}\n    local b=dot(m,d)\n    local c=dot(m,m)-radius*radius\n    local disc=b*b-a*c\n    if disc < 0 then return nil end\n    local root=math.sqrt(disc)\n    local first=(-b-root)\n    if first >= 0 then return first end\n    local last=(-b+root)/a\n    if last >= 0 then return last end\n    return nil\nend\nreturn raySphere\n",
+      "bad_answer_reason": "Assumes a unit direction for the first quadratic root.",
+      "bad_answer_fails": [
+        "nonunit direction"
+      ]
+    },
+    {
+      "id": "MATH-18",
+      "category": "game-math",
+      "topic": "weighted-random",
+      "goal": "Select a weighted bucket deterministically",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return choose(weights,u) as a 1-based index. weights is a nonempty dense array of finite nonnegative numbers with finite positive total; u is finite and 0<=u<1. Reject invalid weights, total or u. Choose the first cumulative total strictly greater than u*total, so zero weights never win and exact boundaries go to the next positive bucket. Use the last positive bucket as a rounding fallback only. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 12,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal w={0,1,0,3,0}\ncheck(\"leading zero never wins\", f(w,0) == 2)\ncheck(\"first bucket interior\", f(w,0.249) == 2)\ncheck(\"exact boundary advances\", f(w,0.25) == 4)\ncheck(\"last positive bucket\", f(w,0.999999) == 4)\ncheck(\"scaling preserves buckets\", f({0,10,0,30,0},0.25) == 4)\ncheck(\"empty and zero totals rejected\", not pcall(f,{},0) and not pcall(f,{0,0},0))\ncheck(\"negative weight rejected\", not pcall(f,{1,-1,3},0.5))\ncheck(\"nonfinite weights rejected\", not pcall(f,{0/0},0) and not pcall(f,{math.huge},0))\ncheck(\"overflow total rejected\", not pcall(f,{1e308,1e308},0))\ncheck(\"invalid draws rejected\", not pcall(f,{1},-0.1) and not pcall(f,{1},1) and not pcall(f,{1},0/0))\ncheck(\"inputs unchanged\", w[1] == 0 and w[2] == 1 and w[4] == 3 and #w == 5)\n"
+      },
+      "reference_answer": "local function choose(weights,u)\n    assert(type(u) == \"number\" and u >= 0 and u < 1, \"u\")\n    local total,last=0,nil\n    for i,w in ipairs(weights) do\n        assert(type(w) == \"number\" and w >= 0 and w < math.huge, \"weight\")\n        total=total+w\n        if w > 0 then last=i end\n    end\n    assert(total > 0 and total < math.huge, \"total\")\n    local target,sum=u*total,0\n    for i,w in ipairs(weights) do\n        sum=sum+w\n        if target < sum then return i end\n    end\n    return last\nend\nreturn choose\n",
+      "bad_answer": "local function choose(weights,u)\n    assert(type(u) == \"number\" and u >= 0 and u < 1, \"u\")\n    local total,last=0,nil\n    for i,w in ipairs(weights) do\n        assert(type(w) == \"number\" and w >= 0 and w < math.huge, \"weight\")\n        total=total+w\n        if w > 0 then last=i end\n    end\n    assert(total > 0 and total < math.huge, \"total\")\n    local target,sum=u*total,0\n    for i,w in ipairs(weights) do\n        sum=sum+w\n        if target <= sum then return i end\n    end\n    return last\nend\nreturn choose\n",
+      "bad_answer_reason": "Uses an inclusive upper boundary, allowing zero-weight buckets.",
+      "bad_answer_fails": [
+        "leading zero never wins"
+      ]
+    },
+    {
+      "id": "MATH-19",
+      "category": "game-math",
+      "topic": "seeded-random",
+      "goal": "Advance an explicit deterministic PRNG state",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return nextRandom(state) -> nextState,u. Require integer state in [1,2147483646]. Use nextState=(state*16807)%2147483647 and u=(nextState-1)/2147483646 in [0,1). Reject invalid states. Keep state explicit: no closure state, math.random or math.randomseed. This is a reproducible gameplay stream, not cryptography or an emulation of Roblox Random. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 9,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal expected={16807,282475249,1622650073,984943658,1144108930}\nlocal state,sequenceOK,rangeOK=1,true,true\nfor i=1,#expected do\n    local u\n    state,u=f(state)\n    sequenceOK=sequenceOK and state == expected[i]\n    rangeOK=rangeOK and u >= 0 and u < 1\nend\ncheck(\"known state sequence\", sequenceOK)\ncheck(\"draw range\", rangeOK)\nlocal a,u=f(1)\ncheck(\"draw conversion\", a == 16807 and near(u,16806/2147483646))\nlocal b,v=f(1)\ncheck(\"same seed reproduces\", a == b and u == v)\nlocal other=f(2)\ncheck(\"streams do not share state\", other == 33614 and f(1) == 16807)\ncheck(\"maximum state\", f(2147483646) == 2147466840)\ncheck(\"out of range rejected\", not pcall(f,0) and not pcall(f,-1) and not pcall(f,2147483647))\ncheck(\"noninteger and nonfinite rejected\", not pcall(f,1.5) and not pcall(f,0/0) and not pcall(f,math.huge))\n"
+      },
+      "reference_answer": "local function nextRandom(state)\n    assert(type(state) == \"number\" and state >= 1 and state <= 2147483646 and state == math.floor(state), \"state\")\n    local nextState=(state*16807)%2147483647\n    return nextState,(nextState-1)/2147483646\nend\nreturn nextRandom\n",
+      "bad_answer": "local function nextRandom(state)\n    assert(type(state) == \"number\" and state >= 1 and state <= 2147483646 and state == math.floor(state), \"state\")\n    local nextState=(state*16808)%2147483647\n    return nextState,(nextState-1)/2147483646\nend\nreturn nextRandom\n",
+      "bad_answer_reason": "Uses an off-by-one multiplier and breaks the specified stream.",
+      "bad_answer_fails": [
+        "known state sequence"
+      ]
+    },
+    {
+      "id": "MATH-20",
+      "category": "game-math",
+      "topic": "fixed-timestep",
+      "goal": "Accumulate fixed steps without silently losing time",
+      "prompt": "Write a pure Luau module returning the requested function. Use only numbers, plain tables and the standard library; no Roblox engine objects, services, global state, clock or global RNG. Inputs are finite numbers of moderate magnitude unless an invalid-input case is specified. Do not mutate input tables. Return advance(accumulator,dt,step,maxSteps) -> count,remainder,alpha. Require finite accumulator>=0, dt>=0, step>0 and integer maxSteps>=0. count=min(floor((accumulator+dt)/step),maxSteps); remainder=accumulator+dt-count*step; alpha=min(remainder/step,1). Preserve backlog even if it exceeds a step; do not discard it at the cap. Tests use binary-exact step sizes at boundaries. Numerical answers use absolute tolerance 1e-9 and relative tolerance 0; booleans, nil, indices and integer states are exact.",
+      "run_mode": "automated",
+      "fixture_status": "implemented",
+      "tolerance": {
+        "absolute": 1e-09,
+        "relative": 0
+      },
+      "unit_test": {
+        "checks": 11,
+        "body": "local f = load_answer()\nlocal function near(a, b)\n    return type(a) == \"number\" and math.abs(a - b) <= 1e-9\nend\ncheck(\"returns a function\", type(f) == \"function\")\nlocal n,r,a=f(0,0.0625,0.125,4)\ncheck(\"partial step\", n == 0 and near(r,0.0625) and near(a,0.5))\nn,r,a=f(0.0625,0.0625,0.125,4)\ncheck(\"exact boundary\", n == 1 and near(r,0) and near(a,0))\nn,r,a=f(0.0625,0.25,0.125,4)\ncheck(\"multiple steps with remainder\", n == 2 and near(r,0.0625) and near(a,0.5))\nn,r,a=f(0,1,0.125,3)\ncheck(\"cap preserves backlog\", n == 3 and near(r,0.625) and near(a,1))\nlocal n2,r2,a2=f(r,0,0.125,8)\ncheck(\"later call catches up\", n2 == 5 and near(r2,0) and near(a2,0))\nn,r,a=f(0.0625,0.25,0.125,0)\ncheck(\"zero cap preserves all time\", n == 0 and near(r,0.3125) and near(a,1))\ncheck(\"negative time rejected\", not pcall(f,-1,0,0.125,4) and not pcall(f,0,-1,0.125,4))\ncheck(\"invalid step rejected\", not pcall(f,0,1,0,4) and not pcall(f,0,1,-1,4))\ncheck(\"invalid cap rejected\", not pcall(f,0,1,0.125,-1) and not pcall(f,0,1,0.125,1.5))\ncheck(\"nonfinite input rejected\", not pcall(f,0,math.huge,0.125,4) and not pcall(f,0,0,0/0,4))\n"
+      },
+      "reference_answer": "local function advance(accumulator,dt,step,maxSteps)\n    assert(accumulator >= 0 and accumulator < math.huge and dt >= 0 and dt < math.huge, \"time\")\n    assert(step > 0 and step < math.huge, \"step\")\n    assert(maxSteps >= 0 and maxSteps < math.huge and maxSteps == math.floor(maxSteps), \"maxSteps\")\n    local total=accumulator+dt\n    assert(total < math.huge, \"total\")\n    local count=math.min(math.floor(total/step),maxSteps)\n    local remainder=total-count*step\n    return count,remainder,math.min(remainder/step,1)\nend\nreturn advance\n",
+      "bad_answer": "local function advance(accumulator,dt,step,maxSteps)\n    assert(accumulator >= 0 and accumulator < math.huge and dt >= 0 and dt < math.huge, \"time\")\n    assert(step > 0 and step < math.huge, \"step\")\n    assert(maxSteps >= 0 and maxSteps < math.huge and maxSteps == math.floor(maxSteps), \"maxSteps\")\n    local total=accumulator+dt\n    assert(total < math.huge, \"total\")\n    local count=math.min(math.floor(total/step),maxSteps)\n    local remainder=total%step\n    return count,remainder,math.min(remainder/step,1)\nend\nreturn advance\n",
+      "bad_answer_reason": "Drops unprocessed full steps whenever the work cap is reached.",
+      "bad_answer_fails": [
+        "cap preserves backlog"
+      ]
+    }
+  ]
+}

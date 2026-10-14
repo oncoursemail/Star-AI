@@ -60,6 +60,52 @@ Expect `[PASS] W03b Matches SHA256SUMS.txt` and `[PASS] W03c Matches the digest 
 
 Expect: the wizard reuses the previous folder; it replaces `_internal` only. It must not touch `%APPDATA%\STAR`.
 
+### W04b Run Setup while STAR is open [manual, Restart Manager]
+
+**Recorded result for the PR #126 repair: NOT RUN.** No packaged Windows upgrade
+trial was performed for this repair. Automated close-order tests, an offscreen Qt
+handler test, and a green Windows build are not Restart Manager acceptance.
+Do not claim a verified Restart Manager fix in release notes until at least one
+packaged W04b run has passed and its evidence has been recorded here or attached
+to the acceptance issue. Keep untested variants marked NOT RUN.
+
+1. Install and launch a packaged build containing this close-path change as the
+   version being replaced. Record its version and source commit; running an older
+   executable without the change does not test the repaired close path. Begin a
+   long streamed response and leave STAR open.
+2. Run the replacement Setup executable over that installation. Repeat with both
+   interactive and silent Setup, and with STAR idle, streaming, and in an active
+   voice call. Include a trial with the local model server and ComfyUI started by
+   STAR; record their process IDs before Setup begins.
+3. Confirm Windows Restart Manager closes STAR automatically without the dialog
+   "Setup was unable to automatically close all applications" and without manually
+   ending STAR in Task Manager. Confirm STAR-owned child processes have exited and
+   released their ports and runtime files, rather than merely checking STAR.exe.
+4. Relaunch STAR, reopen the chat, and verify the interrupted streaming turn has a
+   saved cancellation notice, not a completed answer. Check that Setup replaced
+   the runtime and preserved the existing profile and chat history. An idle close
+   must not add a cancellation notice to an already completed turn.
+5. Record total shutdown time and whether it was within two seconds. The packaged
+   Windows 1.8-second watchdog starts only after ComfyUI, warm-up cancellation and
+   local runtime cleanup return, before voice and executor teardown. It is not an
+   overall two-second shutdown guarantee; slow child cleanup can take longer.
+6. Repeat with a Windows sign-out or shutdown request. Also cancel a Windows
+   sign-out/shutdown after its end-session query has reached STAR. **Accepted
+   behavior:** STAR closes on that query even if Windows later cancels the session
+   end. STAR does not reopen automatically in that case; relaunch it manually and
+   verify the saved turn. This is not a promise to resume the interrupted answer.
+
+Expect: Setup finishes without a close-applications failure, owned child processes
+are stopped, and existing history remains available. Record any duplicate answer
+or other failure as observed; the small final-answer/cancellation race has not been
+eliminated by the cleanup-order repair.
+
+For every trial record: Windows version; installed and replacement build versions
+and source commits; installer SHA-256; interactive/silent mode; idle/streaming/voice
+state; owned child-process state before and after; elapsed shutdown time; installer
+result; profile/history checks; and PASS, FAIL or NOT RUN with evidence. Omit keys,
+private addresses, account names and private chat text from published evidence.
+
 ### W05 STAR launches and the old runtime is gone [manual]
 
 Expect: the window title reads `STAR Intelligence — vX.Y.Z` with the new version, the sidebar shows your old chats, and no error dialog appears. Record the exact version shown. (`W07` and `W08` below prove replacement and preservation by measurement.)
@@ -71,6 +117,22 @@ scripts\windows_acceptance.cmd doctor
 ```
 
 Expect `[PASS] W06a STAR.exe --doctor`, `W06b --ui-doctor` and `W06c --build-doctor`. `STAR.exe` is a windowed program, so its printed text may be empty; the exit code is the result. For an exact pull request build also pass the PR head commit: `scripts\windows_acceptance.cmd doctor --expect-sha <40-hex-commit>`; a mismatch fails W06c. Builds older than the source-stamping change (v0.8.x) carry no provenance, so W06c is **expected to fail** on them and is only meaningful for the candidate build.
+
+### Automated packaged chat smoke (after W06, optional)
+
+Run this on Windows with the *packaged* STAR.exe, a running STAR Server endpoint, and a **copy** of your STAR profile. This is additional automated evidence, not a replacement for W07–W10 or for manual GPU/UI acceptance. Do not point the helper at your actual %APPDATA%\STAR folder. The helper refuses that profile; always close STAR and copy the profile first.
+
+From the project root, in Command Prompt:
+
+```bat
+mkdir "%USERPROFILE%\STAR-smoke-profile\Roaming"
+robocopy "%APPDATA%\STAR" "%USERPROFILE%\STAR-smoke-profile\Roaming\STAR" /E
+python scripts\packaged_smoke.py --exe "%LOCALAPPDATA%\Programs\STAR\STAR.exe" --profile-root "%USERPROFILE%\STAR-smoke-profile" --endpoint "http://127.0.0.1:8000" --key-file "C:\path\to\server-key.txt" --shots "%USERPROFILE%\STAR-acceptance\shots"
+```
+
+Replace the endpoint, executable location and key-file path with the values for this acceptance machine. The key-file accepts either a bare key or one NAME=value line (the value may contain '='). Treat the key file as a secret: never commit it or attach it to evidence. The tool copies the key into the child process environment only, checks that it is not visible in the page, takes startup/reply screenshots, closes STAR, and queries the copy's conversations.sqlite3 messages table for exactly one user row containing ACCEPT-MARKER-0002. Attach the screenshots and redacted PASS/FAIL output; do not attach the profile database or key file. The helper requires a Windows GUI and packaged Qt WebEngine app. Offline Python unit tests instead emulate a loopback DevTools WebSocket server and do not launch STAR or need Qt.
+
+
 
 ### W07 Post-install snapshot [script]
 
@@ -114,7 +176,7 @@ Expect `[PASS] W10 Prompt stored exactly once`, with a detail line such as `{"as
 
 ### W11 Install and start STAR Brain from the app [manual]
 
-STAR Brain tab > **Download and start**. Record the time it took and watch the progress text.
+**Model** page ("Model & connection") > **Download and start**. Record the time it took and watch the progress text.
 
 Expect, from the code: the pinned llama.cpp Vulkan build (`engines\<tag>`) and `Qwen3.5-4B-Q4_K_M.gguf` plus the vision projector are downloaded, hash-checked, and STAR runs a real test completion before it shows **Ready**. A failed start is rolled back and the engine is stopped. Verify the files:
 

@@ -1,7 +1,7 @@
 """Nonsecret provenance of a Windows STAR executable or source checkout.
 
-CI stamps the actual checkout SHA and workflow run into a JSON file before
-PyInstaller packaging. This is diagnostic metadata, NOT a code signature.
+CI stamps the checkout SHA and workflow run before packaging. A clean local
+build stamps its SHA with no claimed workflow run. Neither is a code signature.
 """
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ import sys
 
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
 _RUN = re.compile(r"^[0-9]{1,20}$")
-_EVENT = frozenset({"push", "pull_request", "workflow_dispatch"})
+_EVENT = frozenset({"push", "pull_request", "workflow_dispatch", "local_build"})
 
 
 def read_build_info(root: Path | None = None) -> dict:
@@ -37,12 +37,20 @@ def read_build_info(root: Path | None = None) -> dict:
         run_id = str(raw.get("run_id", ""))
         if (not isinstance(commit, str) or not _COMMIT.fullmatch(commit)
                 or not isinstance(head, str) or not _COMMIT.fullmatch(head)
-                or event not in _EVENT or not _RUN.fullmatch(run_id)):
+                or event not in _EVENT):
+            return unknown
+        if event == "local_build":
+            if raw.get("run_id") != "" or commit != head:
+                return unknown
+            run_url = ""
+        elif _RUN.fullmatch(run_id):
+            run_url = "https://github.com/oncoursemail/Star-AI/actions/runs/" + run_id
+        else:
             return unknown
         return {
             "stamped": True, "source_commit": commit,
             "head_commit": head, "build_event": event,
-            "run_url": "https://github.com/oncoursemail/Star-AI/actions/runs/" + run_id,
+            "run_url": run_url,
             "note": "Build metadata is informational, not a cryptographic signature.",
         }
     except (OSError, ValueError, TypeError, UnicodeError):

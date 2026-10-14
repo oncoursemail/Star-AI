@@ -1,0 +1,601 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "NET-01",
+   "NET-03",
+   "NET-04",
+   "SYS-01",
+   "NET-06",
+   "NET-07",
+   "NET-08",
+   "NET-10",
+   "NET-11"
+  ]
+ },
+ "run": {
+  "app_commit": "66bf9e45984747af16ca1077ca794c9c6ded24f1",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-secure-remotes",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "9b43d620939c",
+  "started_at": "2026-10-11T04:59:35+00:00",
+  "waited_for_lock_s": 5.5,
+  "finished_at": "2026-10-11T05:27:18+00:00",
+  "rescored_at": "2026-10-11T06:34:06+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "NET-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "d8ec704be7622403",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    },
+    {
+     "id": "require:catalog_lookup",
+     "ok": true
+    }
+   ],
+   "seconds": 175.8,
+   "timings": {
+    "luau_check_s": 0.19,
+    "unit_s": 0.61
+   },
+   "blocks": 2,
+   "answer_chars": 4932,
+   "answer_sha256": "8d30ccccbbf70192d24f6092679d2292975b50e93429e8db66733b4b51ddf896",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 235
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the secure rewrite. The server now acts as the single source of truth for pricing and ownership, completely ignoring the `price` argument sent by the client.\n\n### The Vulnerability\nThe original code trusted the client's `price` argument. An exploiter could simply send `0` or a negative number, bypassing the cost entirely [3].\n\n### The Fix\n1.  **Server-Side Pricing:** The server looks up the price in its own `Catalog` table.\n2.  **Validation:** It checks if the item exists and if the player can afford it using the server's authoritative coin count.\n3.  **Ownership Check:** It ensures the player doesn't already own the item.\n\n```lua\n-- Server Script\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Players = game:GetService(\"Players\")\n\n-- 1. Server-authoritative price list\nlocal Catalog = {\n\tsword = 100,\n\tshield = 250\n}\n\n-- 2. Server-authoritative ownership tracking\n-- Using a dictionary of dictionaries: { [Player] = { [itemId] = true } }\nlocal playerInventory = {}\n\nlocal function getInventory(player)\n\tif not playerInventory[player] then\n\t\tplayerInventory[player] = {}\n\tend\n\treturn playerInventory[player]\nend\n\n-- Assume BuyItem is a RemoteEvent defined elsewhere or passed in\nlocal BuyItem = ReplicatedStorage:WaitForChild(\"BuyItem\")\n\n-- Assume giveItem is a function defined elsewhere\nlocal function giveItem(player, itemId)\n\t-- Implementation of giving item\nend\n\nBuyItem.OnServerEvent:Connect(function(player, itemId)\n\t-- A. Validate Input Types\n\tif type(itemId) ~= \"string\" or itemId == \"\" then\n\t\twarn(\"Invalid itemId received from \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- B. Server Decides Price (Never trust client price)\n\tlocal price = Catalog[itemId]\n\tif price == nil then\n\t\twarn(\"Unknown item attempted: \" .. itemId .. \" by \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- C. Check Ownership (One per player)\n\tlocal inventory = getInventory(player)\n\tif inventory[itemId] then\n\t\twarn(player.Name .. \" already owns \" .. itemId)\n\t\treturn\n\tend\n\n\t-- D. Validate Funds (Server-side check)\n\tlocal leaderstats = player:FindFirstChild(\"leaderstats\")\n\tif not leaderstats then return end\n\t\n\tlocal coins = leaderstats:FindFirstChild(\"Coins\")\n\tif not coins or not math.isfinite(coins.Value) then return end\n\n\tif coins.Value < price then\n\t\twarn(player.Name .. \" cannot afford \" .. itemId)\n\t\treturn\n\tend\n\n\t-- E. Execute Transaction\n\tcoins.Value -= price\n\tinventory[itemId] = true -- Mark as owned\n\t\n\tgiveItem(player, itemId) -- Your existing function to give the item\nend)\n\n-- Cleanup when player leaves\nPlayers.PlayerRemoving:Connect(function(player)\n\tplayerInventory[player] = nil\nend)\n```\n\n### Key Changes Explained\n\n*   **Removed `price` from arguments:** The client should only send `itemId`. The server determines the cost based on the `Catalog` table [1].\n*   **`math.isfinite(coins.Value)`:** Prevents exploits involving `NaN` or `Infinity` values which can bypass standard `<` or `>` checks.\n*   **`playerInventory` Table:** Tracks ownership on the server. This prevents exploiters from buying the same item multiple times or bypassing ownership checks by manipulating local state.\n*   **Input Validation:** Checks that `itemId` is a valid string and exists in the `Catalog` before processing.\n\n### Client-Side Note\nEnsure your LocalScript only sends the `itemId`:\n\n```lua\n-- LocalScript (Client)\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal BuyItem = ReplicatedStorage:WaitForChild(\"BuyItem\")\n\n-- Example: Buying a sword\nBuyItem:FireServer(\"sword\") \n-- Do NOT send the price here.\n```\n\n### References\n*   [1] Securing the client-server boundary > Validating remote inputs > Type and structure validation\n*   [2] Roblox for the AP CSP Create Performance Task > The AP CSP Create Performance Task > Project example\n*   [3] Security and cheat mitigation tactics > Never trust the client\n\n**Luau check by STAR:** Code block 1 first failed the static Luau check (Unknown global 'BuyItem'; consider assigning to it first, line 22). STAR corrected it; the version shown compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Securing the client-server boundary > Validating remote inputs > Type and structure validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#type-and-structure-validation) · cited\n2. [Roblox for the AP CSP Create Performance Task > The AP CSP Create Performance Task > Project example](https://create.roblox.com/docs/education/resources/roblox-for-the-ap-csp-create-performance-task#project-example) · cited\n3. [Security and cheat mitigation tactics > Never trust the client](https://create.roblox.com/docs/scripting/security/security-tactics#never-trust-the-client) · cited\n"
+  },
+  "NET-03": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "4c1b3edf60786690",
+   "reasons": [
+    "unit_tests: 0/4 passed; failed: 100 calls within 1 second: exactly one is accepted; a call 2.1 s after the accepted one is allowed; players are gated independently; PlayerRemoving drops trackedCount by one"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "0/4 passed; failed: 100 calls within 1 second: exactly one is accepted; a call 2.1 s after the accepted one is allowed; players are gated independently; PlayerRemoving drops trackedCount by one"
+    },
+    {
+     "id": "require:server_clock",
+     "ok": true
+    },
+    {
+     "id": "require:player_removing",
+     "ok": true
+    }
+   ],
+   "seconds": 120.5,
+   "timings": {
+    "luau_check_s": 0.17,
+    "unit_s": 0.55
+   },
+   "blocks": 2,
+   "answer_chars": 4775,
+   "answer_sha256": "5bfc36d8772f8203fcd26cf149f2b37fe24baef96eaf96dd06a289bdf3137a58",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 204
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `AbilityGate` ModuleScript. It uses `os.clock()` for server-authoritative timing, ensuring client arguments cannot influence the cooldown.\n\n### `ServerScriptService/AbilityGate.lua`\n\n```lua\n--!strict\n\nlocal Players = game:GetService(\"Players\")\n\ntype State = {\n\tlastUseTime: number,\n}\n\nlocal AbilityGate = {}\nAbilityGate.__index = AbilityGate\n\n-- Map of Player -> State\nlocal playerStates: {[Player]: State} = {}\n\n--- Creates a new AbilityGate instance.\nfunction AbilityGate.new(): table\n\treturn setmetatable({}, AbilityGate)\nend\n\n--- Returns the number of players currently being tracked.\nfunction AbilityGate:trackedCount(): number\n\treturn #playerStates\nend\n\n--- Resets the cooldown state for a player (e.g., on leave).\nfunction AbilityGate:forget(player: Player): ()\n\tplayerStates[player] = nil\nend\n\n--- Attempts to use an ability. Returns true if successful, false if on cooldown.\nfunction AbilityGate:tryUse(player: Player): boolean\n\t-- 1. Validate Player object\n\tif not player or not (player:IsA(\"Player\")) then\n\t\treturn false\n\tend\n\n\t-- 2. Initialize state if new\n\tif not playerStates[player] then\n\t\tplayerStates[player] = {\n\t\t\tlastUseTime = os.clock(),\n\t\t}\n\tend\n\n\t-- 3. Check server clock cooldown\n\tlocal now = os.clock()\n\tlocal lastUse = playerStates[player].lastUseTime\n\n\tif now - lastUse < 2 then\n\t\treturn false\n\tend\n\n\t-- 4. Update timestamp\n\tplayerStates[player].lastUseTime = now\n\treturn true\nend\n\n-- Connect cleanup to PlayerRemoving\nPlayers.PlayerRemoving:Connect(function(player: Player)\n\tAbilityGate:forget(player)\nend)\n\nreturn AbilityGate\n```\n\n### Usage Example\n\nIn a `Script` inside `ServerScriptService` (or `ServerStorage` if required by your structure), connect the RemoteEvent:\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal AbilityGate = require(script.Parent.AbilityGate) -- Adjust path as needed\n\nlocal UseAbility = ReplicatedStorage:WaitForChild(\"UseAbility\")\n\nUseAbility.OnServerEvent:Connect(function(player: Player, ...: any)\n\t-- Ignore client arguments for timing logic\n\tif AbilityGate:tryUse(player) then\n\t\t-- Ability allowed: execute logic here\n\t\t-- e.g., AbilityGate:FireClient(player, \"AbilityUsed\")\n\telse\n\t\t-- Ability on cooldown\n\tend\nend)\n```\n\n### Key Implementation Details\n\n1.  **Server Clock (`os.clock()`)**: The cooldown is measured using `os.clock()`, which is a server-side monotonic clock. This prevents clients from manipulating `tick()` or sending fake timestamps via RemoteEvent arguments [1].\n2.  **State Management**: A dictionary `playerStates` maps `Player` objects to their last use timestamp. This allows `trackedCount()` to return the number of active players for testing purposes.\n3.  **Cleanup**: The `forget` function removes the player's entry from the dictionary. It is connected to `Players.PlayerRemoving` to prevent memory leaks when players leave [1].\n4.  **Type Safety**: The script uses `--!strict` and explicit type annotations (`type State = ...`) to ensure robust Luau type checking.\n5.  **Validation**: The `tryUse` function checks if the argument is a valid `Player` object before proceeding, ensuring that invalid or spoofed inputs are rejected.\n\n### References\n\n[1] Remote events and callbacks > Remote events > Server → client: Describes how `OnServerEvent` receives the `Player` as the first argument and how to handle remote events securely.\n[2] Remote events and callbacks > Remote events > Server → all clients: Provides context on firing events to clients, though not directly used in the gate logic.\n[3] RemoteEvent: Details the `RemoteEvent` class and its throttling limits, emphasizing the need for server-side validation.\n[4] Custom abilities > Ability registration: Shows how custom abilities are registered on the server, providing context for where `AbilityGate` might be integrated.\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Remote events > Server&nbsp;→ client](https://create.roblox.com/docs/scripting/events/remote#servernbsp-client) · cited\n2. [Remote events and callbacks > Remote events > Server&nbsp;→ all clients](https://create.roblox.com/docs/scripting/events/remote#servernbsp-all-clients) · cited\n3. [RemoteEvent](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent) · cited\n4. [Custom abilities > Ability registration](https://create.roblox.com/docs/characters/character-controller-library/custom-abilities#ability-registration) · cited\n"
+  },
+  "NET-04": {
+   "status": "fail",
+   "passed": false,
+   "reasons": [
+    "STAR gave no answer: RuntimeError: Model-call limit exceeded; results are not considered complete"
+   ],
+   "checks": [],
+   "seconds": 0.0,
+   "product_failure": "RuntimeError: Model-call limit exceeded; results are not considered complete"
+  },
+  "SYS-01": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "7764ba7ec99aa468",
+   "reasons": [
+    "luau_block: 0 fenced Luau block(s) in the answer",
+    "unit_tests: no code to test",
+    "require:move_item: MoveItem is required",
+    "require:snapshot: GetSnapshot is required"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": false,
+     "detail": "0 fenced Luau block(s) in the answer"
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "no code to test"
+    },
+    {
+     "id": "require:move_item",
+     "ok": false,
+     "detail": "MoveItem is required"
+    },
+    {
+     "id": "require:snapshot",
+     "ok": false,
+     "detail": "GetSnapshot is required"
+    }
+   ],
+   "seconds": 166.5,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 6570,
+   "answer_sha256": "d84ab126849477f1a695a2141b2eb9c3b8ccd2ddbf3e0f672297de6e9c2f5689",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 30
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    }
+   ],
+   "answer": "Here is a robust, `--!strict` Luau implementation of `InventoryService` as a ModuleScript. It manages per-player 20-slot inventories on the server, enforcing the stacking, swapping, and movement rules you specified.\n\n### InventoryService.lua\n\n```lua\n--!strict\n\n-- InventoryService\n-- Manages 20-slot server-side inventories.\n-- Each slot: nil | { itemId: string, count: number }\n-- Max stack size: 99\n\nlocal InventoryService = {}\nInventoryService.__index = InventoryService\n\nlocal MAX_SLOTS = 20\nlocal MAX_STACK = 99\n\n-- Internal storage: { [Player] -> { [number]: { itemId: string, count: number } | nil } }\nlocal inventories: table = {}\n\n-- Helper: Initialize inventory for a player if not present\nlocal function ensureInventory(player: Player): { [number]: { itemId: string, count: number } | nil }\n\tif not inventories[player] then\n\t\tlocal newInv: { [number]: { itemId: string, count: number } | nil } = table.create(MAX_SLOTS)\n\t\t-- table.create creates a table with nil values at indices 1..MAX_SLOTS\n\t\tinventories[player] = newInv\n\tend\n\treturn inventories[player]\nend\n\n-- Helper: Deep copy a slot for snapshotting\nlocal function copySlot(slot: { itemId: string, count: number } | nil): { itemId: string, count: number } | nil\n\tif slot == nil then\n\t\treturn nil\n\tend\n\treturn { itemId = slot.itemId, count = slot.count }\nend\n\n--- Move an item from one slot to another.\n--- @param player Player\n--- @param fromSlot number\n--- @param toSlot number\n--- @return boolean success\n--- @return string? reason\nfunction InventoryService:MoveItem(player: Player, fromSlot: any, toSlot: any): (boolean, string?)\n\t-- 1. Validate types and range\n\tif type(fromSlot) ~= \"number\" or type(toSlot) ~= \"number\" then\n\t\treturn false, \"fromSlot and toSlot must be integers\"\n\tend\n\tif not math.isfinite(fromSlot) or not math.isfinite(toSlot) then\n\t\treturn false, \"fromSlot and toSlot must be finite numbers\"\n\tend\n\tif math.floor(fromSlot) ~= fromSlot or math.floor(toSlot) ~= toSlot then\n\t\treturn false, \"fromSlot and toSlot must be integers\"\n\tend\n\tif fromSlot < 1 or fromSlot > MAX_SLOTS or toSlot < 1 or toSlot > MAX_SLOTS then\n\t\treturn false, \"fromSlot and toSlot must be between 1 and 20\"\n\tend\n\tif fromSlot == toSlot then\n\t\treturn false, \"fromSlot and toSlot must be different\"\n\tend\n\n\t-- 2. Get inventory\n\tlocal inv = ensureInventory(player)\n\n\t-- 3. Validate source is not empty\n\tlocal sourceSlot = inv[fromSlot]\n\tif sourceSlot == nil then\n\t\treturn false, \"Source slot is empty\"\n\tend\n\n\t-- 4. Get target slot content\n\tlocal targetSlot = inv[toSlot]\n\n\t-- 5. Execute logic\n\tif targetSlot == nil then\n\t\t-- Target is empty: move\n\t\tinv[toSlot] = sourceSlot\n\t\tinv[fromSlot] = nil\n\t\treturn true, nil\n\telseif targetSlot.itemId == sourceSlot.itemId then\n\t\t-- Same item: stack up to 99\n\t\tlocal spaceLeft = MAX_STACK - targetSlot.count\n\t\tif spaceLeft <= 0 then\n\t\t\treturn false, \"Target slot is already full\"\n\t\tend\n\t\tlocal amountToMove = math.min(sourceSlot.count, spaceLeft)\n\t\ttargetSlot.count = targetSlot.count + amountToMove\n\t\tsourceSlot.count = sourceSlot.count - amountToMove\n\t\tif sourceSlot.count == 0 then\n\t\t\tinv[fromSlot] = nil\n\t\tend\n\t\treturn true, nil\n\telse\n\t\t-- Different item: swap\n\t\tinv[fromSlot] = targetSlot\n\t\tinv[toSlot] = sourceSlot\n\t\treturn true, nil\n\tend\nend\n\n--- Get a snapshot of the player's inventory.\n--- Returns a table where keys are 1-20 and values are { itemId, count } or nil.\n--- @param player Player\n--- @return { [number]: { itemId: string, count: number } }\nfunction InventoryService:GetSnapshot(player: Player): { [number]: { itemId: string, count: number } }\n\tlocal inv = ensureInventory(player)\n\tlocal snapshot: { [number]: { itemId: string, count: number } } = {}\n\tfor i = 1, MAX_SLOTS do\n\t\tlocal slot = inv[i]\n\t\tif slot ~= nil then\n\t\t\tsnapshot[i] = copySlot(slot)\n\t\telse\n\t\t\tsnapshot[i] = nil\n\t\tend\n\tend\n\treturn snapshot\nend\n\n--- Give an item to the player's inventory.\n--- Fills existing stacks of the same item first, then empty slots.\n--- @param player Player\n--- @param itemId string\n--- @param count number\n--- @return boolean success Returns false if the items did not fit.\nfunction InventoryService:Give(player: Player, itemId: string, count: number): boolean\n\tif type(itemId) ~= \"string\" or itemId == \"\" then\n\t\treturn false\n\tend\n\tif type(count) ~= \"number\" or not math.isfinite(count) or count <= 0 or math.floor(count) ~= count then\n\t\treturn false\n\tend\n\n\tlocal inv = ensureInventory(player)\n\tlocal remaining = count\n\n\t-- Phase 1: Fill existing stacks of the same item\n\tfor i = 1, MAX_SLOTS do\n\t\tif remaining <= 0 then\n\t\t\tbreak\n\t\tend\n\t\tlocal slot = inv[i]\n\t\tif slot ~= nil and slot.itemId == itemId then\n\t\t\tlocal spaceLeft = MAX_STACK - slot.count\n\t\t\tif spaceLeft > 0 then\n\t\t\t\tlocal toAdd = math.min(spaceLeft, remaining)\n\t\t\t\tslot.count = slot.count + toAdd\n\t\t\t\tremaining = remaining - toAdd\n\t\t\tend\n\t\tend\n\tend\n\n\t-- Phase 2: Fill empty slots\n\tif remaining > 0 then\n\t\tfor i = 1, MAX_SLOTS do\n\t\t\tif remaining <= 0 then\n\t\t\t\tbreak\n\t\t\tend\n\t\t\tif inv[i] == nil then\n\t\t\t\tinv[i] = { itemId = itemId, count = remaining }\n\t\t\t\tremaining = 0\n\t\t\tend\n\t\tend\n\tend\n\n\treturn remaining == 0\nend\n\n--- Remove an item from the player's inventory.\n--- @param player Player\n--- @param itemId string\n--- @param count number\n--- @return boolean success\nfunction InventoryService:Remove(player: Player, itemId: string, count: number): boolean\n\tif type(itemId) ~= \"string\" or itemId == \"\" then\n\t\treturn false\n\tend\n\tif type(count) ~= \"number\" or not math.isfinite(count) or count <= 0 or math.floor(count) ~= count then\n\t\treturn false\n\tend\n\n\tlocal inv = ensureInventory(player)\n\tlocal remaining = count\n\n\t-- Iterate through all slots to remove the item\n\tfor i = 1, MAX_SLOTS do\n\t\tif remaining <= 0 then\n\t\t\tbreak\n\t\tend\n\t\tlocal slot = inv\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Services](https://create.roblox.com/docs/scripting/services) · retrieved, not cited\n2. [Intro to module scripts > Module script basics](https://create.roblox.com/docs/tutorials/fundamentals/coding-6/intro-to-module-scripts#module-script-basics) · retrieved, not cited\n3. [Create with module scripts > Project setup > Load the starter project](https://create.roblox.com/docs/tutorials/fundamentals/coding-6/create-with-module-scripts#load-the-starter-project) · retrieved, not cited\n4. [Save player data with standard data stores > Create a standard data store](https://create.roblox.com/docs/tutorials/use-case-tutorials/data-storage/save-player-data#create-a-standard-data-store) · retrieved, not cited\n",
+   "truncation_retries": 2,
+   "truncated": true
+  },
+  "NET-06": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "997fede5fc7be8cb",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:on_server_event",
+     "ok": true
+    },
+    {
+     "id": "require:type_check",
+     "ok": true
+    },
+    {
+     "id": "require:humanoid",
+     "ok": true
+    },
+    {
+     "id": "require:distance",
+     "ok": true
+    },
+    {
+     "id": "require:alive",
+     "ok": true
+    },
+    {
+     "id": "require:server_clock",
+     "ok": true
+    },
+    {
+     "id": "forbid:extra_args",
+     "ok": true
+    }
+   ],
+   "seconds": 134.3,
+   "timings": {
+    "luau_check_s": 0.09
+   },
+   "blocks": 1,
+   "answer_chars": 5193,
+   "answer_sha256": "62e1fb5abf87420fe96d02efcc5a5f393161e7016853dd108fd5bfeea5fcc37d",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 327
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the complete, secure server-side handler. It is a `Script` placed in `ServerScriptService`.\n\n### The Code\n\n```lua\n-- ServerScriptService/HitHandler\nlocal Players = game:GetService(\"Players\")\n\nlocal DAMAGE = 10\nlocal MAX_DISTANCE = 12\nlocal COOLDOWN = 0.6\n\n-- Table to store the last swing time for each player\nlocal lastSwingTime = {}\n\nPlayers.PlayerAdded:Connect(function(player)\n\tlastSwingTime[player] = 0\nend)\n\nPlayers.PlayerRemoving:Connect(function(player)\n\tlastSwingTime[player] = nil\nend)\n\n-- Helper: Get the root part of a character model\nlocal function getRootPart(model)\n\tif not model or not model:IsA(\"Model\") then\n\t\treturn nil\n\tend\n\t-- Prefer HumanoidRootPart, fallback to first Part\n\tlocal root = model:FindFirstChild(\"HumanoidRootPart\")\n\tif root and root:IsA(\"BasePart\") then\n\t\treturn root\n\tend\n\tfor _, child in ipairs(model:GetChildren()) do\n\t\tif child:IsA(\"BasePart\") then\n\t\t\treturn child\n\t\tend\n\tend\n\treturn nil\nend\n\n-- Helper: Check if a model contains a living Humanoid\nlocal function getLivingHumanoid(model)\n\tif not model or not model:IsA(\"Model\") then\n\t\treturn nil\n\tend\n\tlocal humanoid = model:FindFirstChildWhichIsA(\"Humanoid\")\n\tif humanoid and humanoid.Health > 0 then\n\t\treturn humanoid\n\tend\n\treturn nil\nend\n\n-- RemoteEvent handler\nlocal function onHitFired(attackerPlayer, targetModel)\n\t-- 1. Validate Attacker\n\tif not attackerPlayer or not attackerPlayer:IsA(\"Player\") then\n\t\treturn\n\tend\n\n\t-- 2. Validate Target is a Model\n\tif not targetModel or not targetModel:IsA(\"Model\") then\n\t\treturn\n\tend\n\n\t-- 3. Verify Target has a Living Humanoid\n\tlocal targetHumanoid = getLivingHumanoid(targetModel)\n\tif not targetHumanoid then\n\t\treturn\n\tend\n\n\t-- 4. Prevent Self-Damage\n\tlocal attackerCharacter = attackerPlayer.Character\n\tif attackerCharacter and targetModel == attackerCharacter then\n\t\treturn\n\tend\n\n\t-- 5. Verify Distance (Server-side calculation)\n\tlocal attackerRoot = getRootPart(attackerCharacter)\n\tlocal targetRoot = getRootPart(targetModel)\n\n\tif not attackerRoot or not targetRoot then\n\t\treturn\n\tend\n\n\tlocal distance = (attackerRoot.Position - targetRoot.Position).Magnitude\n\tif distance > MAX_DISTANCE then\n\t\treturn\n\tend\n\n\t-- 6. Verify Cooldown (Server-side clock)\n\tlocal currentTime = os.clock()\n\tlocal lastTime = lastSwingTime[attackerPlayer] or 0\n\n\tif currentTime - lastTime < COOLDOWN then\n\t\treturn\n\tend\n\n\t-- 7. Apply Damage (Server-authoritative)\n\tlastSwingTime[attackerPlayer] = currentTime\n\ttargetHumanoid.Health = targetHumanoid.Health - DAMAGE\nend\n\n-- Connect to the RemoteEvent named \"Hit\" in ReplicatedStorage\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal hitEvent = ReplicatedStorage:WaitForChild(\"Hit\")\n\nhitEvent.OnServerEvent:Connect(onHitFired)\n```\n\n### Security & Validation Breakdown\n\n1.  **Argument Validation**: The handler explicitly checks that `attackerPlayer` is a `Player` instance and `targetModel` is a `Model` instance. This prevents clients from sending nil, numbers, or other invalid types [1].\n2.  **Living Humanoid Check**: It uses `FindFirstChildWhichIsA(\"Humanoid\")` and verifies `Health > 0`. This ensures we only damage valid, living characters [2].\n3.  **Self-Damage Prevention**: It compares the `targetModel` directly to the `attackerPlayer.Character`. If they are the same, the hit is ignored.\n4.  **Distance Verification**: The server calculates the distance using `Magnitude` between the `HumanoidRootPart` (or fallback `BasePart`) of both the attacker and the target. It rejects the hit if the distance exceeds 12 studs. This prevents clients from claiming they hit targets far away [1].\n5.  **Cooldown Enforcement**: The server uses `os.clock()` to track the last swing time for each player in a dictionary (`lastSwingTime`). It rejects hits if less than 0.6 seconds have passed since the last valid swing. This prevents rapid-fire exploitation [3].\n6.  **Server-Authoritative Damage**: The damage value (10) is hardcoded in the server script. The client never sends the damage amount, position, or timestamp. The server applies the damage directly to the `Humanoid.Health`.\n\n### References\n\n[1] Hit detection with lasers > Secure remotes using validation > Server  \n[2] Hit detection with lasers > Damage the player  \n[3] Securing the client-server boundary > Validating remote inputs > Weapon targeting\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Secure remotes using validation > Server](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#server) · cited\n2. [Hit detection with lasers > Damage the player](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#damage-the-player) · cited\n3. [Securing the client-server boundary > Validating remote inputs > Weapon targeting](https://create.roblox.com/docs/scripting/security/client-server-boundary#weapon-targeting) · cited\n"
+  },
+  "NET-07": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "7bd837f35bb30c01",
+   "reasons": [
+    "luau_check[1]: line 14: the function 'math.isfinite' expects to get a number as its 1st argument, but is being giv; line 19: the function 'math.floor' expects to get a number as its 1st argument, but is being given "
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": false,
+     "detail": "line 14: the function 'math.isfinite' expects to get a number as its 1st argument, but is being giv; line 19: the function 'math.floor' expects to get a number as its 1st argument, but is being given "
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    }
+   ],
+   "seconds": 203.0,
+   "timings": {
+    "luau_check_s": 0.2,
+    "unit_s": 0.58
+   },
+   "blocks": 2,
+   "answer_chars": 5724,
+   "answer_sha256": "2b60ad8cf6b4d53d24f9beebb5e55f902dce2491748cae4f1f106e7ae6c51c87",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 375
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "failed",
+     "blocks": 2,
+     "errors": 4
+    }
+   ],
+   "answer": "Here is the `Validate` ModuleScript. It implements the four requested validators with strict type checking, range enforcement, and safety against `NaN`/`Inf` values, ensuring none of them throw errors regardless of input.\n\n```lua\n-- // Validate\n-- // Server-side validation module for RemoteEvent arguments.\n-- // Usage: local Validate = require(path.to.Validate)\n\nlocal Validate = {}\n\n--- Validates that x is an integer within [min, max].\n--- @param x any\n--- @param min number\n--- @param max number\n--- @return number?\nfunction Validate.integer(x, min, max)\n\t-- Ensure x is a number and finite (rejects NaN and Inf)\n\tif not (type(x) == \"number\" and math.isfinite(x)) then\n\t\treturn nil\n\tend\n\n\t-- Check for fractional part\n\tif math.floor(x) ~= x then\n\t\treturn nil\n\tend\n\n\t-- Check range\n\tif x < min or x > max then\n\t\treturn nil\n\tend\n\n\treturn x\nend\n\n--- Validates that x is a finite number within [min, max].\n--- @param x any\n--- @param min number\n--- @param max number\n--- @return number?\nfunction Validate.number(x, min, max)\n\t-- Ensure x is a number and finite (rejects NaN and Inf)\n\tif not (type(x) == \"number\" and math.isfinite(x)) then\n\t\treturn nil\n\tend\n\n\t-- Check range\n\tif x < min or x > max then\n\t\treturn nil\n\tend\n\n\treturn x\nend\n\n--- Validates that x is a string with 1 to maxLength bytes and no control characters.\n--- @param x any\n--- @param maxLength number\n--- @return string?\nfunction Validate.string(x, maxLength)\n\tif type(x) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\t-- Check byte length\n\tif #x < 1 or #x > maxLength then\n\t\treturn nil\n\tend\n\n\t-- Check for control characters (bytes < 32 or byte == 127)\n\tfor i = 1, #x do\n\t\tlocal byte = string.byte(x, i)\n\t\tif byte < 32 or byte == 127 then\n\t\t\treturn nil\n\t\tend\n\tend\n\n\treturn x\nend\n\n--- Validates that x is a string present in the allowed dictionary.\n--- @param x any\n--- @param allowed { [string]: boolean }\n--- @return string?\nfunction Validate.oneOf(x, allowed)\n\tif type(x) ~= \"string\" then\n\t\treturn nil\n\tend\n\n\tif allowed[x] ~= true then\n\t\treturn nil\n\tend\n\n\treturn x\nend\n\nreturn Validate\n```\n\n### Key Implementation Details\n\n1.  **Safety (`math.isfinite`)**: As noted in the documentation, `NaN` and `Inf` are valid `number` types in Luau but are dangerous in game logic [3]. All numeric validators explicitly check `math.isfinite(x)` to reject these values.\n2.  **Integer Precision**: The integer validator uses `math.floor(x) ~= x` to detect fractional parts. This is robust for standard integer ranges.\n3.  **Control Character Filtering**: The string validator iterates through every byte using `string.byte`. This ensures that invisible control characters (like newlines `\\n` or tabs `\\t`, which are `< 32`) are rejected, preventing injection or formatting issues in chat or input fields.\n4.  **Error Prevention**: All functions use `type()` checks before accessing values, ensuring that passing `nil`, `Instance`, or `function` types returns `nil` gracefully without throwing a runtime error.\n\n### Usage Example\n\n```lua\n-- Server Script\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\nlocal Validate = require(ReplicatedStorage:WaitForChild(\"Validate\"))\n\nlocal remoteEvent = ReplicatedStorage:WaitForChild(\"SomeEvent\")\n\nremoteEvent.OnServerEvent:Connect(function(player, request)\n\t-- Validate an integer ID between 1 and 100\n\tlocal itemId = Validate.integer(request.itemId, 1, 100)\n\tif not itemId then\n\t\twarn(\"Invalid item ID provided by \" .. player.Name)\n\t\treturn\n\tend\n\n\t-- Validate a safe username string (max 20 bytes, no control chars)\n\tlocal username = Validate.string(request.username, 20)\n\tif not username then\n\t\twarn(\"Invalid username format\")\n\t\treturn\n\tend\n\n\t-- Validate action type\n\tlocal action = Validate.oneOf(request.action, {\n\t\t[\"buy\"] = true,\n\t\t[\"sell\"] = true,\n\t\t[\"equip\"] = true\n\t})\n\tif not action then\n\t\twarn(\"Invalid action requested\")\n\t\treturn\n\tend\n\n\t-- Proceed with trusted data\n\tprint(player.Name, \"bought item\", itemId)\nend)\n```\n\n**Luau check by STAR:** Code block 1 did not pass the static Luau check and is shown unchanged. An automatic fix was tried and did not pass either. Treat it as unverified:\n- line 14: the function 'math.isfinite' expects to get a number as its 1st argument, but is being given a number & unknown & ~number (TypeError)\n- line 19: the function 'math.floor' expects to get a number as its 1st argument, but is being given a number & unknown & ~number (TypeError)\n- line 38: the function 'math.isfinite' expects to get a number as its 1st argument, but is being given a number & unknown & ~number (TypeError)\n- line 66: the function 'string.byte' expects to get a string as its 1st argument, but is being given a string & unknown & ~string (TypeError) Code block 2 compiles and passes Luau type analysis.\n\nRoblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Argument limitations > Non-replicated instances](https://create.roblox.com/docs/scripting/events/remote#non-replicated-instances) · retrieved, not cited\n2. [Remote events and callbacks > Argument limitations > Non-string indices](https://create.roblox.com/docs/scripting/events/remote#non-string-indices) · retrieved, not cited\n3. [Securing the client-server boundary > Validating remote inputs > Value validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#value-validation) · cited\n4. [Securing the client-server boundary > Validating remote inputs > Type and structure validation](https://create.roblox.com/docs/scripting/security/client-server-boundary#type-and-structure-validation) · retrieved, not cited\n"
+  },
+  "NET-08": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "5f7bfac89a4ed1fc",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "luau_check[2]",
+     "ok": true
+    },
+    {
+     "id": "require:remote_event",
+     "ok": true
+    },
+    {
+     "id": "require:on_server_event",
+     "ok": true
+    },
+    {
+     "id": "require:server_state",
+     "ok": true
+    },
+    {
+     "id": "forbid:invoke_client",
+     "ok": true
+    }
+   ],
+   "seconds": 126.0,
+   "timings": {
+    "luau_check_s": 0.19
+   },
+   "blocks": 2,
+   "answer_chars": 4943,
+   "answer_sha256": "375c286a2962628d7f631ebd29e2e25ed067dd9422975f5eba5bbb0627195005",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 266
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 2,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the corrected design. The server now owns the ammo state, initializes it on `PlayerAdded`, and only listens for a `Reload` request via a `RemoteEvent`.\n\n### 1. Server Script (Script in ServerScriptService)\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\n-- 1. Use a RemoteEvent for the client to request a reload.\nlocal ReloadEvent = ReplicatedStorage:WaitForChild(\"ReloadEvent\")\n\n-- 2. Server-owned state table.\nlocal playerAmmo = {}\nlocal MAX_AMMO = 30\nlocal RELOAD_TIME = 1.5 -- seconds\n\n-- Initialize ammo when a player joins\nPlayers.PlayerAdded:Connect(function(player)\n\tplayerAmmo[player.UserId] = MAX_AMMO\nend)\n\n-- Clean up when a player leaves\nPlayers.PlayerRemoving:Connect(function(player)\n\tplayerAmmo[player.UserId] = nil\nend)\n\n-- 3. Handle the Reload request.\nReloadEvent.OnServerEvent:Connect(function(player)\n\tlocal userId = player.UserId\n\tlocal currentAmmo = playerAmmo[userId]\n\n\t-- Validate state on the server\n\tif currentAmmo == nil then return end\n\tif currentAmmo == MAX_AMMO then return end -- Already full\n\n\t-- Start the reload process (server-authoritative)\n\tplayerAmmo[userId] = 0 -- Lock ammo during reload\n\t\n\t-- Notify the client to play the reload animation\n\tReloadEvent:FireClient(player, \"Started\")\n\n\t-- Wait for the reload duration\n\ttask.wait(RELOAD_TIME)\n\n\t-- Complete the reload\n\tplayerAmmo[userId] = MAX_AMMO\n\t\n\t-- Notify the client that reloading is done\n\tReloadEvent:FireClient(player, \"Finished\")\nend)\n\n-- 4. Helper to get ammo (called by server logic, not the client)\nfunction GetAmmo(player)\n\treturn playerAmmo[player.UserId] or 0\nend\n\n-- Example: A server-side function to deduct ammo\nfunction UseAmmo(player, amount)\n\tlocal current = playerAmmo[player.UserId]\n\tif current and current >= amount then\n\t\tplayerAmmo[player.UserId] = current - amount\n\t\treturn true\n\tend\n\treturn false\nend\n```\n\n### 2. Client Script (LocalScript in StarterPlayerScripts)\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal ReloadEvent = ReplicatedStorage:WaitForChild(\"ReloadEvent\")\nlocal player = Players.LocalPlayer\n\n-- The client does NOT ask the server for ammo.\n-- It simply listens for updates from the server.\nReloadEvent.OnClientEvent:Connect(function(action)\n\tif action == \"Started\" then\n\t\t-- Play reload animation\n\t\tprint(\"Reloading...\")\n\telseif action == \"Finished\" then\n\t\t-- Update UI to show full ammo\n\t\tprint(\"Reload complete.\")\n\tend\nend)\n\n-- When the player presses the reload key, they ask the server.\n-- They do not tell the server \"I am reloading now\" or \"I have 5 bullets\".\ngame:GetService(\"UserInputService\").InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\tif input.KeyCode == Enum.KeyCode.R then\n\t\tReloadEvent:FireServer()\n\tend\nend)\n```\n\n### Key Changes and Security Fixes\n\n1.  **Removed `RemoteFunction:InvokeClient`**: The original code used `InvokeClient`, which blocks the server thread until the client responds. A malicious or disconnected client could hang the server indefinitely. We replaced this with a `RemoteEvent` where the server pushes updates to the client.\n2.  **Server Authority**: The `playerAmmo` table is created and maintained entirely on the server. The client never sends its ammo count to the server.\n3.  **Validation**: The server checks if the player is reloading and if they have enough ammo before allowing actions. It does not trust the client's claims about their state.\n4.  **State Sync**: The server fires `ReloadEvent:FireClient` to tell the client when to start and stop animations, ensuring the client's UI matches the server's authoritative state.\n\n### Documentation References\n*   **RemoteEvents**: Reliable and ordered message passing from server to client. [1]\n*   **Client-Server Model**: The server is the ultimate authority for maintaining game state. [4]\n*   **Replication**: Roblox replicates data between server and clients, but the server must be the source of truth for critical state like ammo. [3]\n\n**Luau check by STAR:** Code block 1 compiles and passes Luau type analysis. Code block 2 compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Remote events and callbacks > Delivery guarantees > RemoteEvents](https://create.roblox.com/docs/scripting/events/remote#remoteevents) · cited\n2. [Remote events and callbacks > Remote events > Server&nbsp;→ all clients](https://create.roblox.com/docs/scripting/events/remote#servernbsp-all-clients) · retrieved, not cited\n3. [Client-server runtime > Replication](https://create.roblox.com/docs/projects/client-server#replication) · cited\n4. [Client-server runtime](https://create.roblox.com/docs/projects/client-server) · cited\n"
+  },
+  "NET-10": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "9e8fa73dbfedad5a",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": true
+    }
+   ],
+   "seconds": 104.2,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.62
+   },
+   "blocks": 1,
+   "answer_chars": 3720,
+   "answer_sha256": "06c8c28b877a8c1e973afdd154667d0499292ae542e252770d0030728fdbe6b2",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 328
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the fixed, secure server handler.\n\n### The Fix\n\n```lua\n-- // Server Script\nlocal SpeedMode = game.ReplicatedStorage:WaitForChild(\"SpeedMode\") -- Adjust path as needed\n\n-- Rate limit storage: { [Player] = { count, windowStart } }\nlocal rateLimits = {}\nlocal MAX_REQUESTS = 5\nlocal WINDOW_SECONDS = 1\n\nSpeedMode.OnServerEvent:Connect(function(player, mode)\n\t-- 1. Validate input type and allowlist\n\tif type(mode) ~= \"string\" then\n\t\treturn\n\tend\n\tif mode ~= \"walk\" and mode ~= \"sprint\" then\n\t\treturn\n\tend\n\n\t-- 2. Rate Limiting (Server Clock)\n\tlocal now = os.clock()\n\tlocal limitData = rateLimits[player]\n\t\n\tif limitData then\n\t\tif now - limitData.windowStart < WINDOW_SECONDS then\n\t\t\tif limitData.count >= MAX_REQUESTS then\n\t\t\t\treturn -- Rate limit exceeded\n\t\t\tend\n\t\t\tlimitData.count += 1\n\t\telse\n\t\t\t-- Window expired, reset\n\t\t\trateLimits[player] = { count = 1, windowStart = now }\n\t\tend\n\telse\n\t\trateLimits[player] = { count = 1, windowStart = now }\n\tend\n\n\t-- 3. Character & Humanoid Validation\n\tlocal character = player.Character\n\tif not character then\n\t\treturn\n\tend\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid or humanoid.Health <= 0 then\n\t\treturn\n\tend\n\n\t-- 4. Server Authority Logic\n\tif mode == \"walk\" then\n\t\thumanoid.WalkSpeed = 16\n\telseif mode == \"sprint\" then\n\t\t-- Check Stamina attribute\n\t\tlocal stamina = player:GetAttribute(\"Stamina\")\n\t\tif stamina ~= nil and stamina > 0 then\n\t\t\thumanoid.WalkSpeed = 24\n\t\telse\n\t\t\thumanoid.WalkSpeed = 16\n\t\tend\n\tend\nend)\n\n-- Cleanup on player leave\ngame.Players.PlayerRemoving:Connect(function(player)\n\trateLimits[player] = nil\nend)\n```\n\n### Why This Is Secure\n\n1.  **Server Authority:** The server ignores the client's speed value entirely. It only accepts the mode string and calculates the speed itself (16 or 24) based on its own state (Stamina attribute) [[4]].\n2.  **Input Validation:** The handler strictly checks that `mode` is a string and matches the allowlist `{\"walk\", \"sprint\"}`. Any other value (including numbers, `nil`, or exploit-injected strings) is rejected immediately [[4]].\n3.  **Context Validation:** It verifies the player has a character and a valid, alive Humanoid before attempting to modify `WalkSpeed`. This prevents errors and exploits targeting non-existent or dead characters [[1]].\n4.  **Rate Limiting:** It uses `os.clock()` to enforce a strict limit of 5 requests per second per player on the server side. This prevents spamming and potential server overload [[2]].\n5.  **Stamina Check:** The sprint speed (24) is only applied if the server-side `Stamina` attribute is greater than 0. Otherwise, it defaults to 16.\n\n### References\n\n*   [1] Humanoid > WalkSpeed\n*   [2] Securing the client-server boundary > Rate limiting\n*   [4] Security and cheat mitigation tactics > Never trust the client\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Humanoid > WalkSpeed](https://create.roblox.com/docs/reference/engine/classes/Humanoid#WalkSpeed) · cited\n2. [Securing the client-server boundary > Rate limiting](https://create.roblox.com/docs/scripting/security/client-server-boundary#rate-limiting) · cited\n3. [Server authority techniques > Predicting other player inputs](https://create.roblox.com/docs/projects/server-authority/techniques#predicting-other-player-inputs) · retrieved, not cited\n4. [Security and cheat mitigation tactics > Never trust the client](https://create.roblox.com/docs/scripting/security/security-tactics#never-trust-the-client) · cited\n"
+  },
+  "NET-11": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "bcab5a5424cdac77",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "require:untrusted",
+     "ok": true
+    },
+    {
+     "id": "require:validate",
+     "ok": true
+    },
+    {
+     "id": "citation",
+     "ok": true
+    }
+   ],
+   "seconds": 77.5,
+   "timings": {
+    "luau_check_s": 0.0
+   },
+   "blocks": 0,
+   "answer_chars": 3107,
+   "answer_sha256": "8ea4e1b88b59eae2f51c0e2153ed1a0006d55f206cd89d093d570b18c218844d",
+   "packs": [
+    "roblox-secure-remotes"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 140
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-secure-remotes"
+     ],
+     "chars": 1092
+    }
+   ],
+   "answer": "No, it is not safe for a server script to trust the arguments a client sends through a `RemoteEvent`. The official documentation explicitly marks the security level of these events as **\"None\"** [4].\n\nBecause the security is untrusted, the server must validate every argument before using it. Based on the documentation and standard security practices, the server should check the following:\n\n1.  **Argument Types:** The server must verify that the data types match expectations. For example, if the client sends a number, the server should ensure it is a finite number (checking for `NaN` or `inf`) and falls within an acceptable range.\n2.  **Instance References:** If the client sends an `Instance` (like a `Tool` or `Part`), the server must verify that the instance actually exists, is of the correct class, and is in a valid location within the `DataModel`. The documentation notes that if a client tries to pass an object it cannot see (like one in `ServerStorage`), the server will receive `nil` instead [2].\n3.  **Player Context:** The `OnServerEvent` callback provides the `Player` object as the first argument [4]. The server should use this to verify the player's state (e.g., is the character alive? Do they own the item they are trying to use?).\n4.  **Rate Limiting:** To prevent abuse, the server should implement rate limiting per player to ensure they are not sending too many requests in a short period.\n5.  **Allowlists:** For string arguments (like chat messages or command names), the server should use an allowlist of valid values and enforce a maximum length.\n\n**Key Documentation References:**\n*   [4] **RemoteEvent > OnServerEvent**: States that the security level is \"None\" and defines the callback signature `(player: Player, arguments: Tuple)`.\n*   [2] **Remote events and callbacks > Argument limitations > Non-replicated instances**: Explains how Roblox handles non-replicated instances (passing `nil`), which is a critical detail for validating instance arguments.\n*   [1] **RemoteFunction > InvokeServer**: Notes that any type of Roblox object can be passed as a parameter, reinforcing the need for strict type and validity checks on the server.\n\n**Best Practice:** Always treat client input as untrusted. The server should be the sole authority for game logic, such as calculating damage, processing transactions, or validating positions.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [RemoteFunction > InvokeServer](https://create.roblox.com/docs/reference/engine/classes/RemoteFunction#InvokeServer) · cited\n2. [Remote events and callbacks > Argument limitations > Non-replicated instances](https://create.roblox.com/docs/scripting/events/remote#non-replicated-instances) · cited\n3. [Remote events and callbacks > Remote events > Server&nbsp;→ client](https://create.roblox.com/docs/scripting/events/remote#servernbsp-client) · retrieved, not cited\n4. [RemoteEvent > OnServerEvent](https://create.roblox.com/docs/reference/engine/classes/RemoteEvent#OnServerEvent) · cited\n"
+  }
+ },
+ "summary": {
+  "pass": 5,
+  "fail": 4,
+  "error": 0,
+  "scored": 9,
+  "pass_rate": 0.5556,
+  "median_seconds": 126.0
+ }
+}

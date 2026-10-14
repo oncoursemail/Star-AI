@@ -14,6 +14,7 @@
 | `tests/` and `evals/` | Regressions, fixtures and benchmarks (never fabricate pass results) | Test owner |
 | `docs/` | Live guidance + historical research/design/release gates | Documentation review |
 | `assets/` | Local app images/icons | Design review |
+| `examples/` | Small source trees STAR builds and tests, such as the Roblox test place ([Roblox access](ROBLOX_ACCESS.md)) | Runtime review |
 | `site/` | Historical standalone site used by compatibility fixtures | Keep until separately migrated |
 
 Key starting points: [README](../README.md), [architecture](ARCHITECTURE.md), [release/update model](RELEASES_AND_MODELS.md), [GitHub App setup](GITHUB_APP_SETUP.md), [working agreement](../AGENTS.md).

@@ -75,6 +75,57 @@ def _installer_name(version: str) -> str:
     return f'STAR-Setup-v{version.removeprefix("v")}.exe'
 
 
+# The Inno Setup uninstall entry of STAR (AppId in installer/STAR.iss plus Inno's "_is1").
+UNINSTALL_KEY = r'Software\Microsoft\Windows\CurrentVersion\Uninstall\{E2B5518B-30A1-409D-AF44-6F773BF05C97}_is1'
+ADMIN_PROMPT_NOTE = ('Windows will ask for administrator approval: this copy of STAR is installed for all users, '
+                     'and Setup upgrades it in that same mode.')
+
+
+def _read_install_location(hive: str) -> str | None:
+    """InstallLocation of STAR's uninstall entry in HKCU or HKLM (64-bit view), read-only; None if absent."""
+    import winreg
+    root = winreg.HKEY_CURRENT_USER if hive == 'HKCU' else winreg.HKEY_LOCAL_MACHINE
+    try:
+        with winreg.OpenKey(root, UNINSTALL_KEY, 0, winreg.KEY_READ | winreg.KEY_WOW64_64KEY) as key:
+            value, kind = winreg.QueryValueEx(key, 'InstallLocation')
+    except OSError:
+        return None
+    return value if kind in (winreg.REG_SZ, winreg.REG_EXPAND_SZ) and isinstance(value, str) else None
+
+
+def install_scope(app_dir: Path | None = None,
+                  read: Callable[[str], str | None] | None = None) -> str:
+    """'per-user', 'all-users' or 'unknown' for the installed copy that is running (issue 121).
+
+    Setup installs per-user by default (no administrator). A copy installed for all users is
+    registered under HKEY_LOCAL_MACHINE and every upgrade of it runs Setup in administrative mode,
+    so Windows asks for approval; that prompt is required and is never avoided. This only lets the
+    updater say so beforehand. Read-only: it opens the uninstall entry for reading and nothing else.
+    The running folder must match the entry's InstallLocation, so a second registered copy or the
+    portable ZIP is 'unknown'.
+    """
+    if read is None:
+        if sys.platform != 'win32' or not getattr(sys, 'frozen', False):
+            return 'unknown'
+        read = _read_install_location
+    folder = Path(app_dir) if app_dir is not None else Path(sys.executable).parent
+
+    def same(location: str | None) -> bool:
+        if not location or not location.strip():
+            return False
+        try:
+            return os.path.normcase(os.path.abspath(location.strip())) == os.path.normcase(os.path.abspath(folder))
+        except (TypeError, ValueError):
+            return False
+    for hive, scope in (('HKCU', 'per-user'), ('HKLM', 'all-users')):
+        try:
+            if same(read(hive)):
+                return scope
+        except Exception:
+            continue
+    return 'unknown'
+
+
 def get_latest(client: httpx.Client | None = None) -> UpdateResult:
     """Check only public Star-AI Releases, without credentials or a mirror.
 
@@ -281,9 +332,19 @@ def _extract_update(archive: Path, target: Path):
                 raise ValueError('Unpacked release exceeds 2 GB')
             if info.is_dir():
                 continue
-            dst = target.joinpath(*parts)
+            # An existing destination may contain symlinks even when ZIP names are safe.
+            # Refuse them before opening any member for writing.
+            if target.is_symlink():
+                raise ValueError('Unsafe release ZIP destination')
+            dst = target
+            for component in parts:
+                dst = dst / component
+                if dst.is_symlink():
+                    raise ValueError('Unsafe release ZIP destination')
             dst.parent.mkdir(parents=True, exist_ok=True)
-            with z.open(info) as src, dst.open('wb') as output:
+            if dst.exists():
+                raise ValueError('Release ZIP would overwrite an existing file')
+            with z.open(info) as src, dst.open('xb') as output:
                 shutil.copyfileobj(src, output)
     if not (target / 'STAR.exe').is_file():
         raise ValueError('Release package is missing STAR.exe')

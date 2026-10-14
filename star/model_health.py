@@ -98,7 +98,7 @@ def explain_model_failure(error: Exception, provider_kind: str | None = None) ->
     """Return a short actionable message without leaking raw server/Jinja internals.
 
     `provider_kind='lan'` gives STAR Server wording; a server on the network is
-    never fixed by "start it in the Brain tab".
+    never fixed by starting the on-device brain.
     """
     if provider_kind == 'lan':
         return _explain_server_failure(error)
@@ -119,7 +119,7 @@ def explain_model_failure(error: Exception, provider_kind: str | None = None) ->
                 'appeared after the first message. Update STAR to the fixed version '
                 'and restart STAR Brain, then try again.')
     if 'connection error' in message or 'connection refused' in message or 'connecterror' in message:
-        return 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+        return 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
     if 'timed out' in message or 'timeout' in message:
         return ('STAR Brain did not respond in time. The model may still be loading '
                 'or your machine may be low on memory.')
@@ -242,7 +242,8 @@ def probe_server(settings, *, transport=None, chat: bool = True) -> dict:
         return report
 
     try:
-        endpoint = validate_lan_endpoint(getattr(settings, 'server_endpoint', ''))
+        endpoint = validate_lan_endpoint(getattr(settings, 'server_endpoint', ''),
+                                         allow_cgnat=getattr(settings, 'allow_cgnat', False))
     except ValueError as exc:
         return finish('bad_address', str(exc))
     try:

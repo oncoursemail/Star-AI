@@ -1,9 +1,9 @@
 import {
- ArrowUpRight,Ban,Check,CircleDashed,Cloud,Database,Eye,FileJson,Folder,Monitor,PencilLine,Server
+ ArrowUpRight,Check,CircleDashed,Cloud,Database,Eye,FileJson,Folder,Monitor,PencilLine,Server,ShieldCheck
 } from 'lucide-react'
 import media from './siteMedia.json'
 import {
- LINKS,brainRoutes,connections,dataFolder,faqs,formatBytes,limits,requirements,steps,studioScopes
+ LINKS,brainRoutes,capabilities,dataFolder,evalResults,faqs,formatBytes,limits,requirements,steps,studioScopes
 } from './siteContent'
 import {availability} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
@@ -37,21 +37,19 @@ function Crop({id,alt,sizes,narrowOnly=false}:{id:string;alt:string;sizes:string
 }
 
 const routeIcons={pc:Monitor,server:Server,cloud:Cloud} as const
-const scopeIcons=[Eye,PencilLine,Ban] as const
+const scopeIcons=[Eye,PencilLine,ShieldCheck] as const
 
 export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSize:number|null}){
- const shipped=connections.filter(item=>availability(item.since,latest)==='released')
- const pending=connections.filter(item=>availability(item.since,latest)!=='released')
  return <>
   <section className="sw-chapter" id="brain" aria-labelledby="sw-brain-title">
    <div className="sw-wrap sw-chapter-grid">
     <div className="sw-chapter-copy" data-reveal>
      <p className="sw-kicker">STAR Brain</p>
      <h2 id="sw-brain-title">A brain that runs where you choose.</h2>
-     <p>STAR Brain is a model server that STAR installs and manages for you. Your prompts travel over loopback to a
-      model on your own machine, not to someone else's cloud.</p>
-     <p>One button downloads the engine and the model, checks each file, and asks for a real reply before it calls
-      itself ready.</p>
+     <p>The on-device STAR Brain runs on loopback. You can instead use your own STAR Server on a private network,
+      or explicitly select a hosted provider. A failed local request never switches to a hosted model silently.</p>
+     <p>On-device setup downloads the engine and model, checks each file, and asks for a real reply before it calls
+      itself ready. Using your STAR Server needs no model download on this PC.</p>
     </div>
     <div className="sw-routes" data-reveal style={delay(80)}>
      <p className="sw-routes-origin"><span className="sw-routes-dot" aria-hidden="true"/>Your prompt, from STAR on your PC</p>
@@ -79,7 +77,8 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
      <p className="sw-kicker">Roblox Studio</p>
      <h2 id="sw-roblox-title">Works inside Studio, on your terms.</h2>
      <p>STAR talks to Roblox's <a href={LINKS.robloxMcp} target="_blank" rel="noopener noreferrer">official Studio MCP server<span className="sw-sr"> (opens in a new tab)</span></a>.
-      Point it at an unpublished test place, let it look around, and decide yourself when it may change anything.</p>
+      Point it at a disposable test place and decide yourself when it may edit. Separately, Open Cloud can save
+      a private test-place version or run a Luau test after you approve each action; it does not publish live.</p>
      <ol className="sw-scopes">
       {studioScopes.map((scope,index)=>{
        const Icon=scopeIcons[index]
@@ -110,9 +109,10 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
     <div className="sw-chapter-copy" data-reveal>
      <p className="sw-kicker">Your data</p>
      <h2 id="sw-yours-title">Your projects stay yours.</h2>
-     <p>Everything STAR knows about your work is a file on your disk. There is no account and nothing to sign in to.
-      With the local brain, your prompts and files are processed on your PC.</p>
-     <p>Installing a new version replaces the app and leaves this folder alone.</p>
+     <p>Chats, project notes, references and downloaded models live in your app-data folder. The on-device brain
+      processes prompts on this PC. Choosing a LAN server or an optional hosted provider sends the prompt to that
+      service instead; neither is selected as an automatic fallback.</p>
+     <p>The tested v0.8.0-to-v0.9.0 upgrade preserved this folder; keep backups before later updates.</p>
     </div>
     <div className="sw-tree" data-reveal style={delay(80)} role="group" aria-label="What STAR stores, and where">
      <p className="sw-tree-root"><Folder size={16} aria-hidden="true"/> %APPDATA%\STAR\</p>
@@ -129,22 +129,43 @@ export function SiteChapters({latest,setupSize}:{latest:ReleaseInfo|null;setupSi
   <section className="sw-chapter sw-chapter-wide" id="tools" aria-labelledby="sw-tools-title">
    <div className="sw-wrap">
     <div className="sw-chapter-head" data-reveal>
-     <p className="sw-kicker">Connections</p>
-     <h2 id="sw-tools-title">Connect what you already use.</h2>
-     <p>Each connection is off until you turn it on, and each one says what it may read. The status column is
-      checked against the latest published release, so it changes when a release does.</p>
+     <p className="sw-kicker">v0.9.0 capabilities</p>
+     <h2 id="sw-tools-title">Tools, with their limits in view.</h2>
+     <p>These features are present in the v0.9.0 source. The status follows the latest stable GitHub release,
+      not the source branch; several require optional packages, models, permissions or your own STAR Server.</p>
     </div>
     <div className="sw-ledger" data-reveal style={delay(80)}>
      <table>
-      <caption className="sw-sr">STAR connections and whether each is in the current download</caption>
-      <thead><tr><th scope="col">Connection</th><th scope="col">What it does</th><th scope="col">Status</th></tr></thead>
+      <caption className="sw-sr">Source-backed STAR capabilities and their release status</caption>
+      <thead><tr><th scope="col">Capability</th><th scope="col">What the code does</th><th scope="col">Status</th></tr></thead>
       <tbody>
-       {[...shipped,...pending].map(item=><tr key={item.name}>
-        <th scope="row">{item.name}</th><td>{item.what}</td><td><Status since={item.since} latest={latest}/></td>
+       {capabilities.map(item=><tr key={item.name}>
+        <th scope="row">{item.name}</th>
+        <td>{item.what} <a href={item.doc} target="_blank" rel="noopener noreferrer">Source and details<span className="sw-sr"> (opens in a new tab)</span></a></td>
+        <td><Status since={item.since} latest={latest}/></td>
        </tr>)}
       </tbody>
      </table>
     </div>
+    <details className="sw-ledger sw-eval" data-reveal>
+     <summary><h3>Measured Roblox evaluation, not gameplay quality</h3><span>Automated task results, dated, with their limits</span></summary>
+     <p>The packs-off Roblox task results include runs from October 11–12, 2026, on a real STAR Server in Auto mode with knowledge enabled.
+      Results varied between runs; the 16 Studio-only tasks in v2 were not run.</p>
+     <table>
+      <caption className="sw-sr">Baseline automated task results recorded in docs/evals.md</caption>
+      <thead><tr><th scope="col">Suite</th><th scope="col">Tasks passed</th><th scope="col">Pass rate</th></tr></thead>
+      <tbody>
+       {evalResults.map(item=><tr key={item.suite}>
+        <th scope="row">{item.suite}</th><td>{item.passed}</td><td>{item.rate}</td>
+       </tr>)}
+      </tbody>
+     </table>
+     <p className="sw-note">Five skill packs are enabled by default. In pack-by-pack experiments recorded October 11, 2026, v2 went from 18 to 19 of 34
+      and creation-v1 from 11 to 15 of 23 automated tasks; these were not a combined production benchmark. Three of 18 unchanged
+      reruns flipped result (17%). Pattern checks, Luau mocks and citations do not measure appearance, playtesting,
+      voice, vision or real Studio behaviour. <a href={LINKS.evals} target="_blank" rel="noopener noreferrer">Read the gate,
+      methodology and limitations<span className="sw-sr"> (opens in a new tab)</span></a>.</p>
+    </details>
    </div>
   </section>
 

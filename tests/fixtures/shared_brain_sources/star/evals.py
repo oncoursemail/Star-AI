@@ -1,0 +1,54 @@
+"""Evaluation case catalog and audit report (definitions are not executed by this module)."""
+from dataclasses import dataclass
+import json
+from pathlib import Path
+
+VALID_VERDICTS = {"not_run", "passed", "failed", "blocked"}
+
+
+@dataclass(frozen=True)
+class Case:
+    id: str
+    category: str
+    goal: str
+    required_evidence: tuple[str, ...]
+    pass_conditions: tuple[str, ...]
+    run_mode: str
+
+
+def load_catalog(path: Path) -> list[Case]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, list):
+        raise ValueError("Evaluation catalog must be an array")
+    cases = []
+    ids: set[str] = set()
+    for row in raw:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or row["id"] in ids:
+            raise ValueError("Evaluation case needs a unique ID")
+        if row.get("run_mode") not in {"automated", "studio", "human"}:
+            raise ValueError("Unknown evaluation run mode")
+        for field in ("category", "goal", "required_evidence", "pass_conditions"):
+            if not row.get(field):
+                raise ValueError("Missing evaluation specification: " + field)
+        if any(not isinstance(x, str) or not x for x in row["required_evidence"] + row["pass_conditions"]):
+            raise ValueError("Evidence / conditions must be nonempty strings")
+        cases.append(Case(row["id"], row["category"], row["goal"],
+                          tuple(row["required_evidence"]), tuple(row["pass_conditions"]),
+                          row["run_mode"]))
+        ids.add(row["id"])
+    return cases
+
+
+def summarize_verdicts(cases: list[Case], verdicts: dict[str, str]) -> dict:
+    unknown = set(verdicts) - {c.id for c in cases}
+    if unknown or set(verdicts.values()) - VALID_VERDICTS:
+        raise ValueError("Unknown evaluation ID or verdict")
+    totals = {v: 0 for v in sorted(VALID_VERDICTS)}
+    for case in cases:
+        totals[verdicts.get(case.id, "not_run")] += 1
+    executed = totals["passed"] + totals["failed"]
+    return {
+        "total": len(cases), "counts": totals,
+        "pass_rate_executed": round(totals["passed"] / executed, 4) if executed else None,
+        "note": "Catalog verdicts are externally supplied; this module does NOT run Roblox tests or validate proof."
+    }

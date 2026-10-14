@@ -25,12 +25,16 @@ STAR is an experimental **local-first** AI-development application. This is not 
 - `star/agent.py`: model/tool-calling loop, tool outcomes and context.
 - `star/policy.py`: executable scope enforcement (not just prompts).
 - `star/studio.py`: official Roblox Studio local MCP transport.
+- `star/studio_loop.py`: the Studio build loop; decides in code whether the open place may be edited (a blank unsaved place, or STAR's own account when the owner allowed it), keeps the change journal and undo ([docs/ROBLOX_ACCESS.md](docs/ROBLOX_ACCESS.md)).
+- `star/roblox_cloud.py`, `star/roblox_pipeline.py`, `star/roblox_place.py`: Roblox Open Cloud with the owner's API key. Documented endpoints only; every write goes to one owner-chosen private test experience and waits for the owner's approval; the place deny-list is code.
 - `star/github_app.py`: short-lived, repository-restricted installation tokens and draft PRs only.
 - `star/selfbuild.py`: syntax-checked candidate skills, not verified or auto-executed.
 - `star/knowledge.py`: project-scoped notes and immutable local reference artifacts.
 - `star/lessons.py`, `star/lesson_digest.py`: lessons captured after a turn ([docs/STAR_LEARNING.md](docs/STAR_LEARNING.md)). Only the owner's own words are accepted automatically; anything inferred or model-written is a candidate until the owner approves it. Lessons never grant permissions or change settings.
 - `star/orchestration.py`: pure dependency/ownership planner, not a live multiagent scheduler yet.
 - `star/evals.py`, `evals/roblox_cases.json`: evaluation definitions; most cases require later live fixtures and grading.
+- `star/eval_runner.py`, `star/eval_checks.py`, `star/eval_sandbox.py`, `star/eval_gate.py`, `evals/roblox/`, `evals/results/`: the evaluation harness, the 50-task Roblox suite (v2) plus the 23-task creation suite (animation, VFX, building, UI styles, engineering method) and the gate that compares a proposed change with the stored baseline (`python -m star.evals`, see `docs/evals.md`). Graders, unit tests, reference answers and stored results are harness-owned: the model and the self-builder must not edit them, and a change (skill pack, routing rule, prompt edit, tool recipe) is enabled only after `python -m star.evals gate` allows it. Model-written Luau is only ever run on the STAR server sandbox, never on the PC.
+- `star/skill_packs/`: short, documentation-grounded Roblox skill packs chosen in code for matching prompts only.
 
 ## Developer checks
 

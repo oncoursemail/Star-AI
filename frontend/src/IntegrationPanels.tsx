@@ -79,7 +79,28 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
  const [keyBusy,setKeyBusy]=useState(false)
  const [keyStored,setKeyStored]=useState<boolean|null>(null)
  const [note,setNote]=useState('')
+ const [fileFound,setFileFound]=useState(false)
+ const [fileError,setFileError]=useState('')
+ const testedSettings=useRef<AppSettings|null>(null)
+ useEffect(()=>{let live=true;void invoke('serverKeyFileStatus').then(result=>{
+   if(live&&result&&typeof result==='object'&&'found' in result)setFileFound(Boolean(result.found))
+ });return()=>{live=false}},[invoke])
  const {testing,report,run}=useServerTest(invoke,disabled)
+ useEffect(()=>{
+   if(!report)return
+   const tested=testedSettings.current
+   testedSettings.current=null
+   if(!report.ok||draft.provider==='star_server'||!tested)return
+   if(draft.server_endpoint!==tested.server_endpoint||draft.model!==tested.model){
+     setNote('Server settings changed during the test. Test again before connecting.')
+     return
+   }
+   const next:AppSettings={...draft,provider:'star_server'}
+   void invoke('saveSettings',{settings:next}).then(saved=>{
+     if(saved){onChange(next);setNote('Connected to STAR Server.')}
+     else setNote('Server responded, but settings could not be saved.')
+   })
+ },[report,draft,onChange,invoke])
  const hasKey=keyStored??Boolean(credentials?.star_server)
  const change=(patch:Partial<AppSettings>)=>onChange({...draft,...patch})
  const saveKey=async()=>{
@@ -90,6 +111,15 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
      const saved=await invoke('saveProviderKey',{provider:'star_server',key:field.value.trim()})
      if(saved){setKeyStored(true);setNote('Server key saved in Windows Credential Manager.')}
    }finally{field.value='';setKeyTyped(false);setKeyBusy(false)}
+ }
+ const importKey=async()=>{
+   if(disabled||keyBusy)return
+   setKeyBusy(true);setFileError('')
+   try{
+     const saved=await invoke('importServerKeyFile')
+     if(saved){setKeyStored(true);setNote('Server key imported into the OS vault.')}
+     else setFileError('Key file could not be read or saved securely.')
+   }finally{setKeyBusy(false)}
  }
  const forgetKey=async()=>{
    if(disabled||keyBusy)return
@@ -113,6 +143,8 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
        <input list="star-server-model-ids" spellCheck={false} autoComplete="off" disabled={disabled} value={draft.model??''} placeholder="Test server to list its models" onChange={e=>change({model:e.target.value.trim()})}/>
      </label>
    </div>
+   <label className="integrated-field"><input type="checkbox" disabled={disabled} checked={draft.allow_cgnat??false} onChange={e=>change({allow_cgnat:e.target.checked})}/> Allow Tailscale and carrier-grade NAT addresses</label>
+   <p className="integrated-help">Turn this on only for a Tailscale (or similar VPN) address. On an ordinary carrier network this range is shared with other customers and the connection is not encrypted. Cloud metadata addresses stay blocked.</p>
    <datalist id="star-server-model-ids">{(report?.models??[]).map(id=><option key={id} value={id}/>)}</datalist>
    <div className="integrated-key-controls">
      <label className="integrated-field">Server key (stored in Windows Credential Manager)
@@ -124,6 +156,8 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
        {hasKey&&<span className="integrated-connected"><ShieldCheck size={14}/> Key present in OS vault</span>}
      </div>
    </div>
+   {fileFound&&<div className="integrated-actions"><span>A server key file was found on this PC</span><button type="button" className="secondary-button" disabled={disabled||keyBusy} onClick={()=>void importKey()}>Use it</button></div>}
+   {fileError&&<p role="alert" className="integrated-error">{fileError}</p>}
    <p className="integrated-help">Use the private IP address of your server, ending in /v1. Prompts go only to that address, never to a cloud provider. Plain http is not encrypted, so use it only on a network you trust.</p>
    <details><summary className="integrated-help">Server limits (optional)</summary>
      <div className="integrated-key-controls">
@@ -139,7 +173,7 @@ function ServerSetup({draft,onChange,credentials,invoke,disabled}:{draft:AppSett
      </div>
    </details>
    <div className="integrated-actions">
-     <button type="button" className="secondary-button" disabled={disabled||testing||!draft.server_endpoint} onClick={()=>void run(draft)}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
+     <button type="button" className="secondary-button" disabled={disabled||testing||!draft.server_endpoint} onClick={()=>{testedSettings.current={...draft};void run(draft)}}>{testing?<LoaderCircle size={14} className="spin"/>:<RefreshCcw size={14}/>} {testing?'Testing server…':'Test server'}</button>
      <span>Saves these settings, then checks the server, the key and a real reply.</span>
    </div>
    {note&&<p role="status" className="integrated-confirm">{note}</p>}
@@ -186,6 +220,7 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
  const [apiKey,setApiKey]=useState('')
  const [pending,setPending]=useState(false)
  const [message,setMessage]=useState('')
+ const [connecting,setConnecting]=useState(false)
  const save=async()=>{
    if(disabled||pending||!apiKey.trim())return
    setPending(true);setMessage('')
@@ -202,13 +237,14 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
  }
  return <section className="integrated-panel" aria-label="AI provider settings">
    <div className="integrated-heading"><KeyRound size={18}/><div><strong>Model & provider</strong><span>Local by default. STAR Server keeps everything on your own network. Cloud providers are optional and require your own key.</span></div></div>
+   {!usesStarServer(draft)&&!connecting&&<button type="button" className="secondary-button" disabled={disabled} onClick={()=>setConnecting(true)}>Connect to STAR Server</button>}
    <label className="integrated-field">Inference provider
-     <select value={draft.provider||'local'} disabled={disabled} onChange={e=>onChange({...draft,provider:e.target.value as Provider})}>
+     <select value={connecting?'star_server':draft.provider||'local'} disabled={disabled} onChange={e=>{if(e.target.value==='star_server'){setConnecting(true)}else{setConnecting(false);onChange({...draft,provider:e.target.value as Provider})}}}>
        {providers.map(x=><option value={x} key={x}>{providerNames[x]}</option>)}
      </select>
    </label>
    <p className="integrated-help">After changing provider, save Settings. STAR sends your prompt only to the provider you explicitly selected; ordinary local chat never silently falls back to a cloud model.</p>
-   {usesStarServer(draft)?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
+   {(connecting||usesStarServer(draft))?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
    <div className="integrated-key-controls">
      <label className="integrated-field">Cloud key provider
        <select value={selected} disabled={disabled||pending} onChange={e=>setSelected(e.target.value as CloudProvider)}>

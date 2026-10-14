@@ -14,9 +14,11 @@ A mode without `+q` ignores generated questions even when the index has them.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 import statistics
 
+from .quiet import wait_while_locked
 from .search import Searcher
 
 
@@ -74,10 +76,12 @@ def run_eval(db_path: Path, questions_path: Path, modes: list[str], *, scope_emb
         questions = [q for q in questions if any(path in in_scope for path in q["expected"])]
     summary, rows_by_mode = {}, {}
     for mode in modes:
+        wait_while_locked(log=lambda message: print(message, file=sys.stderr))
         real, options = parse_mode(mode)
         ranks, totals, stages = [], [], {}
         rows = []
         for q in questions:
+            wait_while_locked(log=lambda message: print(message, file=sys.stderr))
             passages, timing = searcher.search(q["question"], mode=real, top=10, per_doc=per_doc, rerank_n=rerank_n, **options)
             rank = next((p.rank for p in passages if p.path in q["expected"]), None)
             ranks.append(rank)

@@ -41,6 +41,75 @@ async function say(user: ReturnType<typeof userEvent.setup>, text: string) {
   await user.keyboard('{Enter}')
 }
 
+describe('image requests directly in chat', () => {
+  const picture = 'data:image/webp;base64,AA=='
+  it('routes a picture request through the image bridge while preserving its text', async () => {
+    const user = await openChat()
+    await say(user, 'Generate an image of a dog')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'a dog', display_prompt: 'Generate an image of a dog', followup: false})
+    expect(desktop.sent('generateImage')[0].payload).not.toHaveProperty('retryMessageId')
+    expect(stopButton()).not.toBeNull()
+  })
+
+  it('keeps code requests in ordinary chat', async () => {
+    const user = await openChat()
+    await say(user, 'how do I generate an ImageLabel in Roblox')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('treats a new picture request after a picture as new, not as a change to the old one', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture}])
+    await say(user, 'Generate an image of a cat')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'a cat', followup: false})
+  })
+
+  it('changes the last picture for "make it brown" straight after it, and only then', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture}])
+    await say(user, 'make it brown')
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject({prompt: 'make it brown', followup: true})
+  })
+
+  it('does not hijack a text follow-up that comes after a text answer', async () => {
+    const user = await openChat([
+      {id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+      {id: '', role: 'assistant', text: 'Image generated', created: '', image: picture},
+      {id: '', role: 'user', text: 'Explain how a Roblox remote event works', created: ''},
+      {id: '', role: 'assistant', text: 'A remote event sends a message between server and client.', created: ''}])
+    await say(user, 'Add a short example')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('does not route when the setting is off', async () => {
+    const user = await openChat([], null, {settings: {...backendSettings, media_chat_auto: false}})
+    await say(user, 'Generate an image of a dog')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('retries a failed picture request as a picture request, not as a text question', async () => {
+    const failure = 'ComfyUI is not running on this PC. Start it, then try again.'
+    const user = await openChat(
+      [{id: '', role: 'user', text: 'Generate an image of a dog', created: ''},
+       {id: '', role: 'event', text: failure, created: '', status: 'failed'}],
+      {status: 'failed', detail: failure, prompt: 'Generate an image of a dog', message_id: 1, created: ''})
+    await user.click(await waitFor(() => retryButton()!))
+    await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
+    expect(desktop.sent('sendMessage')).toHaveLength(0)
+    expect(desktop.sent('generateImage')[0].payload).toMatchObject(
+      {prompt: 'a dog', display_prompt: 'Generate an image of a dog', retryMessageId: 1, followup: false})
+  })
+})
+
 describe('sending a message', () => {
   it('sends the typed text once, shows it immediately and clears the composer', async () => {
     const user = await openChat()
@@ -122,6 +191,47 @@ describe('streaming and completion', () => {
   })
 })
 
+describe('instant answer origin and speed', () => {
+  it('shows the actual PC brain, measured speed and one persisted answer', async () => {
+    const user = await openChat([], null, {
+      settings: {...backendSettings, provider: 'star_server', instant_route_enabled: true},
+      brain_installed: true, brain_running: true,
+    })
+    await say(user, 'What is a palindrome?')
+    const id = await waitFor(() => desktop.requestOf('sendMessage'))
+    desktop.emitRaw(id, 'progress', {phase: 'STAR · Fast answer',
+      activity: {type: 'route', profile: 'fast', model: 'server-model'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answering on this PC',
+      activity: {type: 'instant', model: 'pc-small'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answer complete',
+      activity: {type: 'answer_stats', brain: 'pc', model: 'pc-small',
+        first_token_ms: 80, tokens_per_second: 20.0, estimated_tokens: false}})
+    desktop.complete(id, 'It reads the same backwards.')
+    expect(await screen.findByText('It reads the same backwards.')).toBeTruthy()
+    expect(await screen.findByText(/answered on this PC/)).toBeTruthy()
+    expect(await screen.findByText(/80 ms first token/)).toBeTruthy()
+    expect(await screen.findByText(/20.0 tok\/s/)).toBeTruthy()
+    expect(seen('It reads the same backwards.')).toHaveLength(1)
+    expect(desktop.sent('sendMessage')).toHaveLength(1)
+  })
+
+  it('shows the server model name and estimated rate after instant fallback', async () => {
+    const user = await openChat()
+    await say(user, 'Hi')
+    const id = await waitFor(() => desktop.requestOf('sendMessage'))
+    desktop.emitRaw(id, 'progress', {phase: 'On-device answer unavailable; using STAR Server',
+      activity: {type: 'instant_fallback', model: 'server-model'}})
+    desktop.emitRaw(id, 'progress', {phase: 'Answer complete',
+      activity: {type: 'answer_stats', brain: 'server', model: 'server-model',
+        first_token_ms: 215, tokens_per_second: 14.3, estimated_tokens: true}})
+    desktop.complete(id, 'Server reply.')
+    expect(await screen.findByText('Server reply.')).toBeTruthy()
+    expect(await screen.findByText(/server-model/)).toBeTruthy()
+    expect(await screen.findByText(/14.3 tok\/s/)).toBeTruthy()
+    expect(seen('Server reply.')).toHaveLength(1)
+  })
+})
+
 describe('stopping a turn', () => {
   it('asks the backend to cancel and shows the stopped state once the backend confirms', async () => {
     const user = await openChat()
@@ -145,7 +255,7 @@ describe('stopping a turn', () => {
 })
 
 describe('failure and retry', () => {
-  const offline = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+  const offline = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
 
   it('shows the failure, keeps the question, and Retry re-sends the same text', async () => {
     const user = await openChat()
@@ -236,7 +346,7 @@ describe('duplicate sends', () => {
 })
 
 describe('history after a restart', () => {
-  const failed = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+  const failed = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
 
   it('shows a persisted failure record next to the question it belongs to', async () => {
     await openChat(
@@ -259,7 +369,7 @@ describe('history after a restart', () => {
       {status: 'failed', detail: failed, prompt: 'make the lobby', message_id: 1, created: ''})
     await user.click(await waitFor(() => retryButton()!))
     await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
-    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby', retryMessageId: 1})
     expect(retryButton()).toBeNull() // hidden while the retry runs
   })
 
@@ -271,7 +381,11 @@ describe('history after a restart', () => {
     expect((await screen.findAllByText(detail)).length).toBeGreaterThan(0)
     await user.click(retryButton()!)
     await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
-    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby'})
+    expect(desktop.sent('sendMessage')[0].payload).toMatchObject({prompt: 'make the lobby', retryMessageId: 1})
+    expect(seen('make the lobby')).toHaveLength(1)
+    desktop.complete(desktop.requestOf('sendMessage'), 'Recovered reply.')
+    expect(await screen.findByText('Recovered reply.')).toBeTruthy()
+    expect(seen('make the lobby')).toHaveLength(1)
   })
 
   it('does not offer Retry on an old failure once a later question was answered', async () => {
@@ -353,6 +467,7 @@ describe('connection status with a STAR Server', () => {
     const id = await waitFor(() => desktop.requestOf('testModel'))
     desktop.host({server: check(true)})
     desktop.emitRaw(id, 'result', {ok: true, model: 'star-fast', sample: 'STAR is ready.'})
+    await user.click(screen.getByRole('button', {name: 'More'}))
     await user.click(screen.getByRole('button', {name: 'Model'}))
     expect(await screen.findByText(/Status: ready/)).toBeTruthy()
   })
@@ -370,5 +485,26 @@ describe('notices', () => {
     await screen.findByRole('textbox', {name: /message star/i})
     expect(screen.queryByText('Settings saved.')).toBeNull()
     expect(seen('Hi.')).toHaveLength(1)
+  })
+})
+
+
+describe('Team and Research are composable', () => {
+  it('lets Research be enabled while Team is active and sends an explicit boolean', async () => {
+    const user = await openChat([], null, {credentials: {brave: true, tavily: false}})
+    await user.click(screen.getByRole('button', {name: /add files and tools/i}))
+    await user.click(screen.getByRole('menuitem', {name: 'More'}))  // redesign: Team is under More
+    await user.click(screen.getByRole('menuitemcheckbox', {name: /use a team/i}))
+    await user.click(screen.getByRole('button', {name: /add files and tools/i}))
+    const search = screen.getByRole('menuitemcheckbox', {name: /search the web/i})
+    expect(search.getAttribute('aria-disabled')).not.toBe('true')
+    await user.click(search)
+    expect(screen.getByRole('button', {name: /stop searching the web/i})).toBeTruthy()
+    await say(user, 'Investigate Roblox animation references')
+    await waitFor(() => expect(desktop.sent('runTeam')).toHaveLength(1))
+    expect(desktop.sent('runTeam')[0].payload).toMatchObject({
+      prompt: 'Investigate Roblox animation references', research: true,
+    })
+    expect(await screen.findByText(/Web search sends your objective and queries to your configured search provider/)).toBeTruthy()
   })
 })

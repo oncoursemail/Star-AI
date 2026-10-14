@@ -181,6 +181,63 @@ def test_the_documented_phases_are_the_ones_the_tool_runs():
     assert tool.build_parser().parse_args(["--phases", "first"]).phases == "first"
 
 
+def test_no_phase_can_reach_a_real_studio(tmp_path, monkeypatch):
+    # An operator's own launcher on this PC would win over anything stored: it is taken out of every phase.
+    monkeypatch.setenv(tool.ENV_STUDIO_COMMAND, '["ssh", "operator@studio.example.org", "start.sh"]')
+    env = tool.child_environment(tool.new_profile(tmp_path), SECRET, SECRET)
+    assert tool.ENV_STUDIO_COMMAND not in env
+    # This PC's own Studio is never tested: the only Test click is on the server choice, and with no
+    # connection in the new profile and the operator's launcher removed, the host starts nothing.
+    source = Path(tool.__file__).read_text(encoding="utf-8")
+    body = source[source.index("def step_settings"):source.index("def step_followup")]
+    assert body.index("'STAR Studio server'") < body.index("'Test connection'")
+    assert body.rindex("'Test connection'") < body.index("'This PC')")
+    assert body.count("'Test connection'") == 1
+    # v0.9.0: the phase never types or stores a connection (the page has no such fields).
+    assert "select_all_and_type" not in body[body.index("'settings-studio-server'"):]
+    assert "wait_call('studioHostSave'" not in body and "wait_call('studioHostClear'" not in body
+
+
+def test_the_voice_preview_is_silent_unless_asked(tmp_path):
+    assert tool.build_parser().parse_args([]).audible is False
+    tool.SilentSpeaker.received.clear()
+    with tool.SilentSpeaker(24000) as speaker:
+        speaker.play(b"\x00\x01" * 1200, 24000)
+        assert speaker.pending_seconds() == 0.0
+    assert tool.SilentSpeaker.received == [(1200, 24000)]
+
+    class Factories:
+        @staticmethod
+        def speaker(sample_rate, device):
+            raise AssertionError("the real loudspeaker must not be opened")
+
+        @staticmethod
+        def microphone(device):
+            return "the real microphone factory is kept"
+
+    # star/voice/bridge.py keeps the factories as the class itself; an instance (as tests pass) works too.
+    for kept in (Factories, Factories()):
+        class Voice:
+            _factories = kept
+
+        class Bridge:
+            voice = Voice()
+
+        class Shell:
+            bridge = Bridge()
+
+        assert tool.silence_speaker(Shell()) is True
+        assert isinstance(Shell.bridge.voice._factories.speaker(24000, None), tool.SilentSpeaker)
+        assert Shell.bridge.voice._factories.microphone(None) == "the real microphone factory is kept"
+    from star.voice import bridge as voice_bridge
+    assert isinstance(voice_bridge.VoiceBridge(lambda *_: None)._factories, type)     # the shape this relies on
+
+    class NoVoice:
+        bridge = object()
+
+    assert tool.silence_speaker(NoVoice()) is False
+
+
 @pytest.mark.skipif(tool.skip_reason() is not None, reason=f"live shell run: {tool.skip_reason()}")
 def test_live_first_send_stop_failure_and_restart_against_a_real_server(tmp_path):
     """Runs the real window against the real server. Minutes, not seconds."""

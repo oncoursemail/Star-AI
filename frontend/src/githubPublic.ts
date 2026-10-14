@@ -49,6 +49,8 @@ export type ProgressSnapshot={
 }
 
 export const PAGE_SIZE=100
+/** GitHub resolves this endpoint to the newest published stable release. */
+export const LATEST_RELEASE_ENDPOINT='/releases/latest'
 export const ENDPOINTS={
  releases:'/releases?per_page=10',
  pulls:'/pulls?state=all&sort=updated&direction=desc&per_page='+PAGE_SIZE,
@@ -204,6 +206,16 @@ async function readPart(part:Part,signal:AbortSignal|undefined,now:number):Promi
  if(limited)throw limited
  if(!response.ok)throw new Error('GitHub returned '+response.status)
  return await response.json() as unknown
+}
+
+/** Direct release lookup. The prerendered progress.json remains the static offline/rate-limit fallback. */
+export async function fetchLatestStableRelease(signal?:AbortSignal,now=Date.now()):Promise<ReleaseInfo|null>{
+ const response=await fetch(API_ROOT+LATEST_RELEASE_ENDPOINT,{signal,credentials:'omit',headers:{Accept:'application/vnd.github+json'}})
+ const limited=rateLimitFrom(response,now)
+ if(limited)throw limited
+ if(!response.ok)throw new Error('Latest GitHub release is unavailable')
+ const releases=toReleases([await response.json() as unknown])
+ return releases?.find(release=>!release.prerelease)||null
 }
 
 export type LiveResult={snapshot:ProgressSnapshot;raw:Partial<RawProgress>;partial:boolean}

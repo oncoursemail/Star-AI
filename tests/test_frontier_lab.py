@@ -229,3 +229,89 @@ def test_command_line_uses_the_floor_and_refuses_a_lower_one(tmp_path, monkeypat
     monkeypatch.setattr(sys,"argv",["frontier_lab",str(path),"--baseline","base","--candidate","new","--min-net-wins","1"])
     with pytest.raises(ValueError):
         frontier_lab.main()
+
+
+# ---- the rule is the evaluation gate's own code (star/eval_gate.py), not a copy kept here ----
+
+def gate_results(statuses):
+    return {"suite": {"sha256": "same suite"}, "tasks": {task: {"status": status} for task, status in statuses.items()}}
+
+
+def test_the_verdict_is_the_one_the_gate_module_gives_for_the_same_tasks():
+    from star import eval_gate
+    rows=strong_rows()
+    set_verdict(rows,"new","task-10",["fail","fail"])          # the baseline passed it: a regression
+    set_verdict(rows,"new","task-09",["fail","pass"])          # the baseline passed it: flaky
+    set_verdict(rows,"new","task-00",["pass","fail"])          # the baseline failed it: not an improvement
+    r=report(rows)
+    # The same tasks written by hand as the gate's result files: baseline, candidate run, confirming re-run.
+    base=gate_results({f"task-{i:02d}":"fail" if i < 8 else "pass" for i in range(11)})
+    first=gate_results({**{f"task-{i:02d}":"pass" for i in range(11)},"task-10":"fail","task-09":"fail","task-00":"fail"})
+    again=gate_results({"task-10":"fail","task-09":"pass"})
+    expected=eval_gate.gate_change(base,lambda:first,rerun=lambda ids:again)
+    assert expected.code==eval_gate.BLOCKED
+    assert r["gate"]==expected.to_dict() and r["gate"]["allowed"] is False
+    assert r["regressed_tasks"]==sorted(expected.regressions)==["task-10"]
+    assert r["flaky_tasks"]==sorted(expected.flaky)==["task-09"]
+    assert r["improved_tasks"]==sorted(expected.improvements)==[f"task-{i:02d}" for i in range(1,8)]
+    assert r["net_task_wins"]==5 and r["decision"]=="do_not_promote"
+
+
+def test_the_gate_module_decides_not_a_copy_in_frontier_lab(monkeypatch):
+    from star import eval_gate, frontier_lab
+    assert frontier_lab.eval_gate is eval_gate
+    assert report(sample())["decision"]=="candidate_for_independent_review"
+    calls=[]
+    real=eval_gate.compare
+
+    def refusing(baseline, candidate, **options):
+        calls.append((baseline, candidate))
+        verdict=real(baseline, candidate, **options)
+        verdict.code=eval_gate.BLOCKED
+        verdict.notes.append("stand-in refusal")
+        return verdict
+    monkeypatch.setattr(eval_gate,"compare",refusing)
+    r=report(sample())                                          # the rows that were accepted two lines above
+    assert len(calls)==1 and r["decision"]=="do_not_promote" and r["gate"]["allowed"] is False
+    assert r["reasons"]==["The evaluation gate did not allow the change (blocked; stand-in refusal)"]
+    baseline, candidate=calls[0]                                # what the gate was given: one status per task
+    assert baseline["suite"]==candidate["suite"] and set(baseline["tasks"])=={f"task-{i}" for i in range(8)}
+    assert [baseline["tasks"][f"task-{i}"]["status"] for i in range(8)]==["fail"]*6+["pass"]*2
+    assert [candidate["tasks"][f"task-{i}"]["status"] for i in range(8)]==["fail"]+["pass"]*7
+
+    def regression(baseline, run_candidate, **options):
+        return eval_gate.Verdict(eval_gate.BLOCKED, regressions=["task-7"], improvements=["task-1"])
+    monkeypatch.setattr(eval_gate,"gate_change",regression)
+    r=report(sample())
+    assert r["regressed_tasks"]==["task-7"] and r["improved_tasks"]==["task-1"] and r["net_task_wins"]==0
+    assert r["decision"]=="do_not_promote" and r["reasons"][0].startswith("1 holdout task(s) the baseline passed now fail")
+
+
+def test_a_task_that_is_noisy_in_both_arms_is_flaky_for_the_gate_but_not_counted_as_worse():
+    rows=strong_rows()
+    set_verdict(rows,"base","task-10",["pass","fail"])
+    set_verdict(rows,"new","task-10",["fail","pass"])
+    r=report(rows)
+    assert r["gate"]["flaky"]==["task-10"] and r["gate"]["allowed"] is True
+    assert r["flaky_tasks"]==[] and r["regressed_tasks"]==[]
+    assert r["net_task_wins"]==8 and r["decision"]=="candidate_for_independent_review"
+
+
+def test_a_blocked_trial_or_nothing_paired_gives_no_gate_verdict():
+    from star import eval_gate
+    rows=sample()
+    next(x for x in rows if x["candidate"]=="new")["verdict"]="blocked"
+    r=report(rows)
+    assert r["gate"]["exit_code"]==eval_gate.INCOMPLETE and r["gate"]["incomplete"]==["task-0"]
+    assert "The evaluation gate did not allow the change (incomplete)" in r["reasons"] and r["decision"]=="do_not_promote"
+    r=report([x for x in sample() if x["candidate"]=="base"])
+    assert r["gate"]["exit_code"]==eval_gate.UNUSABLE and r["decision"]=="do_not_promote"
+    assert "The evaluation gate did not allow the change (nothing to compare; the baseline has no scored tasks)" in r["reasons"]
+
+
+def test_a_single_repeat_has_no_confirming_rerun_so_every_failure_is_a_regression():
+    rows=[x for x in strong_rows() if x["trial_index"]==0]
+    assert report(rows, repeats=1)["decision"]=="candidate_for_independent_review"
+    set_verdict(rows,"new","task-10",["fail"])
+    r=report(rows, repeats=1)
+    assert r["regressed_tasks"]==["task-10"] and r["flaky_tasks"]==[] and r["decision"]=="do_not_promote"

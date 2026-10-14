@@ -1,0 +1,26 @@
+.star-pet{position:fixed;z-index:40;width:100px;height:112px;pointer-events:none}
+.star-pet--bottom-right{right:20px;bottom:145px}
+.star-pet--bottom-left{left:20px;bottom:145px}
+.star-pet--top-right{right:20px;top:80px}
+.star-pet--top-left{left:20px;top:80px}
+.star-pet__button{position:relative;border:0;background:transparent;padding:0;width:100%;height:100%;cursor:grab;pointer-events:auto;touch-action:none}
+.star-pet__button:active{cursor:grabbing}
+.star-pet__image{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none;user-select:none}
+.star-pet__bubble{position:absolute;right:0;bottom:100%;max-width:220px;min-width:140px;border:1px solid var(--line,#747b8b);background:var(--surface,#202630);color:var(--text,#fff);border-radius:10px;padding:8px 12px;font-size:12px;line-height:1.4;box-shadow:0 6px 24px #0003}
+@media(prefers-reduced-motion:reduce){.star-pet,.star-pet *{animation:none!important;transition:none!important}}
+
+/* A single composited sprite stage: motion never changes the layout or hit target. */
+.star-pet__breath{position:absolute;inset:0;display:block;transform-origin:50% 94%;animation:star-pet-breathe 4.8s ease-in-out infinite}
+.star-pet__incoming{animation:star-pet-fade-in 210ms ease-out both}
+.star-pet__outgoing{animation:star-pet-fade-out 210ms ease-out both}
+.star-pet__blink{opacity:0;animation:star-pet-blink 7.3s steps(1,end) infinite}
+.star-pet[data-state="finished"] .star-pet__breath{animation:star-pet-pop 440ms cubic-bezier(.18,1.5,.35,1) both,star-pet-breathe 4.8s ease-in-out 440ms infinite}
+.star-pet[data-state="thinking"] .star-pet__breath,.star-pet[data-state="streaming"] .star-pet__breath{animation:star-pet-breathe 3.2s ease-in-out infinite}
+.star-pet[data-state="idle"] .star-pet__button{animation:star-pet-wave 640ms ease-out both}
+@keyframes star-pet-breathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.018)}}
+@keyframes star-pet-blink{0%,45%,47%,100%{opacity:0}45.3%,46.2%{opacity:1}}
+@keyframes star-pet-fade-in{from{opacity:0}to{opacity:1}}
+@keyframes star-pet-fade-out{from{opacity:1}to{opacity:0}}
+@keyframes star-pet-pop{0%{transform:scale(.96)}60%{transform:scale(1.055)}100%{transform:scale(1)}}
+@keyframes star-pet-wave{0%,100%{transform:rotate(0)}35%{transform:rotate(-3deg)}70%{transform:rotate(2deg)}}
+.star-pet--still .star-pet__breath,.star-pet--still .star-pet__button,.star-pet--still .star-pet__image{animation:none!important;transition:none!important}

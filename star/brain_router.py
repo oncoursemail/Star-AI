@@ -231,6 +231,18 @@ def is_roblox_task(prompt: str) -> bool:
     return isinstance(prompt, str) and bool(_ROBLOX.search(prompt))
 
 
+def busy_downgrade_allowed(prompt: str, profile: str) -> bool:
+    """May the quick model answer a message routed to the main model because every main-model slot is busy?
+
+    Interactive chat should not wait minutes behind background answers (evals, night school). Only general
+    'reasoning' chat qualifies: never Roblox, code, documentation-grounded, tool or research questions, which
+    keep the model that is good at them and wait for a slot. Pure; the slot check is the caller's.
+    """
+    return (profile == "reasoning" and isinstance(prompt, str) and not _CODING.search(prompt)
+            and not is_roblox_task(prompt) and not is_roblox_dev_prompt(prompt)
+            and grounding_plan(prompt, mode="auto").retrieve == "none")
+
+
 def deep_request(prompt: str) -> tuple[bool, str]:
     """(did the owner ask for the slow best-quality model, the prompt without a leading `/deep`).
 
@@ -269,7 +281,7 @@ class BrainRoute:
 def select_route(settings, prompt: str, *, mode: str = "auto",
                  image_count: int = 0, research: bool = False,
                  project_tools: bool = False, roblox_context: bool = False,
-                 deep_model: str = "") -> BrainRoute:
+                 deep_model: str = "", home=None) -> BrainRoute:
     """Select a capability profile, not a different privacy or permission policy.
 
     Auto complexity detection is deliberately cheap and deterministic. It is not
@@ -345,6 +357,14 @@ def select_route(settings, prompt: str, *, mode: str = "auto",
         chosen = configured["roblox_model"]
     else:
         chosen = configured["reasoning_model"] or primary
+
+    # Approved routing changes select only an already-configured role on this provider.
+    # Never override explicit deep requests or vision routing, and never change budgets.
+    if home is not None and not image_count and not deep_model:
+        from .promoter import routing_role
+        role = routing_role(home, profile)
+        if role is not None and configured[role + "_model"]:
+            chosen = configured[role + "_model"]
 
     # A configured smaller model can draft subagent analyses while the main
     # reasoning model synthesizes; this never starts several models by itself.

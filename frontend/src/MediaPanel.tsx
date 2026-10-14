@@ -27,7 +27,7 @@ function useLater(){
  const waiting=useRef(new Map<string,(kind:'result'|'error',data:unknown)=>void>())
  useEffect(()=>onBackendEvent(event=>{
    const done=waiting.current.get(event.requestId)
-   if(!done||event.kind==='progress')return
+   if(!done||event.kind==='progress'||event.kind==='voice')return
    waiting.current.delete(event.requestId)
    done(event.kind,event.data)
  }),[])
@@ -105,8 +105,8 @@ export function MediaPlaces({settings,invoke,disabled=false,refresh}:{settings:A
      </div>
      <div className="media-fields">
        <label className="media-field">ComfyUI folder (the one that contains main.py)
-         <input type="text" value={folder} placeholder="Not set: start ComfyUI yourself" onChange={event=>setFolder(event.target.value)} onBlur={()=>{if(folder!==(settings.comfy_home||''))void save({comfy_home:folder.trim()})}}/>
-         <small><button type="button" className="learn-button" disabled={disabled} onClick={()=>void chooseFolder()}>Choose folder</button> STAR starts it for this PC only (127.0.0.1) and stops it when STAR closes.</small></label>
+         <input type="text" value={folder} placeholder={status.detected_home?'Found automatically (see below)':'Not set: start ComfyUI yourself'} onChange={event=>setFolder(event.target.value)} onBlur={()=>{if(folder!==(settings.comfy_home||''))void save({comfy_home:folder.trim()})}}/>
+         <small><button type="button" className="learn-button" disabled={disabled} onClick={()=>void chooseFolder()}>Choose folder</button> STAR starts it for this PC only (127.0.0.1) and stops it when STAR closes.{!folder.trim()&&status.detected_home&&<> Found automatically: {status.detected_home}. STAR uses it until you choose another folder.</>}</small></label>
        <label className="media-field">FFmpeg folder (for video files)
          <input type="text" value={ffmpeg} placeholder="Not set: FFmpeg is looked up on PATH" onChange={event=>setFfmpeg(event.target.value)} onBlur={()=>{if(ffmpeg!==(settings.ffmpeg_dir||''))void save({ffmpeg_dir:ffmpeg.trim()})}}/>
          <small>{status.ffmpeg.message}</small></label>

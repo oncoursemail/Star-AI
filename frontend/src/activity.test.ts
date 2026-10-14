@@ -37,6 +37,42 @@ describe('activity timeline is driven only by backend events', () => {
     expect(settleRun(answered, 'done', 10000).model).toBe('star-voice')
   })
 
+  it('reports checked-example retrieval only after a trusted, bounded event', () => {
+    const start = startRun('example', 'chat', 0)
+    expect(applyProgress(start, {activity: {type: 'example', count: 0}}, 1).steps).toEqual([])
+    expect(applyProgress(start, {activity: {type: 'example', count: 900}}, 1).steps).toEqual([])
+    const selected = applyProgress(start, {activity: {type: 'example', count: 2}}, 300)
+    expect(selected.steps).toHaveLength(1)
+    expect(selected.steps[0].title).toBe('Used checked practice examples')
+    expect(selected.steps[0].detail).toContain('not Roblox Studio')
+    expect(applyProgress(selected, {activity: {type: 'example', count: 2}}, 500).steps).toHaveLength(1)
+  })
+
+  it('tracks the producing brain and measured first-token speed without inventing steps', () => {
+    const local = replay('chat', [
+      {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast', model: 'server-model'}},
+      {activity: {type: 'instant', model: 'pc-small'}},
+      {activity: {type: 'answer_stats', brain: 'pc', model: 'pc-small',
+        first_token_ms: 80, tokens_per_second: 20, estimated_tokens: false}},
+    ])
+    expect(local.model).toBe('pc-small')
+    expect(local.brain).toBe('pc')
+    expect(local.firstTokenMs).toBe(80)
+    expect(local.tokensPerSecond).toBe(20)
+    expect(local.estimatedTokens).toBe(false)
+    expect(local.steps).toHaveLength(0)
+
+    const fallback = replay('chat', [
+      {activity: {type: 'instant_fallback', model: 'server-model'}},
+      {activity: {type: 'answer_stats', brain: 'server', model: 'server-model',
+        first_token_ms: 123, tokens_per_second: 12.5, estimated_tokens: true}},
+    ])
+    expect(fallback.brain).toBe('server')
+    expect(fallback.model).toBe('server-model')
+    expect(fallback.firstTokenMs).toBe(123)
+    expect(fallback.estimatedTokens).toBe(true)
+  })
+
   it('keeps a plain answer to one status line, not a timeline', () => {
     const run = replay('chat', [
       {phase: 'STAR · Fast answer', activity: {type: 'route', profile: 'fast'}},
@@ -239,7 +275,7 @@ describe('connection status and failures are stated truthfully', () => {
     const stopped = 'Request stopped. The draft answer has not been saved as a completed result.'
     expect(classifyFailure(stopped)).toMatchObject({kind: 'cancelled', message: stopped})
     expect(classifyFailure('No reply was recorded for this message. STAR may have been closed before it finished.').kind).toBe('cancelled')
-    const offline = 'Cannot reach STAR Brain. Start it in the Brain tab, then test the connection again.'
+    const offline = 'Cannot reach STAR Brain. Start it on the Model page, then test the connection again.'
     expect(classifyFailure(offline)).toMatchObject({kind: 'unreachable', message: offline})
     expect(classifyFailure('STAR local bridge did not respond. Restart the desktop app and try again.').kind).toBe('unreachable')
     expect(classifyFailure('STAR Brain did not respond in time. The model may still be loading or your machine may be low on memory.').kind).toBe('slow')

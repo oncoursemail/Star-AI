@@ -285,13 +285,13 @@ def test_state_payload_exposes_status_and_retry_after_a_restart(tmp_path, monkey
     try:
         chat = chats.active_chat("STAR")
         user = chats.add("STAR", "user", "make the shop UI", chat_id=chat)
-        chats.add_terminal("STAR", chat, user, "failed", "Cannot reach STAR Brain. Start it in the Brain tab.")
+        chats.add_terminal("STAR", chat, user, "failed", "Cannot reach STAR Brain. Start it on the Model page.")
     finally:
         chats.close()
 
     state = _get_state(settings_file, Runtime())  # a fresh process: no client memory at all
     assert json.loads(json.dumps(state))["retry"] == {
-        "status": "failed", "detail": "Cannot reach STAR Brain. Start it in the Brain tab.",
+        "status": "failed", "detail": "Cannot reach STAR Brain. Start it on the Model page.",
         "prompt": "make the shop UI", "message_id": user, "created": state["retry"]["created"]}
     assert [(m["role"], m.get("status")) for m in state["messages"]] == [("user", None), ("event", "failed")]
     assert state["messages"][1]["text"].startswith("Cannot reach STAR Brain")

@@ -16,3 +16,9 @@ frontend/dist/
 frontend/.vite/
 frontend/.cache/
 star/build-info.json
+/frontend/tsconfig.tsbuildinfo
+/build/
+/dist/
+/STAR.spec
+/STAR-Genesis-Windows-x64.zip
+/STAR-PREVIEW-SHA256SUMS.txt

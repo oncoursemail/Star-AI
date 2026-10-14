@@ -105,7 +105,6 @@ def test_catalog_lists_server_without_any_address_or_key(monkeypatch):
     ("http://192.168.1.20:8080/v1/", "http://192.168.1.20:8080/v1"),
     ("https://192.168.1.20:8443/v1", "https://192.168.1.20:8443/v1"),
     ("http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1"),
-    ("http://169.254.10.20:8080/v1", "http://169.254.10.20:8080/v1"),
     ("http://[fd12:3456:789a::1]:8080/v1", "http://[fd12:3456:789a::1]:8080/v1"),
     ("http://[::1]:8080/v1", "http://[::1]:8080/v1"),
 ])
@@ -118,11 +117,13 @@ def test_private_ip_literals_are_accepted(good, canonical):
     # public or non-private addresses
     "http://8.8.8.8:8080/v1", "http://1.1.1.1:8080/v1", "http://172.32.0.1:8080/v1",
     "http://172.15.255.255:8080/v1", "http://192.169.0.1:8080/v1", "http://11.0.0.1:8080/v1",
+    "http://169.254.10.20:8080/v1", "http://169.254.169.254:8080/v1",
     "http://100.64.0.1:8080/v1", "http://192.0.2.10:8080/v1", "http://203.0.113.5:8080/v1",
     "http://0.0.0.0:8080/v1", "http://255.255.255.255:8080/v1", "http://240.0.0.1:8080/v1",
     "http://224.0.0.1:8080/v1", "http://[2001:4860:4860::8888]:8080/v1",
-    "http://[::ffff:8.8.8.8]:8080/v1", "http://[::ffff:10.0.0.1]:8080/v1", "http://[::]:8080/v1",
-    # host names (DNS could point anywhere, now or later)
+    "http://[::ffff:8.8.8.8]:8080/v1", "http://[::ffff:10.0.0.1]:8080/v1", "http://[::]:8080/v1",  # star:allow placeholder
+    "http://[fe80::1]:8080/v1", "http://[fd00:ec2::254]:8080/v1",
+    # DNS names may rebind and are not safe without connection-level IP pinning
     "http://localhost:8080/v1", "http://star-server:8080/v1", "http://server.local:8080/v1",
     "http://evil.example:8080/v1", "http://10.0.0.1.evil.example:8080/v1",
     "http://192.168.1.20.nip.io:8080/v1",
@@ -236,7 +237,7 @@ def test_key_comes_from_environment_or_keyring_never_settings(monkeypatch, isola
 def test_key_is_only_ever_sent_to_a_validated_private_address(monkeypatch):
     monkeypatch.setenv("STAR_SERVER_API_KEY", SECRET)
     # Even a settings-like object that skipped Settings.validate() cannot leak the key.
-    for bad in ("http://8.8.8.8:8080/v1", "https://api.example.com/v1", "http://localhost:8080/v1", ""):
+    for bad in ("http://8.8.8.8:8080/v1", "https://api.example.com/v1", "http://169.254.169.254:8080/v1", ""):
         with pytest.raises(ValueError):
             connection_for(SimpleNamespace(provider="star_server", server_endpoint=bad,
                                            endpoint="http://127.0.0.1:8080/v1"))
@@ -545,8 +546,9 @@ def test_lan_failures_have_their_own_actionable_messages():
         assert "brain tab" not in lowered and "download" not in lowered and "star brain" not in lowered
         assert SECRET not in message
         assert "STAR Server" in message or "address" in lowered
-    # The on-device wording is unchanged when no kind is given.
-    assert "Brain tab" in explain_model_failure(RuntimeError("Connection error."))
+    # The on-device wording names the page that exists (Model), never the removed Brain tab.
+    local = explain_model_failure(RuntimeError("Connection error."))
+    assert local.startswith("Cannot reach STAR Brain.") and "Model page" in local and "Brain tab" not in local
     assert "API key" in explain_model_failure(StatusError(401))
 
 

@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "name": "unity-scripting-api",
+  "title": "Unity Scripting API",
+  "mode": "link-only",
+  "source": {
+    "kind": "zip",
+    "url": "https://cloudmedia-docs.unity3d.com/docscloudstorage/en/6000.5/UnityDocumentation.zip",
+    "revision": "6000.5",
+    "content_root": "Documentation/ScriptReference/",
+    "public_base": "https://docs.unity.com/en-us/engine/6000.5/script-reference"
+  },
+  "licence": {
+    "text": {
+      "id": "CC-BY-NC-ND-4.0",
+      "url": "https://creativecommons.org/licenses/by-nc-nd/4.0/legalcode",
+      "redistribution_allowed": false,
+      "attribution": "Credit Unity Technologies with a page link and licence link; only noncommercial, unmodified sharing is covered.",
+      "conditions": "CC BY-NC-ND allows only unmodified noncommercial sharing with credit and a licence link, not unrestricted commercial or derivative knowledge indexing. STAR is link-only.",
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/manual/terms-of-use",
+      "evidence_quote": "Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International"
+    },
+    "code_samples": {
+      "id": "Unity-Scripting-Reference-Examples-Grant",
+      "url": "https://docs.unity.com/en-us/engine/6000.5/script-reference",
+      "redistribution_allowed": true,
+      "attribution": "No credit to Unity is required for the Scripting Reference examples under the specific grant on the API landing page.",
+      "conditions": "The Scripting Reference grants a non-exclusive, non-transferable, non-sublicensable licence to redistribute examples. The Manual's general Companion License still covers Manual snippets. No ingestion of the Scripting API prose is authorized.",
+      "evidence_url": "https://docs.unity.com/en-us/engine/6000.5/script-reference",
+      "evidence_quote": "to modify, and to distribute the examples without crediting Unity"
+    }
+  },
+  "include": [
+    "UnityEngine namespace API pages",
+    "UnityEditor namespace API pages",
+    "Classes, structs and enums",
+    "Methods, properties, events and signatures"
+  ],
+  "exclude": [
+    "Manual (separate manifest)",
+    "Undocumented internal or package-specific APIs",
+    "Third-party packages and linked sites",
+    "Images and downloadable binaries"
+  ],
+  "expected_size": {
+    "unit": "documents",
+    "min": 3000,
+    "max": 60000,
+    "note": "Planning estimate only; Unity's official combined Manual + API offline ZIP is about 300 MB, neither half measured."
+  },
+  "update_cadence": {
+    "frequency": "per-release",
+    "note": "Review alongside Unity API releases and check for changed examples/terms; do not fetch automatically."
+  },
+  "citation": {
+    "format": "Unity Scripting API: {title} — {url} (Unity Technologies, version shown on page)",
+    "example": "Unity Scripting API: GameObject — https://docs.unity.com/en-us/engine/6000.5/script-reference (Unity Technologies)"
+  }
+}

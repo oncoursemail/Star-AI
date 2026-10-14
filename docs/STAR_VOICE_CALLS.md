@@ -345,9 +345,12 @@ What the four runs show:
 - **Server provider (done).** `runtime.make_brain` builds the brain with `ServerBrain.from_settings()`:
   address from the app's Settings (`providers.validate_lan_endpoint`), key from the keyring
   (`providers.get_api_key`), model from `server_roles.quick_model`. The environment variables above still override
-  them, and `voiceStatus` reports `serverConfigured` from the same lookup without any network call. On a server
-  that reported two or more slots the call is pinned to the slot next to the open chat's, so a call and a typed
-  chat on the same model do not replace each other's cached prompt.
+  them, and `voiceStatus` reports `serverConfigured` from the same lookup without any network call. A call is
+  sent without a slot number, like other background requests (`providers.llama_request_fields`): it never waits
+  for one slot while another is free, and the server chooses the slot. A call and a typed chat on the same model
+  can therefore replace each other's cached prompt. Without a slot number the server takes the idle slot whose
+  cached prompt starts like the request, otherwise the least recently used one (measured once with a probe
+  script, not with a call and a typed chat running together).
 - **Real microphone untested.** Device opening, sample-rate negotiation on unusual audio hardware, and how the
   thresholds feel with a human voice all still need a person. `Microphone` asks PortAudio for 16 kHz mono directly.
 - **Echo.** With loudspeakers the microphone hears Star. The energy echo gate (`output: speakers`) stops her
@@ -419,3 +422,28 @@ Notes for the screen designer:
   and only upwards for anime and downwards for commanding voices (a unit test enforces this).
 - Adding an engine: write the class (section 2), add its name to `TTS_ENGINES`, and the catalog entries for that engine
   become `callable: true` with no other change.
+
+### The screen (Settings > Star's voice)
+
+`frontend/src/VoiceSettings.tsx`, shown on the Settings page under "Where STAR generates". What it does with the
+contract above:
+
+- One group per style, in the host's order, with the host's summary and sample line. The warm style carries
+  "Default". The commanding style carries "Optional": its voices are listed only after the owner switches on
+  "Offer the confident and commanding voices" (or when one of them is already the saved voice). Showing them
+  chooses nothing.
+- The saved voice is marked "Selected". A profile that never chose a voice has `voice_id` empty and `voice` set to
+  the default recipe name (`heart`); the page treats that name as the catalog voice of the same id. Any other
+  recipe is shown as "a custom recipe that is not in this list".
+- Voices with `callable: false` sit under their own closed heading in each group ("7 more voices that are not usable
+  in live calls yet"), each with that label and the host's `reason`; Preview and Use are off for them.
+- Preview: one at a time. The row shows "Playing" from the click until the `preview_done` voice event with the same
+  request id; an `error` voice event, a refusal of `voicePreviewVoice`, or no event within a minute is shown on
+  that row. Nothing is reported as played before the host said so.
+- Use this voice: `voiceSelectVoice`; the mark moves only when the answer carries the same `voice_id`.
+- `voiceStatus.available: false` is shown as "The voice engine is not installed on this PC" with the missing
+  packages and model files, and Preview is off. A voice can still be chosen. While `inCall` is true, previews wait.
+
+Tests: `frontend/src/settings-ui.test.tsx` (against the fake Qt bridge) and the `settings` phase of
+`scripts/shell_acceptance.py` (the real window and the real Kokoro engine; the loudspeaker alone is replaced by a
+silent sink unless `--audible` is given).

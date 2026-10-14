@@ -1,0 +1,15 @@
+{
+  "format": "star-lessons-v1",
+  "project": "STAR",
+  "exported": "2026-10-12T00:00:00+00:00",
+  "counts": {
+    "candidate": 0,
+    "accepted": 0,
+    "rejected": 0,
+    "superseded": 0,
+    "merged": 0,
+    "pending": 0,
+    "uses": 0
+  },
+  "lessons": []
+}

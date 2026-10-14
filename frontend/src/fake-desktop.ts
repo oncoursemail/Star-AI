@@ -14,17 +14,19 @@ import {act} from '@testing-library/react'
 
 export type Call = {action: string; payload: Record<string, unknown>; requestId: string}
 export type Reply = {ok: boolean; data?: unknown; pending?: boolean; error?: string}
-type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string}
+type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string; image?: string}
 
 /** Mirrors `asdict(Settings())` in star/desktop_core.py; loosely typed on purpose. */
 export const backendSettings = {
   endpoint: 'http://127.0.0.1:8080/v1', provider: 'local', model: 'qwen-test', fast_model: '',
   reasoning_model: '', roblox_model: '', vision_model: '', router_models_dir: '', router_context: 4096,
-  gpu_layers: 25, project: 'STAR', workspace: '', studio_id: '', studio_edit: false, workspace_edit: false,
+  gpu_layers: 25, instant_route_enabled: false, project: 'STAR', workspace: '', studio_id: '', studio_target: 'local_pc', studio_edit: false, workspace_edit: false,
   max_calls: 12, context_chars: 26000, reduced_motion: true, obsidian_vault: '', obsidian_enabled: false,
   skills_enabled: true, graphify_enabled: true, comfy_workflow: '', comfy_prompt_node: '6', comfy_port: 8188,
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
-  roblox_research_enabled: true, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
+  blender_enabled: false, blender_edit: false, blender_executable: '',
+  roblox_research_enabled: true, asset_forge_enabled: false, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
+  practice_lessons_enabled: false, worked_examples_enabled: false,
 }
 
 const analytics = {started: 0, succeeded: 0, failed: 0, tools: 0, rejected: 0, median_ms: null, messages: 0,
@@ -58,7 +60,7 @@ export function installFakeDesktop() {
       case 'bootstrap': return {ok: true, data: boot()}
       case 'sendMessage': case 'generateImage': case 'runTeam': {
         // The real worker saves the user message first, then answers asynchronously.
-        db.push({id: '', role: 'user', text: String(call.payload.prompt), created: stamp()})
+        if (call.payload.retryMessageId === undefined) db.push({id: '', role: 'user', text: String(call.payload.prompt), created: stamp()})
         retry = null
         return {ok: true, pending: true}
       }
@@ -91,7 +93,7 @@ export function installFakeDesktop() {
   Element.prototype.scrollTo = Element.prototype.scrollTo || (() => {})
   Element.prototype.scrollIntoView = Element.prototype.scrollIntoView || (() => {})
 
-  const emit = (requestId: string, kind: 'progress' | 'result' | 'error', data: unknown) =>
+  const emit = (requestId: string, kind: 'progress' | 'result' | 'error' | 'voice', data: unknown) =>
     act(() => { listener?.(JSON.stringify({requestId, kind, data})) })
   const requestOf = (action: string, index = -1) => {
     const found = calls.filter(c => c.action === action)
@@ -102,6 +104,8 @@ export function installFakeDesktop() {
 
   return {
     calls,
+    snapshot: () => boot(),
+    saved: () => db.map((m,i) => ({...m,id: `saved-${i}`})),
     sent: (action: string) => calls.filter(c => c.action === action),
     requestOf,
     /** Start every test from a clean backend. */

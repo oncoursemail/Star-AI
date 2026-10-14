@@ -12,6 +12,7 @@ This folder is the source of truth. Nothing in it names a server: the address co
 |---|---|
 | `starkb/` | the package: `chunking`, `store` (SQLite + FTS5), `embed`, `search`, `serve` (HTTP), `luaucheck`, `study` (doc2query), `refresh` (nightly), `coverage`, `evaluate`, `quiet` (server lock + clean stop) |
 | `corpora.json` | the indexed repositories with licence and attribution |
+| `sources/` | nine future language-corpus manifests (licences and citations only; not ingested); see `sources/README.md` |
 | `fetch.sh` | first clone of the repositories (inside the container) |
 | `deploy.sh` | copy this folder to the server; `--install` also installs the units |
 | `install-service.sh` | runs as root in the container: Luau tools, systemd units |
@@ -62,7 +63,7 @@ short reply covers more pages (held-out questions: expected page in the top 5 fo
 
 - One request to the model server at a time.
 - Before every request or batch they wait while `/opt/star/lock` exists (someone is measuring timings). A lock older
-  than 20 minutes is treated as left behind and ignored; it is never removed by a job.
+  than 15 minutes is treated as left behind and ignored; it is never removed by a job.
 - A commit after every chunk or batch; SIGTERM finishes the request in flight and exits 0.
 - The index is rebuilt in one transaction. A failed fetch, a parse error or a result with under 80 % of the previous
   chunks leaves the working index untouched.

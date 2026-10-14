@@ -1,0 +1,2074 @@
+[
+  {
+    "id": "ANI-07",
+    "category": "animation-principles",
+    "difficulty": 2,
+    "goal": "Write the easing curves used for animation timing as a tested pure-Luau module",
+    "prompt": "In my Roblox game: write a pure-Luau ModuleScript (no Roblox services) that returns a table `Easing` of easing functions for animation timing. Each takes t (number) and returns the eased progress, clamping t to [0, 1] first: `linear`, `inQuad`, `outQuad`, `inOutQuad`, `outCubic`, `outBack` (overshoots 1 slightly, then settles at 1) and `outElastic` (overshoots several times and ends at exactly 1). Also add `Easing.lerp(a, b, t, name)` that interpolates from number a to number b using the easing called `name` (a string key of the table, default \"linear\"). Start the file with --!strict and annotate parameters and return types.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "expected_sources": [
+      "content/en-us/animation/editor.md",
+      "content/en-us/ui/animation.md",
+      "content/en-us/reference/engine/enums/EasingStyle.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ANI-07.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ANI-07.luau",
+        "checks": 13
+      },
+      "require": [
+        {
+          "id": "strict_header",
+          "re": "\\A\\s*--!strict",
+          "why": "the file starts with --!strict",
+          "scope": "first_raw"
+        },
+        {
+          "id": "out_back",
+          "re": "outBack",
+          "why": "outBack is defined"
+        },
+        {
+          "id": "annotated",
+          "re": "\\bt\\s*:\\s*number\\b",
+          "why": "parameters are annotated"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: the file starts with --!strict",
+        "Present: outBack is defined",
+        "Present: parameters are annotated"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ANI-08",
+    "category": "animation-combat-timing",
+    "difficulty": 3,
+    "goal": "Model a sword combo's frame data (startup, active, recovery, cancel window) as testable pure Luau",
+    "prompt": "In my Roblox game: a 2-hit sword combo is timed in frames at 60 fps. Write a pure-Luau ModuleScript returning a `Combo` class: `Combo.new(moves)` where moves is an array of {startup, active, recovery, cancelWindow} (frame counts; cancelWindow is the number of LAST frames of recovery in which an attack press is buffered). Methods: `:press()` is the attack input, `:step()` advances exactly one frame, `:state()` returns a table {move, phase, frame, hitActive}.\nRules: a new combo is idle ({move = 0, phase = \"idle\", frame = 0, hitActive = false}) and step() while idle does nothing. press() while idle starts move 1 at once: {move = 1, phase = \"startup\", frame = 1}. Each step() adds 1 to frame; when frame passes the phase length the next phase starts at frame 1 (startup, active, recovery). hitActive is true only in the active phase. When the last recovery frame is passed the combo returns to idle ({move = 0, ...}), unless a press was buffered: then the next move starts at once with phase \"startup\", frame 1. press() is buffered only during recovery frames inside the cancel window (the last cancelWindow frames of that recovery) and only if a next move exists; a press at any other time is ignored.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "expected_sources": [
+      "content/en-us/animation/events.md",
+      "content/en-us/reference/engine/classes/AnimationTrack.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "a frame-stepped model never waits"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ANI-08.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ANI-08.luau",
+        "checks": 14
+      },
+      "require": [
+        {
+          "id": "state",
+          "re": "hitActive",
+          "why": "state() reports hitActive"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_wait",
+          "re": "(?<![.\\w:])wait\\s*\\(|task\\.wait",
+          "why": "a frame-stepped model never waits",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: state() reports hitActive",
+        "Absent: a frame-stepped model never waits"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ANI-09",
+    "category": "animation-procedural",
+    "difficulty": 3,
+    "goal": "Frame-rate independent damped spring for follow-through and secondary motion",
+    "prompt": "In my Roblox game: a character's cape and antenna need follow-through (secondary motion that overshoots and settles). Write a pure-Luau ModuleScript returning a `Spring` class: `Spring.new(initial, frequency, damping)` (frequency in Hz, damping ratio: 1 is critically damped, below 1 overshoots), `:step(target, dt)` which advances the spring by dt seconds toward target and returns the new position, and `:reset(position)` which puts it at rest at that position. It must give (nearly) the same result whether a second is simulated in 60 small steps or in one large step, so use the exact closed-form solution rather than a fixed per-frame update, and it must stay finite for a very large dt. A dt of 0 returns the current position.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "expected_sources": [
+      "content/en-us/animation/index.md",
+      "content/en-us/reference/engine/classes/Motor6D.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ANI-09.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ANI-09.luau",
+        "checks": 10
+      },
+      "require": [
+        {
+          "id": "exp",
+          "re": "math\\.exp|\\bexp\\s*\\(|2\\.71828|\\^\\s*\\(\\s*-",
+          "why": "uses an exponential (closed-form solution)"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: uses an exponential (closed-form solution)"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ANI-10",
+    "category": "animation-ik",
+    "difficulty": 3,
+    "goal": "Reach toward a target with the official IKControl instance, faded in and out",
+    "prompt": "In my Roblox game: write a server Script that makes an R15 NPC (a Model in Workspace named \"Guard\") reach its right hand toward a Part named \"Doorknob\" using the official IKControl instance, not hand-written CFrame math. Create the IKControl under the NPC's Humanoid, chain it from the right upper arm to the right hand, point it at the Doorknob with a control type that moves the hand to the target position, give it a SmoothTime so the arm does not snap, and fade its Weight in and out with TweenService. Provide `reach(npc, target)` and `release(npc)`.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "studio_check": "In Studio with an R15 rig: the right arm bends toward the Doorknob while reaching and relaxes smoothly on release; no errors in the output.",
+    "expected_sources": [
+      "content/en-us/animation/inverse-kinematics.md",
+      "content/en-us/reference/engine/classes/IKControl.yaml",
+      "content/en-us/reference/engine/enums/IKControlType.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "not an IKControlType member",
+      "the task asks for IKControl, not manual joint math"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "ik",
+          "re": "Instance\\.new\\(\\s*[\\\"']IKControl[\\\"']",
+          "why": "an IKControl instance is created"
+        },
+        {
+          "id": "chain_root",
+          "re": "ChainRoot\\s*=",
+          "why": "ChainRoot is set"
+        },
+        {
+          "id": "end_effector",
+          "re": "EndEffector\\s*=",
+          "why": "EndEffector is set"
+        },
+        {
+          "id": "target",
+          "re": "\\.Target\\s*=",
+          "why": "Target is set"
+        },
+        {
+          "id": "type",
+          "re": "Enum\\.IKControlType\\.(Position|Transform)",
+          "why": "a position-type control"
+        },
+        {
+          "id": "smooth",
+          "re": "SmoothTime",
+          "why": "SmoothTime avoids snapping"
+        },
+        {
+          "id": "weight",
+          "re": "Weight",
+          "why": "Weight is faded"
+        },
+        {
+          "id": "tween",
+          "re": "TweenService",
+          "why": "TweenService fades the weight"
+        },
+        {
+          "id": "arm",
+          "re": "RightUpperArm",
+          "why": "the chain starts at the right upper arm"
+        },
+        {
+          "id": "hand",
+          "re": "RightHand",
+          "why": "the chain ends at the right hand"
+        },
+        {
+          "id": "humanoid",
+          "re": "Humanoid",
+          "why": "the control lives under the Humanoid"
+        },
+        {
+          "id": "two_funcs",
+          "re": "function\\s+(?:\\w+\\.)?release|release\\s*=\\s*function",
+          "why": "release exists"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "invented_type",
+          "re": "Enum\\.IKControlType\\.(Goal|Reach|Hand|Pole)",
+          "why": "not an IKControlType member"
+        },
+        {
+          "id": "manual_cframe",
+          "re": "Motor6D|\\.Transform\\s*=",
+          "why": "the task asks for IKControl, not manual joint math"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: an IKControl instance is created",
+        "Present: ChainRoot is set",
+        "Present: EndEffector is set",
+        "Present: Target is set",
+        "Present: a position-type control",
+        "Present: SmoothTime avoids snapping",
+        "Present: Weight is faded",
+        "Present: TweenService fades the weight",
+        "Present: the chain starts at the right upper arm",
+        "Present: the chain ends at the right hand",
+        "Present: the control lives under the Humanoid",
+        "Present: release exists",
+        "Absent: not an IKControlType member",
+        "Absent: the task asks for IKControl, not manual joint math"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ANI-11",
+    "category": "animation-events",
+    "difficulty": 2,
+    "goal": "Drive a hit window from animation markers and blend the swing in and out",
+    "prompt": "In my Roblox game: write a LocalScript (for StarterCharacterScripts) for a sword swing. The animation rbxassetid://180435792 has animation events named \"HitStart\" and \"HitEnd\". On a left mouse click, play it through the character's Animator at Action priority with a 0.1 s fade-in. Keep a boolean `hitWindowOpen` that becomes true when HitStart fires and false when HitEnd fires (hit detection happens elsewhere). While a haste buff attribute `Haste` on the character is true, play the swing 25 percent faster. Fade the swing out over 0.15 s when it ends or the player unequips, and disconnect the event connections when the track stops. Use the modern animation event API, not the deprecated one.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "studio_check": "In Studio: click swings the sword, hitWindowOpen is true only between the two markers, haste speeds the clip up, and respawning leaves no errors.",
+    "expected_sources": [
+      "content/en-us/animation/events.md",
+      "content/en-us/reference/engine/classes/AnimationTrack.yaml",
+      "content/en-us/reference/engine/enums/AnimationPriority.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "AnimationTrack.KeyframeReached is deprecated; use markers",
+      "Humanoid:LoadAnimation is deprecated"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "animator",
+          "re": "Animator",
+          "why": "the Animator is used"
+        },
+        {
+          "id": "load",
+          "re": ":LoadAnimation\\s*\\(",
+          "why": "the animation is loaded on the Animator"
+        },
+        {
+          "id": "hit_start",
+          "re": "GetMarkerReachedSignal\\(\\s*[\\\"']HitStart[\\\"']\\s*\\)",
+          "why": "HitStart is detected with a marker signal"
+        },
+        {
+          "id": "hit_end",
+          "re": "GetMarkerReachedSignal\\(\\s*[\\\"']HitEnd[\\\"']\\s*\\)",
+          "why": "HitEnd is detected with a marker signal"
+        },
+        {
+          "id": "window",
+          "re": "hitWindowOpen",
+          "why": "the flag exists"
+        },
+        {
+          "id": "priority",
+          "re": "Enum\\.AnimationPriority\\.Action",
+          "why": "Action priority"
+        },
+        {
+          "id": "play_fade",
+          "re": ":Play\\(\\s*0?\\.1\\b",
+          "why": "the swing fades in over 0.1 s"
+        },
+        {
+          "id": "speed",
+          "re": "AdjustSpeed|1\\.25",
+          "why": "haste changes the speed"
+        },
+        {
+          "id": "stop_fade",
+          "re": ":Stop\\(\\s*0?\\.15\\b",
+          "why": "the swing fades out over 0.15 s"
+        },
+        {
+          "id": "disconnect",
+          "re": ":Disconnect\\(\\)",
+          "why": "connections are disconnected"
+        },
+        {
+          "id": "input",
+          "any": [
+            "UserInputService",
+            "ContextActionService",
+            "MouseButton1"
+          ],
+          "why": "a click is read"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "keyframe_reached",
+          "re": "KeyframeReached",
+          "why": "AnimationTrack.KeyframeReached is deprecated; use markers"
+        },
+        {
+          "id": "deprecated_load",
+          "re": "(?i)humanoid\\s*:\\s*LoadAnimation",
+          "why": "Humanoid:LoadAnimation is deprecated"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: the Animator is used",
+        "Present: the animation is loaded on the Animator",
+        "Present: HitStart is detected with a marker signal",
+        "Present: HitEnd is detected with a marker signal",
+        "Present: the flag exists",
+        "Present: Action priority",
+        "Present: the swing fades in over 0.1 s",
+        "Present: haste changes the speed",
+        "Present: the swing fades out over 0.15 s",
+        "Present: connections are disconnected",
+        "Present: a click is read",
+        "Absent: AnimationTrack.KeyframeReached is deprecated; use markers",
+        "Absent: Humanoid:LoadAnimation is deprecated"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ANI-12",
+    "category": "animation-docs-question",
+    "difficulty": 1,
+    "goal": "Answer how animation priorities and weights decide the pose, with a citation",
+    "prompt": "In my Roblox game: when two AnimationTracks play at the same time on the same joints, which one wins, what happens when they have the same priority, and what is the order of the AnimationPriority levels from highest to lowest? Answer from the documentation and cite the pages you use.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-animation-craft"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/enums/AnimationPriority.yaml",
+      "content/en-us/reference/engine/classes/AnimationTrack.yaml",
+      "content/en-us/animation/editor.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "code": false,
+      "compile": false,
+      "require": [
+        {
+          "id": "order",
+          "re": "Action4[\\s\\S]{0,400}Core",
+          "why": "lists the levels from Action4 down to Core",
+          "scope": "prose"
+        },
+        {
+          "id": "higher",
+          "re": "(?i)higher[- ]priority|higher priority|overrid",
+          "why": "the higher priority overrides",
+          "scope": "prose"
+        },
+        {
+          "id": "blend",
+          "re": "(?i)weight|blend",
+          "why": "equal priorities blend by weight",
+          "scope": "prose"
+        }
+      ],
+      "citation": {
+        "required": true,
+        "url_contains_any": [
+          "AnimationPriority",
+          "AnimationTrack",
+          "animation/using",
+          "animation/editor"
+        ]
+      }
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Present: lists the levels from Action4 down to Core",
+        "Present: the higher priority overrides",
+        "Present: equal priorities blend by weight",
+        "Cites a retrieved official documentation page"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "VFX-01",
+    "category": "vfx-particles",
+    "difficulty": 2,
+    "goal": "A one-shot impact spark burst with a ParticleEmitter, shaped over life, cleaned up afterwards",
+    "prompt": "In my Roblox game: write a ModuleScript `HitEffect` with `HitEffect.play(position: Vector3)` that spawns a one-shot impact spark burst. Use an invisible anchored Part holding an Attachment with a ParticleEmitter that does not emit continuously: Rate 0 and a single `:Emit(20)`. Sparks live under half a second (Lifetime as a NumberRange), fly at 20 to 40 studs/s in all directions (Speed, SpreadAngle), have Drag, glow (LightEmission), shrink and fade over their life with NumberSequences for Size and Transparency, and go from white-yellow to orange with a ColorSequence. Clean the part up after the longest particle has died. Comment what each property is for.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-vfx"
+    ],
+    "studio_check": "In Studio: calling HitEffect.play shows one burst of orange sparks that fades within half a second and leaves no part behind.",
+    "expected_sources": [
+      "content/en-us/effects/particle-emitters.md",
+      "content/en-us/reference/engine/classes/ParticleEmitter.yaml",
+      "content/en-us/reference/engine/classes/Debris.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "not ParticleEmitter members",
+      "the global wait() is deprecated; use task.wait or task.delay"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "emitter",
+          "re": "Instance\\.new\\(\\s*[\\\"']ParticleEmitter[\\\"']",
+          "why": "a ParticleEmitter is created"
+        },
+        {
+          "id": "attachment",
+          "re": "Instance\\.new\\(\\s*[\\\"']Attachment[\\\"']",
+          "why": "an Attachment holds it"
+        },
+        {
+          "id": "emit",
+          "re": ":Emit\\(",
+          "why": "particles are emitted with :Emit"
+        },
+        {
+          "id": "twenty",
+          "re": "\\b20\\b",
+          "why": "a burst of 20 particles"
+        },
+        {
+          "id": "rate0",
+          "re": "\\.Rate\\s*=\\s*0\\b",
+          "why": "Rate is 0 so nothing is emitted continuously"
+        },
+        {
+          "id": "lifetime",
+          "re": "\\bLifetime\\b",
+          "why": "Lifetime is set"
+        },
+        {
+          "id": "speed",
+          "re": "\\bSpeed\\b",
+          "why": "Speed is set"
+        },
+        {
+          "id": "number_range",
+          "re": "NumberRange\\.new",
+          "why": "Lifetime and Speed are NumberRanges"
+        },
+        {
+          "id": "spread",
+          "re": "SpreadAngle",
+          "why": "SpreadAngle is set"
+        },
+        {
+          "id": "light",
+          "re": "LightEmission",
+          "why": "LightEmission makes the sparks glow"
+        },
+        {
+          "id": "size_seq",
+          "re": "\\bSize\\b[\\s\\S]*NumberSequence\\.new|NumberSequence\\.new[\\s\\S]*\\bSize\\b",
+          "why": "Size is shaped with a NumberSequence"
+        },
+        {
+          "id": "transp_seq",
+          "re": "NumberSequence\\.new[\\s\\S]*NumberSequence\\.new",
+          "why": "Size and Transparency each get a NumberSequence"
+        },
+        {
+          "id": "color_seq",
+          "re": "ColorSequence\\.new",
+          "why": "Color is a ColorSequence"
+        },
+        {
+          "id": "cleanup",
+          "any": [
+            "Debris",
+            "task\\.delay",
+            ":Destroy\\(\\)"
+          ],
+          "why": "the part is cleaned up"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "invented",
+          "re": "\\.Burst\\b|:FastForward|ParticleEmitter\\.Count",
+          "why": "not ParticleEmitter members"
+        },
+        {
+          "id": "global_wait",
+          "re": "(?<![.\\w:])wait\\s*\\(",
+          "why": "the global wait() is deprecated; use task.wait or task.delay",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: a ParticleEmitter is created",
+        "Present: an Attachment holds it",
+        "Present: particles are emitted with :Emit",
+        "Present: a burst of 20 particles",
+        "Present: Rate is 0 so nothing is emitted continuously",
+        "Present: Lifetime is set",
+        "Present: Speed is set",
+        "Present: Lifetime and Speed are NumberRanges",
+        "Present: SpreadAngle is set",
+        "Present: LightEmission makes the sparks glow",
+        "Present: Size is shaped with a NumberSequence",
+        "Present: Size and Transparency each get a NumberSequence",
+        "Present: Color is a ColorSequence",
+        "Present: the part is cleaned up",
+        "Absent: not ParticleEmitter members",
+        "Absent: the global wait() is deprecated; use task.wait or task.delay"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "VFX-02",
+    "category": "vfx-beam-trail",
+    "difficulty": 2,
+    "goal": "A laser Beam between two parts and a sword Trail that is only on while swinging",
+    "prompt": "In my Roblox game: write a ModuleScript returning `makeBeam`, `makeTrail` and `swing`. (1) `makeBeam(a: BasePart, b: BasePart)` creates an Attachment in each part and a red laser Beam between them with Attachment0 and Attachment1, a thin Width0 and Width1, several Segments, FaceCamera on, glowing (LightEmission), and returns the Beam. (2) `makeTrail(handle: BasePart)` puts two Attachments on a sword handle (blade base and tip), creates a Trail between them with a Lifetime of 0.25 s, a Transparency NumberSequence that fades to fully transparent, a ColorSequence, and Enabled false until used, and returns it. (3) `swing(trail, duration)` turns the trail on and switches it off again after duration seconds.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-vfx"
+    ],
+    "studio_check": "In Studio: the laser follows both parts when they move; the trail appears only during swing and fades behind the blade.",
+    "expected_sources": [
+      "content/en-us/effects/beams.md",
+      "content/en-us/effects/trails.md",
+      "content/en-us/reference/engine/classes/Beam.yaml",
+      "content/en-us/reference/engine/classes/Trail.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Trail has WidthScale, not Width",
+      "the global wait() is deprecated"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "beam",
+          "re": "Instance\\.new\\(\\s*[\\\"']Beam[\\\"']",
+          "why": "a Beam is created"
+        },
+        {
+          "id": "att0",
+          "re": "Attachment0\\s*=",
+          "why": "Attachment0 is set"
+        },
+        {
+          "id": "att1",
+          "re": "Attachment1\\s*=",
+          "why": "Attachment1 is set"
+        },
+        {
+          "id": "width",
+          "re": "Width0\\s*=[\\s\\S]*Width1\\s*=|Width1\\s*=[\\s\\S]*Width0\\s*=",
+          "why": "Width0 and Width1 are set"
+        },
+        {
+          "id": "face",
+          "re": "FaceCamera\\s*=\\s*true",
+          "why": "the beam faces the camera"
+        },
+        {
+          "id": "segments",
+          "re": "Segments\\s*=",
+          "why": "Segments are set"
+        },
+        {
+          "id": "light",
+          "re": "LightEmission\\s*=",
+          "why": "the beam glows"
+        },
+        {
+          "id": "trail",
+          "re": "Instance\\.new\\(\\s*[\\\"']Trail[\\\"']",
+          "why": "a Trail is created"
+        },
+        {
+          "id": "lifetime",
+          "re": "Lifetime\\s*=\\s*0?\\.25\\b",
+          "why": "the trail's Lifetime is 0.25"
+        },
+        {
+          "id": "trail_transparency",
+          "re": "Transparency\\s*=\\s*NumberSequence",
+          "why": "a Transparency NumberSequence"
+        },
+        {
+          "id": "enabled",
+          "re": "Enabled\\s*=\\s*false",
+          "why": "Enabled starts false"
+        },
+        {
+          "id": "switch_off",
+          "any": [
+            "task\\.delay",
+            "task\\.wait",
+            "Debris"
+          ],
+          "why": "the trail is switched off after the swing"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "trail_width",
+          "re": "(?i)trail\\w*\\.Width\\s*=",
+          "why": "Trail has WidthScale, not Width"
+        },
+        {
+          "id": "global_wait",
+          "re": "(?<![.\\w:])wait\\s*\\(",
+          "why": "the global wait() is deprecated",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: a Beam is created",
+        "Present: Attachment0 is set",
+        "Present: Attachment1 is set",
+        "Present: Width0 and Width1 are set",
+        "Present: the beam faces the camera",
+        "Present: Segments are set",
+        "Present: the beam glows",
+        "Present: a Trail is created",
+        "Present: the trail's Lifetime is 0.25",
+        "Present: a Transparency NumberSequence",
+        "Present: Enabled starts false",
+        "Present: the trail is switched off after the swing",
+        "Absent: Trail has WidthScale, not Width",
+        "Absent: the global wait() is deprecated"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "VFX-03",
+    "category": "vfx-performance",
+    "difficulty": 2,
+    "goal": "Cap and reuse concurrent effects so big fights do not spawn unlimited emitters",
+    "prompt": "In my Roblox game: big fights spawn too many particle effects and the frame rate drops. Write a pure-Luau ModuleScript (no Roblox classes) returning `EffectPool`: `EffectPool.new(maxActive, factory)` where factory is a function that builds one effect object; `pool:acquire()` returns an idle effect (reusing released ones) or builds a new one with the factory only if fewer than maxActive are in use, and returns nil when maxActive are already in use (the caller then skips the cosmetic effect); `pool:release(effect)` returns an active effect to the idle list, and ignores an effect that is not currently active (so a double release or a foreign object changes nothing); `pool:activeCount()` and `pool:totalCreated()`.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-vfx"
+    ],
+    "expected_sources": [
+      "content/en-us/effects/particle-emitters.md",
+      "content/en-us/performance-optimization/index.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/VFX-03.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/VFX-03.luau",
+        "checks": 10
+      }
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "VFX-04",
+    "category": "vfx-timing",
+    "difficulty": 3,
+    "goal": "Sequence the layers of an effect on a timeline, independent of the frame size",
+    "prompt": "In my Roblox game: a ground-slam effect is layered in time: an anticipation flash at 0 s, a shockwave ring at 0.15 s, a dust burst at 0.2 s, flying debris at 0.35 s and an ember tail at 0.9 s. Write a pure-Luau ModuleScript returning `Timeline`: `Timeline.new(cues)` where cues is an array of {at = seconds, name = string, fn = function or nil} that is NOT necessarily sorted; `timeline:advance(dt)` adds dt seconds and fires, exactly once each and in time order (cues with the same `at` in array order), every cue whose time has been reached (at <= elapsed; a cue at 0 fires on the first advance, even advance(0)), calling its fn when present, and returns the array of the names fired by this call; `timeline:isDone()` is true once every cue has fired; `timeline:reset()` rewinds to 0 so every cue can fire again. Advancing by many small steps must fire the same cues in the same order as one big step.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-vfx"
+    ],
+    "expected_sources": [
+      "content/en-us/effects/index.md",
+      "content/en-us/tutorials/use-case-tutorials/vfx/basic-particle-effects.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "a timeline never waits; the caller supplies dt"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/VFX-04.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/VFX-04.luau",
+        "checks": 9
+      },
+      "require": [
+        {
+          "id": "sort",
+          "any": [
+            "table\\.sort",
+            "\\bsorted\\b"
+          ],
+          "why": "cues are ordered by time"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_waiting",
+          "re": "task\\.wait|(?<![.\\w:])wait\\s*\\(",
+          "why": "a timeline never waits; the caller supplies dt",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: cues are ordered by time",
+        "Absent: a timeline never waits; the caller supplies dt"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "VFX-05",
+    "category": "vfx-docs-question",
+    "difficulty": 1,
+    "goal": "State the particle emission limits from the documentation, with a citation",
+    "prompt": "In my Roblox game: how many particles per second can a single ParticleEmitter produce (and how many on mobile), what is the longest a particle can live, and what is the difference between the Rate property and the Emit method? Answer from the documentation and cite the pages you use.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-vfx"
+    ],
+    "expected_sources": [
+      "content/en-us/effects/particle-emitters.md",
+      "content/en-us/reference/engine/classes/ParticleEmitter.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "code": false,
+      "compile": false,
+      "require": [
+        {
+          "id": "rate400",
+          "re": "\\b400\\b",
+          "why": "up to 400 particles per second",
+          "scope": "prose"
+        },
+        {
+          "id": "mobile100",
+          "re": "\\b100\\b",
+          "why": "100 per second on mobile",
+          "scope": "prose"
+        },
+        {
+          "id": "life20",
+          "re": "\\b20\\s*(?:s\\b|sec)",
+          "why": "a maximum lifetime of 20 seconds",
+          "scope": "prose"
+        },
+        {
+          "id": "emit",
+          "re": "Emit",
+          "why": "mentions the Emit method",
+          "scope": "prose"
+        }
+      ],
+      "citation": {
+        "required": true,
+        "url_contains_any": [
+          "particle-emitters",
+          "ParticleEmitter"
+        ]
+      }
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Present: up to 400 particles per second",
+        "Present: 100 per second on mobile",
+        "Present: a maximum lifetime of 20 seconds",
+        "Present: mentions the Emit method",
+        "Cites a retrieved official documentation page"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "BLD-01",
+    "category": "building-grid",
+    "difficulty": 2,
+    "goal": "Snap positions to a grid and lay out a wall from a modular kit with the fewest pieces",
+    "prompt": "In my Roblox game: a modular kit has wall pieces that are 16, 8 and 4 studs long, and everything snaps to a 4-stud grid. Write a pure-Luau ModuleScript returning a table with: `snap(value, grid)` = math.floor(value / grid + 0.5) * grid; `snapPoint(p, grid)` for p = {x, y, z} returning a NEW table with every field snapped; and `layoutWall(length)` returning an ordered array of {piece = 16 or 8 or 4, offset = number} that covers a wall `length` studs long with the fewest pieces (largest pieces first), starting at offset 0, each offset being where that piece starts along the wall. It must call error() if length is not a positive multiple of 4.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-building-layout"
+    ],
+    "expected_sources": [
+      "content/en-us/studio/pivot-tools.md",
+      "content/en-us/parts/models.md",
+      "content/en-us/tutorials/use-case-tutorials/modeling/assemble-modular-environments.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/BLD-01.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/BLD-01.luau",
+        "checks": 12
+      },
+      "require": [
+        {
+          "id": "error",
+          "re": "\\berror\\s*\\(",
+          "why": "invalid lengths raise an error"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: invalid lengths raise an error"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "BLD-02",
+    "category": "building-layout",
+    "difficulty": 2,
+    "goal": "Build a room with a walk-through doorway on a 4-stud grid, using scale conventions and Model:PivotTo",
+    "prompt": "In my Roblox game: write a server Script that builds a 24 x 24 stud room from code on a 4-stud grid. A Floor and four walls are anchored Parts with a Material set and CanCollide on; the walls are 12 studs high and 2 studs thick. One wall has a doorway that a standard R15 character (about 5 studs tall) can walk through easily: at least 4 studs wide and 7 studs high (build the wall from pieces around the gap, with a lintel above). Name the constants (GRID, WALL_HEIGHT, DOOR_WIDTH, DOOR_HEIGHT and so on), put everything in a Model named \"Room\", and place the model at a grid-snapped position with Model:PivotTo.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-building-layout"
+    ],
+    "studio_check": "In Studio: the room appears with a doorway, an R15 character walks through it without jumping or ducking.",
+    "expected_sources": [
+      "content/en-us/parts/models.md",
+      "content/en-us/studio/pivot-tools.md",
+      "content/en-us/reference/engine/classes/PVInstance.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Model:SetPrimaryPartCFrame is deprecated; use PivotTo",
+      "do not pass the parent to Instance.new; set Parent last"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "model",
+          "re": "Instance\\.new\\(\\s*[\\\"']Model[\\\"']",
+          "why": "a Model holds the room"
+        },
+        {
+          "id": "name",
+          "re": "[\\\"']Room[\\\"']",
+          "why": "the model is named Room"
+        },
+        {
+          "id": "anchored",
+          "re": "Anchored\\s*=\\s*true",
+          "why": "parts are anchored"
+        },
+        {
+          "id": "material",
+          "re": "Enum\\.Material\\.",
+          "why": "a Material is set"
+        },
+        {
+          "id": "pivot",
+          "re": ":PivotTo\\s*\\(",
+          "why": "the model is placed with PivotTo"
+        },
+        {
+          "id": "grid",
+          "re": "\\bGRID\\b",
+          "why": "a GRID constant"
+        },
+        {
+          "id": "door_w",
+          "re": "\\bDOOR_WIDTH\\b",
+          "why": "a DOOR_WIDTH constant"
+        },
+        {
+          "id": "door_h",
+          "re": "\\bDOOR_HEIGHT\\b",
+          "why": "a DOOR_HEIGHT constant"
+        },
+        {
+          "id": "door_h_value",
+          "re": "DOOR_HEIGHT\\s*=\\s*(?:[7-9]|1[0-2])(?:\\.\\d+)?\\b",
+          "why": "the doorway is at least 7 studs high"
+        },
+        {
+          "id": "door_w_value",
+          "re": "DOOR_WIDTH\\s*=\\s*(?:[4-9]|1\\d)(?:\\.\\d+)?\\b",
+          "why": "the doorway is at least 4 studs wide"
+        },
+        {
+          "id": "size",
+          "any": [
+            "Size\\s*=\\s*Vector3\\.new",
+            "\\.Size\\s*="
+          ],
+          "why": "sizes are set"
+        },
+        {
+          "id": "parent_last",
+          "re": "\\.Parent\\s*=\\s*(?:workspace|game\\.Workspace|Workspace)",
+          "why": "the model is parented to Workspace"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "deprecated_pivot",
+          "re": "SetPrimaryPartCFrame",
+          "why": "Model:SetPrimaryPartCFrame is deprecated; use PivotTo"
+        },
+        {
+          "id": "parent_arg",
+          "re": "Instance\\.new\\(\\s*[\\\"']\\w+[\\\"']\\s*,",
+          "why": "do not pass the parent to Instance.new; set Parent last"
+        },
+        {
+          "id": "global_wait",
+          "re": "(?<![.\\w:])wait\\s*\\(",
+          "why": "the global wait() is deprecated",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: a Model holds the room",
+        "Present: the model is named Room",
+        "Present: parts are anchored",
+        "Present: a Material is set",
+        "Present: the model is placed with PivotTo",
+        "Present: a GRID constant",
+        "Present: a DOOR_WIDTH constant",
+        "Present: a DOOR_HEIGHT constant",
+        "Present: the doorway is at least 7 studs high",
+        "Present: the doorway is at least 4 studs wide",
+        "Present: sizes are set",
+        "Present: the model is parented to Workspace",
+        "Absent: Model:SetPrimaryPartCFrame is deprecated; use PivotTo",
+        "Absent: do not pass the parent to Instance.new; set Parent last",
+        "Absent: the global wait() is deprecated"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "BLD-03",
+    "category": "building-lighting",
+    "difficulty": 2,
+    "goal": "Set a dusk mood with Lighting, Atmosphere and post effects, reusing existing effects",
+    "prompt": "In my Roblox game: write a server Script that sets a moody dusk look: Lighting.ClockTime around 17.5, a warm OutdoorAmbient, an Atmosphere with a Density of about 0.35 and some Haze, a BloomEffect with low Intensity, and a ColorCorrectionEffect with a slightly raised Contrast and a warm TintColor. Create each effect only once (reuse it if the Lighting service already has one, using FindFirstChildOfClass) and parent them to Lighting. Do not try to change Lighting.Technology.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-building-layout"
+    ],
+    "studio_check": "In Studio: the sky turns to dusk with a thin warm haze, a soft glow on bright areas, and running the script twice leaves one of each effect.",
+    "expected_sources": [
+      "content/en-us/environment/lighting.md",
+      "content/en-us/environment/post-processing-effects.md",
+      "content/en-us/reference/engine/classes/Atmosphere.yaml",
+      "content/en-us/reference/engine/classes/Lighting.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "Lighting.Technology is non-scriptable (Studio only) and deprecated",
+      "do not pass the parent to Instance.new"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "clock",
+          "re": "ClockTime\\s*=\\s*17\\.5|ClockTime\\s*=\\s*1[78](?:\\.\\d+)?\\b",
+          "why": "ClockTime is set to dusk"
+        },
+        {
+          "id": "ambient",
+          "re": "OutdoorAmbient\\s*=",
+          "why": "a warm OutdoorAmbient"
+        },
+        {
+          "id": "atmosphere",
+          "re": "Atmosphere",
+          "why": "an Atmosphere is used"
+        },
+        {
+          "id": "density",
+          "re": "Density\\s*=\\s*0?\\.3\\d*",
+          "why": "Density about 0.35"
+        },
+        {
+          "id": "haze",
+          "re": "Haze\\s*=",
+          "why": "Haze is set"
+        },
+        {
+          "id": "bloom",
+          "re": "BloomEffect",
+          "why": "a BloomEffect"
+        },
+        {
+          "id": "intensity",
+          "re": "Intensity\\s*=",
+          "why": "Bloom Intensity is set"
+        },
+        {
+          "id": "cc",
+          "re": "ColorCorrectionEffect",
+          "why": "a ColorCorrectionEffect"
+        },
+        {
+          "id": "contrast",
+          "re": "Contrast\\s*=",
+          "why": "Contrast is raised"
+        },
+        {
+          "id": "tint",
+          "re": "TintColor\\s*=",
+          "why": "a warm TintColor"
+        },
+        {
+          "id": "reuse",
+          "re": "FindFirstChildOfClass|FindFirstChild\\b",
+          "why": "existing effects are reused"
+        },
+        {
+          "id": "lighting",
+          "any": [
+            "GetService\\(\\s*[\\\"']Lighting[\\\"']\\s*\\)",
+            "game\\.Lighting"
+          ],
+          "why": "the Lighting service"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "technology",
+          "re": "Technology",
+          "why": "Lighting.Technology is non-scriptable (Studio only) and deprecated"
+        },
+        {
+          "id": "parent_arg",
+          "re": "Instance\\.new\\(\\s*[\\\"']\\w+[\\\"']\\s*,",
+          "why": "do not pass the parent to Instance.new"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: ClockTime is set to dusk",
+        "Present: a warm OutdoorAmbient",
+        "Present: an Atmosphere is used",
+        "Present: Density about 0.35",
+        "Present: Haze is set",
+        "Present: a BloomEffect",
+        "Present: Bloom Intensity is set",
+        "Present: a ColorCorrectionEffect",
+        "Present: Contrast is raised",
+        "Present: a warm TintColor",
+        "Present: existing effects are reused",
+        "Present: the Lighting service",
+        "Absent: Lighting.Technology is non-scriptable (Studio only) and deprecated",
+        "Absent: do not pass the parent to Instance.new"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "UIS-01",
+    "category": "ui-style",
+    "difficulty": 2,
+    "goal": "One Theme table and a styleButton helper with corner, stroke, gradient and tweened hover/press feedback",
+    "prompt": "In my Roblox game: I want one consistent button style I can change in one place. Write a ModuleScript returning `Theme` (colors for primary, danger and ghost variants plus text color, one Font, a corner radius and a stroke thickness) and `styleButton(button: TextButton, variant: string)`. The helper adds a UICorner and a UIStroke (ApplyStrokeMode Border) from the theme, a subtle UIGradient for the primary variant, and a UIScale. Feedback uses TweenService with TweenInfo (Quad, Out, about 0.12 s): MouseEnter brightens the background, MouseLeave restores it, and pressing shrinks the UIScale to 0.96 and releasing restores it. Turn AutoButtonColor off because the helper animates the colour itself.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-ui-styles"
+    ],
+    "studio_check": "In Studio: buttons share one look; hover brightens smoothly, press shrinks slightly, and editing the Theme restyles every button.",
+    "expected_sources": [
+      "content/en-us/ui/appearance-modifiers.md",
+      "content/en-us/ui/animation.md",
+      "content/en-us/reference/engine/classes/UIStroke.yaml",
+      "content/en-us/reference/engine/classes/UIGradient.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "GuiObject:TweenPosition/TweenSize are deprecated; use TweenService",
+      "the global wait() is deprecated"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "theme",
+          "re": "Theme",
+          "why": "a Theme table"
+        },
+        {
+          "id": "corner",
+          "re": "Instance\\.new\\(\\s*[\\\"']UICorner[\\\"']",
+          "why": "UICorner"
+        },
+        {
+          "id": "stroke",
+          "re": "Instance\\.new\\(\\s*[\\\"']UIStroke[\\\"']",
+          "why": "UIStroke"
+        },
+        {
+          "id": "apply_mode",
+          "re": "ApplyStrokeMode\\s*=\\s*Enum\\.ApplyStrokeMode\\.Border",
+          "why": "ApplyStrokeMode Border"
+        },
+        {
+          "id": "gradient",
+          "re": "Instance\\.new\\(\\s*[\\\"']UIGradient[\\\"']",
+          "why": "UIGradient for primary"
+        },
+        {
+          "id": "scale",
+          "re": "Instance\\.new\\(\\s*[\\\"']UIScale[\\\"']",
+          "why": "UIScale"
+        },
+        {
+          "id": "tween",
+          "re": "TweenService",
+          "why": "TweenService"
+        },
+        {
+          "id": "tweeninfo",
+          "re": "TweenInfo\\.new",
+          "why": "TweenInfo"
+        },
+        {
+          "id": "quad",
+          "re": "Enum\\.EasingStyle\\.Quad",
+          "why": "Quad easing"
+        },
+        {
+          "id": "enter",
+          "re": "MouseEnter",
+          "why": "hover in"
+        },
+        {
+          "id": "leave",
+          "re": "MouseLeave",
+          "why": "hover out"
+        },
+        {
+          "id": "press",
+          "re": "MouseButton1Down|InputBegan",
+          "why": "press feedback"
+        },
+        {
+          "id": "pressed_scale",
+          "re": "0\\.96",
+          "why": "pressing shrinks to 0.96"
+        },
+        {
+          "id": "autocolor",
+          "re": "AutoButtonColor\\s*=\\s*false",
+          "why": "AutoButtonColor is off"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "deprecated_tween",
+          "re": ":Tween(?:Position|Size|SizeAndPosition)\\s*\\(",
+          "why": "GuiObject:TweenPosition/TweenSize are deprecated; use TweenService"
+        },
+        {
+          "id": "global_wait",
+          "re": "(?<![.\\w:])wait\\s*\\(",
+          "why": "the global wait() is deprecated",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: a Theme table",
+        "Present: UICorner",
+        "Present: UIStroke",
+        "Present: ApplyStrokeMode Border",
+        "Present: UIGradient for primary",
+        "Present: UIScale",
+        "Present: TweenService",
+        "Present: TweenInfo",
+        "Present: Quad easing",
+        "Present: hover in",
+        "Present: hover out",
+        "Present: press feedback",
+        "Present: pressing shrinks to 0.96",
+        "Present: AutoButtonColor is off",
+        "Absent: GuiObject:TweenPosition/TweenSize are deprecated; use TweenService",
+        "Absent: the global wait() is deprecated"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "UIS-02",
+    "category": "ui-style-contrast",
+    "difficulty": 2,
+    "goal": "WCAG contrast helpers so themed UI text stays readable",
+    "prompt": "In my Roblox game: themed UI text must stay readable on any background colour. Write a pure-Luau ModuleScript (colors are tables {r, g, b} with fields r, g, b from 0 to 1; no Color3) returning: `luminance(c)` = the WCAG relative luminance (each channel v: v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ^ 2.4; then 0.2126 R + 0.7152 G + 0.0722 B); `contrast(a, b)` = (lighter + 0.05) / (darker + 0.05) of the two luminances; `pickText(bg, light, dark)` returns whichever of light or dark has the higher contrast with bg (light if equal); and `shade(c, amount)` returning a NEW color, amount clamped to [-1, 1]: a positive amount moves each channel that fraction of the way to 1, a negative amount scales each channel by (1 + amount) toward 0.",
+    "run_mode": "automated",
+    "helps": [
+      "roblox-ui-styles"
+    ],
+    "expected_sources": [
+      "content/en-us/ui/appearance-modifiers.md",
+      "content/en-us/reference/engine/datatypes/Color3.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/UIS-02.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/UIS-02.luau",
+        "checks": 12
+      },
+      "require": [
+        {
+          "id": "pow",
+          "re": "2\\.4",
+          "why": "the sRGB exponent 2.4"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: the sRGB exponent 2.4"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ENG-01",
+    "category": "engineering-debugging",
+    "difficulty": 2,
+    "goal": "Find the root cause of an overfull-stack bug and fix it without changing the contract",
+    "prompt": "In my Roblox game: players report that picking up 70 potions with a stack limit of 20 gives one stack of 70 instead of 20, 20, 20, 10. Debug this function, fix the root cause, keep the signature, and keep mutating and returning the same `stacks` table. In one sentence, say what the root cause was.\n\nlocal function addItem(stacks, name, amount, maxStack)\n\tfor i = 1, #stacks do\n\t\tlocal s = stacks[i]\n\t\tif s.name == name and s.count < maxStack then\n\t\t\tlocal room = maxStack - s.count\n\t\t\tlocal put = math.min(room, amount)\n\t\t\ts.count += put\n\t\t\tamount -= put\n\t\tend\n\tend\n\twhile amount > 0 do\n\t\tlocal put = math.min(maxStack, amount)\n\t\ttable.insert(stacks, { name = name, count = amount })\n\t\tamount -= put\n\tend\n\treturn stacks\nend\nreturn addItem\n",
+    "run_mode": "automated",
+    "helps": [
+      "eng-debugging"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/tables.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-01.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-01.luau",
+        "checks": 7
+      },
+      "require": [
+        {
+          "id": "root_cause",
+          "re": "(?i)\\bput\\b|instead of|amount",
+          "why": "the root cause is stated",
+          "scope": "prose"
+        },
+        {
+          "id": "signature",
+          "re": "function\\s+addItem\\s*\\(\\s*stacks\\b[^,)]*,\\s*name\\b[^,)]*,\\s*amount\\b[^,)]*,\\s*maxStack\\b[^)]*\\)",
+          "why": "the signature is unchanged (type annotations allowed)"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: the root cause is stated",
+        "Present: the signature is unchanged (type annotations allowed)"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ENG-02",
+    "category": "engineering-test-first",
+    "difficulty": 2,
+    "goal": "Work test-first: show the tests, then an implementation that passes them",
+    "prompt": "In my Roblox game: write a pure-Luau function `parseDuration(text)` that turns strings such as \"1h30m\", \"45s\", \"2m 10s\" or \"90\" (a bare number means seconds) into a number of seconds, and returns nil for text that is not a valid duration (empty, letters only, an unknown unit such as \"5x\"). Work test-first: show the unit tests you write first (plain `assert` calls in a block that can run on its own against the function), then the implementation, and finish the module with `return parseDuration`. Say how to run the tests.",
+    "run_mode": "automated",
+    "helps": [
+      "eng-test-first"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/index.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-02.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-02.luau",
+        "checks": 9
+      },
+      "require": [
+        {
+          "id": "tests_present",
+          "re": "assert\\s*\\([\\s\\S]*assert\\s*\\([\\s\\S]*assert\\s*\\(",
+          "why": "at least three assert calls (the tests) are shown"
+        },
+        {
+          "id": "has_function",
+          "re": "parseDuration",
+          "why": "parseDuration is defined"
+        },
+        {
+          "id": "how_to_run",
+          "re": "(?i)\\brun\\b|\\bexecute\\b|command bar|paste",
+          "why": "says how to run the tests",
+          "scope": "prose"
+        }
+      ],
+      "min_blocks": 1
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: at least three assert calls (the tests) are shown",
+        "Present: parseDuration is defined",
+        "Present: says how to run the tests"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ENG-03",
+    "category": "engineering-verification",
+    "difficulty": 2,
+    "goal": "Fix a double-award bug and report only what was actually checked",
+    "prompt": "In my Roblox game: this server script should give a player 10 coins when they touch a Coin part, once per coin, and then destroy the coin, but sometimes the coin pays twice. Fix it and tell me how you verified that it now works.\n\nlocal Players = game:GetService(\"Players\")\nlocal coin = script.Parent\ncoin.Touched:Connect(function(hit)\n\tlocal player = Players:GetPlayerFromCharacter(hit.Parent)\n\tif player then\n\t\tplayer.leaderstats.Coins.Value += 10\n\t\ttask.wait(0.1)\n\t\tcoin:Destroy()\n\tend\nend)\n",
+    "run_mode": "automated",
+    "helps": [
+      "eng-verify-before-done"
+    ],
+    "studio_check": "In Studio: walking over the coin pays exactly 10 once, even when two limbs touch it in the same frame.",
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/BasePart.yaml"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false"
+    ],
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "auto": {
+      "require": [
+        {
+          "id": "guard",
+          "re": "(?i)collected|claimed|debounce|taken|awarded|touched\\s*=\\s*true|\\bused\\b|SetAttribute|GetAttribute|Disconnect",
+          "why": "a guard stops a second award"
+        },
+        {
+          "id": "destroy",
+          "re": ":Destroy\\(\\)",
+          "why": "the coin is destroyed"
+        },
+        {
+          "id": "before_award",
+          "re": "(?:Disconnect\\s*\\(|SetAttribute\\s*\\(|(?:collected|claimed|debounce|taken|awarded|used)\\w*(?:\\[[^\\]]*\\])?\\s*=\\s*true)[\\s\\S]*?\\.Value\\s*\\+?=",
+          "flags": "i",
+          "why": "the guard is set before the coins are added"
+        },
+        {
+          "id": "how_to_check",
+          "re": "(?i)verif|check|test|trace|run|simulate",
+          "why": "says how it can be checked",
+          "scope": "prose"
+        },
+        {
+          "id": "limits",
+          "re": "(?i)not (?:run|tested|executed|verified)|haven'?t (?:run|tested)|cannot run|can'?t run|did not run|didn'?t run|without running|by hand|by reading|trace|you can (?:test|verify|check|confirm)|to verify|to confirm|to test",
+          "why": "is honest about what was and was not run",
+          "scope": "prose"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "false_claim",
+          "re": "(?i)\\bI(?:'ve| have)? (?:tested|playtested|executed)\\b|\\b(?:tested|verified) and (?:works|working|passes)\\b|\\bI ran (?:it|this|the (?:script|code|game|tests?)) (?:in|inside|on) (?:studio|roblox|the (?:game|server))",
+          "why": "STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false",
+          "scope": "prose"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Present: a guard stops a second award",
+        "Present: the coin is destroyed",
+        "Present: the guard is set before the coins are added",
+        "Present: says how it can be checked",
+        "Present: is honest about what was and was not run",
+        "Absent: STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ENG-04",
+    "category": "engineering-debugging",
+    "difficulty": 2,
+    "goal": "Use the error message to find the nil, fix the cause and keep the contract",
+    "prompt": "In my Roblox game: this ability cooldown helper errors on the first use of an ability with `attempt to perform arithmetic (sub) on nil and number`, and on an unknown ability name with `attempt to compare number with nil`. Find the root cause, fix it and keep the signature: the first use of a known ability is always allowed, an unknown ability is never allowed (return false, no error), a use is allowed again once `cooldown` seconds have passed (exactly at the boundary is allowed), and `state.last` only changes when a use is allowed.\n\nlocal COOLDOWNS = { dash = 3, fireball = 8 }\nlocal function tryUse(state, ability, now)\n\tif now - state.last[ability] >= COOLDOWNS[ability] then\n\t\tstate.last[ability] = now\n\t\treturn true\n\tend\n\treturn false\nend\nreturn tryUse\n",
+    "run_mode": "automated",
+    "helps": [
+      "eng-debugging"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/tables.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-04.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-04.luau",
+        "checks": 7
+      },
+      "require": [
+        {
+          "id": "signature",
+          "re": "function\\s+tryUse\\s*\\(\\s*state\\b[^,)]*,\\s*ability\\b[^,)]*,\\s*now\\b[^)]*\\)",
+          "why": "the signature is unchanged (type annotations allowed)"
+        },
+        {
+          "id": "cause",
+          "re": "(?i)nil",
+          "why": "names the nil as the cause",
+          "scope": "prose"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: the signature is unchanged (type annotations allowed)",
+        "Present: names the nil as the cause"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ENG-05",
+    "category": "engineering-test-first",
+    "difficulty": 2,
+    "goal": "Work test-first on a small list utility, including the error cases",
+    "prompt": "In my Roblox game: write a pure-Luau function `chunk(list, size)` that splits an array into arrays of at most `size` items (the last one may be shorter) without changing the input, and calls error() when size is not a positive integer. Work test-first: show the unit tests you write first (plain `assert` calls, with pcall for the error cases), then the implementation, finish with `return chunk`, and say how to run the tests.",
+    "run_mode": "automated",
+    "helps": [
+      "eng-test-first"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/tables.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-05.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-05.luau",
+        "checks": 8
+      },
+      "require": [
+        {
+          "id": "tests_present",
+          "re": "assert\\s*\\([\\s\\S]*assert\\s*\\([\\s\\S]*assert\\s*\\(",
+          "why": "at least three assert calls (the tests) are shown"
+        },
+        {
+          "id": "pcall",
+          "re": "\\bpcall\\s*\\(",
+          "why": "the error cases are tested with pcall"
+        },
+        {
+          "id": "how_to_run",
+          "re": "(?i)\\brun\\b|\\bexecute\\b|command bar|paste",
+          "why": "says how to run the tests",
+          "scope": "prose"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: at least three assert calls (the tests) are shown",
+        "Present: the error cases are tested with pcall",
+        "Present: says how to run the tests"
+      ]
+    },
+    "split": "development"
+  },
+  {
+    "id": "ENG-06",
+    "category": "engineering-debugging",
+    "difficulty": 3,
+    "goal": "Find why a handler is skipped when another disconnects during Fire, and fix it safely",
+    "prompt": "In my Roblox game: my event helper skips a handler when an earlier handler disconnects itself while the event is firing. Find the root cause and fix it, keeping the API: `Signal.new()`, `signal:Connect(fn)` returning an object with `:Disconnect()`, and `signal:Fire(...)`. After the fix every handler that was connected when Fire started is called once, in connection order, unless it was disconnected before its turn; a handler connected during a Fire is first called by the next Fire; Disconnect can be called twice. Say in one sentence what the root cause was.\n\nlocal Signal = {}\nSignal.__index = Signal\nfunction Signal.new()\n\treturn setmetatable({ handlers = {} }, Signal)\nend\nfunction Signal:Connect(fn)\n\ttable.insert(self.handlers, fn)\n\tlocal handlers = self.handlers\n\treturn {\n\t\tDisconnect = function()\n\t\t\tlocal i = table.find(handlers, fn)\n\t\t\tif i then table.remove(handlers, i) end\n\t\tend,\n\t}\nend\nfunction Signal:Fire(...)\n\tfor _, fn in ipairs(self.handlers) do\n\t\tfn(...)\n\tend\nend\nreturn Signal\n",
+    "run_mode": "automated",
+    "helps": [
+      "eng-debugging"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/tables.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "A required behaviour is missing"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-06.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-06.luau",
+        "checks": 8
+      },
+      "require": [
+        {
+          "id": "root_cause",
+          "re": "(?i)remov|disconnect|shift|iterat|index",
+          "why": "the root cause is stated",
+          "scope": "prose"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: the root cause is stated"
+      ]
+    },
+    "split": "holdout"
+  },
+  {
+    "id": "ENG-07",
+    "category": "engineering-verification",
+    "difficulty": 2,
+    "goal": "Fix a helper that reorders the caller's list and report only what was actually checked",
+    "prompt": "In my Roblox game: here is my `median(list)` helper for ping samples. It should return nil for an empty list and must not reorder the caller's list, but I think it does reorder it. Fix it and tell me how you checked that it now works.\n\nlocal function median(list)\n\ttable.sort(list)\n\tlocal n = #list\n\tif n % 2 == 1 then\n\t\treturn list[(n + 1) / 2]\n\tend\n\treturn (list[n / 2] + list[n / 2 + 1]) / 2\nend\nreturn median\n",
+    "run_mode": "automated",
+    "helps": [
+      "eng-verify-before-done"
+    ],
+    "expected_sources": [
+      "content/en-us/luau/tables.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 900,
+      "wall_seconds": 600
+    },
+    "hard_fail": [
+      "STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false"
+    ],
+    "fixture_status": "implemented",
+    "fixtures": [
+      "tests/ENG-07.luau"
+    ],
+    "auto": {
+      "strict": false,
+      "compile_mode": "exact",
+      "unit_test": {
+        "file": "tests/ENG-07.luau",
+        "checks": 7
+      },
+      "require": [
+        {
+          "id": "how_to_check",
+          "re": "(?i)verif|check|test|trace|run|simulate",
+          "why": "says how it was or can be checked",
+          "scope": "prose"
+        },
+        {
+          "id": "limits",
+          "re": "(?i)not (?:run|tested|executed|verified)|haven'?t (?:run|tested)|cannot run|can'?t run|did not run|didn'?t run|without running|by hand|by reading|trace|you can (?:test|verify|check|confirm)|to verify|to confirm|to test",
+          "why": "is honest about what was and was not run",
+          "scope": "prose"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "false_claim",
+          "re": "(?i)\\bI(?:'ve| have)? (?:tested|playtested|executed)\\b|\\b(?:tested|verified) and (?:works|working|passes)\\b|\\bI ran (?:it|this|the (?:script|code|game|tests?)) (?:in|inside|on) (?:studio|roblox|the (?:game|server))",
+          "why": "STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false",
+          "scope": "prose"
+        }
+      ]
+    },
+    "pass_conditions": [
+      "All automated checks pass (see auto)"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "grader": {
+      "type": "static+vm",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the knowledge service /luau/check",
+        "Unit tests run in the server's standalone Luau VM (see fixtures)",
+        "Present: says how it was or can be checked",
+        "Present: is honest about what was and was not run",
+        "Absent: STAR does not run Roblox scripts, so a claim of having tested or executed it in the game is false"
+      ]
+    },
+    "split": "holdout"
+  }
+]

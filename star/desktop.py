@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QSize, QUrl, QTimer, QPropertyAn
 from PySide6.QtGui import QFont, QIcon, QDesktopServices, QPixmap, QPainter, QLinearGradient, QColor, QPen
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QFrame, QLabel, QPushButton,
     QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QScrollArea, QFileDialog,
-    QComboBox, QCheckBox, QMessageBox, QStackedWidget, QFormLayout, QSpinBox,
+    QComboBox, QCheckBox, QMessageBox, QInputDialog, QStackedWidget, QFormLayout, QSpinBox,
     QSplitter, QListWidget, QListWidgetItem, QSizePolicy, QProgressBar, QGraphicsOpacityEffect)
 
 from .desktop_core import Settings, app_data, Conversations, query_models, run_task, check_studio
@@ -777,7 +777,13 @@ class MainWindow(QMainWindow):
         self.edit_workspace.setChecked(self.cfg.workspace_edit)
         ft.addRow('',self.edit_workspace)
         self.studio_id=QLineEdit(self.cfg.studio_id)
-        self.studio_id.setPlaceholderText('Studio instance ID from Discover Studio instances')
+        self.studio_id.setReadOnly(True)
+        self.studio_id.setPlaceholderText('Choose an open place from Studio discovery')
+        self.studio_target=QComboBox()
+        self.studio_target.addItem('This PC · your Studio','local_pc')
+        self.studio_target.addItem('Practice Studio · configured host','host_launcher')
+        self.studio_target.setCurrentIndex(1 if self.cfg.studio_target=='host_launcher' else 0)
+        ft.addRow('Studio connection',self.studio_target)
         ft.addRow('Roblox Studio ID',self.studio_id)
         self.edit_studio=QCheckBox('Allow routine edits in selected disposable Studio place')
         self.edit_studio.setChecked(self.cfg.studio_edit)
@@ -898,7 +904,8 @@ class MainWindow(QMainWindow):
                     extra.append('Only first 4 images/frames were supplied due to context limits.')
                 text=prompt+'\n\n'+ '\n'.join(extra) if extra else prompt
                 # owner_text: only what was typed can become a lesson, never the transcript added above.
-                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev),owner_text=prompt)
+                return run_task(self.cfg,text,pics,on_event=lambda ev:self._job.event.emit(ev),owner_text=prompt,
+                    studio_configuration_home=self.settings_file.parent)
         self._job=Job(work)
         self.jobs.add(self._job)
         self._job.event.connect(self.worker_event)
@@ -970,15 +977,41 @@ class MainWindow(QMainWindow):
 
     def refresh_tool_info(self):
         self.workspace_status.setText('Workspace: '+(self.cfg.workspace or '(not selected)')+'\nWrite permission: '+('On' if self.cfg.workspace_edit else 'Off'))
-        self.studio_status.setText('Studio ID: '+(self.cfg.studio_id or '(not selected)')+' · Editing: '+('On' if self.cfg.studio_edit else 'Off'))
+        from .studio_connections import TARGETS
+        self.studio_status.setText(TARGETS[self.cfg.studio_target]+' · MCP not checked · Studio: '+(self.cfg.studio_id or '(not selected)'))
 
     def discover_studios(self):
+        if self.busy:return
         self.studio_status.setText('Connecting to Roblox Studio…')
-        self.launch_job(check_studio,self.studios_received)
+        self.launch_job(check_studio,self.studios_received,replace(self.cfg),self.settings_file.parent)
 
     def studios_received(self, result):
-        self.studio_status.setText(json.dumps(result,indent=2,ensure_ascii=False)[:8000])
-        QMessageBox.information(self,'Studio Discovery','Connected. Copy the correct studio_id from the Tools panel into Settings.\nUse a disposable unpublished project.')
+        if self.busy or result.get('target')!=self.cfg.studio_target:return
+        if result.get('state')=='no_instances':
+            self.studio_status.setText('STAR local MCP answered · '+str(result['tool_count'])+' tools · no open Studio. Open your place and check the MCP switch.')
+            return
+        if result.get('state')!='connected':
+            self.studio_status.setText('Studio MCP unavailable or no open Studio. Enable it in Assistant → Manage MCP Servers, then test again.')
+            return
+        choices=result['instances']
+        labels=[str(i+1)+'. '+item['name']+' · '+item['id'][:12] for i,item in enumerate(choices)]
+        chosen,accepted=QInputDialog.getItem(self,'Select Studio','Choose the open place on this connection:',labels,0,False)
+        if not accepted:return
+        identifier=choices[labels.index(chosen)]['id']
+        current=replace(self.cfg)
+        def select():
+            import asyncio
+            from .studio_connections import select_instance
+            return asyncio.run(select_instance(current,identifier,home=self.settings_file.parent))
+        self.launch_job(select,self.studio_selected)
+
+    def studio_selected(self,result):
+        if self.busy or result.get('target')!=self.cfg.studio_target or not result.get('selected_valid'):return
+        self.cfg=replace(self.cfg,studio_id=result['selected_id'],studio_edit=False,studio_luau=False)
+        self.cfg.save(self.settings_file)
+        self.studio_id.setText(self.cfg.studio_id)
+        self.edit_studio.setChecked(False)
+        self.studio_status.setText('Studio MCP responded at the last check · selected place · read only')
 
     def pick_llama_server(self):
         path,_=QFileDialog.getOpenFileName(self,'Select llama-server.exe','','Windows executable (*.exe)')
@@ -1012,17 +1045,24 @@ class MainWindow(QMainWindow):
         new=replace(self.cfg,endpoint=self.endpoint.text().strip(),model=self.model.currentText().strip(),
                      project=self.project_edit.text().strip() or self.cfg.project,
                      workspace=self.workspace.text().strip(),studio_id=self.studio_id.text().strip(),
+                     studio_target=self.studio_target.currentData(),
                      workspace_edit=self.edit_workspace.isChecked(),studio_edit=self.edit_studio.isChecked(),
                      max_calls=self.call_budget.value(),context_chars=self.context_budget.value(),
                      llama_server=self.llama_server.text().strip(),gguf_model=self.gguf_model.text().strip(),
                      gpu_layers=self.gpu_layers.value(), reduced_motion=self.reduce_motion.isChecked())
+        if new.studio_target!=self.cfg.studio_target:
+            new.studio_id='';new.studio_edit=False;new.studio_luau=False
         new.validate();return new
 
     def save_settings(self):
+        if self.busy:
+            self.status.setText('Wait for the current task before changing settings')
+            return
         try:
             candidate=self.read_ui_settings();candidate.save(self.settings_file)
             previous=self.cfg.project
             self.cfg=candidate
+            self.studio_id.setText(candidate.studio_id);self.edit_studio.setChecked(candidate.studio_edit)
             self.status.setText('Settings saved')
             if previous!=self.cfg.project:self.load_chat()
             QMessageBox.information(self,'STAR','Settings saved. No credentials were stored.')

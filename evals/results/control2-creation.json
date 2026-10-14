@@ -1,0 +1,316 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-creation-v1.json",
+  "sha256": "a02bf13beaf51f34f5a11910d38b7a63ee5ca848c6f004d49be1f6b26dcdb262",
+  "tasks_total": 23,
+  "automated": 23,
+  "selected": [
+   "VFX-01",
+   "VFX-02",
+   "ENG-06"
+  ]
+ },
+ "run": {
+  "app_commit": "292b75d48efa0b3ad007809126a5c5d70d7aff5b",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "off",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "237a0cfcb9d5",
+  "started_at": "2026-10-11T11:01:30+00:00",
+  "waited_for_lock_s": 1.4,
+  "finished_at": "2026-10-11T11:07:14+00:00",
+  "rescored_at": "2026-10-11T11:07:54+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "VFX-01": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "3a66ac0dafce73fb",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:emitter",
+     "ok": true
+    },
+    {
+     "id": "require:attachment",
+     "ok": true
+    },
+    {
+     "id": "require:emit",
+     "ok": true
+    },
+    {
+     "id": "require:twenty",
+     "ok": true
+    },
+    {
+     "id": "require:rate0",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": true
+    },
+    {
+     "id": "require:speed",
+     "ok": true
+    },
+    {
+     "id": "require:number_range",
+     "ok": true
+    },
+    {
+     "id": "require:spread",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:size_seq",
+     "ok": true
+    },
+    {
+     "id": "require:transp_seq",
+     "ok": true
+    },
+    {
+     "id": "require:color_seq",
+     "ok": true
+    },
+    {
+     "id": "require:cleanup",
+     "ok": true
+    },
+    {
+     "id": "forbid:invented",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 159.2,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 6566,
+   "answer_sha256": "fb2038e805af8e947c42c830d66faa6c89f6d8481fc3e37c717846851bef6f36",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 311
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the `HitEffect` ModuleScript. It creates a reusable, self-cleaning impact effect using a single Part, an Attachment, and a ParticleEmitter configured for a one-shot burst.\n\n### `HitEffect` ModuleScript\n\n```lua\n--!strict\n\nlocal HitEffect = {}\n\n-- Configuration for the impact spark effect\nlocal CONFIG = {\n\tEmitCount = 20,           -- Number of sparks per burst\n\tLifetimeMin = 0.2,        -- Minimum particle lifespan (seconds)\n\tLifetimeMax = 0.45,       -- Maximum particle lifespan (seconds) - used for cleanup timing\n\tSpeedMin = 20,            -- Minimum initial velocity (studs/s)\n\tSpeedMax = 40,            -- Maximum initial velocity (studs/s)\n\tSpreadAngleX = 180,       -- Horizontal spread (degrees)\n\tSpreadAngleY = 180,       -- Vertical spread (degrees)\n\tDrag = 10,                -- Resistance causing particles to slow down quickly\n\tLightEmission = 0.6,      -- Glow intensity (0 to 1)\n\tSizeSequence = {\t\t\t-- Size over lifetime: Start large, shrink to nothing\n\t\tNumberSequenceKeypoint.new(0, 0.8),\n\t\tNumberSequenceKeypoint.new(1, 0)\n\t},\n\tTransparencySequence = {\t-- Transparency over lifetime: Start invisible (0), become visible, then fade out\n\t\tNumberSequenceKeypoint.new(0, 1),\n\t\tNumberSequenceKeypoint.new(0.1, 0),\n\t\tNumberSequenceKeypoint.new(0.8, 0),\n\t\tNumberSequenceKeypoint.new(1, 1)\n\t},\n\tColorSequence = {\t\t\t-- Color over lifetime: White-Yellow to Orange\n\t\tNumberSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 220)), -- White-Yellow\n\t\tNumberSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 0))    -- Orange\n\t}\n}\n\n-- Internal cache for the effect template\nlocal EffectTemplate = nil\n\n--- Creates the internal Part/Attachment/Emitter template if it doesn't exist.\nlocal function getTemplate(): Part\n\tif EffectTemplate then return EffectTemplate end\n\n\t-- Invisible anchored Part\n\tlocal part = Instance.new(\"Part\")\n\tpart.Name = \"HitEffectTemplate\"\n\tpart.Anchored = true\n\tpart.CanCollide = false\n\tpart.Transparency = 1 -- Invisible\n\tpart.Size = Vector3.new(0, 0, 0) -- Zero size so it doesn't interfere with physics\n\n\t-- Attachment for the emitter to follow the position precisely\n\tlocal attachment = Instance.new(\"Attachment\")\n\tattachment.Name = \"EffectAttachment\"\n\tattachment.Parent = part\n\n\t-- ParticleEmitter\n\tlocal emitter = Instance.new(\"ParticleEmitter\")\n\temitter.Name = \"Sparks\"\n\temitter.Parent = attachment\n\t\n\t-- One-shot configuration\n\temitter.Enabled = false -- Do not emit continuously\n\temitter.Rate = 0        -- Zero rate prevents auto-emission\n\t\n\t-- Movement and Spread\n\temitter.Speed = NumberRange.new(CONFIG.SpeedMin, CONFIG.SpeedMax)\n\temitter.SpreadAngle = Vector2.new(CONFIG.SpreadAngleX, CONFIG.SpreadAngleY)\n\temitter.Drag = CONFIG.Drag\n\t\n\t-- Lifespan\n\temitter.Lifetime = NumberRange.new(CONFIG.LifetimeMin, CONFIG.LifetimeMax)\n\t\n\t-- Visuals: Glow\n\temitter.LightEmission = CONFIG.LightEmission\n\t\n\t-- Visuals: Size (Shrink over life)\n\temitter.Size = NumberSequence.new(CONFIG.SizeSequence)\n\t\n\t-- Visuals: Transparency (Fade in/out over life)\n\temitter.Transparency = NumberSequence.new(CONFIG.TransparencySequence)\n\t\n\t-- Visuals: Color (White-Yellow to Orange)\n\temitter.Color = ColorSequence.new(CONFIG.ColorSequence)\n\n\tEffectTemplate = part\n\treturn part\nend\n\n--- Plays a one-shot impact spark burst at the specified position.\n--- @param position Vector3\nfunction HitEffect.play(position: Vector3)\n\tlocal template = getTemplate()\n\t\n\t-- Clone the template for this specific hit\n\tlocal effectPart = template:Clone()\n\teffectPart.Position = position\n\t\n\t-- Get the emitter from the cloned attachment\n\tlocal attachment = effectPart:FindFirstChild(\"EffectAttachment\")\n\tif not attachment then \n\t\teffectPart:Destroy() \n\t\treturn \n\tend\n\t\n\tlocal emitter = attachment:FindFirstChild(\"Sparks\")\n\tif not emitter then \n\t\teffectPart:Destroy() \n\t\treturn \n\tend\n\n\t-- Emit the sparks\n\temitter:Emit(CONFIG.EmitCount)\n\n\t-- Clean up the part after the longest particle has died\n\t-- We use the Max Lifetime to determine when to destroy the part\n\tlocal cleanupDelay = CONFIG.LifetimeMax\n\t\n\ttask.delay(cleanupDelay, function()\n\t\tif effectPart and effectPart.Parent then\n\t\t\teffectPart:Destroy()\n\t\tend\n\tend)\nend\n\nreturn HitEffect\n```\n\n### Implementation Notes\n\n1.  **Template Pattern**: The `getTemplate()` function ensures we only create the heavy Part/Attachment/Emitter hierarchy once. Subsequent calls just clone the existing object, which is much more performant than creating new Instances every time a hit occurs [1].\n2.  **One-Shot Logic**: The `Rate` is set to `0` and `Enabled` is `false` to prevent continuous emission. We manually trigger the burst using `:Emit(20)` [1].\n3.  **Cleanup**: The script uses `task.delay` with the `LifetimeMax` value (0.45s) to destroy the Part. This ensures the Part is removed from the workspace immediately after the last possible particle has faded, preventing memory leaks from orphaned parts [3].\n4.  **Visuals**:\n    *   **Color**: Uses a `ColorSequence` transitioning from a bright white-yellow (`255, 255, 220`) to a deep orange (`255, 120, 0`) to simulate heat dissipation [4].\n    *   **Size/Transparency**: `NumberSequence` objects are used to make the sparks shrink to nothing and fade out smoothly over their lifespan, rather than disappearing abruptly [3].\n    *   **Glow**: `LightEmission` is set to `0.6` to give the sparks a bright, energetic look without being blinding [3].\n\n### References\n[1] Create explosions with VFX > Emitter setup\n[2] Create explosions with VFX > Test particle bursts\n[3] Use particles for actions > Make particles spread\n[4] Basic particle effects > Particle properties > Color\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Create explosions with VFX > Emitter setup](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#emitter-setup) · cited\n2. [Create explosions with VFX > Test particle bursts](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/use-particles-for-explosions#test-particle-bursts) · cited\n3. [Use particles for actions > Make particles spread](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/using-particles-for-actions#make-particles-spread) · cited\n4. [Basic particle effects > Particle properties > Color](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/basic-particle-effects#color) · cited\n"
+  },
+  "VFX-02": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "0f4572906d24856a",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:beam",
+     "ok": true
+    },
+    {
+     "id": "require:att0",
+     "ok": true
+    },
+    {
+     "id": "require:att1",
+     "ok": true
+    },
+    {
+     "id": "require:width",
+     "ok": true
+    },
+    {
+     "id": "require:face",
+     "ok": true
+    },
+    {
+     "id": "require:segments",
+     "ok": true
+    },
+    {
+     "id": "require:light",
+     "ok": true
+    },
+    {
+     "id": "require:trail",
+     "ok": true
+    },
+    {
+     "id": "require:lifetime",
+     "ok": true
+    },
+    {
+     "id": "require:trail_transparency",
+     "ok": true
+    },
+    {
+     "id": "require:enabled",
+     "ok": true
+    },
+    {
+     "id": "require:switch_off",
+     "ok": true
+    },
+    {
+     "id": "forbid:trail_width",
+     "ok": true
+    },
+    {
+     "id": "forbid:global_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 117.5,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 4751,
+   "answer_sha256": "27611c6ac10e685dbff14c6078c85ef29ba6b70657041b6ba73dc6fa18b10a5c",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 327
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the ModuleScript containing `makeBeam`, `makeTrail`, and `swing`.\n\n```lua\nlocal BeamUtils = {}\n\n--- Creates a red laser beam between two parts.\n--- @param a BasePart\n--- @param b BasePart\n--- @return Beam\nfunction BeamUtils.makeBeam(a: BasePart, b: BasePart): Beam\n\t-- Create Attachments\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Parent = a\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Parent = b\n\n\t-- Create Beam\n\tlocal beam = Instance.new(\"Beam\")\n\tbeam.Attachment0 = attachment0\n\tbeam.Attachment1 = attachment1\n\tbeam.Width0 = 0.1 -- Thin\n\tbeam.Width1 = 0.1 -- Thin\n\tbeam.Segments = 6 -- Several segments for smoothness\n\tbeam.FaceCamera = true\n\tbeam.LightEmission = 1.0 -- Glowing\n\tbeam.Color = Color3.fromRGB(255, 0, 0) -- Red laser\n\tbeam.Texture = \"rbxassetid://6060542021\" -- Laser texture [4]\n\tbeam.Parent = a -- Parent to first part so it moves with it\n\n\treturn beam\nend\n\n--- Creates a Trail on a sword handle.\n--- @param handle BasePart\n--- @return Trail\nfunction BeamUtils.makeTrail(handle: BasePart): Trail\n\t-- Create Attachments on the handle (blade base and tip)\n\t-- Assuming handle is oriented along Z or Y, adjust offsets as needed for your specific model\n\tlocal attachment0 = Instance.new(\"Attachment\")\n\tattachment0.Position = Vector3.new(0, 0, 0.5) -- Blade base\n\tattachment0.Parent = handle\n\n\tlocal attachment1 = Instance.new(\"Attachment\")\n\tattachment1.Position = Vector3.new(0, 0, -0.5) -- Blade tip\n\tattachment1.Parent = handle\n\n\t-- Create Trail\n\tlocal trail = Instance.new(\"Trail\")\n\ttrail.Attachment0 = attachment0\n\ttrail.Attachment1 = attachment1\n\ttrail.Lifetime = 0.25\n\ttrail.Transparency = NumberSequence.new({\n\t\tNumberSequenceKeypoint.new(0, 0),\n\t\tNumberSequenceKeypoint.new(1, 1) -- Fades to fully transparent\n\t})\n\ttrail.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0)) -- Red trail\n\ttrail.Enabled = false -- Off until used\n\ttrail.Parent = handle\n\n\treturn trail\nend\n\n--- Turns a trail on and switches it off after a duration.\n--- @param trail Trail\n--- @param number duration\nfunction BeamUtils.swing(trail: Trail, duration: number)\n\ttrail.Enabled = true\n\ttask.delay(duration, function()\n\t\ttrail.Enabled = false\n\tend)\nend\n\nreturn BeamUtils\n```\n\n### Notes on Implementation:\n1.  **`makeBeam`**:\n    *   Creates `Attachment` instances in each part to define the beam's start and end points [3].\n    *   Sets `Width0` and `Width1` to a small value (0.1) for a \"thin\" look.\n    *   Sets `Segments` to 6 to provide a smooth, curved appearance if the parts move [3].\n    *   Enables `FaceCamera` so the laser remains visible from all angles [4].\n    *   Sets `LightEmission` to 1.0 for a strong glow [4].\n    *   Uses a standard laser texture (`rbxassetid://6060542021`) which is commonly used for sci-fi lasers [4].\n    *   Parents the beam to `a` so it moves with the first part.\n\n2.  **`makeTrail`**:\n    *   Creates two `Attachment` instances on the `handle` part. The positions (0.5 and -0.5 along Z) are placeholders for \"blade base and tip\"; you may need to adjust these based on your sword's specific orientation (e.g., Y-axis instead of Z).\n    *   Sets `Lifetime` to 0.25 seconds.\n    *   Configures `Transparency` with a `NumberSequence` that starts at 0 (opaque) and ends at 1 (transparent) to create a fading tail effect.\n    *   Sets `Color` to a red `ColorSequence`.\n    *   Sets `Enabled` to `false` initially.\n\n3.  **`swing`**:\n    *   Enables the trail immediately.\n    *   Uses `task.delay` to disable it after the specified `duration` seconds.\n\n### References:\n*   [1] Hit detection with lasers > Create the laser part\n*   [2] Create laser beams with VFX\n*   [3] Create engaging experiences > Beams and attachments\n*   [4] Create laser beams with VFX > Customize the beam\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Hit detection with lasers > Create the laser part](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#create-the-laser-part) · cited\n2. [Create laser beams with VFX](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams) · cited\n3. [Create engaging experiences > Beams and attachments](https://create.roblox.com/docs/education/build-it-play-it-mansion-of-wonder/creating-engaging-experiences#beams-and-attachments) · cited\n4. [Create laser beams with VFX > Customize the beam](https://create.roblox.com/docs/tutorials/use-case-tutorials/vfx/laser-traps-with-beams#customize-the-beam) · cited\n"
+  },
+  "ENG-06": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "636105e93ac0f499",
+   "reasons": [
+    "unit_tests: 5/8 passed; failed: the second Fire calls only the remaining handlers; a handler disconnected before its turn is not called; a handler connected during Fire waits for the next Fire"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "unit_tests",
+     "ok": false,
+     "detail": "5/8 passed; failed: the second Fire calls only the remaining handlers; a handler disconnected before its turn is not called; a handler connected during Fire waits for the next Fire"
+    },
+    {
+     "id": "require:root_cause",
+     "ok": true
+    }
+   ],
+   "seconds": 66.1,
+   "timings": {
+    "luau_check_s": 0.09,
+    "unit_s": 0.47
+   },
+   "blocks": 1,
+   "answer_chars": 3430,
+   "answer_sha256": "104108d7738cf58e3ab841abad17fd283a090788d3b050bc058aa39098f64da4",
+   "packs": [],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 45
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "The root cause was that `table.remove` shifts subsequent elements down, causing the `ipairs` iterator to skip the next handler.\n\nHere is the fixed implementation. It uses a \"tombstone\" approach (marking handlers as `nil`) to preserve indices during iteration, ensuring that handlers connected before `Fire` starts are called in order, while allowing safe self-disconnection.\n\n```lua\nlocal Signal = {}\nSignal.__index = Signal\n\nfunction Signal.new()\n\treturn setmetatable({ handlers = {} }, Signal)\nend\n\nfunction Signal:Connect(fn)\n\t-- Insert at the end to maintain connection order\n\ttable.insert(self.handlers, fn)\n\t\n\tlocal handlers = self.handlers\n\tlocal disconnected = false\n\t\n\treturn {\n\t\tDisconnect = function()\n\t\t\tif not disconnected then\n\t\t\t\tdisconnected = true\n\t\t\t\t-- Mark as nil to preserve indices for the current iterator\n\t\t\t\t-- but prevent future calls if Fire restarts\n\t\t\t\tfor i, handler in ipairs(handlers) do\n\t\t\t\t\tif handler == fn then\n\t\t\t\t\t\thandlers[i] = nil\n\t\t\t\t\t\tbreak\n\t\t\t\t\tend\n\t\t\t\tend\n\t\t\tend\n\t\tend,\n\t}\nend\n\nfunction Signal:Fire(...)\n\t-- Iterate over a snapshot of the current handlers to ensure\n\t-- every handler connected before Fire started is visited.\n\t-- We use ipairs on the table, but skip nils (tombstones).\n\tfor i, fn in ipairs(self.handlers) do\n\t\tif fn ~= nil then\n\t\t\tfn(...)\n\t\tend\n\tend\nend\n\nreturn Signal\n```\n\n### Explanation of the Fix\n\n1.  **Tombstoning**: Instead of `table.remove` (which shifts indices and causes `ipairs` to skip the next element), we set the handler to `nil`. This preserves the index structure for the `ipairs` iterator.\n2.  **Iterator Safety**: `ipairs` continues to the next index regardless of whether the current value is `nil`. By checking `if fn ~= nil`, we skip disconnected handlers without skipping their neighbors.\n3.  **Double Disconnect Safety**: The `disconnected` flag ensures that calling `Disconnect()` twice does not attempt to find and nil the handler again (which is harmless but redundant) and ensures idempotency.\n4.  **New Handlers**: Handlers connected *during* a `Fire` are appended to the end of the `handlers` table. Since we iterate using `ipairs` on the live table, they will *not* be called in the current `Fire` (as the iterator has already passed their index or they weren't there yet). They will be present for the *next* `Fire`. This matches the standard `RBXScriptSignal` behavior where connections made during an event fire are not executed until the next event.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Events > Disconnect functions from events](https://create.roblox.com/docs/scripting/events#disconnect-functions-from-events) · retrieved, not cited\n2. [Events > Connect functions to events](https://create.roblox.com/docs/scripting/events#connect-functions-to-events) · retrieved, not cited\n3. [Remote events and callbacks > Delivery guarantees > RemoteEvents](https://create.roblox.com/docs/scripting/events/remote#remoteevents) · retrieved, not cited\n4. [Deferred engine events > Common affected code patterns > Listen for the first occurrence of an event](https://create.roblox.com/docs/scripting/events/deferred#listen-for-the-first-occurrence-of-an-event) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 2,
+  "fail": 1,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 0.6667,
+  "median_seconds": 117.5
+ }
+}

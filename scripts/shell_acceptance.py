@@ -25,6 +25,12 @@ Phases (default: all, in this order)
     media      Settings shows where STAR generates (servers or this PC) with the host's notes;
                Create image makes a real picture with ComfyUI on this PC when it is running,
                and shows the host's plain explanation when it is not (no model server needed)
+    settings   Settings > Voice and Settings > Roblox Studio: both sections render from the real host,
+               a voice preview and a voice choice reach the voice engine, the commanding voices appear
+               only after their switch, the STAR Studio server choice shows the state of the connection
+               with nothing to type or store, and "Test connection" answers through the host's own check
+    followup   Fast mode in a new chat: the first message and two follow-up messages, with the time
+               from Enter to the first visible words of each
 
 Safety
     * APPDATA is a fresh folder made by this script; a phase refuses to start
@@ -35,8 +41,16 @@ Safety
     * The server key comes from STAR_SERVER_API_KEY (or --key-file). It is never
       printed. The run fails if the key appears in the page, in a bridge event
       or in a log.
-    * It never clicks anything that leaves the app: no file dialogs, no Studio
-      discovery, no update install, no clipboard writes.
+    * It never clicks anything that leaves the app: no file dialogs, no update
+      install, no clipboard writes, and no Studio discovery on this PC. The settings
+      phase tests the STAR Studio server choice only: first with nothing stored (the
+      host starts nothing), then with a placeholder address under the reserved name
+      `.invalid`, which cannot exist, so the one `ssh` it starts ends at once. An
+      operator's STAR_STUDIO_MCP_COMMAND is removed from every phase's environment,
+      so no phase can reach a real Studio.
+    * The settings phase replaces the loudspeaker (and only the loudspeaker) by a
+      silent sink, so the PC makes no sound; the voice engine and everything else
+      are the real ones. `--audible` plays the preview through the real speakers.
 
 Skipped automatically (exit 0, "SKIPPED: ...") when PySide6 with QtWebEngine,
 the built interface, or the server settings are absent:
@@ -44,6 +58,13 @@ the built interface, or the server settings are absent:
     STAR_SERVER_API_KEY       the server's bearer key (or --key-file PATH)
     STAR_ACCEPTANCE_SERVER    e.g. http://192.168.1.20:8080/v1
     STAR_ACCEPTANCE_MODEL     a model ID that server offers
+
+Optional
+    STAR_VOICE_MODELS            folder with the voice model files (star/voice/engines.py)
+    STAR_ACCEPTANCE_EXTRA_PATH   import folders (os.pathsep-separated) added AFTER the environment's
+                                 own, for optional engines that are installed elsewhere on this PC
+                                 (for example the voice packages); nothing the environment already
+                                 has is replaced
 
 Example
     python scripts/shell_acceptance.py --key-file ~/.star/server_api_key --shots out/screenshots
@@ -67,7 +88,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKER = '.star-shell-acceptance-profile'
-PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade', 'testclose', 'media')
+PHASES = ('first', 'restart', 'agent', 'pages', 'wrongkey', 'midclose', 'afterclose', 'upgrade', 'testclose', 'media',
+          'settings', 'followup')
 CONSOLE_PROBE = 'shell-acceptance console probe'
 ENV_KEY = 'STAR_SERVER_API_KEY'
 ENV_SERVER = 'STAR_ACCEPTANCE_SERVER'
@@ -85,6 +107,9 @@ NOT_WATCHED = re.compile(r"(?:haven't|have not|didn't|did not|can't|cannot|can n
 # "tool" makes the read-only Agent Skills tools available; nothing here asks for Studio or a workspace.
 PROMPT_AGENT = ('Call the star_skill_catalog tool once, then tell me in one short sentence '
                 'how many Agent Skills it returned.')
+PROMPT_FOLLOW_UP = ('And what is 3+3? One short sentence.', 'Now add those two results. One short sentence.')
+ENV_EXTRA_PATH = 'STAR_ACCEPTANCE_EXTRA_PATH'
+ENV_STUDIO_COMMAND = 'STAR_STUDIO_MCP_COMMAND'
 TYPED_WHILE_STREAMING = 'typing while it streams'
 PAGES = (('Projects', 'Your workspaces'), ('Library', 'Your library'), ('Tools', 'Connect your tools'),
          ('Analytics', 'Analytics'), ('Model', 'Model & connection'), ('Settings', 'Settings'))
@@ -433,6 +458,10 @@ class Driver:
             if body.get('kind') == 'result':
                 record['data'] = data if len(raw) < 6000 else {k: (v if not isinstance(v, str) else v[:1500])
                                                                for k, v in data.items()}
+            if body.get('kind') == 'voice':
+                record['voice'] = str(data.get('type', ''))[:40]
+                if isinstance(data.get('message'), str):
+                    record['text'] = data['message'][:600]
         elif isinstance(data, str):
             record['text'] = data[:600]
         self.events.append(record)
@@ -596,7 +625,9 @@ class Driver:
         stream = self.js('__acc.stream') or {}
         events = self.events[turn['mark']:]
         deltas = [e for e in events if e.get('delta_chars')]
-        ended = next((e for e in events if e.get('kind') in ('result', 'error')), None)
+        # Not the end of the turn: the result of the app's own warm-up, which can arrive while a turn runs.
+        ended = next((e for e in events if e.get('kind') == 'error'
+                      or (e.get('kind') == 'result' and 'primed' not in (e.get('data') or {}))), None)
         samples = stream.get('samples') or []
         sent_ms = turn['sent_at'] * 1000
         facts = {'bridge_delta_events': len(deltas), 'visible_updates': len(samples)}
@@ -663,7 +694,10 @@ def step_boot(d: Driver, expect_history: bool = False) -> None:
             s.fact('server_checked_during_start', checked)
             # The app now checks the server by itself at start (warm-up). Its light can turn "Ready" a moment
             # before the warm-up's result event arrives (priming is still running), so both are truthful then.
-            s.check(status.get('state') == 'Ready' if checked else status.get('state') in ('Not checked', 'Ready'),
+            # With a wrong key that same check fails, and the light then says "Needs attention": also the truth.
+            wrong_key = bool(d.real_key) and d.key != d.real_key
+            allowed = ('Not checked', 'Needs attention') if wrong_key else ('Not checked', 'Ready')
+            s.check(status.get('state') == 'Ready' if checked else status.get('state') in allowed,
                     'status is truthful at start: "Not checked" until a real check or reply', status.get('state'))
         else:
             s.check(status.get('state') == 'Offline', 'status says the model on this PC is not running', status.get('state'))
@@ -697,7 +731,13 @@ def step_model_page(d: Driver) -> None:
         s.check('STAR Server is your AI brain' in text, 'server card is shown')
         s.check(settings['server_endpoint'] in text, 'card shows the saved server address')
         s.check('Key: saved' in text, 'card says a key is present')
-        s.check('not checked yet' in text, 'card says the server has not been checked yet')
+        # The app checks the server by itself at start (warm-up). The card must agree with the status light:
+        # "not checked yet" before that check has answered, "ready" after it passed.
+        # (The light itself is on the chat page; its state at boot was recorded there.)
+        light = next((step.facts.get('status', {}).get('state') for step in d.steps if step.name == 'boot'), None)
+        s.fact('status_light_at_boot', light)
+        s.check('Status: ready' in text if light == 'Ready' else ('not checked yet' in text or 'Status: ready' in text),
+                'the card agrees with the status light about the server check', [light, text[-260:]])
         s.check(d.js("(document.querySelector('details.brain-details')||{}).open") is False,
                 'the local-model download is folded away as an optional backup')
         s.shots.append(d.shot('model'))
@@ -744,7 +784,8 @@ def step_fast_send(d: Driver, name: str = 'fast-send', prompt: str = PROMPT_FAST
         facts = d.stream_metrics(turn)
         s.facts.update(facts)
         events = d.events[turn['mark']:]
-        result = next((e for e in events if e.get('kind') == 'result'), None)
+        # The app's own warm-up can end during the turn; its result has no answer and is not this turn's.
+        result = next((e for e in events if e.get('kind') == 'result' and 'answer' in (e.get('data') or {})), None)
         answer = ((result or {}).get('data') or {}).get('answer', '')
         s.fact('answer', answer[:400])
         s.fact('activity', [e.get('phase') for e in events if e.get('phase') and not e.get('delta_chars')])
@@ -966,9 +1007,18 @@ def step_restart_retry(d: Driver) -> None:
         d.wait_for('__acc.stream.firstAt', d.options.turn_timeout, 'the first streamed text', poll=0.03)
         d.wait_idle(d.options.turn_timeout)
         s.facts.update(d.stream_metrics(turn))
-        new = read_messages(d.profile)[len(before):]
-        s.check([r['role'] for r in new] == ['user', 'assistant'] and new[0]['body'] == PROMPT_FAIL,
-                'Retry after a restart re-sent the stored prompt and the answer was saved', [r['role'] for r in new])
+        # Retry answers the question that is already stored (in-place Retry): it is not stored a second time.
+        after = read_messages(d.profile)
+        new = after[len(before):]
+        question = next((r for r in reversed(before) if r['role'] == 'user'), None) or {}
+        s.check([r['role'] for r in new] == ['assistant'] and bool(new[0]['body']),
+                'Retry after a restart saved one answer row and did not store the question again', [r['role'] for r in new])
+        copies = [r['id'] for r in after if r['role'] == 'user' and r['body'] == PROMPT_FAIL
+                  and r['chat_id'] == question.get('chat_id') and r['id'] >= question.get('id', 0)]
+        s.check(question.get('body') == PROMPT_FAIL and copies == [question.get('id')]
+                and bool(new) and new[0]['chat_id'] == question.get('chat_id'),
+                'the stored question that was retried still exists exactly once, and the answer is in its chat',
+                {'question': question.get('id'), 'copies': copies})
         shown = d.transcript()
         s.check(bool(shown) and shown[-1]['role'] == 'assistant' and bool(shown[-1]['text']), 'the answer is rendered')
         s.check(all(t['buttons'] == [] for t in shown if t['role'] == 'event'), 'no stale Retry buttons remain')
@@ -1222,7 +1272,15 @@ def step_upgrade(d: Driver) -> None:
         text = d.js("__acc.text('.page-stage')") or ''
         s.fact('text', text)
         s.check('This PC' in text and 'released-local-model' in text, 'the Model page shows the on-device provider and the saved model')
-        s.check('STAR Server' not in text.replace('Connection settings', ''), 'nothing on the page claims a STAR Server is in use', text[:300])
+        # The page may offer STAR Server ("... or switch to STAR Server in Settings"). What it must not do is
+        # claim one is connected or in use: the status label, the Provider value, or a sentence saying so.
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        provider = lines[lines.index('Provider') + 1] if 'Provider' in lines[:-1] else ''
+        label = (d.status().get('label') or '')
+        claims = [line for line in lines if line.startswith('STAR Server')
+                  or re.search(r'\b(?:connected to|using|running on|answered by)\s+(?:the\s+|a\s+|your\s+)?STAR Server\b', line, re.I)]
+        s.check(provider == 'This PC' and 'STAR Server' not in label and not claims,
+                'nothing on the page claims a STAR Server is in use', {'provider': provider, 'status': label, 'claims': claims})
         s.check('Model on this PC' in text, 'the on-device model card is shown, not folded away')
         s.shots.append(d.shot('upgrade-model'))
         d.open_page('Settings', 'Settings')
@@ -1241,7 +1299,7 @@ def step_upgrade(d: Driver) -> None:
         s.check(last.get('status') == 'failed' and last.get('title') == "Can't reach the model", 'the engine not running is a calm failure row', last)
         s.check('STAR Server' not in last.get('text', ''), 'the message does not mention a server the owner never set up', last.get('text'))
         s.check('Brain tab' not in last.get('text', ''), 'the message does not point at a page that no longer exists',
-                last.get('text'), known='local-provider messages still say "Start it in the Brain tab"; the page is now "Model & connection"')
+                last.get('text'))
         new = read_messages(d.profile)[len(before):]
         s.check([r['role'] for r in new] == ['user', 'event'] and new[1]['status'] == 'failed' and new[0]['chat_id'] == 'legacy',
                 'the new turn and its failed record went into the same old conversation')
@@ -1263,7 +1321,8 @@ def step_close_during_test(d: Driver) -> None:
 
 def run_phase(d: Driver) -> None:
     phase = d.phase
-    step_boot(d, expect_history=bool(read_messages(d.profile)) if phase == 'media' else phase != 'first')
+    step_boot(d, expect_history=bool(read_messages(d.profile)) if phase in ('media', 'settings', 'followup')
+              else phase != 'first')
     if phase == 'first':
         step_model_page(d)
         step_fast_send(d)
@@ -1288,6 +1347,10 @@ def run_phase(d: Driver) -> None:
         step_close_during_test(d)
     elif phase == 'media':
         step_media(d)
+    elif phase == 'settings':
+        step_settings(d)
+    elif phase == 'followup':
+        step_followup(d)
 
 
 def step_media(d: Driver) -> None:
@@ -1384,6 +1447,297 @@ def step_media(d: Driver) -> None:
         s.shots.append(d.shot('media-references'))
 
 
+class SilentSpeaker:
+    """Stands in for the loudspeaker only: it takes the synthesised sound and plays nothing."""
+    received: list[tuple[int, int]] = []        # (samples, sample rate) of every block the voice engine produced
+
+    def __init__(self, sample_rate: int):
+        self.sample_rate = sample_rate
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        return None
+
+    def play(self, pcm: bytes, sample_rate: int) -> None:
+        SilentSpeaker.received.append((len(pcm) // 2, int(sample_rate)))
+
+    def pending_seconds(self) -> float:
+        return 0.0
+
+
+def silence_speaker(shell) -> bool:
+    """Replace the loudspeaker of the app's voice bridge; True when that was possible."""
+    voice = getattr(shell.bridge, 'voice', None)
+    factories = getattr(voice, '_factories', None)
+    if factories is None:
+        return False
+
+    # The bridge keeps its factories as a class of static methods (or an instance of one in tests).
+    class Quiet(factories if isinstance(factories, type) else type(factories)):
+        @staticmethod
+        def speaker(sample_rate: int, _device):
+            return SilentSpeaker(sample_rate)
+    voice._factories = Quiet
+    return True
+
+
+def step_settings(d: Driver) -> None:
+    """Settings > Voice and Settings > Roblox Studio against the real host."""
+    voice = 'section[aria-label="Star\'s voice"]'
+    studio = 'section[aria-label="Roblox Studio"]'
+    commanding = voice + ' [role=group][aria-label="Confident and commanding"] .voice-row'
+    warm_use = voice + ' [role=group][aria-label="Warm and caring"] button.is-primary'
+    q = json.dumps
+
+    def calls(action: str) -> list[dict]:
+        return [c for c in (d.js('__acc.calls') or []) if c.get('action') == action]
+
+    def wait_call(action: str, count: int, timeout: float = 20.0) -> dict:
+        d.wait_for(f"__acc.calls.filter(c=>c.action==={q(action)}).length>={count}", timeout, f'the answer to {action}')
+        return calls(action)[count - 1]
+
+    def wait_event(mark: int, wanted, timeout: float, what: str) -> dict:
+        deadline = time.time() + timeout
+        while True:
+            found = next((e for e in d.events[mark:] if wanted(e)), None)
+            if found:
+                return found
+            if time.time() > deadline:
+                raise TimeoutError(f'waited {timeout:.0f}s for {what}')
+            d.pump(0.1)
+
+    def studio_result(event: dict) -> bool:
+        return event.get('kind') == 'error' or (event.get('kind') == 'result' and 'state' in (event.get('data') or {}))
+
+    def stored_command():
+        path = d.profile / 'STAR' / 'studio' / 'remote.json'
+        return json.loads(path.read_text(encoding='utf-8')).get('command') if path.is_file() else None
+
+    def page_text(selector: str) -> str:
+        return (d.js(f"__acc.text({q(selector)})") or '').replace('\n', ' ')
+
+    engine_ready = False
+    with d.step('settings-sections') as s:
+        d.open_page('Settings', 'Settings')
+        d.wait_for(f"!!document.querySelector({q(voice)}) && !!document.querySelector({q(studio)})", 15,
+                   'the Voice and Roblox Studio sections')
+        d.wait_for(f"document.querySelectorAll({q(voice + ' .voice-row')}).length>0", 30, 'the voice list from the host')
+        d.pump(0.5)
+        s.check(bool(d.js('!!document.querySelector(\'section[aria-label="Where STAR generates"]\')')),
+                'the where-to-generate choice is on the same Settings page')
+        listing, status = wait_call('voiceListVoices', 1), wait_call('voiceStatus', 1)
+        s.check(listing.get('ok') is True and status.get('ok') is True, 'the host answered voiceListVoices and voiceStatus',
+                [listing, status])
+        text = page_text(voice)
+        s.fact('voice_text', text[:6000])
+        groups = d.js("[...document.querySelectorAll(" + q(voice + ' [role=group]') + ")].map(g=>({name:g.getAttribute('aria-label'),"
+                      "rows:g.querySelectorAll('.voice-row').length,"
+                      "off:[...g.querySelectorAll('.voice-row')].filter(r=>r.textContent.includes('Not usable in live calls yet')).length,"
+                      "more:(g.querySelector('details.voice-more > summary')||{textContent:''}).textContent,"
+                      "open:!!(g.querySelector('details.voice-more')||{}).open,"
+                      "tags:[...g.querySelectorAll('h3 .voice-tag')].map(t=>t.innerText)}))") or []
+        s.fact('voice_groups', groups)
+        from star.voice.catalog import load_catalog
+        from star.voice.settings import TTS_ENGINES
+        catalog: dict = {}
+        for entry in load_catalog():
+            catalog.setdefault(entry.style, []).append(entry)
+        s.check([g['name'] for g in groups] == ['Warm and caring', 'Confident and commanding', 'Anime-style'],
+                'the three styles are listed in the catalog order', [g.get('name') for g in groups])
+        by = {g['name']: g for g in groups}
+        s.check(by.get('Warm and caring', {}).get('rows') == len(catalog.get('warm-caring', []))
+                and by.get('Anime-style', {}).get('rows') == len(catalog.get('anime-bright', [])),
+                'every warm and anime voice of the shipped catalog is listed', groups)
+        s.check(by.get('Warm and caring', {}).get('tags') == ['Default'], 'the warm style is marked as the default', groups)
+        s.check(by.get('Confident and commanding', {}).get('rows') == 0
+                and by.get('Confident and commanding', {}).get('tags') == ['Optional']
+                and d.js(f"document.querySelector({q(voice + ' .voice-opt-in input')}).checked") is False,
+                'the commanding voices are not listed until their switch is on, and the switch starts off', groups)
+        uncallable = sum(1 for style in ('warm-caring', 'anime-bright') for e in catalog.get(style, []) if e.engine not in TTS_ENGINES)
+        s.check(by.get('Warm and caring', {}).get('off', 0) + by.get('Anime-style', {}).get('off', 0) == uncallable and uncallable > 0,
+                'voices whose engine is not in calls are labelled as not usable in live calls', [groups, uncallable])
+        s.check(all(not g.get('open') for g in groups) and str(by.get('Warm and caring', {}).get('off')) in by.get('Warm and caring', {}).get('more', ''),
+                'those voices sit under their own closed heading, which says how many there are', groups)
+        s.check('Current voice: Heart' in text, 'the saved voice of a new profile is Heart', text[:300])
+        engine_ready = 'voice engine is not installed' not in text
+        s.fact('voice_engine_ready', engine_ready)
+        if not engine_ready:
+            s.check('Missing program parts' in text or 'Missing model files' in text,
+                    'the page says what the voice engine is missing', text[:600])
+        d.box(voice + ' .learn-head')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-voice'))
+        shown = page_text(studio)
+        s.fact('studio_text', shown[:3000])
+        radios = d.js("[...document.querySelectorAll('input[name=\"studio-target\"]')].map(r=>r.checked)")
+        s.check(radios == [True, False] and 'This PC' in shown and 'STAR Studio server' in shown,
+                'Roblox Studio offers this PC and the STAR Studio server, with this PC chosen', radios)
+        s.check('The sandbox rule.' in shown and 'STAR only builds in its own test place' in shown
+                and 'Every other place is read-only' in shown, 'the sandbox rule is stated in the section')
+        s.check('Not tested yet' in shown and not d.js(f"!!document.querySelector({q(studio + ' .media-field input')})"),
+                'nothing is tested by itself and the server fields are hidden for this PC')
+        s.check(not d.key_in_page(), 'the server key is not in the page')
+        d.box(studio + ' .learn-head')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-studio'))
+        s.fact('overflow', d.js(OVERFLOW_JS.strip()))
+
+    with d.step('settings-voice-preview') as s:
+        preview = voice + ' button[aria-label="Preview Heart"]'
+        if not engine_ready:
+            s.check(bool((d.box(preview) or {}).get('disabled')), 'Preview is switched off while the voice engine is missing')
+            s.fact('preview_clicked', False)
+        else:
+            mark = len(d.events)
+            started = time.time()
+            d.click(preview)
+            call = wait_call('voicePreviewVoice', 1)
+            s.check(call.get('ok') is True, 'the host accepted the preview (voicePreviewVoice)', call)
+            during = page_text(preview)
+            ended = wait_event(mark, lambda e: e.get('kind') == 'voice' and e.get('voice') in ('preview_done', 'error'), 180,
+                               'the end of the preview')
+            s.fact('preview_seconds', round(time.time() - started, 2))
+            s.fact('button_while_previewing', during)
+            s.check(ended.get('voice') == 'preview_done', 'the voice engine spoke the sample line and reported it finished',
+                    ended.get('text', ''))
+            s.check('Playing' in during or time.time() - started < 1.0, 'the row showed Playing while the line was spoken', during)
+            d.wait_for(f"(__acc.text({q(preview)})||'').includes('Preview')", 10, 'the Preview button to come back')
+            s.check(not d.js(f"!!document.querySelector({q(voice + ' [role=alert]')})"), 'no failure is shown after a preview that worked')
+            if getattr(d.options, 'audible', False):
+                s.fact('audio', 'played through the real speakers')
+            else:
+                samples = sum(n for n, _rate in SilentSpeaker.received)
+                rate = SilentSpeaker.received[0][1] if SilentSpeaker.received else 0
+                s.fact('audio', {'sink': 'silent (the loudspeaker was replaced, nothing was played aloud)', 'samples': samples,
+                                 'sample_rate': rate, 'seconds_of_speech': round(samples / rate, 2) if rate else 0})
+                s.check(samples > 0, 'the voice engine produced sound for the sample line', samples)
+            s.fact('preview_clicked', True)
+            s.shots.append(d.shot('settings-voice-previewed'))
+
+    with d.step('settings-voice-choice') as s:
+        d.click(voice + ' .voice-opt-in input')
+        d.wait_for(f"document.querySelectorAll({q(commanding)}).length>0", 10, 'the commanding voices after their switch')
+        rows = d.js(f"document.querySelectorAll({q(commanding)}).length")
+        from star.voice.catalog import load_catalog
+        expected = sum(1 for e in load_catalog() if e.style == 'confident-commanding')
+        s.check(rows == expected, 'switching the commanding style on lists all of its voices', [rows, expected])
+        s.check(not calls('voiceSelectVoice') and 'Current voice: Heart' in page_text(voice),
+                'showing the commanding voices chose nothing: the voice is still Heart')
+        d.box(voice + ' .voice-opt-in')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-voice-commanding'))
+        pick = d.js("(()=>{const b=[...document.querySelectorAll(" + q(warm_use) + ")].find(b=>!b.disabled);"
+                    "return b?b.getAttribute('aria-label'):''})()") or ''
+        s.fact('picked', pick)
+        d.click(voice + f' button[aria-label={q(pick)}]')
+        call = wait_call('voiceSelectVoice', 1)
+        s.check(call.get('ok') is True, 'the host stored the choice (voiceSelectVoice)', call)
+        name = pick.removeprefix('Use ')
+        d.wait_for(f"(__acc.text({q(voice)})||'').includes({q(name + ' is now')})", 10, 'the confirmation of the choice')
+        text = page_text(voice)
+        s.check(f'Current voice: {name}' in text, 'the page marks the new voice only after the host confirmed it', text[:300])
+        saved_file = d.profile / 'STAR' / 'voice.json'
+        saved = json.loads(saved_file.read_text(encoding='utf-8')) if saved_file.is_file() else {}
+        s.fact('voice_json', {k: saved.get(k) for k in ('voice_id', 'voice', 'voice_style', 'speed')})
+        s.check(bool(saved.get('voice_id')) and saved.get('voice_style') == 'warm-caring',
+                'voice.json in the profile holds the chosen voice and its style', saved.get('voice_id'))
+        d.box(voice + ' .voice-current')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-voice-chosen'))
+        more = voice + ' [role=group][aria-label="Warm and caring"] details.voice-more'
+        d.click(more + ' > summary')
+        d.pump(0.4)
+        hidden = d.js("(()=>{const r=document.querySelector(" + q(more + ' .voice-row') + ");const b=r&&[...r.querySelectorAll('button')];"
+                      "return r?{text:r.innerText,disabled:b.every(x=>x.disabled)}:null})()") or {}
+        s.check('Not usable in live calls yet' in hidden.get('text', '') and 'engine is not built into calls yet' in hidden.get('text', '')
+                and hidden.get('disabled') is True,
+                "an opened voice of that kind carries the label, the host's reason, and cannot be played or chosen", hidden)
+        s.shots.append(d.shot('settings-voice-not-in-calls'))
+
+    with d.step('settings-studio-server') as s:
+        status = studio + ' .media-engine-state[role=status]'
+        before = len(calls('saveSettings'))
+        d.click(studio + ' .media-option', 'STAR Studio server')
+        saved = wait_call('saveSettings', before + 1)
+        d.wait_for(f"(__acc.text({q(studio)})||'').includes('No server connection is set up on this PC yet.')", 10, 'the state of the connection')
+        s.check(saved.get('ok') is True and d.settings_file().get('studio_target') == 'host_launcher',
+                'choosing the STAR Studio server is saved by the host (settings.json)', d.settings_file().get('studio_target'))
+        s.check(stored_command() is None, 'no server connection exists in a new profile')
+        # v0.9.0: the page shows the state and the test only. It has nothing to type a connection into
+        # and no way to store or remove one (the connection is operator configuration).
+        controls = d.js("(()=>{const g=document.querySelector(" + q(studio + ' [role=group][aria-label="STAR Studio server connection"]') + ");"
+                        "return g?{fields:g.querySelectorAll('input,textarea,select').length,buttons:g.querySelectorAll('button').length}:null})()")
+        s.fact('server_connection_controls', controls)
+        s.check(controls == {'fields': 0, 'buttons': 0}, 'the server connection block has no field and no button', controls)
+        labels = d.js("[...document.querySelectorAll(" + q(studio + ' button') + ")].map(b=>(b.innerText||'').trim())") or []
+        s.check(not any(word in label for label in labels for word in ('Save', 'Forget')),
+                'the section offers no Save and no Forget', labels)
+        # 1. Nothing stored: the host answers "not configured" and starts nothing.
+        mark = len(d.events)
+        d.click(studio + ' button', 'Test connection')
+        first = wait_call('discoverStudio', 1)
+        answer = wait_event(mark, studio_result, 30, 'the first test result')
+        s.fact('test_without_connection', answer.get('data') or answer.get('text'))
+        s.check(first.get('ok') is True and (answer.get('data') or {}).get('state') == 'unconfigured',
+                'Test connection reached the host, which reported that no connection is stored', answer.get('data') or answer.get('text'))
+        d.wait_for(f"(__acc.text({q(status)})||'').includes('nothing was started')", 10, 'the plain result of the test')
+        line = page_text(status)
+        s.fact('result_text', line)
+        s.check('Connected.' not in page_text(studio), 'the page does not claim a connection', line)
+        s.check(stored_command() is None and not calls('studioHostSave') and not calls('studioHostClear'),
+                'nothing was stored and the page never asked the host to store or remove a connection')
+        d.box(studio + ' .learn-head')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-studio-server'))
+        # 2. Back to this PC (this PC's Studio is never tested by this tool).
+        before = len(calls('saveSettings'))
+        d.click(studio + ' .media-option', 'This PC')
+        wait_call('saveSettings', before + 1)
+        d.pump(0.6)
+        s.check(d.settings_file().get('studio_target') == 'local_pc', 'this PC is the saved choice again')
+        s.check(len(calls('discoverStudio')) == 1, 'this PC\'s own Studio was never contacted', len(calls('discoverStudio')))
+        s.check(not d.key_in_page(), 'the server key is not in the page')
+
+    with d.step('settings-small-window') as s:
+        size = d.shell.size()
+        d.shell.resize(920, 650)
+        d.pump(0.8)
+        overflow = d.js(OVERFLOW_JS.strip()) or {}
+        s.fact('overflow_920x650', overflow)
+        s.check(overflow.get('scrollWidth', 0) <= overflow.get('innerWidth', 0) + 1 and not overflow.get('outside'),
+                'nothing in Settings is wider than a 920 x 650 window', overflow)
+        d.box(voice + ' .voice-list')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-voice-small'))
+        d.box(studio + ' .learn-head')
+        d.pump(0.4)
+        s.shots.append(d.shot('settings-studio-small'))
+        d.shell.resize(size)
+        d.pump(0.6)
+
+
+def step_followup(d: Driver) -> None:
+    """Fast mode in a new chat: how long the first words take on the first message and on follow-ups."""
+    with d.step('followup-new-chat') as s:
+        d.open_chat()
+        d.click('.rail-new')
+        d.wait_for("document.querySelectorAll('.thread-turns > .msg').length===0", 15, 'an empty new chat')
+        s.check(not d.transcript(), 'a new chat is open and empty')
+    names = ['followup-first', 'followup-second', 'followup-third']
+    for name, prompt in zip(names, (PROMPT_FAST, *PROMPT_FOLLOW_UP)):
+        step_fast_send(d, name=name, prompt=prompt)
+    with d.step('followup-times') as s:
+        done = {step.name: step.facts for step in d.steps if step.name in names}
+        table = {name: {key: done.get(name, {}).get(key) for key in
+                        ('send_to_first_bridge_delta_ms', 'send_to_first_visible_text_ms', 'send_to_end_ms')} for name in names}
+        s.fact('first_words_ms', table)
+        s.check(all(table[name]['send_to_first_visible_text_ms'] for name in names),
+                'the first-word time of the first message and of both follow-ups was measured', table)
+        s.check(len(d.transcript()) == 6, 'the three questions and three answers are one conversation', len(d.transcript()))
+
+
 # ---------------------------------------------------------------------- child
 def child_main(options) -> int:
     python_main = time.time()
@@ -1396,6 +1750,10 @@ def child_main(options) -> int:
         return 3
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    # Optional engines installed elsewhere on this PC: after everything this environment already has.
+    for extra in os.environ.get(ENV_EXTRA_PATH, '').split(os.pathsep):
+        if extra.strip() and Path(extra.strip()).is_dir() and extra.strip() not in sys.path:
+            sys.path.append(extra.strip())
     from star.desktop_core import app_data
     if app_data().resolve() != (Path(profile) / 'STAR').resolve():
         print('REFUSED: the app would not store its data in the acceptance profile.')
@@ -1419,6 +1777,8 @@ def child_main(options) -> int:
         driver.marks.update(python_main=python_main, qt_app=qt_app, shell_found=time.time())
         driver.install_hooks()
         try:
+            if options.child == 'settings' and not options.audible:
+                driver.marks['loudspeaker'] = 'silent sink' if silence_speaker(shell) else 'real (it could not be replaced)'
             run_phase(driver)
         except Exception:
             driver.python_errors.append('harness: ' + traceback.format_exc()[-2000:])
@@ -1461,6 +1821,7 @@ def child_environment(profile: Path, key: str, real_key: str) -> dict:
         'PYTHONUNBUFFERED': '1',
         'PYTHONUTF8': '1',
     })
+    env.pop(ENV_STUDIO_COMMAND, None)                               # never an operator's real Studio
     return env
 
 
@@ -1511,6 +1872,8 @@ def parent_main(options) -> int:
         command = [sys.executable, str(Path(__file__).resolve()), '--child', phase, '--evidence', str(evidence),
                    '--shots', str(shots), '--dead-endpoint', dead, '--spawned-at', repr(time.time()),
                    '--turn-timeout', str(options.turn_timeout), '--agent-timeout', str(options.agent_timeout)]
+        if options.audible:
+            command.append('--audible')
         print(f'\n=== phase {phase}', flush=True)
         began = time.time()
         with log.open('w', encoding='utf-8') as sink:
@@ -1578,6 +1941,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument('--shots', help='folder for shell-<step>.png screenshots (default: <evidence>/screenshots)')
     parser.add_argument('--profile', help='reuse a profile folder made by an earlier run (to repeat single phases)')
     parser.add_argument('--offscreen', action='store_true', help='run Qt offscreen instead of showing a real window')
+    parser.add_argument('--audible', action='store_true',
+                        help='settings phase: play the voice preview through the real speakers instead of a silent sink')
     parser.add_argument('--turn-timeout', type=float, default=900.0, help='seconds to wait for one plain reply')
     parser.add_argument('--agent-timeout', type=float, default=2400.0, help='seconds to wait for the Agent turn')
     parser.add_argument('--phase-timeout', type=float, default=3600.0, help='seconds before a phase process is killed')

@@ -1,0 +1,302 @@
+{
+ "schema": 1,
+ "suite": {
+  "file": "golden-tasks-v2.json",
+  "sha256": "86e0366fa1a651de70fd2cfd113127307dce64b6137d69c5c1a759e02fb0e31c",
+  "tasks_total": 50,
+  "automated": 34,
+  "selected": [
+   "ANI-03",
+   "ANI-04",
+   "ANI-05"
+  ]
+ },
+ "run": {
+  "app_commit": "66bf9e45984747af16ca1077ca794c9c6ded24f1",
+  "app_dirty": false,
+  "runner": "star.eval_runner/1",
+  "provider": "star_server",
+  "model": "star-fast",
+  "models_served": [
+   "star-deep",
+   "star-embed",
+   "star-fast",
+   "star-rerank",
+   "star-voice"
+  ],
+  "mode": "auto",
+  "skill_packs": "roblox-animation-tools",
+  "knowledge": "on",
+  "temperature": 0,
+  "server_timeout_s": 1800,
+  "server": "<private-address>",
+  "sandbox": "lxc container as user star (prlimit + timeout)",
+  "platform": "win32",
+  "fingerprint": "9e6f73c64169",
+  "started_at": "2026-10-11T05:50:54+00:00",
+  "waited_for_lock_s": 352.4,
+  "finished_at": "2026-10-11T06:07:39+00:00",
+  "rescored_at": "2026-10-11T06:34:16+00:00"
+ },
+ "complete": true,
+ "tasks": {
+  "ANI-03": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "ffc3a145904428fc",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:animator",
+     "ok": true
+    },
+    {
+     "id": "require:load",
+     "ok": true
+    },
+    {
+     "id": "require:priority",
+     "ok": true
+    },
+    {
+     "id": "require:looped",
+     "ok": true
+    },
+    {
+     "id": "require:input",
+     "ok": true
+    },
+    {
+     "id": "require:key",
+     "ok": true
+    },
+    {
+     "id": "require:resume",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated",
+     "ok": true
+    }
+   ],
+   "seconds": 91.8,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 4294,
+   "answer_sha256": "954c84d9b8e3222b2b17a47441c92b1da72292f8d67fefc0bcf1b3f5602f42f0",
+   "packs": [
+    "roblox-animation-tools"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 3,
+     "elapsed_ms": 47
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-animation-tools"
+     ],
+     "chars": 988
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is a complete, robust LocalScript for `StarterCharacterScripts` that meets all your requirements.\n\n### The Script\n\n```lua\n-- StarterCharacterScripts/AnimationController.lua\n--!strict\n\nlocal Players = game:GetService(\"Players\")\nlocal UserInputService = game:GetService(\"UserInputService\")\n\nlocal player = Players.LocalPlayer\nlocal character = player.Character or player.CharacterAdded:Wait()\nlocal humanoid = character:WaitForChild(\"Humanoid\")\nlocal animator = humanoid:WaitForChild(\"Animator\")\n\n-- 1. Setup Animation Instances\nlocal idleAnim = Instance.new(\"Animation\")\nidleAnim.AnimationId = \"rbxassetid://180435571\"\n\nlocal attackAnim = Instance.new(\"Animation\")\nattackAnim.AnimationId = \"rbxassetid://180435792\"\n\n-- 2. Load Animation Tracks\nlocal idleTrack = animator:LoadAnimation(idleAnim)\nlocal attackTrack = animator:LoadAnimation(attackAnim)\n\n-- 3. Configure Tracks\nidleTrack.Looped = true\nidleTrack.Priority = Enum.AnimationPriority.Idle\nidleTrack:Play()\n\nattackTrack.Priority = Enum.AnimationPriority.Action\n\n-- 4. Input Handling\nlocal isAttacking = false\n\nUserInputService.InputBegan:Connect(function(input, gameProcessed)\n\tif gameProcessed then return end\n\t\n\tif input.KeyCode == Enum.KeyCode.F and not isAttacking then\n\t\tisAttacking = true\n\t\t\n\t\t-- Stop idle to prevent conflict and ensure clean transition\n\t\tidleTrack:Stop()\n\t\t\n\t\t-- Play attack (one-shot)\n\t\tattackTrack:Play()\n\t\t\n\t\t-- Wait for attack to finish, then resume idle\n\t\tattackTrack.Stopped:Wait()\n\t\t\n\t\tif character and character.Parent then\n\t\t\tidleTrack:Play()\n\t\tend\n\t\t\n\t\tisAttacking = false\n\tend\nend)\n\n-- 5. Cleanup on Character Removal\ncharacter.AncestryChanged:Connect(function(_, parent)\n\tif not parent then\n\t\t-- Disconnect input to prevent errors if character respawns\n\t\tUserInputService.InputBegan:Disconnect()\n\t\t\n\t\t-- Stop and destroy tracks to free memory\n\t\tidleTrack:Stop()\n\t\tattackTrack:Stop()\n\t\tidleTrack:Destroy()\n\t\tattackTrack:Destroy()\n\tend\nend)\n```\n\n### How it works\n\n1.  **Modern API**: It uses `animator:LoadAnimation()` instead of the deprecated `Humanoid:LoadAnimation()` [1].\n2.  **Priorities**: The idle track is set to `Idle` priority, and the attack track is set to `Action` priority. This ensures the attack visually overrides the idle animation naturally [3].\n3.  **State Management**: A boolean `isAttacking` prevents the player from spamming F and glitching the animation state.\n4.  **Sequencing**: When F is pressed, the script explicitly stops the idle track, plays the attack, and uses `attackTrack.Stopped:Wait()` to pause execution until the attack finishes. It then checks if the character still exists before resuming the idle loop.\n5.  **Cleanup**: The `AncestryChanged` event detects when the character is removed (e.g., upon death). It disconnects the input listener and destroys the tracks to prevent memory leaks in the sandbox instance.\n\n### References\n*   [1] **Use animations > Play animations from scripts > Humanoids**: Demonstrates the correct usage of `animator:LoadAnimation()` and playing tracks.\n*   [3] **Add animations > Script animations > Set up the project**: Shows how to set `track.Priority` and `track.Looped`.\n\n### Notes for Testing\n*   Ensure the Animation IDs (`180435571` and `180435792`) are public or owned by your group, otherwise the animations will appear as \"missing\" in the Animation Editor preview.\n*   This script is placed in `StarterCharacterScripts`, so it automatically loads for every character respawn. The `AncestryChanged` cleanup ensures old tracks don't accumulate.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n2. [Custom characters > Animate the creature](https://create.roblox.com/docs/resources/beyond-the-dark/custom-characters#animate-the-creature) · retrieved, not cited\n3. [Add animations > Script animations > Set up the project](https://create.roblox.com/docs/education/build-it-play-it-island-of-move/adding-animations#set-up-the-project) · cited\n"
+  },
+  "ANI-04": {
+   "status": "pass",
+   "passed": true,
+   "prompt_sha256": "adeb586100af0773",
+   "reasons": [],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:rig_type",
+     "ok": true
+    },
+    {
+     "id": "require:grip",
+     "ok": true
+    },
+    {
+     "id": "require:equipped",
+     "ok": true
+    },
+    {
+     "id": "require:unequipped",
+     "ok": true
+    },
+    {
+     "id": "require:activated",
+     "ok": true
+    },
+    {
+     "id": "require:animator",
+     "ok": true
+    },
+    {
+     "id": "forbid:deprecated",
+     "ok": true
+    }
+   ],
+   "seconds": 372.4,
+   "timings": {
+    "luau_check_s": 0.11
+   },
+   "blocks": 1,
+   "answer_chars": 7013,
+   "answer_sha256": "9ac57f7b111087fcc9251f71975fba38d4b1ebb4369b606421d4d8a06a96f714",
+   "packs": [
+    "roblox-animation-tools"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-animation-tools"
+     ],
+     "chars": 988
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "repaired",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the robust, `--!strict` Luau script to be placed inside the `Tool`.\n\n### Implementation Notes\n1.  **Rig Detection**: The script checks `Humanoid.RigType` upon equipping.\n2.  **Grip Adjustment**:\n    *   **R15**: The engine handles most positioning, but we adjust `GripForward` to ensure the blade points directly forward relative to the hand.\n    *   **R6**: The engine attaches to `Right Arm`. We must explicitly set `GripPos`, `GripForward`, and `GripUp` to rotate the sword so the blade points forward and the handle is held correctly.\n3.  **Animation**: Uses the modern `Animator:LoadAnimation` method. It tracks the `AnimationTrack` to ensure it is stopped cleanly on unequip or character change.\n4.  **Safety**: Disconnects events when the tool is destroyed or the character changes to prevent memory leaks or errors.\n\n```lua\n--!strict\n\nlocal Tool = script.Parent\nlocal ANIMATION_ID = 180435792\n\n-- State variables\nlocal currentCharacter: Model? = nil\nlocal currentAnimator: Animator? = nil\nlocal stabTrack: AnimationTrack? = nil\nlocal isEquipped = false\n\n-- Helper: Stop the current animation track safely\nlocal function stopAnimation()\n\tif stabTrack then\n\t\tstabTrack:Stop()\n\t\tstabTrack = nil\n\tend\nend\n\n-- Helper: Initialize Animator and Animation Track\nlocal function setupAnimation(character: Model)\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then return end\n\n\t-- Get or create Animator\n\tlocal animator = humanoid:FindFirstChildOfClass(\"Animator\")\n\tif not animator then\n\t\tanimator = Instance.new(\"Animator\")\n\t\tanimator.Parent = humanoid\n\tend\n\n\tcurrentAnimator = animator\n\n\t-- Load animation if not already loaded\n\tif not stabTrack then\n\t\tlocal anim = Instance.new(\"Animation\")\n\t\tanim.AnimationId = \"rbxassetid://\" .. tostring(ANIMATION_ID)\n\t\tstabTrack = animator:LoadAnimation(anim)\n\t\tstabTrack.Priority = Enum.AnimationPriority.Action\n\tend\nend\n\n-- Helper: Play the stab animation\nlocal function playStab()\n\tif stabTrack and not stabTrack.IsPlaying then\n\t\tstabTrack:Play()\n\tend\nend\n\n-- Event: Tool Equipped\nTool.Equipped:Connect(function()\n\tcurrentCharacter = Tool.Parent -- The Tool is parented to the Character when equipped\n\tif not currentCharacter then return end\n\n\tlocal humanoid = currentCharacter:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then return end\n\n\tisEquipped = true\n\n\t-- 1. Setup Animation\n\tsetupAnimation(currentCharacter)\n\n\t-- 2. Adjust Grip based on Rig Type\n\tlocal rigType = humanoid.RigType\n\t\n\t-- Default Grip (Identity)\n\tlocal gripPos = Vector3.new(0, 0, 0)\n\tlocal gripForward = Vector3.new(0, 0, -1) -- Default forward\n\tlocal gripUp = Vector3.new(0, 1, 0)\n\tlocal gripRight = Vector3.new(1, 0, 0)\n\n\tif rigType == Enum.HumanoidRigType.R15 then\n\t\t-- R15: The engine attaches to RightHand.\n\t\t-- We adjust forward to ensure the blade points straight out from the hand.\n\t\t-- Depending on the model's local orientation, you might need to tweak these values.\n\t\t-- Standard sword holding: Blade points along negative Z (forward) relative to hand.\n\t\tgripForward = Vector3.new(0, 0, -1)\n\t\t\n\telseif rigType == Enum.HumanoidRigType.R6 then\n\t\t-- R6: The engine attaches to Right Arm.\n\t\t-- We need to rotate the tool so the handle is in the \"hand\" position and blade points forward.\n\t\t-- Typical R6 sword orientation:\n\t\t-- Handle is usually at (0,0,0) of the tool.\n\t\t-- Blade extends along +Z or -Z.\n\t\t\n\t\t-- Adjust position to hold the handle correctly in the R6 arm socket\n\t\tgripPos = Vector3.new(0, 0, 0)\n\t\t\n\t\t-- Rotate so the blade points forward (negative Z in local tool space usually points forward if modeled correctly)\n\t\t-- If the blade points along +Z in the tool, we might need to rotate 180 degrees.\n\t\t-- Assuming standard modeling where Blade is +Z and Handle is origin:\n\t\tgripForward = Vector3.new(0, 0, -1) \n\t\tgripUp = Vector3.new(0, 1, 0)\n\t\tgripRight = Vector3.new(1, 0, 0)\n\t\t\n\t\t-- Note: R6 grips can be tricky. If the sword looks sideways, swap GripForward and GripUp or adjust signs.\n\t\t-- A common R6 sword grip adjustment:\n\t\t-- Tool.Grip = CFrame.new(0, 0, 0) * CFrame.fromOrientation(0, math.pi/2, 0) \n\t\t-- But using GripPos/Forward/Up is cleaner for dynamic adjustment.\n\tend\n\n\t-- Apply the grip to the Tool\n\t-- The Tool's Grip property defines how the Handle is oriented relative to the attachment point.\n\tTool.Grip = CFrame.new(gripPos) * CFrame.fromOrientation(0, 0, 0) -- Simplified, using default orientation if needed\n\t\n\t-- More precise R6 adjustment if the above doesn't align perfectly:\n\tif rigType == Enum.HumanoidRigType.R6 then\n\t\t-- Often R6 swords need to be rotated 90 degrees on X or Y to sit right in the arm.\n\t\t-- This is highly dependent on the specific mesh orientation.\n\t\t-- A robust default for a sword pointing forward in R6:\n\t\tTool.Grip = CFrame.new(0, 0, 0) * CFrame.fromOrientation(0, math.pi / 2, 0)\n\tend\nend)\n\n-- Event: Tool Activated (Click)\nTool.Activated:Connect(function()\n\tif isEquipped and stabTrack then\n\t\tplayStab()\n\tend\nend)\n\n-- Event: Tool Unequipped\nTool.Unequipped:Connect(function()\n\tisEquipped = false\n\tstopAnimation()\nend)\n\n-- Cleanup: When the tool is destroyed or character changes\nTool.Destroying:Connect(function()\n\tstopAnimation()\n\tstabTrack = nil\n\tcurrentAnimator = nil\n\tcurrentCharacter = nil\nend)\n\n-- Optional: Handle Character Change if the tool is already equipped\n-- This ensures the animation track is re-linked if the character respawns while holding the tool\nTool.Equipped:Connect(function()\n\t-- Re-verify character and animator if needed\n\tif currentCharacter and currentCharacter.Parent then\n\t\tlocal humanoid = currentCharacter:FindFirstChildOfClass(\"Humanoid\")\n\t\tif humanoid and not humanoid:FindFirstChildOfClass(\"Animator\") then\n\t\t\t-- Animator might have been lost, re-setup\n\t\t\tsetupAnimation(currentCharacter)\n\t\tend\n\tend\nend)\n```\n\n### Explanation of Key Decisions\n\n1.  **`Tool.Grip` vs. Welds**: We use `Tool.Grip` because\n\n**Luau check by STAR:** The code block first failed the static Luau check (Expected type table, got 'nil' instead, line 39). STAR corrected it; the version shown compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [In-game tools > Create an in-game tool > Physical tool > Set the handle](https://create.roblox.com/docs/players/tools#set-the-handle) · retrieved, not cited\n2. [Manage players > Giving Players Weapons > Give tools to players](https://create.roblox.com/docs/education/battle-royale-series/managing-players#give-tools-to-players) · retrieved, not cited\n3. [Create player tools > Create the tool](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/create-player-tools#create-the-tool) · retrieved, not cited\n4. [Manage players > Giving Players Weapons](https://create.roblox.com/docs/education/battle-royale-series/managing-players#giving-players-weapons) · retrieved, not cited\n"
+  },
+  "ANI-05": {
+   "status": "fail",
+   "passed": false,
+   "prompt_sha256": "12cc7b68ac60eca7",
+   "reasons": [
+    "require:stopped: reacts when the track stops"
+   ],
+   "checks": [
+    {
+     "id": "luau_block",
+     "ok": true
+    },
+    {
+     "id": "luau_check[1]",
+     "ok": true
+    },
+    {
+     "id": "require:marker",
+     "ok": true
+    },
+    {
+     "id": "require:fire",
+     "ok": true
+    },
+    {
+     "id": "require:disconnect",
+     "ok": true
+    },
+    {
+     "id": "require:stopped",
+     "ok": false,
+     "detail": "reacts when the track stops"
+    },
+    {
+     "id": "require:activated",
+     "ok": true
+    },
+    {
+     "id": "forbid:no_global_wait",
+     "ok": true
+    },
+    {
+     "id": "forbid:task_wait",
+     "ok": true
+    }
+   ],
+   "seconds": 125.3,
+   "timings": {
+    "luau_check_s": 0.08
+   },
+   "blocks": 1,
+   "answer_chars": 5188,
+   "answer_sha256": "a0abca6f0d8869b6550cabd9058092d80948038d8cc060123e637fe02da823a8",
+   "packs": [
+    "roblox-animation-tools"
+   ],
+   "events": [
+    {
+     "event": "route_selected",
+     "profile": "roblox",
+     "description": "Roblox engineering"
+    },
+    {
+     "event": "knowledge_finished",
+     "state": "ok",
+     "passages": 4,
+     "elapsed_ms": 250
+    },
+    {
+     "event": "skill_packs",
+     "names": [
+      "roblox-animation-tools"
+     ],
+     "chars": 988
+    },
+    {
+     "event": "luau_check_finished",
+     "state": "passed",
+     "blocks": 1,
+     "errors": 0
+    }
+   ],
+   "answer": "Here is the LocalScript that fulfills your requirements. It is designed to be placed inside the Tool.\n\n### The LocalScript\n\n```lua\nlocal Players = game:GetService(\"Players\")\nlocal ReplicatedStorage = game:GetService(\"ReplicatedStorage\")\n\nlocal player = Players.LocalPlayer\nlocal tool = script.Parent\nlocal remoteEvent = ReplicatedStorage:WaitForChild(\"AttackHit\")\n\nlocal ANIMATION_ID = \"rbxassetid://180435792\"\nlocal animation = Instance.new(\"Animation\")\nanimation.AnimationId = ANIMATION_ID\n\nlocal animationTrack = nil\nlocal markerConnection = nil\n\nlocal function onActivated()\n\tif not tool.Handle then return end -- Safety check\n\t\n\tlocal character = player.Character\n\tif not character then return end\n\t\n\tlocal humanoid = character:FindFirstChildOfClass(\"Humanoid\")\n\tif not humanoid then return end\n\t\n\tlocal animator = humanoid:FindFirstChildOfClass(\"Animator\")\n\tif not animator then return end\n\n\t-- Load the animation if it hasn't been loaded yet\n\tif not animationTrack then\n\t\tanimationTrack = animator:LoadAnimation(animation)\n\tend\n\n\t-- Disconnect any previous marker connection to ensure we only fire once per activation\n\tif markerConnection then\n\t\tmarkerConnection:Disconnect()\n\t\tmarkerConnection = nil\n\tend\n\n\t-- Connect to the \"Hit\" marker\n\t-- We use the track's GetMarkerReachedSignal to ensure we only fire when the animation actually reaches that point [1]\n\tmarkerConnection = animationTrack:GetMarkerReachedSignal(\"Hit\"):Connect(function()\n\t\t-- Only fire if the track is currently playing (hasn't been stopped early)\n\t\tif animationTrack.IsPlaying then\n\t\t\tremoteEvent:FireServer()\n\t\tend\n\tend)\n\n\t-- Play the animation\n\tanimationTrack:Play()\nend\n\nlocal function onUnequipped()\n\t-- Stop the animation when the tool is unequipped\n\tif animationTrack and animationTrack.IsPlaying then\n\t\tanimationTrack:Stop()\n\tend\n\t\n\t-- Disconnect the marker connection to prevent firing after the track stops or is interrupted\n\tif markerConnection then\n\t\tmarkerConnection:Disconnect()\n\t\tmarkerConnection = nil\n\tend\nend\n\ntool.Activated:Connect(onActivated)\ntool.Unequipped:Connect(onUnequipped)\n```\n\n### Explanation of Implementation\n\n1.  **Loading the Animation**: The script creates an `Animation` instance with the ID `rbxassetid://180435792` and loads it onto the character's `Animator` using `animator:LoadAnimation()` [1]. This is the modern, non-deprecated way to handle animations in Roblox.\n2.  **Triggering on Activation**: The `tool.Activated` event is connected to `onActivated`. This ensures the animation only plays when the player clicks/uses the tool.\n3.  **Marker Detection**: Inside `onActivated`, we connect to `animationTrack:GetMarkerReachedSignal(\"Hit\")` [1]. This signal fires exactly when the animation playback reaches the \"Hit\" marker defined in the animation editor.\n4.  **Firing the RemoteEvent**: The `FireServer()` call is placed *inside* the marker signal connection. This guarantees it only fires when the marker is reached, not based on a guessed `wait()` time.\n5.  **Preventing Multiple Fires**: Before playing the animation, we disconnect any existing `markerConnection`. This ensures that if the player activates the tool rapidly, we don't stack connections and accidentally fire multiple times.\n6.  **Handling Early Stops**: The `FireServer()` call is wrapped in a check `if animationTrack.IsPlaying then`. If the animation is stopped early (e.g., by `Unequipped` or another action), the marker signal might still technically fire if the time was reached, but the `IsPlaying` check prevents the remote from firing if the track was interrupted before the marker was actually processed by the engine. More importantly, the `Unequipped` handler disconnects the marker connection entirely, ensuring no further signals are processed.\n7.  **Cleanup on Unequip**: The `tool.Unequipped` event stops the animation and disconnects the marker connection. This prevents the script from trying to access a stopped track or firing a remote after the tool is no longer in use.\n\n### References\n\n[1] Use animations > Play animations from scripts > Humanoids - Demonstrates using `animator:LoadAnimation` and `GetMarkerReachedSignal`.\n\n**Luau check by STAR:** The code block compiles and passes Luau type analysis. Roblox API names and types were not verified, and the code was not run.\n\n---\n**Sources retrieved by STAR** (official documentation: creator-docs@af5f853, CC-BY-4.0 (prose), MIT (code samples); retrieved 2026-10-11)\n\n1. [Use animations > Play animations from scripts > Humanoids](https://create.roblox.com/docs/animation/using#humanoids) · cited\n2. [Add animations > Script animations > Set up the project](https://create.roblox.com/docs/education/build-it-play-it-island-of-move/adding-animations#set-up-the-project) · retrieved, not cited\n3. [Play character animations > Trigger animations > Add animation](https://create.roblox.com/docs/tutorials/use-case-tutorials/animation/play-character-animations#add-animation) · retrieved, not cited\n4. [Hit detection with lasers > Control weapon fire rate](https://create.roblox.com/docs/tutorials/use-case-tutorials/scripting/intermediate-scripting/hit-detection-with-lasers#control-weapon-fire-rate) · retrieved, not cited\n"
+  }
+ },
+ "summary": {
+  "pass": 2,
+  "fail": 1,
+  "error": 0,
+  "scored": 3,
+  "pass_rate": 0.6667,
+  "median_seconds": 125.3
+ }
+}
