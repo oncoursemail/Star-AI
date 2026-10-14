@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
-import math
 import re
 
 from jsonschema import Draft202012Validator
@@ -89,6 +88,10 @@ def validate_animation(value: object) -> dict:
         raise ValueError("Animation recipe is larger than the approved limit")
     if any(True for _ in VALIDATOR.iter_errors(value)):
         raise ValueError("Unsupported animation field, bone name or value")
+    # JSON Schema regex $ can match before a final newline: use strict fullmatch
+    # so filenames and report names never contain hidden control characters.
+    if not isinstance(value["name"], str) or not CLIP_NAME.fullmatch(value["name"]):
+        raise ValueError("Invalid animation clip name")
     frames = [pose["frame"] for pose in value["keyframes"]]
     if frames != sorted(set(frames)) or frames[0] != 0 or frames[-1] != value["frame_count"]:
         raise ValueError("Animation keyframes must be strictly increasing and cover frames 0 to frame_count")
