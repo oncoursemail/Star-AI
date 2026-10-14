@@ -104,3 +104,12 @@ def test_quality_smoke_refuses_silent_analyzer_and_bad_repairs(monkeypatch):
         smoke, "analyze", lambda _source: [SimpleNamespace(rule_id="luau-analyze-typeerror")])
     with pytest.raises(AssertionError, match="rejected corrected Luau"):
         smoke.verify_pure_record_candidates()
+
+def test_loader_accepts_windows_crlf_document(tmp_path: Path):
+    content = lessons.LESSONS_FILE.read_bytes()
+    assert b"\\r\\n" not in content
+    target = tmp_path / "windows-record-types.md"
+    target.write_bytes(content.replace(b"\\n", b"\\r\\n"))
+    assert [case.id for case in lessons.load_cases(target)] == [
+        f"RT-{n:02d}" for n in range(1, 13)
+    ]

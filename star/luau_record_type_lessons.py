@@ -48,7 +48,7 @@ def load_cases(path: Path = LESSONS_FILE) -> tuple[RecordTypeCase, ...]:
     if len(raw) > MAX_BYTES:
         raise ValueError("Record-type candidate collection too large")
     try:
-        body = raw.decode("utf-8")
+        body = raw.decode("utf-8").replace("\\r\\n", "\\n")
     except UnicodeDecodeError as exc:
         raise ValueError("Record-type candidates are not UTF-8") from exc
     if not re.search(r"(?m)^Status: unreviewed candidate reference$", body):
