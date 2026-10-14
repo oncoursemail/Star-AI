@@ -102,6 +102,25 @@ def _calls(source: str):
         if values[i] == "local" and tokens[i + 1].kind == "word"
         and values[i + 2:i + 4] == ["=", "require"]
     }
+    # Function parameters may shadow ambient names. Conservatively mark
+    # affected calls unresolved instead of claiming an exact dependency.
+    parameter_shadows: set[str] = set()
+    for j, word in enumerate(values):
+        if word != "function":
+            continue
+        opening = next((k for k in range(j + 1, min(j + 12, len(values)))
+                        if values[k] == "("), None)
+        if opening is None:
+            continue
+        closing = _close_call(values, opening)
+        if closing is None:
+            continue
+        parameter_shadows.update(
+            values[k] for k in range(opening + 1, closing)
+            if values[k] in ("require", "script", "game")
+            and values[k - 1] in ("(", ",")
+        )
+    shadowed = shadowed or "require" in parameter_shadows
     # A user-defined local named script/game is not a Roblox Instance root.
     # Prefer losing an edge to reporting a misleading definite dependency.
     shadowed_roots = {
@@ -110,6 +129,7 @@ def _calls(source: str):
                or values[i:i + 3] == ["function", root, "("]
                for i in range(len(values)))
     }
+    shadowed_roots.update(parameter_shadows & {"script", "game"})
     for i, token in enumerate(tokens):
         if (token.kind != "word" or token.value not in aliases | {"require"}
                 or values[i + 1:i + 2] != ["("]
