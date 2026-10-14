@@ -440,8 +440,12 @@ def build_real(args, log=print):
         raise SystemExit("Give the STAR Server URL with --server or STAR_EVAL_SERVER")
     # A non-streamed answer of 1600 tokens takes 3 to 10 minutes on a busy CPU server; the app's default of 600 s
     # of silence would turn a slow server into a "timeout", which says nothing about the answer.
+    # --pin-model: every role (quick chat, code/Roblox, vision) answers with --model. Without it a server that offers
+    # star-fast fills the blank code role, so a "star-quick" run still answers Roblox tasks with star-fast.
+    pinned = getattr(args, "pin_model", False)
+    roles = {f: args.model for f in ("fast_model", "reasoning_model", "roblox_model", "vision_model")} if pinned else {}
     settings = Settings(provider="star_server", server_endpoint=server, model=args.model, project="STAR-eval",
-                        server_timeout=SERVER_TIMEOUT_SECONDS)
+                        server_timeout=SERVER_TIMEOUT_SECONDS, **roles)
     settings.validate()
     knowledge = client_for(settings)
     if knowledge is None:
@@ -474,14 +478,15 @@ def build_real(args, log=print):
                                    prelude=suite.prelude, test_body=suite.test_body(task))
 
     served = served_models(server, key)
-    fingerprint_source = {"mode": args.mode, "model": args.model, "packs": args.packs, "provider": "star_server"}
+    fingerprint_source = {"mode": args.mode, "model": args.model, "packs": args.packs, "provider": "star_server",
+                          **({"pinned_roles": True} if roles else {})}
     run_info = {
         **git_state(),
         "runner": "star.eval_runner/" + str(SCHEMA),
         "provider": "star_server", "model": args.model, "models_served": served, "mode": args.mode,
         "skill_packs": args.packs, "knowledge": "on", "temperature": 0, "server_timeout_s": SERVER_TIMEOUT_SECONDS,
         "server": "<private-address>", "sandbox": "lxc container as user star (prlimit + timeout)" if sandbox else "none",
-        "platform": sys.platform,
+        "platform": sys.platform, **({"pinned_roles": True} if roles else {}),
         "fingerprint": hashlib.sha256(json.dumps(fingerprint_source, sort_keys=True).encode()).hexdigest()[:12],
     }
     probe = sandbox.lock_present if sandbox else None
@@ -588,6 +593,8 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default="star-fast")
     parser.add_argument("--mode", default="auto", choices=["auto", "fast", "agent"])
     parser.add_argument("--packs", default="off", help="skill packs: off, all, or a comma list of pack names")
+    parser.add_argument("--pin-model", action="store_true",
+                        help="every role answers with --model (a quick-model arm for python -m star.cascade_router)")
 
 
 def main(argv: list[str] | None = None) -> int:
