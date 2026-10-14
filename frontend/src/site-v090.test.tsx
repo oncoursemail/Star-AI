@@ -86,8 +86,32 @@ describe('GitHub release fallback',()=>{
  it('offers the official release page, not fabricated ZIP or checksum URLs',()=>{
   render(<SiteDownload latest={null} files={releaseFiles(null)} releaseLive={false} snapshotAt={null}/>)
   expect(screen.getByRole('link',{name:/Open the latest release/i}).getAttribute('href')).toBe(LINKS.latest)
-  expect(screen.getByRole('link',{name:/Portable ZIP on GitHub/i}).getAttribute('href')).toBe(LINKS.latest)
+  expect(screen.getByRole('link',{name:/View release assets/i}).getAttribute('href')).toBe(LINKS.latest)
   expect(screen.getByRole('link',{name:/Checksums on GitHub Releases/i}).getAttribute('href')).toBe(LINKS.latest)
   expect(screen.getByText(/Live release details unavailable/)).toBeTruthy()
+ })
+})
+
+
+describe('website claim accuracy regressions',()=>{
+ it('qualifies installation, hardware, speed, evaluations and GitHub snapshots in the rendered page',()=>{
+  const html=renderToString(<Landing/>)
+  expect(html).toContain('all-users installation or upgrade may require it')
+  expect(html).toContain('guidance, not a hardware benchmark')
+  expect(html).toContain('speed varies with hardware')
+  expect(html).toContain('October 11–12, 2026')
+  expect(html).toContain('pack-by-pack experiments recorded October 11, 2026')
+  expect(html).toContain('browser-cached snapshot')
+  expect(html).toContain('Read-only when connected')
+  expect(html).not.toContain('there is no administrator prompt')
+  expect(html).not.toContain('It is quick and private')
+  expect(html).not.toContain('This board is read from the public GitHub repository when you open the page')
+ })
+ it('never promises a ZIP or checksum when published assets are unknown',()=>{
+  render(<SiteDownload latest={null} files={releaseFiles(null)} releaseLive={false} snapshotAt={null}/>)
+  expect(screen.getByRole('link',{name:/View release assets/i}).getAttribute('href')).toBe(LINKS.latest)
+  expect(screen.getByText(/If a release provides SHA256SUMS.txt/)).toBeTruthy()
+  expect(screen.getByText(/older published builds and any checksums provided/)).toBeTruthy()
+  expect(screen.queryByText('The checksum is listed in SHA256SUMS.txt on the release.')).toBeNull()
  })
 })

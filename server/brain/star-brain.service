@@ -1,0 +1,30 @@
+# /etc/systemd/system/star-brain.service  (PROPOSED 2026-10-10, not applied)
+# Changes against the live unit:
+#   * numactl --interleave=all in front of llama-server: the router's model processes inherit the memory policy, so
+#     every model's weights are spread over the four memory nodes (4 DDR4 channels instead of 1-2).
+#   * --threads / --threads-batch removed from the command line. Command-line flags override models.ini for EVERY
+#     model, which is why star-embed and star-rerank ran with 24/48 threads. Thread counts now live in models.ini.
+#   * ExecStartPre makes sure every node has free memory before the models load (see star-brain-prestart.sh).
+#   * --models-max raised to the size of the fleet in models.ini.
+[Unit]
+Description=STAR Brain (llama.cpp router server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=star
+Group=star
+Environment=LD_LIBRARY_PATH=/opt/star/bin
+ExecStartPre=/opt/star/bin/star-brain-prestart.sh
+ExecStart=/usr/bin/numactl --interleave=all /opt/star/bin/llama-server --host 0.0.0.0 --port 8080 \
+  --api-key-file /opt/star/secrets/api_keys \
+  --models-preset /opt/star/config/models.ini --models-max 5 \
+  --numa distribute --jinja --metrics
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+LimitMEMLOCK=infinity
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

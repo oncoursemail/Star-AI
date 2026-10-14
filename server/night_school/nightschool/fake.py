@@ -23,11 +23,18 @@ def practice_task(task_id: str, name: str, *, needs: str = "math\\.clamp") -> di
     }
 
 
+LIMIT_NAMES = ("limitHealth", "limitSpeed", "limitStamina", "limitVolume", "limitZoom", "limitHunger")
+EASY_NAMES = ("easyOne", "easyTwo", "easyThree")
+VALIDATION_NAMES = ("limitMana", "limitAmmo", "limitFuel", "limitShield", "limitOxygen")
+DRY_VALIDATION_IDS = tuple(f"NSDRY-{i:02d}" for i in range(10, 10 + len(VALIDATION_NAMES)))
+
+
 def dry_tasks() -> list[dict]:
-    """Nine tiny tasks. The scripted model solves "easy" ones at once and the others only with the lesson."""
-    tasks = [practice_task(f"NSDRY-{i:02d}", name) for i, name in enumerate(
-        ["limitHealth", "limitSpeed", "limitStamina", "limitVolume", "limitZoom", "limitHunger"], 1)]
-    tasks += [practice_task(f"NSDRY-{i:02d}", name, needs="return") for i, name in enumerate(["easyOne", "easyTwo", "easyThree"], 7)]
+    """Nine tiny practice tasks and five validation tasks. The scripted model solves "easy" ones at once and the
+    others only with the lesson, so the paired gate sees 5 tasks x k=2 = 10 winning pairs (p = 1/1024)."""
+    tasks = [practice_task(f"NSDRY-{i:02d}", name) for i, name in enumerate(LIMIT_NAMES, 1)]
+    tasks += [practice_task(f"NSDRY-{i:02d}", name, needs="return") for i, name in enumerate(EASY_NAMES, 7)]
+    tasks += [practice_task(task_id, name) for task_id, name in zip(DRY_VALIDATION_IDS, VALIDATION_NAMES)]
     return tasks
 
 
@@ -37,8 +44,7 @@ def scripted(body: dict) -> str:
     if DIAGNOSE_MARK in text:
         return json.dumps({"cause": "The answer used chained if statements instead of the clamp call the task expects.",
                            "lesson": LESSON})
-    name = next((n for n in ("limitHealth", "limitSpeed", "limitStamina", "limitVolume", "limitZoom", "limitHunger",
-                             "easyOne", "easyTwo", "easyThree") if n in text), "limitValue")
+    name = next((n for n in LIMIT_NAMES + EASY_NAMES + VALIDATION_NAMES if n in text), "limitValue")
     if "math.clamp" in text or name.startswith("easy"):
         code = f"local function {name}(value: number): number\n\treturn math.clamp(value, 0, 100)\nend\n\nreturn {name}"
     else:

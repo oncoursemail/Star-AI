@@ -10,7 +10,7 @@
 import type {TargetAndTransition, Transition, Variants} from 'motion/react'
 
 export const duration = {press: 0.09, hover: 0.12, menu: 0.16, message: 0.17, page: 0.2} as const
-export const ease = [0.2, 0.7, 0.2, 1] as const
+export const ease = [0.23, 1, 0.32, 1] as const
 
 const tween = (seconds: number): Transition => ({duration: seconds, ease})
 export const instant: Transition = {type: 'tween', duration: 0, delay: 0}

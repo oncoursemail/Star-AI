@@ -1,6 +1,6 @@
-# STAR Intelligence v0.9.0 — Draft release notes
+# STAR Intelligence v0.9.0 — Release notes and source evidence
 
-**Status:** Release candidate in [PR #40](https://github.com/oncoursemail/Star-AI/pull/40), not a published Windows update.
+**Publication (verified October 12, 2026):** v0.9.0 was published October 11, 2026 with Windows Setup, portable ZIP and SHA-256 manifest. [Published release](https://github.com/oncoursemail/Star-AI/releases/tag/v0.9.0) is authoritative for the shipped build. [PR #40](https://github.com/oncoursemail/Star-AI/pull/40) and subsequent `star/next` changes describe source history, **not** automatically what was in the released installer.
 
 ## What is new
 
@@ -12,7 +12,7 @@
 
 **Studio and Open Cloud.** Connect your own private test experience using a scoped Open Cloud key or Studio's MCP connector. Reads are available; publication and Luau testing require approval, and Studio changes are guarded by place/session checks. [Roblox access](ROBLOX_ACCESS.md#L1-L83).
 
-**Skills and evaluation gate.** Eighteen topic packs ship; five are enabled by default (the six game-type packs are opt-in until the gate has measured them). Automated Roblox suites and a gate help compare changes, not certify game quality. [Evaluations](evals.md#L113-L123).
+**Skills and evaluation gate.** The **October 11, 2026 published release notes report** 18 skill packs and five defaults for v0.9.0; that release inventory has not been independently extracted from the installer in this audit. The **October 12, 2026 `star/next` source** has 26 `star/skill_packs/` directories and five entries in `DEFAULT_ENABLED` (`star/skill_packs/__init__.py`); newer source packs must not be represented as shipped in v0.9.0. Six game-type packs are off by default in that source. Automated suites measure specific tasks, not game quality. [Evaluations](evals.md).
 
 **Learning.** Project-specific corrections and preferences can be reviewed, recalled and exported. Inferred lessons need approval; the model is not retrained. [Learning](STAR_LEARNING.md#L1-L6).
 
@@ -24,16 +24,16 @@
 
 ## Upgrading from v0.8
 
-Back up `%APPDATA%\STAR` first. The upgrade is designed to preserve chats, models and references; an upgrade from an existing Windows profile still needs verification. Configure your server or local brain, Roblox credentials/test place, and optional voice and image dependencies separately. [Acceptance](STAR_V090_RELEASE_ACCEPTANCE.md#L23-L48).
+Back up `%APPDATA%\STAR` first. The **October 11, 2026 published release notes** report one v0.8.0-to-v0.9.0 Windows 11 upgrade, with a matching installer checksum, byte-identical personal files and preserved chat database contents. This is a reported test on **one PC**, not evidence that every upgrade path (including v0.8.1), Windows profile or device was tested. Configure your server or local brain, Roblox credentials/test place, and optional voice and image dependencies separately. [Acceptance](STAR_V090_RELEASE_ACCEPTANCE.md).
 
 ## What is verified and how
 
-PR #40 reports 2,058 Python tests passing (15 skipped), 172 frontend tests passing, compilation/build checks, offline Studio safety probes and a read-only live Studio check. These are branch-reported results, not proof of a completed release installation. [PR #40](https://github.com/oncoursemail/Star-AI/pull/40).
+The **published v0.9.0 release notes (October 11, 2026)** report **2,723 Python tests and 215 interface tests passing** for the released source, plus a packaged build/smoke test and a **65-step** real Windows app acceptance run. These counts are **reported by the release**, not newly executed or independently measured in this documentation audit. Earlier [PR #40](https://github.com/oncoursemail/Star-AI/pull/40) reports **2,717 Python tests passing (16 skipped) and 215 Vitest tests passing** on its recorded **October 11, 2026** Windows 11 / Python 3.12 head `7def230`; those are **not** the release's final test totals. Neither set proves every Roblox workflow, GPU or Windows profile works.
 
 ## What is NOT verified yet or needs your setup
 
-A v0.8-to-v0.9 Windows upgrade on your profile, GPU/provider performance, live microphone/speaker calls, and your own Roblox/ComfyUI configuration require separate checks. The website is not deployed. [Acceptance](STAR_V090_RELEASE_ACCEPTANCE.md#L35-L48); [Voice](STAR_VOICE_CALLS.md#L343-L359).
+A v0.8.0 upgrade on **one** Windows 11 machine is reported in the published release; upgrades on your profile, GPU/provider performance, live microphone/speaker calls, and your own Roblox/ComfyUI configuration still need separate checks. **Public GitHub Pages deployment was not independently verified in this audit**: a website build or Pages workflow cannot establish the site's live state. [Acceptance](STAR_V090_RELEASE_ACCEPTANCE.md#real-windows-acceptance--mandatory-follow-up); [Voice](STAR_VOICE_CALLS.md).
 
 ## Known limits
 
-Without packs: **18/34 = 52.9%** on Roblox v2; **11/23 = 47.8%** on creation-v1; combined **29/57 = 50.9%**. Individually tested default packs gave 19/34 and 15/23, **not** a measured combined-packs run. Sixteen Studio-dependent v2 tasks were not run; scores are noisy and do not measure visuals or gameplay. [Evaluations](evals.md#L123-L146); [limits](evals.md#L180-L214).
+**Dated automated scripting results, not game-quality scores:** `python -m star.evals run` with `star-fast`, Auto mode, temperature 0 and packs off, followed by `star.evals rescore`, produced **18/34** Roblox v2 and **11/23** creation-v1 on **October 11, 2026** (**29/57** across those two suites for that run). A separate released-v0.9.0 scripting run on **October 12, 2026** passed **13/34**; another earlier run recorded **16/34** (its exact run date is not established by the October 12 handoff). Thus the documented v2 outcomes range **13–18/34**; the earlier **11/23** creation figure has not been reproduced on the release. Individually tested default packs gave **19/34** and **15/23** on October 11, **not** a measured combined-packs run. Another **16** Studio-dependent v2 tasks require manual/engine evaluation. See [methods and stored runs](evals.md#measured-results-2026-10-11-star-server-star-fast-mode-auto-temperature-0-knowledge-on-one-request-at-a-time) and the [October 12 release handoff](WEBSITE_RELEASE_CHECKLIST.md).

@@ -1,0 +1,23 @@
+{
+ "pairs": 3537,
+ "chunks": 1600,
+ "pages": 831,
+ "by_origin": {
+  "synthetic-question": 1357,
+  "synthetic-task": 1359,
+  "doc2query-index": 821
+ },
+ "by_generator": {
+  "Qwen3.6-35B-A3B-Q4_K_M.gguf (STAR star-fast; Qwen/Qwen3.6-35B-A3B, Apache-2.0)": 12,
+  "Qwen3.5-9B-Q4_K_M.gguf (unsloth/Qwen3.5-9B-GGUF of Qwen/Qwen3.5-9B, Apache-2.0)": 2704,
+  "star-quick/q1 (STAR star-quick on server 1 = JetBrains/Mellum2.1-12B-A2.5B-Thinking Q4_K_M, Apache-2.0)": 821
+ },
+ "eval_pages_in_training": 89,
+ "eval_pages_total": 140,
+ "dropped": {
+  "too similar to an evaluation question": 17
+ },
+ "strict_variant": false,
+ "claude_or_chatgpt_outputs_used": false,
+ "sha256": "5141e53c4b59e0545554e06a04bfe3d84b9cd57a0382f520cb498e1623343195"
+}

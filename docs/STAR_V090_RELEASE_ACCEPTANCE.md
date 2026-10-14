@@ -1,6 +1,6 @@
 # STAR Genesis v0.9.0 — Combined Integration and Release Acceptance
 
-**State:** Candidate source branch, not a public release until GitHub Actions successfully builds, tests, signs or checksum-publishes (when supported), and publishes a new v0.9.0 Windows Setup and portable ZIP. The original v0.8.1 installer is unchanged until a new official release is verified. Python/React CI and packaged EXE doctor checks are not substitutes for live GPU or Windows user-profile testing.
+**Publication state (checked October 12, 2026):** STAR v0.9.0 **was published October 11, 2026** with Windows Setup, portable ZIP and SHA-256 checksums. The release reports one Windows 11 v0.8.0-to-v0.9.0 upgrade and a 65-step acceptance run; it does **not** establish acceptance on other PCs, every Windows user profile, Roblox Studio session or GPU. Python/React CI and packaged EXE doctor checks alone are not substitutes for those live checks. This document also records the historical candidate's integration requirements.
 
 ## Canonical integration source
 
@@ -30,7 +30,7 @@
 
 **Windows:** PyInstaller `STAR.exe --doctor` and `--ui-doctor`, verify React compiled bundle present, build Inno Setup executable and portable ZIP. Publish checksum manifest. The CI smoke test does not exercise graphics drivers, real inference, user keyring, image generation or install/upgrade from the user's current profile.
 
-**Version:** All source, React package, installer and metadata versions must match v0.9.0. Public latest release must contain `STAR-Setup-v0.9.0.exe`, `STAR-Genesis-Windows-x64.zip`, `SHA256SUMS.txt` and pass anonymous download and digest verification. Only then announce it as released.
+**Version:** `star/version.py`, `pyproject.toml`, `frontend/package.json` and `installer/STAR.iss` specify v0.9.0 in the audited source (October 12, 2026). The October 11 GitHub release lists `STAR-Setup-v0.9.0.exe`, `STAR-Genesis-Windows-x64.zip` and `SHA256SUMS.txt`; this audit verified GitHub's asset listing, **not** an independent anonymous download or digest recomputation. These are publication criteria to re-check for future releases.
 
 ## Real Windows acceptance — mandatory follow-up
 
@@ -49,7 +49,7 @@ These require an actual Windows 11 test computer, GPU, internet provider credent
 
 ## Disposition of old pull requests
 
-When combined v0.9.0 has a validated CI build and merge to `main`, mark old draft PRs #27, #29, #30 and #31 **superseded by #35** (close without overwriting the combined code). Keep branches and review history intact. Do not force push, delete user histories, ignore failing tests or mask a failed Windows package with frontend-only CI.
+The v0.9.0 integration was published October 11, 2026. Earlier PRs #27, #29, #30, #31 and #35 are historical integration references, **not** instructions to close or merge any currently open pull request. Check GitHub's current PR state before any separate disposition decision. Keep branches and review history intact; do not force push, delete user histories, ignore failing tests or mask a failed Windows package with frontend-only CI.
 
 ## Nonclaims
 

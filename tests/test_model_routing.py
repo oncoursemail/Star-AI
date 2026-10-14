@@ -540,6 +540,7 @@ class SlotServer:
     requests sent at the same moment really meet."""
 
     def __init__(self, slots=2, together=2):
+        self.count = slots
         self.free = set(range(slots))
         self.together = together
         self.changed = None
@@ -574,6 +575,15 @@ class SlotServer:
             self.free.add(taken)
             self.changed.notify_all()
         return reply(f"slot {taken}")
+
+    def slots_page(self, seen=None):
+        """`GET /slots?model=X` of this server, as an httpx mock transport (llama.cpp's fields)."""
+        def answer(request):
+            if seen is not None:
+                seen.append(request)
+            return httpx.Response(200, json=[{"id": number, "id_task": -1, "is_processing": number not in self.free}
+                                             for number in range(self.count)])
+        return httpx.MockTransport(answer)
 
 
 def test_two_helpers_at_once_do_not_wait_for_the_same_slot(desk):
@@ -640,7 +650,8 @@ def test_two_clients_sending_a_chat_turn_at_once(monkeypatch):
     assert sorted(two_clients_send_a_turn_at_once(settings, server, [first, apart])) == ["slot 0", "slot 1"]
     assert sorted(server.named) == [0, 1] and server.peak == 2 and server.waited == []
 
-    # The known limit, kept visible: both clients name one slot and the second waits for it
+    # Sent at the very same moment, without the look at the server's slots the app takes first
+    # (see the busy-slot tests below): both clients name one slot and the second waits for it
     # although the other slot is free. Both turns are still answered.
     server = SlotServer(2)
     answers = two_clients_send_a_turn_at_once(settings, server, [first, same])
@@ -652,6 +663,171 @@ def test_two_clients_sending_a_chat_turn_at_once(monkeypatch):
     server = SlotServer(2)
     assert sorted(two_clients_send_a_turn_at_once(settings, server, [first, same])) == ["slot 0", "slot 1"]
     assert server.named == [None, None] and server.peak == 2 and server.waited == []
+
+
+def chats_on_one_slot(settings, model="star-fast"):
+    """Two chat names that a fresh process puts on the same slot, and that slot."""
+    def home(chat):
+        providers._SLOT_TABLE.clear()
+        return slot(settings, chat, model=model)
+    first, *others = [f"STAR::chat::{number}" for number in range(16)]
+    same = next(chat for chat in others if home(chat) == home(first))
+    shared = home(first)
+    providers._SLOT_TABLE.clear()
+    return first, same, shared
+
+
+def test_a_turn_moves_off_a_slot_another_client_is_generating_in(monkeypatch):
+    """Issue 118: client B's chat hashes to the slot client A is generating in. B looks at the
+    server's slots first, sees that slot busy and sends its turn to the idle one: both run side by
+    side, nobody waits, and B's chat stays on its new slot for the next turn."""
+    settings = fleet_settings()
+    monkeypatch.setenv("STAR_SERVER_API_KEY", KEY)
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    first, same, shared = chats_on_one_slot(settings)
+    server = SlotServer(2)
+    seen = []
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", server.slots_page(seen))
+
+    async def client_a():
+        def fields(tools):
+            providers._SLOT_TABLE.clear()                                # its own process
+            return llama_request_fields(settings, conversation=first, tools=tools, model="star-fast")
+        return (await execute(client=Client(server), model="star-fast", prompt="hello there", image_paths=[],
+                              mode="fast", today="2026-10-10", request_extras=fields))[0]
+
+    async def client_b():
+        while server.running == 0:                                       # a moment after A's turn started
+            await asyncio.sleep(0)
+        providers._SLOT_TABLE.clear()                                    # another process
+        busy = await providers.look_for_busy_slots(settings, "star-fast", conversation=same)
+        assert busy == {shared}
+        moved = llama_request_fields(settings, conversation=same, model="star-fast")
+        return (await execute(client=Client(server), model="star-fast", prompt="hello there", image_paths=[],
+                              mode="fast", today="2026-10-10", request_extras=moved))[0], moved
+
+    async def both():
+        return await asyncio.gather(client_a(), client_b())
+    answer_a, (answer_b, moved) = asyncio.run(both())
+    assert answer_a == f"slot {shared}" and answer_b == f"slot {1 - shared}"
+    assert moved["id_slot"] == 1 - shared
+    assert server.named == [shared, 1 - shared] and server.peak == 2 and server.waited == []
+    # The look went to the validated server's own /slots page for that model, with the key.
+    assert len(seen) == 1
+    asked = seen[0]
+    assert (asked.method, asked.url.host, asked.url.path) == ("GET", httpx.URL(LAN).host, "/slots")
+    assert asked.url.params["model"] == "star-fast"
+    assert asked.headers["authorization"] == f"Bearer {KEY}"
+    # B's chat keeps the slot it moved to (its prompt is cached there), with no further look.
+    assert slot(settings, same, model="star-fast") == 1 - shared
+    assert slot(settings, same, model="star-fast", tools=True) == 1 - shared
+
+
+def test_a_busy_slot_seen_once_moves_one_turn_choice_only(monkeypatch):
+    settings = fleet_settings()
+    monkeypatch.setenv("STAR_SERVER_API_KEY", KEY)
+    remember_server_limits(LAN, "star-fast", 32768, 3)
+    chat = "STAR::chat::a"
+    home = slot(settings, chat, model="star-fast")
+
+    def busy_page(busy):
+        return httpx.MockTransport(lambda request: httpx.Response(
+            200, json=[{"id": number, "is_processing": number in busy} for number in range(3)]))
+
+    def look(busy):
+        monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", busy_page(busy))
+        return asyncio.run(providers.look_for_busy_slots(settings, "star-fast", conversation=chat))
+
+    # Other slots busy: nothing moves, and the answer is used up by that turn.
+    assert look({(home + 1) % 3}) == {(home + 1) % 3}
+    assert slot(settings, chat, model="star-fast") == home
+    assert providers._BUSY_SLOTS == {}
+    # A warm-up never moves the chat (it prepares the slot the chat is in) and leaves the answer for the turn.
+    look({home})
+    assert slot(settings, chat, model="star-fast", prime=True) == home
+    assert slot(settings, chat, model="star-fast") == (home + 1) % 3       # the turn moves to the next idle one
+    assert slot(settings, chat, model="star-fast") == (home + 1) % 3       # and stays
+    home = (home + 1) % 3
+    # Every slot busy: no idle slot to go to, so the chat keeps its own.
+    look({0, 1, 2})
+    assert slot(settings, chat, model="star-fast") == home
+    # Its slot and the next one busy: the one after.
+    look({home, (home + 1) % 3})
+    assert slot(settings, chat, model="star-fast") == (home + 2) % 3
+    home = (home + 2) % 3
+    # An answer older than a few seconds says nothing about now.
+    look({home})
+    stamp, busy = providers._BUSY_SLOTS[providers._instance(settings, "star-fast")]
+    providers._BUSY_SLOTS[providers._instance(settings, "star-fast")] = (stamp - 60, busy)
+    assert slot(settings, chat, model="star-fast") == home
+    # Older llama.cpp builds report `state` (0 idle) instead of `is_processing`.
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(lambda request: httpx.Response(
+        200, json=[{"id": 0, "state": 1}, {"id": 1, "state": 0}, {"id": 2, "state": 1}, "junk", {"id": "3"}])))
+    assert asyncio.run(providers.look_for_busy_slots(settings, "star-fast", conversation=chat)) == {0, 2}
+
+
+@pytest.mark.parametrize("failure", ["refused", "timeout", "server error", "not json", "not a list", "unauthorized"])
+def test_a_failed_look_at_the_slots_changes_nothing(monkeypatch, failure):
+    settings = fleet_settings()
+    monkeypatch.setenv("STAR_SERVER_API_KEY", KEY)
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    chat = "STAR::chat::a"
+    home = slot(settings, chat, model="star-fast")
+
+    def answer(request):
+        if failure == "refused":
+            raise httpx.ConnectError("refused", request=request)
+        if failure == "timeout":
+            raise httpx.ReadTimeout("slow", request=request)
+        return {"server error": httpx.Response(500, text="boom"), "not json": httpx.Response(200, text="<html>"),
+                "not a list": httpx.Response(200, json={"error": "x"}),
+                "unauthorized": httpx.Response(401, json={"error": "bad key"})}[failure]
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(answer))
+    assert asyncio.run(providers.look_for_busy_slots(settings, "star-fast", conversation=chat)) == frozenset()
+    assert providers._BUSY_SLOTS == {} and providers._NO_SLOTS_PAGE == set()
+    assert slot(settings, chat, model="star-fast") == home
+
+
+def test_the_slots_page_is_only_asked_when_the_turn_would_be_pinned(monkeypatch):
+    settings = fleet_settings()
+    monkeypatch.setenv("STAR_SERVER_API_KEY", KEY)
+    asked = []
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(
+        lambda request: asked.append(request) or httpx.Response(404)))
+
+    def look(settings, model="star-fast", conversation="STAR::chat::a"):
+        return asyncio.run(providers.look_for_busy_slots(settings, model, conversation=conversation))
+    assert look(settings) == frozenset() and asked == []                  # slot count not known yet
+    remember_server_limits(LAN, "star-fast", 32768, 1)
+    assert look(settings) == frozenset() and asked == []                  # one slot: never pinned
+    remember_server_limits(LAN, "star-fast", 32768, 2)
+    assert look(settings, conversation="") == frozenset() and asked == []  # no conversation: not pinned
+    assert look(Settings(provider="groq", model="x")) == frozenset() and asked == []
+    for name in ("STAR_SERVER_SLOT_PINNING", "STAR_SERVER_SLOT_PROBE"):
+        monkeypatch.setenv(name, "off")
+        assert look(settings) == frozenset() and asked == []
+        monkeypatch.delenv(name)
+    # A server without the page (llama.cpp --no-slots answers 501, others 404) is asked once per process.
+    assert look(settings) == frozenset() and len(asked) == 1
+    assert look(settings) == frozenset() and len(asked) == 1
+    assert providers._NO_SLOTS_PAGE == {LAN}
+
+
+def test_a_chat_turn_through_run_task_avoids_a_busy_slot(desk, monkeypatch):
+    """The app path: run_task looks at the server's slots before the turn and pins the idle one."""
+    scope = "STAR::chat::" + desk.chat
+    home = slot(desk.settings, scope, model="star-fast")
+    asked = []
+
+    def page(request):
+        asked.append(request.url.params.get("model"))
+        return httpx.Response(200, json=[{"id": 0, "is_processing": home == 0},
+                                         {"id": 1, "is_processing": home == 1}])
+    monkeypatch.setattr(providers, "_SLOT_PROBE_TRANSPORT", httpx.MockTransport(page))
+    request = desk.turn(ROBLOX_QUESTION, [reply("Use TweenService:Create.", model="star-fast")])
+    assert asked == ["star-fast"]
+    assert request["extra_body"]["id_slot"] == 1 - home
+    assert slot(desk.settings, scope, model="star-fast") == 1 - home
 
 
 @pytest.mark.parametrize("value, pinned", [("", True), ("on", True), ("1", True), ("anything", True),
