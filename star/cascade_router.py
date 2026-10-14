@@ -36,7 +36,7 @@ from .eval_gate import _errors, load_result
 
 POLICIES = ("strong", "quick", "cascade")
 DEFAULT_ACCEPT = ("passed",)
-_SCORED = {"pass": True, "fail": False}
+_SCORED: dict[object, bool] = {"pass": True, "fail": False}
 _ROUTE_EVENTS = ("route_selected", "route_busy_quick", "route_fallback")
 _BLIND = re.compile(r"holdout", re.I)      # the blind exam: never used to fit anything (night school pool rule)
 
@@ -111,8 +111,8 @@ def build_pairs(strong_runs: list[dict], quick_runs: list[dict], *, accept=DEFAU
     k = min(len(strong_runs), len(quick_runs))
     if len(strong_runs) != len(quick_runs):
         notes.append(f"{len(strong_runs)} strong vs {len(quick_runs)} quick runs: the first {k} of each are paired")
-    strong_models = {answered_by(row) for run in strong_runs for row in run["tasks"].values() if answered_by(row)}
-    quick_models = {answered_by(row) for run in quick_runs for row in run["tasks"].values() if answered_by(row)}
+    strong_models = {m for run in strong_runs for row in run["tasks"].values() if (m := answered_by(row))}
+    quick_models = {m for run in quick_runs for row in run["tasks"].values() if (m := answered_by(row))}
     if strong_models & quick_models:
         message = (f"both arms were answered by {', '.join(sorted(strong_models & quick_models))}: the quick arm was "
                    "probably re-routed to the strong model (run it with `python -m star.evals run --pin-model`)")
