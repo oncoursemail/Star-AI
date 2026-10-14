@@ -19,6 +19,26 @@ class Runtime:
         self.log_path: Path | None = None
         self.lock = threading.Lock()
         self.mode: str | None = None
+        # The process stop() is waiting for. The wait happens outside `lock`, so status() (called from the
+        # UI thread on every state refresh) answers at once instead of freezing the window for up to 15 s.
+        self._stopping: subprocess.Popen | None = None
+
+    def _close_log(self) -> None:
+        if self.log_file:
+            try:
+                self.log_file.close()
+            finally:
+                self.log_file = None
+
+    def _ready_to_start(self, busy_message: str) -> None:
+        """Called with `lock` held: refuse while a process runs or is stopping; release a dead one's log."""
+        if self._stopping is not None:
+            raise RuntimeError('STAR Brain is still stopping; try again in a moment')
+        if self.process and self.process.poll() is None:
+            raise RuntimeError(busy_message)
+        # A process that exited by itself still holds its log file open; close it before opening a new one.
+        self.process = None
+        self._close_log()
 
     @staticmethod
     def arguments(executable: Path, model: Path, *, port=8080, context=4096, gpu_layers=25, projector: Path | None = None) -> list[str]:
@@ -67,8 +87,7 @@ class Runtime:
                      *, port=8080, context=4096, gpu_layers=25):
         """Start only an explicitly requested, locally installed model router."""
         with self.lock:
-            if self.process and self.process.poll() is None:
-                raise RuntimeError('Stop the current managed STAR Brain before starting model router')
+            self._ready_to_start('Stop the current managed STAR Brain before starting model router')
             argv = self.router_arguments(executable, models_dir, port=port,
                                          context=context, gpu_layers=gpu_layers)
             log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,12 +107,12 @@ class Runtime:
 
     def router_running(self) -> bool:
         with self.lock:
-            return bool(self.mode == 'router' and self.process and self.process.poll() is None)
+            return bool(self.mode == 'router' and self._stopping is None
+                        and self.process and self.process.poll() is None)
 
     def start(self, executable: Path, model: Path, log_path: Path, *, port=8080, context=4096, gpu_layers=25, projector: Path | None = None):
         with self.lock:
-            if self.process and self.process.poll() is None:
-                raise RuntimeError('llama.cpp is already running')
+            self._ready_to_start('llama.cpp is already running')
             argv=self.arguments(executable,model,port=port,context=context,gpu_layers=gpu_layers,projector=projector)
             log_path.parent.mkdir(parents=True,exist_ok=True)
             self.log_file=log_path.open('ab')
@@ -110,20 +129,41 @@ class Runtime:
 
     def stop(self):
         with self.lock:
-            process=self.process
+            process = self.process
             if not process:
                 self.mode = None
                 return
+            owner = self._stopping is None
+            if owner:
+                self._stopping = process
+                if process.poll() is None:
+                    process.terminate()
+        if not owner:
+            # Another caller (a Stop click, then closing the window) is already stopping it: wait as well,
+            # so this caller also returns only once the process is gone.
+            try:
+                process.wait(timeout=15)
+            except subprocess.TimeoutExpired:
+                pass
+            return
+        try:
             if process.poll() is None:
-                process.terminate()
-                try:process.wait(timeout=10)
+                try:
+                    process.wait(timeout=10)
                 except subprocess.TimeoutExpired:
-                    process.kill();process.wait(timeout=5)
-            self.process=None
-            self.mode=None
-            if self.log_file:self.log_file.close();self.log_file=None
+                    process.kill()
+                    process.wait(timeout=5)
+        finally:
+            with self.lock:
+                self._stopping = None
+                # Forget the process only once it has really exited; otherwise it still holds the port.
+                if self.process is process and process.poll() is not None:
+                    self.process = None
+                    self.mode = None
+                    self._close_log()
 
     def status(self):
         with self.lock:
+            if self._stopping is not None:return 'stopping'
             if not self.process:return 'not started'
             return 'running' if self.process.poll() is None else f'exited ({self.process.returncode})'
