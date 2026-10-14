@@ -88,3 +88,21 @@ Rerank median latency per query in these runs: 11.9-17.4 s (15), 6.4-8.9 s (8), 
   14:09Z clean fewer/shorter runs (RS4). Locks released each time; server left clean (no temp servers, unit finished).
 - Commit 6498bbcd models.ini; pytest 7679 passed, 256 skipped, 1 failed before the commit
   (test_brain_models_ini_is_checked_out_with_lf compares the working copy with the index; passes after the commit).
+
+## Lead decisions applied (2026-10-14 14:2xZ, item #140)
+1. star-rerank `load-on-startup = false`, live and in the repo (PR #389). Applied WITHOUT a brain restart: backup
+   /opt/star/config/backups/20261014-rerank-ondemand/models.ini, edited /opt/star/config/models.ini, then
+   `POST /models/unload {"model":"star-rerank"}`. All other models stayed loaded (star-fast, star-voice, star-embed,
+   star-embed-ft1). **RAM freed: 5.8 GB** (container used 37,571 -> 31,778 MiB). First rerank call after that loads it
+   on demand: 8.9 s, then 0.5 s for a 2-document call; unloaded again afterwards. The router applies the file's
+   `load-on-startup = false` at its next restart (until then it simply stays unloaded unless used).
+   Rollback: copy the backup models.ini back (and load it with any rerank call, or restart star-brain).
+2. Knowledge app redeployed from star/next d287e67c with `server/knowledge/deploy.sh --install` (clean detached
+   worktree; LF files checked). Backups: /opt/star/knowledge/backups/app-20261014-1419.tgz and units-20261014-1419/.
+   star-knowledge restarted 14:19:48Z (~3 s gap); drop-ins embed-ft1.conf kept (STAR_EMBED_MODEL=star-embed-ft1 on both
+   units); the refresh unit now also has STAR_PLANNER_URL (planner not running = old behaviour).
+   Checks: the same live search returns the same 3 passages (vector, 45 ms); evaluate.py now waits for the quiet lock
+   (seen: "quiet: server lock present, pausing" / "continuing after 20s" with a test lock); `starkb eval`
+   recall@5 vector 30/30, 37/40, 18/25 and MRR 0.8667 / 0.8217 / 0.5017 = identical to before.
+   Rollback: `tar xzf /opt/star/knowledge/backups/app-20261014-1419.tgz -C /opt/star/knowledge`, copy the three units
+   back to /etc/systemd/system, `systemctl daemon-reload && systemctl restart star-knowledge`.
