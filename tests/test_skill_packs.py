@@ -21,10 +21,15 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
          "roblox-tweenservice-easing",
          "roblox-studio-mcp-workflow", "roblox-replication-hot-paths", "roblox-editable-memory-streaming",
-         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender"]
+         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender", "roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints", "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs", "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud",
+         "roblox-purchases-badges"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-                      "roblox-tweenservice-easing"}
+                      "roblox-tweenservice-easing", "roblox-purchases-badges"}
+# Typed gameplay and platform packs; their grounding is checked in test_roblox_gameplay_skill_packs.py.
+GAMEPLAY_PACKS = {"roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints",
+                  "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs",
+                  "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
 ENGINE_NAMES = set(skill_packs.ENGINE_CONTEXTS)   # other-engine packs, tested in test_engine_skill_packs.py
@@ -50,7 +55,8 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
         # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
-        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS or pack.name in ENGINE_NAMES:
+        if (pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS
+                or pack.name in GAMEPLAY_PACKS or pack.name in ENGINE_NAMES):
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:

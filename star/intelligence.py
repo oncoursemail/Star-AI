@@ -561,7 +561,13 @@ class LocalIntelligence:
             }
             return handlers[name]()
         if name == "star_skill_catalog":
-            return self.skills.list()
+            # ~100 bundled packs: full descriptions alone would fill most of a 25,000-character request.
+            listed = self.skills.list()
+            for skill in listed["skills"]:
+                if len(skill["description"]) > 100:
+                    skill["description"] = skill["description"][:99].rstrip() + "…"
+            listed["note"] = "Descriptions are shortened; star_skill_load returns a skill's full instructions."
+            return listed
         if name == "star_skill_load":
             return self.skills.load(args["name"])
         if name == "star_skill_reference":

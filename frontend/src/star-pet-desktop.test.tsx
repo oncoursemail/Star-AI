@@ -24,7 +24,7 @@ async function openChat(){
 }
 async function openPreferences(user:ReturnType<typeof userEvent.setup>){
  await user.click(screen.getByRole('button',{name:/^settings/i}))
- await user.click(screen.getByText('Advanced settings'))
+ await user.click(await screen.findByRole('tab',{name:'General'}))
  return screen.getByRole('checkbox',{name:'Show Star'})
 }
 async function startAnswer(user:ReturnType<typeof userEvent.setup>){
