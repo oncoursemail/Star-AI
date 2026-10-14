@@ -543,7 +543,8 @@ class RobloxCloud:
         if universe and place:
             first = ask("read the test experience", "universe", universe=universe)
             second = ask("read the test place", "place", universe=universe, place=place)
-            read_status["experience_info"] = (second or first).status if (second or first) else None
+            reply = second or first
+            read_status["experience_info"] = reply.status if reply else None
             if scope_allows(scopes, "universe-datastores.control", "list", universe):
                 stores = ask("list its data stores", "data_stores", universe=universe, params={"maxPageSize": 1})
                 read_status["list_data_stores"] = stores.status if stores else None
@@ -732,9 +733,11 @@ class RobloxCloud:
             self.sleep(2.0)
             polled = self._cloud().call("asset_operation", operation=operation)
             result = polled.data if polled.status == 200 and isinstance(polled.data, dict) else {}
-        response = result.get("response") if isinstance(result.get("response"), dict) else {}
+        got = result.get("response")
+        response = got if isinstance(got, dict) else {}
         asset_id = response.get("assetId")
-        moderation = response.get("moderationResult") if isinstance(response.get("moderationResult"), dict) else {}
+        got = response.get("moderationResult")
+        moderation = got if isinstance(got, dict) else {}
         return {"ok": bool(asset_id), "asset_id": str(asset_id) if asset_id else None, "operation": operation,
                 "done": bool(result.get("done")), "moderation": moderation.get("moderationState"),
                 "sha256": hashlib.sha256(data).hexdigest()}
@@ -927,7 +930,8 @@ class RobloxCloud:
         if not approved:
             return public_action(action, full=True)
         # The approval is for the place the action named when the owner saw it, and for no other.
-        named = action.get("target") if isinstance(action.get("target"), dict) else {}
+        target = action.get("target")
+        named = target if isinstance(target, dict) else {}
         only = (named.get("universe_id"), named.get("place_id"))
         try:
             if action["kind"] == "publish":
