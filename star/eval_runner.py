@@ -38,6 +38,7 @@ import sys
 import tempfile
 import threading
 import time
+from typing import Any
 
 from . import eval_checks as checks
 
@@ -292,10 +293,35 @@ def record_for(task: dict, asked: Asked | None, score: checks.TaskScore | None, 
     }
 
 
+def _planner_job_id(task_id: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.-]", "-", str(task_id))[:60] or "task"
+
+
 def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info: dict, task_ids=None,
               resume: bool = True, retry_errors: bool = False, sleep=time.sleep, now=time.monotonic,
-              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS) -> dict:
-    """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict."""
+              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS, planner: Any = None,
+              planner_holder: str = "") -> dict:
+    """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict.
+
+    `planner` (star.planner_client.PlannerClient, optional): before each request the runner asks STAR's resource
+    planner for an "eval" lease (one star-fast slot; the planner keeps one slot free for chat and pauses evals for
+    timing windows); during the request a "yield" stops it like the quiet lock does, and it is asked again later.
+    Planner off or unreachable: exactly the old behaviour (the quiet lock only)."""
+    holder = planner_holder or f"eval-{os.getpid()}"
+    lease = {"grant": None}
+
+    def quiet_probe():
+        """True when the request must stop: the quiet lock appeared, or the planner wants the slot back."""
+        locked = lock_probe() if lock_probe is not None else None
+        grant = lease["grant"]
+        if locked is not True and grant is not None and grant.planned:
+            renewed = planner.renew(grant)
+            lease["grant"] = renewed if renewed.action in ("run", "fallback") else None
+            if renewed.action in ("yield", "refuse"):
+                log(f"planner: eval yields ({renewed.reason})")
+                return True
+        return locked
+    watch_probe = quiet_probe if (lock_probe is not None or planner is not None) else None
     selected = [t for t in suite.runnable() if not task_ids or t["id"] in set(task_ids)]
     unknown = set(task_ids or []) - {t["id"] for t in suite.tasks}
     if unknown:
@@ -340,11 +366,19 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
             for interruption in range(MAX_INTERRUPTIONS + MAX_TRUNCATION_RETRIES + 1):
                 if lock_probe is not None:
                     waited += wait_for_lock(lock_probe, sleep=sleep, now=now, log=log)
+                if planner is not None:
+                    began = now()
+                    lease["grant"] = planner.wait_for("eval", holder, _planner_job_id(task["id"]), sleep=sleep,
+                                                      log=log)
+                    waited += now() - began
                 cancel = threading.Event()
-                watcher = LockWatcher(lock_probe, cancel, interval=watch_interval)
+                watcher = LockWatcher(watch_probe, cancel, interval=watch_interval)
                 try:
                     with watcher:
                         asked = ask(task, cancel)
+                    if planner is not None:              # scoring does not use the brain's slot
+                        planner.release(lease["grant"])
+                        lease["grant"] = None
                     if checks.looks_truncated(asked.answer) and truncations < MAX_TRUNCATION_RETRIES:
                         truncations += 1
                         log(f"{task['id']}: the answer stops inside a code block; asking again ({truncations}/{MAX_TRUNCATION_RETRIES})")
@@ -354,13 +388,18 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
                     error = str(exc)
                 except Exception as exc:                   # the task path failed: infrastructure, not a wrong answer
                     if watcher.fired:
-                        log(f"{task['id']}: stopped because the server lock appeared; will repeat it when the lock is gone")
+                        log(f"{task['id']}: stopped because the server lock appeared or the planner needed the slot; "
+                            "will repeat it")
                         asked, score, error = None, None, ""
                         continue
                     if any(text in str(exc) for text in PRODUCT_FAILURES):
                         product_failure = f"{type(exc).__name__}: {str(exc)[:160]}"
                     else:
                         error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                finally:
+                    if planner is not None:
+                        planner.release(lease["grant"])
+                        lease["grant"] = None
                 break
             else:
                 error = f"stopped {MAX_INTERRUPTIONS} times by the server lock"
@@ -426,6 +465,31 @@ def served_models(server: str, key: str) -> list[str]:
         return []
 
 
+class PlannedSandbox:
+    """Luau VM checks on whichever STAR container the resource planner picks for "cpu-work" (brain 2's CPU-worker
+    pool first, brain 1 when brain 2 has no headroom). Planner off or unreachable: the default sandbox, as before."""
+
+    def __init__(self, boxes: dict, planner, default, holder: str = ""):
+        self.boxes, self.planner, self.default = boxes, planner, default
+        self.holder = holder or f"eval-check-{os.getpid()}"
+        self.limits = getattr(default, "limits", {})
+        self.placed: dict[str, int] = {}
+
+    def run(self, source: str):
+        grant = self.planner.admit("cpu-work", self.holder, "luau-check")
+        box = self.boxes.get(grant.machine) if grant.planned else None
+        try:
+            chosen = box or self.default
+            name = grant.machine if box else "default"
+            self.placed[name] = self.placed.get(name, 0) + 1
+            return chosen.run(source)
+        finally:
+            self.planner.release(grant)
+
+    def lock_present(self, *args, **kwargs):
+        return self.default.lock_present(*args, **kwargs)
+
+
 def build_real(args, log=print):
     """(run_info, ask, scorer, lock_probe, secrets) wired to the real server."""
     from .desktop_core import Settings, run_task
@@ -447,7 +511,16 @@ def build_real(args, log=print):
     if knowledge is None:
         raise SystemExit("STAR Knowledge is not configured for this server address")
     ssh = args.ssh or os.environ.get("STAR_EVAL_SSH", "")
-    sandbox = ContainerSandbox(ssh) if ssh else None
+    # The Luau VM runs (sandbox) may go to another STAR container (brain 2: CPU work off the model machine); the
+    # quiet-lock probe always asks brain 1.
+    sandbox_ssh = getattr(args, "sandbox_ssh", "") or os.environ.get("STAR_EVAL_SANDBOX_SSH", "") or ssh
+    sandbox = ContainerSandbox(sandbox_ssh) if sandbox_ssh else None
+    lock_box = ContainerSandbox(ssh) if ssh else None
+    if sandbox is not None and lock_box is not None and sandbox_ssh != ssh:
+        from .planner_client import PlannerClient
+        planner = PlannerClient(timeout=3.0)
+        if planner.enabled:
+            sandbox = PlannedSandbox({"brain2": sandbox, "brain1": lock_box}, planner, sandbox)
 
     def luau_check(code: str, strict: bool = False):
         last = None
@@ -484,8 +557,9 @@ def build_real(args, log=print):
         "platform": sys.platform,
         "fingerprint": hashlib.sha256(json.dumps(fingerprint_source, sort_keys=True).encode()).hexdigest()[:12],
     }
-    probe = sandbox.lock_present if sandbox else None
-    return run_info, ask, scorer, probe, [key, server, ssh, ssh.split("@")[-1] if ssh else ""]
+    probe = lock_box.lock_present if lock_box else None
+    return run_info, ask, scorer, probe, [key, server, ssh, ssh.split("@")[-1] if ssh else "",
+                                          sandbox_ssh, sandbox_ssh.split("@")[-1] if sandbox_ssh else ""]
 
 
 def rescore(suite: Suite, result: dict, scorer, *, log=print) -> dict:
@@ -584,6 +658,8 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--suite", required=True, type=Path)
     parser.add_argument("--server", default="", help="STAR Server URL (or STAR_EVAL_SERVER)")
     parser.add_argument("--ssh", default="", help="user@host of the server's LXD host (or STAR_EVAL_SSH)")
+    parser.add_argument("--sandbox-ssh", default="", help="user@host whose STAR container runs the Luau VM checks "
+                        "(or STAR_EVAL_SANDBOX_SSH; default: --ssh). Brain 2 takes this CPU work off the model machine")
     parser.add_argument("--key-file", default=str(DEFAULT_KEY_FILE))
     parser.add_argument("--model", default="star-fast")
     parser.add_argument("--mode", default="auto", choices=["auto", "fast", "agent"])
@@ -635,8 +711,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(done["summary"]))
         return 0
     ids = [x for x in args.tasks.split(",") if x] or None
+    from .planner_client import PlannerClient
+    planner = PlannerClient(timeout=3.0)         # $STAR_PLANNER_URL or ~/.star/planner_url; none = old behaviour
     result = run_suite(suite, out=args.out, ask=ask, scorer=scorer, lock_probe=probe, run_info=run_info,
-                       task_ids=ids, resume=not args.no_resume, retry_errors=args.retry_errors, secrets=secrets)
+                       task_ids=ids, resume=not args.no_resume, retry_errors=args.retry_errors, secrets=secrets,
+                       planner=planner if planner.enabled else None)
     print(json.dumps(result["summary"]))
     return 0 if result.get("complete") else 2
 

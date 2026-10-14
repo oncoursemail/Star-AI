@@ -23,6 +23,11 @@ export type Fixture = {
   script?: FixtureScript
   /** A finished run shown above the last answer (for static timeline review). */
   finishedRun?: ActivityRun
+  /** Sidebar chats for this fixture (default: `fixtureChats`). The first one is the open chat. */
+  chats?: ChatThread[]
+  /** The current project and the other saved projects (default: the preview's own). */
+  project?: string
+  projects?: string[]
 }
 
 /** The preview shows the owner's real topology: the model runs on a STAR Server, not on this PC. */
@@ -150,7 +155,134 @@ The specialists disagreed on one point: the planner wanted drag-and-drop in the 
 
 None of this was tested in Studio; it is analysis of the context you have approved.`
 
+/* ---------------------------------------------------------------------------------------------
+ * STRESS: worst-case data for break-UI review (`?preview=1&fixture=stress`). Every string here is
+ * chosen to break a layout: unbreakable tokens, one letter, emoji only, right-to-left and mixed
+ * direction text, a several-KB message, a very long code line, a wide table, 66 chats and a long
+ * error. None of it is model output.
+ * ------------------------------------------------------------------------------------------- */
+const longUrl = 'https://create.roblox.com/docs/reference/engine/classes/' + 'UIGridLayout'.repeat(5) + '?section=' + 'a'.repeat(30)
+const longEmail = 'ember.hollow.survival.prototype.internal.testing.team.' + 'q'.repeat(40) + '@studio-builds.example.com'
+export const stressTitles = {
+  /** The open chat: one long sentence, so the top bar has to shorten it. */
+  open: 'Why does the inventory grid in Ember Hollow stutter on phones when the backpack has more than forty items and the hotbar is visible at the same time?',
+  url: longUrl,
+  email: longEmail,
+  unbroken: 'a'.repeat(120),
+  one: 'x',
+  emoji: '🔥🌲🏮🎒⚔️🛡️🧭🗺️🪵🔦',
+  arabic: 'كيف أصلح خطأ التكرار في نظام المخزون الخاص بلعبتي على الهاتف؟',
+  hebrew: 'איך לשמור את נתוני השחקן בלי לאבד התקדמות כשהשרת נסגר',
+  mixed: 'إصلاح RemoteEvent يعمل مرتين — fires twice on mobile',
+  mixedHebrew: 'שגיאה ב-DataStore: UpdateAsync נכשל after 3 retries',
+}
+export const stressProject = 'Ember Hollow — survival prototype for phones, tablets and console (winter update, internal testing branch)'
+const stressFiller = [
+  'Lantern flicker shader', 'Wolf pack AI', 'Crafting recipes v2', 'Day and night cycle', 'Footstep sounds on snow', 'Tutorial pacing',
+  'Fishing minigame', 'Shop UI', 'Badge ideas', 'Server hop', 'Anti-exploit for remotes', 'Backpack weight', 'Map streaming radius',
+]
+export const stressChats: ChatThread[] = [
+  {id: 'fx-s1', title: stressTitles.open, created: at(1_200_000), updated: at(300_000)},
+  {id: 'fx-s2', title: stressTitles.url, created: at(2_000_000), updated: at(1_800_000)},
+  {id: 'fx-s3', title: stressTitles.email, created: at(2_400_000), updated: at(2_300_000)},
+  {id: 'fx-s4', title: stressTitles.unbroken, created: at(3_000_000), updated: at(2_900_000)},
+  {id: 'fx-s5', title: stressTitles.one, created: at(3_400_000), updated: at(3_300_000)},
+  {id: 'fx-s6', title: stressTitles.emoji, created: at(3_800_000), updated: at(3_700_000)},
+  {id: 'fx-s7', title: stressTitles.arabic, created: at(day + 1000), updated: at(day + 1000)},
+  {id: 'fx-s8', title: stressTitles.hebrew, created: at(day + 2000), updated: at(day + 2000)},
+  {id: 'fx-s9', title: stressTitles.mixed, created: at(2 * day), updated: at(2 * day)},
+  {id: 'fx-s10', title: stressTitles.mixedHebrew, created: at(3 * day), updated: at(3 * day)},
+  // Filler: enough chats that the sidebar must scroll and the 60-chat window applies.
+  ...Array.from({length: 56}, (_, index) => ({
+    id: 'fx-f' + index,
+    title: stressFiller[index % stressFiller.length] + (index >= stressFiller.length ? ' (' + (Math.floor(index / stressFiller.length) + 1) + ')' : ''),
+    created: at((4 + index) * day),
+    updated: at((4 + index) * day),
+  })),
+]
+const longCodeLine = 'local config = {' + Array.from({length: 24}, (_, index) => `slot${index + 1} = {id = "item_${index + 1}", count = ${index * 3}, weight = ${index / 2}}`).join(', ') + '}'
+const unbrokenToken = 'InventoryGridSlotTemplateCloneBuffer'.repeat(8)
+export const stressUserMessage = [
+  'Here is everything I have. Sorry for the wall of text, I pasted it straight from my notes and the output window.',
+  '',
+  'Error from the output window (one line, it does not wrap in Studio either):',
+  "ServerScriptService.InventoryService:212: attempt to index nil with 'Slots' — Stack Begin — Script 'ServerScriptService.InventoryService', Line 212 - function moveItem — Script 'ServerScriptService.InventoryService', Line 88 — Stack End",
+  '',
+  'My config line:',
+  longCodeLine,
+  '',
+  'The name the plugin generated: ' + unbrokenToken,
+  '',
+  'The asset path: C:\\Users\\Player\\Documents\\Roblox\\Places\\EmberHollow\\Builds\\Winter\\' + 'Assets'.repeat(12) + '\\inventory_grid_final_FINAL_v7.rbxl',
+  '',
+  'Table I typed in my notes:',
+  '| Slot | Item | Count | Weight | Durability | Rarity | Stackable | Sell price | Craftable | Notes |',
+  '| 1 | Lantern | 1 | 2.5 | 100 | Common | no | 15 | yes | always in the hotbar, never dropped on death |',
+  '',
+  ...Array.from({length: 18}, (_, index) =>
+    `Note ${index + 1}: the grid uses a UIGridLayout with CellSize 64×64 and CellPadding 6, and when the backpack holds more than forty items the frame rebuilds every slot again, which is what I think causes the stutter on my phone (an older Android with 3 GB of RAM).`),
+].join('\n')
+export const stressAnswer = `## Short answer 🔥
+
+The stutter comes from rebuilding every slot. Build the slots once and only change their image and count.
+
+### بالعربية
+
+هذه فقرة كاملة باللغة العربية لاختبار اتجاه النص من اليمين إلى اليسار. يجب أن تبدأ من الجهة اليمنى، وأن تبقى علامات الترقيم في مكانها الصحيح، حتى عندما تحتوي على كلمات إنجليزية مثل UIGridLayout أو RemoteEvent في منتصف الجملة.
+
+### בעברית
+
+זוהי פסקה בעברית כדי לבדוק שהטקסט זורם מימין לשמאל. היא כוללת מילים באנגלית כמו DataStore ו-UpdateAsync באמצע המשפט, ומספרים כמו 64 ו-3.
+
+### Plan
+
+1. Build the grid once 🎒
+   - Clone \`SlotTemplate\` 24 times at startup
+     - Keep the clones in an array indexed by slot number
+       - Never call \`:Destroy()\` on a slot while the inventory is open
+   - Swap \`Image\` and \`Count.Text\` on change
+2. Batch updates
+   - Coalesce changes into one \`RenderStepped\` frame
+3. Measure on the phone ⚔️🛡️
+
+### Wide table
+
+| Slot | Item | Count | Weight | Durability | Rarity | Stackable | Sell price | Craftable | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | Lantern | 1 | 2.5 | 100 | Common | no | 15 | yes | always in the hotbar, never dropped on death |
+| 2 | Wolf pelt | 12 | 0.8 | — | Uncommon | yes | 40 | no | ${'stacks'.repeat(8)} |
+
+### Very long code line
+
+\`\`\`lua
+${longCodeLine}
+\`\`\`
+
+### Links
+
+- Reference: [${longUrl}](${longUrl})
+- Bare link: ${longUrl}
+- Contact: ${longEmail}
+- Inline token: \`${unbrokenToken}\`
+
+✅🎉🌲🏮`
+const stressError = 'STAR Server did not answer in time while loading the model "star-main-q4_k_m-' + 'x'.repeat(60) + '.gguf" from /srv/star/models/' + 'very-long-folder-name/'.repeat(4) + '. It may be busy with another request or still loading its model. Try again in a minute, raise the server timeout in Settings, or check the server log for the line that starts with "load failed".'
+
 export const FIXTURES: Record<string, Fixture> = {
+  /** Worst-case data everywhere at once (see the STRESS block above). */
+  stress: {
+    chats: stressChats,
+    project: stressProject,
+    projects: [stressProject, stressTitles.unbroken, 'x', 'مشروع البقاء في الغابة المظلمة', '🔥🌲'],
+    messages: [
+      {id: 'saved-0', role: 'user', text: stressUserMessage},
+      {id: 'saved-1', role: 'assistant', text: stressAnswer},
+      {id: 'saved-2', role: 'user', text: stressTitles.arabic},
+      {id: 'saved-3', role: 'event', text: stressError, status: 'failed'},
+    ],
+    server: {...fixtureServer, ok: false, code: 'timeout'},
+    retry: {status: 'failed', detail: stressError, prompt: stressTitles.arabic, message_id: 3, created: ''},
+  },
   /** Finished conversation with a long Markdown answer. */
   chat: {
     messages: [...history, {id: 'saved-2', role: 'user', text: inventoryQuestion}, {id: 'saved-3', role: 'assistant', text: inventoryAnswer}],

@@ -1,0 +1,7 @@
+local fn = load_answer()
+check("case 1", deepEqual(fn({wood=2,iron=1},{wood=2,iron=1}), {wood=0,iron=0}))
+check("case 2", deepEqual(fn({wood=5,iron=1},{wood=2,iron=1}), {wood=3,iron=0}))
+check("case 3", deepEqual(fn({wood=1},{wood=2}), nil))
+check("case 4", deepEqual(fn({wood=3},{iron=1}), nil))
+check("case 5", deepEqual(fn({wood=3},{wood=1}), {wood=2}))
+check("case 6", deepEqual(fn({wood=4,stone=2},{wood=2}), {wood=2,stone=2}))
