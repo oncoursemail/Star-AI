@@ -74,9 +74,10 @@ async def research_web(
     if provider is None:
         # Report the actionable missing-key error before provider exceptions are
         # redacted; this path runs only after the owner selects Team + Research.
-        from .providers import get_api_key
-        if not get_api_key('brave') and not get_api_key('tavily'):
-            raise RuntimeError('Web research needs a Brave Search or Tavily API key. Add one in Settings → AI providers.')
+        from .web_search import web_search_available
+        if not web_search_available():
+            raise RuntimeError('Web research needs STAR Server (self-hosted search) or a Brave Search / Tavily API key. '
+                               'Set one up in Settings.')
     search = provider if provider is not None else search_web
     if not callable(search):
         raise TypeError("A callable approved search provider is required")
