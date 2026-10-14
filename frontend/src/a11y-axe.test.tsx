@@ -115,7 +115,8 @@ describe('axe: open menus and dialogs', () => {
 describe('keyboard', () => {
   it('starts with a skip link that moves focus to the message box', async () => {
     const user = await open()
-    document.body.focus()
+    // body.focus() does not move focus off an element that already has it (the composer may on open)
+    ;(document.activeElement as HTMLElement | null)?.blur()
     await user.tab()
     const skip = document.activeElement as HTMLElement
     expect(skip.textContent).toBe('Skip to message box')
