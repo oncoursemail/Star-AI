@@ -69,13 +69,13 @@ def check_stub(correction: str, answer: str) -> dict:
     """Patterns the correction itself names. Empty when it names none (the task then needs a human-written check)."""
     require, forbid = [], []
     for good, bad in _INSTEAD.findall(correction or ""):
-        require.append({"id": f"uses_{len(require) + 1}", "re": re.escape(good.rstrip("()")),
+        require.append({"id": f"uses_{len(require) + 1}", "re": re.escape(good.rstrip("().:")),
                         "why": f"the owner said to use {good}", "scope": "code"})
-        forbid.append({"id": f"avoids_{len(forbid) + 1}", "re": r"(?<![\w.:])" + re.escape(bad.rstrip("()")) + r"\b",
+        forbid.append({"id": f"avoids_{len(forbid) + 1}", "re": r"(?<![\w.:])" + re.escape(bad.rstrip("().:")) + r"\b",
                        "why": f"the owner said not to use {bad}", "scope": "code"})
     for bad in _DONT.findall(correction or ""):
-        if not any(bad.rstrip("()") in f["why"] for f in forbid):
-            forbid.append({"id": f"avoids_{len(forbid) + 1}", "re": r"(?<![\w.:])" + re.escape(bad.rstrip("()")) + r"\b",
+        if not any(bad.rstrip("().:") in f["why"] for f in forbid):
+            forbid.append({"id": f"avoids_{len(forbid) + 1}", "re": r"(?<![\w.:])" + re.escape(bad.rstrip("().:")) + r"\b",
                            "why": f"the owner said not to use {bad}", "scope": "code"})
     return {"require": require, "forbid": forbid}
 
