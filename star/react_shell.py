@@ -609,7 +609,7 @@ def close_for_session(shell, manager=None):
 
 def launch():
     try:
-        from PySide6.QtCore import QObject, QUrl, Slot, Signal, Qt, QTimer
+        from PySide6.QtCore import QObject, QUrl, Slot, Signal, QTimer
         from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWebEngineCore import QWebEnginePage
@@ -814,7 +814,6 @@ def launch():
                 raise RuntimeError('Stop the active chat before switching STAR models')
             # The helper refuses non-local providers and never switches the
             # owner away from STAR Server while the router is loading.
-            from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
             return self.runtime, self.settings_file, app_data(), source
@@ -1020,7 +1019,6 @@ def launch():
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
                 if action=='pickFiles':
-                    from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
                     if kind=='audio':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Select audio references','','Audio files (*.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
@@ -1149,6 +1147,7 @@ def launch():
                 if action in STUDIO_HOST_ACTIONS:
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
                 if action=='testBlender':
+                    import asyncio
                     from .blender_bridge import BlenderController
                     settings=Settings.load(self.settings_file)
                     self._run(rid,action,lambda:asyncio.run(
