@@ -46,7 +46,7 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
       {setup&&<div><dt>Setup</dt><dd><code>{setup.name}</code> · {formatBytes(setup.size)}</dd></div>}
       {files.zip&&<div><dt>Portable</dt><dd><code>{files.zip.name}</code> · {formatBytes(files.zip.size)}</dd></div>}
       {latest&&<div><dt>Published</dt><dd>{formatDate(latest.publishedAt,'long')} · <a href={latest.url} target="_blank" rel="noopener noreferrer">Release notes<ArrowUpRight size={13} aria-hidden="true"/><span className="sw-sr"> (opens in a new tab)</span></a></dd></div>}
-      <div><dt>Needs</dt><dd>Windows 11, 64-bit. v0.9.0 brain setup checks for 4.3 GB free (October 2026 source).</dd></div>
+      <div><dt>Needs</dt><dd>Windows 11, 64-bit. v1.0.0 brain setup checks for 4.3 GB free (October 2026 source).</dd></div>
      </dl>
      {!releaseLive&&<p className="sw-note">{latest&&snapshotAt?'Fallback release snapshot from '+formatDate(snapshotAt,'long')+'. ':'Live release details unavailable. '}
       <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check the latest release directly on GitHub</a>.</p>}
@@ -55,7 +55,7 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
 
     <div className="sw-verify" data-reveal>
      <h3>Check the file before you run it</h3>
-     <p>The published v0.9.0 installer is not code-signed, so Windows may show a publisher warning. When a release
+     <p>The published v1.0.0 installer is not code-signed, so Windows may show a publisher warning. When a release
       provides a SHA-256 checksum, compare it with your downloaded file.</p>
      {setup?.sha256
       ?<div className="sw-hash">
