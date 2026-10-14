@@ -15,7 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "build_windows.ps1"
 WORKFLOW = ROOT / ".github" / "workflows" / "windows-desktop.yml"
 FLAGS = ("--add-data", "--hidden-import", "--collect-all", "--collect-submodules")
-LOCAL_EXTRA_COLLECTIONS = frozenset({"pypdf", "docx", "pptx", "openpyxl"})
+LOCAL_EXTRA_COLLECTIONS: frozenset[str] = frozenset()  # CI collects the office libraries too since #319
 GENERATED = frozenset({"frontend/dist", "star/build-info.json"})
 
 # Every AST __file__ root anchor in the 195 reviewed star/**/*.py modules.
@@ -48,7 +48,6 @@ PENDING_OWNER_REVIEW = frozenset({
     "docs/lessons/roblox-character-lifecycle.md",
     "examples/roblox-templates",
     "data/roblox_api_confusions.json",
-    "star/voice/voices.json",
     "evals/studio",  # do not bundle protected evaluation manifests blindly
 })
 
@@ -147,7 +146,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
     assert len(PACKAGE_DATA_SITES) == 12
-    assert len(bundled) == 5  # two optional readers share the skill-pack directory
+    assert len(bundled) == 6  # two optional readers share the skill-pack directory
 
 
 def test_actual_packaged_root_readers_resolve_resources(tmp_path):

@@ -7,8 +7,10 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import logging
 import time
 from .analytics import AnalyticsStore
+from .atomic_io import atomic_write_text, move_aside
 from dataclasses import dataclass, asdict, replace, field
 from contextlib import AsyncExitStack
 from typing import Callable
@@ -134,7 +136,9 @@ class Settings:
     def load(cls, file: Path):
         if not file.exists():
             return cls()
-        raw = json.loads(file.read_text(encoding='utf-8'))
+        raw = _read_settings_object(file)
+        if raw is None:
+            return cls()
         if 'studio_target' not in raw:
             # An old ID was selected on an unknown implicit route; never rebind its grants.
             raw = {**raw, 'studio_target': 'local_pc', 'studio_id': '', 'studio_edit': False, 'studio_luau': False}
@@ -240,9 +244,52 @@ class Settings:
 
     def save(self, file: Path):
         self.validate()
-        file.parent.mkdir(parents=True, exist_ok=True)
-        # configuration is nonsecret; never write bearer tokens here
-        file.write_text(json.dumps(asdict(self), indent=2), encoding='utf-8')
+        # configuration is nonsecret; never write bearer tokens here. Written in one step so a crash,
+        # power cut or a reader in another STAR process never sees half a settings file.
+        atomic_write_text(file, json.dumps(asdict(self), indent=2))
+
+
+_log = logging.getLogger(__name__)
+
+
+def _read_settings_object(file: Path) -> dict | None:
+    """The saved settings as a dict, or None after moving a damaged file aside.
+
+    A truncated or hand-broken settings.json used to raise on every Settings.load, so the desktop
+    could not start and every bridge request failed. The file is read twice (a writer from an older
+    STAR copy may still replace it in place) before it is renamed to settings.json.corrupt-<time>
+    for the owner to inspect, and the defaults are used. The defaults are the safe ones: Studio
+    editing, Luau execution and every opt-in feature are off.
+    """
+    problem = None
+    damaged = 0
+    for attempt in range(4):
+        try:
+            raw = json.loads(file.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return None
+        except ValueError as exc:            # also UnicodeDecodeError: the content is damaged
+            problem = exc
+            damaged += 1
+            if damaged >= 2:
+                break
+            time.sleep(0.05)
+            continue
+        except OSError:
+            # Locked or unreadable right now (another STAR process swapping it in on Windows, a virus
+            # scanner, permissions): that is not damage, so the owner's file is never moved aside for it.
+            if attempt == 3:
+                raise
+            time.sleep(0.05)
+            continue
+        if isinstance(raw, dict):
+            return raw
+        problem = TypeError(f'settings file holds {type(raw).__name__}, not an object')
+        break
+    backup = move_aside(file)
+    _log.warning('STAR settings could not be read (%s); using defaults%s', type(problem).__name__,
+                 f'; the damaged file was kept as {backup.name}' if backup else '')
+    return None
 
 
 TERMINAL_STATUSES = ('failed', 'cancelled')

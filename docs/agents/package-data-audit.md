@@ -98,3 +98,9 @@ the inert PowerShell build harness. A green GitHub CI result validates this
 contract, not the five missing shipped resources or installed upgrades.
 No local real executable build, owner account access, GPU or Studio run is
 claimed here.
+
+## Update after merging star/next (2026-10-14)
+
+#319 (now on star/next) bundles `star/voice/voices.json` and adds the four office `--collect-all` options to CI,
+so both "missing" rows above for voices.json and the local-only office collections are closed. The test now expects
+no local-only collections and four resources pending owner review.
