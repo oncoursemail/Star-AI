@@ -31,6 +31,8 @@ PACKAGE_DATA_SITES = {
     "star/lesson_import.py": "star/skill_packs",
     "star/react_shell.py": "frontend/dist",
     "star/roblox_api_confusions.py": "data/roblox_api_confusions.json",
+    "star/roblox_cutscene_studio.py": "star/skill_packs",  # roblox-cutscenes pack luau/ (PR #351)
+    "star/roblox_vfx_studio.py": "star/skill_packs",  # roblox-vfx-composer pack luau/ (PR #327)
     "star/skill_packs/__init__.py": "star/skill_packs",
     "star/studio_milestones.py": "evals/studio",
     "star/voice/catalog.py": "star/voice/voices.json",
@@ -105,7 +107,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 21
+    assert len(discovered) == 23
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
@@ -147,8 +149,8 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(PACKAGE_DATA_SITES) == 13
-    assert len(bundled) == 6  # two optional readers share the skill-pack directory
+    assert len(PACKAGE_DATA_SITES) == 15
+    assert len(bundled) == 6  # five readers share the skill-pack directory
 
 
 def test_actual_packaged_root_readers_resolve_resources(tmp_path):
