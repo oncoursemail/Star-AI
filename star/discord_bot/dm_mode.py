@@ -7,21 +7,33 @@ permissions, and a model never autonomously approves lessons.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 from dataclasses import dataclass
 from io import BytesIO
+import logging
 import os
 from pathlib import Path
 import re
 
 from .core import MAX_PROMPT, MAX_REPLY, clean_text
 
-MAX_IMAGE_BYTES = 6 * 1024 * 1024
-MAX_IMAGE_PIXELS = 16_000_000
-MAX_IMAGE_EDGE = 1536
+MAX_IMAGE_BYTES = 6 * 1024 * 1024        # the normalized picture sent to the vision model
+MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024    # what STAR downloads from Discord (phone photos are 3-12 MB)
+MAX_IMAGE_PIXELS = 16_000_000            # a screen capture
+MAX_SOURCE_PIXELS = 80_000_000           # an uploaded photo before it is shrunk (48 MP phones fit)
+MAX_IMAGE_EDGE = 1536                    # screen captures
+MAX_UPLOAD_EDGE = 1568                   # uploaded photos: longest side sent to the vision model
 _MAX_SNOWFLAKE = 2**64 - 1
 _ALLOWED_IMAGES = {".png": "image/png", ".jpg": "image/jpeg",
-                   ".jpeg": "image/jpeg", ".webp": "image/webp"}
+                   ".jpeg": "image/jpeg", ".webp": "image/webp",
+                   ".heic": "image/heic", ".heif": "image/heif"}
+_FORMATS = {"image/png": {"PNG"}, "image/jpeg": {"JPEG", "MPO"}, "image/webp": {"WEBP"},
+            "image/heic": {"HEIF"}, "image/heif": {"HEIF"}}
+HEIC_HELP = ("This photo is HEIC (the iPhone format) and HEIC support is not installed on the PC running the "
+             "bot. Install it with `pip install pillow-heif` in the bot's Python and restart the bot, or send "
+             "the photo as JPEG (iPhone: Settings > Camera > Formats > Most Compatible).")
+_LOG = logging.getLogger(__name__)
 _REMEMBER = re.compile(
     r"^remember(?:\s+(preference|correction))?\s*:\s*(.{1,1000})$",
     re.I | re.S,
@@ -105,44 +117,85 @@ def classify_owner_dm(content: str, *, attachments: int,
     return DMAction("text", prompt)
 
 
+def _heif_ready() -> bool:
+    """Register pillow-heif's opener once when it is installed (optional dependency)."""
+    try:
+        import pillow_heif
+    except ImportError:
+        return False
+    pillow_heif.register_heif_opener()
+    return True
+
+
+async def download_attachment(attachment, *, limit: int = MAX_DOWNLOAD_BYTES, attempts: int = 2) -> bytes:
+    """The attachment's bytes, up to `limit`, checked against the size Discord announced.
+
+    A short or failed download is tried once more before the owner is told to send it again.
+    """
+    size = getattr(attachment, "size", None)
+    if type(size) is not int or size <= 0:
+        raise ValueError("The image arrived empty. Send it again.")
+    if size > limit:
+        raise ValueError(f"The image is {size / 2**20:.1f} MB; STAR takes images up to {limit // 2**20} MB.")
+    for attempt in range(1, attempts + 1):
+        try:
+            data = await attachment.read()
+        except Exception as exc:    # discord.HTTPException / NotFound; never log the URL
+            _LOG.info("Discord attachment download failed (%s), attempt %d", type(exc).__name__, attempt)
+            continue
+        if isinstance(data, bytes) and len(data) == size:
+            return data
+        _LOG.info("Discord attachment short read (%d of %d bytes), attempt %d",
+                  len(data) if isinstance(data, bytes) else -1, size, attempt)
+        await asyncio.sleep(0)
+    raise ValueError(f"The image did not download completely from Discord (tried {attempts} times). "
+                     "Send it again.")
+
+
 def prepare_discord_image(filename: str, content_type: str | None,
                           declared_size: int, data: bytes) -> bytes:
-    """Bounded, normalized JPEG: strip file metadata and reject malformed input."""
+    """Bounded, normalized JPEG: EXIF rotation applied, metadata stripped, longest side MAX_UPLOAD_EDGE.
+
+    Phone photos up to MAX_DOWNLOAD_BYTES are accepted and shrunk here, on the PC, before any model sees them.
+    """
     if not isinstance(filename, str) or len(filename) > 150:
         raise ValueError("Invalid image filename")
     extension = Path(filename).suffix.lower()
-    if (extension not in _ALLOWED_IMAGES
-            or content_type != _ALLOWED_IMAGES[extension]):
-        raise ValueError("Send a PNG, JPG, or WebP image")
-    if (type(declared_size) is not int or not 0 < declared_size <= MAX_IMAGE_BYTES
-            or not isinstance(data, bytes) or not 0 < len(data) <= MAX_IMAGE_BYTES
+    expected = _ALLOWED_IMAGES.get(extension)
+    given = (content_type or "").split(";")[0].strip().lower()
+    if given == "image/jpg":
+        given = "image/jpeg"
+    if expected is None or (given and given != expected and not (expected == "image/heic" and given == "image/heif")):
+        raise ValueError("Send a PNG, JPG, WebP or HEIC image")
+    if (type(declared_size) is not int or not 0 < declared_size <= MAX_DOWNLOAD_BYTES
+            or not isinstance(data, bytes) or not 0 < len(data) <= MAX_DOWNLOAD_BYTES
             or len(data) != declared_size):
-        raise ValueError("Image exceeds the 6 MiB limit or was not fully received")
+        raise ValueError(f"Image exceeds the {MAX_DOWNLOAD_BYTES // 2**20} MB limit or was not fully received")
     from PIL import Image, ImageOps, UnidentifiedImageError
+    heic = expected == "image/heic"
+    if heic and not _heif_ready():
+        raise ValueError(HEIC_HELP)
     try:
         with Image.open(BytesIO(data)) as image:
-            if image.format not in {"JPEG", "PNG", "WEBP"}:
-                raise ValueError("File signature is not a supported image")
-            if _ALLOWED_IMAGES[extension] == "image/jpeg" and image.format != "JPEG":
+            if image.format not in _FORMATS[expected]:
                 raise ValueError("Image content does not match filename")
-            if _ALLOWED_IMAGES[extension] == "image/png" and image.format != "PNG":
-                raise ValueError("Image content does not match filename")
-            if _ALLOWED_IMAGES[extension] == "image/webp" and image.format != "WEBP":
-                raise ValueError("Image content does not match filename")
-            if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
+            if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_SOURCE_PIXELS:
                 raise ValueError("Image dimensions are too large")
+            if image.format in ("JPEG", "MPO"):
+                image.draft("RGB", (MAX_UPLOAD_EDGE, MAX_UPLOAD_EDGE))   # decode big photos at a reduced scale
             # Transpose using EXIF, then discard original metadata and color channels.
-            return normalize_pil_image(ImageOps.exif_transpose(image))
-    except (UnidentifiedImageError, OSError) as exc:
+            return normalize_pil_image(ImageOps.exif_transpose(image), edge=MAX_UPLOAD_EDGE,
+                                       max_pixels=MAX_SOURCE_PIXELS)
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         raise ValueError("Image could not be decoded") from exc
 
 
-def normalize_pil_image(image) -> bytes:
+def normalize_pil_image(image, *, edge: int = MAX_IMAGE_EDGE, max_pixels: int = MAX_IMAGE_PIXELS) -> bytes:
     """Bounded RGB JPEG without metadata (shared by uploads and confirmed screen captures)."""
-    if image.width <= 0 or image.height <= 0 or image.width * image.height > MAX_IMAGE_PIXELS:
+    if image.width <= 0 or image.height <= 0 or image.width * image.height > max_pixels:
         raise ValueError("Image dimensions are too large")
     flattened = image.convert("RGB")
-    flattened.thumbnail((MAX_IMAGE_EDGE, MAX_IMAGE_EDGE))
+    flattened.thumbnail((edge, edge))
     stream = BytesIO()
     flattened.save(stream, format="JPEG", quality=85)
     result = stream.getvalue()

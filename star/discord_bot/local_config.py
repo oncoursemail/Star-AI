@@ -41,6 +41,7 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_STATE", "STAR_DISCORD_LEARNING_DM_COOLDOWN_HOURS",
     "STAR_DISCORD_LEARNING_CHECK_MINUTES",
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
+    "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
 })
 # The token may only come from the secret file or the process environment.
 _SECRET_KEYS = frozenset({"STAR_DISCORD_BOT_TOKEN"})
@@ -120,6 +121,14 @@ STAR_DISCORD_DM_IMAGES=1
 STAR_DISCORD_DM_LEARNING_CANDIDATES=0
 # PC screenshots via /screen: each capture still needs a button press in Discord.
 STAR_DISCORD_SCREEN_CAPTURE=0
+# Make images ("draw a dragon" or /draw) on this PC's graphics card. ANYONE=1 also lets members of your
+# approved server use /draw (never strangers' DMs). TIMEOUT: seconds before a picture is cancelled.
+STAR_DISCORD_DRAW=1
+STAR_DISCORD_DRAW_ANYONE=0
+STAR_DISCORD_DRAW_TIMEOUT=240
+# 1 = answer @STAR mentions in your approved server (Discord then sends the bot server message events;
+# it still only sees the text of messages that mention it).
+STAR_DISCORD_MENTIONS=0
 # Requests per 10 minutes from the owner before STAR asks to slow down.
 STAR_DISCORD_RATE_LIMIT=30
 # Night School digest DMs: 1 = send a short DM when practice numbers really change.
