@@ -1,8 +1,9 @@
 """Benchmark: how long importing STAR's entry modules takes, in fresh interpreters.
 
 Each sample is a new `python -c "import <module>"` process (so nothing is cached in memory),
-timed from inside the child with perf_counter around the import itself. The interpreter start
-is excluded. Reports min and median over --runs samples; use the median for before/after.
+timed from inside the child around the import itself (wall clock and the process's CPU time;
+CPU time is the steadier number on a busy machine). The interpreter start is excluded. Reports
+the median and min over --runs samples, and how many modules the import left in sys.modules.
 
     python benchmarks/bench_import.py [--runs 9] [modules ...]
     python benchmarks/bench_import.py --heavy star.react_shell   # which heavy libraries got loaded
@@ -24,10 +25,11 @@ HEAVY = ("jsonschema", "httpx", "PIL.Image", "anyio", "openai", "mcp", "numpy", 
 
 CHILD = r"""
 import sys, time, json
-t = time.perf_counter()
+t, c = time.perf_counter(), time.process_time()
 import {module}
-elapsed = (time.perf_counter() - t) * 1000
-print(json.dumps({{"ms": elapsed, "heavy": [m for m in {heavy!r} if m in sys.modules]}}))
+elapsed, cpu = (time.perf_counter() - t) * 1000, (time.process_time() - c) * 1000
+print(json.dumps({{"ms": elapsed, "cpu_ms": cpu, "modules": len(sys.modules),
+                  "heavy": [m for m in {heavy!r} if m in sys.modules]}}))
 """
 
 
@@ -51,14 +53,18 @@ def main() -> int:
         sample(module, env)  # writes .pyc files and warms the OS file cache
         runs = [sample(module, env) for _ in range(max(1, args.runs))]
         times = [r["ms"] for r in runs]
+        cpu = [r["cpu_ms"] for r in runs]
         results[module] = {"median_ms": round(statistics.median(times), 1), "min_ms": round(min(times), 1),
+                           "cpu_median_ms": round(statistics.median(cpu), 1), "cpu_min_ms": round(min(cpu), 1),
+                           "modules": runs[-1]["modules"],
                            **({"heavy_loaded": runs[-1]["heavy"]} if args.heavy else {})}
     if args.json:
         print(json.dumps(results, indent=2))
     else:
         for module, r in results.items():
             extra = f"  heavy: {', '.join(r['heavy_loaded']) or '-'}" if args.heavy else ""
-            print(f"{module:24s} median {r['median_ms']:8.1f} ms   min {r['min_ms']:8.1f} ms{extra}")
+            print(f"{module:24s} median {r['median_ms']:8.1f} ms   min {r['min_ms']:8.1f} ms   "
+                  f"cpu median {r['cpu_median_ms']:8.1f} ms   modules {r['modules']}{extra}")
     return 0
 
 
