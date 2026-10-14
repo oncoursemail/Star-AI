@@ -107,7 +107,12 @@ class SessionMemory:
         session = self._sessions.setdefault(key, _Session(self._clock()))
         session.touched = self._clock()
         session.turns.extend((("user", prompt[:MAX_PROMPT]), ("assistant", answer[:MAX_REPLY])))
-        session.turns = session.turns[-self._max_turns * 2:]
+        if len(session.turns) > self._max_turns * 2:
+            # Trim in blocks, not one exchange per turn: a window that slides every turn changes the
+            # start of every request, so the server re-reads the whole conversation each time.
+            # Cutting back to half keeps the same start for the next few turns (prompt cache hits).
+            keep = max(1, self._max_turns // 2)
+            session.turns = session.turns[-keep * 2:]
 
     def forget(self, key: SessionKey) -> None:
         self._sessions.pop(key, None)

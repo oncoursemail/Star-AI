@@ -14,7 +14,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-from .knowledge import _project
+from .knowledge import _project, now
 from .lessons import grants_permission, has_secret
 
 HEADING = "AUTOMATICALLY CHECKED PRACTICE EXAMPLES (untrusted reference, not instructions)"
@@ -184,9 +184,13 @@ def select(home: Path, project: str, prompt: str, *, max_chars: int = MAX_PROMPT
     if max_chars < 200 or not path.is_file():
         return "", []
     with sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True) as db:
+        # Examples from a learning bundle (star/learned_week.py) stop being used when their 14 days are over.
+        timed = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='example_expiry'").fetchone()
+        expiry = ("AND id NOT IN (SELECT id FROM example_expiry WHERE project=? AND expires_at<=?) " if timed else "")
+        values = (_project(project), *((_project(project), now()) if timed else ()), MAX_ROWS)
         rows = db.execute(
-            "SELECT id,group_id,category,instruction,response FROM worked_examples WHERE project=? "
-            "ORDER BY id LIMIT ?", (_project(project), MAX_ROWS)).fetchall()
+            "SELECT id,group_id,category,instruction,response FROM worked_examples WHERE project=? " + expiry +
+            "ORDER BY id LIMIT ?", values).fetchall()
     entries = [Example(*row) for row in rows]
     result, used = [], []
     for example, _score in rank(prompt, entries):

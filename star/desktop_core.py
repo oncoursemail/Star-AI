@@ -23,10 +23,11 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
-                        look_for_busy_slots,
+                        look_for_busy_slots, model_slots_full,
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
-from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
+from .brain_router import (select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES,
+                           busy_downgrade_allowed)
 from .instant_route import decide_instant_route, loaded_local_model, answer_on_pc
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
@@ -113,12 +114,20 @@ class Settings:
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    # STAR search (self-hosted SearXNG behind star-search-gateway, server/searxng): '' = the STAR
+    # Server's host on port 8093, 'off' = never ask it. Used when no Brave/Tavily key is set.
+    search_endpoint: str = ''
+    # Search the web automatically for questions about news, prices, weather or "latest" things.
+    web_auto_search: bool = True
     # Learning (star/lessons.py). Lessons are local project notes, never weights.
     learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
     practice_lessons_enabled: bool = False  # off until the owner opts in
     worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
+    # Owner default (O1): night school's text lessons that won the paired gate go live for 14 days, visibly, with undo
+    # (star/learned_week.py). False = bundles only add candidates that wait for review.
+    learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
@@ -152,7 +161,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -214,6 +223,13 @@ class Settings:
             raise ValueError('STAR Knowledge address must be text')
         if self.knowledge_endpoint and self.knowledge_endpoint != 'off':
             validate_knowledge_endpoint(self.knowledge_endpoint)
+        if not isinstance(self.search_endpoint, str):
+            raise ValueError('STAR search address must be text')
+        if self.search_endpoint and self.search_endpoint != 'off':
+            from .web_search import validate_search_endpoint
+            validate_search_endpoint(self.search_endpoint)
+        if not isinstance(self.web_auto_search, bool):
+            raise ValueError('Automatic web search must be on or off')
         if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
             raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
         if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
@@ -835,7 +851,40 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     if not reuse:
         checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
                                                           chat_id, records=rows)
-    return conversation_memory.respect_checkpoint(window, checkpoint), rows
+    return with_sent_times(conversation_memory.respect_checkpoint(window, checkpoint)), rows
+
+
+def with_sent_times(window):
+    """Each replayed user turn ends with the time line it was first sent with.
+
+    A plain chat turn is sent as the owner's words plus a context block holding only the
+    current time (star.agent.volatile_context). Replaying the earlier turns with the same
+    block, rebuilt from each message's stored timestamp, keeps the request starting with the
+    bytes the model server already read. Same number and order of messages as the window.
+    """
+    from .clock import sent_line
+    from .context_layout import context_block, final_user_text
+    messages = list(window.messages)
+    for index, group in enumerate(window.exchanges):
+        position = 2 * index
+        if position >= len(messages) or messages[position].get('role') != 'user':
+            break
+        line = sent_line(group[0].get('created', '')) if group else ''
+        if line:
+            messages[position] = {'role': 'user', 'content': final_user_text(
+                messages[position]['content'], context_block((), tail=[line]))}
+    return replace(window, messages=messages)
+
+
+def current_turn_line(records) -> str:
+    """The time line for the message being answered: from its stored timestamp (so the next turn
+    replays the same bytes), with a live server-clock note if the clocks differ; else the time now."""
+    from .clock import now_line, sent_line
+    if records and records[-1].get('role') == 'user':
+        line = sent_line(records[-1].get('created', ''), offset=None)
+        if line:
+            return line
+    return now_line()
 
 
 def picture_limit(settings) -> int | None:
@@ -1008,6 +1057,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         if document_block:
             turn_sections.insert(0, ('ATTACHED DOCUMENTS (untrusted reference data)', document_block))
         use_tools = route.use_tools
+        from .live_context import wants_fresh_web
+        auto_web = bool(not research and settings.web_auto_search is not False and wants_fresh_web(prompt))
         allowed_context_chars = model_context_char_budget(settings, route.model)
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
@@ -1057,7 +1108,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             installed=bool(settings.gguf_model or settings.router_models_dir),
                             attachments=len(images) + len(documents or ()) + max(0, attachment_count),
                             tools=use_tools or document_tools is not None or bool(github_enabled),
-                            research=research, documentation=route.grounding.retrieve != 'none',
+                            research=research or auto_web, documentation=route.grounding.retrieve != 'none',
                             deep=wants_deep, followup=referential or roblox_context
                             or bool(owner_text is not None and owner_text != prompt))
             if decide_instant_route(**eligible, loaded_model='resident').use_local:
@@ -1084,10 +1135,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                 [{'role': 'user', 'content': prompt},
                                  {'role': 'assistant', 'content': instant_answer.text}], [])
             from .web_search import search_web, source_context
+            from . import live_context
+            live_context.refresh_server_clock_soon(settings)   # the STAR Server's clock, for the time line
             if research:
                 audited_event({'event': 'search_started'})
                 found = await search_web(prompt[:600], limit=5)
                 turn_sections.append(('WEB SEARCH', source_context(found)))
+                audited_event({'event': 'search_finished'})
+            elif auto_web:
+                # A question about what is happening now: search without waiting for the switch.
+                # A failure is one line in the context (the model says so), never a failed turn.
+                audited_event({'event': 'search_started'})
+                web_text, _sources = await live_context.auto_search(prompt, settings=settings)
+                if web_text:
+                    turn_sections.append(('WEB SEARCH', web_text))
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
@@ -1156,6 +1217,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             audited_event({'event': 'worked_example_used',
                                            'count': len(selected_examples), 'chars': len(example_block)})
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
+                              now=current_turn_line(conversation_records),
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
                               preserve_history=True,
@@ -1178,7 +1240,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
                               stream_tokens=stream_tokens, response_tokens=route.response_tokens,
                               subagent_model=route.subagent_model,
-                              web_search_enabled=bool(research and mode == 'agent'),
+                              web_search_enabled=bool((research or auto_web) and mode == 'agent'),
+                              web_settings=settings,
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
@@ -1249,15 +1312,25 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                         prepared_conversation = candidate
                         return result
                 used = route
+                # Interactive chat must not queue behind background answers (evals, night school) that hold
+                # every slot of the main model: general chat (no tools, images, documents or code) is answered
+                # by the quick model instead (brain_router.busy_downgrade_allowed; one probe, <0.5 s).
+                quick_name = str(getattr(server_roles.effective(settings), 'fast_model', '') or '')
+                if (kind == 'lan' and not use_tools and not images and document_tools is None
+                        and not document_block and quick_name and quick_name != route.model
+                        and busy_downgrade_allowed(prompt, route.profile)
+                        and await model_slots_full(settings, route.model)):
+                    used = replace(route, model=quick_name)
+                    audited_event({'event': 'route_busy_quick', 'model': quick_name})
                 try:
-                    result = await answer_with(route.model)
+                    result = await answer_with(used.model)
                 except Exception as exc:
                     # A role's model that is missing or will not load: answer with the single
                     # configured model instead, once, and only if nothing was shown or run yet.
-                    if (kind != 'lan' or route.model == settings.model or first_visible_token
+                    if (kind != 'lan' or used.model == settings.model or first_visible_token
                             or tools_ran or not model_unavailable(exc)):
                         raise
-                    server_roles.mark_failed(settings, route.model)
+                    server_roles.mark_failed(settings, used.model)
                     used = replace(route, model=settings.model, subagent_model=(
                         settings.model if route.subagent_model == route.model else route.subagent_model))
                     if specialists is not None:

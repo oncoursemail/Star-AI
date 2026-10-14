@@ -10,6 +10,7 @@ import {useCallback,useEffect,useRef,useState} from 'react'
 import {BookOpen,Check,Download,LoaderCircle,Pencil,RotateCcw,Sparkles,Trash2,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
 import {Tag} from './components'
+import {LearnedThisWeek} from './LearnedThisWeek'
 import type {AppSettings,Lesson,LessonCounts,LessonStatus} from './types'
 import './learning.css'
 
@@ -104,7 +105,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    if(reply?.pending&&reply.requestId)digestId.current=reply.requestId
    else setPending('')
  }
- const change=async(key:'learning_auto_accept'|'learning_digest'|'learning_digest_cloud'|'practice_lessons_enabled',value:boolean)=>{
+ const change=async(key:'learning_auto_accept'|'learning_digest'|'learning_digest_cloud'|'practice_lessons_enabled'|'learning_auto_live',value:boolean)=>{
    if(disabled)return
    const saved=await invoke('saveSettings',{settings:{[key]:value}})
    if(saved)refresh?.()
@@ -117,13 +118,15 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
  const raw=lessons.some(l=>l.status==='candidate'&&!['summary','user','import','practice'].includes(l.source_type))
  const cloud=!['local','star_server'].includes(settings.provider)
  const autoAccept=settings.learning_auto_accept??true
+ const autoLive=settings.learning_auto_live??true
  return <section className="learn" aria-label="What STAR has learned">
    <div className="learn-head">
      <BookOpen size={18} aria-hidden="true"/>
      <div className="learn-title"><h2>What STAR has learned</h2><p>Notes for the project “{project}”. STAR does not retrain its model: it keeps lessons you can read, change and remove, and uses the accepted ones in later answers.</p></div>
      <Tag kind={waiting?'gold':'neutral'}>{waiting} waiting for review</Tag>
    </div>
-   <p className="learn-help">{practice} {practice===1?'lesson has':'lessons have'} been imported from STAR’s own practice. New imports wait for your review; they are never accepted automatically.</p>
+   <LearnedThisWeek invoke={invoke} disabled={disabled} project={project}/>
+   <p className="learn-help">{practice} {practice===1?'lesson has':'lessons have'} been imported from STAR’s own practice. {autoLive?'A practice lesson is used on its own only when it beat the current lessons on held-out practice, for 14 days, listed above with Undo; every other import waits for your review.':'Automatic use is off: every import waits for your review.'}</p>
    <p className="learn-help">To import a server lesson export locally, run <code>python -m star.lessons import lessons.json</code>. No server connection is made.</p>
    <div className="learn-tabs" role="tablist" aria-label="Lessons by status">
      {views.map(v=><button key={v.id} type="button" role="tab" aria-selected={view===v.id} className={'learn-tab'+(view===v.id?' is-current':'')} onClick={()=>{setView(v.id);setEditing(null);setConfirming(null)}}>{v.label} <span>{countOf(v.id)}</span></button>)}
@@ -167,6 +170,7 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    <div className="learn-tools"><button type="button" className="learn-button is-primary" disabled={disabled||!!pending||teach.trim().length<3} onClick={()=>void remember()}><Check size={14} aria-hidden="true"/> Save as accepted</button><span className="learn-count">{teach.length}/1200</span></div>
    <div className="learn-settings">
      <label className="learn-switch"><span><strong>Import bundled STAR practice lessons</strong><small>Off by default. When enabled, import the shipped, reviewed-in-code bundle once per app version as candidates. Approval remains your choice.</small></span><input type="checkbox" disabled={disabled} checked={settings.practice_lessons_enabled===true} onChange={e=>void change("practice_lessons_enabled",e.target.checked)}/></label>
+     <label className="learn-switch"><span><strong>Use what night school learns, on a 14-day trial</strong><small>{autoLive?'On: a text lesson that beat the current lessons on held-out practice is used at once, shown under What STAR learned this week, and expires after 14 days unless you keep it.':'Off: night school’s lessons wait for your review like any other import.'}</small></span><input type="checkbox" disabled={disabled} checked={autoLive} onChange={e=>void change('learning_auto_live',e.target.checked)}/></label>
      <label className="learn-switch"><span><strong>Accept my own corrections automatically</strong><small>{autoAccept?'What you state in your own words is kept at once. Everything STAR infers still waits for review.':'Review everything: even your own statements wait here until you approve them.'}</small></span><input type="checkbox" disabled={disabled} checked={autoAccept} onChange={e=>void change('learning_auto_accept',e.target.checked)}/></label>
      <label className="learn-switch"><span><strong>Summarise raw notes in the background</strong><small>After an answer, the spare fast model of a STAR Server may reword raw notes. It never runs on the model you chat with; use “Summarise raw notes” for that. Its suggestions always wait for review.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest??true} onChange={e=>void change('learning_digest',e.target.checked)}/></label>
      {cloud&&<label className="learn-switch"><span><strong>Also summarise with a hosted provider</strong><small>Off by default: the notes quote your chats and would be sent to the selected provider.</small></span><input type="checkbox" disabled={disabled} checked={settings.learning_digest_cloud??false} onChange={e=>void change('learning_digest_cloud',e.target.checked)}/></label>}
