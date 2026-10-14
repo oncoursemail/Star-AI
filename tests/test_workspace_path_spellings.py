@@ -35,6 +35,10 @@ def ws(tmp_path):
     "nul",
     "CON.txt",
     "sub/com1.log",
+    "COM\u00b9.txt",
+    "lpt\u00b3",
+    "CONOUT$",
+    "conin$.log",
     "C:evil.txt",
     ".env.local",
     ".ENV.Production",
@@ -73,3 +77,21 @@ def test_link_to_protected_file_is_refused(ws):
         pytest.skip("symlinks not permitted here")
     with pytest.raises(PermissionError):
         ws.call("workspace_read", {"path": "innocent.txt"})
+
+
+def test_windows_short_name_of_a_protected_folder_is_refused(ws, monkeypatch):
+    """`GIT~1` passes the spelling checks; the resolved (long) name must still be checked.
+
+    On Windows, Path.resolve returns the long name (GetFinalPathNameByHandle) for the existing
+    part of the path, so an 8.3 alias of `.git` comes back as `.git`. Simulated here.
+    """
+    (ws.root / ".git").mkdir()
+    real_resolve = type(ws.root).resolve
+
+    def resolve_short_names(self, strict=False):
+        return real_resolve(type(self)(str(self).replace("GIT~1", ".git")), strict=strict)
+
+    monkeypatch.setattr(type(ws.root), "resolve", resolve_short_names)
+    with pytest.raises(PermissionError):
+        ws.call("workspace_write", {"path": "GIT~1/config", "content": "x"}, allow_write=True)
+    assert not (ws.root / ".git" / "config").exists()

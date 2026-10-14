@@ -15,7 +15,9 @@ DENIED_SUFFIXES = {'.pem', '.p12', '.pfx', '.key'}
 # `.env.local`, `.env.production` ... hold the same secrets as `.env`; these few are templates.
 _ENV_TEMPLATES = {'.env.example', '.env.sample', '.env.template'}
 # Windows device names (also with an extension: `nul.txt` opens the device).
-_RESERVED = {'con', 'prn', 'aux', 'nul', *(f'com{i}' for i in range(1, 10)), *(f'lpt{i}' for i in range(1, 10))}
+# Windows also treats the superscript digits COM¹-³/LPT¹-³ and the console names as devices.
+_RESERVED = {'con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
+             *(f'{dev}{i}' for dev in ('com', 'lpt') for i in (*range(1, 10), '¹', '²', '³'))}
 
 
 def _bad_component(part: str) -> str:
