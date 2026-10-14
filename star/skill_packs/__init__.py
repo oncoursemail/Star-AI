@@ -171,6 +171,9 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:multi-?agents?|several agents|two agents|parallel agents|Codex|Claude|integrator|claims?|claimed|"
         r"Studio lock|mutex|handoff|hand-?off|normal play|playtest acceptance|acceptance tests?|verdicts?|"
         r"INCOMPLETE|two clients|Server and Clients|late join)\b", re.IGNORECASE),
+    "roblox-architecture-blender": re.compile(
+        r"\b(?:Blender|architecture|architectural|facades?|rooflines?|gables?|glTF|GLB|FBX|3D Importer|"
+        r"UV unwrap\w*|modelling|modeling)\b", re.IGNORECASE),
 }
 
 
