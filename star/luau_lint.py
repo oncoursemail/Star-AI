@@ -185,8 +185,12 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             containing = [(a, b) for a, b in loops if a < i < b]
             if containing:
                 a, b = containing[-1]
-                # The for-loop counter's "=" is not ownership of this connection.
-                if "=" not in v[max(a, i - 8):i] and "Disconnect" not in v[i:b]:
+                # The for-loop counter's (or a while condition's) "=" in the loop
+                # header is not ownership of this connection; the loop body is.
+                body_start = a
+                if v[a] in ("for", "while"):
+                    body_start = next((k for k in range(a + 1, i) if v[k] == "do"), a)
+                if "=" not in v[body_start:i] and "Disconnect" not in v[i:b]:
                     add("loop-connection", i, "Connection in a loop has no visible owner or disconnection.",
                         "Store the connection and disconnect it.", "review")
 
@@ -227,8 +231,11 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             for name in names[1:]:
                 if name in body and (
                     any(w in body for w in ("+", "-", "*", "/", "amount", "Amount"))
-                    or (name.lower() == "target" and any(
-                        w in body for w in ("Destroy", "PivotTo", "SetAttribute")))):
+                    or (name.lower() == "target" and (
+                        any(w in body for w in ("Destroy", "PivotTo", "SetAttribute"))
+                        # target.Humanoid.Health = 0, target.Parent = nil, target:Kick()
+                        or any(body[k] == name and body[k + 1:k + 2] in (["."], [":"])
+                               for k in range(len(body)))))):
                     if not any(w in body[:body.index(name)] for w in ("typeof", "type", "clamp")):
                         add("remote-unvalidated", i, "Client argument used without visible prior validation.",
                             "Check type, allowed targets and server-side range first.", "review")

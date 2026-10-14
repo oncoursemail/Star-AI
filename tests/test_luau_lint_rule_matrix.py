@@ -217,3 +217,20 @@ def test_target_mutation_needs_validation_but_a_plain_read_is_not_a_remote_risk(
                for f in lint(unsafe, external=False))
     assert not any(f.rule_id == "remote-unvalidated"
                    for f in lint(safe, external=False))
+
+
+@pytest.mark.parametrize("unsafe", [
+    "remote.OnServerEvent:Connect(function(player, target) target.Humanoid.Health = 0 end)",
+    "remote.OnServerEvent:Connect(function(player, target) target.Parent = nil end)",
+])
+def test_target_member_mutation_still_needs_validation(unsafe):
+    assert any(f.rule_id == "remote-unvalidated" for f in lint(unsafe, external=False))
+
+
+def test_owned_connection_with_long_receiver_chain_in_loop_is_not_flagged():
+    owned = ("while running do\n"
+             "  self.conns[n] = player.Character.Humanoid.Died:Connect(onDied)\n"
+             "  task.wait()\nend")
+    assert not any(f.rule_id == "loop-connection" for f in lint(owned, external=False))
+    unowned = "while x == 1 do part.Touched:Connect(handle) task.wait() end"
+    assert any(f.rule_id == "loop-connection" for f in lint(unowned, external=False))

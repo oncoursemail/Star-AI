@@ -29,8 +29,8 @@ fails if an ID is added or removed without updating the matrix.
 
 | Kind | Count | Witness | Resolution or limitation |
 | --- | ---: | --- | --- |
-| False positives | 2 | A local function called `wait` and a harmless `print(target)` in a remote callback were flagged | Targeted guards distinguish local shadowing and target mutation from passive reads; real `lint()` negatives test both |
-| False negatives | 1 | A `for` loop's counter assignment masked an unowned `Touched:Connect` call | Ignore distant loop-counter assignments for the connection-ownership heuristic; real `lint()` matrix asserts the hit |
+| False positives | 2 | A local function called `wait` and a harmless `print(target)` in a remote callback were flagged | Targeted guards distinguish local shadowing, and target mutation (member access or Destroy/PivotTo/SetAttribute) from passive reads; real `lint()` negatives test both |
+| False negatives | 1 | A `for` loop's counter assignment masked an unowned `Touched:Connect` call | Ignore `=` in the loop header (before `do`) for the connection-ownership heuristic; an assignment anywhere earlier in the loop body still counts as ownership; real `lint()` matrix asserts the hit |
 | Baseline missing-rule coverage | 0 | All 12 IDs had one positive and one negative | Added 2x matrix and static AST ID-set guard |
 | Baseline cases lacking precise diagnostics | 12 rule IDs | Prior table only compared membership | All matrix positives require exact line, rule ID, severity and nonempty suggestion |
 | Remaining observed false negatives | 0 in the curated cases after repair | 24 independent firing snippets | These are illustrative syntactic patterns, not exhaustive proof |
