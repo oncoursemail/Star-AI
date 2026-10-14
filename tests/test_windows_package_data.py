@@ -37,6 +37,7 @@ PACKAGE_DATA_SITES = {
     "star/voice/catalog.py": "star/voice/voices.json",
 }
 OTHER_FILE_ANCHORS = {
+    "star/architecture_pipeline.py": "opt-in Blender export runs scripts/blender_building.py from a source checkout",
     "star/cli.py": "source-only CLI",
     "star/discord_supervisor.py": "source checkout of the Discord bot (STAR_CHECKOUT for the packaged app)",
     "star/eval_gate.py": "developer-only evaluation result files",
@@ -108,7 +109,7 @@ def _bundle_has(resource: str, flags: frozenset[str]) -> bool:
 
 def test_all_ast_package_anchors_are_explicitly_reviewed():
     discovered = _roots_in_python_ast()
-    assert len(discovered) == 23
+    assert len(discovered) == 24
     assert discovered == set(PACKAGE_DATA_SITES) | set(OTHER_FILE_ANCHORS)
     assert not set(PACKAGE_DATA_SITES) & set(OTHER_FILE_ANCHORS)
     for resource in PACKAGE_DATA_SITES.values():
