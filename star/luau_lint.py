@@ -166,7 +166,10 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
                    w == "Wait" and j > 0 and body[j - 1] == ":"
                    for j, w in enumerate(body))
 
-    loops = [(i, block_end(i)) for i, w in enumerate(v) if w in ("while", "repeat")]
+    # Generic `for ... in` loops usually wire each element once (not a leak); numeric
+    # `for i = ...` loops and while/repeat loops can connect the same signal repeatedly.
+    loops = [(i, block_end(i)) for i, w in enumerate(v)
+             if w in ("while", "repeat") or (w == "for" and v[i + 2:i + 3] == ["="])]
     for i, word in enumerate(v):
         if word == "while" and v[i + 1:i + 3] == ["true", "do"]:
             end = block_end(i)

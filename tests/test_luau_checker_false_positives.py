@@ -232,3 +232,18 @@ def test_real_cooldown_named_last_hit_is_respected():
     assert "lasthit" in source.lower() and "cooldown_seconds" in source.lower()
     assert "touched-debounce" not in {
         finding.rule_id for finding in lint(source, external=False)}
+
+
+def test_loop_connection_skips_generic_for_but_keeps_while():
+    from star.luau_lint import lint
+
+    def rules(code):
+        return [f.rule_id for f in lint(code, external=False)]
+
+    # Wiring each element of a collection once is normal Roblox code.
+    assert "loop-connection" not in rules(
+        "for _, part in parts do part.Touched:Connect(handle) end")
+    # Numeric `for i = ...` loops stay in scope: PR #291's rule matrix expects
+    # "for i = 1, 3 do part.Touched:Connect(handle) end" to fire once its for-counter fix lands.
+    assert "loop-connection" in rules(
+        "while ready do part.Touched:Connect(handle) task.wait(1) end")
