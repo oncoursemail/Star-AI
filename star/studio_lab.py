@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
+import contextlib
 import copy
 import hashlib
 import json
@@ -95,11 +96,14 @@ def check_spec(spec) -> tuple[dict | None, list[str]]:
     problems: list[str] = []
     if not isinstance(spec, dict):
         return None, ["A lab spec must be a JSON object"]
-    unknown = sorted(set(spec) - {"name", "kind", "plan", "maxIterations", "playSeconds", "description", "lesson"})
+    if spec.get("kind") == "ui":
+        return check_ui_spec(spec)
+    unknown = sorted(set(spec) - {"name", "kind", "plan", "maxIterations", "playSeconds", "description", "lesson",
+                                  "defect"})
     if unknown:
         problems.append("unknown keys: " + ", ".join(unknown))
     if spec.get("kind", "map") != "map":
-        problems.append("only kind 'map' is supported (UI specs: see docs/agents/studio-lab-20261013.md)")
+        problems.append("kind must be 'map' or 'ui'")
     name = spec.get("name") or (spec.get("plan") or {}).get("mapName")
     if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9 _-]{0,63}", name):
         problems.append("name must be 1-64 letters, digits, spaces, _ or -")
@@ -125,7 +129,42 @@ def check_spec(spec) -> tuple[dict | None, list[str]]:
         return None, problems
     return {"name": name, "kind": "map", "plan": copy.deepcopy(plan), "maxIterations": iterations,
             "playSeconds": float(seconds), "description": str(spec.get("description", ""))[:600],
-            "lesson": spec.get("lesson") if isinstance(spec.get("lesson"), dict) else {}}, []
+            "lesson": spec.get("lesson") if isinstance(spec.get("lesson"), dict) else {},
+            "defect": str(spec.get("defect", ""))[:80]}, []
+
+
+DEVICES = {
+    # id: (what the device simulator is asked for, the size used when no preset matches). "desktop" = no simulation.
+    "phone": {"label": "phone (landscape)", "match": ["iPhone", "Phone", "Galaxy", "Pixel"], "fallback": [844, 390]},
+    "tablet": {"label": "tablet (landscape)", "match": ["iPad", "Tablet", "Tab "], "fallback": [1180, 820]},
+    "desktop": {"label": "desktop (Studio viewport, no simulation)", "match": [], "fallback": None},
+}
+
+
+def check_ui_spec(spec: dict) -> tuple[dict | None, list[str]]:
+    """{"name", "kind": "ui", "ui": {...star/roblox_ui_compiler spec...}, "devices": ["phone", "tablet", "desktop"]}."""
+    from . import roblox_ui_compiler
+    problems = []
+    unknown = sorted(set(spec) - {"name", "kind", "ui", "devices", "description", "defect"})
+    if unknown:
+        problems.append("unknown keys: " + ", ".join(unknown))
+    name = spec.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", name):
+        problems.append("name must be 1-64 letters, digits, _ or -")
+    devices = spec.get("devices", ["phone", "tablet", "desktop"])
+    if (not isinstance(devices, list) or not 1 <= len(devices) <= 3 or len(set(devices)) != len(devices)
+            or any(d not in DEVICES for d in devices)):
+        problems.append("devices must be 1..3 of " + ", ".join(DEVICES))
+    try:
+        compiled = roblox_ui_compiler.compile_ui(spec.get("ui"))
+    except (roblox_ui_compiler.SpecError, TypeError, ValueError) as error:
+        problems.append("ui spec: " + str(error)[:300])
+        compiled = None
+    if problems:
+        return None, problems
+    return {"name": name, "kind": "ui", "ui": copy.deepcopy(spec["ui"]), "devices": list(devices),
+            "description": str(spec.get("description", ""))[:600], "defect": str(spec.get("defect", ""))[:80],
+            "warnings": [str(w) for w in compiled.warnings][:10]}, []
 
 
 # --------------------------------------------------------------------------- geometry of the route
@@ -633,9 +672,21 @@ def cameras(plan: dict) -> list[dict]:
 
 # --------------------------------------------------------------------------- diagnosis and fixes (pure)
 
+CORRIDOR_HALF_WIDTH = 3.5   # studs either side of the line the character runs (centre to centre), R15 is ~2 wide
+
+
 def _corridor(a: dict, b: dict) -> tuple[list[float], list[float]]:
+    """The space a run-and-jump from surface a to surface b passes through: along the leg from a's far side to b's,
+    across it a tube around the centre line (narrower than wide floors, so a crate at the side of a broad walkway is
+    not 'in the way'), from just above the lower surface to JUMP_CLEARANCE above the higher one."""
     lo = [min(a["lo"][0], b["lo"][0]), min(a["hi"][1], b["hi"][1]) + 0.3, min(a["lo"][2], b["lo"][2])]
     hi = [max(a["hi"][0], b["hi"][0]), max(a["hi"][1], b["hi"][1]) + JUMP_CLEARANCE, max(a["hi"][2], b["hi"][2])]
+    ca = [(a["lo"][i] + a["hi"][i]) / 2 for i in (0, 2)]
+    cb = [(b["lo"][i] + b["hi"][i]) / 2 for i in (0, 2)]
+    across = 2 if abs(cb[0] - ca[0]) >= abs(cb[1] - ca[1]) else 0
+    k = 0 if across == 0 else 1
+    line_lo, line_hi = min(ca[k], cb[k]) - CORRIDOR_HALF_WIDTH, max(ca[k], cb[k]) + CORRIDOR_HALF_WIDTH
+    lo[across], hi[across] = max(lo[across], line_lo), min(hi[across], line_hi)
     return lo, hi
 
 
@@ -647,6 +698,131 @@ def _corridor_blockers(boxes: dict, source: str, target: str) -> list[str]:
     return [name for name, box in boxes.items()
             if name not in (source, target) and box["solid"] and box["kind"] != "spawn" and box["hi"][1] > step_up
             and all(box["lo"][i] < hi[i] - 0.05 and box["hi"][i] > lo[i] + 0.05 for i in range(3))]
+
+
+def _route_legs(plan: dict) -> list[tuple[str, str]]:
+    route = [n for n in plan["route"]["waypoints"] if isinstance(n, str)]
+    return list(zip(route, route[1:]))
+
+
+def _all_corridor_blockers(boxes: dict, legs: list[tuple[str, str]]) -> set[str]:
+    found = set()
+    for source, target in legs:
+        if source in boxes and target in boxes:
+            found.update(_corridor_blockers(boxes, source, target))
+    return found
+
+
+# Roles a fixer may move aside or remove: they dress the map, the route does not depend on them.
+MOVABLE_ROLES = ("decor", "prop", "")
+REMOVABLE_ROLES = ("decor", "prop")
+# Structural parts above the route (a beam, a roof) keep their place and shape; only their height changes.
+OVERHEAD_ROLES = ("roof", "wall", "")
+MAX_ASIDE = 12.0          # studs: further away a decoration no longer reads as part of the same spot
+ASIDE_MARGIN = 0.5
+
+
+def _part_box(item: dict) -> dict:
+    lo, hi = map_plan._aabb(item["position"], item["size"], item.get("rotation", (0, 0, 0)))
+    return {"lo": lo, "hi": hi}
+
+
+def _fits(plan: dict, name: str, lo: list[float], hi: list[float]) -> bool:
+    """Inside the declared bounds and not interpenetrating another solid object of the plan."""
+    bounds = plan["bounds"]
+    centre = bounds.get("center", [0, 0, 0])
+    if any(lo[i] < centre[i] - bounds["size"][i] / 2 - 0.01 or hi[i] > centre[i] + bounds["size"][i] / 2 + 0.01
+           for i in range(3)):
+        return False
+    for other, box in _object_boxes(plan).items():
+        if other == name or not box["solid"]:
+            continue
+        if all(min(hi[i], box["hi"][i]) - max(lo[i], box["lo"][i]) > map_plan.OVERLAP_TOLERANCE for i in range(3)):
+            return False
+    return True
+
+
+def _rests_on(plan: dict, name: str) -> bool:
+    """True when the part stands on the ground level of the map or on top of another solid object."""
+    boxes = _object_boxes(plan)
+    box = boxes[name]
+    ground = min(b["lo"][1] for b in boxes.values())
+    if box["lo"][1] <= ground + map_plan.SUPPORT_TOLERANCE:
+        return True
+    return any(other != name and b["solid"] and abs(b["hi"][1] - box["lo"][1]) <= map_plan.SUPPORT_TOLERANCE
+               and b["lo"][0] < box["hi"][0] and b["hi"][0] > box["lo"][0]
+               and b["lo"][2] < box["hi"][2] and b["hi"][2] > box["lo"][2] for other, b in boxes.items())
+
+
+def aside_moves(plan: dict, name: str) -> list[dict]:
+    """Candidate horizontal moves that take `name` out of every route corridor, smallest first. Pure."""
+    boxes = _object_boxes(plan)
+    item = boxes[name]["item"]
+    legs = _route_legs(plan)
+    supported = _rests_on(plan, name)
+    candidates = []
+    for source, target in legs:
+        if name not in _corridor_blockers(boxes, source, target):
+            continue
+        lo, hi = _corridor(boxes[source], boxes[target])
+        box = boxes[name]
+        for axis in (0, 2):
+            candidates.append((axis, hi[axis] - box["lo"][axis] + ASIDE_MARGIN))
+            candidates.append((axis, -(box["hi"][axis] - lo[axis] + ASIDE_MARGIN)))
+    moves = []
+    seen = set()
+    for axis, shift in sorted(candidates, key=lambda c: abs(c[1])):
+        shift = round(shift, 3)
+        if (axis, shift) in seen or abs(shift) > MAX_ASIDE:
+            continue
+        seen.add((axis, shift))
+        delta = [0.0, 0.0, 0.0]
+        delta[axis] = shift
+        trial = copy.deepcopy(plan)
+        moved = next(p for p in trial["parts"] if p["name"] == name)
+        _move(moved, delta)
+        box = _part_box(moved)
+        if not _fits(trial, name, box["lo"], box["hi"]):
+            continue
+        if supported and not _rests_on(trial, name):
+            continue                    # it stood on something: it must still stand on something (never float it)
+        if name in _all_corridor_blockers(_object_boxes(trial), legs):
+            continue
+        moves.append({"delta": delta, "distance": abs(shift)})
+    return moves
+
+
+def clearing_strategy(plan: dict, name: str, source: str, target: str) -> dict:
+    """The smallest change that clears `name` from the route and keeps what the designer meant it to be:
+      1. a decoration or prop: move it aside (shortest horizontal move that leaves every jump corridor, stays inside
+         the bounds and overlaps nothing), else remove it; never float it in the air;
+      2. a structural part already above the route (beam, roof): raise it just enough (its place and shape stay);
+      3. anything else on the route (platforms, floors, goals) is never changed by this fixer: report only."""
+    boxes = _object_boxes(plan)
+    if name not in boxes or boxes[name]["kind"] != "part":
+        return {"strategy": None, "object": name, "why": "not a part"}
+    item = boxes[name]["item"]
+    role = item.get("role", "")
+    route = {n for n in plan["route"]["waypoints"] if isinstance(n, str)}
+    if name in route:
+        return {"strategy": None, "object": name, "why": "a route surface"}
+    a, b = boxes[source], boxes[target]
+    surface = max(a["hi"][1], b["hi"][1])
+    overhead = boxes[name]["lo"][1] >= min(a["hi"][1], b["hi"][1]) + 2.0
+    if role in OVERHEAD_ROLES and role != "" and overhead:
+        lift = round(surface + JUMP_CLEARANCE - boxes[name]["lo"][1] + ASIDE_MARGIN, 3)
+        return {"strategy": "raise-overhead", "object": name, "delta": [0.0, lift, 0.0]}
+    if role in MOVABLE_ROLES:
+        moves = aside_moves(plan, name)
+        if moves:
+            return {"strategy": "move-aside", "object": name, "delta": moves[0]["delta"],
+                    "distance": moves[0]["distance"]}
+        if role in REMOVABLE_ROLES:
+            return {"strategy": "remove", "object": name, "why": f"no move aside within {MAX_ASIDE:g} studs fits"}
+        if overhead:
+            lift = round(surface + JUMP_CLEARANCE - boxes[name]["lo"][1] + ASIDE_MARGIN, 3)
+            return {"strategy": "raise-overhead", "object": name, "delta": [0.0, lift, 0.0]}
+    return {"strategy": None, "object": name, "why": f"role '{role}' is kept as designed"}
 
 
 def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[dict]:
@@ -684,11 +860,14 @@ def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[di
         if not extra and (too_high or leg.get("climbed")):
             extra = _corridor_blockers(boxes, source, target)
         if extra:
-            ceiling = max(a["hi"][1], b["hi"][1]) + JUMP_CLEARANCE
-            defects.append({"code": "route-unintended-support", "fix": "raise-blockers", "objects": extra,
-                            "evidence": {"leg": f"{source} -> {target}", "stood_on": leg.get("stood_on"),
-                                         "highest": leg.get("highest"), "probe": leg,
-                                         "corridor": {"max": [None, round(ceiling, 2), None]}}})
+            defects.append(_clearing_defect("route-unintended-support", plan, extra, source, target, {
+                "leg": f"{source} -> {target}", "stood_on": leg.get("stood_on"), "highest": leg.get("highest"),
+                "probe": leg}))
+            return defects
+        if too_high:
+            # Higher than a jump, and nothing of the plan is in the corridor: never call that a pass.
+            defects.append({"code": "route-unexplained-height", "fix": None, "evidence": {
+                "leg": f"{source} -> {target}", "highest": leg.get("highest"), "probe": leg}})
             return defects
     failed = probe.get("failed_leg")
     if not failed:
@@ -712,45 +891,182 @@ def diagnose(plan: dict, check: dict, probe: dict, errors: list[str]) -> list[di
         defects.append({"code": "route-surface-not-collidable", "fix": "make-collidable", "object": target,
                         "evidence": evidence})
         return defects
+    if b["kind"] == "part" and b["item"].get("anchored", True) is False:
+        defects.append({"code": "route-surface-unanchored", "fix": "anchor", "object": target, "evidence": evidence})
+        return defects
     corridor_lo, corridor_hi = _corridor(a, b)
     blockers = _corridor_blockers(boxes, source, target)
     if blockers:
-        defects.append({"code": "jump-corridor-blocked", "fix": "raise-blockers", "objects": blockers,
-                        "evidence": {**evidence, "clearance_needed": JUMP_CLEARANCE,
-                                     "corridor": {"min": [round(v, 2) for v in corridor_lo],
-                                                  "max": [round(v, 2) for v in corridor_hi]}}})
+        defects.append(_clearing_defect("jump-corridor-blocked", plan, blockers, source, target, {
+            **evidence, "clearance_needed": JUMP_CLEARANCE,
+            "corridor": {"min": [round(v, 2) for v in corridor_lo], "max": [round(v, 2) for v in corridor_hi]}}))
         return defects
     if rise > SAFE_RISE:
-        defects.append({"code": "jump-too-high", "fix": "lower-rest", "object": target, "evidence": evidence})
+        defects.append({"code": "jump-too-high", "fix": "ease-rise", "object": target, "evidence": evidence})
     elif gap > SAFE_GAP:
-        defects.append({"code": "jump-too-far", "fix": "close-gap", "object": target, "evidence": evidence})
+        defects.append({"code": "jump-too-far", "fix": "extend-platform", "object": target, "evidence": evidence})
     else:
         defects.append({"code": "route-failed", "fix": "close-gap", "object": target, "heuristic": True,
                         "evidence": evidence})
     return defects
 
 
+def _clearing_defect(code: str, plan: dict, objects: list[str], source: str, target: str, evidence: dict) -> dict:
+    """A defect whose fix clears `objects` from the leg; report only when no object has an allowed strategy."""
+    strategies = [clearing_strategy(plan, name, source, target) for name in objects]
+    fixable = any(s.get("strategy") for s in strategies)
+    return {"code": code, "fix": "clear-route" if fixable else None, "objects": list(objects),
+            "leg": [source, target], "strategies": strategies, "evidence": evidence}
+
+
 def _move(item: dict, delta) -> None:
     item["position"] = [round(p + d, 3) for p, d in zip(item["position"], delta)]
 
 
+def _axis(a: dict, b: dict) -> tuple[int, float]:
+    """The horizontal axis (0 = X, 2 = Z) a leg mostly runs along, and its direction (+1 / -1)."""
+    ca = [(a["lo"][i] + a["hi"][i]) / 2 for i in range(3)]
+    cb = [(b["lo"][i] + b["hi"][i]) / 2 for i in range(3)]
+    axis = 0 if abs(cb[0] - ca[0]) >= abs(cb[2] - ca[2]) else 2
+    return axis, (1.0 if cb[axis] >= ca[axis] else -1.0)
+
+
+def _part(plan: dict, name: str) -> dict | None:
+    return next((p for p in plan.get("parts", []) if p["name"] == name), None)
+
+
+def extend_platform(plan: dict, target: str) -> dict | None:
+    """Jump too far: grow the landing part toward the take-off by the missing distance; its far edge, height and the
+    rest of the route stay where the designer put them. None when it cannot (a spawn, a rotated part, no room)."""
+    route = [n for n in plan["route"]["waypoints"] if isinstance(n, str)]
+    index = route.index(target)
+    boxes = _object_boxes(plan)
+    item = _part(plan, target)
+    if item is None or index == 0 or any(item.get("rotation", (0, 0, 0))):
+        return None
+    a, b = boxes[route[index - 1]], boxes[target]
+    gap, _rise = _leg(a, b)
+    axis, direction = _axis(a, b)
+    grow = round(gap - SAFE_GAP if gap > SAFE_GAP else min(1.5, gap * 0.5), 3)
+    if grow <= 0 or grow > item["size"][axis] * 2 + 4:
+        return None
+    trial = copy.deepcopy(plan)
+    grown = _part(trial, target)
+    grown["size"][axis] = round(grown["size"][axis] + grow, 3)
+    grown["position"][axis] = round(grown["position"][axis] - direction * grow / 2, 3)
+    box = _part_box(grown)
+    if not _fits(trial, target, box["lo"], box["hi"]):
+        return None
+    return {"plan": trial, "change": {"fix": "extend-platform", "object": target, "axis": "XYZ"[axis],
+                                      "grown_by": grow, "size": grown["size"], "position": grown["position"]}}
+
+
+def ease_rise(plan: dict, target: str) -> dict | None:
+    """Rise too high: the smallest change that keeps the climb. (a) lower only the target when the next leg still
+    climbs a safe amount; (b) add one step platform halfway in the gap. None when neither fits."""
+    route = [n for n in plan["route"]["waypoints"] if isinstance(n, str)]
+    index = route.index(target)
+    boxes = _object_boxes(plan)
+    if index == 0:
+        return None
+    a, b = boxes[route[index - 1]], boxes[target]
+    gap, rise = _leg(a, b)
+    drop = round(rise - SAFE_RISE, 3)
+    item = _part(plan, target)
+    if item is not None and drop > 0:
+        next_rise = _leg(b, boxes[route[index + 1]])[1] if index + 1 < len(route) else 0.0
+        if next_rise + drop <= SAFE_RISE:
+            trial = copy.deepcopy(plan)
+            _move(_part(trial, target), [0.0, -drop, 0.0])
+            box = _part_box(_part(trial, target))
+            if _fits(trial, target, box["lo"], box["hi"]):
+                return {"plan": trial, "change": {"fix": "lower-target", "object": target, "lowered_by": drop}}
+    if gap >= 2.0:
+        axis, direction = _axis(a, b)
+        other = 2 if axis == 0 else 0
+        lo_edge = a["hi"][axis] if direction > 0 else b["hi"][axis]
+        hi_edge = b["lo"][axis] if direction > 0 else a["lo"][axis]
+        length = round(max(1.0, (hi_edge - lo_edge) - 1.0), 3)
+        across_lo = max(a["lo"][other], b["lo"][other])
+        across_hi = min(a["hi"][other], b["hi"][other])
+        if across_hi - across_lo < 2.0:          # the platforms do not face each other: use the landing's width
+            across_lo, across_hi = b["lo"][other], b["hi"][other]
+        width = round(min(6.0, across_hi - across_lo), 3)
+        top = a["hi"][1] + rise / 2
+        position = [0.0, round(top - 0.5, 3), 0.0]
+        position[axis] = round((lo_edge + hi_edge) / 2, 3)
+        position[other] = round((across_lo + across_hi) / 2, 3)
+        size = [0.0, 1.0, 0.0]
+        size[axis], size[other] = length, width
+        names = {p["name"] for p in plan.get("parts", [])} | {s["name"] for s in plan.get("spawns", [])}
+        candidates = [f"{target}Step"] + [f"{target}Step{n}" for n in range(2, 50)]
+        name = next((c for c in candidates if c not in names), None)
+        if name is None or len(name) > 64:
+            return None
+        step = {"name": name, "position": position, "size": size, "role": "platform"}
+        for key in ("material", "color", "group"):
+            if item is not None and key in item:
+                step[key] = item[key]
+        trial = copy.deepcopy(plan)
+        trial["parts"].append(step)
+        box = _part_box(step)
+        if _fits(trial, name, box["lo"], box["hi"]):
+            waypoints = trial["route"]["waypoints"]
+            waypoints.insert(waypoints.index(target), name)
+            return {"plan": trial, "change": {"fix": "add-step", "object": name, "before": target,
+                                              "position": position, "size": size}}
+    return None
+
+
 def fix_plan(plan: dict, defects: list[dict]) -> tuple[dict, list[dict]]:
-    """Apply the fixes the defects name to a COPY of the plan. Returns (new plan, what was changed)."""
+    """Apply the fixes the defects name to a COPY of the plan. Returns (new plan, what was changed).
+
+    Strategy order (smallest change that keeps the designer's intent first):
+      clear-route      decor/prop: move aside, else remove (never floated); beam/roof above the route: raise it
+      extend-platform  grow the landing toward the take-off; fallback: move the rest of the route closer
+      ease-rise        lower only the landing, else add one step halfway; fallback: lower the rest of the route
+      anchor / make-collidable / shift-map / close-gap / lower-rest / raise-blockers (kept for older reports)"""
     new = copy.deepcopy(plan)
-    objects = {item["name"]: item for key in ("parts", "spawns") for item in new.get(key, [])}
-    route = list(new["route"]["waypoints"])
     changes = []
     for defect in defects:
         fix = defect.get("fix")
+        objects = {item["name"]: item for key in ("parts", "spawns") for item in new.get(key, [])}
+        route = list(new["route"]["waypoints"])
         if fix == "make-collidable":
             objects[defect["object"]]["canCollide"] = True
             changes.append({"fix": fix, "object": defect["object"], "canCollide": True})
+        elif fix == "anchor":
+            objects[defect["object"]]["anchored"] = True
+            changes.append({"fix": fix, "object": defect["object"], "anchored": True})
+        elif fix == "clear-route":
+            source, target = defect["leg"]
+            for name in defect["objects"]:
+                if _part(new, name) is None:
+                    continue
+                chosen = clearing_strategy(new, name, source, target)
+                strategy = chosen.get("strategy")
+                if strategy in ("move-aside", "raise-overhead"):
+                    _move(_part(new, name), chosen["delta"])
+                    changes.append({"fix": strategy, "object": name, "delta": chosen["delta"]})
+                elif strategy == "remove":
+                    new["parts"] = [p for p in new["parts"] if p["name"] != name]
+                    changes.append({"fix": "remove", "object": name, "why": chosen.get("why", "")})
+                else:
+                    changes.append({"fix": None, "object": name, "why": chosen.get("why", "")})
+        elif fix in ("extend-platform", "ease-rise"):
+            done = (extend_platform if fix == "extend-platform" else ease_rise)(new, defect["object"])
+            if done is not None:
+                new = done["plan"]
+                changes.append(done["change"])
+            else:
+                fallback = {**defect, "fix": "close-gap" if fix == "extend-platform" else "lower-rest"}
+                new, more = fix_plan(new, [fallback])
+                changes.extend(more)
         elif fix == "raise-blockers":
             ceiling = defect["evidence"]["corridor"]["max"][1]
             for name in defect["objects"]:
                 item = objects[name]
-                box = _object_boxes({"parts": [item]} if name in {p["name"] for p in new.get("parts", [])}
-                                    else {"spawns": [item]})[name]
+                box = _object_boxes({"parts": [item]} if _part(new, name) is not None else {"spawns": [item]})[name]
                 lift = round(ceiling - box["lo"][1] + 0.5, 3)
                 _move(item, [0, lift, 0])
                 changes.append({"fix": fix, "object": name, "raised_by": lift})
@@ -865,17 +1181,29 @@ def plan_summary(plan: dict) -> str:
 
 LESSON_TEXT = {
     "jump-corridor-blocked": "Roblox obby: keep about 13 studs of free height above every jump (default jump "
-                             "height 7.2 plus the character); a beam over the gap 6 studs up stops the jump.",
+                             "height 7.2 plus the character); move decorations aside instead of floating them.",
     "jump-too-far": "Roblox obby: keep jump gaps at or under about 6 studs for a default character (WalkSpeed 16, "
-                    "JumpHeight 7.2); wider gaps fail in a real playtest.",
+                    "JumpHeight 7.2); widen the landing toward the jump rather than moving the whole course.",
     "jump-too-high": "Roblox obby: keep the rise between platforms at or under about 4.5 studs for a default "
-                     "character; use stairs, a ramp or a TrussPart for more.",
-    "route-unintended-support": "Roblox obby: keep decorations out of the jump path (about 13 studs above each gap); "
-                                "a character can climb onto a thin decor part over a gap and skip the intended jump.",
+                     "character; lower the landing or add one step halfway for more.",
+    "route-unintended-support": "Roblox obby: keep decorations out of the jump path; a character can climb onto a "
+                                "thin decor part over a gap and skip the jump. Move it beside the path.",
     "route-surface-not-collidable": "Roblox obby: every platform a player must stand on needs CanCollide = true; "
                                     "a non-collidable platform looks fine in Edit mode but players fall through.",
+    "route-surface-unanchored": "Roblox obby: anchor every floating platform (Anchored = true); an unanchored one "
+                                "looks right in Edit mode but falls away the moment the game runs.",
     "foreign-overlap": "Roblox maps: check a new build's area for existing parts before building; overlapping an "
                        "existing structure blocks the route.",
+}
+
+
+CLEARING_CODES = ("jump-corridor-blocked", "route-unintended-support")
+# When the verified fix was not "move the decoration aside", the lesson says what really worked.
+FIX_TEXT = {
+    "raise-overhead": "Roblox obby: a beam or roof over a jump needs about 13 studs of free height above the take-off "
+                      "and landing; raise the beam rather than moving the platforms.",
+    "remove": "Roblox obby: a decoration standing in the running line on a small platform cannot move aside and stay "
+              "on it; remove it or put it on its own base beside the route.",
 }
 
 
@@ -903,7 +1231,9 @@ def lesson_record(report: dict) -> dict | None:
                   "legs": len(last["probe"]["legs"]), "build_hash": last["verify"].get("build_hash")},
         "screenshots": shots, "plan_hash": digest(report.get("final_plan") or {}),
     }
-    text = LESSON_TEXT[code]
+    fixes = [c.get("fix") for it in iterations for c in it.get("fixes", [])]
+    text = next((FIX_TEXT[f] for f in fixes if f in FIX_TEXT), None) if code in CLEARING_CODES else None
+    text = text or LESSON_TEXT[code]
     return {"id": f"studio-lab-{report['run']}-{code}", "kind": "pitfall", "text": text, "code": code,
             "source": "studio-lab:" + report["run"], "source_type": "verified-fix", "evidence": evidence,
             "reviewed": False}
@@ -948,6 +1278,172 @@ def write_outbox(outbox: Path, records: list[dict]) -> dict:
     return {"records": len(newest), "file": "star-lessons-studio-lab.json"}
 
 
+# --------------------------------------------------------------------------- UI specs (ScreenGui preview at device sizes)
+
+UI_MARK = "STAR_LAB_UI "
+UI_ATTRIBUTE = "StarLabUi"
+PLAYER_GUI_LINE = 'local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")'
+MIN_TOUCH = 44            # px: smallest comfortable touch target on a phone (Apple HIG / Roblox mobile guidance)
+
+
+def ui_apply_luau(spec: dict, run: str) -> str:
+    """Build the compiled ScreenGui in Edit mode, under StarterGui (shown in the edit viewport), tagged with the
+    lab attribute; a ScreenGui of an earlier lab run with the same name is replaced. One undo step via GuardedStudio.
+    The compiled module is used unchanged except where it would wait for a player's PlayerGui (none in Edit)."""
+    from . import roblox_ui_compiler
+    if not _TOKEN.fullmatch(run):
+        raise ValueError("invalid run token")
+    source = roblox_ui_compiler.compile_ui(spec["ui"]).source
+    if source.count(PLAYER_GUI_LINE) != 1:
+        raise ValueError("the compiled UI does not have the expected PlayerGui line")
+    source = source.replace(PLAYER_GUI_LINE, "local playerGui = __starLabParent")
+    return "\n".join([
+        "-- STAR Studio Lab UI apply (Edit-mode preview of a compiled ScreenGui)",
+        'local StarterGui = game:GetService("StarterGui")',
+        "local removed = 0",
+        "for _, old in ipairs(StarterGui:GetChildren()) do",
+        f"\tif old:GetAttribute({_lua_string(UI_ATTRIBUTE)}) == {_lua_string(spec['name'])} then old:Destroy(); removed += 1 end",
+        "end",
+        "local before = {}",
+        "for _, child in ipairs(StarterGui:GetChildren()) do before[child] = true end",
+        "local __starLabParent = StarterGui",
+        "local module = (function()",
+        source,
+        "end)()",
+        "local made = {}",
+        "for _, child in ipairs(StarterGui:GetChildren()) do",
+        "\tif not before[child] and child:IsA(\"ScreenGui\") then",
+        f"\t\tchild:SetAttribute({_lua_string(UI_ATTRIBUTE)}, {_lua_string(spec['name'])})",
+        f"\t\tchild:SetAttribute(\"StarLabRun\", {_lua_string(run)})",
+        "\t\ttable.insert(made, child.Name)",
+        "\tend",
+        "end",
+        "local handleCount = 0",
+        "if type(module) == \"table\" and type(module.handles) == \"table\" then",
+        "\tfor _ in pairs(module.handles) do handleCount += 1 end",
+        "end",
+        f'return "{UI_MARK}" .. game:GetService("HttpService"):JSONEncode({{made = made, removed = removed, '
+        f'run = {_lua_string(run)}, handles = handleCount}})',
+    ]) + "\n"
+
+
+def ui_device_luau(device: str) -> str:
+    """Switch Studio's Device Simulator (StudioDeviceSimulatorService, plugin context) to a preset of the wanted
+    kind, or stop simulating for 'desktop'. Reads back the viewport size. Changes only Studio's view, not the place."""
+    if device not in DEVICES:
+        raise ValueError("unknown device")
+    match = ", ".join(_lua_string(m) for m in DEVICES[device]["match"])
+    return f"""-- STAR Studio Lab: device simulator -> {device}
+local HttpService = game:GetService("HttpService")
+local ok, svc = pcall(function() return game:GetService("StudioDeviceSimulatorService") end)
+local result = {{ device = {_lua_string(device)}, simulator = ok and svc ~= nil }}
+if ok and svc then
+	local wanted = {{ {match} }}
+	if #wanted == 0 then
+		pcall(function() svc:StopSimulationAsync() end)
+		result.preset = "none"
+	else
+		local best, bestArea
+		local listed, devices = pcall(function() return svc:GetDeviceListAsync() end)
+		if listed then
+			for _, id in ipairs(devices) do
+				local got, info = pcall(function() return svc:GetDeviceInfoAsync(id) end)
+				if got and info and info.Name then
+					for _, word in ipairs(wanted) do
+						if string.find(info.Name, word, 1, true) then
+							local area = (info.Width or 0) * (info.Height or 0)
+							if not best or area < bestArea then best, bestArea = {{ id = id, info = info }}, area end
+						end
+					end
+				end
+			end
+		end
+		if best then
+			local set, problem = pcall(function() svc:SetDeviceAsync(best.id) end)
+			pcall(function() svc:SetOrientationAsync(Enum.ScreenOrientation.LandscapeLeft) end)
+			result.preset = best.info.Name
+			result.set = set
+			if not set then result.problem = string.sub(tostring(problem), 1, 160) end
+		else
+			result.preset = "not found"
+		end
+	end
+	task.wait(0.6)
+	local active = pcall(function() result.active = svc:GetDeviceAsync() end)
+end
+local camera = workspace.CurrentCamera
+result.viewport = camera and {{ math.floor(camera.ViewportSize.X), math.floor(camera.ViewportSize.Y) }} or nil
+return "{UI_MARK}" .. HttpService:JSONEncode(result)
+"""
+
+
+def ui_layout_luau(name: str, limit: int = 24) -> str:
+    """Reads only: every visible GuiObject of the lab's ScreenGui with its on-screen box (compact rows)."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", name) or not 1 <= limit <= 40:
+        raise ValueError("invalid UI name")
+    return f"""-- STAR Studio Lab UI layout read-back (reads only)
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
+local camera = workspace.CurrentCamera
+local rows, total = {{}}, 0
+for _, gui in ipairs(StarterGui:GetChildren()) do
+	if gui:GetAttribute({_lua_string(UI_ATTRIBUTE)}) == {_lua_string(name)} then
+		for _, item in ipairs(gui:GetDescendants()) do
+			if item:IsA("GuiObject") and item.Visible and item.Name ~= "ResponsiveRoot" then
+				total += 1
+				if #rows < {limit} then
+					local p, s = item.AbsolutePosition, item.AbsoluteSize
+					local fits = true
+					if item:IsA("TextLabel") or item:IsA("TextButton") or item:IsA("TextBox") then fits = item.TextFits end
+					table.insert(rows, {{ string.sub(item.Name, 1, 24), item.ClassName, math.floor(p.X), math.floor(p.Y),
+						math.floor(s.X), math.floor(s.Y), fits, item:IsA("GuiButton") or item:IsA("TextBox") }})
+				end
+			end
+		end
+	end
+end
+return "{UI_MARK}" .. HttpService:JSONEncode({{ viewport = camera and {{ math.floor(camera.ViewportSize.X),
+	math.floor(camera.ViewportSize.Y) }} or nil, total = total, rows = rows }})
+"""
+
+
+def ui_remove_luau(name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,63}", name):
+        raise ValueError("invalid UI name")
+    return f"""-- STAR Studio Lab: remove lab ScreenGuis by name (only those carrying the lab attribute)
+local removed = 0
+for _, gui in ipairs(game:GetService("StarterGui"):GetChildren()) do
+	if gui:GetAttribute({_lua_string(UI_ATTRIBUTE)}) == {_lua_string(name)} then gui:Destroy(); removed += 1 end
+end
+return "{UI_MARK}" .. game:GetService("HttpService"):JSONEncode({{ removed = removed }})
+"""
+
+
+def ui_check(layout: dict | None, device: str) -> list[dict]:
+    """Layout problems from the read-back: off screen, clipped text, touch targets too small on a phone. Pure."""
+    if not layout or not layout.get("viewport"):
+        return [{"code": "ui-not-read", "detail": "no layout read-back"}]
+    width, height = layout["viewport"]
+    problems = []
+    if not layout.get("rows"):
+        problems.append({"code": "ui-empty", "detail": "the ScreenGui has no visible elements"})
+    for row in layout.get("rows", []):
+        if not isinstance(row, list) or len(row) != 8:
+            continue
+        name, cls, x, y, w, h, fits, interactive = row
+        if w <= 0 or h <= 0:
+            problems.append({"code": "ui-zero-size", "object": name, "detail": f"{cls} is {w}x{h} px"})
+        elif x < -1 or y < -1 or x + w > width + 1 or y + h > height + 1:
+            problems.append({"code": "ui-off-screen", "object": name,
+                             "detail": f"{cls} at {x},{y} size {w}x{h} outside {width}x{height}"})
+        if fits is False:
+            problems.append({"code": "ui-text-clipped", "object": name, "detail": f"{cls} text does not fit"})
+        if interactive and device == "phone" and 0 < min(w, h) < MIN_TOUCH:
+            problems.append({"code": "ui-touch-target-small", "object": name,
+                             "detail": f"{cls} {w}x{h} px < {MIN_TOUCH} px"})
+    return problems
+
+
 # --------------------------------------------------------------------------- the live loop
 
 def _text(result) -> str:
@@ -990,9 +1486,15 @@ class Lab:
     """Drives one spec through the loop on an already opened GuardedStudio (see run_lab for the connection)."""
 
     def __init__(self, guarded, out: Path, *, capture_command=None, critic=None, log=print, sleep=asyncio.sleep,
-                 poll: float = 2.0):
+                 poll: float = 2.0, play_lock=None, settle: float = 12.0):
         self.guarded, self.out = guarded, Path(out)
         self.capture_command, self.critic, self.log, self.sleep, self.poll = capture_command, critic, log, sleep, poll
+        # Several Studios on one connector host: Play start/stop re-register each Studio's DataModels with the host.
+        # Two Studios doing that in the same second once stalled both connectors (2026-10-13 20:54:51Z), so the
+        # parallel runner passes one shared lock: a start holds it until this run's probe has printed (or `settle`
+        # seconds), a stop holds it while stopping.
+        self.play_lock = play_lock if play_lock is not None else contextlib.nullcontext()
+        self.settle = settle
 
     async def _luau(self, code: str) -> tuple[bool, str, dict]:
         result = await self.guarded.call_tool("execute_luau", {"studio_id": self.guarded.studio_id,
@@ -1014,8 +1516,8 @@ class Lab:
                 "added": entry.get("added_count"), "removed": entry.get("removed"),
                 "detail": "" if ok else (entry.get("diagnostic") or text[-300:])}
 
-    async def remove(self, names: list[str]) -> dict:
-        ok, text, entry = await self._luau(remove_luau(names))
+    async def remove(self, names: list[str], root: str = map_plan.MANAGED_ROOT) -> dict:
+        ok, text, entry = await self._luau(remove_luau(names, root))
         receipt = marked_json(text, APPLY_MARK) or {}
         return {"ok": ok, "removed": receipt.get("removed", []), "undo_tag": entry.get("tag")}
 
@@ -1034,14 +1536,27 @@ class Lab:
         return merge_readback(pages)
 
     async def playtest(self, run: str, seconds: float, folder: Path) -> dict:
-        started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id, "is_start": True})
-        if _failed(started):
-            return {"ok": False, "started": False, "detail": _text(started)[:300], "probe": parse_probe("", run),
-                    "errors": []}
         console, probe, capture = "", parse_probe("", run), {"ok": False, "detail": "not taken"}
+        async with self.play_lock:
+            started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                       "is_start": True})
+            if _failed(started):
+                return {"ok": False, "started": False, "detail": _text(started)[:300], "probe": probe, "errors": []}
+            settle_until = time.monotonic() + self.settle
+            try:
+                while time.monotonic() < settle_until and not probe["started"]:
+                    await self.sleep(min(self.poll, 1.0))
+                    console = _text(await self._read("get_console_output"))
+                    probe = parse_probe(console, run)
+            except BaseException:
+                # Never leave Studio in Play (GuardedStudio would refuse every later edit): stop while still
+                # holding the lock, then let the error go on.
+                await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                 "is_start": False})
+                raise
         deadline = time.monotonic() + seconds
         try:
-            while time.monotonic() < deadline:
+            while time.monotonic() < deadline and not probe["finished"]:
                 await self.sleep(self.poll)
                 result = await self._read("get_console_output")
                 console = _text(result)
@@ -1051,8 +1566,9 @@ class Lab:
                 if probe["finished"]:
                     break
         finally:
-            stopped = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
-                                                                       "is_start": False})
+            async with self.play_lock:
+                stopped = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                           "is_start": False})
         at = console.find(PROBE_MARK)
         (folder / "playtest-output.txt").write_text(console[console.rfind("\n", 0, at) + 1:] if at >= 0 else console[-4000:],
                                                     encoding="utf-8")
@@ -1136,6 +1652,56 @@ class Lab:
         return report
 
 
+class UiLab(Lab):
+    """A UI spec: build the compiled ScreenGui in Edit mode, then per device size switch the Device Simulator, read
+    the layout back, check it and take a screenshot of the viewport. The simulator is put back at the end."""
+
+    async def _ui(self, code: str) -> tuple[bool, dict]:
+        ok, text, _entry = await self._luau(code)
+        return ok, (marked_json(text, UI_MARK) or {})
+
+    async def run(self, spec: dict, *, run: str | None = None, keep: bool = True) -> dict:
+        run = run or secrets.token_hex(4)
+        self.out.mkdir(parents=True, exist_ok=True)
+        report = {"lab": LAB_VERSION, "kind": "ui", "run": run, "spec": spec["name"], "devices": [],
+                  "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "passed": False}
+        identity = getattr(getattr(self.guarded, "verdict", None), "identity", None)
+        if identity is not None:
+            report["place"] = {"place_id": identity.place_id, "universe_id": identity.game_id}
+        ok, applied = await self._ui(ui_apply_luau(spec, run))
+        report["apply"] = {"ok": ok and applied.get("run") == run and bool(applied.get("made")), **applied}
+        self.log(f"[ui] apply: {report['apply']}")
+        if report["apply"]["ok"]:
+            try:
+                for device in spec["devices"]:
+                    _, switched = await self._ui(ui_device_luau(device))
+                    _, layout = await self._ui(ui_layout_luau(spec["name"]))
+                    shot = await self._read("screen_capture", capture_id=f"StarLabUi_{spec['name']}_{device}")
+                    images = _images(shot)
+                    entry = {"device": device, "simulator": switched, "layout": layout,
+                             "problems": ui_check(layout, device)}
+                    if images and not _failed(shot):
+                        data, mime = images[0]
+                        name = f"ui-{device}.{'jpg' if 'jpeg' in mime else 'png'}"
+                        (self.out / name).write_bytes(data)
+                        entry["screenshot"] = {"ok": True, "file": name, "bytes": len(data), "sha256": digest(data)}
+                    else:
+                        entry["screenshot"] = {"ok": False, "detail": _text(shot)[:200]}
+                    report["devices"].append(entry)
+                    self.log(f"[ui] {device}: viewport {layout.get('viewport')} preset {switched.get('preset')} "
+                             f"problems {[p['code'] for p in entry['problems']]}")
+            finally:
+                _, reset = await self._ui(ui_device_luau("desktop"))
+                report["reset"] = reset
+        if not keep:
+            report["removed"] = (await self._ui(ui_remove_luau(spec["name"])))[1]
+        report["passed"] = bool(report["apply"]["ok"] and report["devices"]
+                                and all(d["screenshot"]["ok"] and not d["problems"] for d in report["devices"]))
+        report["finished"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        (self.out / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+        return report
+
+
 def _admit(name: str):
     """One admission per lab run from STAR's resource planner when it is configured (fail-open)."""
     try:
@@ -1170,7 +1736,9 @@ async def run_lab(home, spec: dict, out: Path, *, capture_command=None, critic=N
             if not (guarded.verdict.editable and facts.get("is_test_place")):
                 return {"ok": False, "passed": False, "problem": "the open place is not STAR Test Place or the sandbox "
                         "rule does not allow edits: " + str(facts.get("verdict", {}).get("reason", ""))}
-            report = await Lab(guarded, out, capture_command=capture_command, critic=critic, log=log).run(spec)
+            lab = (UiLab if spec.get("kind") == "ui" else Lab)(guarded, out, capture_command=capture_command,
+                                                                  critic=critic, log=log)
+            report = await lab.run(spec)
             report["ok"] = True
             return report
     finally:
@@ -1211,6 +1779,15 @@ def run_lab_sync(home, spec: dict, out: Path, *, timeout: float = 900.0, **kwarg
 
 def public_summary(report: dict, out: Path | None = None) -> dict:
     """What a model or the owner sees: results and evidence files, no images, no commands."""
+    if report.get("kind") == "ui":
+        return {"ok": report.get("ok", False), "passed": report.get("passed", False), "run": report.get("run"),
+                "kind": "ui", "problem": report.get("problem", ""), "applied": (report.get("apply") or {}).get("ok"),
+                "devices": [{"device": d["device"], "viewport": (d.get("layout") or {}).get("viewport"),
+                             "preset": (d.get("simulator") or {}).get("preset"),
+                             "problems": [p["code"] for p in d.get("problems", [])],
+                             "screenshot": (d.get("screenshot") or {}).get("file")} for d in report.get("devices", [])],
+                "evidence_folder": str(out) if out else "",
+                "note": "Edit-mode preview under StarterGui (tagged StarLabUi); nothing was saved or published."}
     iterations = []
     for step in report.get("iterations", []):
         probe = step.get("probe") or {}

@@ -1,0 +1,125 @@
+{
+ "name": "V2PillarOnLanding",
+ "kind": "map",
+ "description": "A 1x7x1 decor pillar stands on P2, in the running line.",
+ "defect": "decor-on-landing",
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V2PillarOnLanding",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    56.0,
+    40,
+    40.0
+   ],
+   "center": [
+    -24.0,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12,
+     1,
+     12
+    ],
+    "material": "SmoothPlastic",
+    "color": "#5B8DEF",
+    "role": "floor"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -27.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -17.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1,
+     6.0
+    ],
+    "color": "#F2B134",
+    "role": "platform"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     -6.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1,
+     8.0
+    ],
+    "color": "#3CCB6B",
+    "role": "goal",
+    "material": "Neon"
+   },
+   {
+    "name": "Pillar",
+    "position": [
+     -18.0,
+     10.0,
+     150.0
+    ],
+    "size": [
+     1,
+     7,
+     1
+    ],
+    "material": "Marble",
+    "color": "#DDDDDD",
+    "role": "decor"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "Goal"
+   ]
+  }
+ }
+}
