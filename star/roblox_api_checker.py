@@ -162,8 +162,18 @@ def _tokens(source: str) -> list[_Token]:
     return result
 
 
+# How alike two names must be (difflib ratio) before one is offered as "did you mean". With no
+# floor, every unknown name got the least-unlike real name, e.g. Instance.new("MyHitbox") -> "Model".
+SUGGESTION_CUTOFF = 0.6
+
+
 def _nearest(name: str, candidates: frozenset[str] | dict[str, ApiClass]) -> str | None:
-    matches = get_close_matches(name, sorted(candidates), n=1, cutoff=0)
+    """The real name the author most likely meant, or None when nothing is close enough."""
+    names = sorted(candidates)
+    folded = [candidate for candidate in names if candidate.lower() == name.lower()]
+    if folded:
+        return folded[0]    # wrong case only (Instance.new("part"), :findFirstChild)
+    matches = get_close_matches(name, names, n=1, cutoff=SUGGESTION_CUTOFF)
     return matches[0] if matches else None
 
 
