@@ -1,7 +1,7 @@
 """STAR Desktop's local-only backend. The Qt GUI calls this from worker threads."""
 from __future__ import annotations
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -259,6 +259,7 @@ class Conversations:
         import sqlite3
         db.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(db, timeout=30)
+        self._last_stamp: datetime | None = None
         self.connection.execute(
             'CREATE TABLE IF NOT EXISTS messages '
             '(id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, '
@@ -305,6 +306,19 @@ class Conversations:
         )
         self.connection.commit()
 
+    def _stamp(self) -> str:
+        """A UTC timestamp that is strictly later than the previous one from this store.
+
+        Chats are ordered by ``updated``. Two writes within one tick of the system clock
+        (about 16 ms on some Windows machines) used to get the same stamp, so the newest
+        chat could be listed second and ``active_chat`` could fall back to the wrong one.
+        """
+        now = datetime.now(timezone.utc)
+        if self._last_stamp is not None and now <= self._last_stamp:
+            now = self._last_stamp + timedelta(microseconds=1)
+        self._last_stamp = now
+        return now.isoformat(timespec='microseconds')
+
     def new_chat(self, project: str) -> str:
         import uuid
         # Reuse an already blank active thread instead of filling the history with
@@ -319,7 +333,7 @@ class Conversations:
         if current:
             return current[0]
         chat_id = uuid.uuid4().hex
-        created = datetime.now(timezone.utc).isoformat()
+        created = self._stamp()
         with self.connection:
             self.connection.execute(
                 'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
@@ -379,7 +393,7 @@ class Conversations:
         if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
                                      or type(reply_to) is not int):
             raise ValueError('Only an event record that answers a user message can be failed or cancelled')
-        stamp = datetime.now(timezone.utc).isoformat()
+        stamp = self._stamp()
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
             if chat_id is None:

@@ -1,9 +1,23 @@
 """Regression coverage for STAR's in-place chat thread migration."""
 import sqlite3
+from datetime import datetime, timezone
 
 import pytest
 
+import star.desktop_core as desktop_core
 from star.desktop_core import Conversations, recent_context
+
+
+class _FrozenClock(datetime):
+    """``datetime`` whose ``now`` never moves: every write lands in the same clock tick."""
+    @classmethod
+    def now(cls, tz=None):
+        return datetime(2026, 10, 13, 12, 0, 0, tzinfo=timezone.utc)
+
+
+@pytest.fixture
+def frozen_clock(monkeypatch):
+    monkeypatch.setattr(desktop_core, "datetime", _FrozenClock)
 
 
 def test_existing_messages_migrate_without_data_loss(tmp_path):
@@ -34,7 +48,9 @@ def test_existing_messages_migrate_without_data_loss(tmp_path):
         reopened.close()
 
 
-def test_fresh_chats_do_not_leak_history(tmp_path):
+def test_fresh_chats_do_not_leak_history(tmp_path, frozen_clock):
+    # The clock is frozen on purpose: this test used to fail now and then on Windows, where
+    # several writes share one clock tick and the newest chat tied with the older one.
     store = Conversations(tmp_path / "messages.db")
     try:
         first = store.active_chat("My Roblox project")
@@ -54,6 +70,38 @@ def test_fresh_chats_do_not_leak_history(tmp_path):
         store.switch_chat("My Roblox project", first)
         assert store.active_chat("My Roblox project") == first
         assert len(store.recent("My Roblox project", chat_id=first)) == 2
+    finally:
+        store.close()
+
+
+def test_newest_chat_is_listed_first_even_within_one_clock_tick(tmp_path, frozen_clock):
+    store = Conversations(tmp_path / "messages.db")
+    try:
+        ids = [store.new_chat("STAR")]
+        store.add("STAR", "user", "First", chat_id=ids[0])
+        for title in ("Second", "Third"):
+            ids.append(store.new_chat("STAR"))
+            store.add("STAR", "user", title, chat_id=ids[-1])
+        assert [chat["title"] for chat in store.list_chats("STAR")] == ["Third", "Second", "First"]
+        # Writing to an older chat moves it back to the top.
+        store.add("STAR", "assistant", "Reply", chat_id=ids[0])
+        assert store.list_chats("STAR")[0]["id"] == ids[0]
+        stamps = [chat["updated"] for chat in store.list_chats("STAR")]
+        assert stamps == sorted(stamps, reverse=True) and len(set(stamps)) == 3
+    finally:
+        store.close()
+
+
+def test_active_chat_falls_back_to_the_most_recently_updated_chat(tmp_path, frozen_clock):
+    store = Conversations(tmp_path / "messages.db")
+    try:
+        first = store.new_chat("STAR")
+        store.add("STAR", "user", "Older", chat_id=first)
+        second = store.new_chat("STAR")
+        store.add("STAR", "user", "Newer", chat_id=second)
+        store.connection.execute("DELETE FROM active_chats")
+        store.connection.commit()
+        assert store.active_chat("STAR") == second
     finally:
         store.close()
 
