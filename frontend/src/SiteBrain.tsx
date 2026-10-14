@@ -4,7 +4,8 @@
  * The map is data from scripts/build_brain_graph.py (frontend/src/brainGraph.json, a precomputed force-directed
  * layout of the most connected files). The page first shows the static SVG of the same layout; the interactive canvas
  * and its data load only when the section comes near the viewport. Hover (or touch) names a file and lights up its
- * links. Reduced motion skips the settle-in animation. Nothing here calls the network.
+ * links. Dots glow and drift slowly while the map is on screen; reduced motion shows it still. Nothing here calls
+ * the network.
  */
 import {useEffect,useRef,useState} from 'react'
 import type {CSSProperties,PointerEvent as ReactPointerEvent} from 'react'
@@ -22,12 +23,29 @@ const ASPECT=1000/640
 const radius=(symbols:number)=>Math.min(2+Math.sqrt(symbols)*.75,13)
 const number=(value:number)=>value.toLocaleString('en')
 
+/** A soft round glow in one colour, drawn once and stamped behind every dot of that colour. */
+function glowSprite(color:string){
+ const sprite=document.createElement('canvas')
+ sprite.width=sprite.height=64
+ const context=sprite.getContext('2d')
+ if(context){
+  const gradient=context.createRadialGradient(32,32,0,32,32,32)
+  gradient.addColorStop(0,color+'99');gradient.addColorStop(.35,color+'33');gradient.addColorStop(1,color+'00')
+  context.fillStyle=gradient;context.fillRect(0,0,64,64)
+ }
+ return sprite
+}
+const HOT='#FFD98A'
+
 function BrainCanvas({data}:{data:BrainData}){
  const canvas=useRef<HTMLCanvasElement>(null)
  const box=useRef<HTMLDivElement>(null)
  const [hover,setHover]=useState<number|null>(null)
  const [size,setSize]=useState({w:0,h:0})
  const progress=useRef(1)
+ // The animation loop reads these, so a frame never draws with a stale hover or size.
+ const live=useRef({hover:null as number|null,size:{w:0,h:0},time:0,drift:0})
+ live.current.hover=hover;live.current.size=size
  const neighbours=useRef<Map<number,Set<number>>>(new Map())
  if(!neighbours.current.size){
   for(const [a,b] of data.links){
@@ -36,6 +54,7 @@ function BrainCanvas({data}:{data:BrainData}){
    neighbours.current.get(a)!.add(b);neighbours.current.get(b)!.add(a)
   }
  }
+ const sprites=useRef<HTMLCanvasElement[]|null>(null)
  useEffect(()=>{
   const node=box.current
   if(!node)return
@@ -52,46 +71,94 @@ function BrainCanvas({data}:{data:BrainData}){
  }
  const draw=()=>{
   const element=canvas.current
+  const {hover,size,time,drift}=live.current
   if(!element||!size.w)return
   const ratio=Math.min(window.devicePixelRatio||1,2)
-  element.width=Math.round(size.w*ratio);element.height=Math.round(size.h*ratio)
+  const width=Math.round(size.w*ratio),height=Math.round(size.h*ratio)
+  if(element.width!==width||element.height!==height){element.width=width;element.height=height}
   const context=element.getContext('2d')
   if(!context)return
+  if(!sprites.current)sprites.current=data.areas.map(area=>glowSprite(area.color))
   context.setTransform(ratio,0,0,ratio,0,0)
   context.clearRect(0,0,size.w,size.h)
   const t=1-Math.pow(1-progress.current,3)
   const lit=hover===null?null:neighbours.current.get(hover)||new Set<number>()
-  context.lineWidth=1
-  for(const [a,b] of data.links){
-   const on=hover!==null&&(a===hover||b===hover)
-   context.strokeStyle=on?'rgba(232,191,118,.75)':hover===null?'rgba(138,145,150,.16)':'rgba(138,145,150,.06)'
-   const [x1,y1]=point(a,size.w,size.h,t),[x2,y2]=point(b,size.w,size.h,t)
-   context.beginPath();context.moveTo(x1,y1);context.lineTo(x2,y2);context.stroke()
-  }
   const scale=Math.max(.7,Math.min(1.15,size.w/900))
-  data.nodes.forEach((node,index)=>{
+  // Each dot drifts a few pixels on its own slow loop (amplitude 0 when motion is off).
+  const at=data.nodes.map((_,index)=>{
    const [x,y]=point(index,size.w,size.h,t)
+   if(!drift)return [x,y]
+   const phase=index*2.399
+   return [x+Math.sin(time*(.21+(index%7)*.023)+phase)*drift,y+Math.cos(time*(.17+(index%5)*.029)+phase*1.7)*drift]
+  })
+  // Links: a wide faint stroke under a thin bright one, added together so crossings glow.
+  context.globalCompositeOperation='lighter'
+  context.lineCap='round'
+  const byArea=data.areas.map(()=>new Path2D())
+  const hot=new Path2D()
+  for(const [a,b] of data.links){
+   const target=hover!==null&&(a===hover||b===hover)?hot:byArea[data.nodes[a].a]
+   target.moveTo(at[a][0],at[a][1]);target.lineTo(at[b][0],at[b][1])
+  }
+  const quiet=hover!==null
+  // Small maps pack the same links into less space, so each one is fainter there or the core turns white.
+  const dense=Math.max(.5,Math.min(1,size.w/1000))
+  data.areas.forEach((area,index)=>{
+   context.strokeStyle=area.color
+   context.globalAlpha=(quiet?.025:.07)*dense;context.lineWidth=3.2;context.stroke(byArea[index])
+   context.globalAlpha=(quiet?.06:.3)*dense;context.lineWidth=1;context.stroke(byArea[index])
+  })
+  if(hover!==null){
+   context.strokeStyle=HOT
+   context.globalAlpha=.35;context.lineWidth=6;context.stroke(hot)
+   context.globalAlpha=1;context.lineWidth=1.8;context.stroke(hot)
+  }
+  // Dots: a soft glow that breathes slowly, then the solid dot on top.
+  data.nodes.forEach((node,index)=>{
    const dim=lit!==null&&index!==hover&&!lit.has(index)
-   context.globalAlpha=dim?.22:.92
-   context.fillStyle=data.areas[node.a]?.color||'#8A9196'
-   context.beginPath();context.arc(x,y,radius(node.s)*scale*(index===hover?1.35:1),0,Math.PI*2);context.fill()
+   const on=index===hover||(lit!==null&&lit.has(index))
+   const r=radius(node.s)*scale*(index===hover?1.4:1)
+   const pulse=drift?.8+.2*Math.sin(time*.9+index*1.3):.9
+   const g=r*(on?4.2:3.4)
+   context.globalAlpha=dim?.12:on?1:pulse
+   context.drawImage(sprites.current![node.a]||sprites.current![0],at[index][0]-g,at[index][1]-g,g*2,g*2)
+  })
+  context.globalCompositeOperation='source-over'
+  data.nodes.forEach((node,index)=>{
+   const dim=lit!==null&&index!==hover&&!lit.has(index)
+   context.globalAlpha=dim?.28:1
+   context.fillStyle=index===hover?'#FFF6E0':data.areas[node.a]?.color||'#A3B1BD'
+   context.beginPath();context.arc(at[index][0],at[index][1],radius(node.s)*scale*(index===hover?1.4:1),0,Math.PI*2);context.fill()
   })
   context.globalAlpha=1
  }
  useEffect(draw)
  useEffect(()=>{
-  if(staticMode()||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return
-  let frame=0
+  if(!size.w||staticMode()||window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)return
+  const element=box.current
+  let frame=0,visible=true,last=0
   const start=performance.now()
   progress.current=0
+  live.current.drift=Math.max(1.6,Math.min(3,size.w/400))
   const tick=(now:number)=>{
+   frame=0
+   if(!visible||document.hidden)return
+   frame=requestAnimationFrame(tick)
+   // Settle-in at full frame rate, then about 30 frames a second for the slow drift.
+   if(progress.current>=1&&now-last<32)return
+   last=now
    progress.current=Math.min(1,(now-start)/1100)
+   live.current.time=now/1000
    draw()
-   if(progress.current<1)frame=requestAnimationFrame(tick)
   }
-  frame=requestAnimationFrame(tick)
-  return ()=>{cancelAnimationFrame(frame);progress.current=1}
-  // Runs once, when the canvas first has a size.
+  const resume=()=>{if(!frame&&visible&&!document.hidden)frame=requestAnimationFrame(tick)}
+  const observer=element&&'IntersectionObserver' in window
+   ?new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;resume()}):null
+  if(element)observer?.observe(element)
+  document.addEventListener('visibilitychange',resume)
+  resume()
+  return ()=>{cancelAnimationFrame(frame);observer?.disconnect();document.removeEventListener('visibilitychange',resume);progress.current=1;live.current.drift=0}
+  // Starts once the canvas has a size; a resize keeps the running loop.
  },[size.w>0])
  const pick=(event:ReactPointerEvent<HTMLCanvasElement>)=>{
   const rect=event.currentTarget.getBoundingClientRect()
@@ -166,7 +233,7 @@ export function SiteBrain(){
     </div>
     <figcaption>
      <ul className="sw-brain-legend" aria-label="Colours">
-      {summary.areas.filter(area=>area.files>0).map(area=><li key={area.id}><span style={{background:area.color}} aria-hidden="true"/>{area.label}<em>{number(area.files)}</em></li>)}
+      {summary.areas.filter(area=>area.files>0).map(area=><li key={area.id}><span style={{background:area.color,boxShadow:'0 0 8px '+area.color}} aria-hidden="true"/>{area.label}<em>{number(area.files)}</em></li>)}
      </ul>
      <p className="sw-note">The {summary.shown.files} most connected of {number(current.files)} files and {summary.shown.links} of their
       strongest links, from {number(current.nodes)} functions and classes and {number(current.edges)} links in v{current.version} source

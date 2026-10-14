@@ -38,15 +38,15 @@ SVG_LINKS = 420
 
 # Areas colour the graph. Order matters: the first matching rule wins.
 AREAS = [
-    ("learning", "Learning", "#C7A6E8", ("star/night", "star/lessons", "star/learned", "star/practice", "star/corrections",
+    ("learning", "Learning", "#C9A2FF", ("star/night", "star/lessons", "star/learned", "star/practice", "star/corrections",
                                           "star/worked_examples", "star/failure_ledger", "star/eval", "server/night_school",
                                           "server/training")),
-    ("roblox", "Roblox", "#E8987A", ("star/roblox", "star/luau", "star/studio", "star/rbx", "star/map_plan", "examples/")),
-    ("interface", "Interface", "#8EC5E8", ("frontend/", "star/react_shell", "star/desktop")),
-    ("server", "Server", "#A9D3B7", ("server/",)),
-    ("core", "Core", "#E8BF76", ("star/",)),
-    ("tests", "Tests and evaluations", "#7C868D", ("tests/", "evals/")),
-    ("other", "Scripts and other", "#B9AE98", ("",)),
+    ("roblox", "Roblox", "#FF8F66", ("star/roblox", "star/luau", "star/studio", "star/rbx", "star/map_plan", "examples/")),
+    ("interface", "Interface", "#5CC8FF", ("frontend/", "star/react_shell", "star/desktop")),
+    ("server", "Server", "#5BE3A1", ("server/",)),
+    ("core", "Core", "#FFC857", ("star/",)),
+    ("tests", "Tests and evaluations", "#A3B1BD", ("tests/", "evals/")),
+    ("other", "Scripts and other", "#E9D8A6", ("",)),
 ]
 
 
@@ -174,15 +174,16 @@ def svg(data: dict) -> str:
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img" '
            f'aria-label="A map of STAR\'s code: {len(nodes)} most connected files, coloured by area">',
            f'<rect width="{width}" height="{height}" fill="#090B0E"/>',
-           '<g stroke="#8A9196" stroke-opacity=".16" stroke-width="1">']
+           '<g stroke-opacity=".32" stroke-width="1">']
     for a, b, _ in data["links"][:SVG_LINKS]:
         (x1, y1), (x2, y2) = point(nodes[a]), point(nodes[b])
-        out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}"/>')
+        color = data["areas"][nodes[a]["a"]]["color"]
+        out.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" stroke="{color}"/>')
     out.append("</g><g>")
     for node in nodes:
         x, y = point(node)
         radius = 2 + math.sqrt(node["s"]) * 0.75
-        out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{min(radius, 13):.1f}" fill="{data["areas"][node["a"]]["color"]}" fill-opacity=".9"/>')
+        out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{min(radius, 13):.1f}" fill="{data["areas"][node["a"]]["color"]}" fill-opacity="1"/>')
     out.append("</g></svg>")
     return "\n".join(out) + "\n"
 

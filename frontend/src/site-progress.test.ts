@@ -283,7 +283,8 @@ describe('prerendering',()=>{
   const setup=releaseFiles(latestStable(snapshot)).setup
   expect(setup).not.toBeNull()
   expect(markup).toContain('href="'+setup!.url+'"')
-  expect(markup).not.toContain('STAR-Setup-v'+pkg.version+'.exe')
+  // Only meaningful while the source is ahead of the published release (after a release they are the same file).
+  if(latestStable(snapshot)?.tag!=='v'+pkg.version)expect(markup).not.toContain('STAR-Setup-v'+pkg.version+'.exe')
  })
  it('contains nothing that depends on the visitor clock or time zone',()=>{
   expect(markup).not.toMatch(/\d+ (min|hours?|days?) ago|just now/)

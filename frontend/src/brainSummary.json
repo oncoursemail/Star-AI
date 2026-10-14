@@ -14,43 +14,43 @@
   {
    "id": "learning",
    "label": "Learning",
-   "color": "#C7A6E8",
+   "color": "#C9A2FF",
    "files": 30
   },
   {
    "id": "roblox",
    "label": "Roblox",
-   "color": "#E8987A",
+   "color": "#FF8F66",
    "files": 86
   },
   {
    "id": "interface",
    "label": "Interface",
-   "color": "#8EC5E8",
+   "color": "#5CC8FF",
    "files": 96
   },
   {
    "id": "server",
    "label": "Server",
-   "color": "#A9D3B7",
+   "color": "#5BE3A1",
    "files": 51
   },
   {
    "id": "core",
    "label": "Core",
-   "color": "#E8BF76",
+   "color": "#FFC857",
    "files": 149
   },
   {
    "id": "tests",
    "label": "Tests and evaluations",
-   "color": "#7C868D",
+   "color": "#A3B1BD",
    "files": 332
   },
   {
    "id": "other",
    "label": "Scripts and other",
-   "color": "#B9AE98",
+   "color": "#E9D8A6",
    "files": 33
   }
  ],
