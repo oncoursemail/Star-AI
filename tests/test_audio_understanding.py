@@ -327,15 +327,25 @@ def test_flag_cancellation_while_waiting_cancels_backend_and_preserves_cancelled
 
 
 def test_deadline_uses_one_budget_for_all_windows():
+    # Deterministic: the backend advances the event loop's clock by a fixed amount instead of
+    # sleeping on the wall clock (a 35 ms sleep against a 50 ms budget flaked on Windows runners,
+    # whose timer ticks are ~15.6 ms). Each window costs 6 s of a 10 s budget: a per-window budget
+    # would finish all three windows, the single shared budget expires after the second.
     async def scenario():
+        loop = asyncio.get_running_loop()
+        real_time, skew = loop.time, [0.0]
+        loop.time = lambda: real_time() + skew[0]
         calls = []
         async def slow(request):
             calls.append(request)
-            await asyncio.sleep(0.035)
+            skew[0] += 6.0
             return {'complete': True, 'observations': []}
         registered = audio.RegisteredAudioBackend(audio.AudioCapability('fixture', 'fake_native', native_audio=True, max_clip_seconds=1), slow)
-        with pytest.raises(audio.AudioUnavailable, match='timed out'):
-            await audio.inspect_audio(source(frames=48000), 'Sounds?', registered, timeout_seconds=0.05)
+        try:
+            with pytest.raises(audio.AudioUnavailable, match='timed out'):
+                await audio.inspect_audio(source(frames=48000), 'Sounds?', registered, timeout_seconds=10)
+        finally:
+            del loop.time
         assert len(calls) == 2
     asyncio.run(scenario())
 
@@ -357,10 +367,12 @@ def test_uncooperative_adapter_does_not_make_deadline_cleanup_wait_forever():
         registered = audio.RegisteredAudioBackend(audio.AudioCapability('fixture', 'fake_native', native_audio=True), stubborn)
         task = asyncio.create_task(audio.inspect_audio(source(), 'Sounds?', registered, timeout_seconds=0.03))
         try:
+            # Hang guard only (generous for loaded Windows runners): the task must end on its own
+            # deadline although the adapter never finishes; it cannot be the adapter's release.
             with pytest.raises(audio.AudioUnavailable, match='timed out'):
-                await asyncio.wait_for(task, timeout=0.25)
+                await asyncio.wait_for(task, timeout=10)
             assert cancelled.is_set() and not cleaned.is_set() and len(calls) == 1
         finally:
             release.set()  # host cleanup: Python cannot forcibly terminate an injected coroutine
-            await asyncio.wait_for(cleaned.wait(), timeout=0.25)
+            await asyncio.wait_for(cleaned.wait(), timeout=10)
     asyncio.run(scenario())

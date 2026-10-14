@@ -344,8 +344,14 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
         if not same:
             raise ValueError(f"{out.name} exists from a different suite or configuration; use another --out or delete it")
         result["run"]["started_at"] = previous["run"].get("started_at", result["run"]["started_at"])
+        # A run limited with --tasks adds to the file: records of tasks it did not select stay as they were
+        # (rewriting the file with only the selected tasks used to drop every other result). Only errors of the
+        # selected tasks are dropped, and only with --retry-errors.
+        chosen = {t["id"] for t in selected}
         result["tasks"] = {tid: rec for tid, rec in previous.get("tasks", {}).items()
-                           if tid in {t["id"] for t in selected} and (rec["status"] != "error" or not retry_errors)}
+                           if tid not in chosen or rec["status"] != "error" or not retry_errors}
+        before = previous.get("suite", {}).get("selected") or []
+        result["suite"]["selected"] = list(dict.fromkeys([*before, *result["suite"]["selected"]]))
     for task in suite.tasks:
         if task.get("run_mode") != "automated" and (not task_ids or task["id"] in task_ids):
             result["tasks"].setdefault(task["id"], {"status": "skipped", "reasons": ["needs Roblox Studio or a human"]})
@@ -407,7 +413,8 @@ def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info
             write_result(out, result, secrets)
             log(f"[{number}/{len(todo)}] {task['id']} {record['status']} {record.get('seconds', 0)}s"
                 + (": " + "; ".join(record["reasons"])[:160] if record["status"] != "pass" else ""))
-        result["complete"] = True
+        # Complete = every task the file covers has a record (a --tasks run on top of a partial file is not).
+        result["complete"] = all(tid in result["tasks"] for tid in result["suite"]["selected"])
         result["run"]["finished_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
     except (KeyboardInterrupt, RunAborted) as exc:
         log("stopped: " + (str(exc) or type(exc).__name__) + " (progress is saved; run again to resume)")
