@@ -159,18 +159,11 @@ async def main(args):
         from .agent import execute
         from .studio import connect, list_tools
         from .memory import Memory
-        db = Memory(ROOT / ".local" / "star-memory.sqlite3")
-        project = args.project
         from .knowledge import KnowledgeStore
-        knowledge = KnowledgeStore(ROOT / ".local" / "star-knowledge")
-        approved = knowledge.find(project, args.prompt, reviewed_only=True, limit=8)
-        trusted_notes = "\n".join(f"[{n.kind} ref={n.source} rev={n.revision}] {n.text}" for n in approved)
-        for image in args.image:
-            from .media import image_part
-            path = Path(image).expanduser().resolve()
-            image_part(path) # Validate format and size before preserving raw image.
-            knowledge.ingest_artifact(project=project, path=path, origin=f"task-reference:{path.name}", media_type="image/" + ("jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "webp" if path.suffix.lower() == ".webp" else "png"))
-        knowledge.close()
+        from .media import image_part
+        project = args.project
+        # Every refusal comes before anything is stored: a refused run used to have copied its
+        # reference images into the knowledge store already (and left both databases open).
         model = os.environ.get("STAR_MODEL", "").strip()
         if not model or model == "your-loaded-lm-studio-model-id":
             raise RuntimeError("Set STAR_MODEL to the identifier of your loaded model in LM Studio")
@@ -185,6 +178,21 @@ async def main(args):
             raise RuntimeError("Edit blocked: pin your disposable Studio ID in STAR_SANDBOX_STUDIO_ID first")
         if not args.no_studio and not args.studio_id:
             raise RuntimeError("Run `studios` and specify --studio-id, or use --no-studio")
+        references = []
+        for image in args.image:
+            path = Path(image).expanduser().resolve()
+            image_part(path)  # Validate format and size before preserving raw image.
+            references.append((path, image_media_type(path)))
+        knowledge = KnowledgeStore(ROOT / ".local" / "star-knowledge")
+        try:
+            approved = knowledge.find(project, args.prompt, reviewed_only=True, limit=8)
+            for path, media_type in references:
+                knowledge.ingest_artifact(project=project, path=path, origin=f"task-reference:{path.name}",
+                                          media_type=media_type)
+        finally:
+            knowledge.close()
+        trusted_notes = "\n".join(f"[{n.kind} ref={n.source} rev={n.revision}] {n.text}" for n in approved)
+        db = Memory(ROOT / ".local" / "star-memory.sqlite3")
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
         target = ROOT / "runs" / run_id
         target.mkdir(parents=True)
