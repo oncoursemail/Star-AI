@@ -15,6 +15,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {Cpu,ImagePlus,Images,LoaderCircle,Pin,RefreshCw,Trash2} from 'lucide-react'
 import {onBackendEvent} from './bridge'
+import {EmptyState} from './states'
 import type {AppSettings,MediaCapability,MediaComparison,MediaReference,MediaStatus} from './types'
 import './learning.css'
 import './media.css'
@@ -181,7 +182,7 @@ export function ReferencesPanel({project,invoke,disabled=false}:{project:string;
      <button type="button" className="learn-button is-primary" disabled={disabled||!!busy||items.length>=limit} onClick={()=>void pin()}><Pin size={14}/> Pin an image</button>
      <span className="learn-help">{items.length} of {limit} pinned</span>
    </div>
-   {items.length===0?<p className="learn-help">No references yet for this project.</p>:
+   {items.length===0?<EmptyState compact icon={<Images size={15}/>} title="No references yet for this project." description="Pin an approved design or screenshot and STAR uses it when it makes images or UI here."/>:
    <ul className="reference-grid">
      {items.map(item=><li key={item.id} className="reference-card">
        <img src={item.preview} alt={'Reference: '+item.label}/>

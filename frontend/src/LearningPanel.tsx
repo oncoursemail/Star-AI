@@ -10,6 +10,7 @@ import {useCallback,useEffect,useRef,useState} from 'react'
 import {BookOpen,Check,Download,LoaderCircle,Pencil,RotateCcw,Sparkles,Trash2,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
 import {Tag} from './components'
+import {EmptyState,ErrorState,LoadingState} from './states'
 import {LearnedThisWeek} from './LearnedThisWeek'
 import type {AppSettings,Lesson,LessonCounts,LessonStatus} from './types'
 import './learning.css'
@@ -56,10 +57,13 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
  const [notice,setNotice]=useState('')
  const [teach,setTeach]=useState('')
  const digestId=useRef('')
+ // First read: '' until it answers, then 'ok' or 'failed' (a failed read is not "no lessons").
+ const [read,setRead]=useState<''|'ok'|'failed'>('')
  const load=useCallback(async()=>{
    if(disabled)return
    const found=await invoke('listLessons') as Listing|null
    if(found?.lessons){setLessons(found.lessons);setTotals(found.counts)}
+   setRead(current=>found?.lessons?'ok':current==='ok'?'ok':'failed')
  },[disabled,invoke])
  useEffect(()=>{void load()},[load,project])
  // The background summary answers later, as an event: show what it did and re-read the list.
@@ -131,7 +135,10 @@ export function LearningPanel({project,settings,counts,invoke,disabled=false,ref
    <div className="learn-tabs" role="tablist" aria-label="Lessons by status">
      {views.map(v=><button key={v.id} type="button" role="tab" aria-selected={view===v.id} className={'learn-tab'+(view===v.id?' is-current':'')} onClick={()=>{setView(v.id);setEditing(null);setConfirming(null)}}>{v.label} <span>{countOf(v.id)}</span></button>)}
    </div>
-   {shown.length===0?<p className="learn-empty">{disabled?'Open STAR Desktop to see what it has learned.':emptyText[view]}</p>
+   {shown.length===0?(disabled?<EmptyState compact title="Open STAR Desktop to see what it has learned."/>
+     :read===''&&!lessons.length?<LoadingState compact label="Loading lessons" lines={2}/>
+     :read==='failed'&&!lessons.length?<ErrorState compact title="Lessons could not be loaded." description="STAR Desktop did not answer. Try again in a moment." action={<button type="button" className="learn-button" onClick={()=>void load()}>Try again</button>}/>
+     :<EmptyState compact title={emptyText[view]}/>)
    :<ul className="learn-list">{shown.map(lesson=>{
      const busy=pending.endsWith(':'+lesson.id)
      return <li key={lesson.id} className="lesson">
