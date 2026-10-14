@@ -1,0 +1,90 @@
+{
+  "Classes": [
+    {
+      "Name": "Instance",
+      "Superclass": "<<<ROOT>>>",
+      "Members": [
+        {
+          "Name": "WaitForChild"
+        },
+        {
+          "Name": "Parent"
+        },
+        {
+          "Name": "Name"
+        },
+        {
+          "Name": "Destroy"
+        }
+      ]
+    },
+    {
+      "Name": "Model",
+      "Superclass": "Instance",
+      "Members": []
+    },
+    {
+      "Name": "Humanoid",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "Health"
+        },
+        {
+          "Name": "Jump"
+        },
+        {
+          "Name": "MoveTo"
+        },
+        {
+          "Name": "MoveToFinished"
+        }
+      ]
+    },
+    {
+      "Name": "BasePart",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "Position"
+        },
+        {
+          "Name": "CanSetNetworkOwnership"
+        },
+        {
+          "Name": "SetNetworkOwner"
+        }
+      ]
+    },
+    {
+      "Name": "Path",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "ComputeAsync"
+        },
+        {
+          "Name": "GetWaypoints"
+        },
+        {
+          "Name": "Blocked"
+        },
+        {
+          "Name": "Status"
+        }
+      ]
+    },
+    {
+      "Name": "PathfindingService",
+      "Superclass": "Instance",
+      "Members": [
+        {
+          "Name": "CreatePath"
+        }
+      ],
+      "Tags": [
+        "Service"
+      ]
+    }
+  ]
+}

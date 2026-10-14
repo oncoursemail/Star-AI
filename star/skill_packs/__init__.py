@@ -150,6 +150,10 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    "roblox-pathfinding-npc": re.compile(
+        r"\b(?:PathfindingService|CreatePath|Path\\.Blocked|PathWaypoint|PathStatus|MoveToFinished|"
+        r"ComputeAsync|NPC (?:movement|pathfinding|chase)|NPCs? (?:chasing|walking|navigation)|"
+        r"pathfinding|chasing NPCs?)\b", re.IGNORECASE),
 }
 
 
