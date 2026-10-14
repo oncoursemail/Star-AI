@@ -261,6 +261,8 @@ export function SettingsPage(props:SettingsPageProps) {
    </Block>
    <Block id="voice" keywords="voice speech speak tts read aloud sound audio">
      <VoiceSettings disabled={inactive}/>
+   </Block>
+   <Block id="discord" keywords="discord bot autostart start stop supervisor">
      <DiscordSettings disabled={inactive}/>
    </Block>
    <Block id="blender" keywords="blender 3d model mesh">
