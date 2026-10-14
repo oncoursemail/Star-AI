@@ -9,6 +9,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+_IMAGE_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
+
 
 def loopback_endpoint(url: str) -> bool:
     """True only for a plain-http model endpoint on this machine with an explicit port.
@@ -24,6 +26,16 @@ def loopback_endpoint(url: str) -> bool:
         return False
     return (parts.scheme == "http" and parts.hostname in {"127.0.0.1", "localhost"} and port is not None
             and parts.username is None and parts.password is None)
+
+
+def image_media_type(path: Path) -> str:
+    """The media type of the picture's real format (validated by image_part), not of its file name."""
+    from PIL import Image
+    with Image.open(path) as image:
+        media_type = _IMAGE_TYPES.get(image.format or "")
+    if media_type is None:
+        raise ValueError("Only PNG/JPEG/WebP reference images are allowed")
+    return media_type
 
 
 def setup():
@@ -89,13 +101,11 @@ async def main(args):
                 store.review_note(project=args.project, note_id=args.note_id, evidence=args.evidence)
                 print("Note marked reviewed with a separate evidence record:", args.note_id)
             else:
-                import mimetypes
                 from .media import image_part
                 path = Path(args.file).expanduser().resolve()
                 image_part(path)  # Verify image bytes; extension alone isn't enough.
-                mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-                if mime not in {"image/png", "image/jpeg", "image/webp"}:
-                    raise ValueError("Only PNG/JPEG/WebP reference images are allowed")
+                # The stored type follows the bytes: a PNG saved as "shot.jpg" used to be recorded as JPEG.
+                mime = image_media_type(path)
                 digest, dest = store.ingest_artifact(project=args.project, path=path,
                     origin=f"local-upload:{path.name}", media_type=mime)
                 print("Locally stored image:", digest, "at", dest)
