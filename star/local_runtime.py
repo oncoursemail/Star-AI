@@ -48,7 +48,9 @@ class Runtime:
             raise ValueError('Choose the llama-server.exe supplied with llama.cpp')
         if model.suffix.lower()!='.gguf' or model.stat().st_size<100000:
             raise ValueError('Choose a downloaded GGUF model file (at least 100 KB)')
-        if not 1024<=port<=65535 or not 512<=context<=32768 or not 0<=gpu_layers<=1000:
+        # Whole numbers only, as router_arguments requires: 8080.5 used to reach the command line.
+        if (type(port) is not int or not 1024<=port<=65535 or type(context) is not int
+                or not 512<=context<=32768 or type(gpu_layers) is not int or not 0<=gpu_layers<=1000):
             raise ValueError('Invalid port, context length or GPU layers')
         args = [str(executable), '-m', str(model), '--host', '127.0.0.1',
                 '--port', str(port), '--ctx-size', str(context), '-ngl', str(gpu_layers), '--jinja']
@@ -91,6 +93,7 @@ class Runtime:
             argv = self.router_arguments(executable, models_dir, port=port,
                                          context=context, gpu_layers=gpu_layers)
             log_path.parent.mkdir(parents=True, exist_ok=True)
+            self._close_log()
             self.log_file = log_path.open('ab')
             self.log_path = log_path
             flags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
@@ -115,6 +118,7 @@ class Runtime:
             self._ready_to_start('llama.cpp is already running')
             argv=self.arguments(executable,model,port=port,context=context,gpu_layers=gpu_layers,projector=projector)
             log_path.parent.mkdir(parents=True,exist_ok=True)
+            self._close_log()
             self.log_file=log_path.open('ab')
             self.log_path=log_path
             flags=getattr(subprocess,'CREATE_NO_WINDOW',0)

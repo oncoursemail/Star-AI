@@ -751,9 +751,15 @@ def test_real_mcp_build_loop_cancellation_stops_once(monkeypatch,tmp_path,during
             await asyncio.Event().wait()
         async with bound_fake(monkeypatch,tmp_path,fake) as (proxy,protocol,_):
             task=asyncio.create_task(sl.run_build_loop(proxy,scripts=[],settle=settle))
-            await asyncio.wait_for(entered.wait(),2)
+            # Wait for the blocking point itself, not for a wall-clock budget: a cold first run on a
+            # loaded Windows runner once needed more than the former 2 s. If the loop ends without
+            # reaching the blocking point, fail at once instead of waiting; 60 s is only a hang guard.
+            reached=asyncio.create_task(entered.wait())
+            await asyncio.wait({reached,task},timeout=60,return_when=asyncio.FIRST_COMPLETED)
+            if not reached.done():reached.cancel()
+            assert entered.is_set() and not task.done()
             task.cancel()
-            with pytest.raises(asyncio.CancelledError):await asyncio.wait_for(task,3)
+            with pytest.raises(asyncio.CancelledError):await asyncio.wait_for(task,60)
             assert not fake.playing and not proxy._play_pending and not proxy.control.operations
             assert len(native_stops(fake))==1
             starts=[entry for entry in proxy.journal.entries if entry['kind']=='playtest' and entry['start']]

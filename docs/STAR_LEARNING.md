@@ -2,8 +2,11 @@
 
 STAR's model is not retrained on this hardware. "Learning" means STAR keeps **lessons**: short, local,
 project-scoped notes with a source. It records them after a turn, decides by fixed rules which ones are
-trusted, and puts the trusted ones into later answers of the same project. Nothing leaves the PC, and
-every lesson can be read, changed, rejected, deleted and exported.
+trusted, and puts the trusted ones into later answers of the same project. Lessons are stored on the PC
+and every lesson can be read, changed, rejected, deleted and exported. The one exception is the optional
+background summary (see below): it sends a few raw notes to a model. By default (`learning_digest` on) that
+is the spare fast model on your own STAR Server; a hosted provider receives them only if you turn on
+`learning_digest_cloud` (default off). With `learning_digest` off, nothing is sent anywhere.
 
 Code: `star/lessons.py` (records, rules, recall), `star/lesson_digest.py` (optional background
 summary), `star/desktop_core.py` (`run_task` recall and capture), `star/react_shell.py` (bridge
@@ -113,8 +116,9 @@ after a turn and its cache warm-up have finished, STAR may send one small reques
   puts its raw captures back under Waiting (they are not sent to the model a second time).
 - One request per run, 6 captures, 420 output tokens, 120 seconds; cancelled by any real request;
   after a failed run automatic runs pause for 15 minutes.
-- Off for hosted providers unless `learning_digest_cloud` is turned on, because the captures quote your
-  chats. `learning_digest` turns it off entirely. "Summarise raw notes" on the review page runs it once
+- Where the notes go: to the spare model on your own STAR Server (`learning_digest` is on by default), and
+  to a hosted provider only when `learning_digest_cloud` is turned on (default off), because the captures
+  quote your chats. With the local provider and no spare model, no request is made. `learning_digest` turns it off entirely. "Summarise raw notes" on the review page runs it once
   on request.
 
 ## Review page
