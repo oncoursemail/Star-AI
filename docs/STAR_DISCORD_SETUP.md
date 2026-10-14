@@ -128,6 +128,60 @@ worktree) and install `requirements-discord.txt` into that Python first. The log
 The task only runs while you are signed in; "run whether signed in or not" would need your Windows password
 and is deliberately not used. Use A or B, or both: if both start, the second one steps aside.
 
+### C. Run it on a STAR server (24/7, without the PC)
+
+`server/discord/deploy.sh` runs the bot as a systemd service (`star-discord.service`) inside a STAR server's
+LXD container (brain 2; not the model server). Run it from the checkout on the PC in Git Bash; the address is
+yours to supply and is never stored in the repository:
+
+```
+export STAR_DISCORD_SSH=<user>@<LXD host address>
+STAR_BRAIN_URL=http://<brain 1 LAN address>:8080/v1 bash server/discord/deploy.sh install   # code + venv + unit
+bash server/discord/deploy.sh secrets    # copies ~/.star/discord.env, discord-settings.env, server_api_key
+bash server/discord/deploy.sh doctor     # offline check on the server
+```
+
+Then move the bot: stop the PC bot first (Ctrl+C in its window, or Stop in STAR Desktop), run
+`bash server/discord/deploy.sh start`, and check `bash server/discord/deploy.sh status` for
+"STAR Discord bot connected (guild count: 1)". Finally create the file `%USERPROFILE%\.star\discord-runs-on-server`
+(any text): while it exists every PC start (terminal, STAR Desktop, Task Scheduler) refuses to run a second copy.
+
+- On the server: user `star-discord` (no login), code in `/opt/star/discord/releases/<commit>` with `current` and
+  `previous` links, venv `/opt/star/discord/venv`, secrets in `/opt/star/discord/secrets` (folder 0700, files
+  0600), STAR settings (brain address, model names) in `/opt/star/discord/state/star-ai/settings.json`. Logs go to
+  the journal (`journalctl -u star-discord`). Restart on failure, started at boot, memory limit 512 MB.
+- `deploy.sh install` again updates the code (restarts only a running bot); `deploy.sh rollback` swaps back to the
+  previous release; `deploy.sh stop` / `start` / `status`.
+- `/screen` answers that it needs the STAR app on the PC (`STAR_DISCORD_HOST=server`, set by the unit).
+  Speech (`/star speak`, `/star hear`) needs the voice engines, which the server copy does not install.
+  `/digest` over `STAR_DISCORD_LEARNING_REPORT_SSH` needs an ssh key on the server, which it does not have.
+
+#### Drawing from the server: the STAR GPU worker on the PC
+
+Pictures are still made on the PC's graphics card. A small worker on the PC connects **out** to the server with
+your existing SSH key (`ssh <LXD host> lxc exec starai -- ... gpu_link relay`), so no port is opened on the PC and
+nothing needs administrator rights. When a draw job arrives it starts ComfyUI on 127.0.0.1, makes the picture with
+the same code as STAR Desktop's Create image, sends it back, and stops ComfyUI after 10 idle minutes. Jobs are
+signed with a key only the bot and the worker hold (`~/.star/gpu-worker.key` = the server's
+`secrets/gpu-worker.key`); the worker refuses unsigned, old or repeated jobs. One job at a time, prompt up to 1500
+characters, picture up to 8 MB, owner-only as before. If the worker is not connected (PC off or asleep) the bot
+answers at once: "My drawing GPU (your PC) is offline right now".
+
+```
+bash server/discord/deploy.sh secrets                  # creates ~/.star/gpu-worker.key and gpu-worker.env once
+bash server/discord/deploy.sh stop; bash server/discord/deploy.sh start      # the bot reads the key at start
+cd <checkout> && <discord venv>\Scripts\python.exe -m star.discord_bot.gpu_worker install   # task at sign-in
+<discord venv>\Scripts\python.exe -m star.discord_bot.gpu_worker start      # run it now (hidden)
+```
+
+`gpu_worker status | stop | remove` show, end or delete the task "STAR GPU worker" (hidden, your account, ordinary
+rights, restarted by Windows if it fails). The worker reconnects by itself after a network or server drop. Log:
+`~/.star/gpu-worker.log` (job ids and timings only; no prompts, pictures or keys). The task runs the checkout it was
+installed from (`-m star.discord_bot.gpu_worker run` in that folder).
+- Back to the PC: `bash server/discord/deploy.sh stop`, then `ssh <host> lxc exec starai -- systemctl disable
+  star-discord` (or it starts again at the server's next boot), delete `%USERPROFILE%\.star\discord-runs-on-server`,
+  start the PC bot as before.
+
 ## 5. Use it
 
 - **DM the bot** like a normal chat: click the bot in your server's member list > **Message**.
@@ -165,6 +219,7 @@ candidates, screen capture and Night School DMs stay 0 until you change them.
 | `STAR_DISCORD_DRAW_ANYONE` | 0 | 1 = members of your approved server may use `/draw` too (rate-limited each). Strangers' DMs never reach the image engine. |
 | `STAR_DISCORD_DRAW_TIMEOUT` | 240 | Seconds before a picture is cancelled in ComfyUI (30-900). |
 | `STAR_DISCORD_MENTIONS` | 0 | 1 = answer `@STAR ...` in your approved server (draw requests and, for you, questions). Discord then sends the bot server message events; without the message-content intent it only sees the text of messages that mention it. |
+| `STAR_DISCORD_HOST` | pc | `server` = the bot runs on a STAR server (section 4 C): drawing goes to the PC's STAR GPU worker, `/screen` answers that it needs the PC. |
 | `STAR_DISCORD_RATE_LIMIT` | 30 | Requests per 10 minutes before STAR asks you to slow down. |
 | `STAR_DISCORD_LAB_STATUS` | 0 | Enable read-only owner Lab progress/screenshot reports from a trusted, pre-staged job receipt; does not control Studio or capture the host desktop. |
 | `STAR_DISCORD_LAB_REPORT` | empty | Absolute path on the bot host to an operator-approved latest.json receipt and same-folder checked viewport/render screenshot. |

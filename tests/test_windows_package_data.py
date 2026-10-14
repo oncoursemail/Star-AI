@@ -43,6 +43,7 @@ OTHER_FILE_ANCHORS = {
     "star/architecture_pipeline.py": "opt-in Blender export runs scripts/blender_building.py from a source checkout",
     "star/cli.py": "source-only CLI",
     "star/discord_supervisor.py": "source checkout of the Discord bot (STAR_CHECKOUT for the packaged app)",
+    "star/discord_bot/gpu_worker.py": "source checkout that the PC GPU worker's logon task runs",
     "star/eval_gate.py": "developer-only evaluation result files",
     "star/eval_runner.py": "developer-only evaluation fixtures",
     "star/failure_ledger.py": "developer-only evaluation prelude",

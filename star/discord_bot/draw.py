@@ -48,15 +48,17 @@ class DrawSettings:
     anyone: bool = False            # also members of the approved server (never strangers' DMs)
     timeout_seconds: int = 240
     mentions: bool = False          # answer @STAR mentions in the approved server (needs guild messages)
+    on_pc: bool = True              # False on a server (STAR_DISCORD_HOST=server): the PC GPU worker draws
 
     @classmethod
     def from_env(cls, env=None) -> "DrawSettings":
+        from .local_config import bot_host
         source = os.environ if env is None else env
         raw = str(source.get("STAR_DISCORD_DRAW_TIMEOUT", "240")).strip() or "240"
         if not raw.isdecimal() or not 30 <= int(raw) <= 900:
             raise ValueError("STAR_DISCORD_DRAW_TIMEOUT must be a number of seconds from 30 to 900")
         return cls(_flag(source, "STAR_DISCORD_DRAW", "1"), _flag(source, "STAR_DISCORD_DRAW_ANYONE", "0"),
-                   int(raw), _flag(source, "STAR_DISCORD_MENTIONS", "0"))
+                   int(raw), _flag(source, "STAR_DISCORD_MENTIONS", "0"), on_pc=bot_host(source) == "pc")
 
 
 # ---- Which messages are picture requests (a port of the desktop's frontend/src/imageIntent.ts) ----
