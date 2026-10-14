@@ -36,6 +36,7 @@ import secrets
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 PACK_DIR = Path(__file__).resolve().parent / "skill_packs" / "roblox-vfx-composer"
 LUAU_DIR = PACK_DIR / "luau"
@@ -842,7 +843,8 @@ class VfxLab:
         result = await self.guarded.call_tool("execute_luau", {"studio_id": self.guarded.studio_id,
                                                                "datamodel_type": "Edit", "code": code})
         receipt = _marked_json(_text(result), EDIT_MARK) or {}
-        answer = receipt.get("result") if isinstance(receipt.get("result"), str) else _text(result)
+        got = receipt.get("result")
+        answer = got if isinstance(got, str) else _text(result)
         return (not _failed(result) and receipt.get("ok") is True), answer
 
     async def _call(self, name: str, **arguments):
@@ -900,7 +902,7 @@ class VfxLab:
         frames: list[dict] = []
         console = ""
         play_at = None
-        info = {"ok": False, "started": True}
+        info: dict[str, Any] = {"ok": False, "started": True}
         try:
             deadline = self.clock() + 40
             while self.clock() < deadline and f"{MARK} client-ready {run}" not in console:
@@ -1004,7 +1006,7 @@ def public_summary(report: dict) -> dict:
 # --------------------------------------------------------------------------- CLI
 
 def main(arguments=None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.roblox_vfx_studio", description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.roblox_vfx_studio", description=(__doc__ or "").split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("plan", "run"):
         p = sub.add_parser(name)
