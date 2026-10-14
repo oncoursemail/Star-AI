@@ -51,6 +51,5 @@ whether the v1.0.0 artifacts have actually been published.
 
 - Security review 2: legacy archive extraction hardened, residual risks documented (#134).
 - Opt-in Luau trust and lifetime checks with metamorphic regression tests (#221, #260).
-- Agent-written code and Roblox project files are read only, not executed, by the new readers (#141, #258).
 
 [1.0.0]: https://github.com/oncoursemail/Star-AI/compare/v0.9.0...star/next
