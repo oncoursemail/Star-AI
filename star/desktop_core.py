@@ -262,13 +262,24 @@ def _read_settings_object(file: Path) -> dict | None:
     editing, Luau execution and every opt-in feature are off.
     """
     problem = None
-    for _attempt in range(2):
+    damaged = 0
+    for attempt in range(4):
         try:
             raw = json.loads(file.read_text(encoding='utf-8'))
         except FileNotFoundError:
             return None
-        except (OSError, UnicodeDecodeError, ValueError) as exc:
+        except ValueError as exc:            # also UnicodeDecodeError: the content is damaged
             problem = exc
+            damaged += 1
+            if damaged >= 2:
+                break
+            time.sleep(0.05)
+            continue
+        except OSError:
+            # Locked or unreadable right now (another STAR process swapping it in on Windows, a virus
+            # scanner, permissions): that is not damage, so the owner's file is never moved aside for it.
+            if attempt == 3:
+                raise
             time.sleep(0.05)
             continue
         if isinstance(raw, dict):

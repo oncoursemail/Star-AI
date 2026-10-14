@@ -94,3 +94,35 @@ def test_move_aside_never_overwrites_an_earlier_copy(tmp_path):
     assert one != two
     assert one.read_text(encoding="utf-8") == "one" and two.read_text(encoding="utf-8") == "two"
     assert one.name == "a.json.corrupt-20261013T120000Z"
+
+
+def test_a_locked_settings_file_is_not_treated_as_damaged(tmp_path, monkeypatch):
+    """Review fix: a sharing violation while another STAR process swaps the file in (Windows) or a permission
+    error is not damage: the owner's file must stay where it is instead of being moved aside for defaults."""
+    from pathlib import Path
+    target = tmp_path / "settings.json"
+    Settings(model="kept").save(target)
+    real = Path.read_text
+    failures = [0]
+
+    def locked(self, *args, **kwargs):
+        if self == target:
+            failures[0] += 1
+            raise PermissionError(13, "The process cannot access the file", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", locked)
+    with pytest.raises(PermissionError):
+        Settings.load(target)
+    assert failures[0] == 4 and [p.name for p in tmp_path.iterdir()] == ["settings.json"]
+
+    failures[0] = 0
+    calls = iter([True, False])               # locked once, then readable: the saved settings load
+
+    def briefly_locked(self, *args, **kwargs):
+        if self == target and next(calls, False):
+            raise PermissionError(13, "busy", str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", briefly_locked)
+    assert Settings.load(target).model == "kept"
