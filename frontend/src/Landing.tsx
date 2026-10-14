@@ -1,27 +1,25 @@
 /**
  * The public STAR website. It never talks to the native Qt bridge and never reads local data:
- * everything on the page is editorial content, captures of the interface, or public GitHub data.
+ * everything on the page is editorial content, captures of the interface, or public GitHub release data.
  */
 import {Suspense,useEffect,useMemo,useRef,useState} from 'react'
-import {ArrowDown,ArrowUpRight,Github,Menu,X} from 'lucide-react'
+import {ArrowDown,Github,Menu,X} from 'lucide-react'
 import {StarLockup,StarMark} from './SiteBrand'
-import {SiteMascotHero,SiteMascotMeet,SiteMascotFooter} from './SiteMascot'
-import {SiteShowcase} from './SiteShowcase'
-import {SiteChapters,SiteLimits} from './SiteChapters'
-import {SiteProgress} from './SiteProgress'
+import {SiteMascotHero,SiteMascotFooter} from './SiteMascot'
+import {SiteFeatures} from './SiteFeatures'
+import {SiteLearning} from './SiteLearning'
+import {SiteHonest} from './SiteHonest'
 import {SiteDownload} from './SiteDownload'
-import {LINKS,SOURCE_VERSION,formatBytes,formatDate,modelLabelForRelease,releaseFiles} from './siteContent'
+import {LINKS,SOURCE_VERSION,formatDate,releaseFiles} from './siteContent'
 import {compareVersions,fetchLatestStableRelease,latestStable} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
-import {delay,staticMode,useActiveSection,useHeaderState,useProgress,useReveal} from './siteHooks'
+import {builtSnapshot,delay,staticMode,useActiveSection,useHeaderState,useReveal} from './siteHooks'
 import './site.css'
 
 const sections=[
- {id:'product',label:'Product'},
- {id:'roblox',label:'Roblox'},
- {id:'how',label:'How it works'},
- {id:'progress',label:'Progress'},
- {id:'download',label:'Download'}
+ {id:'features',label:'Features'},
+ {id:'learning',label:'How it learns'},
+ {id:'honest',label:'Honest numbers'}
 ] as const
 const sectionIds=sections.map(section=>section.id)
 
@@ -29,17 +27,15 @@ export function Landing(){
  const root=useRef<HTMLDivElement>(null)
  const menuButton=useRef<HTMLButtonElement>(null)
  const [menu,setMenu]=useState(false)
- const progress=useProgress()
  const [liveRelease,setLiveRelease]=useState<ReleaseInfo|null>(null)
- // The direct latest-release API can outpace the build-time progress snapshot.
- // Until it succeeds, the prerendered snapshot and official Releases link still work.
+ // The build-time snapshot gives the prerendered page a real release; GitHub's latest-release answer replaces it.
  useEffect(()=>{
   if(staticMode())return
   const controller=new AbortController()
   fetchLatestStableRelease(controller.signal).then(release=>{if(release)setLiveRelease(release)}).catch(()=>undefined)
   return ()=>controller.abort()
  },[])
- const latest=useMemo(()=>liveRelease||latestStable(progress.snapshot),[liveRelease,progress.snapshot])
+ const latest=useMemo(()=>liveRelease||latestStable(builtSnapshot),[liveRelease])
  const files=useMemo(()=>releaseFiles(latest),[latest])
  const header=useHeaderState(menu)
  const active=useActiveSection(sectionIds)
@@ -58,19 +54,20 @@ export function Landing(){
  },[menu])
 
  const closeMenu=()=>setMenu(false)
+ const sourceAhead=latest?compareVersions(SOURCE_VERSION,latest.tag)>0:false
  return <div className={'sw'+(still?' sw-still':'')} id="top" ref={root}>
   <a className="sw-skip" href="#main">Skip to content</a>
 
   <header className="sw-header" data-solid={header.solid||menu} data-hidden={header.hidden} data-past={header.past}>
    <div className="sw-wrap sw-header-row">
-    <a className="sw-brand" href="#top" aria-label="STAR Intelligence, back to top"><StarLockup size={26}/></a>
+    <a className="sw-brand" href="#top" aria-label="STAR, back to top"><StarLockup size={26}/></a>
     <nav className="sw-nav" id="sw-nav" aria-label="Main" data-open={menu}>
      <ul>
       {sections.map(section=><li key={section.id}>
        <a href={'#'+section.id} aria-current={active===section.id?'true':undefined} onClick={closeMenu}>{section.label}</a>
       </li>)}
       <li className="sw-nav-out"><a href={LINKS.repo} target="_blank" rel="noopener noreferrer" onClick={closeMenu}>
-       <Github size={16} aria-hidden="true"/> GitHub <ArrowUpRight size={14} aria-hidden="true"/><span className="sw-sr"> (opens in a new tab)</span>
+       <Github size={16} aria-hidden="true"/> GitHub<span className="sw-sr"> (opens in a new tab)</span>
       </a></li>
      </ul>
     </nav>
@@ -88,67 +85,69 @@ export function Landing(){
    <section className="sw-hero" aria-labelledby="sw-hero-title">
     <div className="sw-wrap sw-hero-grid">
      <div className="sw-hero-copy">
-      <h1 id="sw-hero-title" className="sw-enter" style={delay(0)}>Make the things you&nbsp;imagine.</h1>
+      <h1 id="sw-hero-title" className="sw-enter" style={delay(0)}>An AI that runs on machines you&nbsp;own.</h1>
       <p className="sw-lede sw-enter" style={delay(90)}>
-       STAR is a local-first AI workspace for Windows. Run a model on this PC or your own STAR Server,
-       work with Roblox Studio by permission, and keep chats and project files on your&nbsp;disk.
-       Hosted model providers are optional, never an automatic fallback.
+       STAR is a chat app for Windows 11. It talks to a model on your PC or on your own server, helps you build
+       Roblox games, makes pictures, searches the web, and practises at night to get better, with you deciding
+       what it&nbsp;keeps.
       </p>
       <div className="sw-cta sw-enter" style={delay(170)}>
        <a className="sw-btn sw-btn-primary" href="#download"><ArrowDown size={18} aria-hidden="true"/> Download for Windows</a>
-       <a className="sw-btn sw-btn-quiet" href="#product">See STAR in action</a>
+       <a className="sw-btn sw-btn-quiet" href="#features">See what is in 1.0</a>
       </div>
-      {latest&&compareVersions(SOURCE_VERSION,latest.tag)>0&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
-       <strong>Published: {latest.tag}.</strong> Later source features shown below are still in development.
-       <a href="#download"> Get the published build</a>.
-      </p>}
-      {!latest&&<p className="sw-hero-shipping sw-enter" style={delay(270)}>
-       Release details could not be verified here. <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check GitHub Releases</a>.
-      </p>}
+      <p className="sw-hero-meta sw-enter" style={delay(250)}>
+       {!latest&&<>Release details are unavailable here. <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check GitHub Releases</a>.</>}
+       {latest&&!sourceAhead&&<>Free for Windows 11. <a href={latest.url} target="_blank" rel="noopener noreferrer">{latest.tag}</a>, published {formatDate(latest.publishedAt,'long')}.</>}
+       {latest&&sourceAhead&&<>This page describes {SOURCE_VERSION}, which is not published yet. The download is {latest.tag}, published {formatDate(latest.publishedAt,'long')}.</>}
+      </p>
      </div>
-     <div className="sw-hero-side">
      <SiteMascotHero/>
-     <dl className="sw-spec sw-enter" style={delay(240)} aria-label="Current release">
-      <div><dt>Release</dt><dd>{latest?<a href={latest.url} target="_blank" rel="noopener noreferrer">{latest.tag}</a>:'See GitHub'}</dd></div>
-      <div><dt>Published</dt><dd>{latest?formatDate(latest.publishedAt):'unavailable'}</dd></div>
-      <div><dt>Platform</dt><dd>Windows 11 · x64</dd></div>
-      <div><dt>Installer</dt><dd>{files.setup?formatBytes(files.setup.size):'on GitHub'}</dd></div>
-      <div><dt>Model</dt><dd>{modelLabelForRelease(latest)}</dd></div>
-      <div><dt>Status</dt><dd>Early software</dd></div>
-     </dl>
+    </div>
+   </section>
+
+   <section className="sw-story" aria-labelledby="sw-story-title">
+    <div className="sw-wrap sw-story-grid">
+     <h2 id="sw-story-title">Your model, your disk, your&nbsp;say.</h2>
+     <div className="sw-story-text">
+      <p>Most AI apps rent you a model in someone else's data centre. STAR goes the other way. The model runs on a PC
+       or a server you own, your chats stay in a folder on your disk, and anything that can touch your files, your
+       screen or Roblox Studio stays off until you switch it on.</p>
+      <p>1.0 is the first release where the whole picture works together: a chat app that feels familiar, a server
+       brain that needs no graphics card, tools for Roblox and design, and a learning loop you can inspect and undo.</p>
      </div>
     </div>
    </section>
 
    {/* Each boundary hydrates as its own task, so the prerendered page never blocks input for long. */}
-   <Suspense><SiteShowcase latest={latest}/></Suspense>
-   <SiteMascotMeet/>
-   <Suspense><SiteChapters latest={latest} setupSize={files.setup?.size??null}/></Suspense>
-   <Suspense><SiteProgress progress={progress}/></Suspense>
-   <Suspense><SiteLimits/></Suspense>
-   <Suspense><SiteDownload latest={latest} files={files} releaseLive={liveRelease!==null} snapshotAt={progress.snapshot?.generatedAt??null}/></Suspense>
+   <Suspense><SiteFeatures latest={latest}/></Suspense>
+   <Suspense><SiteLearning/></Suspense>
+   <Suspense><SiteHonest/></Suspense>
+   <Suspense><SiteDownload latest={latest} files={files} releaseLive={liveRelease!==null} snapshotAt={builtSnapshot?.generatedAt??null}/></Suspense>
   </main>
 
   <footer className="sw-footer">
    <div className="sw-wrap sw-footer-grid">
     <div className="sw-footer-brand">
-     <span className="sw-footer-mark"><StarMark size={22}/><strong>STAR Intelligence</strong></span>
-     <p>A local-first AI workspace for Windows. Built in the open.</p>
-     <p className="sw-fine">This site sets no cookies and runs no analytics. Repository data comes from GitHub's public API.</p>
      <SiteMascotFooter/>
+     <div>
+      <span className="sw-footer-mark"><StarMark size={20}/><strong>STAR</strong></span>
+      <p>An AI that runs on machines you own. Built in the open.</p>
+      <p className="sw-fine">This site sets no cookies and runs no analytics. Release details come from GitHub's public API.</p>
+     </div>
     </div>
     <nav aria-label="Product">
      <h2>Product</h2>
      <ul>
       <li><a href="#download">Download</a></li>
-      <li><a href={LINKS.releases} target="_blank" rel="noopener noreferrer">Release notes</a></li>
+      <li><a href={LINKS.notes} target="_blank" rel="noopener noreferrer">1.0 release notes</a></li>
+      <li><a href={LINKS.releases} target="_blank" rel="noopener noreferrer">All releases</a></li>
       <li><a href={LINKS.commits} target="_blank" rel="noopener noreferrer">Changelog</a></li>
-      <li><a href="#progress">Progress</a></li>
      </ul>
     </nav>
     <nav aria-label="Documentation">
      <h2>Docs</h2>
      <ul>
+      <li><a href={LINKS.readme} target="_blank" rel="noopener noreferrer">README</a></li>
       <li><a href={LINKS.start} target="_blank" rel="noopener noreferrer">Getting started</a></li>
       <li><a href={LINKS.security} target="_blank" rel="noopener noreferrer">Security and autonomy</a></li>
       <li><a href={LINKS.docs} target="_blank" rel="noopener noreferrer">All documents</a></li>
@@ -158,6 +157,7 @@ export function Landing(){
      <h2>Project</h2>
      <ul>
       <li><a href={LINKS.repo} target="_blank" rel="noopener noreferrer">Source on GitHub</a></li>
+      <li><a href={LINKS.pulls} target="_blank" rel="noopener noreferrer">Work in progress</a></li>
       <li><a href={LINKS.issues} target="_blank" rel="noopener noreferrer">Report a problem</a></li>
       <li><a href={LINKS.newIssue} target="_blank" rel="noopener noreferrer">Suggest an idea</a></li>
      </ul>

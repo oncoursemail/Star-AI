@@ -1,145 +1,83 @@
 {
- "capturedAt": "2026-10-13T12:21:45.301Z",
- "sourceVersion": "0.9.0",
+ "capturedAt": "2026-10-14T01:23:30.144Z",
+ "sourceVersion": "1.0.0",
  "images": {
   "chat": [
    {
     "file": "chat-1280.webp",
     "width": 1280,
     "height": 800,
-    "bytes": 24198
+    "bytes": 57228
    },
    {
     "file": "chat-2560.webp",
     "width": 2560,
     "height": 1600,
-    "bytes": 63782
+    "bytes": 135186
    }
   ],
-  "chat-narrow": [
+  "chat-phone": [
    {
-    "file": "chat-narrow-860.webp",
-    "width": 860,
-    "height": 1240,
-    "bytes": 41110
+    "file": "chat-phone-780.webp",
+    "width": 780,
+    "height": 1688,
+    "bytes": 81510
    }
   ],
-  "brain": [
+  "plus": [
    {
-    "file": "brain-1280.webp",
-    "width": 1280,
-    "height": 800,
-    "bytes": 27978
+    "file": "plus-306.webp",
+    "width": 306,
+    "height": 201,
+    "bytes": 4758
    },
    {
-    "file": "brain-2560.webp",
-    "width": 2560,
-    "height": 1600,
-    "bytes": 72556
+    "file": "plus-612.webp",
+    "width": 612,
+    "height": 402,
+    "bytes": 10310
    }
   ],
-  "brain-narrow": [
+  "consent": [
    {
-    "file": "brain-narrow-860.webp",
-    "width": 860,
-    "height": 1240,
-    "bytes": 43222
-   }
-  ],
-  "tools": [
-   {
-    "file": "tools-1280.webp",
-    "width": 1280,
-    "height": 800,
-    "bytes": 37316
+    "file": "consent-488.webp",
+    "width": 488,
+    "height": 362,
+    "bytes": 13842
    },
    {
-    "file": "tools-2560.webp",
-    "width": 2560,
-    "height": 1600,
-    "bytes": 88226
+    "file": "consent-976.webp",
+    "width": 976,
+    "height": 724,
+    "bytes": 30134
    }
   ],
-  "tools-narrow": [
+  "learned": [
    {
-    "file": "tools-narrow-860.webp",
-    "width": 860,
-    "height": 1240,
-    "bytes": 47602
-   }
-  ],
-  "projects": [
-   {
-    "file": "projects-1280.webp",
-    "width": 1280,
-    "height": 800,
-    "bytes": 30422
-   },
-   {
-    "file": "projects-2560.webp",
-    "width": 2560,
-    "height": 1600,
-    "bytes": 74440
-   }
-  ],
-  "projects-narrow": [
-   {
-    "file": "projects-narrow-860.webp",
-    "width": 860,
-    "height": 1240,
-    "bytes": 36252
-   }
-  ],
-  "analytics": [
-   {
-    "file": "analytics-1280.webp",
-    "width": 1280,
-    "height": 800,
-    "bytes": 24624
-   },
-   {
-    "file": "analytics-2560.webp",
-    "width": 2560,
-    "height": 1600,
-    "bytes": 60438
-   }
-  ],
-  "analytics-narrow": [
-   {
-    "file": "analytics-narrow-860.webp",
-    "width": 860,
-    "height": 1240,
-    "bytes": 23188
-   }
-  ],
-  "studio-narrow": [
-   {
-    "file": "studio-narrow-796.webp",
-    "width": 796,
-    "height": 1356,
-    "bytes": 42058
-   }
-  ],
-  "setup": [
-   {
-    "file": "setup-700.webp",
-    "width": 700,
-    "height": 150,
-    "bytes": 5098
-   },
-   {
-    "file": "setup-1400.webp",
-    "width": 1400,
+    "file": "learned-820.webp",
+    "width": 820,
     "height": 300,
-    "bytes": 13296
+    "bytes": 16338
+   },
+   {
+    "file": "learned-1640.webp",
+    "width": 1640,
+    "height": 600,
+    "bytes": 37158
    }
   ],
-  "setup-narrow": [
+  "learned-phone": [
    {
-    "file": "setup-narrow-796.webp",
-    "width": 796,
-    "height": 310,
-    "bytes": 12176
+    "file": "learned-phone-358.webp",
+    "width": 358,
+    "height": 407,
+    "bytes": 16862
+   },
+   {
+    "file": "learned-phone-716.webp",
+    "width": 716,
+    "height": 814,
+    "bytes": 39116
    }
   ]
  }
