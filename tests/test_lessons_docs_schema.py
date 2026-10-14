@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from star import character_lifecycle_lessons as lifecycle
+from star import luau_record_type_lessons as record_types
 
 DOCS = Path(__file__).resolve().parents[1] / "docs" / "lessons"
 MAX_BYTES = 35_000
@@ -110,8 +111,13 @@ def _sections(path: Path, text: str, headings: list[re.Match[str]],
         else:
             for key in ("Failure", "Correction"):
                 _field(path, case, body, key)
-            _source(path, case, _field(path, case, body, "Source"))
-            if _field(path, case, body, "Verification") != "illustrative-engine-only":
+            source = _field(path, case, body, "Source")
+            # luau-record-types.md cites the official Luau syntax page too; its loader pins the exact URLs.
+            if not (path.name == "luau-record-types.md" and source in record_types.OFFICIAL_SOURCES):
+                _source(path, case, source)
+            allowed = (record_types.VERIFICATION_LEVELS if path.name == "luau-record-types.md"
+                       else {"illustrative-engine-only"})
+            if _field(path, case, body, "Verification") not in allowed:
                 _fail(path, case, "unsupported Verification claim")
             if "**Incorrect (Luau):**" not in body or "**Corrected (Luau):**" not in body:
                 _fail(path, case, "missing incorrect/corrected labels")
@@ -136,6 +142,9 @@ def validate_lesson_file(path: Path) -> tuple[str, ...]:
         if path.name == "roblox-character-lifecycle.md":
             if tuple(c.id for c in lifecycle.load_cases(path)) != result:
                 _fail(path, case, "production lifecycle parser mismatch")
+        if path.name == "luau-record-types.md":
+            if tuple(c.id for c in record_types.load_cases(path)) != result:
+                _fail(path, case, "production record-type parser mismatch")
         return result
     if "status:** standalone review material, not loaded into star by default" in opening:
         headings = list(LEDGER.finditer(text))

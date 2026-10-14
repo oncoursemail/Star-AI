@@ -223,6 +223,13 @@ class KnowledgeClient:
             results.append(item)
         return results
 
+    def luau_run(self, code: str, *, tests: str = "", time_limit_s: float = 3.0,
+                 memory_limit_mb: int = 256) -> dict:
+        """Explicit remote execution on the independently enabled sandbox; no local fallback."""
+        from .luau_run_client import run
+        return run(self, code, tests=tests, time_limit_s=time_limit_s,
+                   memory_limit_mb=memory_limit_mb)
+
     def luau_check(self, code: str, *, strict: bool = False) -> dict:
         """Static check only. `ran` is True only when the service really ran its tools."""
         if not isinstance(code, str) or not code.strip() or len(code) > MAX_CODE_CHARS:

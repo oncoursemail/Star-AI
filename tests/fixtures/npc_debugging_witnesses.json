@@ -1,0 +1,50 @@
+{
+  "DBG-26": {
+    "broken": "--!strict\nlocal state: NPCMovement = { speed = 12 }\nprint(state.speed)",
+    "fixed": "--!strict\ntype NPCMovement = { speed: number }\nlocal state: NPCMovement = { speed = 12 }\nprint(state.speed)"
+  },
+  "DBG-27": {
+    "broken": "--!strict\nlocal candidate = script.Parent:FindFirstChild(\"Humanoid\")\ncandidate:TakeDamage(5)",
+    "fixed": "--!strict\nlocal candidate = script.Parent:FindFirstChild(\"Humanoid\")\nif candidate and candidate:IsA(\"Humanoid\") then\n    candidate:TakeDamage(5)\nend"
+  },
+  "DBG-28": {
+    "broken": "--!strict\nlocal function targetPosition(player: Player): Vector3\n    return player.Character.HumanoidRootPart.Position\nend\nreturn targetPosition",
+    "fixed": "--!strict\nlocal function targetPosition(player: Player): Vector3?\n    local character = player.Character\n    if not character then return nil end\n    local root = character:FindFirstChild(\"HumanoidRootPart\")\n    if root and root:IsA(\"BasePart\") then\n        return root.Position\n    end\n    return nil\nend\nreturn targetPosition"
+  },
+  "DBG-29": {
+    "broken": "--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\npath.Blocked:Connect(function(blocked: boolean)\n    if blocked then warn(\"replan\") end\nend)",
+    "fixed": "--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\nlocal currentWaypointIndex = 2\npath.Blocked:Connect(function(blockedWaypointIndex: number)\n    if blockedWaypointIndex >= currentWaypointIndex then warn(\"replan\") end\nend)"
+  },
+  "DBG-30": {
+    "broken": "--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\nlocal origin = Vector3.new(0, 0, 0)\nlocal goal = Vector3.new(20, 0, 0)\npath:ComputeAsync(origin, goal)\nprint(#path:GetWaypoints())",
+    "fixed": "--!strict\nlocal path = game:GetService(\"PathfindingService\"):CreatePath()\nlocal origin = Vector3.new(0, 0, 0)\nlocal goal = Vector3.new(20, 0, 0)\nlocal ok = pcall(function()\n    path:ComputeAsync(origin, goal)\nend)\nif not ok or path.Status ~= Enum.PathStatus.Success then\n    warn(\"No valid route; choose a safe fallback\")\n    return\nend\nprint(#path:GetWaypoints())"
+  },
+  "DBG-31": {
+    "broken": "--!strict\nlocal humanoid = script.Parent:WaitForChild(\"Humanoid\") :: Humanoid\nhumanoid.MoveToFinished:Connect(function(_reached)\n    print(\"advance\")\nend)",
+    "fixed": "--!strict\nlocal humanoid = script.Parent:WaitForChild(\"Humanoid\") :: Humanoid\nhumanoid.MoveToFinished:Connect(function(reached: boolean)\n    if not reached then\n        warn(\"retry waypoint\")\n        return\n    end\n    print(\"advance\")\nend)"
+  },
+  "DBG-32": {
+    "broken": "--!strict\nlocal function travel(humanoid: Humanoid, waypoints: {PathWaypoint})\n    for _, waypoint in waypoints do\n        humanoid:MoveTo(waypoint.Position)\n    end\nend\nreturn travel",
+    "fixed": "--!strict\nlocal function travel(humanoid: Humanoid, waypoints: {PathWaypoint})\n    for _, waypoint in waypoints do\n        if waypoint.Action == Enum.PathWaypointAction.Jump then\n            humanoid.Jump = true\n        end\n        humanoid:MoveTo(waypoint.Position)\n    end\nend\nreturn travel"
+  },
+  "DBG-33": {
+    "broken": "--!strict\nlocal function step(humanoid: Humanoid, waypoint: PathWaypoint)\n    humanoid:MoveTo(waypoint.Position.Position)\nend\nreturn step",
+    "fixed": "--!strict\nlocal function step(humanoid: Humanoid, waypoint: PathWaypoint)\n    humanoid:MoveTo(waypoint.Position)\nend\nreturn step"
+  },
+  "DBG-34": {
+    "broken": "--!strict\nlocal function start(humanoid: Humanoid, path: Path)\n    local first = path:GetWaypoints()[1]\n    humanoid:MoveTo(first.Position)\nend\nreturn start",
+    "fixed": "--!strict\nlocal function start(humanoid: Humanoid, path: Path)\n    local waypoints = path:GetWaypoints()\n    if #waypoints == 0 then return end\n    local first = waypoints[1]\n    humanoid:MoveTo(first.Position)\nend\nreturn start"
+  },
+  "DBG-35": {
+    "broken": "--!strict\nlocal function moveNpc(model: Instance)\n    local humanoid = model.Humanoid\n    humanoid:MoveTo(Vector3.new(0, 0, 5))\nend\nreturn moveNpc",
+    "fixed": "--!strict\nlocal function moveNpc(model: Instance)\n    if not model:IsA(\"Model\") then return end\n    local humanoid = model:FindFirstChildOfClass(\"Humanoid\")\n    if not humanoid then return end\n    humanoid:MoveTo(Vector3.new(0, 0, 5))\nend\nreturn moveNpc"
+  },
+  "DBG-36": {
+    "broken": "--!strict\nlocal function position(model: Model): Vector3\n    return model.PrimaryPart.Position\nend\nreturn position",
+    "fixed": "--!strict\nlocal function position(model: Model): Vector3?\n    local root = model.PrimaryPart\n    if not root then return nil end\n    return root.Position\nend\nreturn position"
+  },
+  "DBG-37": {
+    "broken": "--!strict\nlocal function watchPath(path: Path)\n    path.Blocked:Connect(function(index: number)\n        warn(index)\n    end)\nend\nreturn watchPath",
+    "fixed": "--!strict\nlocal blockedConnection: RBXScriptConnection? = nil\nlocal function watchPath(path: Path)\n    if blockedConnection then\n        blockedConnection:Disconnect()\n        blockedConnection = nil\n    end\n    blockedConnection = path.Blocked:Connect(function(index: number)\n        warn(index)\n    end)\nend\nreturn watchPath"
+  }
+}

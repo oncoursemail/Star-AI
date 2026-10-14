@@ -30,16 +30,16 @@ export function BlenderPanel({draft,onChange,status,invoke,disabled=false}:{
    if(response?.pending&&response.requestId){activeRequest.current=response.requestId}
    else setPending(false)
  }
- return <section className="integrated-panel" aria-label="Blender MCP integration">
+ return <section className="integrated-panel" aria-label="Blender">
    <div className="integrated-heading"><Box size={18}/><div>
-     <strong>Blender for Brain 2</strong>
-     <span>STAR's private local MCP connector builds editable scenes and Roblox-compatible GLB files.</span>
+     <strong>Blender</strong>
+     <span>Lets STAR build editable 3D scenes in the Blender on this PC and export them as models Roblox Studio can import.</span>
    </div></div>
    <div className="integrated-connectors">
      <div className="integrated-connector">
-       <div><strong>Local Blender</strong><small>No cloud account or third-party MCP addon. Requires a trusted local Blender installation.</small></div>
+       <div><strong>Use Blender on this PC</strong><small>No cloud account or add-on needed. Uses a Blender you installed and trust.</small></div>
        <label className="integrated-switch">
-         <input type="checkbox" aria-label="Enable Blender MCP" checked={!!draft.blender_enabled}
+         <input type="checkbox" aria-label="Use Blender on this PC" checked={!!draft.blender_enabled}
            disabled={disabled} onChange={e=>onChange({...draft,blender_enabled:e.target.checked,
              blender_edit:e.target.checked?!!draft.blender_edit:false})}/>
          <span>Enable</span>
@@ -47,7 +47,7 @@ export function BlenderPanel({draft,onChange,status,invoke,disabled=false}:{
      </div>
      <div className="integrated-connector">
        <div><strong>Permit creating new Blender scenes</strong>
-         <small>Writes new isolated STAR project files only. Never modify existing .blend files or run arbitrary Python.</small></div>
+         <small>STAR only writes new files of its own. It never changes your existing Blender files and cannot run arbitrary code in Blender.</small></div>
        <label className="integrated-switch">
          <input type="checkbox" aria-label="Allow Blender scene creation" checked={!!draft.blender_edit}
            disabled={disabled||!draft.blender_enabled}
@@ -71,7 +71,7 @@ export function BlenderPanel({draft,onChange,status,invoke,disabled=false}:{
    </div>
    {result&&<p className="integrated-help" role="status">{result}</p>}
    <p className="integrated-help">Saved setup: {status?.ready?'Blender found, version not yet verified.':status?.enabled?'Blender is not found.':'Off.'}
-     {' '}Save settings before testing. Brain 2 can use Blender only for relevant tool requests after the owner enables it.
-     Exported GLB files still require import and review in Roblox Studio.</p>
+     {' '}Save settings before testing. STAR uses Blender only when a request needs it, and only after you turn it on here.
+     Exported models (.glb) still need to be imported and checked in Roblox Studio.</p>
  </section>
 }

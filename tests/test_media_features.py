@@ -134,7 +134,7 @@ def test_transcription_refuses_unknown_models_and_devices(voice_note, whisper, o
 
 def test_transcription_without_the_voice_extras_says_what_to_install(voice_note, monkeypatch):
     monkeypatch.setitem(sys.modules, "faster_whisper", None)          # import fails
-    with pytest.raises(RuntimeError, match="requirements-voice.txt"):
+    with pytest.raises(RuntimeError, match="not set up"):
         media.transcribe_audio(voice_note)
 
 
@@ -161,5 +161,5 @@ def test_local_speech_speaks_once_and_refuses_very_long_text(monkeypatch):
     with pytest.raises(ValueError, match="too long"):
         media.local_speak("x" * 8001)
     monkeypatch.setitem(sys.modules, "pyttsx3", None)
-    with pytest.raises(RuntimeError, match="requirements-voice.txt"):
+    with pytest.raises(RuntimeError, match="not set up"):
         media.local_speak("Hello")

@@ -6,18 +6,22 @@ follows the same Speaker interface as the virtual one, so the call logic above i
 from __future__ import annotations
 
 import collections
+import logging
 import queue
 import threading
 import time
 
 from .pcm import FRAME_SAMPLES, SAMPLE_RATE
 
+log = logging.getLogger(__name__)
+
 
 def _sounddevice():
     try:
         import sounddevice
     except (ImportError, OSError) as exc:
-        raise RuntimeError("Audio devices need the optional voice packages: pip install -r requirements-voice.txt") from exc
+        log.warning("Audio devices unavailable (%s); install with: pip install -r requirements-voice.txt", exc)
+        raise RuntimeError("Voice features are not set up on this computer yet.") from exc
     return sounddevice
 
 
