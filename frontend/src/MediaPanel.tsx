@@ -3,8 +3,11 @@
  *
  * `MediaPlaces` (Settings): for images, voice and video understanding the owner chooses between
  * "STAR Brains (servers)" and "This PC (your GPU)". Each option carries the host's own note, built
- * from measurements; an option that does not exist is shown as unavailable with its reason and
- * cannot be chosen. Below it: the image engine on this PC (state, start, give memory back).
+ * from measurements. An option that settings could make available (for example by connecting STAR
+ * Server) is shown as unavailable with its reason and cannot be chosen. An option that cannot exist
+ * on this install (the host marks it `fixable: false`, e.g. images on servers with no graphics card)
+ * is not drawn as a dead choice: the capability says where it runs, and the reason sits behind
+ * "Why not ...?". Below it: the image engine on this PC (state, start, give memory back).
  *
  * `ReferencesPanel` (Projects): the approved reference images pinned to the current project and
  * the "compare with reference" step (side by side, measured facts, the vision model's differences).
@@ -15,12 +18,23 @@
 import {useCallback,useEffect,useRef,useState} from 'react'
 import {Cpu,ImagePlus,Images,LoaderCircle,Pin,RefreshCw,Trash2} from 'lucide-react'
 import {onBackendEvent} from './bridge'
+import {EmptyState} from './states'
 import type {AppSettings,MediaCapability,MediaComparison,MediaReference,MediaStatus} from './types'
 import './learning.css'
 import './media.css'
 
 type Invoke=(action:string,params?:Record<string,unknown>)=>Promise<unknown|null>
 type Pending={pending?:boolean;requestId?:string}
+
+/** "This PC (your GPU)" → "this PC (your GPU)", "STAR Brains (servers)" → "the STAR Brains (servers)": for "Runs on ...". */
+export function inSentence(label:string):string{
+ return /^this /i.test(label)?'this '+label.slice(5):'the '+label
+}
+/** "STAR Brains (servers)" → "the STAR Brains", "This PC (your GPU)" → "this PC": for "Why not ...?". */
+export function placeName(label:string):string{
+ const bare=label.replace(/\s*\(.*\)\s*$/,'').trim()||label
+ return /^this /i.test(bare)?'this '+bare.slice(5):'the '+bare
+}
 
 /** Start a host action that answers later, and deliver its result (or its error text) once. */
 function useLater(){
@@ -78,12 +92,25 @@ export function MediaPlaces({settings,invoke,disabled=false,refresh}:{settings:A
  const engine=status?.images
  return <section className="learn" aria-label="Where STAR generates">
    <div className="learn-head"><Cpu size={20}/><div className="learn-title"><h2>Where STAR generates</h2>
-     <p>Choose, for each kind of work, whether it runs on the STAR Brains (your servers) or on this PC's graphics card. The notes are measurements from your own hardware; where a number is an estimate it says so. An option that does not exist yet is shown as unavailable and is never silently replaced by the other one.</p></div></div>
+     <p>Where each kind of work runs: on the STAR Brains (your servers) or on this PC's graphics card. The notes are measurements from your own hardware; where a number is an estimate it says so. A place that is not available is never silently replaced by the other one.</p></div></div>
    {!status&&<p className="learn-help">{disabled?'Open STAR Desktop to see and change this.':'Reading the current state…'}</p>}
-   {status?.places.map((capability:MediaCapability)=><div key={capability.id} className="media-capability" role="radiogroup" aria-label={capability.title}>
+   {status?.places.map((capability:MediaCapability)=>{
+     // A place this install can never offer is explained, not drawn as a dead choice (unless it is the saved one).
+     const never=capability.options.filter(option=>!option.available&&option.fixable===false&&option.id!==capability.chosen)
+     const choices=capability.options.filter(option=>!never.includes(option))
+     const only=choices.length===1&&choices[0].id===capability.chosen&&choices[0].available?choices[0]:null
+     const why=never.map(option=><details key={option.id} className="media-why"><summary>Why not {placeName(option.label)}?</summary><p>{option.reason}</p></details>)
+     if(only)return <div key={capability.id} className="media-capability" role="group" aria-label={capability.title}>
+       <h3>{capability.title}</h3>
+       <div className="media-options"><div className="media-option is-chosen is-fixed">
+         <span className="media-option-text"><strong>Runs on {inSentence(only.label)}</strong>{only.note&&<small>{only.note}</small>}</span>
+       </div></div>
+       {why}
+     </div>
+     return <div key={capability.id} className="media-capability" role="radiogroup" aria-label={capability.title}>
      <h3>{capability.title}</h3>
      <div className="media-options">
-       {capability.options.map(option=>{
+       {choices.map(option=>{
          const chosen=capability.chosen===option.id
          return <label key={option.id} className={'media-option'+(chosen?' is-chosen':'')+(option.available?'':' is-unavailable')}>
            <input type="radio" name={'media-'+capability.id} checked={chosen} disabled={disabled||!option.available} onChange={()=>void save({[capability.field]:option.id})}/>
@@ -94,7 +121,8 @@ export function MediaPlaces({settings,invoke,disabled=false,refresh}:{settings:A
        })}
      </div>
      {capability.options.some(option=>option.id===capability.chosen&&!option.available)&&<p className="media-warning">The chosen place is not available, so {capability.title.toLowerCase()} will stop with that explanation until you choose the other one.</p>}
-   </div>)}
+     {why}
+   </div>})}
    {status&&<div className="media-capability">
      <h3>Image engine on this PC</h3>
      <div className="media-engine">
@@ -181,7 +209,7 @@ export function ReferencesPanel({project,invoke,disabled=false}:{project:string;
      <button type="button" className="learn-button is-primary" disabled={disabled||!!busy||items.length>=limit} onClick={()=>void pin()}><Pin size={14}/> Pin an image</button>
      <span className="learn-help">{items.length} of {limit} pinned</span>
    </div>
-   {items.length===0?<p className="learn-help">No references yet for this project.</p>:
+   {items.length===0?<EmptyState compact icon={<Images size={15}/>} title="No references yet for this project." description="Pin an approved design or screenshot and STAR uses it when it makes images or UI here."/>:
    <ul className="reference-grid">
      {items.map(item=><li key={item.id} className="reference-card">
        <img src={item.preview} alt={'Reference: '+item.label}/>

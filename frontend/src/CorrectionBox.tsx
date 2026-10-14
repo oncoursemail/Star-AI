@@ -1,6 +1,6 @@
 /**
  * Under an answer the owner marked "Not helpful": say what was wrong. STAR keeps it as a correction
- * that waits in the Learning panel; only the owner can turn it into a regression test there.
+ * that waits under "Your corrections" on the Projects page; only the owner can turn it into a regression test there.
  */
 import {useState} from 'react'
 import {Check,LoaderCircle} from 'lucide-react'
@@ -18,7 +18,7 @@ export function CorrectionBox({onCorrect}:{onCorrect:(text:string)=>Promise<bool
      if(done!==false){setSaved(true);setDraft('')}
    }finally{setBusy(false)}
  }
- if(saved)return <p className="msg-correction-saved" role="status">Correction saved. It waits in the Learning panel, where you can make it a test.</p>
+ if(saved)return <p className="msg-correction-saved" role="status">Correction saved. It waits under Your corrections on the Projects page, where you can make it a test.</p>
  return <div className="msg-correction">
    <label>What was wrong? (optional)
      <textarea rows={2} maxLength={1000} value={draft} disabled={busy} onChange={e=>setDraft(e.target.value)} placeholder="Example: use task.wait instead of wait, and the door should tween open."/>

@@ -147,8 +147,8 @@ class Settings:
 
     def validate(self):
         validate_target(self.studio_target)
-        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
-            validate_alias(getattr(self, field), field=field)
+        for name in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, name), field=name)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -974,7 +974,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     audio transcript, a note about video frames). Only the owner's own words can become an
     automatically accepted lesson.
     """
-    from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
@@ -1437,7 +1436,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         first = token_timing['first']
-        last = token_timing['last']
         requested = token_timing['requested']
         measured_first = (instant_answer.first_token_ms if instant_answer is not None else
                           model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else

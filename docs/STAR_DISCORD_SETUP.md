@@ -80,6 +80,8 @@ images), including the STAR Brain server when that is your provider. Choose thos
   intact), and remembers the last few turns for an hour (`/star reset` forgets them). Send `help` for
   a reminder.
 - Attach **one screenshot** to a DM (or use `/image`) and ask about it.
+- Attach **two images** to an owner DM (first desired reference, second current STAR result), or use `/compare` with the two attachments. STAR produces a private local-vision critique and a proposed change list; images are normalized and not stored in chat history. A screenshot is not enough to judge motion, rig correctness, or real Studio test results.
+- If `STAR_DISCORD_DM_LEARNING_CANDIDATES=1` is enabled and your previous DM was about an image, a follow-up like “I don’t like that” or “you messed up the animation” creates a review-only correction candidate, not automatic changes or training. You can also use `wrong: ...` or `remember correction: ...` explicitly.
 - Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, plus the `/star ...` group
   (research, speech, voice channel, reset, doctor).
 
@@ -96,7 +98,26 @@ candidates, screen capture and Night School DMs stay 0 until you change them.
 | `STAR_DISCORD_SCREEN_CAPTURE` | 0 | `/screen` lets STAR look at this PC's screen. **Every capture needs you to press "Capture my screen now"** (expires after 60 s, one capture per press). Nothing is saved; you see the capture privately. |
 | `STAR_DISCORD_LEARNING_DM_OPT_IN` | 0 | DM a short Night School digest when the verified practice numbers change (at most one per 6 h); `/digest` shows it on demand. Report source: `STAR_DISCORD_LEARNING_REPORT_SSH` (your existing key login to the brain server) or `STAR_DISCORD_LEARNING_REPORT` (a local file). |
 | `STAR_DISCORD_RATE_LIMIT` | 30 | Requests per 10 minutes before STAR asks you to slow down. |
+| `STAR_DISCORD_LAB_STATUS` | 0 | Enable read-only owner Lab progress/screenshot reports from a trusted, pre-staged job receipt; does not control Studio or capture the host desktop. |
+| `STAR_DISCORD_LAB_REPORT` | empty | Absolute path on the bot host to an operator-approved latest.json receipt and same-folder checked viewport/render screenshot. |
 | `DISCORD_CHANNEL_IDS` | empty | Limit server use to these channels. |
+
+## Optional Studio Lab / Blender screenshot reports
+
+STAR can answer `/star lab`, `/star labshot` and selected plain-language owner
+DM questions about what the test Studio is doing, **only if an operator first
+configures a trusted local job receipt**. This is NOT a new remote screen
+capture tool. Nothing is fetched from Brain 2 unless an authorized Studio Lab
+or Blender producer has already staged timestamped, checksum-matched evidence
+on the bot host. Slash command results are private; image sending requires
+an explicit owner command. See
+[STAR_DISCORD_LAB_EVIDENCE_20261013.md](STAR_DISCORD_LAB_EVIDENCE_20261013.md)
+for schema, security limits, integration and validation.
+
+STAR's separate opt-in learning digest already sends owner DMs on meaningful
+verified Night School changes when configured with a real report source.
+These are practice results, not automatically trained neural weights or
+unconditionally successful Roblox Studio builds.
 
 ## What the bot will never do from Discord
 
