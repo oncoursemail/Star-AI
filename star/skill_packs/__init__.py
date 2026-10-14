@@ -150,6 +150,45 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Gameplay and platform recipes with typed (--!strict) examples. Default OFF until the evaluation gate passes.
+    "roblox-combat-hitboxes": re.compile(
+        r"\b(?:hit ?box(?:es)?|hitscan|hit detection|hit validation|melee|swords?|guns?|weapons?|damage|TakeDamage|"
+        r"GetPartBoundsInBox|GetPartBoundsInRadius|GetPartsInPart|OverlapParams|RaycastParams|combat|attack cooldown)\b",
+        re.IGNORECASE),
+    "roblox-pathfinding-npc": re.compile(
+        r"\b(?:PathfindingService|pathfinding|CreatePath|ComputeAsync|GetWaypoints|MoveToFinished|PathWaypoint|"
+        r"PathfindingModifier|PathfindingLink|navigation mesh|navmesh|NPC (?:AI|movement|chase|patrol)|chase|patrol)\b",
+        re.IGNORECASE),
+    "roblox-physics-constraints": re.compile(
+        r"\b(?:LinearVelocity|AngularVelocity|AlignPosition|AlignOrientation|VectorForce|BodyVelocity|BodyPosition|BodyGyro|"
+        r"BodyForce|body movers?|mover constraints?|constraints?|ApplyImpulse|AssemblyLinearVelocity|SetNetworkOwner|"
+        r"network ownership|knockback|HingeConstraint|SpringConstraint)\b", re.IGNORECASE),
+    "roblox-collection-tags": re.compile(
+        r"\b(?:CollectionService|GetTagged|AddTag|HasTag|GetInstanceAddedSignal|GetInstanceRemovedSignal|tags?|tagged|"
+        r"attributes?|SetAttribute|GetAttribute|GetAttributeChangedSignal|component pattern)\b", re.IGNORECASE),
+    "roblox-input-devices": re.compile(
+        r"\b(?:ContextActionService|BindAction|UserInputService|InputBegan|gameProcessedEvent|PreferredInput|"
+        r"LastInputTypeChanged|TouchEnabled|GamepadEnabled|gamepad|controller|touch controls?|mobile buttons?|keybinds?|"
+        r"InputAction|InputContext|InputBinding|cross-?platform input|console)\b", re.IGNORECASE),
+    "roblox-sound-design": re.compile(
+        r"\b(?:SoundService|SoundGroup|Sound|sounds?|audio|music|sfx|RollOffMode|RollOffMaxDistance|PlaybackSpeed|"
+        r"AudioPlayer|AudioEmitter|AudioListener|AudioDeviceOutput|Wire|PlayLocalSound|footsteps?|volume)\b",
+        re.IGNORECASE),
+    "roblox-luau-specs": re.compile(
+        r"\b(?:TestEZ|describe|expect|specs?|unit tests?|test suites?|spec files?|test runner|testable|"
+        r"dependency injection|pure functions?|Jest|beforeEach)\b", re.IGNORECASE),
+    "roblox-marketplace-purchases": re.compile(
+        r"\b(?:MarketplaceService|ProcessReceipt|PromptProductPurchase|PromptGamePassPurchase|UserOwnsGamePassAsync|"
+        r"developer products?|game ?pass(?:es)?|Robux|purchases?|PurchaseGranted|NotProcessedYet|receipts?)\b",
+        re.IGNORECASE),
+    "roblox-teleport-matchmaking": re.compile(
+        r"\b(?:TeleportService|TeleportAsync|TeleportOptions|ReserveServer|reserved servers?|TeleportInitFailed|"
+        r"GetJoinData|teleport\w*|matchmaking|match ?queue|queues?|MemoryStoreService|MemoryStoreQueue|"
+        r"MemoryStoreSortedMap|lobby to match|party|parties)\b", re.IGNORECASE),
+    "roblox-open-cloud": re.compile(
+        r"\b(?:Open Cloud|OpenCloud|apis\.roblox\.com|cloud/v2|x-api-key|HttpService|RequestAsync|GetSecret|secrets? store|"
+        r"MessagingService|SubscribeAsync|webhooks?|external (?:server|service|tool)|from (?:outside|Python|Node))\b",
+        re.IGNORECASE),
 }
 
 
