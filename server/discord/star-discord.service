@@ -13,6 +13,8 @@ WorkingDirectory=/opt/star/discord/current
 Environment=STAR_DISCORD_HOST=server STAR_DISCORD_CONFIG_DIR=/opt/star/discord/secrets
 Environment=XDG_DATA_HOME=/opt/star/discord/state HOME=/opt/star/discord/state
 Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# Draw jobs for the STAR GPU worker on the owner's PC (it connects out over SSH; star/discord_bot/gpu_link.py).
+Environment=STAR_DISCORD_GPU_SOCKET=/opt/star/discord/state/gpu-worker.sock
 ExecStart=/opt/star/discord/venv/bin/python -m star.discord_bot
 Restart=on-failure
 RestartSec=15

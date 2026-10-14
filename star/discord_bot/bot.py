@@ -100,10 +100,14 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
     if service is None:
         from .brain import DiscordBrain, system_prompt
         # The system prompt names exactly the features this bot was started with (byte-stable per process).
-        brain = DiscordBrain(system=system_prompt(draw=config.draw.enabled, vision=config.dm.images,
-                                                  on_pc=config.host == "pc"))
+        brain = DiscordBrain(system=system_prompt(draw=config.draw.enabled, vision=config.dm.images))
         service = DiscordService(config.policy, brain=brain, rate_limiter=RateLimiter(limit=config.rate_limit))
-    drawer = drawer or Drawer(config.draw)
+    if drawer is None:
+        if config.draw.on_pc:
+            drawer = Drawer(config.draw)
+        else:   # on a server the picture is made by the STAR GPU worker on the owner's PC (gpu_link.py)
+            from .gpu_link import remote_drawer
+            drawer = remote_drawer(config.draw)
     intents = discord.Intents.default()
     intents.message_content = False
     intents.members = False
@@ -129,6 +133,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
                 if guild:
                     self.tree.copy_global_to(guild=guild)
                 await self.tree.sync(guild=guild)
+            start = getattr(drawer, "start", None)
+            if start is not None:
+                await start()
             if config.digest.enabled:
                 self.loop.create_task(digest_loop())
             if reporter is not None:
@@ -139,6 +146,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
                     on_error=lambda name: _LOG.warning("STAR Discord activity update failed (%s)", name)))
 
         async def close(self):
+            stop = getattr(drawer, "stop", None)
+            if stop is not None:
+                await stop()
             task = getattr(self, "_star_presence_task", None)
             if task is not None:
                 task.cancel()
@@ -362,7 +372,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
             digest = config.digest.describe()
         presence = (f"on · rotates every {config.presence.interval_minutes} min (when connected)"
                     if config.presence.enabled else "off")
-        where = "the PC" if config.host == "pc" else "a STAR server (drawing and /screen need the PC)"
+        where = "the PC" if config.host == "pc" else "a STAR server (drawing uses the PC's GPU worker; /screen needs the PC)"
         return (f"**Runs on:** {where}\n"
                 f"**Bot activity:** {presence}\n"
                 f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
@@ -663,7 +673,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
 
     async def draw_in_channel(channel, prompt: str):
         """DM or @mention: a 'Drawing…' message that tracks progress, then the picture with its prompt."""
-        if not prompt and config.draw.enabled and config.draw.on_pc:
+        if not prompt and config.draw.enabled:
             await channel.send(NO_SUBJECT, allowed_mentions=discord.AllowedMentions.none())
             return
         status_message = await channel.send("🎨 Drawing…", allowed_mentions=discord.AllowedMentions.none())

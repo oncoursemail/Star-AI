@@ -8,8 +8,10 @@
 #              point current -> it (the old one becomes previous), create/refresh the venv, install the unit, enable it
 #              at boot. Restarts the bot only if it was already running. First install: set STAR_BRAIN_URL
 #              (http://<brain 1 LAN address>:8080/v1) to write the bot's STAR settings (state/star-ai/settings.json).
-#   secrets    copy ~/.star/discord.env, discord-settings.env and server_api_key from this PC to
+#   secrets    copy ~/.star/discord.env, discord-settings.env, server_api_key and gpu-worker.key (created here
+#              the first time, with ~/.star/gpu-worker.env for the PC GPU worker) from this PC to
 #              /opt/star/discord/secrets (directory 0700, files 0600, owner star-discord). Contents never printed.
+#              Restart the bot afterwards (stop, start) so it reads a new key.
 #   doctor     offline readiness check as the service user (prints no token)
 #   start      start the bot (stop the PC bot FIRST: two copies would both answer)
 #   stop       stop the bot
@@ -68,7 +70,15 @@ install)
   ;;
 secrets)
   remote "install -d -o star-discord -g star-discord -m 700 $base/secrets"
-  for name in discord.env discord-settings.env server_api_key; do
+  # The PC GPU worker's files (star/discord_bot/gpu_worker.py): a new signing key the first time (shared with
+  # the bot, never printed) and the worker's own SSH target (this same STAR_DISCORD_SSH).
+  mkdir -p "$HOME/.star"
+  if [ ! -s "$HOME/.star/gpu-worker.key" ]; then
+    (umask 077; head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$HOME/.star/gpu-worker.key")
+    echo "created ~/.star/gpu-worker.key"
+  fi
+  [ -s "$HOME/.star/gpu-worker.env" ] || printf 'STAR_GPU_WORKER_SSH=%s\nSTAR_GPU_WORKER_CONTAINER=%s\n' "$target" "$container" > "$HOME/.star/gpu-worker.env"
+  for name in discord.env discord-settings.env server_api_key gpu-worker.key; do
     file="$HOME/.star/$name"
     [ -f "$file" ] || { echo "missing $file" >&2; exit 2; }
     push_secret "$name" < "$file"
@@ -95,6 +105,6 @@ rollback)
   if running; then remote "systemctl restart $unit"; echo "restarted"; fi
   ;;
 *)
-  sed -n '2,20p' "$0"; exit 2
+  sed -n '2,24p' "$0"; exit 2
   ;;
 esac

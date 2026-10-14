@@ -46,8 +46,8 @@ def _unlock(handle) -> None:
 class InstanceLock:
     """``acquire()`` is True for the one process that may run the bot."""
 
-    def __init__(self, folder: Path):
-        self.path = Path(folder) / LOCK_FILE
+    def __init__(self, folder: Path, name: str = LOCK_FILE):
+        self.path = Path(folder) / name
         self._handle = None
 
     def acquire(self) -> bool:

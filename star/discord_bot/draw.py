@@ -31,8 +31,6 @@ MAX_DISCORD_FILE = 8 * 1024 * 1024
 IDLE_STOP_SECONDS = 600         # stop a ComfyUI that the bot started after 10 quiet minutes
 START_WAIT_SECONDS = 240        # a cold start on a busy PC took over 120 s (2026-10-14); 25-28 s when warm
 TURN_ON_HINT = "Set STAR_DISCORD_DRAW=1 in ~/.star/discord-settings.env and restart the bot."
-NEEDS_PC = ("Drawing needs the PC: STAR makes pictures with ComfyUI on the owner's PC graphics card, and this "
-            "Discord bot runs on a STAR server without one. Use Create image in STAR Desktop on the PC.")
 NO_SUBJECT = ("What should I draw? Say what you want to see, for example "
               "`draw a dragon over a castle at sunset` (or use `/draw`).")
 
@@ -50,7 +48,7 @@ class DrawSettings:
     anyone: bool = False            # also members of the approved server (never strangers' DMs)
     timeout_seconds: int = 240
     mentions: bool = False          # answer @STAR mentions in the approved server (needs guild messages)
-    on_pc: bool = True              # False when the bot runs on a server (STAR_DISCORD_HOST=server): no GPU
+    on_pc: bool = True              # False on a server (STAR_DISCORD_HOST=server): the PC GPU worker draws
 
     @classmethod
     def from_env(cls, env=None) -> "DrawSettings":
@@ -252,8 +250,6 @@ class Drawer:
                              + " (The bot's copy of that log is ~/.star/discord-images/logs/comfyui.log.)") from exc
 
     async def draw(self, prompt: str, *, on_status: Callable[[str], Awaitable] | None = None) -> Drawing:
-        if not self.config.on_pc:
-            raise ValueError(NEEDS_PC)
         if not self.config.enabled:
             raise ValueError("Making images is switched off for the Discord bot. " + TURN_ON_HINT)
         prompt = " ".join(str(prompt or "").split())
@@ -318,8 +314,6 @@ class Drawer:
         self._idle = loop.call_later(self._idle_seconds, stop)
 
     def describe(self) -> str:
-        if not self.config.on_pc:
-            return "needs the PC (this bot runs on a STAR server)"
         if not self.config.enabled:
             return "off"
         who = "owner + approved server" if self.config.anyone else "owner only"

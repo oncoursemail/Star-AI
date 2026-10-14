@@ -47,12 +47,9 @@ Answer directly and concisely, without needless disclaimers; use code blocks whe
 """
 
 
-def system_prompt(*, draw: bool = True, vision: bool = True, on_pc: bool = True) -> str:
+def system_prompt(*, draw: bool = True, vision: bool = True) -> str:
     """The Discord system prompt for the features this bot was started with (stable for its lifetime)."""
-    if not on_pc:
-        drawing = ("- Making images: only on the PC. This bot runs on a STAR server without a graphics card;\n"
-                   "  picture requests are answered by the app with a note to use Create image in STAR Desktop.\n")
-    elif draw:
+    if draw:
         drawing = ("- Making images: ON. STAR draws pictures on the PC's graphics card. The app sends\n"
                    "  messages like 'draw a dragon' or 'generate an image of ...' and `/draw` straight to the\n"
                    "  image engine. If a picture request reaches you, say: write `draw <what you want>` or use `/draw`.\n")
