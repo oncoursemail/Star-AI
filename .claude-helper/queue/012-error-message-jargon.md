@@ -1,0 +1,2 @@
+# Plain-language error messages (backend strings)
+Find user-facing error strings in star/ that contain developer instructions (e.g. 'pip install -r requirements-voice.txt', module or env-var names) shown to normal users, and give each a plain-language message with the technical hint moved to logs or an 'Advanced' detail field. Keep tests passing; update tests that assert on exact strings. Don't touch frontend/ (another agent owns UI).
