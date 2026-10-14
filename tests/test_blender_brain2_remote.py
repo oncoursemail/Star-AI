@@ -195,7 +195,7 @@ def test_code_size_and_type_limits():
     (bb.NEW_SCENE, {"SCENE": "lantern"}), (bb.OPEN_SCENE, {"SCENE": "lantern"}), (bb.SAVE_SCENE, {"SCENE": "lantern"}),
     (bb.VIEW, {"AZ": 40.0, "EL": 25.0, "ZOOM": 1.0, "HASC": 0, "CX": 0.0, "CY": 0.0, "CZ": 0.0}),
     (bb.RENDER, {"W": 640, "H": 360, "AZ": 0.0, "EL": 0.0, "ZOOM": 1.0, "ENGINE": "workbench", "NAME": "a-front",
-                 "SAMPLES": 0, "DENOISE": 0, "CAMERA": "auto", "HASC": 1, "CX": 0.0, "CY": -3.1, "CZ": 5.6}),
+                 "SAMPLES": 0, "DENOISE": 0, "CAMERA": "auto", "LOOK": "clay", "HASC": 1, "CX": 0.0, "CY": -3.1, "CZ": 5.6}),
     (bb.BAKE, {"SCENE": "dragon", "OBJECT": "Low Body", "SOURCE": "High", "SIZE": 2048, "MAPS": "normal,ao,color",
                "SAMPLES": 16, "EXTRUSION": 0.05, "MARGIN": 8}),
     (bb.EXPORT, {"SCENE": "lantern", "FORMAT": "glb"}),
@@ -654,7 +654,8 @@ def test_bake_saves_textures_fetches_them_and_saves_the_scene(tmp_path):
     {"action": "bake", "object": "A"},                                                        # no scene
     {"action": "bake", "scene": "dragon", "object": "A/../x"},                                # bad name
     {"action": "render_preview", "camera": "orbit"}, {"action": "render_preview", "samples": 0},
-    {"action": "render_preview", "label": "../x"}, {"action": "render_preview", "width": 1920},
+    {"action": "render_preview", "label": "../x"}, {"action": "render_preview", "width": 4096},
+    {"action": "render_preview", "preset": "square8k"}, {"action": "render_preview", "look": "xray"},
 ])
 def test_bake_and_render_options_are_validated(tmp_path, bad):
     c, launcher, session = client(tmp_path)
@@ -706,7 +707,7 @@ def test_screenshot_label_keeps_earlier_passes(tmp_path):
 
 def test_existing_world_is_kept_by_renders():
     code = bb.fill(bb.RENDER, W=64, H=64, AZ=0.0, EL=0.0, ZOOM=1.0, ENGINE="eevee", NAME="x", SAMPLES=32, DENOISE=0,
-                   CAMERA="auto", **bb._centre(None))
+                   CAMERA="auto", LOOK="material", **bb._centre(None))
     assert "    if scene.world is None:   # a world the scene already has" in code
     assert "scene.eevee.taa_render_samples = samples" in code
 
@@ -763,3 +764,126 @@ def test_close_ups_look_at_a_chosen_point(tmp_path):
         assert run(c2.call(bb.TOOL, {"action": "screenshot", "center": bad}))["isError"]
     with pytest.raises(ValueError):
         bb._centre([True, 1, 2])
+
+
+# --------------------------------------------------------------------------- dragon v4 lessons: square renders, form
+# looks (clay / silhouette), sculpt strokes, memory in replies, line numbers in errors, no undo memory
+
+def test_square_hero_preset_keeps_a_big_render_as_evidence_without_attaching_it(tmp_path):
+    big = PNG[:16] + struct.pack(">II", 2048, 2048) + PNG[24:] + b"\0" * (bb.MAX_IMAGE + 10)
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-camera.png", "engine": "cycles", "size": [2048, 2048]}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-camera.png": big}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "cycles", "camera": "scene",
+                                 "preset": "square2k", "samples": 64, "denoise": True, "label": "hero"}))
+    info = text(reply)
+    assert not reply["isError"], info
+    assert "w, h = 2048, 2048" in session.calls[0][1]["code"]
+    note = info["previews"][0]
+    assert note["size"] == [2048, 2048] and note["attached"] is False and note["bytes"] == len(big)
+    assert not [b for b in reply["content"] if b["type"] == "image"]
+    assert (tmp_path / note["evidence"]).read_bytes() == big
+    assert bb.PRESETS["square1k"] == (1024, 1024)
+
+
+@pytest.mark.parametrize("look", ["clay", "silhouette", "paint"])
+def test_form_looks_render_through_workbench_and_restore_the_scene(tmp_path, look):
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-front.png", "engine": "workbench", "size": [640, 360]}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-front.png": PNG}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "cycles", "look": look,
+                                 "angles": ["front"]}))
+    assert not reply["isError"], text(reply)
+    assert text(reply)["previews"][0]["look"] == look
+    code = session.calls[0][1]["code"]
+    ast.parse(code)
+    assert f"look = {look!r}" in code and 'scene.render.engine = "BLENDER_WORKBENCH"' in code
+    # everything the look changes is put back in `finally`, so the scene's own lighting design survives
+    assert "for (part, key), value in kept.items():" in code and "setattr(owner, key, value)" in code
+    assert "scene.world.color = (1.0, 1.0, 1.0)" in code and "shading.single_color = (0.0, 0.0, 0.0)" in code
+    assert "shading.color_type = 'VERTEX' if look == \"paint\" else 'SINGLE'" in code
+
+
+def test_sculpt_strokes_are_validated_filled_as_literals_and_saved(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"object": "Hi_Head", "vertices": 900, "strokes": [{"brush": "crease", "vertices": 40}]}},
+                           {"status": "ok", "result": {"saved_bytes": 77}}])
+    c, _, _ = client(tmp_path, session=session)
+    reply = run(c.call(bb.TOOL, {"action": "sculpt", "scene": "dragon", "object": "Hi_Head", "mirror_x": True,
+                                 "strokes": [{"brush": "crease", "points": [[0.1, -3, 5.8], [0.3, -2.8, 5.9]],
+                                              "radius": 0.05, "strength": 0.8}]}))
+    info = text(reply)
+    assert not reply["isError"], info
+    code = session.calls[0][1]["code"]
+    ast.parse(code)
+    assert "obj = bpy.data.objects.get('Hi_Head')" in code and "if 1:   # symmetry" in code
+    assert '"brush": "crease"' in code and '"radius": 0.05' in code   # one JSON string literal, parsed in Blender
+    assert "save_as_mainfile" in session.calls[1][1]["code"]
+    assert info["sculpt"]["strokes"][0]["vertices"] == 40 and info["scene_saved_bytes"] == 77
+
+
+@pytest.mark.parametrize("bad", [
+    {"action": "sculpt", "scene": "dragon", "object": "A"},                                              # no strokes
+    {"action": "sculpt", "scene": "dragon", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 1}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "dynamite", "points": [[0, 0, 0]], "radius": 1}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0]], "radius": 1}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 0}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 1, "strength": 9}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0, 0]] * 65, "radius": 1}]},
+    {"action": "sculpt", "scene": "dragon", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 1, "code": "x"}]},
+    {"action": "sculpt", "object": "A", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 1}]},  # no scene
+    {"action": "sculpt", "scene": "dragon", "object": "A'); import os #", "strokes": [{"brush": "draw", "points": [[0, 0, 0]], "radius": 1}]},
+])
+def test_sculpt_refuses_bad_strokes_before_blender(tmp_path, bad):
+    c, launcher, session = client(tmp_path)
+    reply = run(c.call(bb.TOOL, bad))
+    assert reply["isError"] and not session.calls and launcher.calls == []
+
+
+def test_sculpt_needs_the_edit_permission(tmp_path):
+    c, _, session = client(tmp_path, edit=False)
+    reply = run(c.call(bb.TOOL, {"action": "sculpt", "scene": "dragon", "object": "A",
+                                 "strokes": [{"brush": "smooth", "points": [[0, 0, 0]], "radius": 1}]}))
+    assert reply["isError"] and "edit permission" in text(reply)["error"] and not session.calls
+
+
+def test_heavy_actions_report_blenders_memory(tmp_path):
+    class MemLauncher(FakeLauncher):
+        async def __call__(self, argv, timeout):
+            if argv[len(COMMAND):][0] == "status":
+                self.calls.append(["status"])
+                return 0, json.dumps({"running": True, "mcp_port_open": True, "blender_mb": 1834, "mem_max": "2560M"}).encode(), b""
+            return await super().__call__(argv, timeout)
+    session = FakeSession([{"status": "ok", "result": {"n": 1}}, {"status": "ok", "result": {"saved_bytes": 5}}])
+    c, _, _ = client(tmp_path, launcher=MemLauncher(), session=session)
+    info = text(run(c.call(bb.TOOL, {"action": "run_bpy", "scene": "dragon", "code": "result = {'n': 1}"})))
+    assert info["blender_mb"] == 1834 and info["blender_mem_max"] == "2560M"
+
+
+def test_errors_name_the_failing_line_of_the_sent_code(tmp_path):
+    message = ('Traceback (most recent call last):\n  File "/lab/mcp/x.py", line 88, in run\n'
+               '  File "<string>", line 12, in <module>\n  File "<string>", line 7, in f\nZeroDivisionError: division by zero')
+    session = FakeSession([{"status": "error", "message": message}])
+    c, _, _ = client(tmp_path, session=session)
+    reply = run(c.call(bb.TOOL, {"action": "run_bpy", "scene": "dragon", "code": "x = 1"}))
+    assert reply["isError"]
+    assert text(reply)["error"] == "Blender code failed (line 7 of the code): ZeroDivisionError: division by zero"
+    assert "/lab/" not in text(reply)["error"]
+
+
+def test_scene_check_turns_off_undo_memory():
+    code = bb.fill(bb.ENSURE_SCENE, SCENE="dragon")
+    ast.parse(code)
+    assert "bpy.context.preferences.edit.undo_steps = 1" in code
+    assert "bpy.context.preferences.edit.undo_memory_limit = 64" in code
+
+
+def test_big_cycles_frames_skip_the_denoiser_and_say_so(tmp_path):
+    code = bb.fill(bb.RENDER, W=2048, H=2048, AZ=0.0, EL=0.0, ZOOM=1.0, ENGINE="cycles", NAME="x", SAMPLES=64, DENOISE=1,
+                   CAMERA="scene", LOOK="material", **bb._centre(None))
+    ast.parse(code)
+    assert "if engine == \"cycles\" and denoise and w * h > 1700000:" in code and "samples = max(samples, 128)" in code
+    assert "scene.cycles.use_adaptive_sampling = True" in code
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-camera.png", "engine": "cycles",
+                                                       "size": [2048, 2048], "denoise_skipped": True}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-camera.png": PNG}), session=session)
+    info = text(run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "cycles", "camera": "scene",
+                                      "preset": "square2k", "denoise": True})))
+    assert "denoise skipped" in info["previews"][0]["note"]

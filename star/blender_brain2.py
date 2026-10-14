@@ -40,14 +40,23 @@ COMMAND_ENV = "STAR_BLENDER_BRAIN2_COMMAND"
 MAX_COMMAND_BYTES = 4000
 MAX_CODE = 24_000
 MAX_IMAGE = 3_000_000
+MAX_RENDER = 16 * 1024 * 1024   # a 2048x2048 hero PNG; kept as evidence, attached only when <= MAX_IMAGE
 MAX_FILE = 24 * 1024 * 1024
 SCENE_NAME = r"^[a-z][a-z0-9_-]{1,39}$"
 OBJECT_NAME = r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,62}$"
 
 READ_ACTIONS = ("status", "list_files", "inspect", "docs", "screenshot")
-EDIT_ACTIONS = ("start", "stop", "new_scene", "open_scene", "run_bpy", "render_preview", "bake", "export")
+EDIT_ACTIONS = ("start", "stop", "new_scene", "open_scene", "run_bpy", "sculpt", "render_preview", "bake", "export")
 BAKE_MAPS = ("normal", "ao", "color", "emit", "roughness", "lit")
 LABEL = r"^[a-z0-9][a-z0-9_-]{0,23}$"
+# Render size presets: square ones for hero shots and turntables (portfolio style), hd for wide shots.
+PRESETS = {"square2k": (2048, 2048), "square1k": (1024, 1024), "hd": (1280, 720)}
+# material: the scene as it is; clay: one grey material with cavity (anatomy and form only, like a sculpt);
+# silhouette: black on white, flat (does the shape read with no detail at all?); paint: the colour attribute under
+# studio light with cavity, through Workbench (look-dev of painted colour on a dense sculpt that Cycles cannot hold
+# inside the memory cap)
+LOOKS = ("material", "clay", "silhouette", "paint")
+BRUSHES = ("draw", "inflate", "crease", "pinch", "flatten", "smooth")
 
 # name -> (azimuth, elevation) in degrees. Azimuth 0 looks at the front (camera on -Y), 90 from +X, 180 from the
 # back, 270 from -X; elevation 90 looks straight down.
@@ -71,8 +80,20 @@ SCHEMA = {
                    "items": {"type": "number", "minimum": -10000, "maximum": 10000}},
         "frame": {"type": "integer", "minimum": 0, "maximum": 100000},
         "format": {"type": "string", "enum": ["glb", "fbx"]},
-        "width": {"type": "integer", "minimum": 64, "maximum": 1280},
-        "height": {"type": "integer", "minimum": 64, "maximum": 720},
+        "width": {"type": "integer", "minimum": 64, "maximum": 2048},
+        "height": {"type": "integer", "minimum": 64, "maximum": 2048},
+        "preset": {"type": "string", "enum": sorted(PRESETS)},
+        "look": {"type": "string", "enum": list(LOOKS)},
+        "mirror_x": {"type": "boolean"},
+        "strokes": {"type": "array", "minItems": 1, "maxItems": 64, "items": {
+            "type": "object", "additionalProperties": False, "required": ["brush", "points", "radius"],
+            "properties": {
+                "brush": {"type": "string", "enum": list(BRUSHES)},
+                "points": {"type": "array", "minItems": 1, "maxItems": 64, "items": {
+                    "type": "array", "minItems": 3, "maxItems": 3,
+                    "items": {"type": "number", "minimum": -10000, "maximum": 10000}}},
+                "radius": {"type": "number", "minimum": 0.002, "maximum": 20},
+                "strength": {"type": "number", "minimum": -2, "maximum": 2}}}},
         "engine": {"type": "string", "enum": ["workbench", "eevee", "cycles"]},
         "samples": {"type": "integer", "minimum": 1, "maximum": 1024},
         "denoise": {"type": "boolean"},
@@ -102,8 +123,13 @@ DESCRIPTION = (
     "screenshot {angles: [front,right,back,left,top,three_quarter,rear_quarter] or azimuth+elevation}: images of the "
     "3D viewport as a person sees it (zoom 0.5-8 frames closer, default 1; center [x,y,z]: look at that point, e.g. "
     "the head; frame: show that animation frame); "
-    "render_preview {angles, width (<=1280), height (<=720), engine, zoom, frame, samples, denoise, camera: auto|scene, "
-    "label}: a render (workbench is fastest, eevee looks better, cycles is slowest; camera 'scene' renders through the "
+    "sculpt {scene, object, strokes: [{brush: draw|inflate|crease|pinch|flatten|smooth, points: [[x,y,z], ...] (a "
+    "stroke path in world space), radius, strength (-2..2, negative digs in)}], mirror_x}: brush strokes on a mesh, "
+    "like a sculptor (crease = a sharp cut line such as an eyelid or mouth line, pinch = sharpen a ridge, flatten = "
+    "carve a plane, smooth = calm noise, draw/inflate = add volume); "
+    "render_preview {angles, width, height (<=2048) or preset: square2k|square1k|hd, engine, look: material|clay|"
+    "silhouette|paint (clay = grey sculpt look for anatomy, silhouette = black on white, paint = vertex colours, cheap), zoom, frame, samples, denoise, "
+    "camera: auto|scene, label}: a render (workbench is fastest, eevee looks better, cycles is slowest; camera 'scene' renders through the "
     "scene's own camera and lights, e.g. a 3-point setup you built; label prefixes the evidence file names so passes "
     "are kept); bake {scene, object (low-poly target with a UV map and materials), source (high-poly, optional: "
     "selected-to-active), maps: normal|ao|color|emit|roughness|lit (lit = colour x AO + glow in one map, for game "
@@ -324,6 +350,10 @@ result = dict(_stats(), scene=@@SCENE@@, objects=len(bpy.context.scene.objects))
 # the fresh Blender shows the factory scene. Every scene-bound action first makes sure ITS scene is the open file,
 # otherwise a run_bpy would edit the factory cube and the save after it would overwrite the real scene.
 ENSURE_SCENE = _HEAD + """\
+# Each Lab call can leave an undo step holding a full copy of a dense mesh; on a memory-capped Blender that is what
+# ran it out of memory on the dragon v3 sculpt. STAR's calls do not need undo (the saved scene is the history).
+bpy.context.preferences.edit.undo_steps = 1
+bpy.context.preferences.edit.undo_memory_limit = 64
 path = os.path.join(SB, @@SCENE@@ + ".blend")
 if os.path.normpath(bpy.data.filepath or "") != os.path.normpath(path):
     if not os.path.isfile(path):
@@ -398,6 +428,7 @@ cam_data = bpy.data.cameras.new("STAR_PreviewCam")
 cam = bpy.data.objects.new("STAR_PreviewCam", cam_data)
 scene.collection.objects.link(cam)
 old_cam = scene.camera
+kept = {}
 try:
     w, h = @@W@@, @@H@@
     scene.render.resolution_x, scene.render.resolution_y, scene.render.resolution_percentage = w, h, 100
@@ -411,12 +442,56 @@ try:
     engine = @@ENGINE@@
     samples, denoise = @@SAMPLES@@, bool(@@DENOISE@@)
     scene.render.engine = {"workbench": "BLENDER_WORKBENCH", "eevee": "BLENDER_EEVEE", "cycles": "CYCLES"}[engine]
-    if engine == "workbench":
+    look = @@LOOK@@
+    if look != "material":   # clay / silhouette: form only, through Workbench, every setting restored afterwards
+        engine = "workbench"
+        scene.render.engine = "BLENDER_WORKBENCH"
+        shading = scene.display.shading
+        for key in ("light", "color_type", "single_color", "show_cavity", "show_shadows", "show_object_outline",
+                    "show_specular_highlight", "cavity_type", "curvature_ridge_factor", "curvature_valley_factor"):
+            value = getattr(shading, key)
+            kept[("shading", key)] = value if isinstance(value, (str, bool, int, float)) else tuple(value)
+        kept[("view", "view_transform")] = scene.view_settings.view_transform
+        kept[("view", "look")] = scene.view_settings.look
+        kept[("film", "film_transparent")] = scene.render.film_transparent
+        kept[("aa", "render_aa")] = scene.display.render_aa
+        if scene.world is None:
+            scene.world = bpy.data.worlds.new("StarWorld")
+        kept[("world", "color")] = tuple(scene.world.color)
+        scene.view_settings.view_transform = 'Standard'
+        scene.view_settings.look = 'None'
+        scene.render.film_transparent = False
+        scene.display.render_aa = '16'
+        shading.show_object_outline = False
+        shading.show_shadows = False
+        shading.show_specular_highlight = look == "clay"
+        shading.color_type = 'VERTEX' if look == "paint" else 'SINGLE'
+        if look == "silhouette":
+            shading.light = 'FLAT'
+            shading.single_color = (0.0, 0.0, 0.0)
+            shading.show_cavity = False
+            scene.world.color = (1.0, 1.0, 1.0)
+        else:
+            shading.light = 'STUDIO'
+            shading.single_color = (0.62, 0.62, 0.64)
+            shading.show_cavity = True
+            shading.cavity_type = 'BOTH'
+            shading.curvature_ridge_factor = 1.0
+            shading.curvature_valley_factor = 1.0
+            scene.world.color = (0.16, 0.16, 0.18)
+    elif engine == "workbench":
         scene.display.shading.light = 'STUDIO'
         scene.display.shading.color_type = 'MATERIAL'
+    denoise_skipped = False
+    if engine == "cycles" and denoise and w * h > 1700000:
+        # OpenImageDenoise on a full 2048x2048 frame needs more memory than Blender's cap on brain 2 (seen: oom-kill
+        # every time, while the same frame without the denoiser used ~0.8 GB): more samples instead, adaptively.
+        denoise, denoise_skipped = False, True
+        samples = max(samples, 128)
     if engine == "cycles":
         scene.cycles.device = 'CPU'
         scene.cycles.samples = samples or 24
+        scene.cycles.use_adaptive_sampling = True
         scene.cycles.use_denoising = denoise
         if denoise:
             scene.cycles.denoiser = 'OPENIMAGEDENOISE'
@@ -439,10 +514,15 @@ try:
 finally:
     scene.camera = old_cam
     bpy.data.objects.remove(cam)
+    for (part, key), value in kept.items():
+        owner = {"shading": scene.display.shading, "view": scene.view_settings, "film": scene.render,
+                 "aa": scene.display, "world": scene.world}[part]
+        setattr(owner, key, value)
     for o in [o for o in bpy.data.objects if o.name.startswith("STAR_PreviewSun")]:
         bpy.data.objects.remove(o)
 out = os.path.join(SB, "previews", @@NAME@@ + ".png")
-result = {"file": "previews/" + @@NAME@@ + ".png", "bytes": os.path.getsize(out), "engine": @@ENGINE@@, "size": [@@W@@, @@H@@]}
+result = {"file": "previews/" + @@NAME@@ + ".png", "bytes": os.path.getsize(out), "engine": engine, "look": @@LOOK@@,
+          "size": [@@W@@, @@H@@], "denoise_skipped": denoise_skipped}
 """
 
 BAKE = _HEAD + """\
@@ -546,6 +626,134 @@ finally:
     for o in bpy.data.objects:
         o.select_set(False)
 result = {"object": target.name, "source": source.name if source else "", "size": size, "maps": done}
+"""
+
+SCULPT = _HEAD + """\
+import json
+from mathutils import kdtree
+obj = bpy.data.objects.get(@@OBJECT@@)
+if obj is None or obj.type != 'MESH':
+    raise RuntimeError("sculpt: no mesh object with that name")
+if obj.mode != 'OBJECT':
+    bpy.ops.object.mode_set(mode='OBJECT')
+me = obj.data
+n = len(me.vertices)
+if n == 0:
+    raise RuntimeError("sculpt: the mesh has no vertices")
+co = [0.0] * (3 * n)
+me.vertices.foreach_get("co", co)
+P = [mathutils.Vector(co[3 * i:3 * i + 3]) for i in range(n)]
+inv = obj.matrix_world.inverted()
+scale = max(obj.matrix_world.to_scale()) or 1.0
+tree = kdtree.KDTree(n)
+for i, p in enumerate(P):
+    tree.insert(p, i)
+tree.balance()
+neighbours = None
+
+
+def _smoothstep(x):
+    x = min(1.0, max(0.0, x))
+    return x * x * (3.0 - 2.0 * x)
+
+
+def _closest(p, pts):
+    best, bd = pts[0], (p - pts[0]).length
+    for a, b in zip(pts, pts[1:]):
+        d = b - a
+        L2 = d.length_squared
+        t = 0.0 if L2 < 1e-12 else max(0.0, min(1.0, (p - a).dot(d) / L2))
+        q = a + d * t
+        dist = (p - q).length
+        if dist < bd:
+            best, bd = q, dist
+    return best, bd
+
+
+def _normals():
+    me.update()
+    nn = [0.0] * (3 * n)
+    me.vertices.foreach_get("normal", nn)
+    return [mathutils.Vector(nn[3 * i:3 * i + 3]) for i in range(n)]
+
+
+def _mirror(p):
+    v = inv @ mathutils.Vector(p)
+    return list(obj.matrix_world @ mathutils.Vector((-v.x, v.y, v.z)))
+
+
+report = []
+strokes = json.loads(@@STROKES@@)
+if @@MIRROR@@:   # symmetry across the object's own X axis, like a sculptor's X symmetry
+    strokes = [x for s in strokes for x in (s, dict(s, points=[_mirror(p) for p in s["points"]]))]
+for s in strokes:
+    brush, r, k = s["brush"], s["radius"] / scale, s["strength"]
+    pts = [inv @ mathutils.Vector(p) for p in s["points"]]
+    # stroke samples every quarter radius, so every vertex under the path is found
+    samples = [pts[0]]
+    for a, b in zip(pts, pts[1:]):
+        steps = min(4000, max(1, int((b - a).length / (r * 0.25))))
+        samples += [a.lerp(b, j / steps) for j in range(1, steps + 1)]
+    hit = {}
+    for c in samples:
+        for (_, i, _) in tree.find_range(c, r):
+            hit[i] = True
+    if not hit:
+        report.append({"brush": brush, "vertices": 0})
+        continue
+    nor = _normals()
+    idx = list(hit)
+    weight, nearest = {}, {}
+    for i in idx:
+        q, d = _closest(P[i], pts)
+        nearest[i] = q
+        weight[i] = (1.0 - _smoothstep(d / r)) if brush != "crease" else max(0.0, 1.0 - d / r) ** 3
+    if brush in ("draw", "flatten"):
+        avg_n = mathutils.Vector((0.0, 0.0, 0.0))
+        avg_p = mathutils.Vector((0.0, 0.0, 0.0))
+        tw = 0.0
+        for i in idx:
+            avg_n += nor[i] * weight[i]
+            avg_p += P[i] * weight[i]
+            tw += weight[i]
+        avg_n = avg_n.normalized() if avg_n.length > 1e-9 else mathutils.Vector((0.0, 0.0, 1.0))
+        avg_p = avg_p / max(tw, 1e-9)
+    if brush == "smooth" and neighbours is None:
+        neighbours = [[] for _ in range(n)]
+        for e in me.edges:
+            a, b = e.vertices
+            neighbours[a].append(b)
+            neighbours[b].append(a)
+    moved = {}
+    for i in idx:
+        w = weight[i] * k
+        if w == 0.0:
+            continue
+        if brush == "draw":
+            moved[i] = P[i] + avg_n * (w * r * 0.25)
+        elif brush == "inflate":
+            moved[i] = P[i] + nor[i] * (w * r * 0.25)
+        elif brush == "crease":   # a sharp cut: in along the normal, and pulled toward the line
+            moved[i] = P[i] - nor[i] * (w * r * 0.22) + (nearest[i] - P[i]) * min(0.9, abs(w) * 0.35)
+        elif brush == "pinch":
+            moved[i] = P[i] + (nearest[i] - P[i]) * max(-0.95, min(0.95, w * 0.5))
+        elif brush == "flatten":
+            off = (P[i] - avg_p).dot(avg_n)
+            moved[i] = P[i] - avg_n * (off * max(-1.0, min(1.0, w)))
+        elif brush == "smooth":
+            nb = neighbours[i]
+            if nb:
+                m = sum((P[j] for j in nb), mathutils.Vector((0.0, 0.0, 0.0))) / len(nb)
+                moved[i] = P[i].lerp(m, max(0.0, min(1.0, w)))
+    for i, v in moved.items():
+        P[i] = v
+    report.append({"brush": brush, "vertices": len(moved)})
+flat = [0.0] * (3 * n)
+for i, p in enumerate(P):
+    flat[3 * i], flat[3 * i + 1], flat[3 * i + 2] = p.x, p.y, p.z
+me.vertices.foreach_set("co", flat)
+me.update()
+result = {"object": obj.name, "vertices": n, "strokes": report}
 """
 
 EXPORT = _HEAD + """\
@@ -788,6 +996,16 @@ class BrainTwoBlender:
             raise LabError("the file is larger than STAR will take over")
         return out
 
+    async def _add_memory(self, info: dict) -> None:
+        """Blender's memory after a heavy step (its cap is small): lets the caller restart it before it is killed."""
+        try:
+            status = await self._control_json("status")
+        except LabError:
+            return
+        if "blender_mb" in status:
+            info["blender_mb"] = status.get("blender_mb")
+            info["blender_mem_max"] = status.get("mem_max", "")
+
     async def _ensure_running(self, session_needed: bool = True) -> dict:
         status = await self._control_json("status")
         if status.get("running") and status.get("mcp_port_open"):
@@ -809,7 +1027,10 @@ class BrainTwoBlender:
         if reply.get("status") != "ok":
             message = str(reply.get("message", "unknown error"))
             tail = [line for line in message.strip().splitlines() if line.strip()][-1:] or ["unknown error"]
-            raise LabError("Blender code failed: " + tail[0][:300])
+            # the traceback's last frame inside the sent code ("<string>" / "<blender_code>") names the failing line
+            lines = re.findall(r'File "<[^>"]*>", line (\d+)', message)
+            where = f" (line {lines[-1]} of the code)" if lines else ""
+            raise LabError("Blender code failed" + where + ": " + tail[0][:300])
         result = reply.get("result")
         out = dict(result) if isinstance(result, dict) else {"value": result}
         if reply.get("stdout") and "Warning:" not in str(reply["stdout"]):
@@ -868,7 +1089,7 @@ class BrainTwoBlender:
         action = arguments["action"]
         if action in EDIT_ACTIONS and not self.edit:
             raise PermissionError("This action needs the Blender edit permission in STAR settings")
-        needs_scene = {"new_scene", "open_scene", "run_bpy", "export", "bake"}
+        needs_scene = {"new_scene", "open_scene", "run_bpy", "sculpt", "export", "bake"}
         if action in needs_scene and "scene" not in arguments:
             raise ValueError(f"{action} needs a scene name")
         if action == "bake" and "object" not in arguments:
@@ -877,6 +1098,8 @@ class BrainTwoBlender:
             raise ValueError("bake: source and object must be different meshes")
         if action == "run_bpy":
             check_bpy_code(arguments.get("code"))
+        if action == "sculpt" and not (arguments.get("object") and arguments.get("strokes")):
+            raise ValueError("sculpt needs the object (a mesh) and its strokes")
         if action == "docs" and "query" not in arguments:
             raise ValueError("docs needs a query")
         if action == "export" and "format" not in arguments:
@@ -926,6 +1149,23 @@ class BrainTwoBlender:
         info = {"ran": ran, "scene": saved}
         if reopened:
             info["note"] = "Blender had restarted; the saved scene was reopened before your code ran"
+        await self._add_memory(info)
+        return self._result(info)
+
+    async def _do_sculpt(self, args):
+        """Brush strokes on a mesh, written by STAR (the model gives only brush names, points and numbers)."""
+        await self._ensure_running()
+        strokes = [{"brush": s["brush"], "points": [[float(v) for v in p] for p in s["points"]],
+                    "radius": float(s["radius"]), "strength": float(s.get("strength", 0.5))} for s in args["strokes"]]
+        async with self._long_session(600.0) as session:
+            reopened = await self._scene_open(session, args["scene"])
+            ran = await self._exec(session, fill(SCULPT, OBJECT=args["object"], STROKES=json.dumps(strokes),
+                                                 MIRROR=int(bool(args.get("mirror_x", False)))))
+            saved = await self._exec(session, fill(SAVE_SCENE, SCENE=args["scene"]))
+        info = {"sculpt": ran, "scene_saved_bytes": saved.get("saved_bytes")}
+        if reopened:
+            info["note"] = "Blender had restarted; the saved scene was reopened before the strokes"
+        await self._add_memory(info)
         return self._result(info)
 
     async def _do_inspect(self, args):
@@ -976,8 +1216,9 @@ class BrainTwoBlender:
     async def _do_render_preview(self, args):
         await self._ensure_running()
         scene = args.get("scene", "") or "preview"
-        width, height = int(args.get("width", 640)), int(args.get("height", 360))
+        width, height = PRESETS.get(args.get("preset", ""), (int(args.get("width", 640)), int(args.get("height", 360))))
         camera = args.get("camera", "auto")
+        look = args.get("look", "material")
         angles = [("camera", 0.0, 0.0)] if camera == "scene" else self._angles(args)[:4]
         images, notes = [], []
         async with self._long_session(900.0) as session:
@@ -988,16 +1229,25 @@ class BrainTwoBlender:
                 info = await self._exec(session, _at_frame(fill(
                     RENDER, W=width, H=height, AZ=azimuth, EL=elevation, ZOOM=float(args.get("zoom", 1.0)),
                     ENGINE=args.get("engine", "workbench"), NAME=name, SAMPLES=int(args.get("samples", 0)),
-                    DENOISE=int(bool(args.get("denoise", False))), CAMERA=camera, **_centre(args.get("center"))),
-                    args.get("frame")))
-                png = await self._fetch(info["file"], MAX_IMAGE)
+                    DENOISE=int(bool(args.get("denoise", False))), CAMERA=camera, LOOK=look,
+                    **_centre(args.get("center"))), args.get("frame")))
+                png = await self._fetch(info["file"], MAX_RENDER)
                 if not is_png(png):
                     raise LabError("the preview was not a PNG")
-                images.append(png)
-                notes.append({"angle": label, "engine": info["engine"], "size": list(png_size(png)),
-                              "seconds": round(time.monotonic() - began, 2),
-                              "evidence": self._evidence(scene, _named(args.get("label", ""), f"render-{label}.png"), png)})
-        return self._result({"previews": notes}, images)
+                note = {"angle": label, "engine": info["engine"], "look": look, "size": list(png_size(png)),
+                        **({"note": "denoise skipped above 1.7 megapixels (memory cap); rendered with 128+ samples"}
+                           if info.get("denoise_skipped") else {}),
+                        "seconds": round(time.monotonic() - began, 2),
+                        "evidence": self._evidence(scene, _named(args.get("label", ""), f"render-{label}.png"), png)}
+                if len(png) <= MAX_IMAGE:
+                    images.append(png)
+                else:   # a 2048x2048 hero shot: kept in full as evidence, too big to hand to a model as an image
+                    note["attached"] = False
+                    note["bytes"] = len(png)
+                notes.append(note)
+        info = {"previews": notes}
+        await self._add_memory(info)
+        return self._result(info, images)
 
     async def _do_bake(self, args):
         """Cycles bakes (normal / AO / colour / emission / roughness) onto the target's UV map, saved as PNG files in
@@ -1022,6 +1272,7 @@ class BrainTwoBlender:
                 images.append(data)
         info.pop("stdout", None)
         info["scene_saved_bytes"] = saved.get("saved_bytes")
+        await self._add_memory(info)
         return self._result(info, images)
 
     async def _do_export(self, args):
