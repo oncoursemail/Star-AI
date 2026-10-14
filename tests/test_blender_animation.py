@@ -281,3 +281,10 @@ def test_packaged_windows_build_includes_trusted_worker():
     text = source.read_text(encoding="utf-8")
     assert "star/blender_worker.py;star" in text
     assert "star/blender_animation_worker.py;star" in text
+
+
+def test_clip_name_rejects_trailing_control_chars():
+    for name in ("Wave\n", "Wave\r", "Wave\t", "Wave ", "\nWave"):
+        # Do not allow regexp end-of-string newline allowances in file labels.
+        with pytest.raises(ValueError):
+            validate_animation({**R15_WAVE, "name": name})
