@@ -15,6 +15,30 @@ Date: 2026-10-11. Branch: star/blender-brain2-20261011. **Draft, opt-in.** This 
 | Desktop | BlenderPanel, Qt status + testBlender, saved settings | Owner can enable connection and independently permit scene writes; check local installed Blender. |
 | Packaging | Windows workflow and scripts/build_windows.ps1 | Bundles the real worker source in the packaged STAR.exe, not just the Python module bytecode. |
 
+## New experimental Blender-to-Roblox animation foundation (2026-10-13)
+
+The new source-tree feature adds a read-only R6/R15 animation keyframe
+preflight through the existing Blender MCP, and an **EXPERIMENTAL R15-only**
+Blender bone-action FBX draft exporter. It does **not** create production
+skinned avatars, prove R15 native import, support native R6 Motor6D FBX
+export, publish animation assets or train models.
+
+The experimental authoring tool is unavailable unless the existing
+Blender enabled + edit controls are ON **and** the operator separately
+sets STAR_BLENDER_R15_ANIMATION_EXPERIMENT=on on the STAR process.
+
+The new trusted worker produces an editable scene.blend and bone-only
+animation.fbx inside the project-private job directory. No user-rig
+imports, arbitrary Blender Python execution, addons or cloud calls are
+permitted. A real Roblox Studio Clip Editor import, character playback,
+different rig sizes and multi-frame visual acceptance remain mandatory.
+The R6 preflight explicitly says that R6 rigid Motor6D rigs need their
+own importer and remapping pipeline.
+
+See [STAR Blender Roblox Motion / Causal Motion Twin research](STAR_BLENDER_ROBLOX_MOTION_CAUSAL_TWIN_20261013.md) for the official
+Blender FBX rig/export settings, real animation QA and detailed future
+creative-system experimental plan.
+
 ## How the Blender connector works
 
 ~~~text

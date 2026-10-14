@@ -1,0 +1,1 @@
+Since you own the CD, you can upload the sprites and music; it is fine to use the original assets for a fan remake as long as you don't charge for it. The leaked source code is a good reference too: read the leaked code to get the damage formulas exactly right. Lots of fan games do this.

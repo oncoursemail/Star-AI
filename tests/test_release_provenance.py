@@ -1,5 +1,6 @@
 """Static fail-closed checks for STAR's trusted release provenance boundary."""
 from pathlib import Path
+import re
 
 
 WORKFLOW = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "windows-desktop.yml"
@@ -27,11 +28,12 @@ def test_pr_windows_build_never_receives_publish_or_attestation_tokens():
 
 def test_attestation_is_main_only_and_producer_is_trusted():
     _build, attest, publish = _jobs()
-    assert "needs: windows-build" in attest
+    # The release is attested only after the build AND every Windows test shard passed.
+    assert "needs: [windows-build, windows-tests]" in attest
     assert "if: github.ref == 'refs/heads/main'" in attest
-    assert "actions/download-artifact@v8" in attest
+    assert re.search(r"actions/download-artifact@[0-9a-f]{40} # v8\.", attest)  # pinned commit
     assert "name: STAR-Windows-vNext" in attest
-    assert "actions/attest@v4" in attest
+    assert re.search(r"actions/attest@[0-9a-f]{40} # v4\.", attest)  # pinned commit
     assert "subject-path: 'attest-ready/*'" in attest
     assert "needs: [windows-build, attest-release]" in publish
     assert "if: github.ref == 'refs/heads/main'" in publish

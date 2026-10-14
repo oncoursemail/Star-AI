@@ -143,10 +143,12 @@ export const evaluation={
  * harness); worked examples = night school's outbox export of October 13, 2026 (docs/agents/self-learning-loop-20261013.md);
  * lessons = star/skill_packs/lessons_bundled.json; knowledge = docs/agents/knowledge-study.md.
  */
+declare const __STAR_SKILL_PACKS__: string   // vite.config.ts: folders in star/skill_packs at build time
+
 export const brainCounts={
  asOf:'Counted October 13, 2026, from the repository and the project notes.',
  items:[
-  {label:'Skill packs',value:'33',note:' task-specific instruction packs; most are opt-in'},
+  {label:'Skill packs',value:__STAR_SKILL_PACKS__,note:' task-specific instruction packs; most are opt-in'},
   {label:'Practice tasks',value:'300',note:' with runnable checks, all 300 verified on the server'},
   {label:'Worked examples',value:'137',note:' checked practice answers in night school’s outbox; 64 pass the app’s import checks'},
   {label:'Lessons promoted',value:'0',note:' so far: none has passed the paired gate, and the 1.0 lesson file is empty'},
