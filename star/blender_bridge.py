@@ -221,7 +221,24 @@ class BlenderController:
         report = json.loads(manifest.read_text(encoding="utf-8"))
         if not isinstance(report, dict) or report.get("job_id") != job_id or report.get("status") != "completed":
             raise ValueError("Blender job report did not pass validation")
-        # Never trust arbitrary report paths even if Blender worker was compromised.
+        # Never trust arbitrary paths reported by a worker. Animation jobs are
+        # separate draft artifacts, with FBX not GLB, and no claimed Studio proof.
+        if report.get("kind") == "animation":
+            for name in ("scene.blend", "animation.fbx"):
+                file = directory / name
+                if file.is_symlink() or not file.is_file() or not 0 < file.stat().st_size <= 150_000_000:
+                    raise ValueError("Expected Blender animation draft is missing or too large")
+            if report.get("rig") != "r15" or report.get("native_studio_import_tested") is not False:
+                raise ValueError("Blender animation evidence is invalid")
+            return {"job_id": job_id, "scene": report.get("scene"), "kind": "animation",
+                    "rig": "r15", "fps": report.get("fps"),
+                    "frame_count": report.get("frame_count"),
+                    "keyed_joints": report.get("keyed_joints"),
+                    "blend_file": str(directory / "scene.blend"),
+                    "fbx_file": str(directory / "animation.fbx"),
+                    "preview_file": None, "native_studio_import_tested": False,
+                    "notice": ("Experimental BONE-ONLY R15 proxy FBX. Must import to and test in "
+                               "real target Roblox rig using Studio Animation Editor. Not R6 compatible.")}
         for name in ("scene.blend", "scene.glb"):
             file = directory / name
             if file.is_symlink() or not file.is_file() or file.stat().st_size == 0:
@@ -262,6 +279,51 @@ class BlenderController:
                 raise BlenderJobError("Blender scene job failed; inspect the job's private worker.log")
             return self.inspect(job_id)
 
+
+
+    async def animate(self, spec: dict) -> dict:
+        """Generate one R15 bone-only FBX draft in a new project-private job.
+
+        Distinct experimental opt-in on top of the existing Blender create
+        permission. Refuses R6 until a verified Motor6D Studio import path is
+        available. Never imports user-owned assets or invokes arbitrary bpy.
+        """
+        from .blender_animation import validate_animation
+
+        if getattr(self.settings, "blender_edit", False) is not True:
+            raise PermissionError("Allow Blender scene creation explicitly in STAR settings")
+        if os.environ.get("STAR_BLENDER_R15_ANIMATION_EXPERIMENT") != "on":
+            raise PermissionError("R15 animation export is experimental and off by default")
+        clip = validate_animation(spec)
+        if clip["rig"] != "r15":
+            raise ValueError("R6 requires native Motor6D retarget testing; use animation preflight only")
+        executable = self._executable()
+        worker = Path(__file__).with_name("blender_animation_worker.py")
+        if not worker.is_file() or worker.is_symlink():
+            raise BlenderUnavailable("STAR's trusted animation worker is not available")
+        async with self.serial:
+            root = _job_root(self.home, self.settings.project)
+            root.mkdir(parents=True, exist_ok=True)
+            job_id = secrets.token_hex(12)
+            directory = root / job_id
+            directory.mkdir(mode=0o700, exist_ok=False)
+            (directory / "animation.json").write_text(
+                json.dumps(clip, sort_keys=True), encoding="utf-8")
+            try:
+                code, out, err = await self._invoke(
+                    str(executable), "--background", "--factory-startup",
+                    "--python-exit-code", "17", "--python", str(worker),
+                    "--", str(directory / "animation.json"),
+                    cwd=directory, timeout=MAX_JOB_SECONDS)
+            except asyncio.TimeoutError as exc:
+                raise BlenderJobError("Blender animation exceeded its bounded time budget") from exc
+            except OSError as exc:
+                raise BlenderUnavailable("Blender executable could not start") from exc
+            (directory / "worker.log").write_bytes((out + b"\n" + err)[-40_000:])
+            if code:
+                raise BlenderJobError(
+                    "Blender R15 draft animation failed; inspect its private worker.log")
+            return self.inspect(job_id)
 
 
 def main(argv: list[str] | None = None) -> int:
