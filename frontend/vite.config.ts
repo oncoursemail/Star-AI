@@ -1,9 +1,17 @@
 /// <reference types="vitest/config" />
+import { readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+// The website's brain map shows how many skill packs STAR has: counted from star/skill_packs at build time, so a
+// pull request that adds a pack does not have to edit the site (site-v1.test.tsx checks the number).
+const skillPacks = readdirSync(fileURLToPath(new URL('../star/skill_packs', import.meta.url)), { withFileTypes: true })
+  .filter(entry => entry.isDirectory() && !entry.name.startsWith('_')).length
+
 export default defineConfig({
   plugins: [react()],
+  define: { __STAR_SKILL_PACKS__: JSON.stringify(String(skillPacks)) },
   base: './',
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: false, cssCodeSplit: false },
   server: { strictPort: true },

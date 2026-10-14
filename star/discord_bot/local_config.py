@@ -41,6 +41,7 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_STATE", "STAR_DISCORD_LEARNING_DM_COOLDOWN_HOURS",
     "STAR_DISCORD_LEARNING_CHECK_MINUTES",
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
+    "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
     "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
 })
 # The token may only come from the secret file or the process environment.
@@ -121,6 +122,10 @@ STAR_DISCORD_DM_IMAGES=1
 STAR_DISCORD_DM_LEARNING_CANDIDATES=0
 # PC screenshots via /screen: each capture still needs a button press in Discord.
 STAR_DISCORD_SCREEN_CAPTURE=0
+# Read-only status/screenshot from a trusted locally staged Studio/Blender job receipt.
+# Never accepts Discord-supplied file paths; the producer must supply SHA-matched evidence.
+STAR_DISCORD_LAB_STATUS=0
+STAR_DISCORD_LAB_REPORT=
 # Make images ("draw a dragon" or /draw) on this PC's graphics card. ANYONE=1 also lets members of your
 # approved server use /draw (never strangers' DMs). TIMEOUT: seconds before a picture is cancelled.
 STAR_DISCORD_DRAW=1
@@ -137,3 +142,20 @@ STAR_DISCORD_LEARNING_DM_OPT_IN=0
 STAR_DISCORD_LEARNING_REPORT_SSH=
 STAR_DISCORD_LEARNING_REPORT=
 """
+
+
+def ensure_settings_file(env: Mapping[str, str] | None = None) -> bool:
+    """Write SETTINGS_TEMPLATE if discord-settings.env is missing; never overwrite.
+
+    Returns True only when a file was created. Holds no secrets; the token is never written here.
+    """
+    path = config_dir(env) / SETTINGS_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(SETTINGS_TEMPLATE)
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    return True

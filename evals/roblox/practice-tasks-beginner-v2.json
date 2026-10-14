@@ -1,0 +1,2734 @@
+[
+  {
+    "id": "BEG-01",
+    "topic": "hazards",
+    "category": "roblox-hazards",
+    "difficulty": 1,
+    "goal": "Touching the lava brick eliminates only the touching humanoid",
+    "prompt": "I made a lava brick. Can you show me the server Script inside it that kills a player when their character touches it, but ignores random dropped parts?",
+    "teaches": "Check the touched part's parent for a Humanoid before setting Health to zero.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A touching loose Part should not be destroyed or treated as a character.",
+    "expected_behavior": [
+      "Touching the lava brick eliminates only the touching humanoid.",
+      "A touching loose Part should not be destroyed or treated as a character."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Humanoid.Health"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/BasePart.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/BasePart"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "connects Touched",
+          "scope": "code"
+        },
+        {
+          "id": "humanoid",
+          "re": "FindFirstChildOfClass\\s*\\(\\s*[\"']Humanoid[\"']\\s*\\)",
+          "why": "looks up a humanoid",
+          "scope": "code"
+        },
+        {
+          "id": "health",
+          "re": "\\.Health\\s*=\\s*0\\b",
+          "why": "eliminates the humanoid",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_parent_destroy",
+          "re": "hit\\.Parent\\s*:\\s*Destroy\\s*\\(",
+          "why": "do not delete entire characters",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: connects Touched",
+        "Present: looks up a humanoid",
+        "Present: eliminates the humanoid",
+        "Absent: do not delete entire characters"
+      ]
+    }
+  },
+  {
+    "id": "BEG-02",
+    "topic": "hazards",
+    "category": "roblox-hazards",
+    "difficulty": 2,
+    "goal": "One hazard hit per character per second",
+    "prompt": "My acid floor is damaging players 60 times when they touch it. Can you make a server Script that damages 10 HP at most once a second per humanoid?",
+    "teaches": "Track per-humanoid hit times to prevent repeated Touched events from stacking damage.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Back-to-back touches in the same second cause one damage event.",
+    "expected_behavior": [
+      "One hazard hit per character per second.",
+      "Back-to-back touches in the same second cause one damage event."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Humanoid.TakeDamage"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/BasePart.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/BasePart"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "listen for contact",
+          "scope": "code"
+        },
+        {
+          "id": "cooldown",
+          "re": "(?:os\\.clock|time)\\s*\\(",
+          "why": "uses a time source",
+          "scope": "code"
+        },
+        {
+          "id": "damage",
+          "re": ":\\s*TakeDamage\\s*\\(\\s*10\\s*\\)",
+          "why": "deals ten damage",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_client",
+          "re": "\\.FireServer\\s*\\(",
+          "why": "damage must not originate from a client",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: listen for contact",
+        "Present: uses a time source",
+        "Present: deals ten damage",
+        "Absent: damage must not originate from a client"
+      ]
+    }
+  },
+  {
+    "id": "BEG-03",
+    "topic": "hazards",
+    "category": "roblox-hazards",
+    "difficulty": 2,
+    "goal": "Kill characters who fall below a world-height limit",
+    "prompt": "If a player falls under Y = -50 in my obby, I want them to die even if there is no kill brick. Could you write a server loop for it?",
+    "teaches": "Check the character root's height without relying on a Touched event.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Characters exactly at Y=-50 are not below the kill plane.",
+    "expected_behavior": [
+      "Kill characters who fall below a world-height limit.",
+      "Characters exactly at Y=-50 are not below the kill plane."
+    ],
+    "engine_symbols": [
+      "Players.GetPlayers",
+      "BasePart.Position",
+      "Humanoid.Health"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/BasePart.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/BasePart"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "players",
+          "re": "GetPlayers\\s*\\(",
+          "why": "inspects active players",
+          "scope": "code"
+        },
+        {
+          "id": "root",
+          "re": "HumanoidRootPart",
+          "why": "finds root part",
+          "scope": "code"
+        },
+        {
+          "id": "threshold",
+          "re": "(?:Position\\.Y\\s*<\\s*-50|-50\\s*>\\s*\\w+\\.Position\\.Y)",
+          "why": "checks kill-plane height",
+          "scope": "code"
+        },
+        {
+          "id": "kill",
+          "re": "\\.Health\\s*=\\s*0\\b",
+          "why": "eliminates fallen character",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_busy_loop",
+          "re": "while\\s+true\\s+do\\s*(?:--[^\\n]*)?\\s*end\\b",
+          "why": "avoid unbounded empty polling",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: inspects active players",
+        "Present: finds root part",
+        "Present: checks kill-plane height",
+        "Present: eliminates fallen character",
+        "Absent: avoid unbounded empty polling"
+      ]
+    }
+  },
+  {
+    "id": "BEG-04",
+    "topic": "checkpoints",
+    "category": "roblox-checkpoints",
+    "difficulty": 1,
+    "goal": "Change respawn point when a checkpoint pad is touched",
+    "prompt": "How do I make obby checkpoints? I have SpawnLocation parts called Checkpoint. When a player touches one, save that pad as the player's respawn spot for this server.",
+    "teaches": "Use Player.RespawnLocation with a touched SpawnLocation.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "NPCs touching the pad must not set any player's respawn.",
+    "expected_behavior": [
+      "Change respawn point when a checkpoint pad is touched.",
+      "NPCs touching the pad must not set any player's respawn."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Players.GetPlayerFromCharacter",
+      "Player.RespawnLocation"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/SpawnLocation.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/SpawnLocation"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "listen for checkpoint contact",
+          "scope": "code"
+        },
+        {
+          "id": "player",
+          "re": "GetPlayerFromCharacter\\s*\\(",
+          "why": "resolve the player",
+          "scope": "code"
+        },
+        {
+          "id": "respawn",
+          "re": "\\.RespawnLocation\\s*=",
+          "why": "set that player's checkpoint spawn",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_global_spawn",
+          "re": "workspace\\.SpawnLocation\\s*=",
+          "why": "do not mutate a global spawn instead of the player",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: listen for checkpoint contact",
+        "Present: resolve the player",
+        "Present: set that player's checkpoint spawn",
+        "Absent: do not mutate a global spawn instead of the player"
+      ]
+    }
+  },
+  {
+    "id": "BEG-05",
+    "topic": "checkpoints",
+    "category": "roblox-checkpoints",
+    "difficulty": 2,
+    "goal": "Reapply saved checkpoint ID when a character respawns",
+    "prompt": "I want my obby to remember Stage for the current play session. Please show a server Script that saves the touched pad's Stage attribute on Player and moves their new character to that checkpoint after respawn.",
+    "teaches": "Connect CharacterAdded and use a server-owned checkpoint stage.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A fresh character uses the last stage rather than the first spawn.",
+    "expected_behavior": [
+      "Reapply saved checkpoint ID when a character respawns.",
+      "A fresh character uses the last stage rather than the first spawn."
+    ],
+    "engine_symbols": [
+      "Player.SetAttribute",
+      "Player.CharacterAdded",
+      "PVInstance.PivotTo"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/SpawnLocation.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/SpawnLocation"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "stage_attr",
+          "re": "SetAttribute\\s*\\(\\s*[\"']Stage[\"']",
+          "why": "stores stage on player",
+          "scope": "code"
+        },
+        {
+          "id": "character",
+          "re": "\\.CharacterAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "handles respawn",
+          "scope": "code"
+        },
+        {
+          "id": "pivot",
+          "re": ":\\s*PivotTo\\s*\\(",
+          "why": "moves character to checkpoint",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_localplayer",
+          "re": "Players\\.LocalPlayer",
+          "why": "checkpoint state belongs on server",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: stores stage on player",
+        "Present: handles respawn",
+        "Present: moves character to checkpoint",
+        "Absent: checkpoint state belongs on server"
+      ]
+    }
+  },
+  {
+    "id": "BEG-06",
+    "topic": "checkpoints",
+    "category": "roblox-checkpoints",
+    "difficulty": 2,
+    "goal": "Prevent backtracking from lowering the cleared obby stage",
+    "prompt": "My obby has numbered checkpoint pads. Can you write the part that only increases player leaderstats.Stage when they touch a later checkpoint, never resetting progress if they walk backward?",
+    "teaches": "Compare the new stage number to the stored Stage before updating.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Touching checkpoint 2 after checkpoint 4 leaves Stage at 4.",
+    "expected_behavior": [
+      "Prevent backtracking from lowering the cleared obby stage.",
+      "Touching checkpoint 2 after checkpoint 4 leaves Stage at 4."
+    ],
+    "engine_symbols": [
+      "IntValue.Value",
+      "BasePart.Touched"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/SpawnLocation.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/SpawnLocation"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "stage",
+          "re": "\\.Stage\\.Value",
+          "why": "uses stage leaderstat",
+          "scope": "code"
+        },
+        {
+          "id": "compare",
+          "re": "(?:>\\s*\\w+\\.Stage\\.Value|\\.Stage\\.Value\\s*<)",
+          "why": "guards against stage decrease",
+          "scope": "code"
+        },
+        {
+          "id": "assign",
+          "re": "\\.Stage\\.Value\\s*=",
+          "why": "updates stage after guard",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_decrement",
+          "re": "\\.Stage\\.Value\\s*-=",
+          "why": "never decrement stored stage",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: uses stage leaderstat",
+        "Present: guards against stage decrease",
+        "Present: updates stage after guard",
+        "Absent: never decrement stored stage"
+      ]
+    }
+  },
+  {
+    "id": "BEG-07",
+    "topic": "doors",
+    "category": "roblox-interactions",
+    "difficulty": 1,
+    "goal": "Open a door using a ProximityPrompt and a tween",
+    "prompt": "I put a ProximityPrompt in my door. When someone presses E, can the door slide open smoothly using TweenService?",
+    "teaches": "Use ProximityPrompt.Triggered and TweenService:Create.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Touch alone does not open the door; the prompt must be triggered.",
+    "expected_behavior": [
+      "Open a door using a ProximityPrompt and a tween.",
+      "Touch alone does not open the door; the prompt must be triggered."
+    ],
+    "engine_symbols": [
+      "ProximityPrompt.Triggered",
+      "TweenService.Create",
+      "Tween.Play"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ProximityPrompt.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/ProximityPrompt"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "prompt",
+          "re": "\\.Triggered\\s*:\\s*Connect\\s*\\(",
+          "why": "handles player prompt",
+          "scope": "code"
+        },
+        {
+          "id": "tween",
+          "re": "TweenService\\s*:\\s*Create\\s*\\(",
+          "why": "builds door tween",
+          "scope": "code"
+        },
+        {
+          "id": "play",
+          "re": ":\\s*Play\\s*\\(",
+          "why": "starts tween",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_instant_destroy",
+          "re": "door\\s*:\\s*Destroy\\s*\\(",
+          "why": "do not remove the door",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles player prompt",
+        "Present: builds door tween",
+        "Present: starts tween",
+        "Absent: do not remove the door"
+      ]
+    }
+  },
+  {
+    "id": "BEG-08",
+    "topic": "doors",
+    "category": "roblox-interactions",
+    "difficulty": 2,
+    "goal": "Require a server-owned key before opening a prompt door",
+    "prompt": "My vault door has a ProximityPrompt. Only players whose HasVaultKey attribute is true should be allowed to open it. Can you write the server handler?",
+    "teaches": "Authorize prompt use against a server-owned player attribute.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A player without the key does not open the vault even when prompt is triggered.",
+    "expected_behavior": [
+      "Require a server-owned key before opening a prompt door.",
+      "A player without the key does not open the vault even when prompt is triggered."
+    ],
+    "engine_symbols": [
+      "ProximityPrompt.Triggered",
+      "Instance.GetAttribute"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ProximityPrompt.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/ProximityPrompt"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "prompt",
+          "re": "\\.Triggered\\s*:\\s*Connect\\s*\\(",
+          "why": "uses the proximity prompt",
+          "scope": "code"
+        },
+        {
+          "id": "attribute",
+          "re": "GetAttribute\\s*\\(\\s*[\"']HasVaultKey[\"']\\s*\\)",
+          "why": "checks entitlement",
+          "scope": "code"
+        },
+        {
+          "id": "guard",
+          "re": "if\\s+.*HasVaultKey|if\\s+.*GetAttribute",
+          "why": "guards open action",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_clientside",
+          "re": "\\.OnClientEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "do not make the server authorization a client event",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: uses the proximity prompt",
+        "Present: checks entitlement",
+        "Present: guards open action",
+        "Absent: do not make the server authorization a client event"
+      ]
+    }
+  },
+  {
+    "id": "BEG-09",
+    "topic": "doors",
+    "category": "roblox-interactions",
+    "difficulty": 2,
+    "goal": "Close a prompt door after delay without a stale timer",
+    "prompt": "My automatic sliding door can be triggered multiple times. Can you make it close five seconds after the MOST RECENT press, without an older timer closing it early?",
+    "teaches": "Invalidate older scheduled closes with a monotonically increasing request token.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Two presses three seconds apart must keep the door open five seconds after the second.",
+    "expected_behavior": [
+      "Close a prompt door after delay without a stale timer.",
+      "Two presses three seconds apart must keep the door open five seconds after the second."
+    ],
+    "engine_symbols": [
+      "ProximityPrompt.Triggered",
+      "task.delay"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/ProximityPrompt.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/ProximityPrompt"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "prompt",
+          "re": "\\.Triggered\\s*:\\s*Connect\\s*\\(",
+          "why": "reacts to triggers",
+          "scope": "code"
+        },
+        {
+          "id": "schedule",
+          "re": "task\\.delay\\s*\\(\\s*5\\b",
+          "why": "schedules a five-second close",
+          "scope": "code"
+        },
+        {
+          "id": "sequence",
+          "re": "(?:generation|version|serial|requestId)\\s*\\+=\\s*1",
+          "why": "tracks latest trigger",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_wait_blocking",
+          "re": "(?:^|[^\\w.])wait\\s*\\(\\s*5",
+          "why": "do not block the handler with legacy wait",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: reacts to triggers",
+        "Present: schedules a five-second close",
+        "Present: tracks latest trigger",
+        "Absent: do not block the handler with legacy wait"
+      ]
+    }
+  },
+  {
+    "id": "BEG-10",
+    "topic": "coins",
+    "category": "roblox-currency",
+    "difficulty": 1,
+    "goal": "Destroy a touched coin and grant one leaderboard coin",
+    "prompt": "Can you make my yellow coin part add exactly 1 to the player's Coins leaderstat when touched, then disappear so it can't pay twice?",
+    "teaches": "Guard duplicate contact and award only a real touching player before destroying coin.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Two contacts from one avatar yield only one coin.",
+    "expected_behavior": [
+      "Destroy a touched coin and grant one leaderboard coin.",
+      "Two contacts from one avatar yield only one coin."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "IntValue.Value",
+      "Instance.Destroy"
+    ],
+    "expected_sources": [
+      "content/en-us/players/leaderboards.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/leaderboards"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "receives coin touch",
+          "scope": "code"
+        },
+        {
+          "id": "coins",
+          "re": "\\.Coins\\.Value\\s*\\+=\\s*1",
+          "why": "adds one coin",
+          "scope": "code"
+        },
+        {
+          "id": "destroy",
+          "re": ":\\s*Destroy\\s*\\(",
+          "why": "retires coin",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_client",
+          "re": "\\.FireServer\\s*\\(",
+          "why": "award coins from server only",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: receives coin touch",
+        "Present: adds one coin",
+        "Present: retires coin",
+        "Absent: award coins from server only"
+      ]
+    }
+  },
+  {
+    "id": "BEG-11",
+    "topic": "coins",
+    "category": "roblox-currency",
+    "difficulty": 2,
+    "goal": "Create a Coins leaderstat for each joining player",
+    "prompt": "How do I get a Coins number on the Roblox leaderboard? I just need the server script that sets up leaderstats and a Coins IntValue for every joining player.",
+    "teaches": "Create the lowercase leaderstats folder and a named IntValue under each player.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Each player gets a separate fresh Coins value instead of one shared number.",
+    "expected_behavior": [
+      "Create a Coins leaderstat for each joining player.",
+      "Each player gets a separate fresh Coins value instead of one shared number."
+    ],
+    "engine_symbols": [
+      "Players.PlayerAdded",
+      "Folder",
+      "IntValue"
+    ],
+    "expected_sources": [
+      "content/en-us/players/leaderboards.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/leaderboards"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "playeradded",
+          "re": "\\.PlayerAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "handles joining players",
+          "scope": "code"
+        },
+        {
+          "id": "folder",
+          "re": "Instance\\.new\\s*\\(\\s*[\"']Folder[\"']\\s*\\)",
+          "why": "creates folder",
+          "scope": "code"
+        },
+        {
+          "id": "leaderstats",
+          "re": "[\"']leaderstats[\"']",
+          "why": "uses reserved leaderstats name",
+          "scope": "code"
+        },
+        {
+          "id": "intvalue",
+          "re": "Instance\\.new\\s*\\(\\s*[\"']IntValue[\"']\\s*\\)",
+          "why": "uses integer Coins value",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_local",
+          "re": "\\.LocalPlayer\\b",
+          "why": "leaderstats are created server-side",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles joining players",
+        "Present: creates folder",
+        "Present: uses reserved leaderstats name",
+        "Present: uses integer Coins value",
+        "Absent: leaderstats are created server-side"
+      ]
+    }
+  },
+  {
+    "id": "BEG-12",
+    "topic": "coins",
+    "category": "roblox-currency",
+    "difficulty": 2,
+    "goal": "Hide and respawn a collectible coin after a cooldown",
+    "prompt": "My pickup coin should come back 12 seconds after someone takes it. Could you show a server Script that makes it invisible and untouchable, then restores it?",
+    "teaches": "Disable CanTouch while a coin is unavailable and reset visibility later.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Repeated contacts during the 12 seconds do not grant repeated pickups.",
+    "expected_behavior": [
+      "Hide and respawn a collectible coin after a cooldown.",
+      "Repeated contacts during the 12 seconds do not grant repeated pickups."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "BasePart.Transparency",
+      "BasePart.CanTouch",
+      "task.delay"
+    ],
+    "expected_sources": [
+      "content/en-us/players/leaderboards.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/leaderboards"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "collects on touch",
+          "scope": "code"
+        },
+        {
+          "id": "hide",
+          "re": "\\.Transparency\\s*=\\s*1\\b",
+          "why": "hides collected coin",
+          "scope": "code"
+        },
+        {
+          "id": "disable",
+          "re": "\\.CanTouch\\s*=\\s*false\\b",
+          "why": "disables touch while hidden",
+          "scope": "code"
+        },
+        {
+          "id": "respawn",
+          "re": "task\\.delay\\s*\\(\\s*12\\b",
+          "why": "schedules respawn",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_destroy",
+          "re": ":\\s*Destroy\\s*\\(",
+          "why": "keep the part so it can respawn",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: collects on touch",
+        "Present: hides collected coin",
+        "Present: disables touch while hidden",
+        "Present: schedules respawn",
+        "Absent: keep the part so it can respawn"
+      ]
+    }
+  },
+  {
+    "id": "BEG-13",
+    "topic": "shops",
+    "category": "roblox-secure-remotes",
+    "difficulty": 1,
+    "goal": "Fire an item ID from a shop GUI button",
+    "prompt": "I already made a BuySword TextButton in StarterGui. What LocalScript do I put inside it so pressing it asks the server to buy the 'sword' item with a RemoteEvent?",
+    "teaches": "Use GUI Activated to send a fixed item ID, never a client-selected price.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Clicking once sends one item ID and does not grant coins on the client.",
+    "expected_behavior": [
+      "Fire an item ID from a shop GUI button.",
+      "Clicking once sends one item ID and does not grant coins on the client."
+    ],
+    "engine_symbols": [
+      "GuiButton.Activated",
+      "RemoteEvent.FireServer"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/events/remote"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "button",
+          "re": "\\.Activated\\s*:\\s*Connect\\s*\\(",
+          "why": "handles touch, controller and mouse",
+          "scope": "code"
+        },
+        {
+          "id": "fireserver",
+          "re": ":\\s*FireServer\\s*\\(\\s*[\"']sword[\"']\\s*\\)",
+          "why": "sends item ID",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_clientprice",
+          "re": ":\\s*FireServer\\s*\\([^,\\n]+,\\s*\\d+",
+          "why": "do not send client price",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles touch, controller and mouse",
+        "Present: sends item ID",
+        "Absent: do not send client price"
+      ]
+    }
+  },
+  {
+    "id": "BEG-14",
+    "topic": "shops",
+    "category": "roblox-secure-remotes",
+    "difficulty": 2,
+    "goal": "Verify a server-side shop purchase from RemoteEvent",
+    "prompt": "Can you write the server side of BuyItem? Players send itemId but I don't want hackers choosing their own prices. Use a server Prices table, make sure Coins cover the price, and subtract Coins before granting.",
+    "teaches": "Never trust client price; derive the cost and check balance in a server handler.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Unknown item IDs or insufficient funds leave coins unchanged.",
+    "expected_behavior": [
+      "Verify a server-side shop purchase from RemoteEvent.",
+      "Unknown item IDs or insufficient funds leave coins unchanged."
+    ],
+    "engine_symbols": [
+      "RemoteEvent.OnServerEvent",
+      "IntValue.Value"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/events/remote"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "serverevent",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "listens on server",
+          "scope": "code"
+        },
+        {
+          "id": "lookup",
+          "re": "Prices\\s*\\[\\s*itemId\\s*\\]",
+          "why": "uses server price catalog",
+          "scope": "code"
+        },
+        {
+          "id": "balance",
+          "re": "Coins\\.Value\\s*>=\\s*price",
+          "why": "checks funds",
+          "scope": "code"
+        },
+        {
+          "id": "subtract",
+          "re": "Coins\\.Value\\s*-=\\s*price",
+          "why": "spends correct price",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_clientprice",
+          "re": "Coins\\.Value\\s*-=\\s*clientPrice",
+          "why": "never debit client-supplied price",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: listens on server",
+        "Present: uses server price catalog",
+        "Present: checks funds",
+        "Present: spends correct price",
+        "Absent: never debit client-supplied price"
+      ]
+    }
+  },
+  {
+    "id": "BEG-15",
+    "topic": "shops",
+    "category": "roblox-secure-remotes",
+    "difficulty": 2,
+    "goal": "Show purchase feedback when the server confirms it",
+    "prompt": "My Roblox shop sends a BuyItem request already. Could you make the LocalScript listen for the server's purchase result and change a StatusLabel to Purchased or Not enough coins?",
+    "teaches": "Handle a server result through OnClientEvent and update client UI only.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Rejected purchase shows a failure message without changing the player's coin balance.",
+    "expected_behavior": [
+      "Show purchase feedback when the server confirms it.",
+      "Rejected purchase shows a failure message without changing the player's coin balance."
+    ],
+    "engine_symbols": [
+      "RemoteEvent.OnClientEvent",
+      "TextLabel.Text"
+    ],
+    "expected_sources": [
+      "content/en-us/scripting/events/remote.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/scripting/events/remote"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "response",
+          "re": "\\.OnClientEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "receives server response",
+          "scope": "code"
+        },
+        {
+          "id": "label",
+          "re": "StatusLabel\\.Text\\s*=",
+          "why": "updates status label",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_serverlistener",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "LocalScript must not run server listener",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: receives server response",
+        "Present: updates status label",
+        "Absent: LocalScript must not run server listener"
+      ]
+    }
+  },
+  {
+    "id": "BEG-16",
+    "topic": "day-night",
+    "category": "roblox-environments",
+    "difficulty": 1,
+    "goal": "Advance Lighting ClockTime using Heartbeat delta seconds",
+    "prompt": "I want a smooth day-night cycle in my Roblox place. Can you use RunService.Heartbeat dt to make 24 game hours pass in 10 real minutes?",
+    "teaches": "Scale the frame delta by an explicit 24/600 ratio and wrap the lighting clock.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "The clock wraps from just under 24 to morning without jumping outside 0..24.",
+    "expected_behavior": [
+      "Advance Lighting ClockTime using Heartbeat delta seconds.",
+      "The clock wraps from just under 24 to morning without jumping outside 0..24."
+    ],
+    "engine_symbols": [
+      "RunService.Heartbeat",
+      "Lighting.ClockTime"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Lighting.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Lighting"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "heartbeat",
+          "re": "\\.Heartbeat\\s*:\\s*Connect\\s*\\(",
+          "why": "uses frame delta",
+          "scope": "code"
+        },
+        {
+          "id": "clock",
+          "re": "Lighting\\.ClockTime\\s*=",
+          "why": "controls time",
+          "scope": "code"
+        },
+        {
+          "id": "wrap",
+          "re": "%\\s*24\\b",
+          "why": "wraps 24-hour time",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_busyloop",
+          "re": "while\\s+true\\s+do\\s*(?:--[^\\n]*)?\\s*end\\b",
+          "why": "avoid a busy loop",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: uses frame delta",
+        "Present: controls time",
+        "Present: wraps 24-hour time",
+        "Absent: avoid a busy loop"
+      ]
+    }
+  },
+  {
+    "id": "BEG-17",
+    "topic": "day-night",
+    "category": "roblox-environments",
+    "difficulty": 2,
+    "goal": "Set fixed morning or night lighting using a command",
+    "prompt": "Can you make a little admin-free server script: when a BindableEvent named ToggleNight fires with true, switch Lighting to midnight; false switches back to noon?",
+    "teaches": "Use a server BindableEvent and set explicit Lighting.ClockTime for both states.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Calling ToggleNight twice with opposite booleans changes between two stable presets.",
+    "expected_behavior": [
+      "Set fixed morning or night lighting using a command.",
+      "Calling ToggleNight twice with opposite booleans changes between two stable presets."
+    ],
+    "engine_symbols": [
+      "BindableEvent.Event",
+      "Lighting.ClockTime"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Lighting.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Lighting"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "event",
+          "re": "\\.Event\\s*:\\s*Connect\\s*\\(",
+          "why": "handles BindableEvent",
+          "scope": "code"
+        },
+        {
+          "id": "clock",
+          "re": "Lighting\\.ClockTime\\s*=",
+          "why": "sets clock",
+          "scope": "code"
+        },
+        {
+          "id": "night",
+          "re": "ClockTime\\s*=\\s*(?:0|12)\\b",
+          "why": "uses explicit clock presets",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_remotes",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "local BindableEvent does not require a remote",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles BindableEvent",
+        "Present: sets clock",
+        "Present: uses explicit clock presets",
+        "Absent: local BindableEvent does not require a remote"
+      ]
+    }
+  },
+  {
+    "id": "BEG-18",
+    "topic": "day-night",
+    "category": "roblox-environments",
+    "difficulty": 2,
+    "goal": "Blend outdoor ambient color around sunrise",
+    "prompt": "My game gets dark suddenly at sunrise. Can you write a LocalScript that blends Lighting.OutdoorAmbient between night and daytime Color3 values based on ClockTime?",
+    "teaches": "Interpolate Color3 ambient smoothly with ClockTime-derived alpha.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "At mid-blend the ambient is between both endpoint colors.",
+    "expected_behavior": [
+      "Blend outdoor ambient color around sunrise.",
+      "At mid-blend the ambient is between both endpoint colors."
+    ],
+    "engine_symbols": [
+      "Lighting.OutdoorAmbient",
+      "Lighting.ClockTime",
+      "Color3.Lerp"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Lighting.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Lighting"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "outdoor",
+          "re": "Lighting\\.OutdoorAmbient\\s*=",
+          "why": "writes outdoor ambient",
+          "scope": "code"
+        },
+        {
+          "id": "lerp",
+          "re": ":\\s*Lerp\\s*\\(",
+          "why": "blends colors",
+          "scope": "code"
+        },
+        {
+          "id": "clock",
+          "re": "Lighting\\.ClockTime",
+          "why": "reads current time",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_hardchange",
+          "re": "OutdoorAmbient\\s*=\\s*Color3\\.new\\s*\\(\\s*1,\\s*1,\\s*1\\s*\\)",
+          "why": "avoid unconditional white ambient",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: writes outdoor ambient",
+        "Present: blends colors",
+        "Present: reads current time",
+        "Absent: avoid unconditional white ambient"
+      ]
+    }
+  },
+  {
+    "id": "BEG-19",
+    "topic": "speed",
+    "category": "roblox-movement",
+    "difficulty": 1,
+    "goal": "Apply a timed WalkSpeed boost on touch",
+    "prompt": "I made a speed pad. When a player steps on it, can it increase their Humanoid WalkSpeed to 24 for 5 seconds, then restore what they had before?",
+    "teaches": "Save the original WalkSpeed before the temporary boost and restore it after five seconds.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "After five seconds the original speed is restored, not a hard-coded 16.",
+    "expected_behavior": [
+      "Apply a timed WalkSpeed boost on touch.",
+      "After five seconds the original speed is restored, not a hard-coded 16."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Humanoid.WalkSpeed",
+      "task.delay"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Humanoid.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "triggers from pad touch",
+          "scope": "code"
+        },
+        {
+          "id": "walkspeed",
+          "re": "\\.WalkSpeed\\s*=\\s*24\\b",
+          "why": "sets temporary boost",
+          "scope": "code"
+        },
+        {
+          "id": "delay",
+          "re": "task\\.delay\\s*\\(\\s*5\\b",
+          "why": "schedules restoration",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_client",
+          "re": "\\.FireServer\\s*\\(",
+          "why": "server authorizes boost",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: triggers from pad touch",
+        "Present: sets temporary boost",
+        "Present: schedules restoration",
+        "Absent: server authorizes boost"
+      ]
+    }
+  },
+  {
+    "id": "BEG-20",
+    "topic": "speed",
+    "category": "roblox-movement",
+    "difficulty": 2,
+    "goal": "Prevent speed pads from stacking temporary boosts",
+    "prompt": "My two speed boost pads keep stacking and make players super fast. Can you add a per-Humanoid activeBoost guard so touching more pads during a boost does nothing?",
+    "teaches": "Reject overlapping boosts against server-owned per-humanoid state.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Two rapid pad touches must not lengthen or multiply the boost.",
+    "expected_behavior": [
+      "Prevent speed pads from stacking temporary boosts.",
+      "Two rapid pad touches must not lengthen or multiply the boost."
+    ],
+    "engine_symbols": [
+      "Humanoid.WalkSpeed",
+      "BasePart.Touched"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Humanoid.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "guard",
+          "re": "if\\s+activeBoost\\s*\\[\\s*humanoid\\s*\\]",
+          "why": "guards active boost",
+          "scope": "code"
+        },
+        {
+          "id": "mark",
+          "re": "activeBoost\\s*\\[\\s*humanoid\\s*\\]\\s*=\\s*true",
+          "why": "marks boost active",
+          "scope": "code"
+        },
+        {
+          "id": "cleanup",
+          "re": "activeBoost\\s*\\[\\s*humanoid\\s*\\]\\s*=\\s*nil",
+          "why": "clears guard",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_multiplication",
+          "re": "\\.WalkSpeed\\s*\\*=",
+          "why": "do not multiply stacked boosts",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: guards active boost",
+        "Present: marks boost active",
+        "Present: clears guard",
+        "Absent: do not multiply stacked boosts"
+      ]
+    }
+  },
+  {
+    "id": "BEG-21",
+    "topic": "speed",
+    "category": "roblox-movement",
+    "difficulty": 2,
+    "goal": "Reset speed on every newly spawned character",
+    "prompt": "My Roblox player keeps the old speed state after respawning. Can you write the server PlayerAdded/CharacterAdded handler that sets a new Humanoid's WalkSpeed to 16?",
+    "teaches": "Set default speed on the new character rather than the previous Humanoid.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Respawning twice uses the new humanoid each time.",
+    "expected_behavior": [
+      "Reset speed on every newly spawned character.",
+      "Respawning twice uses the new humanoid each time."
+    ],
+    "engine_symbols": [
+      "Players.PlayerAdded",
+      "Player.CharacterAdded",
+      "Humanoid.WalkSpeed"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Humanoid.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Humanoid"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "join",
+          "re": "\\.PlayerAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "handles players",
+          "scope": "code"
+        },
+        {
+          "id": "respawn",
+          "re": "\\.CharacterAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "handles each new character",
+          "scope": "code"
+        },
+        {
+          "id": "humanoid",
+          "re": "WaitForChild\\s*\\(\\s*[\"']Humanoid[\"']\\s*\\)",
+          "why": "waits for new humanoid",
+          "scope": "code"
+        },
+        {
+          "id": "speed",
+          "re": "\\.WalkSpeed\\s*=\\s*16\\b",
+          "why": "sets default speed",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_localplayer",
+          "re": "Players\\.LocalPlayer",
+          "why": "server-side character lifecycle",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles players",
+        "Present: handles each new character",
+        "Present: waits for new humanoid",
+        "Present: sets default speed",
+        "Absent: server-side character lifecycle"
+      ]
+    }
+  },
+  {
+    "id": "BEG-22",
+    "topic": "teams",
+    "category": "roblox-teams",
+    "difficulty": 1,
+    "goal": "Place joining players on the smaller of two teams",
+    "prompt": "I made Teams.Red and Teams.Blue. Can you write the server PlayerAdded handler that counts both teams' members and sends the new player to the one with fewer players?",
+    "teaches": "Use server team counts instead of a random team assignment.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A new player joins Blue when Red has more members.",
+    "expected_behavior": [
+      "Place joining players on the smaller of two teams.",
+      "A new player joins Blue when Red has more members."
+    ],
+    "engine_symbols": [
+      "Players.PlayerAdded",
+      "Players.GetPlayers",
+      "Player.Team"
+    ],
+    "expected_sources": [
+      "content/en-us/players/teams.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/teams"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "join",
+          "re": "\\.PlayerAdded\\s*:\\s*Connect\\s*\\(",
+          "why": "assign on join",
+          "scope": "code"
+        },
+        {
+          "id": "players",
+          "re": "GetPlayers\\s*\\(",
+          "why": "counts team members",
+          "scope": "code"
+        },
+        {
+          "id": "team",
+          "re": "player\\.Team\\s*=",
+          "why": "assigns player team",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_local",
+          "re": "Players\\.LocalPlayer",
+          "why": "team allocation is server-owned",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: assign on join",
+        "Present: counts team members",
+        "Present: assigns player team",
+        "Absent: team allocation is server-owned"
+      ]
+    }
+  },
+  {
+    "id": "BEG-23",
+    "topic": "teams",
+    "category": "roblox-teams",
+    "difficulty": 2,
+    "goal": "Configure a spawn pad for only one team",
+    "prompt": "I placed a SpawnLocation for Blue team. Can you write the server setup that makes it not neutral and uses the actual Blue team's TeamColor so only the Blue team respawns there?",
+    "teaches": "Set SpawnLocation.Neutral false and match TeamColor.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A Red player does not spawn on the Blue-only pad.",
+    "expected_behavior": [
+      "Configure a spawn pad for only one team.",
+      "A Red player does not spawn on the Blue-only pad."
+    ],
+    "engine_symbols": [
+      "SpawnLocation.Neutral",
+      "SpawnLocation.TeamColor"
+    ],
+    "expected_sources": [
+      "content/en-us/players/teams.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/teams"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "neutral",
+          "re": "\\.Neutral\\s*=\\s*false\\b",
+          "why": "disables neutral spawning",
+          "scope": "code"
+        },
+        {
+          "id": "color",
+          "re": "\\.TeamColor\\s*=\\s*.*\\.TeamColor",
+          "why": "copies the chosen team's color",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_neutral",
+          "re": "\\.Neutral\\s*=\\s*true\\b",
+          "why": "do not reopen team spawn to everyone",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: disables neutral spawning",
+        "Present: copies the chosen team's color",
+        "Absent: do not reopen team spawn to everyone"
+      ]
+    }
+  },
+  {
+    "id": "BEG-24",
+    "topic": "teams",
+    "category": "roblox-teams",
+    "difficulty": 2,
+    "goal": "Let a player request one of two allowed teams from UI",
+    "prompt": "My game has Red and Blue team select buttons. Can you write the server OnServerEvent handler that checks the requested team is 'Red' or 'Blue' before setting Player.Team?",
+    "teaches": "Never trust arbitrary client team names; allow only the two server team objects.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "A fake team name is rejected.",
+    "expected_behavior": [
+      "Let a player request one of two allowed teams from UI.",
+      "A fake team name is rejected."
+    ],
+    "engine_symbols": [
+      "RemoteEvent.OnServerEvent",
+      "Player.Team",
+      "Teams"
+    ],
+    "expected_sources": [
+      "content/en-us/players/teams.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/players/teams"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "handler",
+          "re": "\\.OnServerEvent\\s*:\\s*Connect\\s*\\(",
+          "why": "handles team request",
+          "scope": "code"
+        },
+        {
+          "id": "allowlist",
+          "re": "(?:requestedTeam\\s*==\\s*[\"']Red[\"']|requestedTeam\\s*==\\s*[\"']Blue[\"'])",
+          "why": "checks team name",
+          "scope": "code"
+        },
+        {
+          "id": "assignment",
+          "re": "player\\.Team\\s*=",
+          "why": "sets allowed team",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_unverified",
+          "re": "player\\.Team\\s*=\\s*requestedTeam\\b",
+          "why": "never assign client string as Team object",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: handles team request",
+        "Present: checks team name",
+        "Present: sets allowed team",
+        "Absent: never assign client string as Team object"
+      ]
+    }
+  },
+  {
+    "id": "BEG-25",
+    "topic": "platforms",
+    "category": "roblox-platforms",
+    "difficulty": 1,
+    "goal": "Tween an anchored moving platform back and forth",
+    "prompt": "How do I make an anchored part move from PointA to PointB and back forever with TweenService? I want it to reverse, not teleport.",
+    "teaches": "Use TweenInfo Reverses and repeat count for back-and-forth motion.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "The platform travels back toward PointA automatically.",
+    "expected_behavior": [
+      "Tween an anchored moving platform back and forth.",
+      "The platform travels back toward PointA automatically."
+    ],
+    "engine_symbols": [
+      "TweenService.Create",
+      "TweenInfo.new",
+      "Tween.Play"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TweenService.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/TweenService"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "create",
+          "re": "TweenService\\s*:\\s*Create\\s*\\(",
+          "why": "constructs motion tween",
+          "scope": "code"
+        },
+        {
+          "id": "reverse",
+          "re": "TweenInfo\\.new\\s*\\([^)]*,\\s*[^)]*,\\s*[^)]*,\\s*-1\\s*,\\s*true",
+          "why": "sets infinite repeat and reverse",
+          "scope": "code"
+        },
+        {
+          "id": "play",
+          "re": ":\\s*Play\\s*\\(",
+          "why": "starts movement",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_busy",
+          "re": "while\\s+true\\s+do\\s*(?:--[^\\n]*)?\\s*end\\b",
+          "why": "avoid an empty infinite loop",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: constructs motion tween",
+        "Present: sets infinite repeat and reverse",
+        "Present: starts movement",
+        "Absent: avoid an empty infinite loop"
+      ]
+    }
+  },
+  {
+    "id": "BEG-26",
+    "topic": "platforms",
+    "category": "roblox-platforms",
+    "difficulty": 2,
+    "goal": "Stop a platform tween on arrival",
+    "prompt": "I want my moving platform to stop at the destination instead of reversing. Can you make a tween and use its Completed event to record when it actually finished?",
+    "teaches": "Handle Tween.Completed and PlaybackState to distinguish finish from cancel.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Canceling the tween should not be reported as a successful arrival.",
+    "expected_behavior": [
+      "Stop a platform tween on arrival.",
+      "Canceling the tween should not be reported as a successful arrival."
+    ],
+    "engine_symbols": [
+      "TweenService.Create",
+      "Tween.Completed",
+      "Enum.PlaybackState"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TweenService.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/TweenService"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "create",
+          "re": "TweenService\\s*:\\s*Create\\s*\\(",
+          "why": "creates tween",
+          "scope": "code"
+        },
+        {
+          "id": "completed",
+          "re": "\\.Completed\\s*:\\s*Connect\\s*\\(",
+          "why": "listens for completion",
+          "scope": "code"
+        },
+        {
+          "id": "playback",
+          "re": "Enum\\.PlaybackState\\.Completed",
+          "why": "checks successful ending",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_loop",
+          "re": "while\\s+true\\s+do\\s*(?:--[^\\n]*)?\\s*end\\b",
+          "why": "do not spin the thread forever",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: creates tween",
+        "Present: listens for completion",
+        "Present: checks successful ending",
+        "Absent: do not spin the thread forever"
+      ]
+    }
+  },
+  {
+    "id": "BEG-27",
+    "topic": "platforms",
+    "category": "roblox-platforms",
+    "difficulty": 2,
+    "goal": "Move a platform using frame delta and sinusoidal offset",
+    "prompt": "My platform should bob gently up and down 3 studs. Can you show an anchored platform Script using RunService.Heartbeat dt and math.sin instead of a Tween?",
+    "teaches": "Accumulate delta time and compute a bounded sine offset from starting CFrame.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Motion stays within plus or minus three studs regardless of frame rate.",
+    "expected_behavior": [
+      "Move a platform using frame delta and sinusoidal offset.",
+      "Motion stays within plus or minus three studs regardless of frame rate."
+    ],
+    "engine_symbols": [
+      "RunService.Heartbeat",
+      "BasePart.CFrame"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/TweenService.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/TweenService"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "heartbeat",
+          "re": "\\.Heartbeat\\s*:\\s*Connect\\s*\\(",
+          "why": "ticks every frame",
+          "scope": "code"
+        },
+        {
+          "id": "sine",
+          "re": "math\\.sin\\s*\\(",
+          "why": "uses sine offset",
+          "scope": "code"
+        },
+        {
+          "id": "cframe",
+          "re": "platform\\.CFrame\\s*=",
+          "why": "moves platform from base",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_infinite_wait",
+          "re": "while\\s+true\\s+do\\s*(?:--[^\\n]*)?\\s*end\\b",
+          "why": "don't use a busy loop",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: ticks every frame",
+        "Present: uses sine offset",
+        "Present: moves platform from base",
+        "Absent: don't use a busy loop"
+      ]
+    }
+  },
+  {
+    "id": "BEG-28",
+    "topic": "sound",
+    "category": "roblox-audio",
+    "difficulty": 1,
+    "goal": "Play a sound when a part is touched, with debounce",
+    "prompt": "I put a Sound inside a bell Part. Please show a server Script that plays it when touched and stops a dozen rapid Touched events playing it repeatedly.",
+    "teaches": "Use Touched, Sound.Play and a contact debounce guard.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "One player brushing the bell should produce one sound.",
+    "expected_behavior": [
+      "Play a sound when a part is touched, with debounce.",
+      "One player brushing the bell should produce one sound."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Sound.Play"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Sound.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Sound"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "listens for contact",
+          "scope": "code"
+        },
+        {
+          "id": "sound",
+          "re": ":\\s*Play\\s*\\(",
+          "why": "plays sound",
+          "scope": "code"
+        },
+        {
+          "id": "guard",
+          "re": "if\\s+(?:debounce|busy|cooldown)\\b",
+          "why": "guards repeats",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_destroy",
+          "re": "sound\\s*:\\s*Destroy\\s*\\(",
+          "why": "keep sound for future plays",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: listens for contact",
+        "Present: plays sound",
+        "Present: guards repeats",
+        "Absent: keep sound for future plays"
+      ]
+    }
+  },
+  {
+    "id": "BEG-29",
+    "topic": "sound",
+    "category": "roblox-audio",
+    "difficulty": 2,
+    "goal": "Play a footstep trigger sound only for real player touches",
+    "prompt": "My trigger Part plays a Sound when anything touches it, even dropped tools. Can you make it play only when the touching character belongs to a Player?",
+    "teaches": "Resolve Players:GetPlayerFromCharacter before playing a touch-triggered sound.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Dropped parts and NPC-only contact do not play the sound.",
+    "expected_behavior": [
+      "Play a footstep trigger sound only for real player touches.",
+      "Dropped parts and NPC-only contact do not play the sound."
+    ],
+    "engine_symbols": [
+      "BasePart.Touched",
+      "Players.GetPlayerFromCharacter",
+      "Sound.Play"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Sound.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Sound"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "touch",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(",
+          "why": "listens for touch",
+          "scope": "code"
+        },
+        {
+          "id": "player",
+          "re": "GetPlayerFromCharacter\\s*\\(",
+          "why": "requires a player",
+          "scope": "code"
+        },
+        {
+          "id": "play",
+          "re": ":\\s*Play\\s*\\(",
+          "why": "plays verified contact sound",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_unconditional",
+          "re": "\\.Touched\\s*:\\s*Connect\\s*\\(\\s*function\\s*\\([^)]*\\)\\s*sound\\s*:\\s*Play",
+          "why": "do not play immediately without checking the player",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: listens for touch",
+        "Present: requires a player",
+        "Present: plays verified contact sound",
+        "Absent: do not play immediately without checking the player"
+      ]
+    }
+  },
+  {
+    "id": "BEG-30",
+    "topic": "sound",
+    "category": "roblox-audio",
+    "difficulty": 2,
+    "goal": "Avoid overlapping touch sound playback",
+    "prompt": "My laser alarm Sound overlaps with itself a lot. Can you make the touching Part only start the Sound when it isn't already playing, and use Ended to reset the busy flag?",
+    "teaches": "Gate playback while IsPlaying and release the state on Sound.Ended.",
+    "run_mode": "automated",
+    "fixture_status": "not_needed",
+    "fixtures": [],
+    "helps": [],
+    "split": "development",
+    "edge_case": "Three simultaneous contacts start only one playback.",
+    "expected_behavior": [
+      "Avoid overlapping touch sound playback.",
+      "Three simultaneous contacts start only one playback."
+    ],
+    "engine_symbols": [
+      "Sound.IsPlaying",
+      "Sound.Ended",
+      "Sound.Play",
+      "BasePart.Touched"
+    ],
+    "expected_sources": [
+      "content/en-us/reference/engine/classes/Sound.md"
+    ],
+    "source_urls": [
+      "https://create.roblox.com/docs/reference/engine/classes/Sound"
+    ],
+    "scoring_scope": "static regex/API checks only; gameplay semantics require separate sandbox or Studio testing",
+    "budget": {
+      "model_calls": 3,
+      "tool_calls": 6,
+      "output_tokens": 1150,
+      "wall_seconds": 720
+    },
+    "hard_fail": [
+      "A required API or structural guard is missing",
+      "A task-specific unsafe pattern appears"
+    ],
+    "pass_conditions": [
+      "Fenced Luau compiles and type-checks; every required static check matches and every forbidden pattern is absent",
+      "Specified edge case is a review contract, not proven by regex"
+    ],
+    "required_evidence": [
+      "answer.md",
+      "check-results.json"
+    ],
+    "auto": {
+      "compile": true,
+      "strict": false,
+      "require": [
+        {
+          "id": "playing",
+          "re": "\\.IsPlaying\\b",
+          "why": "checks playback state",
+          "scope": "code"
+        },
+        {
+          "id": "ended",
+          "re": "\\.Ended\\s*:\\s*Connect\\s*\\(",
+          "why": "handles natural ending",
+          "scope": "code"
+        },
+        {
+          "id": "play",
+          "re": ":\\s*Play\\s*\\(",
+          "why": "starts eligible playback",
+          "scope": "code"
+        }
+      ],
+      "forbid": [
+        {
+          "id": "no_clone",
+          "re": "sound\\s*:\\s*Clone\\s*\\(",
+          "why": "avoid cloning new Sounds on every touch",
+          "scope": "code_nostr"
+        }
+      ]
+    },
+    "grader": {
+      "type": "static",
+      "checks": [
+        "Fenced Luau compiles and type-checks through the existing knowledge check",
+        "Present: checks playback state",
+        "Present: handles natural ending",
+        "Present: starts eligible playback",
+        "Absent: avoid cloning new Sounds on every touch"
+      ]
+    }
+  }
+]

@@ -42,6 +42,14 @@ def _default_slot_pinning(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_resource_planner(monkeypatch):
+    """No test may talk to a real resource planner (star/planner_client.py reads $STAR_PLANNER_URL or
+    ~/.star/planner_url). Tests of the planner hand in their own URL or client."""
+    monkeypatch.setenv("STAR_PLANNER_URL", "off")
+    monkeypatch.setenv("STAR_NS_PLANNER_URL", "off")
+
+
+@pytest.fixture(autouse=True)
 def _offline_slot_probe(monkeypatch):
     """Before a chat turn on STAR Server the app asks the server which slots are busy (issue 118).
     No test may reach a real address for that: by default the page answers "not here", which is the
