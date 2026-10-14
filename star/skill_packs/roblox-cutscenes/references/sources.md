@@ -33,6 +33,7 @@ STAR's own observations in Studio (docs/agents/roblox-cutscenes-20261014/, not d
   were read back unchanged (the lab's samples).
 - KeyframeSequenceProvider:RegisterKeyframeSequence worked from a LocalScript in a Studio playtest (`recoil`, `nod`).
 - Default R15 idle (507766666) holds the arms 12-37 degrees from rest on this rig (measured RightShoulder transform).
+  Correction (v4): 507766666 is the Animate script's rare look-around idle, not the main one (507766388).
 
 Craft numbers (shot length >= 1.2 s, FOV change < 25 degrees per shot, reading time ~15 characters per second + 0.8 s,
 walk 4-10 studs/s, head size 4% / 20-27% of frame height) are STAR's working rules from the lab critique, not
@@ -52,3 +53,27 @@ HumanoidDescription.Head, Enum.HumanoidRigType.R15, AnimationConstraint.Transfor
 TextLabel.MaxVisibleGraphemes, ScreenGui.IgnoreGuiInset, ContextActionService:BindAction, StarterGui:SetCoreGuiEnabled,
 StarterGui:GetCoreGuiEnabled, Humanoid.JumpHeight, HttpService:GenerateGUID, SurfaceGui.CanvasSize,
 Instance:FindFirstChildWhichIsA, Humanoid:SetStateEnabled.
+
+## v4 cinematic pass (2026-10-14), verified by running in Studio (STAR Test Place, brain 2)
+Every API below ran without error in the lab playtests v4a-v4-final (no `[StarCutscene]` or script errors in the
+console; the frames show each effect). Not looked up with /api-lookup this time (no brain-1 requests in this pass).
+- Lighting.ClockTime / Brightness / ExposureCompensation / Ambient / OutdoorAmbient / ColorShift_Top /
+  ColorShift_Bottom / EnvironmentDiffuseScale / EnvironmentSpecularScale, Lighting:GetSunDirection (sun at -x/-z in the
+  evening: (-0.90, 0.17, -0.40) at 17.3), Atmosphere (Density, Offset, Color, Decay, Glare, Haze), ColorCorrectionEffect,
+  BloomEffect (Threshold above 1 keeps sky and lit walls from blooming), SunRaysEffect, DepthOfFieldEffect, SpotLight
+  (Face, Angle, Range, Brightness): create.roblox.com/docs/reference/engine/classes/<ClassName>.
+- HumanoidDescription:SetAccessories(list, includeRigid=true) with AccessoryType Hair / Eyebrow (rigid) and TShirt /
+  Jacket / Pants / LeftShoe / RightShoe (IsLayered = true). `HumanoidDescription.EyebrowAccessory` does NOT exist
+  (the first v4 run failed on it). The built actor had 5 WrapLayers and a FaceControls head.
+- Free catalog items used (price 0 or part of a free Roblox bundle; nothing bought): Man Face head 10725826963 and
+  brows 10725837187 (bundle 949), Brown Charmer Hair 376548738, Basic T-Shirt Gray 9112474888, Leather Jacket Black
+  7192549218, Cargo Pants Brown 6984740059, Roblox Sneakers Gray 7193165925/7193166879 (bundle 872). Checked with the
+  public catalog API (catalog.roblox.com/v1/search/items/details, economy.roblox.com/v2/assets/<id>/details).
+- Default Animate script of a CreateHumanoidModelFromDescriptionAsync rig (read in Studio): idle Animation1 =
+  507766388 (weight 9), Animation2 = 507766666 (weight 1, the look-around); walk = 913402848.
+- Terrain:FillBlock / FillCylinder / FillBall (FillBall takes a Vector3 centre, not a CFrame), Terrain:ReadVoxels,
+  workspace:Raycast. In a playtest a 4-stud slab filled at y 0..4 surfaced at y 6 (raycast); in Edit, ReadVoxels showed
+  the fill in cell 0..4 only. The lab therefore measures the ground and lifts the set's origin.
+- settings().Rendering.QualityLevel (Studio, Edit context): Automatic dropped DOF/sun rays/bloom on brain 2's GPU;
+  Level21 shows them. It was back at Automatic after a later playtest (cause not confirmed); the lab now sets it
+  for each capture and restores the previous value.

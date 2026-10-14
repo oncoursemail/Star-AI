@@ -5,7 +5,9 @@
 --   * arc-length parameterisation: a lookup table maps "fraction of the distance" to the curve parameter, so the
 --     camera's SPEED comes only from the easing curve, not from how far apart the points happen to be;
 --   * easing through TweenService:GetValue (the same curves as tweens: Sine, Quad, Cubic, Quint, Back, ...);
---   * the look target, FOV and roll are interpolated with the same eased alpha.
+--   * the look target, FOV and roll are interpolated with the same eased alpha;
+--   * optional handheld drift (shot.handheld degrees): slow smooth noise on yaw/pitch/roll plus a few hundredths of
+--     a stud of sway, a function of time only, so a replay looks the same.
 -- Nothing here touches the camera: `sample` returns (CFrame, fov) and the player applies it every frame.
 
 local TweenService = game:GetService("TweenService")
@@ -172,6 +174,21 @@ local function lerpList(values: { number }?, alpha: number, default: number): nu
 	return values[i + 1] + (values[i + 2] - values[i + 1]) * (x - i)
 end
 
+-- Handheld offset at time t: an operator breathing behind the camera, not a shake. amplitude in degrees (0..3);
+-- about 0.2-0.4 Hz drift with a faster, smaller tremor on top.
+function CameraPath.handheld(t: number, amplitude: number, seed: number?): CFrame
+	if amplitude <= 0 then
+		return CFrame.identity
+	end
+	local s = seed or 0
+	local function n(rate: number, lane: number): number
+		return math.noise(t * rate, lane + s, 0.5) * 2 + math.noise(t * rate * 3.7, lane + s + 9, 0.25) * 0.35
+	end
+	local a = math.rad(amplitude)
+	return CFrame.new(n(0.3, 4) * 0.05 * amplitude, n(0.26, 5) * 0.04 * amplitude, 0)
+		* CFrame.Angles(n(0.27, 1) * a * 0.7, n(0.33, 2) * a, n(0.21, 3) * a * 0.35)
+end
+
 -- (camera CFrame in world space, field of view) at time t. `actorHead` resolves lookActor to a world position.
 function CameraPath.sample(self: any, t: number, origin: CFrame, actorHead: ((name: string) -> Vector3?)?): (CFrame, number)
 	local shot: Types.Shot = self.shot
@@ -200,6 +217,10 @@ function CameraPath.sample(self: any, t: number, origin: CFrame, actorHead: ((na
 	local roll = shot.roll
 	if roll and roll ~= 0 then
 		cf *= CFrame.Angles(0, 0, math.rad(roll))
+	end
+	local drift = shot.handheld
+	if drift and drift > 0 then
+		cf *= CameraPath.handheld(t, drift, shot.start)
 	end
 	return cf, lerpList(shot.fov, alpha, 70)
 end

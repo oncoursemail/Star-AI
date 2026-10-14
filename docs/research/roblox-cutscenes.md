@@ -66,6 +66,31 @@ values, playing tracks, joint transform. Frame times are aligned to the shot cut
 critique checks framing per shot, expressions on camera with the preset reached, cuts only at boundaries, easing,
 bars in/out, the VFX cue, and that control came back.
 
+## 6. Cinematic pass (v4, 2026-10-14)
+What made the lab's 15-second demo look cinematic instead of basic, measured on frame sheets (evidence in the
+workspace notes, docs/agents/roblox-cutscenes-20261014/v4/):
+- Look presets (CutsceneLook: golden_hour, dusk, battle, neutral), applied by the client for the cutscene and restored
+  after: low sun, Atmosphere haze/glare, a mild ColorCorrection grade, Bloom with a threshold above 1 (only emissives
+  glow), a little SunRays. The best frames are contre-jour: the sun low behind the subject, the glowing object as the
+  motivated key on the face. Too much warm tint, colour shift and saturation turned everything yellow (v4a).
+- Composition from numbers, not guesses: a projection model calibrated on the lab's own samples (head about 4.75 studs
+  above the ground) solves camera distance and lookOffset for a target head size and screen position. Results: MCU head
+  25% at x 0.37, CU 31% at x 0.36, eyes at y 0.42 / 0.40; over-the-shoulder subject at x 0.27, crystal at x 0.65.
+  All cameras on one side of the hero-crystal line.
+- Motion: eased dolly push-ins in every shot, 0.45 degrees of handheld drift (smooth noise) on the reaction shot.
+- Close-ups: a warm rim/kicker SpotLight kept behind and beside the head; depth of field with a focus pull from the
+  background to the face (NearIntensity must be high while the subject is in the near field, or the rack does not show).
+- VFX: accent abilities (accent_pulse: light, rising motes, a 0.1 s flash at a fifth of the strength, small ring and
+  dome, a short shake) plus cue.scale / cue.screen. Peak glow coverage fell from 52% of the picture (v3) to 12%.
+- Character: free Dynamic Head with eyebrows (Man Face bundle) plus free layered clothing; brows make the expressions
+  read. The Animate script's MAIN idle is 507766388; 507766666 is the look-around variant and turned the head away in
+  every close-up since v1 (the critique now measures how much the face turns to the lens).
+- Set dressing: terrain ground with patches and distant hills, a rock hill behind the gate, a stepped pedestal with a
+  rock ring and crystal shards, a crystal cluster (neon core, glass shell, pointed tip), trees. Terrain Grass grows
+  blades taller than a low camera; LeafyGrass does not. In a playtest a terrain slab surfaced 2 studs above its fill, so
+  the lab measures the ground with a raycast and lifts the set.
+- Review captures need high render quality: Studio's Automatic quality dropped DOF, sun rays and bloom on brain 2.
+
 ## Limits
 - The reference videos themselves were not watched (titles only).
 - Critique is metric and advisory; taste was judged by looking at the sheets (Claude), not by a vision model.

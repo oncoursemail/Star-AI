@@ -3,16 +3,21 @@
 -- The server sends only ("play", name, origin CFrame, token). The client plays only timelines it registered itself
 -- (shipped in the game, never sent over the network), checks every received value, and reports back
 -- ("finished", token, state) so the server can give gameplay back. The client is trusted with nothing else.
--- VFX cues are played locally through the VFX composer (roblox-vfx-composer pack) when it is installed.
+-- VFX cues are played locally through the VFX composer (roblox-vfx-composer pack) when it is installed, scaled
+-- for a shot: cue.scale multiplies the style's size, cue.screen (default 0.35) its screen effects (flash, tint,
+-- bloom kick, shake), so a burst reads as an accent instead of filling the frame. CutsceneLook.ACCENTS adds small
+-- abilities made for cutscene beats (accent_pulse, accent_hit).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Types = require(script.Parent:WaitForChild("CutsceneTypes"))
 local CutscenePlayer = require(script.Parent:WaitForChild("CutscenePlayer"))
+local CutsceneLook = require(script.Parent:WaitForChild("CutsceneLook"))
 
 local CutsceneClient = {}
 CutsceneClient.REMOTE_NAME = "StarCutsceneEvent"
 CutsceneClient.ACTORS_FOLDER = "StarCutsceneActors"
+CutsceneClient.SCREEN_DEFAULT = 0.35 -- share of a style's screen effects a cutscene VFX cue gets by default
 
 local timelines: { [string]: Types.Timeline } = {}
 local remote: RemoteEvent? = nil
@@ -31,16 +36,41 @@ function CutsceneClient.register(timeline: Types.Timeline): (boolean, string?)
 	return true, nil
 end
 
--- A VFX hook backed by the VFX composer's client module (ReplicatedStorage.<folder>.VfxClient), or nil.
+-- A style scaled for a shot: sizes times `scale`, screen effects times `screen` (no inverted frame below 0.5).
+function CutsceneClient.scaledStyle(style: { [string]: any }, scale: number, screen: number): { [string]: any }
+	local copy = table.clone(style)
+	copy.sizeScale = (style.sizeScale or 1) * scale
+	local fx = table.clone(style.screen or {})
+	for _, key in { "flash", "tint", "bloom", "shake", "fovPunch" } do
+		if type(fx[key]) == "number" then
+			fx[key] *= screen
+		end
+	end
+	fx.invert = fx.invert == true and screen >= 0.5
+	copy.screen = fx
+	return copy
+end
+
+-- A VFX hook backed by the VFX composer modules (ReplicatedStorage.<folder>: VfxComposer, VfxStyles), or nil.
 function CutsceneClient.composerVfx(folderName: string?): ((cue: Types.Cue, at: CFrame, speed: number) -> ())?
 	local folder = ReplicatedStorage:FindFirstChild(folderName or "StarVfx")
-	local module = folder and folder:FindFirstChild("VfxClient")
-	if not module or not module:IsA("ModuleScript") then
+	local composerModule = folder and folder:FindFirstChild("VfxComposer")
+	local stylesModule = folder and folder:FindFirstChild("VfxStyles")
+	if not (composerModule and composerModule:IsA("ModuleScript") and stylesModule and stylesModule:IsA("ModuleScript")) then
 		return nil
 	end
-	local VfxClient = require(module) :: any
+	local Composer = require(composerModule) :: any
+	local Styles = require(stylesModule) :: any
 	return function(cue: Types.Cue, at: CFrame, speed: number)
-		VfxClient.preview(cue.ability, cue.style, at, speed)
+		local ability = (CutsceneLook.ACCENTS :: any)[cue.ability] or Composer.ABILITIES[cue.ability]
+		local style = Styles.get(cue.style :: string)
+		if not ability or not style then
+			error("unknown ability or style", 0)
+		end
+		local scaled = CutsceneClient.scaledStyle(style, cue.scale or 1, cue.screen or CutsceneClient.SCREEN_DEFAULT)
+		if not Composer.play(ability, scaled, at, { speed = speed }) then
+			error("the composer refused the effect", 0)
+		end
 	end
 end
 

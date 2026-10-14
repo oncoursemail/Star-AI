@@ -21,7 +21,11 @@ export type Shot = {
 	fov: { number }?, -- { from, to } in degrees (1..120); default 70
 	ease: Ease?, -- how alpha moves along the path; default Sine InOut
 	roll: number?, -- degrees of camera roll (dutch angle)
-	dof: { focusActor: string?, distance: number?, radius: number?, far: number?, near: number? }?,
+	handheld: number?, -- 0..3 degrees of slow handheld drift (reaction shots); 0 or nil = locked
+	rim: string?, -- an actor name: keep a rim light behind that actor's head (close-ups)
+	-- depth of field; pullFrom/pullAt/pullTime = a focus pull from a local point to the focus actor
+	dof: { focusActor: string?, distance: number?, radius: number?, far: number?, near: number?,
+		pullFrom: Vector3?, pullAt: number?, pullTime: number? }?,
 }
 
 export type Cue = {
@@ -43,6 +47,8 @@ export type Cue = {
 	target: string?, -- vfx: an actor name or "point" (default)
 	show: boolean?, -- letterbox: show or hide
 	alpha: number?, -- fade: 0 clear .. 1 black
+	scale: number?, -- vfx: size multiplier (0.1..2; cutscene accents are usually 0.4..0.8)
+	screen: number?, -- vfx: multiplier of the style's screen effects (flash, tint, bloom, shake), 0..1
 }
 
 export type Timeline = {
@@ -50,6 +56,7 @@ export type Timeline = {
 	length: number, -- seconds; the cutscene ends (and control returns) here
 	skippable: boolean?,
 	letterbox: number?, -- bar height as a fraction of the screen height (0..0.2), default 0.11
+	look: string?, -- CutsceneLook preset for the cutscene's length: golden_hour, dusk, battle, neutral
 	shots: { Shot },
 	cues: { Cue },
 }
@@ -71,6 +78,7 @@ Types.KINDS = {
 }
 Types.EXPRESSIONS = { neutral = true, happy = true, angry = true, surprised = true, sad = true }
 Types.CURVES = { catmull = true, bezier = true, linear = true }
+Types.LOOKS = { golden_hour = true, dusk = true, battle = true, neutral = true }
 Types.MAX_SHOTS = 16
 Types.MAX_CUES = 64
 Types.MAX_POINTS = 12
@@ -107,6 +115,9 @@ function Types.validate(timeline: any): (boolean, string?)
 	end
 	if type(timeline.cues) ~= "table" or #timeline.cues > Types.MAX_CUES then
 		return false, "cues must be a list of at most 64"
+	end
+	if timeline.look ~= nil and not Types.LOOKS[timeline.look] then
+		return false, "unknown look " .. tostring(timeline.look)
 	end
 	local cursor = 0
 	for index, shot in timeline.shots do
@@ -151,6 +162,15 @@ function Types.validate(timeline: any): (boolean, string?)
 				end
 			end
 		end
+		if shot.handheld ~= nil and (type(shot.handheld) ~= "number" or shot.handheld < 0 or shot.handheld > 3) then
+			return false, where .. ": handheld must be 0..3 degrees"
+		end
+		if shot.rim ~= nil and type(shot.rim) ~= "string" then
+			return false, where .. ": rim must be an actor name"
+		end
+		if shot.dof ~= nil and shot.dof.pullFrom ~= nil and not isVector(shot.dof.pullFrom) then
+			return false, where .. ": dof.pullFrom must be a Vector3"
+		end
 		if shot.ease ~= nil then
 			if not enumItem(Enum.EasingStyle, shot.ease.style) or not enumItem(Enum.EasingDirection, shot.ease.direction) then
 				return false, where .. ": unknown easing"
@@ -190,6 +210,12 @@ function Types.validate(timeline: any): (boolean, string?)
 		end
 		if cue.kind == "vfx" and (type(cue.ability) ~= "string" or type(cue.style) ~= "string") then
 			return false, where .. ": vfx needs an ability and a style"
+		end
+		if cue.scale ~= nil and (type(cue.scale) ~= "number" or cue.scale < 0.1 or cue.scale > 2) then
+			return false, where .. ": scale must be 0.1..2"
+		end
+		if cue.screen ~= nil and (type(cue.screen) ~= "number" or cue.screen < 0 or cue.screen > 1) then
+			return false, where .. ": screen must be 0..1"
 		end
 	end
 	return true, nil
