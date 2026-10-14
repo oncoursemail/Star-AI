@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 
-from star.roblox_project_preflight import MAX_CHECK_SOURCE_BYTES, main, preflight
+from star import luau_analyze
+from star.roblox_project_preflight import MAX_CHECK_SOURCE_BYTES, MAX_NATIVE_FILES, main, preflight
 
 DUMP = Path(__file__).parent / "fixtures" / "roblox_api_small.json"
 
@@ -164,3 +166,682 @@ def test_identical_source_has_deterministic_json_report(tmp_path, capsys):
     first = capsys.readouterr().out
     assert main([str(root), "--api-dump", str(DUMP)]) == 0
     assert capsys.readouterr().out == first
+
+
+def test_api_confusions_cli_optin_reports_twelve_diverse_source_linked_candidates(
+        tmp_path, capsys):
+    from star.roblox_api_confusions import load_confusions
+
+    root = _project(tmp_path)
+    examples = load_confusions()
+    chosen = [examples[i] for i in (0, 10, 22, 33, 37, 41, 47, 53, 57, 65, 72, 79)]
+    source = root / "ServerScriptService/Main.server.luau"
+    source.write_text(
+        "local custom = {}\n" +
+        "".join("custom" + entry["wrong"] + "nil)\n" for entry in chosen),
+        encoding="utf-8")
+
+    assert main([str(root), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    records = _files(report)["ServerScriptService/Main.server.luau"]
+    advisory = [f for f in records["findings"]
+                if f["checker"] == "roblox-api-confusions"]
+    assert len(advisory) == 12
+    assert [(f["line"], f["column"], f["wrong"], f["right"], f["source_url"])
+            for f in advisory] == [
+        (i + 2, 7, entry["wrong"], entry["right"], entry["source_url"])
+        for i, entry in enumerate(chosen)
+    ]
+    assert all(f["rule"] == "api-confusion:possible-method-spelling"
+               and f["category"] == "advisory" and f["severity"] == "info"
+               and f["receiver_evidence"] == "unverified"
+               and f["receiver_class"] is None
+               and "custom methods may be valid" in f["message"]
+               for f in advisory)
+    assert records["status"] == "partial"
+    assert "api-confusion-spellings-advisory" in records["checked_scope"]
+    assert report["summary"]["api_confusion_candidates"] == 12
+    assert report["summary"]["api_confusion_advisories"] == 12
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert "receiver types" in " ".join(records["unverified"])
+    assert report["coverage"] == "partial"
+    assert "Studio verification" in " ".join(report["limitations"])
+
+
+def test_optin_reuses_api_dump_only_for_unambiguous_inferred_class(
+        tmp_path, capsys):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\n'
+        'part:GetAllChildren()\n'
+        'local custom = {}\n'
+        'function custom:GetAllChildren() return {} end\n'
+        'custom:GetAllChildren()\n'
+        'local ws = game:GetService("Workspace")\n'
+        'ws:RayCast(Vector3.zero, Vector3.yAxis)\n'
+        'ws:Raycast(Vector3.zero, Vector3.yAxis)\n'
+        'part:GetChildren()\n'
+        'local quoted = "part:GetAllChildren()"\n'
+        'local long = [=[\npart:GetAllChildren()\n]=]\n'
+        'local tick = ' + chr(96) + 'part:GetAllChildren()' + chr(96) + '\n'
+        '-- part:GetAllChildren()\n'
+        '--[=[ ws:RayCast() ]=]\n',
+        encoding="utf-8")
+
+    assert main([str(root), "--api-dump", str(DUMP), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    all_findings = _files(report)["ServerScriptService/Main.server.luau"]["findings"]
+    advisory = [f for f in all_findings if f.get("category") == "advisory"]
+    assert [(f["line"], f["wrong"]) for f in advisory] == [
+        (2, ":GetAllChildren("), (4, ":GetAllChildren("),
+        (5, ":GetAllChildren("), (7, ":RayCast("),
+    ]
+    assert [(f["receiver_evidence"], f["receiver_class"]) for f in advisory] == [
+        ("api-dump-inferred-class", "Part"),
+        ("unverified", None), ("unverified", None),
+        ("api-dump-inferred-class", "Workspace"),
+    ]
+    assert all(f["severity"] == "info" and "custom methods" in f["message"]
+               for f in advisory)
+    assert sum(f["rule"] == "api:unknown-member" for f in all_findings) == 2
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+
+
+def test_optin_does_not_change_default_cli_json(tmp_path, capsys):
+    root = _project(tmp_path)
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    baseline = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    assert capsys.readouterr().out == baseline
+    assert json.loads(baseline) == preflight(root, api_dump=DUMP, api_confusions=False)
+    assert "api_confusion_candidates" not in json.loads(baseline)["summary"]
+    assert not any("api-confusion" in scope for f in json.loads(baseline)["files"]
+                   for scope in f["checked_scope"])
+
+
+def test_optin_caps_advisories_and_marks_omitted_candidates(tmp_path, capsys):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        "local custom = {}\n" + "custom:FindChild()\n" * 60,
+        encoding="utf-8")
+    assert main([str(root), "--api-confusions"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    source = _files(report)["ServerScriptService/Main.server.luau"]
+    assert len(source["findings"]) == 50
+    assert all(f["category"] == "advisory" for f in source["findings"])
+    assert report["summary"]["api_confusion_candidates"] == 60
+    assert report["summary"]["api_confusion_advisories"] == 50
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert any("truncated" in warning for warning in source["unverified"])
+    assert len(json.dumps(report)) < 30_000
+
+
+def test_optin_does_not_scan_source_above_existing_budget(tmp_path):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        "-- " + "x" * (MAX_CHECK_SOURCE_BYTES + 2) + "\n"
+        + "custom:FindChild()\n", encoding="utf-8")
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    assert file["checked_scope"] == []
+    assert file["findings"] == []
+    assert report["summary"]["api_confusion_candidates"] == 0
+
+
+def test_optin_keeps_malformed_luau_corpus_hits_advisory(tmp_path):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\npart:GetAllChildren(\n',
+        encoding="utf-8")
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    hits = [f for f in _files(report)["ServerScriptService/Main.server.luau"]["findings"]
+            if f.get("category") == "advisory"]
+    assert len(hits) == 1 and hits[0]["line"] == 2
+    assert hits[0]["receiver_evidence"] == "api-dump-inferred-class"
+    assert hits[0]["category"] == "advisory"
+    assert report["summary"]["api_confusion_confirmed_engine_errors"] == 0
+    assert "Luau is not executed or typechecked" in " ".join(report["limitations"])
+
+
+def test_optin_bad_dump_and_missing_corpus_fail_closed(tmp_path, capsys, monkeypatch):
+    from star import roblox_api_confusions as api
+
+    root = _project(tmp_path)
+    bad = tmp_path / "api.json"
+    bad.write_text("{}", encoding="utf-8")
+    assert main([str(root), "--api-dump", str(bad), "--api-confusions"]) == 2
+    assert json.loads(capsys.readouterr().out)["status"] == "invalid"
+
+    original = api.DATA
+    monkeypatch.setattr(api, "DATA", tmp_path / "absent-corpus.json")
+    api.load_confusions.cache_clear()
+    try:
+        assert main([str(root), "--api-dump", str(DUMP)]) == 0
+        assert json.loads(capsys.readouterr().out)["status"] == "checked"
+        assert main([str(root), "--api-dump", str(DUMP), "--api-confusions"]) == 2
+        invalid = json.loads(capsys.readouterr().out)
+        assert invalid["status"] == "invalid"
+        assert invalid["files"] == [] and invalid["coverage"] == "none"
+        assert "corpus" in invalid["error"].lower()
+    finally:
+        monkeypatch.setattr(api, "DATA", original)
+        api.load_confusions.cache_clear()
+
+
+def test_optin_never_writes_project_runs_code_or_calls_network(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    (root / "ServerScriptService/Main.server.luau").write_text(
+        'local part = Instance.new("Part")\npart:GetAllChildren()\n',
+        encoding="utf-8")
+    before = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.rglob("*") if p.is_file()}
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("optional preflight attempted side effects")
+
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr("subprocess.run", forbidden)
+    monkeypatch.setattr("socket.create_connection", forbidden)
+    report = preflight(root, api_dump=DUMP, api_confusions=True)
+    assert report["summary"]["api_confusion_advisories"] == 1
+    assert before == {
+        p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in root.rglob("*") if p.is_file()
+    }
+def _fake_native(monkeypatch, result=None):
+    """An installed analyzer double; reads the ACTUAL temporarily staged source."""
+    calls = []
+    monkeypatch.setattr(luau_analyze, "locate_analyzer",
+                        lambda **kwargs: "installed-luau-analyze")
+
+    def execute(args, **kwargs):
+        assert args == ["installed-luau-analyze", "--mode=strict", "star-check.luau"]
+        assert kwargs["timeout"] == luau_analyze.TIMEOUT_SECONDS
+        assert kwargs["capture_output"] and kwargs["text"] and kwargs["check"] is False
+        assert kwargs["env"]["HOME"] == kwargs["cwd"]
+        assert kwargs["env"]["USERPROFILE"] == kwargs["cwd"]
+        assert "OPENAI_API_KEY" not in kwargs["env"]
+        staged = Path(kwargs["cwd"]) / "star-check.luau"
+        code = staged.read_text(encoding="utf-8")
+        calls.append(code)
+        if callable(result):
+            return result(args, kwargs, code)
+        return result or subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(luau_analyze.subprocess, "run", execute)
+    return calls
+
+
+def test_native_analysis_disabled_keeps_entire_default_json_and_never_locates_binary(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    def unexpected(**kwargs):
+        raise AssertionError("Native analyzer must be disabled by default")
+    monkeypatch.setattr(luau_analyze, "locate_analyzer", unexpected)
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    original = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 0
+    assert capsys.readouterr().out == original
+    assert "native_luau" not in original and "native_analysis" not in original
+
+
+def test_explicit_native_analysis_reports_actual_checked_files_in_cli_json(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    calls = _fake_native(monkeypatch)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["status"] == "checked" and data["coverage"] == "static-only"
+    assert data["native_analysis"] == {
+        "requested": True, "checked_files": 2, "unverified_files": 0,
+        "attempted_files": 2, "skipped_files": 0, "file_limit": MAX_NATIVE_FILES,
+        "statuses": {"checked": 2},
+        "scope": "Standalone Luau source analyzer; NOT Roblox Studio or engine verification",
+    }
+    assert len(calls) == 2
+    assert all(f["native_luau"]["status"] == "checked" for f in data["files"])
+    assert all("native-luau-syntax-limited-types" in f["checked_scope"] for f in data["files"])
+    assert all(f["native_luau"]["diagnostic_count"] == 0 for f in data["files"])
+
+
+@pytest.mark.parametrize("kind,expected", [
+    ("syntax", "luau-analyze-syntaxerror"),
+    ("type", "luau-analyze-typeerror"),
+])
+def test_native_parser_reports_real_file_line_rule_and_severity(
+        tmp_path, monkeypatch, capsys, kind, expected):
+    root = _project(tmp_path)
+    code = ("--!strict\nlocal = 1\n" if kind == "syntax"
+            else '--!strict\nlocal points: number = "wrong"\n')
+    (root / "ServerScriptService/Main.server.luau").write_text(code, encoding="utf-8")
+
+    def recorded(args, kwargs, source):
+        if source == code:
+            message = ("SyntaxError: Expected identifier"
+                       if kind == "syntax" else
+                       "TypeError: Type 'string' could not be converted into 'number'")
+            return subprocess.CompletedProcess(
+                args, 1, stdout="", stderr=f"star-check.luau(2,7): {message}\n")
+        return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+
+    calls = _fake_native(monkeypatch, recorded)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    hits = [f for f in file["findings"] if f["checker"] == "native-luau"]
+    assert len(hits) == 1
+    assert (hits[0]["line"], hits[0]["rule"]) == (2, expected)
+    assert hits[0]["severity"] == ("error" if kind == "syntax" else "warning")
+    assert file["native_luau"]["status"] == "diagnostics"
+    assert file["file"] == "ServerScriptService/Main.server.luau"
+    assert report["native_analysis"]["checked_files"] == 2
+    assert report["status"] == "findings" and report["findings"] >= 1
+    assert len(calls) == 2
+
+
+def test_suppressed_roblox_engine_errors_are_unverified_not_clean(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    src = "--!strict\nreturn game:GetService('Players')\n"
+    (root / "ServerScriptService/Main.server.luau").write_text(src, encoding="utf-8")
+
+    def recorded(args, kwargs, code):
+        return subprocess.CompletedProcess(
+            args, 1, stdout="", stderr="star-check.luau(2,8): "
+            "TypeError: Unknown global 'game'\n") if code == src else (
+                subprocess.CompletedProcess(args, 0, stdout="", stderr=""))
+
+    _fake_native(monkeypatch, recorded)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    file = _files(report)["ServerScriptService/Main.server.luau"]
+    assert file["status"] == "partial"
+    assert file["native_luau"]["status"] == "engine_limited"
+    assert file["native_luau"]["engine_symbols_ignored"] == 1
+    assert report["native_analysis"]["unverified_files"] == 1
+    assert any("Roblox engine" in msg for msg in file["unverified"])
+    assert not any("Unknown global 'game'" in f["message"] for f in file["findings"])
+
+
+def test_missing_binary_produces_partial_evidence_and_nonzero_exit(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    monkeypatch.setattr(luau_analyze, "locate_analyzer", lambda **kwargs: None)
+    monkeypatch.setattr(luau_analyze.subprocess, "run",
+                        lambda *a, **k: (_ for _ in ()).throw(
+                            AssertionError("missing binary must not spawn")))
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "partial"
+    assert report["native_analysis"]["checked_files"] == 0
+    assert report["native_analysis"]["statuses"] == {"unavailable": 2}
+    assert all(f["status"] == "partial" for f in report["files"])
+
+
+def test_timeout_and_start_failure_are_not_accepted_as_passes(tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for failure, status in (
+        (subprocess.TimeoutExpired(["fake"], 6), "timed_out"),
+        (OSError("internal path not for reports"), "failed"),
+    ):
+        def throw(args, kwargs, code):
+            raise failure
+        _fake_native(monkeypatch, throw)
+        report = preflight(root, api_dump=DUMP, native_luau=True)
+        assert report["status"] == "partial"
+        assert report["native_analysis"]["checked_files"] == 0
+        assert report["native_analysis"]["statuses"] == {status: 2}
+        assert "internal path" not in json.dumps(report)
+
+
+@pytest.mark.parametrize("code,stderr,stdout,exitcode,expected", [
+    ("ok", "", "", 1, "malformed"),
+    ("garbage", "leaked source path or raw stderr", "", 1, "malformed"),
+    ("conflicting", "star-check.luau(1,1): SyntaxError: bad\n", "", 0, "malformed"),
+    ("stdout", "", "raw private diagnostics", 0, "malformed"),
+    ("bad_status", "", "", 2, "malformed"),
+    ("oversized", "x" * (luau_analyze.MAX_OUTPUT_BYTES + 1), "", 1, "truncated"),
+], ids=["silent-exit-one", "unrecognized", "exit-zero-diagnostic",
+        "unexpected-stdout", "exit-two", "oversized-output"])
+def test_malformed_silent_and_truncated_analyzer_outputs_cannot_pass(
+        tmp_path, monkeypatch, code, stderr, stdout, exitcode, expected):
+    root = _project(tmp_path)
+    _fake_native(monkeypatch, lambda args, kwargs, source:
+                 subprocess.CompletedProcess(args, exitcode, stdout=stdout, stderr=stderr))
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["status"] == "partial"
+    assert result["native_analysis"]["checked_files"] == 0
+    assert result["native_analysis"]["statuses"] == {expected: 2}
+    text = json.dumps(result)
+    assert "raw private" not in text and "leaked source path" not in text
+
+
+def test_native_result_refuses_diagnostics_from_other_file_or_outside_source(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for stderr in (
+        "somebody-elses-file.luau(1,1): SyntaxError: no\n",
+        "star-check.luau(900,1): SyntaxError: invalid line\n",
+        "star-check.luau(0,0): TypeError: bad column\n",
+    ):
+        _fake_native(monkeypatch, lambda args, kwargs, source:
+                     subprocess.CompletedProcess(args, 1, stderr=stderr, stdout=""))
+        result = preflight(root, api_dump=DUMP, native_luau=True)
+        assert result["native_analysis"]["statuses"] == {"malformed": 2}
+        assert result["findings"] == 0 and result["status"] == "partial"
+
+
+def test_more_than_twenty_native_diagnostics_are_truncated_and_disclosed(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    raw = "".join(
+        f"star-check.luau(1,1): SyntaxError: bad token {i}\n"
+        for i in range(luau_analyze.MAX_FINDINGS + 3))
+    _fake_native(monkeypatch, lambda args, kwargs, source:
+                 subprocess.CompletedProcess(args, 1, stderr=raw, stdout=""))
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["native_analysis"]["statuses"] == {"truncated": 2}
+    assert result["native_analysis"]["unverified_files"] == 2
+    assert result["findings"] == 2 * luau_analyze.MAX_FINDINGS
+    assert all(f["status"] == "partial" for f in result["files"])
+
+
+def test_native_budget_skips_oversized_and_twelfth_plus_source(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    for i in range(MAX_NATIVE_FILES + 2):
+        (root / "ServerScriptService" / f"Extra{i:02d}.server.luau").write_text(
+            "local value = 1\n", encoding="utf-8")
+    too_long = root / "ServerScriptService" / "Extra00.server.luau"
+    too_long.write_text("-- " + "z" * (MAX_CHECK_SOURCE_BYTES + 2), encoding="utf-8")
+    calls = _fake_native(monkeypatch)
+    report = preflight(root, api_dump=DUMP, native_luau=True)
+    assert len(report["files"]) == MAX_NATIVE_FILES + 4
+    assert len(calls) == MAX_NATIVE_FILES
+    assert report["native_analysis"]["attempted_files"] == MAX_NATIVE_FILES
+    assert report["native_analysis"]["skipped_files"] == 4
+    assert report["native_analysis"]["statuses"] == {
+        "checked": MAX_NATIVE_FILES, "skipped": 4,
+    }
+    assert _files(report)["ServerScriptService/Extra00.server.luau"][
+        "native_luau"]["status"] == "skipped"
+    assert report["status"] == "partial"
+
+
+def test_opt_in_native_staging_never_modifies_project_or_contacts_network(
+        tmp_path, monkeypatch):
+    root = _project(tmp_path)
+    original = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                for p in root.rglob("*") if p.is_file()}
+    def forbid_network(*args, **kwargs):
+        raise AssertionError("preflight must not access network")
+    monkeypatch.setattr("socket.create_connection", forbid_network)
+    calls = _fake_native(monkeypatch)
+    result = preflight(root, api_dump=DUMP, native_luau=True)
+    assert result["status"] == "checked" and len(calls) == 2
+    after = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+             for p in root.rglob("*") if p.is_file()}
+    assert original == after
+
+
+def test_native_flag_deterministic_json_for_same_returned_evidence(
+        tmp_path, monkeypatch, capsys):
+    root = _project(tmp_path)
+    _fake_native(monkeypatch)
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    first = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP), "--native-luau"]) == 0
+    assert capsys.readouterr().out == first
+
+
+def test_preflight_does_not_implicitly_analyze_from_global_env(
+        tmp_path, monkeypatch):
+    """Only explicit --native-luau may start the standalone analyzer."""
+    root = _project(tmp_path)
+    monkeypatch.setenv(luau_analyze.ENV_VAR, "on")
+    monkeypatch.setattr(
+        luau_analyze, "locate_analyzer",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError(
+            "only --native-luau may locate the tool")))
+    report = preflight(root, api_dump=DUMP)
+    assert report["status"] == "checked"
+    assert "native_analysis" not in report
+    assert all("native_luau" not in f for f in report["files"])
+
+
+# These deterministic fixtures drive the actual preflight() entrypoint, not a
+# guessed filesystem resolver or an isolated parser. They use the source tree
+# admitted by roblox_place.read_tree, including init.luau conversion.
+def _require_project(tmp_path, scripts):
+    root = tmp_path / "requires"
+    for relative, source in scripts.items():
+        file = root / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_text(source, encoding="utf-8")
+    return root
+
+
+@pytest.mark.parametrize(("scripts", "counts"), [
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "local m = require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="single-module"),
+    pytest.param({
+        "ServerScriptService/Feature/Main.server.luau":
+            "local m = require(script.Parent.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="nested-parent"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'local m = require(game:GetService("ReplicatedStorage").Shared.Config)',
+        "ReplicatedStorage/Shared/Config.luau": "return {}",
+    }, (1, 0, 0, 0), id="static-service"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "local m = require(script.Parent.Kit)",
+        "ServerScriptService/Kit/init.luau": "return {}",
+    }, (1, 0, 0, 0), id="folder-init-module"),
+    pytest.param({
+        "ServerScriptService/Kit/init.luau": "return require(script.Helper)",
+        "ServerScriptService/Kit/Helper.luau": "return {}",
+    }, (1, 0, 0, 0), id="module-child"),
+    pytest.param({
+        "ServerScriptService/A.luau": "return require(script.Parent.B)",
+        "ServerScriptService/B.luau": "return require(script.Parent.A)",
+    }, (2, 1, 0, 0), id="two-module-cycle"),
+    pytest.param({
+        "ServerScriptService/Loop.luau": "return require(script)",
+    }, (1, 1, 0, 0), id="self-cycle"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Missing)",
+    }, (0, 0, 1, 0), id="missing-static-module"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Lib)",
+        "ServerScriptService/Lib/Child.luau": "return {}",
+    }, (0, 0, 1, 0), id="nonmodule-folder"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau": "return require(chosenModule)",
+    }, (0, 0, 0, 1), id="dynamic-variable"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local loader = require\nreturn loader(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="require-alias"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(script.Parent["Config"])',
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="bracket-expression"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(game:GetService("Players").Helpers)',
+    }, (0, 0, 0, 1), id="outside-supported-service"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "return require(script.Parent.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="parent-outside-boundary"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            'return require(script.Parent.Config',
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="malformed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function require(value) return value end\nreturn require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    }, (0, 0, 0, 1), id="shadowed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local script = {}\nreturn require(script.Parent.Missing)",
+    }, (0, 0, 0, 1), id="shadowed-script-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local game = {}\nreturn require(game:GetService('ReplicatedStorage').Config)",
+    }, (0, 0, 0, 1), id="shadowed-game-root"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(require) return require(script.Parent.Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-require"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(script) return require(script.Parent.Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-script"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "local function load(game) return require(game:GetService('ReplicatedStorage').Absent) end",
+    }, (0, 0, 0, 1), id="parameter-shadowed-game"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            '-- require(script.Parent.Missing)\n'
+            '--[=[ require(script.Parent.Missing) ]=]\n'
+            'local msg = "require(script.Parent.Missing)"\n'
+            'local example = [==[require(script.Parent.Missing)]==]\n'
+            'return true',
+    }, (0, 0, 0, 0), id="strings-and-comments"),
+    pytest.param({
+        "ServerScriptService/Main.server.luau":
+            "return require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+        "ServerScriptService/ConfigOld.luau": "return {}",
+    }, (1, 0, 0, 0), id="exactly-named-target"),
+])
+def test_module_require_graph_real_preflight_fixtures(tmp_path, scripts, counts):
+    root = _require_project(tmp_path, scripts)
+    report = preflight(root, api_dump=DUMP, module_requires=True)
+    graph = report["module_require_graph"]
+    assert (len(graph["edges"]), len(graph["cycles"]),
+            len(graph["missing"]), len(graph["unresolved"])) == counts
+    assert graph["scanned_calls"] == sum(counts[:1] + counts[2:])
+    assert not graph["truncated"] and not graph["skipped_sources"]
+    assert all(edge["from"] in scripts and edge["to"] in scripts
+               and edge["line"] >= 1 for edge in graph["edges"])
+    assert all(item["file"] in scripts and item["line"] >= 1
+               for item in graph["missing"] + graph["unresolved"])
+    assert graph["status"] == ("findings" if counts[1] or counts[2] else
+                               "partial" if counts[3] else "checked-static")
+    assert report["summary"]["module_require_edges"] == counts[0]
+    assert report["summary"]["module_require_missing"] == counts[2]
+    assert report["summary"]["module_require_unresolved"] == counts[3]
+    assert "Roblox" in " ".join(report["limitations"])
+
+
+def test_module_require_cycle_and_missing_are_distinct_with_source_lines(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/A.luau": "-- heading\nreturn require(script.Parent.B)",
+        "ServerScriptService/B.luau": "return require(script.Parent.A)",
+        "ServerScriptService/Main.server.luau":
+            "require(script.Parent.Absent)\nrequire(script.Parent.A)",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["cycles"] == [{"modules": [
+        "ServerScriptService/A.luau", "ServerScriptService/B.luau"]}]
+    assert graph["missing"] == [{
+        "file": "ServerScriptService/Main.server.luau", "line": 1,
+        "target": "ServerScriptService/Absent", "reason": "missing-from-source-tree",
+    }]
+    assert any(edge["from"] == "ServerScriptService/A.luau" and edge["line"] == 2
+               for edge in graph["edges"])
+
+
+def test_require_graph_off_preserves_default_report_and_cli_json(tmp_path, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Config)",
+        "ServerScriptService/Config.luau": "return {}",
+    })
+    before = preflight(root, api_dump=DUMP)
+    assert before == preflight(root, api_dump=DUMP, module_requires=False)
+    assert "module_require_graph" not in before
+    assert "module_require_edges" not in before["summary"]
+    assert main([str(root), "--api-dump", str(DUMP)]) == 1
+    default_json = capsys.readouterr().out
+    assert main([str(root), "--api-dump", str(DUMP)]) == 1
+    assert capsys.readouterr().out == default_json
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    optin = json.loads(capsys.readouterr().out)
+    assert optin["module_require_graph"]["status"] == "checked-static"
+    assert "module-requires-static" in optin["files"][0]["checked_scope"]
+
+
+def test_require_graph_failing_cli_missing_and_bad_tree_are_fail_closed(tmp_path, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "return require(script.Parent.Absent)",
+    })
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "findings"
+    assert report["module_require_graph"]["missing"][0]["line"] == 1
+    assert main([str(root / "no-project"), "--module-requires"]) == 2
+    invalid = json.loads(capsys.readouterr().out)
+    assert invalid["status"] == "invalid" and invalid["files"] == []
+
+
+def test_require_graph_source_budget_is_partial_not_a_clean_bill(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau":
+            "--" + "x" * (MAX_CHECK_SOURCE_BYTES + 1) + "\n"
+            + "return require(script.Parent.Undeclared)",
+        "ServerScriptService/Util.luau": "return {}",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["status"] == "partial"
+    assert graph["scanned_calls"] == 0 and not graph["missing"]
+    assert graph["skipped_sources"] == ["ServerScriptService/Main.server.luau"]
+    assert graph["coverage"] == "partial"
+
+
+def test_require_graph_limits_call_count_and_reports_truncation(tmp_path):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau":
+            "local m = require(script.Parent.Config)\n" * 270,
+        "ServerScriptService/Config.luau": "return {}",
+    })
+    graph = preflight(root, api_dump=DUMP, module_requires=True)["module_require_graph"]
+    assert graph["scanned_calls"] == 256
+    assert len(graph["edges"]) == 256
+    assert graph["truncated"] and graph["status"] == "partial"
+    assert graph["coverage"] == "partial"
+
+
+def test_require_graph_has_deterministic_json_and_no_side_effects(tmp_path, monkeypatch, capsys):
+    root = _require_project(tmp_path, {
+        "ServerScriptService/Main.server.luau": "require(script.Parent.Shared)",
+        "ServerScriptService/Shared.luau": "return {}",
+    })
+    before = {p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in root.rglob("*") if p.is_file()}
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("Optional require preflight attempted a side effect")
+    monkeypatch.setattr(Path, "write_text", forbidden)
+    monkeypatch.setattr(Path, "write_bytes", forbidden)
+    monkeypatch.setattr("subprocess.run", forbidden)
+    monkeypatch.setattr("socket.create_connection", forbidden)
+    a = preflight(root, api_dump=DUMP, module_requires=True)
+    b = preflight(root, api_dump=DUMP, module_requires=True)
+    assert a == b
+    assert before == {
+        p.relative_to(root).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+        for p in root.rglob("*") if p.is_file()
+    }
+    assert main([str(root), "--api-dump", str(DUMP), "--module-requires"]) == 1
+    assert json.loads(capsys.readouterr().out) == a

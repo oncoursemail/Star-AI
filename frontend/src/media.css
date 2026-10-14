@@ -58,6 +58,31 @@
 .shell .media-unavailable {
   color: var(--star-danger);
 }
+/* The only place this install offers: a statement, not a choice (MediaPanel.tsx). */
+.shell .media-option.is-fixed {
+  grid-column: 1 / -1;
+  cursor: default;
+  border-color: var(--star-stroke);
+  background: var(--star-surface-2);
+}
+.shell .media-why {
+  margin-top: var(--star-2);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  line-height: 1.55;
+}
+.shell .media-why summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--star-muted);
+}
+.shell .media-why summary:hover {
+  color: var(--star-text);
+}
+.shell .media-why p {
+  margin: var(--star-2) 0 0;
+  max-width: 68ch;
+}
 .shell .media-engine {
   display: flex;
   flex-wrap: wrap;
