@@ -31,6 +31,7 @@ import re
 import secrets
 import time
 from pathlib import Path
+from typing import Any
 
 PACK_DIR = Path(__file__).resolve().parent / "skill_packs" / "roblox-cutscenes"
 LUAU_DIR = PACK_DIR / "luau"
@@ -927,11 +928,12 @@ def critique(frames: list[dict], evidence: dict, timeline: dict) -> dict:
         boxes = [letterbox_score(g, bar) for g in grays]
         shown = [b for b, t in zip(boxes, ts) if 1.0 <= t <= min(timeline["length"] - 1.5, 13.5)]
         ended = [b for b, t in zip(boxes, ts) if t > timeline["length"] + 0.6]
-        scores["letterbox_during"] = round(sum(shown) / len(shown), 2) if shown else None
-        scores["letterbox_after"] = round(sum(ended) / len(ended), 2) if ended else None
-        if shown and scores["letterbox_during"] < 0.8:
+        during = round(sum(shown) / len(shown), 2) if shown else None
+        after = round(sum(ended) / len(ended), 2) if ended else None
+        scores["letterbox_during"], scores["letterbox_after"] = during, after
+        if during is not None and during < 0.8:
             findings.append("letterbox bars not visible during the cutscene")
-        if ended and scores["letterbox_after"] > 0.5:
+        if after is not None and after > 0.5:
             findings.append("letterbox bars still on screen after the cutscene")
         diffs = [_diff(a, b) for a, b in zip(grays, grays[1:])]
         mids = [(ts[i] + ts[i + 1]) / 2 for i in range(len(diffs))]
@@ -1100,7 +1102,8 @@ class CutsceneLab:
         result = await self.guarded.call_tool("execute_luau", {"studio_id": self.guarded.studio_id,
                                                                "datamodel_type": "Edit", "code": code})
         receipt = _marked_json(_text(result), EDIT_MARK) or {}
-        answer = receipt.get("result") if isinstance(receipt.get("result"), str) else _text(result)
+        got = receipt.get("result")
+        answer = got if isinstance(got, str) else _text(result)
         return (not _failed(result) and receipt.get("ok") is True), answer
 
     async def _call(self, name: str, **arguments):
@@ -1166,7 +1169,7 @@ class CutsceneLab:
         frames: list[dict] = []
         console = ""
         play_at = None
-        info = {"ok": False, "started": True}
+        info: dict[str, Any] = {"ok": False, "started": True}
         try:
             deadline = self.clock() + 45
             while self.clock() < deadline and f"{MARK} client-ready {run}" not in console:
@@ -1257,7 +1260,7 @@ def public_summary(report: dict) -> dict:
 # --------------------------------------------------------------------------- CLI
 
 def main(arguments=None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.roblox_cutscene_studio", description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.roblox_cutscene_studio", description=(__doc__ or "").split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("plan", "run"):
         p = sub.add_parser(name)
