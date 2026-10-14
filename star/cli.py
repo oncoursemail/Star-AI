@@ -10,6 +10,22 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def loopback_endpoint(url: str) -> bool:
+    """True only for a plain-http model endpoint on this machine with an explicit port.
+
+    A prefix test let ``http://localhost:1234@example.com/v1`` through: everything before the
+    ``@`` is a user name, so requests (and the prompt) would have gone to example.com.
+    """
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    return (parts.scheme == "http" and parts.hostname in {"127.0.0.1", "localhost"} and port is not None
+            and parts.username is None and parts.password is None)
+
+
 def setup():
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
@@ -100,7 +116,7 @@ async def main(args):
         if not model or model == "your-loaded-lm-studio-model-id":
             raise RuntimeError("Load a local model in LM Studio and configure STAR_MODEL")
         base_url = os.environ.get("STAR_BASE_URL", "http://127.0.0.1:1234/v1")
-        if not base_url.startswith(("http://127.0.0.1:", "http://localhost:")):
+        if not loopback_endpoint(base_url):
             raise RuntimeError("Self-build requires a loopback local model endpoint")
         github = from_env() if args.publish_draft else None
         async with AsyncOpenAI(base_url=base_url, api_key="local-only", timeout=180.0, max_retries=0) as client:
@@ -149,7 +165,7 @@ async def main(args):
         if not model or model == "your-loaded-lm-studio-model-id":
             raise RuntimeError("Set STAR_MODEL to the identifier of your loaded model in LM Studio")
         base_url = os.environ.get("STAR_BASE_URL", "http://127.0.0.1:1234/v1")
-        if not base_url.startswith(("http://127.0.0.1:", "http://localhost:")):
+        if not loopback_endpoint(base_url):
             raise RuntimeError("STAR v0.1 requires a local loopback model endpoint")
         if args.unsafe_luau and not args.edit:
             raise RuntimeError("--unsafe-luau requires --edit in a disposable place")
