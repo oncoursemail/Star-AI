@@ -143,7 +143,8 @@ def prepare_discord_image(filename: str, content_type: str | None,
             or not isinstance(data, bytes) or not 0 < len(data) <= MAX_IMAGE_BYTES
             or len(data) != declared_size):
         raise ValueError("Image exceeds the 6 MiB limit or was not fully received")
-    from PIL import Image, ImageOps, UnidentifiedImageError
+    from PIL import ImageOps, UnidentifiedImageError
+    from ..pil_safe import Image
     try:
         with Image.open(BytesIO(data)) as image:
             if image.format not in {"JPEG", "PNG", "WEBP"}:
