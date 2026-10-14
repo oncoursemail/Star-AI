@@ -9,6 +9,28 @@ from dataclasses import dataclass
 import re
 
 
+# Opt-in only. Each class and method is marked Deprecated in the official
+# Roblox Creator Hub engine reference (see docs/LUAU_DEPRECATED_APIS.md).
+_DEPRECATED_BODY_MOVERS: dict[str, tuple[str, str]] = {
+    "BodyVelocity": ("deprecated-body-velocity", "LinearVelocity"),
+    "BodyGyro": ("deprecated-body-gyro", "AlignOrientation"),
+    "BodyPosition": ("deprecated-body-position", "AlignPosition"),
+    "BodyForce": ("deprecated-body-force", "VectorForce"),
+}
+_DEPRECATED_RAY_METHODS: dict[str, tuple[str, str]] = {
+    "FindPartOnRay": ("deprecated-find-part-on-ray",
+                      "Use workspace:Raycast(ray.Origin, ray.Direction, params); inspect the RaycastResult."),
+    "FindPartOnRayWithIgnoreList": ("deprecated-find-part-on-ray-ignore",
+                                    "Use workspace:Raycast with RaycastParams.ExcludeInstances."),
+    "FindPartOnRayWithWhitelist": ("deprecated-find-part-on-ray-whitelist",
+                                   "Use workspace:Raycast with RaycastParams.IncludeInstances."),
+}
+_BODY_CLASS_LITERAL = re.compile(
+    r"""^\s*(["'])(BodyVelocity|BodyGyro|BodyPosition|BodyForce)\1\s*(?=[,)])"""
+)
+
+
+
 @dataclass(frozen=True)
 class Finding:
     rule_id: str
@@ -79,8 +101,9 @@ def _tokens(code: str) -> list[_Token]:
 
 
 def lint(code: str, *, external: bool | None = None, safety_checks: bool = False,
-         script_class: str | None = None, server_security: bool = False) -> list[Finding]:
-    """Return sorted static findings; the CLI second opinion, lifetime and server-trust checks are OFF by default."""
+         script_class: str | None = None, server_security: bool = False,
+         deprecated_apis: bool = False) -> list[Finding]:
+    """Return sorted static findings; optional checks (including deprecated APIs) are OFF by default."""
     if not isinstance(code, str):
         raise TypeError("code must be str")
     ts = _tokens(code)
@@ -159,6 +182,50 @@ def lint(code: str, *, external: bool | None = None, safety_checks: bool = False
             if end + 1 < len(v) and v[end + 1] in (".", ":", "["):
                 add("unchecked-find-child", i, "FindFirstChild result indexed without a nil check.",
                     "Store the child and check it is non-nil before indexing.")
+
+    if deprecated_apis:
+        # Recognize only Roblox's known globals, not arbitrary receiver
+        # methods: Luau tables may define names identical to engine members.
+        def shadowed(name: str) -> bool:
+            for j, token in enumerate(v):
+                if token == name:
+                    if (j and v[j - 1] in ("local", "function", "for")) or v[j + 1:j + 2] == ["="]:
+                        return True
+                if token == "local":
+                    k = j + 1
+                    while k < len(v):
+                        if v[k] == name:
+                            return True
+                        if k + 1 < len(v) and v[k + 1] == ",":
+                            k += 2
+                        else:
+                            break
+                if token == "function":
+                    opening = next((k for k in range(j + 1, min(j + 16, len(v)))
+                                    if v[k] == "("), None)
+                    if opening is not None and name in v[opening + 1:end_of(opening)]:
+                        return True
+            return False
+
+        builtin_instance = not shadowed("Instance")
+        builtin_workspace = not shadowed("workspace")
+        for i, word in enumerate(v):
+            if (builtin_instance and v[i:i + 4] == ["Instance", ".", "new", "("]
+                    and (i == 0 or v[i - 1] not in (".", ":"))):
+                # The lexer skips strings. Inspect only the first literal at a
+                # confirmed call's opening parenthesis, never comment contents.
+                match = _BODY_CLASS_LITERAL.match(code[ts[i + 3].offset + 1:])
+                if match:
+                    class_name = match.group(2)
+                    rule, replacement = _DEPRECATED_BODY_MOVERS[class_name]
+                    add(rule, i, f"{class_name} is a deprecated Roblox body mover.",
+                        f"Use {replacement} with the appropriate attachment/constraint setup.")
+            if (builtin_workspace and word in _DEPRECATED_RAY_METHODS and i >= 2
+                    and v[i - 2:i] == ["workspace", ":"]
+                    and (i == 2 or v[i - 3] not in (".", ":"))
+                    and v[i + 1:i + 2] == ["("]):
+                rule, replacement = _DEPRECATED_RAY_METHODS[word]
+                add(rule, i, f"workspace:{word} is deprecated.", replacement)
 
     # Yield recognition is deliberately syntactic; it is not a guarantee of progress.
     def yields(body: list[str]) -> bool:
