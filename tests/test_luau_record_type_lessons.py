@@ -1,5 +1,6 @@
 """Real loader/validator regressions for unreviewed Luau record type candidates."""
 from dataclasses import replace
+from types import SimpleNamespace
 from pathlib import Path
 
 import pytest
@@ -73,3 +74,33 @@ def test_read_only_candidates_are_not_selected_as_skill_packs():
     assert "luau-record-type-lessons" not in skill_packs.DEFAULT_ENABLED
     assert skill_packs.select("What color is the sky?", enabled=set()) == []
     assert lessons.load_cases()  # No lesson store or model execution.
+
+def test_quality_smoke_checks_all_eight_real_pure_candidate_pairs(monkeypatch):
+    from scripts import luau_quality_smoke as smoke
+
+    pure = [case for case in lessons.load_cases()
+            if case.verification == "pure-luau-illustrative"]
+    broken = {case.incorrect for case in pure}
+    seen = []
+
+    def fake_analyze(source):
+        seen.append(source)
+        return ([SimpleNamespace(rule_id="luau-analyze-typeerror")]
+                if source in broken else [])
+
+    monkeypatch.setattr(smoke, "analyze", fake_analyze)
+    assert smoke.verify_pure_record_candidates() == 8
+    assert len(seen) == 16
+    assert set(seen) == broken | {case.corrected for case in pure}
+
+
+def test_quality_smoke_refuses_silent_analyzer_and_bad_repairs(monkeypatch):
+    from scripts import luau_quality_smoke as smoke
+
+    monkeypatch.setattr(smoke, "analyze", lambda _source: [])
+    with pytest.raises(AssertionError, match="did not detect broken typing"):
+        smoke.verify_pure_record_candidates()
+    monkeypatch.setattr(
+        smoke, "analyze", lambda _source: [SimpleNamespace(rule_id="luau-analyze-typeerror")])
+    with pytest.raises(AssertionError, match="rejected corrected Luau"):
+        smoke.verify_pure_record_candidates()

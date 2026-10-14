@@ -7,9 +7,32 @@ from statistics import median
 from time import perf_counter
 
 from star.luau_lint import lint
+from star.luau_analyze import analyze
+from star.luau_record_type_lessons import load_cases
 
 
 SOURCE = Path("examples/roblox-templates/simulator/ReplicatedStorage/Shared/CostCurve.luau")
+
+
+def verify_pure_record_candidates() -> int:
+    """Typecheck actual pure-language lesson witnesses with the pinned analyzer.
+
+    Multi-file ModuleScript cases cannot be checked by this single-file CLI;
+    they require a project-aware Roblox Studio type checker.
+    """
+    pure = [case for case in load_cases()
+            if case.verification == "pure-luau-illustrative"]
+    if len(pure) != 8:
+        raise AssertionError("Expected eight pure-Luau type witnesses")
+    for case in pure:
+        broken = analyze(case.incorrect)
+        repaired = analyze(case.corrected)
+        if not any(item.rule_id == "luau-analyze-typeerror" for item in broken):
+            raise AssertionError(f"{case.id}: analyzer did not detect broken typing")
+        if any(item.rule_id in ("luau-analyze-typeerror", "luau-analyze-syntaxerror")
+               for item in repaired):
+            raise AssertionError(f"{case.id}: analyzer rejected corrected Luau")
+    return len(pure)
 
 
 def main() -> int:
@@ -38,6 +61,9 @@ def main() -> int:
         if name == "type" and "luau-analyze-typeerror" not in categories:
             raise AssertionError("Pinned Luau analyzer did not catch seeded type error")
     print(f"Real pinned analyzer invoked on 3 STAR-derived cases; median_ms={median(samples)}")
+    verified = verify_pure_record_candidates()
+    print(f"Real pinned analyzer: {verified}/{verified} pure candidate witness pairs"
+          " rejected broken types and accepted corrected snippets")
     return 0
 
 
