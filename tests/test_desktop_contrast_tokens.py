@@ -33,7 +33,7 @@ class Pair:
 # Exact foreground/background usage from shipped desktop selectors, not
 # invented combinations. A backdrop is explicit when the CSS uses a wash.
 PAIRS = [
-    Pair("shell-body", "stellar-ui.css", ".shell", "body", "--star-body", "--star-bg", ""),
+    Pair("shell-body", "stellar-ui.css", ".shell", "text", "--star-body", "--star-bg", ""),
     Pair("rail-hover", "stellar-ui.css", ".rail-item:not(:disabled):hover", "text", "--star-text", "--star-surface-1", ""),
     Pair("rail-current", "stellar-ui.css", ".rail-item.is-current", "text", "--star-text", "--star-surface-2", ""),
     Pair("topbar-hover", "stellar-ui.css", ".bar-action[aria-pressed='true']", "text", "--star-text", "--star-surface-2", ""),
@@ -126,8 +126,8 @@ def _ratio(pair: Pair, tokens: dict[str, str]) -> float:
 def test_desktop_colour_pair_meets_wcag_22_aa(pair: Pair):
     assert pair.sheet in SHEETS
     rule = _rule(pair.sheet, pair.selector)
-    property_name = "color" if pair.role == "text" else (
-        "border-color" if pair.role == "focus" else "border")
+    property_name = ("color" if pair.role == "text" else "border" if pair.role == "border"
+                     else "box-shadow" if pair.name == "menu-focus" else "border-color")
     assert f"var({pair.foreground})" in rule[property_name], pair.name
     if pair.role == "text":
         assert f"var({pair.background})" in rule["background"], pair.name

@@ -26,7 +26,7 @@ Failures were interactive control boundaries / focus, not default text.
 
 | CSS use | Role | Foreground | Background (underlay for alpha) | Minimum | Before | After |
 | --- | --- | --- | --- | ---: | ---: | ---: |
-| shell-body (`stellar-ui.css`) | body | `--star-body` | `--star-bg` | 3.0 | 14.66 | 14.66 |
+| shell-body (`stellar-ui.css`) | text | `--star-body` | `--star-bg` | 3.0 | 14.66 | 14.66 |
 | rail-hover (`stellar-ui.css`) | text | `--star-text` | `--star-surface-1` | 4.5 | 16.31 | 16.31 |
 | rail-current (`stellar-ui.css`) | text | `--star-text` | `--star-surface-2` | 4.5 | 15.20 | 15.20 |
 | topbar-hover (`stellar-ui.css`) | text | `--star-text` | `--star-surface-2` | 4.5 | 15.20 | 15.20 |
