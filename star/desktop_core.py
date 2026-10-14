@@ -493,19 +493,6 @@ class Conversations:
         ).fetchall()
         return list(reversed(rows))
 
-    def history_rows(self, project: str, chat_id: str | None = None, clip: int = 4000):
-        """Every user/assistant row of the chat as (role, text), oldest first, without events.
-
-        All rows, not the newest few: the model's history window is measured from the
-        first message of the chat so that it stays put from turn to turn (see
-        context_layout.conversation_window). Each text is cut to ``clip`` characters.
-        """
-        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
-        return self.connection.execute(
-            f"SELECT role,SUBSTR(body,1,?) FROM messages WHERE {scope} AND role IN ('user','assistant') ORDER BY id",
-            (clip, *args)
-        ).fetchall()
-
     def raw_history_records(self, project: str, chat_id: str | None = None) -> list[dict]:
         """Full ID-bearing records of exactly one chat, including terminal outcomes."""
         return conversation_memory.raw_records(self.connection, project, chat_id)
