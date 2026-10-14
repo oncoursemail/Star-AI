@@ -150,6 +150,27 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Field lessons from a large Studio port project (docs/research/paintball-practice-proposals.md has the practice
+    # ideas). Shipped OFF until the evaluation gate measures them.
+    "roblox-studio-mcp-workflow": re.compile(
+        r"\b(?:Studio MCP|MCP|cloud save|save confirmation|Version History|ChangeHistoryService|undo|Rojo|installer|"
+        r"install (?:script|pipeline|snippet)|require coverage|screen ?capture|screenshots?|Edit mode|datamodel|"
+        r"Archivable|rbxl|rbxm|place backup)\b", re.IGNORECASE),
+    "roblox-replication-hot-paths": re.compile(
+        r"\b(?:replication|replicat\w+|PivotTo|SetAttribute|GetAttribute|attributes?|UnreliableRemoteEvent|bandwidth|"
+        r"network budget|network traffic|items per second|per-frame|hot path|allocations?|GetDescendants|"
+        r"LocalTransparencyModifier|sequence numbers?)\b", re.IGNORECASE),
+    "roblox-editable-memory-streaming": re.compile(
+        r"\b(?:EditableMesh|EditableImage|CreateEditableMeshAsync|CreateEditableImage\w*|FixedSize|memory budget|"
+        r"Content\.fromObject|TintMask|AlphaMode|ModelStreamingMode|Persistent|Atomic|streams? in|streamed in|"
+        r"BatchSetValues)\b", re.IGNORECASE),
+    "roblox-asset-upload-moderation": re.compile(
+        r"\b(?:upload\w*|moderat\w+|off-?platform|barcodes?|QR codes?|asset review|asset approval|SHA-?256|hash gate|"
+        r"thumbnail state|blocked assets?|re-?upload\w*|import queue)\b", re.IGNORECASE),
+    "roblox-multi-agent-studio": re.compile(
+        r"\b(?:multi-?agents?|several agents|two agents|parallel agents|Codex|Claude|integrator|claims?|claimed|"
+        r"Studio lock|mutex|handoff|hand-?off|normal play|playtest acceptance|acceptance tests?|verdicts?|"
+        r"INCOMPLETE|two clients|Server and Clients|late join)\b", re.IGNORECASE),
 }
 
 
@@ -198,12 +219,15 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
-    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
-    if not allowed:
-        return []
+    # The prompt test comes first: it is a regular expression, while the enabled set with `home`
+    # opens the knowledge database (promoter switches). Most prompts are not Roblox or Godot
+    # questions and return here without touching it. Same result in either order.
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
     godot_context = bool(_GODOT_CONTEXT.search(prompt))
     if not roblox_context and not godot_context:
+        return []
+    allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
+    if not allowed:
         return []
     scored = []
     for order, pack in enumerate(available()):

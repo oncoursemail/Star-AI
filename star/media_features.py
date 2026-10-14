@@ -2,6 +2,8 @@
 from __future__ import annotations
 from pathlib import Path
 import json
+import logging
+import math
 import shutil
 import subprocess
 import tempfile
@@ -9,21 +11,28 @@ import tempfile
 VIDEO_EXTENSIONS = {'.mp4', '.mov', '.mkv', '.webm', '.avi'}
 AUDIO_EXTENSIONS = {'.wav', '.mp3', '.m4a', '.flac', '.ogg', '.aac'}
 
+log = logging.getLogger(__name__)
+
 
 def video_frames(path: Path, destination: Path, *, max_frames: int = 4) -> list[Path]:
     """Use installed ffprobe/ffmpeg to sample a bounded number of video frames."""
     path = path.expanduser().resolve(strict=True)
     if path.suffix.lower() not in VIDEO_EXTENSIONS or path.stat().st_size > 700_000_000:
         raise ValueError('Unsupported video or file exceeds 700 MB')
-    if max_frames < 1 or max_frames > 4:
+    if type(max_frames) is not int or max_frames < 1 or max_frames > 4:
         raise ValueError('Use 1-4 frames per model request')
     if not shutil.which('ffmpeg') or not shutil.which('ffprobe'):
         raise RuntimeError('Install FFmpeg (ffmpeg and ffprobe) and add them to PATH for video frames')
     p = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                         '-of', 'default=noprint_wrappers=1:nokey=1', str(path)],
                        capture_output=True, text=True, timeout=20, check=True)
-    duration = float(p.stdout.strip())
-    if duration <= 0 or duration > 60 * 90:
+    # ffprobe prints "N/A" for streams without a duration and can print "nan"; a NaN passed both
+    # range checks below and every seek then failed inside ffmpeg with an unhelpful error.
+    try:
+        duration = float(p.stdout.strip())
+    except ValueError:
+        raise ValueError('The video has no readable duration') from None
+    if not math.isfinite(duration) or duration <= 0 or duration > 60 * 90:
         raise ValueError('Video duration out of supported range (90 minutes)')
     destination.mkdir(parents=True, exist_ok=True)
     points = [max(0., duration * (i + .5) / max_frames) for i in range(max_frames)]
@@ -40,6 +49,15 @@ def video_frames(path: Path, destination: Path, *, max_frames: int = 4) -> list[
     return outputs
 
 
+VOICE_UNAVAILABLE_MESSAGE = 'Voice features are not set up on this computer yet.'
+
+
+def _voice_unavailable(exc: BaseException) -> None:
+    """Raise a plain-language error; the developer hint goes to the log only."""
+    log.warning('Voice extras missing (%s); install with: pip install -r requirements-voice.txt', exc)
+    raise RuntimeError(VOICE_UNAVAILABLE_MESSAGE) from exc
+
+
 def transcribe_audio(path: Path, *, model_name: str = 'base', device: str = 'cpu') -> str:
     """Optional faster-whisper offline STT; CPU int8 default avoids GPU contention."""
     path = path.expanduser().resolve(strict=True)
@@ -48,7 +66,7 @@ def transcribe_audio(path: Path, *, model_name: str = 'base', device: str = 'cpu
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
-        raise RuntimeError('Install optional voice extras: pip install -r requirements-voice.txt') from exc
+        _voice_unavailable(exc)
     if model_name not in {'tiny', 'base', 'small'}:
         raise ValueError('Supported STT models: tiny, base, small')
     if device not in {'cpu', 'cuda'}:
@@ -65,7 +83,7 @@ def local_speak(text: str) -> None:
     try:
         import pyttsx3
     except ImportError as exc:
-        raise RuntimeError('Install optional voice extras: pip install -r requirements-voice.txt') from exc
+        _voice_unavailable(exc)
     engine = pyttsx3.init()
     engine.say(text)
     engine.runAndWait()

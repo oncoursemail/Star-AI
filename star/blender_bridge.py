@@ -6,18 +6,18 @@ No external Blender MCP addon, network listener, downloaded scripts or assets ar
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import asyncio
 from hashlib import sha256
 import json
-import math
 import os
 from pathlib import Path
 import re
 import secrets
 import shutil
-import sys
 
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 SCENE_NAME = r"^[A-Za-z][A-Za-z0-9_-]{1,39}$"
 HEX = r"^#[0-9a-fA-F]{6}$"
@@ -52,7 +52,14 @@ SCENE_SCHEMA = {
     },
     "required": ["name", "objects"],
 }
-VALIDATOR = Draft202012Validator(SCENE_SCHEMA)
+
+
+@lru_cache(maxsize=1)
+def _validator():
+    """The scene schema validator, built on first use (jsonschema is not imported at start-up)."""
+    return Draft202012Validator(SCENE_SCHEMA)
+
+
 JOB_ID = re.compile(r"^[a-f0-9]{24}$")
 MAX_SPEC_BYTES = 24_000
 MAX_REPORT_BYTES = 80_000
@@ -77,7 +84,7 @@ def validate_scene(spec: object) -> dict:
         raise ValueError("Blender scene contains invalid JSON values") from exc
     if len(encoded.encode("utf-8")) > MAX_SPEC_BYTES:
         raise ValueError("Blender scene request is too large")
-    errors = list(VALIDATOR.iter_errors(spec))
+    errors = list(_validator().iter_errors(spec))
     if errors:
         raise ValueError("Unsupported Blender scene field or out-of-range value")
     names = [item["name"].casefold() for item in spec["objects"]]

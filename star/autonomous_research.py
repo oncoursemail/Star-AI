@@ -15,6 +15,7 @@ from time import time
 from uuid import uuid4
 
 from .web_search import _safe_results, source_context
+from .validation_messages import describe_invalid
 
 MAX_EVIDENCE = 10
 FOLLOWUP_LINE = re.compile(r"^FOLLOWUP_QUERY:\s*(.+?)\s*$", re.I | re.M)
@@ -99,9 +100,9 @@ def _connect(home: Path) -> sqlite3.Connection:
 def begin_research(home: Path, project: str, objective: str) -> str:
     """A small private audit record: no prompts, article excerpts or API keys."""
     if not isinstance(project, str) or not project.strip() or len(project) > 100:
-        raise ValueError("Invalid research project")
+        raise ValueError(f"Invalid research project: project must be nonblank text of 1-100 characters (got {describe_invalid(project)}). Choose a shorter label.")
     if not isinstance(objective, str) or not 2 <= len(objective.strip()) <= 12000:
-        raise ValueError("Invalid research objective")
+        raise ValueError("Invalid research objective: objective must be 2-12000 nonblank text characters. Edit the question.")
     run_id = uuid4().hex
     with _connect(home) as db:
         db.execute("""INSERT INTO research_runs
@@ -116,9 +117,9 @@ def begin_research(home: Path, project: str, objective: str) -> str:
 def finish_research(home: Path, run_id: str, *, status: str, book: EvidenceBook,
                     elapsed_ms: int, peak_concurrency: int) -> None:
     if status not in {"completed", "failed", "cancelled"}:
-        raise ValueError("Invalid research completion status")
+        raise ValueError("Invalid research completion status: status must be completed, failed or cancelled. Choose one of these values.")
     if not isinstance(book, EvidenceBook) or not 0 <= elapsed_ms <= 4_000_000:
-        raise ValueError("Invalid research metric")
+        raise ValueError("Invalid research metric: book must be EvidenceBook and elapsed_ms must be between 0 and 4000000. Correct the metrics.")
     with _connect(home) as db:
         db.execute("""UPDATE research_runs SET status=?,searches=?,failed_searches=?,
             source_count=?,elapsed_ms=?,peak_concurrency=? WHERE id=? AND status='running'""",

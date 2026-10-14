@@ -56,12 +56,13 @@ ASSET = ["star_asset_search", "star_building_plan", "star_terrain_preview"]
 # Prepared shared stores only: not in ordered general-prompt tool expectations.
 SHARED_BRAIN = ["shared_brain_query", "shared_brain_stats"]
 # Prompt-scoped design and map-plan tools, and the opt-in live Roblox docs (off unless enabled); not part
-# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating).
-DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan",
+# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating; the opt-in
+# Studio lab tool: tests/test_studio_lab.py).
+DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan", "star_roblox_studio_lab",
                "star_roblox_docs_live_search", "star_roblox_docs_live_page"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
-WORKSPACE_WRITE = ["workspace_write"]
+WORKSPACE_WRITE = ["workspace_write", "workspace_edit"]
 # Added in integration round 5 (pull request 69, game projects of several engines); not in a7a36a3.
 WORKSPACE_GAME = ["workspace_game_discover", "workspace_game_inspect", "workspace_game_plan"]
 # Read-only MCP connections (star/mcp_connections.py TOOLS): when one is switched on in Settings.
