@@ -114,7 +114,7 @@ local Players = game:GetService("Players")
 local LOBBY_PLACE = 1111111111
 local isReserved = game.PrivateServerId ~= "" and game.PrivateServerOwnerId == 0
 
-Players.PlayerAdded:Connect(function(player: Player)
+local function onJoin(player: Player)
 	local join = player:GetJoinData()
 	local data = join.TeleportData
 	local mode = "duel"
@@ -123,7 +123,12 @@ Players.PlayerAdded:Connect(function(player: Player)
 		mode = data.mode -- a known value from our own lobby
 	end
 	player:SetAttribute("Mode", mode)
-end)
+end
+
+Players.PlayerAdded:Connect(onJoin)
+for _, player in Players:GetPlayers() do
+	task.spawn(onJoin, player)
+end
 ~~~
 Only choose among known modes; rewards and currency come from server storage. [S5][S8]
 

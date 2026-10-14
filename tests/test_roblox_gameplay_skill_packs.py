@@ -152,3 +152,10 @@ def test_the_packs_do_not_take_unrelated_or_non_roblox_prompts():
     for prompt in ("How do I add sound to my React web app?", "Write pytest specs for my Flask API",
                    "Teleport my Unity character to a spawn point", "What is the capital of France?"):
         assert not set(skill_packs.matching_names(prompt, enabled=every)) & set(NAMES), prompt
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_examples_pass_the_opt_in_roblox_rules_when_that_checker_is_present(name):
+    rules = pytest.importorskip("star.luau_roblox_rules")
+    for example in examples(pack(name).body):
+        assert rules.lint_roblox_rules(example) == [], name
