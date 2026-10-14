@@ -104,7 +104,7 @@ function MenuItem({icon, label, hint, checked, availability, onSelect}: {icon: R
     >
       <span className="cmp-menu-icon">{icon}</span>
       <span className="cmp-menu-text">{label}</span>
-      {checked ? <Check size={15} className="cmp-menu-check" aria-hidden="true" /> : (blocked ? availability?.reason : hint) && <small>{blocked ? availability?.reason : hint}</small>}
+      {checked ? <Check size={15} className="cmp-menu-check" aria-hidden="true" /> : (blocked ? availability?.reason : hint) && <small title={blocked ? availability?.reason : hint}>{blocked ? availability?.reason : hint}</small>}
     </button>
   )
 }
