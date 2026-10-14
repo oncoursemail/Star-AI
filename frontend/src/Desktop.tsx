@@ -891,7 +891,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          <button type="button" onClick={undoDelete}><Undo2 size={14} aria-hidden="true"/> Undo</button>
        </motion.div>}
      </AnimatePresence>
-     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>void lookAtScreen()} onClosed={()=>composerRef.current?.focus()}/>
+     <ScreenConsent open={screenAsk} busy={capturing} onCancel={()=>{if(!capturing)setScreenAsk(false)}} onConfirm={()=>void lookAtScreen()} onClosed={()=>document.querySelector<HTMLButtonElement>('.cmp-icon-button[aria-label="Add files and tools"]')?.focus()}/>
      {notice&&<div role="status" className="toast" data-notice-region="page"><Info size={16} aria-hidden="true"/><span>{truncate(notice,240)}</span><button aria-label="Dismiss message" onClick={()=>setNotice('')}><X size={16}/></button></div>}
    </div>
    {tab==='chat'&&showStar&&<StarPet state={petState} reducedMotion={reducedMotion} idleEnabled={!inactive}/>}
