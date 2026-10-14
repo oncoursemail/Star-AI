@@ -1,8 +1,10 @@
 # STAR voice calls
 
-Status: working backend prototype (branch `star/voice-call-20261010`). You speak, Star answers out loud in a warm
-voice, and she stops talking when you talk over her. There is no call screen in the app yet: this document defines
-the bridge actions and events that screen needs, so it can be wired afterwards.
+Status: the call screen is in the desktop app (2026-10-13, branch `star/voice-mom-20261013`): a phone button next
+to Send opens it, it asks for microphone consent, and calls are **push to talk** by default (hold the talk button or
+Space; release and Star answers), with hands-free as an option. Every chat reply also has **Read aloud**, and new
+replies can be read aloud automatically (off by default). The default voice is **Star (warm mum)**, `star-mum`
+(section 10). You speak, Star answers out loud, and she stops talking when you press the key or talk over her.
 
 What has been run and what has not:
 
@@ -11,8 +13,9 @@ What has been run and what has not:
 | Whole pipeline from recorded audio files against the real STAR Server, including an interruption | Run, measured (section 7) |
 | Turn logic, sentence chunking, cancellation, bridge, model download | Unit tests with fakes (`tests/test_voice_*.py`) |
 | Loudspeaker echo handling | Simulation only (Star's audio mixed back into the fake microphone) |
-| A real microphone and real loudspeakers or headphones | **Not tested.** The launcher exists; nobody has spoken into it yet |
-| The call screen in the React app | Not built (bridge contract below) |
+| Push-to-talk calls from recorded audio, real engines, a local brain on the PC GPU | Run, measured (section 7.4) |
+| A real microphone and real loudspeakers or headphones | **Not tested.** Nobody has spoken into it yet |
+| The call screen and read-aloud in the React app | Built; tested with a fake bridge (`frontend/src/voice-call.test.tsx`); not yet clicked through in the real desktop window |
 
 ## 1. How a call works
 
@@ -145,17 +148,20 @@ request.
 
 | Action | Payload | Immediate `data` |
 |---|---|---|
-| `voiceStatus` | none | `{available, missingPackages[], missingModels[], serverConfigured, inCall, callId, state, muted}` |
+| `voiceStatus` | none | `{available, missingPackages[], missingModels[], serverConfigured, inCall, callId, state, muted, speaking}` |
 | `voiceGetSettings` | none | `{settings: VoiceSettings, choices: {asr_model[], endpointer[], output[]}}` |
 | `voiceSaveSettings` | `{settings: {...partial}}` | `{settings}` after validation; stored in `voice.json` in the app data folder |
 | `voiceListVoices` | `{style?}` | `{styles[], voices[], selected}`: the voice catalog, optionally one style (section 9) |
 | `voiceSelectVoice` | `{voiceId}` | `{settings, voice, appliesToNextCall}`; saves the voice, speed, language, pauses, pitch and speaking style |
 | `voiceListDevices` | none | `{devices: [{index, kind: "input"|"output", name, default}]}` |
-| `voiceStartCall` | `{settings?: {...partial}}` | `{callId, settings}`; loading and the call run in the background |
+| `voiceStartCall` | `{micConsent: true, settings?: {...partial}}` | `{callId, settings}`; loading and the call run in the background. Refused without `micConsent: true` (only the call screen's consent step sends it); stops any read-aloud |
 | `voiceStopCall` | none | `{stopped: true|false}`; an `ended` event follows |
 | `voiceInterrupt` | none | `{interrupted: true}` (a "stop talking" button) |
 | `voiceSetMuted` | `{muted: true|false}` | `{muted}`; while muted the microphone is ignored |
 | `voicePreviewVoice` | `{voiceId?, voice?, speed?, text?}` | `{previewing, voiceId}`; speaks one sample line (the style's own line for a catalog voice) when no call is active; a `preview_done` event follows |
+| `voicePushToTalk` | `{down: true|false}` | `{down}`; push-to-talk calls only (a hands-free call refuses it). Down opens a turn (and interrupts Star if she is talking); up ends it after a 160 ms tail |
+| `voiceSpeak` | `{text}` | `{speaking, sentences, characters, voiceId}`; read-aloud of one chat reply in the saved voice. The Markdown is turned into speech text first (`readaloud.py`); `speak_started`, then `speak_done` or `error` follow. Refused during a call |
+| `voiceStopSpeaking` | none | `{stopped}`; ends a read-aloud or preview now |
 
 Only one call can exist. `voiceStartCall` during a call returns an error. Invalid settings are rejected before
 anything starts.
@@ -167,15 +173,18 @@ anything starts.
 | `state` | `state`: `starting`, `listening`, `user_speaking`, `thinking`, `speaking`, `ended` | Every change. Drive the main visual from this |
 | `progress` | `message` | While models load during `starting` (first call takes a few seconds) |
 | `level` | `mic`, `speaker` (0 to 1) | About 12 times a second, for level meters or an orb |
-| `speech_started` | `barge_in` (true if Star was cut off) | The user began to talk |
+| `speech_started` | `barge_in` (true if Star was cut off), `push_to_talk` (push-to-talk calls) | The user began to talk (or pressed the key) |
+| `discarded` | `reason` | Push to talk: the key was held but no speech was heard |
 | `partial_transcript` | `text` | Live transcript while the user talks (about once a second) |
 | `final_transcript` | `turn`, `text` | The user's finished turn (empty text = nothing understood) |
 | `assistant_delta` | `turn`, `text` | Raw text pieces from the brain as they stream |
 | `assistant_sentence` | `turn`, `text` | A sentence has been synthesised and queued to play: use for captions |
-| `interrupted` | `turn`, `reason` (`barge_in`, `user_kept_talking`, `button`, `call_ended`), `heard_text` | A reply was cut; `heard_text` is what was audible |
+| `interrupted` | `turn`, `reason` (`barge_in`, `push_to_talk`, `user_kept_talking`, `button`, `call_ended`), `heard_text` | A reply was cut; `heard_text` is what was audible |
 | `turn_metrics` | `turn`, `user_text`, `reply_text`, `stages{...}`, `interrupted`, ... | After every turn; `stages` holds the latency breakdown in seconds |
 | `error` | `message` | Something failed (server unreachable, wrong key, model file missing). The call keeps listening when it can |
-| `preview_done` | `voice` | A voice preview finished |
+| `preview_done` | `voice`, `stopped` | A voice preview finished |
+| `speak_started` | `first_audio_seconds` | Read-aloud: the first audio is playing (keyed by the `voiceSpeak` request id) |
+| `speak_done` | `voice`, `stopped`, `first_audio_seconds` | Read-aloud finished (`stopped`: cut short by Stop, a new read-aloud or a call) |
 | `ended` | `turns[]` | The call is over; includes all turn metrics |
 
 State flow in a normal turn: `listening -> user_speaking -> thinking -> speaking -> listening`. With an interruption:
@@ -187,12 +196,14 @@ the words Star actually spoke), so a call appears in the conversation history li
 | Field | Default | Notes |
 |---|---|---|
 | `tts_engine` | `kokoro` | Only Kokoro is wired in today |
-| `voice` | `heart` | Audition-page id (`heart`, `blend-heart-nicole`, ...) or a custom blend `af_heart:0.7+af_nicole:0.3` |
-| `speed` | `0.92` | 0.6 to 1.4; slightly under 1 reads calmer |
+| `voice` | `af_heart:0.5+af_bella:0.25+af_nicole:0.25` | The Star mum blend; or an audition-page id (`heart`, ...) or any custom blend |
+| `speed` | `0.80` | 0.6 to 1.4; under 1 reads calmer |
 | `voice_style` | `warm-caring` | Speaking manner: `warm-caring`, `confident-commanding`, `anime-bright` (changes the system prompt) |
-| `voice_id` | empty | Catalog id of the chosen voice; empty when `voice` is a custom recipe |
+| `voice_id` | `star-mum` | Catalog id of the chosen voice; empty when `voice` is a custom recipe |
 | `tts_lang` | `en-us` | `en-us` or `en-gb` (the British stock voices) |
-| `sentence_gap_ms` | 0 | Silence after each spoken sentence (the commanding voices use 300 to 450) |
+| `sentence_gap_ms` | 120 | Silence after each spoken sentence (the commanding voices use 300 to 450) |
+| `call_mode` | `push-to-talk` | `push-to-talk` (hold the talk button or Space) or `hands-free` (voice activity + end-of-turn model) |
+| `read_aloud_auto` | false | Read each new chat reply aloud as soon as it is finished (never history) |
 | `pitch_semitones` | 0 | Whole-voice pitch change, -6 to 6 (anime voices up, commanding down) |
 | `asr_engine`, `asr_model` | `faster-whisper`, `auto` | `auto` = `small.en` on an NVIDIA GPU, `base.en` on the CPU (section 6) |
 | `asr_prompt` | names such as Star, Roblox, RemoteEvent | Spellings the transcript should prefer |
@@ -340,6 +351,28 @@ What the four runs show:
   person stops and a gap of 700 ms or more already reads as hesitation (`docs/research/voice.md`, section 7). With
   the server as measured here that is not reachable; with the scripted brain the chain takes 2.4 s.
 
+### 7.4 Push to talk, real engines, a local brain on the PC (13 Oct 2026)
+
+The server brain was off limits during these runs (the v1.0 release evaluation was using it), so the brain was a
+small local model on the same graphics card: Qwen3.5-4B Q4_K_M under llama.cpp (Vulkan build b11538), thinking off,
+about 57 tokens/s alone and 60 to 70 tokens/s in the call. Same five synthetic caller lines as above
+(`voice-lab/call-tests/q*.wav`), voice `star-mum`, `small.en` and Kokoro on the GPU. In push-to-talk mode the
+pretend caller holds the key for each line and lets go after its last frame, so **TOTAL is key release to Star's
+first sound**. Whole stack peak: 6.08 GB on the card including the desktop's 1.3 GB (`vram-ptt-local.txt`).
+
+| Run | Mode | End-of-turn wait | Speech end -> transcript | Transcript -> first token | First token -> first audio | TOTAL (mean) | TOTAL range |
+|---|---|---|---|---|---|---|---|
+| `run-ptt-local-1` | push to talk | 0.17 | 0.36 | 0.16 | 0.61 | **1.13** | 0.92-1.44 |
+| `run-ptt-local-2` | push to talk | 0.16 | 0.38 | 0.17 | 0.50 | **1.05** | 0.84-1.19 |
+| `run-handsfree-local-1` | hands-free (Smart Turn) | 0.62 | 0.63 | 0.17 | 0.45 | **1.24** | 1.17-1.33 |
+
+- Push to talk removes the end-of-turn wait (0.16 s release tail instead of 0.61 s) but the transcript can only start
+  at release (0.2 s on the GPU), so it saves about 0.1 to 0.2 s per turn. Its real gain is control: no cut-offs
+  mid-thought, no false turns from room noise, and the key is an exact barge-in (turn 3 in both push-to-talk runs).
+- With a fast brain Star's own part (end of turn + transcript + first clause + Kokoro) is under one second. With the
+  server brain under load the brain alone took 11 s in `run-server-3`; measuring push to talk against the server
+  waits for the release evaluation to finish.
+
 ## 8. Hand-off notes and open problems
 
 - **Server provider (done).** `runtime.make_brain` builds the brain with `ServerBrain.from_settings()`:
@@ -351,6 +384,9 @@ What the four runs show:
   can therefore replace each other's cached prompt. Without a slot number the server takes the idle slot whose
   cached prompt starts like the request, otherwise the least recently used one (measured once with a probe
   script, not with a call and a typed chat running together).
+- **Push to talk in the real window.** The Space bar works while the call window has focus and is ignored inside
+  text fields; holding the on-screen button uses pointer capture so sliding off it still releases. Not yet tried in
+  the Qt WebEngine window with a real microphone.
 - **Real microphone untested.** Device opening, sample-rate negotiation on unusual audio hardware, and how the
   thresholds feel with a human voice all still need a person. `Microphone` asks PortAudio for 16 kHz mono directly.
 - **Echo.** With loudspeakers the microphone hears Star. The energy echo gate (`output: speakers`) stops her
@@ -447,3 +483,46 @@ contract above:
 Tests: `frontend/src/settings-ui.test.tsx` (against the fake Qt bridge) and the `settings` phase of
 `scripts/shell_acceptance.py` (the real window and the real Kokoro engine; the loudspeaker alone is replaced by a
 silent sink unless `--audible` is given).
+
+## 10. Star's default persona, read-aloud and the 13 Oct 2026 voice round
+
+**Persona.** Star is a warm, caring, nurturing, mum-like voice: kind, supportive, patient, proud of small wins and
+honest when something will not work, never romantic, flirtatious or sexual (`persona.VOICE_SYSTEM_PROMPT`, the
+`warm-caring` style). The call prompt is written for speech: one to three short sentences, a short warm opener, no
+lists, headings, Markdown or emoji, numbers said as words, code and links described in a few words instead of read.
+
+**Default voice: `star-mum`** (`voices.json`, first entry, recommended for live). Kokoro-82M blend of three stock
+voices, heart 50% + bella 25% + nicole 25%, speed 0.80, 120 ms pause after each sentence. No real person is cloned
+(Kokoro stock voices, Apache-2.0). Measured over the six comparison lines (`voice-lab/mom_audition.py`,
+`analyze_samples.py`, `mos_estimate.py`): 186 Hz median pitch, 161 words a minute, soft falling endings (-7.6
+semitones), 0.5% heard-back error, UTMOS MOS estimate 4.42, first sentence ready in 0.33 s (first audio packet
+0.17 s), about 9 times faster than real time, about 1.2 GB of GPU memory. It had the best fit to the warm-voice recipe
+(98 of 100) of the seven live candidates; `mom-heart-sarah-low` scored a little higher on MOS (4.50) but speaks at
+181 words a minute, too brisk for the persona.
+
+**Read-aloud.** Every assistant reply has a Read aloud button (`frontend/src/ReadAloud.tsx`). The host turns the
+Markdown into speech text (`star/voice/readaloud.py`): headings and list items become short sentences, a code block
+becomes "I've put the code on screen." (once), a table "There's a table on screen.", links keep their text, raw URLs
+and file paths become "a link" / "a file path", emoji and `<think>` blocks are dropped, and replies over 1,600
+characters stop at a sentence with "The rest is on screen." It speaks sentence by sentence and stays at most 1.5 s
+ahead of the speaker, so Stop is instant. Automatic read-aloud (`read_aloud_auto`, Settings > Star's voice) reads a
+reply only when it was just streamed in front of the owner, once, never history.
+
+**The audition round.** `docs/voice-samples/ab/index.html` in the project folder (favourites in localStorage) now
+opens with an engine comparison table (MOS estimate, first audio, speed, GPU memory, streaming, licence, live in STAR)
+and a "Star's mum voice" group: 7 Kokoro blends (live) and 3 Qwen3-TTS VoiceDesign voices designed from written
+descriptions, 2 of them locked with the Base model. Best Qwen result: `mom-calm-alto` (designed; recipe fit 100,
+184 Hz, 161 wpm) and its locked version `mom-calm-alto-locked` (MOS 4.49, first audio 0.66 s, 1.7x real time, about
+4.4 to 6 GB of GPU memory); Qwen is not wired into calls, so it is "best quality, not live yet". Licences re-checked
+on the Hugging Face model cards on 13 Oct 2026: Kokoro-82M apache-2.0; Qwen3-TTS 12Hz 1.7B VoiceDesign/Base
+apache-2.0; Chatterbox and Chatterbox Turbo mit; Fun-CosyVoice3-0.5B and CosyVoice2-0.5B apache-2.0; VoxCPM2
+apache-2.0; Orpheus 3B apache-2.0 but gated; Fish Audio S2 Pro `fish-audio-research-license` (non-commercial);
+IndexTTS-2 no licence tag on the card (custom bilibili licence in the repo); Pocket TTS cc-by-4.0; Supertonic 3
+openrail. MOS estimates come from UTMOS22 strong (ONNX export `TigreGotico/utmos-onnx`, MIT; Saeki et al.,
+Interspeech 2022): a screen, not a listening test. It favours clean neutral read speech and scores breathy voices
+low (the owner-liked Nicole scores 3.0), so the owner's ears decide.
+
+VoxCPM2 (OpenBMB, 2B, Apache-2.0, voice design from a description, streaming) was also run in this round: it filled
+the card to 7.7 GB and ran about 2.8 times slower than real time, with MOS estimates 3.4 to 4.1 and large pitch drift
+between lines, so it is audition-only on an 8 GB card. Full table: `docs/research/voice.md` section 9 in the project
+folder.

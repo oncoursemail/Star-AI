@@ -1,0 +1,1 @@
+SharedArrayBuffer has been removed from browsers after the Spectre attacks, so threaded builds no longer run on the open web. Users must enable a browser flag (chrome://flags) to get it back. Rebuild without threads.

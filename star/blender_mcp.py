@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
 import json
+import os
 from pathlib import Path
 import re
 
@@ -21,12 +22,15 @@ from mcp.server import Server
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from .blender_bridge import BlenderController, SCENE_SCHEMA, status
+from .blender_animation import ANIMATION_SCHEMA, analyze_animation
 
 STATUS = "star_blender_status"
 PROBE = "star_blender_probe"
 INSPECT = "star_blender_inspect"
 BUILD = "star_blender_build_scene"
-NAMES = frozenset({STATUS, PROBE, INSPECT, BUILD})
+ANIMATION_PREFLIGHT = "star_blender_animation_preflight"
+ANIMATION_EXPORT = "star_blender_animation_export_r15_draft"
+NAMES = frozenset({STATUS, PROBE, INSPECT, BUILD, ANIMATION_PREFLIGHT, ANIMATION_EXPORT})
 MAX_ARGS = 25_000
 MAX_PREVIEW = 1_800_000
 CALL_SECONDS = 205
@@ -43,6 +47,19 @@ CATALOG = (
     {"name": INSPECT, "description": "Inspect only a previous STAR-created Blender job in the currently selected project; does not open arbitrary .blend files.",
      "inputSchema": {"type": "object", "properties": {"job_id": {"type": "string", "pattern": "^[a-f0-9]{24}$"}},
                      "required": ["job_id"], "additionalProperties": False}},
+    {"name": ANIMATION_PREFLIGHT,
+     "description": ("Read-only preflight of bounded R15/R6 Blender animation keyframe plans: "
+                     "rig-specific bone names, loops, motion-rate warnings, and native Studio import limits. "
+                     "Does not launch Blender, upload, train or prove an animation is playable."),
+     "inputSchema": ANIMATION_SCHEMA},
+    {"name": ANIMATION_EXPORT,
+     "description": ("EXPERIMENTAL: author editable Blender R15 proxy bone actions and export "
+                     "one draft animation.fbx plus scene.blend into a private STAR job. "
+                     "This is bone-only, not a Roblox avatar; native Studio import unverified. "
+                     "Requires existing Blender edit permission AND "
+                     "STAR_BLENDER_R15_ANIMATION_EXPERIMENT=on. Never supports R6 export, "
+                     "arbitrary bpy, source assets, Roblox publishing or auto-install."),
+     "inputSchema": ANIMATION_SCHEMA},
     {"name": BUILD, "description": (
         "Create an editable .blend scene and Roblox-compatible .glb in STAR's isolated Blender project folder. "
         "Only validated primitives, modular arches/roofs, low-poly trees/rocks, colors, camera and optional preview render. "
@@ -80,7 +97,10 @@ def make_server(controller: BlenderController):
     """Expose only host-approved capabilities; schema and runtime gates both enforce scope."""
     enabled = getattr(controller.settings, "blender_enabled", False) is True
     editing = enabled and getattr(controller.settings, "blender_edit", False) is True
-    catalog = [tool for tool in CATALOG if tool["name"] != BUILD or editing]
+    animation_export = editing and os.environ.get("STAR_BLENDER_R15_ANIMATION_EXPERIMENT") == "on"
+    catalog = [tool for tool in CATALOG
+               if (tool["name"] != BUILD or editing)
+               and (tool["name"] != ANIMATION_EXPORT or animation_export)]
     server = Server("STAR Blender MCP", version="1.0")
 
     @server.list_tools()
@@ -104,6 +124,12 @@ def make_server(controller: BlenderController):
                 if set(arguments) != {"job_id"}:
                     return _error("STAR Blender MCP: inspect takes one job identifier")
                 result = controller.inspect(arguments["job_id"])
+            elif name == ANIMATION_PREFLIGHT:
+                result = analyze_animation(arguments)
+            elif name == ANIMATION_EXPORT:
+                if not animation_export:
+                    return _error("STAR Blender MCP: experimental R15 animation permission required")
+                result = await controller.animate(arguments)
             else:
                 if not editing:
                     return _error("STAR Blender MCP: owner approval required")

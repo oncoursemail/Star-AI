@@ -401,7 +401,9 @@ def main(argv: list[str] | None = None) -> int:
             items = load_selftest(args.dir)
             suite_file = next(Path(args.dir).glob("*.json"))
             _, scorer = _real_scorer(suite_file, args.server or os.environ.get("STAR_EVAL_SERVER", ""),
-                                     args.ssh or os.environ.get("STAR_EVAL_SSH", ""), args.key_file)
+                                     # the Luau VM may run on brain 2 (STAR_EVAL_SANDBOX_SSH): it only needs the luau binary
+                                     args.ssh or os.environ.get("STAR_EVAL_SANDBOX_SSH", "")
+                                     or os.environ.get("STAR_EVAL_SSH", ""), args.key_file)
             problems = verify(items, scorer)
             print(f"verify: {len(items)} tasks, " + ("all good" if not problems else f"{problems} problem(s)"))
             return 1 if problems else 0
