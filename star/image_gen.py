@@ -21,7 +21,11 @@ import time
 from pathlib import Path
 
 from ._lazy import lazy_attr, lazy_module
-Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time Pillow loads on first use
+    from PIL import Image
+else:
+    Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
 ImageFilter = lazy_module("PIL.ImageFilter")
 
 from . import media_places, references

@@ -18,10 +18,13 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from ._lazy import lazy_attr, lazy_module
-Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+if TYPE_CHECKING:  # type checkers see the real module; at run time Pillow loads on first use
+    from PIL import Image
+else:
+    Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
 ImageChops, ImageDraw = lazy_module("PIL.ImageChops"), lazy_module("PIL.ImageDraw")
 ImageOps, ImageStat = lazy_module("PIL.ImageOps"), lazy_module("PIL.ImageStat")
 
