@@ -239,8 +239,10 @@ class Drawer:
                              "scripts/media/setup_comfyui.sh (see docs/STAR_DISCORD_SETUP.md), or start ComfyUI "
                              "from STAR Desktop → Settings → Where STAR generates, then ask again.")
         await say("Starting the image engine on the PC (30 seconds to a few minutes)…")
+        launcher = self._launcher
+        assert launcher is not None  # _parts() creates it before an engine is started
         try:
-            await asyncio.to_thread(self._launcher.start, settings, self.home, wait_seconds=START_WAIT_SECONDS)
+            await asyncio.to_thread(launcher.start, settings, self.home, wait_seconds=START_WAIT_SECONDS)
         except (OSError, RuntimeError, ValueError) as exc:     # TimeoutError is an OSError
             raise ValueError("The image engine (ComfyUI) did not start: " + str(exc)[:400]
                              + " (The bot's copy of that log is ~/.star/discord-images/logs/comfyui.log.)") from exc
