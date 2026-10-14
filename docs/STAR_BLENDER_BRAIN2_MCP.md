@@ -133,3 +133,34 @@ Roblox's official Blender workflow explicitly discusses coordinate/scale differe
 **Manual Windows/Blender:** test actual official Blender 4.x/5.x binary; verify nonempty editable .blend, .glb geometry and PNG; inspect exported meshes in the Studio Importer; measure job wall time, memory, output size and rendered quality, including failure and timeout cases. Test installer upgrade preservation and the packaged executable path. Before any version is described as released or production-ready, attach screenshot and native device evidence.
 
 **Future work (not shipped):** full Blender modeling and texture-baking graph, skinned and physics foliage, camera-lock reference matching with perceptual and semantic scoring, animation strip validation, visual artifact preview UI, imported Roblox mesh reconciliation and artist-reviewed self-improvement gated by held-out benchmarks. These should be separate small audited PRs, not unbounded powers granted to Brain 2.
+
+## Update 2026-10-13: the Blender that runs ON brain 2 (live GUI, official Blender Lab MCP)
+
+The sections above describe the local, headless, recipe-only connector. A second, opt-in route lets STAR work in the real
+Blender 5.2 GUI that runs on brain 2 (the second STAR server), look at it like a person (viewport screenshots from set camera
+angles, quick renders) and export GLB/FBX for Roblox. Setting `blender_brain2` (needs `blender_enabled`; `blender_edit` for
+anything that changes a scene or starts Blender); off by default. The tool is `star_blender` (`star/blender_brain2.py`); it reaches the
+official Blender Lab MCP add-on through an operator-chosen ssh command, like the Studio connector, and model-written Python
+(`run_bpy`) passes an AST allow-list first. Details, measurements, security model and the live demo evidence:
+`docs/agents/blender-brain2-20261013.md` and `docs/agents/blender-brain2-20261013/`. Launcher and setup script: `server/brain2_blender/`.
+
+## Update 2026-10-14: bake pipeline and the lessons of the dragon v3 build (stylized high-detail -> game-ready)
+
+Learned by building a high-detail stylized dragon (565k-face sculpt-style body, 86k-face wings) and baking it onto
+a 25k-triangle rigged game model entirely through `star_blender` (evidence and the capability-gap report:
+`docs/agents/dragon-v3-20261013/` in the workspace). What changed in the tool:
+
+- `bake {scene, object, source?, maps, size, samples, extrusion, margin}`: Cycles bakes (normal, ao, color, emit,
+  roughness, and `lit` = albedo x ambient occlusion + glow in ONE colour map for engines that read only a colour map)
+  from a high mesh onto a low mesh's UV map (selected-to-active) or from a mesh's own material. STAR's own code saves the
+  PNGs into the sandbox (`textures/`) and relinks the images to those files, so the maps survive a Blender restart and
+  go into the GLB; model code still cannot write files. Other objects sit out of the bake (memory, no stray AO).
+- `render_preview`: `samples`, `denoise`, `camera: scene` (render through the scene's own camera and lights, e.g. a
+  3-point setup), up to 1280x720, and an existing world is kept. `screenshot`/`render_preview`: `center [x,y,z]` to look
+  at a point (face close-ups), zoom up to 8, and `label` to keep each pass's evidence files.
+- Restart safety: every scene action first reopens its scene if Blender restarted (30-minute limit or a memory-cap
+  kill); before this a `run_bpy` after a restart edited the factory cube and the save overwrote the real scene file.
+- Filter: `bmesh.utils` allowed (only while `bmesh` is the real module), f-string labels like `f"{a}/{b}"` no longer
+  read as paths, `bpy.ops.sculpt` / `bpy.ops.paint` allowed, and file keywords (`filepath=`, `save_mode=`, ...) are
+  refused on every call (`bpy.ops.object.bake(save_mode='EXTERNAL', filepath=...)` could write anywhere before).
+  `run_bpy` code limit 12k -> 24k characters.
