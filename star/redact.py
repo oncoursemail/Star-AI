@@ -21,6 +21,8 @@ _NOT_AN_EXPRESSION = rf"(?![{_KEY_CHARS}=(.\[:])"
 _PATTERNS = (
     # Authorization: Bearer <token>
     (re.compile(rf"(?i)\b(Bearer\s+)[{_KEY_CHARS}.=]{{16,}}"), r"\1" + _REDACTED),
+    # Authorization: Bot <token> (Discord). Only in a header, so "the bot configuration_file" is prose.
+    (re.compile(rf"(?i)\b(Authorization[\"']?\s*[:=]\s*[\"']?Bot\s+)[{_KEY_CHARS}.=]{{16,}}"), r"\1" + _REDACTED),
     # scheme://user:password@host
     (re.compile(r"(?i)\b((?:https?|wss?|ftp)://)[^\s/@:]+:[^\s/@]+@"), r"\1" + _REDACTED + "@"),
     # name = value, "name": "value", NAME=value for a secret-looking name (OPENAI_API_KEY, client_secret,
@@ -35,6 +37,12 @@ _PATTERNS = (
     # Well-known key formats, wherever they appear.
     (re.compile(r"(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}"), _REDACTED),
     (re.compile(r"(?<![A-Za-z0-9_])(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,})"), _REDACTED),
+    # Hugging Face, AWS access key IDs, Google API keys, Slack, GitLab, Stripe-style live/test keys.
+    (re.compile(r"(?<![A-Za-z0-9_-])(?:hf_[A-Za-z0-9]{30,}|AKIA[0-9A-Z]{16}(?![0-9A-Z])|AIza[0-9A-Za-z_-]{35}"
+                r"|xox[abposr]-[A-Za-z0-9-]{10,}|glpat-[A-Za-z0-9_-]{20,}|[rsp]k_(?:live|test)_[A-Za-z0-9]{20,})"),
+     _REDACTED),
+    # Discord bot token: base64 user id . 6-character timestamp . HMAC.
+    (re.compile(r"(?<![A-Za-z0-9_.-])[MNO][A-Za-z0-9_-]{23,27}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}"), _REDACTED),
     (re.compile(r"(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}"), _REDACTED),
     (re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)"), _REDACTED),
 )
