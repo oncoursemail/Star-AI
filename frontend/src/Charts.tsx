@@ -14,9 +14,9 @@ export function AnalyticsView({data}:{data:Analytics}) {
   const points=data.trend||[]
   // Counted learning events (star/analytics.py). Missing on an older host: shown as zero, never guessed.
   const learning=data.learning||{captured:0,accepted:0,used:0}
-  return <div className="scroll-region">
+  return <div className="scroll-region" tabIndex={0} role="region" aria-label="Analytics">
     <div className="page-wrap dashboard">
-      <div className="page-intro"><div className="eyebrow">DEVELOPMENT INSIGHTS</div><h1>Analytics<span className="gold-dot">.</span></h1><p>Real activity from your local workspace. No cloud tracking, no made-up numbers.</p></div>
+      <div className="page-intro"><h1>Analytics</h1><p>Real activity from your local workspace. No cloud tracking, no made-up numbers.</p></div>
       <div className="stat-grid">
         {[
           {icon:<Activity size={18}/>,label:'Task runs',value:total,meta:'Last 14 days'},

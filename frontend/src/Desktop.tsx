@@ -32,6 +32,7 @@ import {ChatRow} from './ChatRow'
 import {ScreenConsent} from './ScreenConsent'
 import {useDismiss} from './Composer'
 import './redesign.css'
+import './polish.css'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -665,6 +666,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
+   <a className="skip-link" href="#star-main" onClick={e=>{e.preventDefault();const main=document.getElementById('star-main');main?.focus();if(tab==='chat')composerRef.current?.focus()}}>Skip to {tab==='chat'?'message box':'page content'}</a>
    <aside className="rail" aria-label="STAR navigation">
      <div className="rail-head">
        <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span>STAR</span></button>
@@ -708,7 +710,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              onBlur={event=>{const next=event.currentTarget.value.trim();setRenamingTitle(false);if(next&&next!==chatTitle)void renameChat(currentChat.id,next)}}
              onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.currentTarget.value=chatTitle;setRenamingTitle(false)}}}/>
            :<h1 title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
-           :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
+           :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span>{/* Pages with their own <h1> get a plain breadcrumb here; Brain draws no page title, so the bar keeps its h1. */}{tab==='brain-overview'?<h1>{sections.find(x=>x[0]===tab)?.[1]}</h1>:<span className="bar-page" aria-current="page">{sections.find(x=>x[0]===tab)?.[1]}</span>}</div>}
        </div>
        <div className="bar-right">
          {tab==='chat'&&<>
@@ -728,9 +730,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </>}
        </div>
      </header>
-     {preview&&<div className="preview-ribbon" role="note"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
+     {preview&&<div className="preview-ribbon" role="region" aria-label="Preview notice"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
-       <MotionSurface as="main" key={tab} className="page-stage" variants={pageFade}>
+       <MotionSurface as="main" id="star-main" tabIndex={-1} key={tab} className="page-stage" variants={pageFade}>
          {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
