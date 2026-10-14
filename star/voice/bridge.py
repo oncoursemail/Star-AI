@@ -1,12 +1,18 @@
 """Bridge between the desktop UI and voice calls: a small set of actions in, a stream of events out.
 
-The React call screen is not built yet (another branch owns the chat UI). This module is the whole backend
-contract it needs, documented in docs/STAR_VOICE_CALLS.md:
+The React call screen (frontend/src/VoiceCall.tsx) and read-aloud (frontend/src/ReadAloud.tsx) use this
+contract, documented in docs/STAR_VOICE_CALLS.md:
 
   actions  voiceStatus, voiceGetSettings, voiceSaveSettings, voiceListVoices, voiceSelectVoice, voiceListDevices,
-           voiceStartCall, voiceStopCall, voiceInterrupt, voiceSetMuted, voicePreviewVoice
+           voiceStartCall, voiceStopCall, voiceInterrupt, voiceSetMuted, voicePreviewVoice, voicePushToTalk,
+           voiceSpeak, voiceStopSpeaking
   events   kind "voice", data {type: state | level | speech_started | partial_transcript | final_transcript
-           | assistant_delta | assistant_sentence | interrupted | turn_metrics | error | progress | ended}
+           | assistant_delta | assistant_sentence | interrupted | turn_metrics | error | progress | ended
+           | discarded | speak_started | speak_done | preview_done}
+
+Read-aloud (voiceSpeak) speaks one chat reply in the chosen voice outside a call. Only one thing speaks at a time:
+a new read-aloud stops the previous one, and starting a call stops any read-aloud. voiceStartCall needs
+`micConsent: true`, which only the call screen's consent step sends.
 
 At most one call exists at a time. Everything slow (loading models, the call itself) runs on a worker
 thread; handle() only validates and returns.
@@ -15,11 +21,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 import threading
+import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .catalog import STYLES, VoiceEntry, find_voice, kokoro_recipe, load_catalog
 from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, TTS_ENGINES, VoiceSettings
@@ -27,9 +33,11 @@ from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, TTS_ENGINES, VoiceS
 VOICE_ACTIONS = frozenset({
     "voiceStatus", "voiceGetSettings", "voiceSaveSettings", "voiceListVoices", "voiceSelectVoice",
     "voiceListDevices", "voiceStartCall", "voiceStopCall", "voiceInterrupt", "voiceSetMuted", "voicePreviewVoice",
+    "voicePushToTalk", "voiceSpeak", "voiceStopSpeaking",
 })
 REQUIRED_PACKAGES = {"numpy": "numpy", "onnxruntime": "onnxruntime", "sounddevice": "sounddevice",
                      "faster_whisper": "faster-whisper", "kokoro_onnx": "kokoro-onnx", "httpx": "httpx"}
+SPEAK_AHEAD_SECONDS = 1.5            # read-aloud synthesises at most this far ahead of what is playing
 PREVIEW_LINE = "Hi sweetheart, it's Star. I'm so glad you're here."
 
 
@@ -52,6 +60,12 @@ class _Factories:
         return Microphone(device=device or None)
 
     @staticmethod
+    def tts(settings: VoiceSettings):
+        from .engines import make_tts
+        return make_tts(settings.tts_engine, settings.voice, settings.speed, settings.device, settings.tts_lang,
+                        settings.sentence_gap_ms, settings.pitch_semitones)
+
+    @staticmethod
     def speaker(sample_rate: int, device):
         from .devices import SoundSpeaker
         return SoundSpeaker(sample_rate=sample_rate, device=device or None)
@@ -72,6 +86,16 @@ class _Call:
         self.thread: threading.Thread | None = None
 
 
+class _SpeechJob:
+    """One read-aloud or preview: a cancel flag and the thread speaking it."""
+
+    def __init__(self, request_id: str) -> None:
+        self.id = request_id
+        self.cancel = threading.Event()
+        self.speaker: Any = None  # the SoundSpeaker while it plays
+        self.thread: threading.Thread | None = None
+
+
 class VoiceBridge:
     def __init__(self, emit: Callable[[str, dict], None], *, settings_path: Path | None = None,
                  save_turn: Callable[[str, str], None] | None = None, factories=None) -> None:
@@ -83,6 +107,9 @@ class VoiceBridge:
         self._call: _Call | None = None
         self._engines = None
         self._engines_key: tuple | None = None
+        self._speech: _SpeechJob | None = None
+        self._tts = None                         # read-aloud engine when no call has loaded one yet
+        self._tts_key: tuple | None = None
 
     # -- helpers ------------------------------------------------------------------------------
     def _emit(self, call_id: str, data: dict) -> None:
@@ -123,6 +150,7 @@ class VoiceBridge:
             "callId": call.id if call else None,
             "state": (call.session.state if call and call.session else ("starting" if call else "idle")),
             "muted": bool(call and call.session and call.session.muted),
+            "speaking": self._speech is not None,
         }
 
     # -- actions ------------------------------------------------------------------------------
@@ -154,17 +182,29 @@ class VoiceBridge:
             return {"stopped": self.stop_call()}
         if action == "voicePreviewVoice":
             return self._preview(body, request_id)
+        if action == "voiceSpeak":
+            return self._read_aloud(body, request_id)
+        if action == "voiceStopSpeaking":
+            return {"stopped": self.stop_speaking()}
         call = self._call
         if call is None or call.session is None:
             raise RuntimeError("No voice call is active")
         if action == "voiceInterrupt":
             call.session.interrupt()
             return {"interrupted": True}
+        if action == "voicePushToTalk":
+            if not call.session.config.push_to_talk:
+                raise ValueError("This call is hands-free; push-to-talk is off")
+            call.session.push_to_talk(body.get("down") is True)
+            return {"down": body.get("down") is True}
         call.session.set_muted(body.get("muted") is True)          # voiceSetMuted
         return {"muted": call.session.muted}
 
     def _start_call(self, body: dict, request_id: str) -> dict:
         settings = VoiceSettings.from_mapping(body.get("settings") or {}, self._load_settings())
+        if body.get("micConsent") is not True:
+            raise PermissionError("Starting a call needs your OK to use the microphone (the call screen asks first)")
+        self.stop_speaking()
         with self._lock:
             if self._call is not None:
                 raise RuntimeError("A voice call is already running")
@@ -188,7 +228,24 @@ class VoiceBridge:
             call.thread.join(wait)
         return True
 
+    def stop_speaking(self, wait: float = 2.0) -> bool:
+        """Stop a read-aloud or preview now. True when something was speaking."""
+        job = self._speech
+        if job is None:
+            return False
+        job.cancel.set()
+        speaker = job.speaker
+        if speaker is not None:
+            try:
+                speaker.stop()
+            except Exception:
+                pass
+        if job.thread is not None and job.thread is not threading.current_thread():
+            job.thread.join(wait)
+        return True
+
     def close(self) -> None:
+        self.stop_speaking(wait=1.0)
         self.stop_call(wait=2.0)
 
     # -- voice catalog ------------------------------------------------------------------------
@@ -303,26 +360,75 @@ class VoiceBridge:
             line = STYLES[entry.style]["preview_line"]
         settings = VoiceSettings.from_mapping(wanted, self._load_settings())
         text = str(body.get("text") or line)[:400]
+        self._start_speech(request_id, settings, [text], done_type="preview_done")
+        return {"previewing": settings.voice, "voiceId": settings.voice_id}
+
+    def _read_aloud(self, body: dict, request_id: str) -> dict:
+        """Read one chat reply aloud in the saved voice. Markdown is turned into speech first (readaloud.py)."""
+        from .readaloud import sentences, spoken_text
+        if self._call is not None:
+            raise RuntimeError("Star is on a call; read-aloud waits until the call ends")
+        raw = str(body.get("text") or "")
+        if len(raw) > 60_000:
+            raise ValueError("That reply is too long to read aloud")
+        text = spoken_text(raw)
+        if not text:
+            raise ValueError("There is nothing in that reply to read aloud")
+        settings = self._load_settings()
+        parts = sentences(text)
+        self._start_speech(request_id, settings, parts, done_type="speak_done")
+        return {"speaking": True, "sentences": len(parts), "characters": len(text), "voiceId": settings.voice_id}
+
+    def _speech_tts(self, settings: VoiceSettings):
+        """The loaded call engine if there is one, else a read-aloud engine kept for the next reply."""
+        if self._engines is not None:
+            return self._engines.tts
+        key = (settings.tts_engine, settings.device)
+        if self._tts is None or self._tts_key != key:
+            self._tts = self._factories.tts(settings)
+            self._tts_key = key
+        return self._tts
+
+    def _start_speech(self, request_id: str, settings: VoiceSettings, parts: list[str], *, done_type: str) -> None:
+        self.stop_speaking()
+        job = _SpeechJob(request_id)
+        self._speech = job
 
         def work() -> None:
+            started = time.monotonic()
+            first_audio = None
             try:
-                from .engines import make_tts
-                tts = self._engines.tts if self._engines is not None else make_tts(
-                    settings.tts_engine, settings.voice, settings.speed, settings.device, settings.tts_lang,
-                    settings.sentence_gap_ms, settings.pitch_semitones)
+                tts = self._speech_tts(settings)
                 _apply_voice(tts, settings)
                 speaker = self._factories.speaker(int(getattr(tts, "sample_rate", 24000)), settings.output_device)
+                job.speaker = speaker
                 with speaker:
-                    for pcm, rate in tts.synthesize(text):
-                        speaker.play(pcm, rate)
-                    while speaker.pending_seconds() > 0 and self._call is None:
-                        threading.Event().wait(0.05)
-                self._emit(request_id, {"type": "preview_done", "voice": settings.voice})
+                    for part in parts:
+                        # Stay at most a couple of seconds ahead of the speaker: stopping is then instant and
+                        # cheap, and a long reply does not hold the graphics card for its whole length.
+                        while not job.cancel.is_set() and speaker.pending_seconds() > SPEAK_AHEAD_SECONDS:
+                            job.cancel.wait(0.02)
+                        if job.cancel.is_set():
+                            break
+                        for pcm, rate in tts.synthesize(part):
+                            if job.cancel.is_set():
+                                break
+                            if first_audio is None:
+                                first_audio = round(time.monotonic() - started, 3)
+                                self._emit(request_id, {"type": "speak_started", "first_audio_seconds": first_audio})
+                            speaker.play(pcm, rate)
+                    while not job.cancel.is_set() and speaker.pending_seconds() > 0 and self._call is None:
+                        job.cancel.wait(0.05)
+                self._emit(request_id, {"type": done_type, "voice": settings.voice, "stopped": job.cancel.is_set(),
+                                        "first_audio_seconds": first_audio})
             except Exception as exc:
                 self._emit(request_id, {"type": "error", "message": str(exc)[:300] or type(exc).__name__})
+            finally:
+                if self._speech is job:
+                    self._speech = None
 
-        threading.Thread(target=work, name="star-voice-preview", daemon=True).start()
-        return {"previewing": settings.voice, "voiceId": settings.voice_id}
+        job.thread = threading.Thread(target=work, name="star-voice-speak", daemon=True)
+        job.thread.start()
 
 
 def _settings_for(entry: VoiceEntry) -> dict:

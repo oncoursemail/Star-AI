@@ -11,7 +11,6 @@ import argparse
 import asyncio
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
-import hashlib
 import io
 import json
 import os
