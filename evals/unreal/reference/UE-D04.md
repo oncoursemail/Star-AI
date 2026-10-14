@@ -1,0 +1,3 @@
+Binding the action is only half of Enhanced Input. An Input Mapping Context does nothing until it is added for the local player, so Space is never mapped to `JumpAction`.
+
+Fix: when the pawn is possessed by a local PlayerController (for example in `PawnClientRestart` or `BeginPlay` of a locally controlled pawn), get the `UEnhancedInputLocalPlayerSubsystem` from the controller's `ULocalPlayer` and call `AddMappingContext(DefaultMappingContext, 0)`. Also check that the project's Default Input Component Class is `EnhancedInputComponent`, that Space is mapped to `JumpAction` in the context, and that `EnhancedInput` is in your module's `.Build.cs`. Not compiled or run here.

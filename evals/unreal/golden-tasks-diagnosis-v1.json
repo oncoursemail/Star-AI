@@ -1,0 +1,444 @@
+[
+ {
+  "id": "UE-D01",
+  "category": "unreal-cpp",
+  "difficulty": 2,
+  "goal": "Diagnose a UObject collected by the garbage collector",
+  "prompt": "In my Unreal Engine 5 project an AActor subclass creates an inventory with `Inventory = NewObject<UInventory>(this);` in BeginPlay and stores it in a member declared as `UInventory* Inventory;`. A few seconds later the game crashes when I touch it. Explain the cause and the fix in prose, naming the exact Unreal macros and types.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-cpp-gameplay"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "recommends AddToRoot as the normal fix"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "uproperty",
+     "re": "UPROPERTY",
+     "why": "marks the member UPROPERTY()",
+     "scope": "prose"
+    },
+    {
+     "id": "gc",
+     "re": "(?i)garbage[- ]collect|\\bGC\\b",
+     "why": "explains garbage collection",
+     "scope": "prose"
+    },
+    {
+     "id": "reflection",
+     "re": "(?i)reflect|not (?:visible|seen|tracked)|invisible|doesn'?t (?:see|know)|does not (?:see|know)|untracked",
+     "why": "explains raw pointers are not seen by the GC",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "add_to_root_everywhere",
+     "re": "(?i)always (?:call|use) AddToRoot",
+     "why": "recommends AddToRoot as the normal fix",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: marks the member UPROPERTY()",
+    "Present: explains garbage collection",
+    "Present: explains raw pointers are not seen by the GC",
+    "Absent: recommends AddToRoot as the normal fix"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UE-D02",
+  "category": "unreal-networking",
+  "difficulty": 2,
+  "goal": "Diagnose a Server RPC that never runs because of ownership",
+  "prompt": "In my Unreal Engine 5 multiplayer game a door actor placed in the level has `UFUNCTION(Server, Reliable) void ServerOpen();`. A client calls `Door->ServerOpen()` when pressing E, but the server never runs it. Explain the cause and the fix in prose, naming the exact Unreal concepts and APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-replication-gas"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "replaces it with a NetMulticast called from the client"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "ownership",
+     "re": "(?i)\\bown(?:s|ed|er|ership|ing)?\\b",
+     "why": "explains actor ownership",
+     "scope": "prose"
+    },
+    {
+     "id": "dropped",
+     "re": "(?i)dropp|ignored|discard|never (?:reach|arriv|execut)|not (?:sent|executed)",
+     "why": "says the RPC is dropped",
+     "scope": "prose"
+    },
+    {
+     "id": "route",
+     "re": "(?i)PlayerController|(?:character|pawn)[^.]{0,80}(?:Server|RPC)|SetOwner",
+     "why": "routes the call through an owned actor or SetOwner",
+     "scope": "prose"
+    },
+    {
+     "id": "authority",
+     "re": "(?i)server[^.]{0,80}(?:valid|check|range|distance|decid)",
+     "why": "the server validates the request",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "multicast_fix",
+     "re": "(?i)(?:change|switch|make) (?:it|the (?:function|RPC)) (?:to |into )?(?:a )?NetMulticast",
+     "why": "replaces it with a NetMulticast called from the client",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains actor ownership",
+    "Present: says the RPC is dropped",
+    "Present: routes the call through an owned actor or SetOwner",
+    "Present: the server validates the request",
+    "Absent: replaces it with a NetMulticast called from the client"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UE-D03",
+  "category": "unreal-networking",
+  "difficulty": 2,
+  "goal": "Make a health variable replicate and fire its notify on the host",
+  "prompt": "In my Unreal Engine 5 game the server changes `Health` on my character, declared `UPROPERTY(ReplicatedUsing = OnRep_Health) float Health;`. Clients never see the new value, and after I fixed that, the listen-server host still never runs OnRep_Health. Explain both causes and the fixes in prose, naming the exact Unreal functions and macros.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-replication-gas"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "glrp",
+     "re": "GetLifetimeReplicatedProps",
+     "why": "overrides GetLifetimeReplicatedProps",
+     "scope": "prose"
+    },
+    {
+     "id": "doreplifetime",
+     "re": "DOREPLIFETIME",
+     "why": "registers the property with DOREPLIFETIME",
+     "scope": "prose"
+    },
+    {
+     "id": "breplicates",
+     "re": "(?i)bReplicates|SetReplicates",
+     "why": "the actor must replicate",
+     "scope": "prose"
+    },
+    {
+     "id": "server_manual",
+     "re": "(?i)(?:server|host)[^.]{0,120}(?:call|invoke)[^.]{0,40}OnRep|(?:call|invoke)[^.]{0,40}OnRep_Health[^.]{0,80}(?:server|host|manual)|manually",
+     "why": "calls OnRep on the server manually",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: overrides GetLifetimeReplicatedProps",
+    "Present: registers the property with DOREPLIFETIME",
+    "Present: the actor must replicate",
+    "Present: calls OnRep on the server manually"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UE-D04",
+  "category": "unreal-input",
+  "difficulty": 2,
+  "goal": "Diagnose Enhanced Input actions that never fire",
+  "prompt": "In my Unreal Engine 5 character I created an Input Action and an Input Mapping Context, and in SetupPlayerInputComponent I call `EIC->BindAction(JumpAction, ETriggerEvent::Triggered, this, &AMyCharacter::DoJump);`, but pressing Space does nothing. Explain the likely cause and the fix in prose, naming the exact Unreal classes and functions.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-cpp-gameplay"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "falls back to legacy action mappings"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "subsystem",
+     "re": "UEnhancedInputLocalPlayerSubsystem",
+     "why": "gets the UEnhancedInputLocalPlayerSubsystem",
+     "scope": "prose"
+    },
+    {
+     "id": "add_ctx",
+     "re": "AddMappingContext",
+     "why": "calls AddMappingContext",
+     "scope": "prose"
+    },
+    {
+     "id": "local_player",
+     "re": "(?i)local ?player|locally controlled|possess",
+     "why": "adds it for the local player after possession",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "legacy",
+     "re": "(?i)use (?:the )?(?:legacy|old) (?:input|action mappings?|BindAction\\(\\\")",
+     "why": "falls back to legacy action mappings",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: gets the UEnhancedInputLocalPlayerSubsystem",
+    "Present: calls AddMappingContext",
+    "Present: adds it for the local player after possession",
+    "Absent: falls back to legacy action mappings"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UE-D05",
+  "category": "unreal-build",
+  "difficulty": 2,
+  "goal": "Fix an unresolved external symbol from a missing module dependency",
+  "prompt": "In my Unreal Engine 5 C++ project I added a UMG widget class that uses `UUserWidget` and `CreateWidget`. The build fails with `error LNK2019: unresolved external symbol ... UUserWidget::...`. Explain the cause and the fix in prose, naming the exact files and settings.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-cpp-gameplay"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "buildcs",
+     "re": "(?i)\\.Build\\.cs|Build\\.cs",
+     "why": "edits the module's .Build.cs",
+     "scope": "prose"
+    },
+    {
+     "id": "deps",
+     "re": "(?:Public|Private)DependencyModuleNames",
+     "why": "adds to PublicDependencyModuleNames or PrivateDependencyModuleNames",
+     "scope": "prose"
+    },
+    {
+     "id": "umg",
+     "re": "\\bUMG\\b",
+     "why": "adds the UMG module",
+     "scope": "prose"
+    },
+    {
+     "id": "module",
+     "re": "(?i)\\bmodule\\b",
+     "why": "explains the missing module dependency",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: edits the module's .Build.cs",
+    "Present: adds to PublicDependencyModuleNames or PrivateDependencyModuleNames",
+    "Present: adds the UMG module",
+    "Present: explains the missing module dependency"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "UE-D06",
+  "category": "unreal-gas",
+  "difficulty": 2,
+  "goal": "Set up a Gameplay Ability System component that survives respawn and works on clients",
+  "prompt": "In my Unreal Engine 5 multiplayer shooter I put the UAbilitySystemComponent on the character. Cooldowns and attributes reset every respawn, and on clients abilities fail to activate. Explain where the component should live, how it must be initialised on server and client, and which replication mode to use, in prose, naming the exact GAS functions.",
+  "run_mode": "automated",
+  "helps": [
+   "unreal-replication-gas"
+  ],
+  "studio_check": "A human checks every API name and macro against the Unreal Engine 5 API reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "playerstate",
+     "re": "(?i)PlayerState",
+     "why": "moves the ASC to the PlayerState",
+     "scope": "prose"
+    },
+    {
+     "id": "init",
+     "re": "InitAbilityActorInfo",
+     "why": "calls InitAbilityActorInfo",
+     "scope": "prose"
+    },
+    {
+     "id": "both_sides",
+     "re": "(?i)PossessedBy[^.]{0,200}OnRep_PlayerState|OnRep_PlayerState[^.]{0,200}PossessedBy",
+     "why": "initialises on server (PossessedBy) and client (OnRep_PlayerState)",
+     "scope": "prose"
+    },
+    {
+     "id": "mixed",
+     "re": "(?i)\\bMixed\\b",
+     "why": "uses Mixed replication mode for players",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: moves the ASC to the PlayerState",
+    "Present: calls InitAbilityActorInfo",
+    "Present: initialises on server (PossessedBy) and client (OnRep_PlayerState)",
+    "Present: uses Mixed replication mode for players"
+   ]
+  },
+  "split": "holdout"
+ }
+]

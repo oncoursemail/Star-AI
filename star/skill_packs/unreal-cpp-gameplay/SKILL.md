@@ -1,0 +1,15 @@
+---
+name: unreal-cpp-gameplay
+description: Unreal Engine 5 C++ gameplay rules - UObject garbage collection and reflection macros, actor lifecycle, gameplay framework roles, modules and Build.cs, Enhanced Input, Blueprint and C++ split, Roblox equivalents. Use for Unreal C++ crashes, linker errors, input that does nothing or structuring gameplay code.
+---
+# Unreal Engine 5 C++ gameplay (assume UE 5.8 unless told otherwise)
+- Reflection: UCLASS/USTRUCT/UENUM plus GENERATED_BODY(); the .generated.h include goes last. Prefixes are required: A actors, U objects, F structs, E enums, I interfaces.
+- Garbage collection only sees reflected references. Every UObject pointer member that must stay alive needs UPROPERTY(), written as TObjectPtr<T>; a raw pointer without UPROPERTY dangles after the next GC. TWeakObjectPtr for non-owning links, TSoftObjectPtr for assets loaded later. IsValid(x) checks null and pending kill.
+- Constructor builds the Class Default Object: only defaults and CreateDefaultSubobject; never GetWorld or other actors there. Gameplay starts in BeginPlay; clean up timers and delegates in EndPlay. SpawnActorDeferred plus FinishSpawning when BeginPlay needs values set first. Turn off Tick unless needed; prefer timers and events.
+- Framework: GameMode exists only on the server (rules, spawning); GameState and PlayerState replicate to everyone; PlayerController exists on the server and its owning client (input, UI); Pawn or Character is the body. UI goes on the owning client only.
+- Modules: using another module's class means adding it to PublicDependencyModuleNames or PrivateDependencyModuleNames in the .Build.cs (EnhancedInput, UMG, GameplayAbilities, GameplayTags, GameplayTasks, AIModule, Niagara). LNK2019 unresolved external symbol almost always means a missing module dependency or a class not exported with MODULE_API.
+- Live Coding patches function bodies only; after changing headers, UPROPERTY layout or constructors, close the editor and rebuild. Keep Hot Reload off.
+- Enhanced Input: UInputAction plus UInputMappingContext. Nothing fires until the context is added for the local player: ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PC->GetLocalPlayer())->AddMappingContext(Context, Priority), once the pawn is locally possessed. Bind in SetupPlayerInputComponent with UEnhancedInputComponent::BindAction(Action, ETriggerEvent::Triggered, this, &AMyCharacter::Move).
+- Blueprints: C++ base classes own systems, data and replication; Blueprint subclasses tune values and cosmetics through BlueprintCallable, BlueprintImplementableEvent and BlueprintNativeEvent. Avoid hard references that load whole asset chains.
+- Roblox map: Script is server code behind HasAuthority(); LocalScript is PlayerController or IsLocallyControlled() code; ModuleScript is a C++ class or Subsystem; BindableEvent is a delegate; Heartbeat is Tick or a timer; Humanoid is ACharacter with UCharacterMovementComponent; CollectionService tags are Gameplay Tags.
+- Never claim code compiled or ran in the editor unless it did.

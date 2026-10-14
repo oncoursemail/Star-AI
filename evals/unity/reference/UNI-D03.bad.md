@@ -1,0 +1,1 @@
+Netcode needs the variable to be writable by clients. Construct it as `new NetworkVariable<int>(100, writePerm: NetworkVariableWritePermission.Everyone)` so any client can change it, and then the subtraction on the client will replicate to all players automatically.

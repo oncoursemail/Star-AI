@@ -1,0 +1,458 @@
+[
+ {
+  "id": "GD-D01",
+  "category": "godot-migration",
+  "difficulty": 2,
+  "goal": "Port Godot 3 movement and wait code to Godot 4",
+  "prompt": "In my Godot 4 project I pasted a Godot 3 player script. It extends KinematicBody, calls `velocity = move_and_slide(velocity, Vector3.UP)` and waits with `yield(get_tree().create_timer(0.5), \"timeout\")`. The editor reports parse errors. Explain the cause and the fix in prose, naming the exact Godot 4 classes and APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-migration-and-pitfalls"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "keeps Godot 3 yield"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "characterbody",
+     "re": "CharacterBody3D",
+     "why": "replaces KinematicBody with CharacterBody3D",
+     "scope": "prose"
+    },
+    {
+     "id": "await",
+     "re": "(?i)\\bawait\\b",
+     "why": "replaces yield with await",
+     "scope": "prose"
+    },
+    {
+     "id": "no_args",
+     "re": "(?i)move_and_slide\\(\\)|no (?:arguments|parameters)|without (?:any )?(?:arguments|parameters)|takes no",
+     "why": "says move_and_slide() takes no arguments",
+     "scope": "prose"
+    },
+    {
+     "id": "velocity_prop",
+     "re": "(?i)velocity (?:property|member)|built-in velocity|set(?:ting)? (?:the )?`?velocity`?",
+     "why": "uses the built-in velocity property",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "keeps_yield",
+     "re": "(?i)\\byield\\s*\\(\\s*get_tree|keep (?:using )?yield",
+     "why": "keeps Godot 3 yield",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: replaces KinematicBody with CharacterBody3D",
+    "Present: replaces yield with await",
+    "Present: says move_and_slide() takes no arguments",
+    "Present: uses the built-in velocity property",
+    "Absent: keeps Godot 3 yield"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-D02",
+  "category": "godot-physics",
+  "difficulty": 2,
+  "goal": "Diagnose an Area3D that never reports bodies",
+  "prompt": "In my Godot 4 project a coin is an Area3D on collision layer 3 and the player is a CharacterBody3D on layer 1. `body_entered` never fires when the player walks through the coin. Explain the likely causes and the fix in prose, naming the exact properties.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-migration-and-pitfalls"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "replaces the area with per-frame distance polling"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "mask",
+     "re": "(?i)collision_mask|\\bmask\\b",
+     "why": "talks about the collision mask",
+     "scope": "prose"
+    },
+    {
+     "id": "layer_vs_mask",
+     "re": "(?i)layer[^.]{0,80}(?:what|is|belongs)[^.]{0,80}mask|mask[^.]{0,80}(?:detect|scan|look|see)",
+     "why": "explains layer = what it is, mask = what it detects",
+     "scope": "prose"
+    },
+    {
+     "id": "monitoring",
+     "re": "(?i)\\bmonitoring\\b",
+     "why": "checks that monitoring is on",
+     "scope": "prose"
+    },
+    {
+     "id": "shape",
+     "re": "(?i)CollisionShape3D",
+     "why": "checks the Area3D has a CollisionShape3D",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "process_poll",
+     "re": "(?i)distance every frame|distance in _process",
+     "why": "replaces the area with per-frame distance polling",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: talks about the collision mask",
+    "Present: explains layer = what it is, mask = what it detects",
+    "Present: checks that monitoring is on",
+    "Present: checks the Area3D has a CollisionShape3D",
+    "Absent: replaces the area with per-frame distance polling"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-D03",
+  "category": "godot-multiplayer",
+  "difficulty": 2,
+  "goal": "Fix a client-to-server RPC that the server ignores and make it safe",
+  "prompt": "In my Godot 4 multiplayer game a client calls `request_attack.rpc_id(1, target_name, damage)`. The function is declared with a plain `@rpc` annotation and the server never runs it. Explain why, how to fix it, and what the server must check, in prose, naming the exact Godot APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-multiplayer-data"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "authority_default",
+     "re": "(?i)\\\"?authority\\\"?[^.]{0,120}default|default[^.]{0,120}\\\"?authority\\\"?",
+     "why": "explains the default mode is authority",
+     "scope": "prose"
+    },
+    {
+     "id": "any_peer",
+     "re": "(?i)any_peer",
+     "why": "uses @rpc(\"any_peer\")",
+     "scope": "prose"
+    },
+    {
+     "id": "sender",
+     "re": "get_remote_sender_id",
+     "why": "reads multiplayer.get_remote_sender_id() to validate",
+     "scope": "prose"
+    },
+    {
+     "id": "server_damage",
+     "re": "(?i)(?:server|host)[^.]{0,80}(?:compute|decide|calculate|own)s?[^.]{0,40}damage|never trust[^.]{0,60}(?:damage|client)|not (?:accept|trust)[^.]{0,40}damage",
+     "why": "server decides damage instead of trusting the client",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains the default mode is authority",
+    "Present: uses @rpc(\"any_peer\")",
+    "Present: reads multiplayer.get_remote_sender_id() to validate",
+    "Present: server decides damage instead of trusting the client"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-D04",
+  "category": "godot-multiplayer",
+  "difficulty": 2,
+  "goal": "Diagnose a MultiplayerSpawner that spawns nothing on clients",
+  "prompt": "In my Godot 4 game the server instantiates a player scene with `add_child(player)` under the root node when a peer connects, and I added a MultiplayerSpawner, but clients never see the players. Explain the likely causes and the fix in prose, naming the exact Godot APIs and properties.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-multiplayer-data"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "spawn_path",
+     "re": "spawn_path",
+     "why": "names spawn_path",
+     "scope": "prose"
+    },
+    {
+     "id": "list",
+     "re": "(?i)spawnable|add_spawnable_scene|auto spawn",
+     "why": "the scene must be in the spawnable list",
+     "scope": "prose"
+    },
+    {
+     "id": "direct_child",
+     "re": "(?i)(?:direct )?child(?:ren)? of[^.]{0,40}spawn|under (?:the )?(?:spawn_path|node (?:that )?spawn_path)",
+     "why": "add as a child of the spawn_path node",
+     "scope": "prose"
+    },
+    {
+     "id": "authority",
+     "re": "(?i)(?:server|authority)[^.]{0,60}(?:add|spawn|instanti)|only (?:the )?(?:server|authority)",
+     "why": "only the authority adds the node",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names spawn_path",
+    "Present: the scene must be in the spawnable list",
+    "Present: add as a child of the spawn_path node",
+    "Present: only the authority adds the node"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "GD-D05",
+  "category": "godot-save-data",
+  "difficulty": 2,
+  "goal": "Replace an unsafe resource-based save that players share",
+  "prompt": "In my Godot 4 game players can share save files. I save with `ResourceSaver.save(save_res, \"res://save.tres\")` and load it with `load()`. It fails after exporting and I heard it is unsafe. Explain both problems and a safer approach in prose, naming the exact Godot APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-multiplayer-data"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "enables allow_objects for untrusted data"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "user_path",
+     "re": "user://",
+     "why": "saves under user://",
+     "scope": "prose"
+    },
+    {
+     "id": "readonly",
+     "re": "(?i)res://[^.]{0,80}read[- ]only",
+     "why": "says res:// is read-only after export",
+     "scope": "prose"
+    },
+    {
+     "id": "code_risk",
+     "re": "(?i)(?:script|code)[^.]{0,80}(?:run|execut)|(?:run|execut)[^.]{0,80}(?:script|code)",
+     "why": "explains a resource can carry code that runs on load",
+     "scope": "prose"
+    },
+    {
+     "id": "safe_format",
+     "re": "(?i)\\bJSON\\b|ConfigFile|get_var",
+     "why": "uses JSON, ConfigFile or get_var instead",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "allow_objects_true",
+     "re": "(?i)allow_objects\\s*(?:=|to|set to)\\s*true|get_var\\(\\s*true\\s*\\)",
+     "why": "enables allow_objects for untrusted data",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: saves under user://",
+    "Present: says res:// is read-only after export",
+    "Present: explains a resource can carry code that runs on load",
+    "Present: uses JSON, ConfigFile or get_var instead",
+    "Absent: enables allow_objects for untrusted data"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-D06",
+  "category": "godot-ui",
+  "difficulty": 2,
+  "goal": "Diagnose buttons and world clicks blocked by an overlay, and shared material edits",
+  "prompt": "In my Godot 4 game I added a full-screen ColorRect for a fade effect. Since then no Button reacts and my `_unhandled_input` click code never runs. Separately, when I change one enemy's material colour, every enemy changes. Explain both causes and the fixes in prose, naming the exact Godot properties and methods.",
+  "run_mode": "automated",
+  "helps": [
+   "godot-migration-and-pitfalls"
+  ],
+  "studio_check": "A human checks every API name against the Godot 4 class reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "mouse_filter",
+     "re": "mouse_filter",
+     "why": "names mouse_filter",
+     "scope": "prose"
+    },
+    {
+     "id": "ignore",
+     "re": "(?i)IGNORE",
+     "why": "sets the overlay to ignore the mouse",
+     "scope": "prose"
+    },
+    {
+     "id": "shared",
+     "re": "(?i)shared|same (?:resource|material) (?:instance|object)",
+     "why": "explains the material resource is shared",
+     "scope": "prose"
+    },
+    {
+     "id": "dup",
+     "re": "(?i)duplicate\\(|local_to_scene|local to scene",
+     "why": "uses duplicate() or local to scene",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names mouse_filter",
+    "Present: sets the overlay to ignore the mouse",
+    "Present: explains the material resource is shared",
+    "Present: uses duplicate() or local to scene"
+   ]
+  },
+  "split": "holdout"
+ }
+]

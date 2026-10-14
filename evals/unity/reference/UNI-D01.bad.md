@@ -1,0 +1,1 @@
+The jitter happens because the frame rate is too high for the physics engine. Set `Time.fixedDeltaTime = Time.deltaTime` every frame so physics and rendering line up, keep moving the player with `transform.position` in `Update`, and move the camera in the same `Update` right after the player so they stay in sync.

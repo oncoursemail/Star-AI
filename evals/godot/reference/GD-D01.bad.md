@@ -1,0 +1,1 @@
+Godot 4 still supports this. Just make sure the node is a KinematicBody and pass the velocity to move_and_slide(velocity, Vector3.UP), then use yield(get_tree().create_timer(0.5), "timeout") as before.

@@ -1,0 +1,1 @@
+Triggers do not need any physics body. Just rename the method to `OnTriggerEnter(Collision other)` so it receives the hit information, and make sure both colliders are set as triggers. If it still fails, call the method manually from `Update` with a distance check.

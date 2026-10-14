@@ -1,0 +1,1 @@
+Destroy is the correct way to remove the enemies; the leak is just the garbage collector being lazy. Call `Resources.UnloadUnusedAssets()` and `System.GC.Collect()` at the end of every wave and the bundle memory will be freed.

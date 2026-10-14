@@ -19,7 +19,10 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing"]
+         "roblox-tweenservice-easing",
+         "godot-migration-and-pitfalls", "godot-multiplayer-data", "godot-rendering-performance",
+         "unity-scripting-core", "unity-netcode-data", "unity-rendering-performance",
+         "unreal-cpp-gameplay", "unreal-replication-gas", "unreal-rendering-performance"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}
@@ -52,6 +55,10 @@ def test_implementation_packs_cite_official_documentation_and_list_the_api_names
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:
             assert sources.count("https://docs.godotengine.org/en/stable/") >= 5, pack.name
+        elif pack.name in skill_packs.UNITY_PACKS:
+            assert sources.count("https://docs.unity3d.com/") >= 5, pack.name
+        elif pack.name in skill_packs.UNREAL_PACKS:
+            assert sources.count("https://dev.epicgames.com/documentation/en-us/unreal-engine/") >= 5, pack.name
         else:
             assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
             assert "verified with the knowledge service /api-lookup" in sources, pack.name

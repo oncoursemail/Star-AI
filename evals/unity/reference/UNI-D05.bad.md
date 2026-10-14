@@ -1,0 +1,1 @@
+These are only warnings, so you can ignore them: `Rigidbody.velocity` and `FindObjectsOfType` keep working forever in Unity 6. For the input error, reinstall the editor, because `Input.GetAxis` should always work and the exception means the install is corrupted.

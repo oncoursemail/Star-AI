@@ -53,7 +53,19 @@ _ROBLOX_CONTEXT = re.compile(
 
 _GODOT_CONTEXT = re.compile(r"\b(?:godot(?:\s*4)?|gdscript|PackedScene|CharacterBody2D|Node2D|Control\s+node)\b", re.IGNORECASE)
 GODOT_PACKS = frozenset(("godot-scenes-and-nodes", "godot-gdscript-typing-and-signals",
-                         "godot-physics-and-input", "godot-ui-and-themes"))
+                         "godot-physics-and-input", "godot-ui-and-themes",
+                         "godot-migration-and-pitfalls", "godot-multiplayer-data", "godot-rendering-performance"))
+_UNITY_CONTEXT = re.compile(
+    r"\b(?:unity(?:\s*6)?|MonoBehaviour|ScriptableObject|UnityEngine|Netcode for GameObjects|NetworkBehaviour|"
+    r"Addressables|URP|HDRP|IComponentData|SystemAPI|IJobEntity)\b", re.IGNORECASE)
+UNITY_PACKS = frozenset(("unity-scripting-core", "unity-netcode-data", "unity-rendering-performance"))
+_UNREAL_CONTEXT = re.compile(
+    r"\b(?:unreal(?:\s*engine)?|UE\s?5(?:\.\d)?|UCLASS|UPROPERTY|UFUNCTION|GENERATED_BODY|AActor|UObject|DOREPLIFETIME|"
+    r"UAbilitySystemComponent|AbilitySystemComponent|Nanite|Lumen|RunUAT|BuildCookRun)\b", re.IGNORECASE)
+UNREAL_PACKS = frozenset(("unreal-cpp-gameplay", "unreal-replication-gas", "unreal-rendering-performance"))
+# An engine pack is chosen only when its engine is named (Roblox words may appear too: STAR's users often ask
+# "what is the Unity version of a RemoteEvent?"). A Roblox pack is chosen only when no other engine is named.
+_ENGINE_CONTEXTS = ((GODOT_PACKS, _GODOT_CONTEXT), (UNITY_PACKS, _UNITY_CONTEXT), (UNREAL_PACKS, _UNREAL_CONTEXT))
 
 # ... and name the pack's topic.
 TRIGGERS: dict[str, re.Pattern] = {
@@ -150,6 +162,49 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Major-engine packs (docs/research/engines/). Unmeasured: OFF by default until the gate passes them.
+    "godot-migration-and-pitfalls": re.compile(
+        r"\b(?:Godot 3|yield|KinematicBody\w*|move_and_slide|CharacterBody3D|port(?:ed|ing)?|migrat\w*|upgrad\w*|Spatial|"
+        r"collision_layer|collision_mask|collision layers?|masks?|Area3D|Area2D|body_entered|mouse_filter|duplicate|"
+        r"local_to_scene|shared|null instance|previously freed|Node not found|is_instance_valid|partial|_unhandled_input|"
+        r"ColorRect|overlay|materials?|Roblox)\b",
+        re.IGNORECASE),
+    "godot-multiplayer-data": re.compile(
+        r"\b(?:multiplayer|rpc|rpc_id|any_peer|call_local|authority|ENetMultiplayerPeer|MultiplayerSpawner|"
+        r"MultiplayerSynchronizer|get_remote_sender_id|peers?|server|client|host|save\w*|FileAccess|ConfigFile|JSON|"
+        r"ResourceSaver|store_var|get_var|RemoteEvent)\b", re.IGNORECASE),
+    "godot-rendering-performance": re.compile(
+        r"\b(?:performance|optimi[sz]\w*|FPS|frame ?rate|lag\w*|stutter\w*|profil\w*|Forward|renderer|SDFGI|VoxelGI|"
+        r"LightmapGI|lightmaps?|MultiMesh\w*|RenderingServer|PhysicsServer3D|export\w*|headless|GDExtension|godot-cpp|"
+        r"draw calls?)\b", re.IGNORECASE),
+    "unity-scripting-core": re.compile(
+        r"\b(?:MonoBehaviour|Awake|OnEnable|Start|Update|FixedUpdate|LateUpdate|SerializeField|ScriptableObject|prefabs?|"
+        r"Rigidbody|linearVelocity|OnTriggerEnter|OnCollisionEnter|colliders?|Input System|InputAction|EventSystem|Canvas|"
+        r"UI Toolkit|UIDocument|coroutines?|Awaitable|NullReferenceException|MissingReferenceException|jitter\w*|"
+        r"FindObjectsByType|GetComponent|Roblox)\b", re.IGNORECASE),
+    "unity-netcode-data": re.compile(
+        r"\b(?:Netcode|NGO|NetworkVariable|NetworkObject|NetworkBehaviour|NetworkManager|NetworkTransform|ServerRpc|"
+        r"ClientRpc|Rpc|SendTo|multiplayer|host|server|client|Relay|Lobby|Addressables|LoadAssetAsync|InstantiateAsync|"
+        r"Release|persistentDataPath|JsonUtility|PlayerPrefs|save\w*|Cloud Save|RemoteEvent)\b", re.IGNORECASE),
+    "unity-rendering-performance": re.compile(
+        r"\b(?:URP|HDRP|render pipeline|SRP Batcher|batch\w*|draw calls?|GPU Resident Drawer|Render Graph|Shader Graph|"
+        r"lightmap\w*|LOD\w*|occlusion|Profiler|Frame Debugger|garbage|GC|allocat\w*|performance|optimi[sz]\w*|FPS|"
+        r"frame ?rate|lag\w*|DOTS|ECS|Entities|IComponentData|ISystem|SystemAPI|IJobEntity|Burst\w*|Jobs?|"
+        r"EntityCommandBuffer|IL2CPP|build profiles?|batchmode|executeMethod|runTests)\b", re.IGNORECASE),
+    "unreal-cpp-gameplay": re.compile(
+        r"\b(?:UPROPERTY|UCLASS|UFUNCTION|GENERATED_BODY|UObject|NewObject|TObjectPtr|garbage collect\w*|BeginPlay|Tick|"
+        r"constructor|CreateDefaultSubobject|SpawnActor\w*|GameMode|PlayerController|Pawn|Build\.cs|modules?|LNK2019|"
+        r"unresolved external|linker|Live Coding|Hot Reload|Enhanced Input|Input Action|mapping context|AddMappingContext|"
+        r"BindAction|SetupPlayerInputComponent|Blueprints?|Roblox)\b", re.IGNORECASE),
+    "unreal-replication-gas": re.compile(
+        r"\b(?:replicat\w*|bReplicates|DOREPLIFETIME|GetLifetimeReplicatedProps|RepNotify|OnRep_\w+|RPCs?|NetMulticast|"
+        r"Reliable|WithValidation|HasAuthority|authority|own(?:er|s|ership)|multiplayer|listen server|dedicated server|Iris|"
+        r"GAS|Gameplay Ability System|U?AbilitySystemComponent|GameplayAbility|GameplayEffect|AttributeSet|"
+        r"InitAbilityActorInfo|USaveGame|SaveGameToSlot|RemoteEvent)\b", re.IGNORECASE),
+    "unreal-rendering-performance": re.compile(
+        r"\b(?:Nanite|Lumen|Virtual Shadow Maps?|VSM|MegaLights|Substrate|World Partition|HLOD|stat unit|Unreal Insights|"
+        r"Insights|ProfileGPU|PSO|shader compil\w*|stutter\w*|hitch\w*|performance|optimi[sz]\w*|FPS|frame ?rate|lag\w*|"
+        r"packag\w*|cook\w*|RunUAT|BuildCookRun|Shipping|light leak\w*)\b", re.IGNORECASE),
 }
 
 
@@ -195,20 +250,21 @@ def enabled_names(environ=None, *, home=None) -> frozenset[str]:
 
 
 def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
-    """The packs for this prompt, best match first. Empty for anything that is not a Roblox question."""
+    """The packs for this prompt, best match first. Empty unless the prompt names Roblox or a supported engine."""
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
     if not allowed:
         return []
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
-    godot_context = bool(_GODOT_CONTEXT.search(prompt))
-    if not roblox_context and not godot_context:
+    engine_context = {packs: bool(pattern.search(prompt)) for packs, pattern in _ENGINE_CONTEXTS}
+    other_engine = any(engine_context.values())
+    if not roblox_context and not other_engine:
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
-                                    (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
+        engine = next((packs for packs, _ in _ENGINE_CONTEXTS if pack.name in packs), None)
+        if pack.name in allowed and (engine_context[engine] if engine is not None else roblox_context and not other_engine):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):

@@ -1,0 +1,16 @@
+---
+name: unreal-replication-gas
+description: Unreal Engine 5 multiplayer - server authority, roles and ownership, property replication with RepNotify, Server/Client/NetMulticast RPCs, Gameplay Ability System setup and replication, and USaveGame. Use for Unreal networking bugs, RPCs that never run, values that do not replicate, GAS setup or saving.
+---
+# Unreal Engine 5 replication and the Gameplay Ability System (the server is authoritative)
+- Only the server's changes replicate. Gate server logic with HasAuthority(); GetLocalRole() is ROLE_Authority, ROLE_AutonomousProxy (my own pawn) or ROLE_SimulatedProxy (everyone else's).
+- Property replication needs all of: bReplicates = true on the actor (components: SetIsReplicatedByDefault(true)); UPROPERTY(Replicated) or UPROPERTY(ReplicatedUsing = OnRep_X); GetLifetimeReplicatedProps calling Super and DOREPLIFETIME (or DOREPLIFETIME_CONDITION with COND_OwnerOnly, COND_SkipOwner and so on) with Net/UnrealNetwork.h included.
+- In C++ an OnRep runs only on clients when the value arrives: call OnRep_X() yourself on the server after setting it. Use REPNOTIFY_Always when the same value must notify again.
+- RPCs: UFUNCTION(Server, Reliable) client to server, UFUNCTION(Client, Reliable) server to owning client, UFUNCTION(NetMulticast, Unreliable) server to everyone relevant; the body is Name_Implementation. RPCs are unreliable unless marked Reliable; never send Reliable RPCs every tick.
+- A Server RPC is dropped unless the calling client owns the actor (its PlayerController, possessed pawn, or an actor whose owner chain ends at that controller). For doors, pickups and level actors, call the RPC on the character or controller and pass the target, or SetOwner on the server.
+- WithValidation adds Name_Validate; false disconnects the client, so reserve it for impossible input. Normal checks (range, cooldown, cost, ownership) go in the implementation; the server computes damage and prices itself, exactly like a Roblox OnServerEvent handler.
+- Bandwidth: NetUpdateFrequency, relevancy (NetCullDistanceSquared, bOnlyRelevantToOwner), dormancy, push model, FFastArraySerializer for arrays. Iris is opt-in (bUseIris in Target.cs); legacy replication stays the default.
+- GAS: plugin GameplayAbilities; modules GameplayAbilities, GameplayTags, GameplayTasks. Player characters keep the UAbilitySystemComponent on the PlayerState (survives respawn, raise its NetUpdateFrequency); AI keep it on the pawn. Implement IAbilitySystemInterface. Call InitAbilityActorInfo(Owner, Avatar) on the server in PossessedBy and on the client in OnRep_PlayerState. Replication mode Mixed for players, Minimal for AI, Full for single player. Grant abilities only on the server with GiveAbility.
+- AttributeSets: FGameplayAttributeData with ATTRIBUTE_ACCESSORS, ReplicatedUsing plus GAMEPLAYATTRIBUTE_REPNOTIFY, registered with DOREPLIFETIME_CONDITION_NOTIFY(..., COND_None, REPNOTIFY_Always). Clamp in PreAttributeChange; apply damage in PostGameplayEffectExecute. Cosmetics through Gameplay Cues.
+- Saving: USaveGame subclass with UPROPERTY fields, UGameplayStatics::AsyncSaveGameToSlot and LoadGameFromSlot; store IDs and soft paths, not pointers; keep a version field; in multiplayer save on the server only.
+- Test with PIE Net Mode Play As Client, two or more players, and network emulation (packet lag and loss).

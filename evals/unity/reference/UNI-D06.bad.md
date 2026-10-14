@@ -1,0 +1,1 @@
+The job just needs to be allowed to change structure. Switch it to `Entities.ForEach` with `.WithStructuralChanges()` and call `EntityManager.DestroyEntity` there, or wrap the call in a lock so the parallel threads do not destroy at the same time.

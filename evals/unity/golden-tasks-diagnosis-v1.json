@@ -1,0 +1,488 @@
+[
+ {
+  "id": "UNI-D01",
+  "category": "unity-physics",
+  "difficulty": 2,
+  "goal": "Fix third-person camera and Rigidbody jitter",
+  "prompt": "In my Unity 6 project the player has a Rigidbody that I move by setting `transform.position` in `Update`, and the camera follows it from another script's `Update`. The player visibly stutters, worst at high frame rates. Explain the cause and the fix in prose, naming the exact Unity APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-scripting-core"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Keeps moving the Rigidbody through the Transform"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "fixed_update",
+     "re": "(?i)\\bFixedUpdate\\b",
+     "why": "moves the body in FixedUpdate (physics runs on the fixed timestep)",
+     "scope": "prose"
+    },
+    {
+     "id": "interpolate",
+     "re": "(?i)\\binterpolat(?:e|ion)\\b",
+     "why": "enables Rigidbody interpolation",
+     "scope": "prose"
+    },
+    {
+     "id": "late_update",
+     "re": "(?i)\\bLateUpdate\\b",
+     "why": "moves the follow camera in LateUpdate",
+     "scope": "prose"
+    },
+    {
+     "id": "rb_move",
+     "re": "(?i)\\b(?:MovePosition|AddForce|linearVelocity)\\b",
+     "why": "moves through the Rigidbody (MovePosition, AddForce or linearVelocity), not the Transform",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "fixed_dt_hack",
+     "re": "(?i)fixedDeltaTime\\s*=\\s*Time\\.deltaTime",
+     "why": "sets fixedDeltaTime to the frame delta",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: moves the body in FixedUpdate (physics runs on the fixed timestep)",
+    "Present: enables Rigidbody interpolation",
+    "Present: moves the follow camera in LateUpdate",
+    "Present: moves through the Rigidbody (MovePosition, AddForce or linearVelocity), not the Transform",
+    "Absent: sets fixedDeltaTime to the frame delta"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UNI-D02",
+  "category": "unity-physics",
+  "difficulty": 1,
+  "goal": "Diagnose OnTriggerEnter that never fires",
+  "prompt": "In my Unity 6 project I have a pickup with a SphereCollider and a script with `OnTriggerEnter`, and the player is a capsule with a CapsuleCollider moved by a script. Walking through the pickup never calls `OnTriggerEnter`. Explain the possible causes and the fix in prose, naming the exact Unity APIs and settings.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-scripting-core"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Claims triggers work with two static colliders"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "rigidbody",
+     "re": "(?i)\\bRigidbody\\b",
+     "why": "says one of the two objects needs a Rigidbody (kinematic is fine)",
+     "scope": "prose"
+    },
+    {
+     "id": "is_trigger",
+     "re": "(?i)\\bis ?Trigger\\b",
+     "why": "says one collider needs Is Trigger enabled",
+     "scope": "prose"
+    },
+    {
+     "id": "signature",
+     "re": "(?i)OnTriggerEnter\\s*\\(\\s*Collider\\b|parameter (?:must be|is) (?:a )?`?Collider\\b",
+     "why": "gives the exact OnTriggerEnter(Collider) signature",
+     "scope": "prose"
+    },
+    {
+     "id": "layers",
+     "re": "(?i)collision matrix|layer collision|\\blayers?\\b",
+     "why": "mentions the layer collision matrix",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "collision_sig",
+     "re": "(?i)OnTriggerEnter\\s*\\(\\s*Collision\\b",
+     "why": "uses the wrong OnTriggerEnter(Collision) signature",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says one of the two objects needs a Rigidbody (kinematic is fine)",
+    "Present: says one collider needs Is Trigger enabled",
+    "Present: gives the exact OnTriggerEnter(Collider) signature",
+    "Present: mentions the layer collision matrix",
+    "Absent: uses the wrong OnTriggerEnter(Collision) signature"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UNI-D03",
+  "category": "unity-netcode",
+  "difficulty": 3,
+  "goal": "Fix a client writing a server-owned NetworkVariable",
+  "prompt": "In my Unity 6 project using Netcode for GameObjects, a client-side script on the player does `health.Value -= 10` on a `NetworkVariable<int>` declared with default settings. The value never changes for anyone and the console logs a permission error. Explain the cause and the server-authoritative fix in prose, naming the exact Netcode APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-netcode-data"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Lets the client write authoritative health"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "write_perm",
+     "re": "(?i)write ?permission|NetworkVariableWritePermission",
+     "why": "names the NetworkVariable write permission",
+     "scope": "prose"
+    },
+    {
+     "id": "server_default",
+     "re": "(?i)only the server (?:can|may) write|server[- ]only|default[^.]{0,60}\\bserver\\b",
+     "why": "says the default write permission is server-only",
+     "scope": "prose"
+    },
+    {
+     "id": "rpc",
+     "re": "\\[?Rpc\\(\\s*SendTo\\.Server\\s*\\)",
+     "why": "sends the request with [Rpc(SendTo.Server)]",
+     "scope": "prose"
+    },
+    {
+     "id": "validate",
+     "re": "(?i)\\bvalidat\\w*|\\bcheck\\w* (?:the |that )?(?:sender|request|amount|value|range)",
+     "why": "validates the request on the server",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "everyone_write",
+     "re": "(?i)WritePermission\\.Everyone|write permission (?:to|of) Everyone",
+     "why": "invents an Everyone write permission",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the NetworkVariable write permission",
+    "Present: says the default write permission is server-only",
+    "Present: sends the request with [Rpc(SendTo.Server)]",
+    "Present: validates the request on the server",
+    "Absent: invents an Everyone write permission"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UNI-D04",
+  "category": "unity-addressables",
+  "difficulty": 3,
+  "goal": "Diagnose an Addressables memory leak",
+  "prompt": "In my Unity 6 project I spawn enemies with `Addressables.InstantiateAsync(\"Enemy\")` and load their sounds with `Addressables.LoadAssetAsync<AudioClip>`. When enemies die I call `Destroy(gameObject)`. Memory grows every wave and the Memory Profiler shows the enemy AssetBundle never unloads. Explain the cause and the fix in prose, naming the exact Addressables APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-netcode-data"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Keeps Destroy on InstantiateAsync instances"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "release_instance",
+     "re": "\\bReleaseInstance\\b",
+     "why": "destroys InstantiateAsync instances with Addressables.ReleaseInstance",
+     "scope": "prose"
+    },
+    {
+     "id": "release_handle",
+     "re": "(?i)Addressables\\.Release\\b|\\.Release\\(\\)|release (?:the|each|its|every) (?:operation )?handle",
+     "why": "releases each LoadAssetAsync handle",
+     "scope": "prose"
+    },
+    {
+     "id": "ref_count",
+     "re": "(?i)reference[- ]count|ref[- ]count",
+     "why": "explains reference counting",
+     "scope": "prose"
+    },
+    {
+     "id": "bundle_unload",
+     "re": "(?i)(?:bundle|AssetBundle)[^.]{0,120}(?:only|until)[^.]{0,80}(?:all|every)[^.]{0,40}released|(?:all|every)[^.]{0,60}released[^.]{0,80}(?:bundle|AssetBundle)[^.]{0,40}unload",
+     "why": "says a bundle unloads only after all its assets are released",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "unload_unused",
+     "re": "(?i)Resources\\.UnloadUnusedAssets",
+     "why": "relies on Resources.UnloadUnusedAssets instead of releasing",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: destroys InstantiateAsync instances with Addressables.ReleaseInstance",
+    "Present: releases each LoadAssetAsync handle",
+    "Present: explains reference counting",
+    "Present: says a bundle unloads only after all its assets are released",
+    "Absent: relies on Resources.UnloadUnusedAssets instead of releasing"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "UNI-D05",
+  "category": "unity-migration",
+  "difficulty": 2,
+  "goal": "Fix Unity 6 upgrade errors for physics, object lookup and input",
+  "prompt": "In my Unity project I upgraded from 2022.3 to Unity 6. The console now warns that `Rigidbody.velocity` and `Object.FindObjectsOfType` are obsolete, and at runtime `Input.GetAxis(\"Horizontal\")` throws an InvalidOperationException saying the Input System package is the active input handling. Explain each cause and the fix in prose, naming the exact Unity 6 APIs and settings.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-scripting-core"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Keeps the obsolete velocity property"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "linear_velocity",
+     "re": "\\blinearVelocity\\b",
+     "why": "renames velocity to Rigidbody.linearVelocity",
+     "scope": "prose"
+    },
+    {
+     "id": "find_by_type",
+     "re": "\\bFind(?:Objects|FirstObject|AnyObject)ByType\\b",
+     "why": "replaces FindObjectsOfType with FindObjectsByType or FindFirstObjectByType/FindAnyObjectByType",
+     "scope": "prose"
+    },
+    {
+     "id": "active_input",
+     "re": "(?i)Active Input Handling",
+     "why": "names the Active Input Handling player setting",
+     "scope": "prose"
+    },
+    {
+     "id": "input_system_api",
+     "re": "(?i)\\bInputAction\\b|Keyboard\\.current|\\bReadValue\\b|PlayerInput",
+     "why": "ports to an Input System API (InputAction.ReadValue, Keyboard.current or PlayerInput)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "invented",
+     "re": "(?i)\\blinearSpeed\\b|\\bvelocityLinear\\b|\\bFindObjectsOfTypeAll\\b",
+     "why": "invents a renamed API",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: renames velocity to Rigidbody.linearVelocity",
+    "Present: replaces FindObjectsOfType with FindObjectsByType or FindFirstObjectByType/FindAnyObjectByType",
+    "Present: names the Active Input Handling player setting",
+    "Present: ports to an Input System API (InputAction.ReadValue, Keyboard.current or PlayerInput)",
+    "Absent: invents a renamed API"
+   ]
+  },
+  "split": "holdout"
+ },
+ {
+  "id": "UNI-D06",
+  "category": "unity-dots",
+  "difficulty": 4,
+  "goal": "Move structural changes out of an IJobEntity",
+  "prompt": "In my Unity 6 project using Entities, an `IJobEntity` scheduled with `ScheduleParallel` calls `EntityManager.DestroyEntity` on projectiles whose lifetime ran out, and it fails with errors about structural changes and EntityManager use inside a job. Explain the cause and the fix in prose, naming the exact Entities APIs.",
+  "run_mode": "automated",
+  "helps": [
+   "unity-rendering-performance"
+  ],
+  "studio_check": "A human checks every API name against the Unity scripting reference.",
+  "expected_sources": [],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 6,
+   "output_tokens": 600,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Invents an API name",
+   "Keeps EntityManager calls inside the job"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "ecb",
+     "re": "\\bEntityCommandBuffer\\b",
+     "why": "records the destroy in an EntityCommandBuffer",
+     "scope": "prose"
+    },
+    {
+     "id": "structural",
+     "re": "(?i)structural change",
+     "why": "explains structural changes cannot happen inside a job",
+     "scope": "prose"
+    },
+    {
+     "id": "parallel_writer",
+     "re": "\\bAsParallelWriter\\b|\\bParallelWriter\\b",
+     "why": "uses the ECB ParallelWriter for a parallel job",
+     "scope": "prose"
+    },
+    {
+     "id": "ecb_system",
+     "re": "\\b(?:End|Begin)(?:Simulation|Initialization|Presentation|FixedStepSimulation)EntityCommandBufferSystem\\b",
+     "why": "gets the buffer from an EntityCommandBufferSystem singleton for playback",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "with_structural",
+     "re": "(?i)WithStructuralChanges",
+     "why": "uses the removed Entities.ForEach WithStructuralChanges",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: records the destroy in an EntityCommandBuffer",
+    "Present: explains structural changes cannot happen inside a job",
+    "Present: uses the ECB ParallelWriter for a parallel job",
+    "Present: gets the buffer from an EntityCommandBufferSystem singleton for playback",
+    "Absent: uses the removed Entities.ForEach WithStructuralChanges"
+   ]
+  },
+  "split": "holdout"
+ }
+]
