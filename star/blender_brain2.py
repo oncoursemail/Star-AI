@@ -38,14 +38,16 @@ TOOL = "star_blender"
 NAMES = frozenset({TOOL})
 COMMAND_ENV = "STAR_BLENDER_BRAIN2_COMMAND"
 MAX_COMMAND_BYTES = 4000
-MAX_CODE = 12_000
-MAX_IMAGE = 1_800_000
+MAX_CODE = 24_000
+MAX_IMAGE = 3_000_000
 MAX_FILE = 24 * 1024 * 1024
 SCENE_NAME = r"^[a-z][a-z0-9_-]{1,39}$"
 OBJECT_NAME = r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,62}$"
 
 READ_ACTIONS = ("status", "list_files", "inspect", "docs", "screenshot")
-EDIT_ACTIONS = ("start", "stop", "new_scene", "open_scene", "run_bpy", "render_preview", "export")
+EDIT_ACTIONS = ("start", "stop", "new_scene", "open_scene", "run_bpy", "render_preview", "bake", "export")
+BAKE_MAPS = ("normal", "ao", "color", "emit", "roughness", "lit")
+LABEL = r"^[a-z0-9][a-z0-9_-]{0,23}$"
 
 # name -> (azimuth, elevation) in degrees. Azimuth 0 looks at the front (camera on -Y), 90 from +X, 180 from the
 # back, 270 from -X; elevation 90 looks straight down.
@@ -64,13 +66,25 @@ SCHEMA = {
                    "items": {"type": "string", "enum": sorted(ANGLES)}},
         "azimuth": {"type": "number", "minimum": -360, "maximum": 360},
         "elevation": {"type": "number", "minimum": -89, "maximum": 90},
-        "zoom": {"type": "number", "minimum": 0.5, "maximum": 4},
+        "zoom": {"type": "number", "minimum": 0.5, "maximum": 8},
+        "center": {"type": "array", "minItems": 3, "maxItems": 3,
+                   "items": {"type": "number", "minimum": -10000, "maximum": 10000}},
         "frame": {"type": "integer", "minimum": 0, "maximum": 100000},
         "format": {"type": "string", "enum": ["glb", "fbx"]},
-        "width": {"type": "integer", "minimum": 64, "maximum": 960},
-        "height": {"type": "integer", "minimum": 64, "maximum": 540},
+        "width": {"type": "integer", "minimum": 64, "maximum": 1280},
+        "height": {"type": "integer", "minimum": 64, "maximum": 720},
         "engine": {"type": "string", "enum": ["workbench", "eevee", "cycles"]},
+        "samples": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "denoise": {"type": "boolean"},
+        "camera": {"type": "string", "enum": ["auto", "scene"]},
+        "label": {"type": "string", "pattern": LABEL},
         "object": {"type": "string", "pattern": OBJECT_NAME},
+        "source": {"type": "string", "pattern": OBJECT_NAME},
+        "maps": {"type": "array", "minItems": 1, "maxItems": 5, "uniqueItems": True,
+                 "items": {"type": "string", "enum": list(BAKE_MAPS)}},
+        "size": {"type": "integer", "enum": [256, 512, 1024, 2048]},
+        "extrusion": {"type": "number", "minimum": 0, "maximum": 2},
+        "margin": {"type": "integer", "minimum": 0, "maximum": 64},
         "query": {"type": "string", "minLength": 2, "maxLength": 120},
     },
     "required": ["action"],
@@ -82,13 +96,20 @@ DESCRIPTION = (
     "Scenes live in one sandbox folder there (names: lower-case letters, digits, - and _). "
     "Actions: status; start / stop (Blender runs on demand, never all the time; it stops itself after 30 minutes); "
     "new_scene / open_scene {scene}; run_bpy {scene, code}: your Blender Python (import only bpy, bmesh, mathutils, "
-    "math, random, colorsys; use bpy.ops.mesh / object / material / node / transform / collection / uv / curve "
-    "operators and bpy.data; no files, no network, no classes, no while loops, no getattr/exec/open, no dunder names; "
+    "math, random, colorsys; use bpy.ops.mesh / object / material / node / transform / collection / uv / curve / "
+    "sculpt / paint operators, bmesh.ops / bmesh.utils and bpy.data; no files, no network, no classes, no while loops, no getattr/exec/open, no dunder names; "
     "set `result = {...}` to return values; the scene is saved after a run that worked); "
     "screenshot {angles: [front,right,back,left,top,three_quarter,rear_quarter] or azimuth+elevation}: images of the "
-    "3D viewport as a person sees it (zoom 0.5-4 frames closer, default 1; frame: show that animation frame); "
-    "render_preview {angles, width, height, engine, zoom, frame}: a quick render (workbench is "
-    "fastest, eevee looks better); export {scene, format: glb|fbx}: a file for Roblox Studio's importer plus its "
+    "3D viewport as a person sees it (zoom 0.5-8 frames closer, default 1; center [x,y,z]: look at that point, e.g. "
+    "the head; frame: show that animation frame); "
+    "render_preview {angles, width (<=1280), height (<=720), engine, zoom, frame, samples, denoise, camera: auto|scene, "
+    "label}: a render (workbench is fastest, eevee looks better, cycles is slowest; camera 'scene' renders through the "
+    "scene's own camera and lights, e.g. a 3-point setup you built; label prefixes the evidence file names so passes "
+    "are kept); bake {scene, object (low-poly target with a UV map and materials), source (high-poly, optional: "
+    "selected-to-active), maps: normal|ao|color|emit|roughness|lit (lit = colour x AO + glow in one map, for game "
+    "engines that read only a colour map; give it 32+ samples), size 256-2048, samples, extrusion, margin}: Cycles "
+    "bakes saved as PNG textures in the sandbox (they survive a restart; wire them with the image named "
+    "<object>_<map>); export {scene, format: glb|fbx}: a file for Roblox Studio's importer plus its "
     "statistics; inspect {object?}: scene or object summary; docs {query}: search the Blender Python API; "
     "list_files: what is in the sandbox. Returned images are evidence: look at them before you claim a model is right."
 )
@@ -145,8 +166,11 @@ ALLOWED_IMPORTS = frozenset({"bpy", "bmesh", "mathutils", "math", "random", "col
                              "collections", "bpy_extras"})
 ALLOWED_OPS = frozenset({
     "object", "mesh", "curve", "curves", "surface", "transform", "material", "node", "uv", "collection", "armature",
-    "pose", "constraint", "lattice", "geometry", "rigidbody", "anim", "mball", "font",
+    "pose", "constraint", "lattice", "geometry", "rigidbody", "anim", "mball", "font", "sculpt", "paint",
 })
+# Keyword arguments that make an allowed operator read or write a file (object.bake can save to any path).
+BLOCKED_KEYWORDS = frozenset({"filepath", "filepath_raw", "directory", "filename", "files", "save_mode",
+                              "relative_path"})
 BLOCKED_NAMES = frozenset({
     "exec", "eval", "compile", "open", "input", "breakpoint", "__import__", "globals", "locals", "vars", "getattr",
     "setattr", "delattr", "memoryview", "help", "exit", "quit", "type", "super", "classmethod",
@@ -163,6 +187,8 @@ BLOCKED_ATTRIBUTES = frozenset({
 ESCAPE_ATTRIBUTES = frozenset({"os", "sys", "modules", "builtins", "operator", "subprocess", "importlib", "socket",
                                "shutil", "ctypes", "posix", "nt", "popen"})
 _PATH_LIKE = re.compile(r"(^/|^\\|^~|\.\.|://|^[A-Za-z]:|\\\\)")
+# Inside an f-string a lone "/" is usually a label ("{a}/{b}"); real path pieces are still refused there.
+_PATH_IN_FSTRING = re.compile(r"(\.\.|://|[A-Za-z]:[/\\]|\\\\|~/|/(etc|home|root|tmp|usr|var|opt|proc|dev|run)\b)")
 
 
 def check_bpy_code(code: object) -> str:
@@ -184,6 +210,14 @@ def check_bpy_code(code: object) -> str:
     for key, node in ops_nodes.items():
         if key not in consumed:   # `x = bpy.ops` would hide which operator module is used
             raise ValueError(f"bpy.ops must be used directly as bpy.ops.<module>.<operator>(...) (line {node.lineno})")
+    # `bmesh.utils` (edge_split, face_split, ...) is fine, but only while the name `bmesh` is really the bmesh module:
+    # an assignment or an `import x as bmesh` would turn it into a way to reach bpy.utils.
+    bmesh_rebound = any(
+        (isinstance(node, ast.Name) and node.id == "bmesh" and not isinstance(node.ctx, ast.Load))
+        or (isinstance(node, ast.alias) and node.asname == "bmesh")
+        or (isinstance(node, ast.arg) and node.arg == "bmesh")
+        for node in ast.walk(tree))
+    formatted = {id(value) for node in ast.walk(tree) if isinstance(node, ast.JoinedStr) for value in node.values}
     for node in ast.walk(tree):
         line = getattr(node, "lineno", 0)
         where = f" (line {line})" if line else ""
@@ -208,7 +242,13 @@ def check_bpy_code(code: object) -> str:
         elif isinstance(node, ast.Name):
             if node.id in BLOCKED_NAMES or (node.id.startswith("__") and node.id.endswith("__")):
                 raise ValueError(f"The name '{node.id}' is not allowed{where}")
+        elif isinstance(node, ast.keyword):
+            if node.arg in BLOCKED_KEYWORDS:
+                raise ValueError(f"The argument '{node.arg}=' is not allowed (it reads or writes files){where}")
         elif isinstance(node, ast.Attribute):
+            if (node.attr == "utils" and isinstance(node.value, ast.Name) and node.value.id == "bmesh"
+                    and not bmesh_rebound):
+                continue
             if node.attr.startswith("_") or node.attr in BLOCKED_ATTRIBUTES or node.attr in ESCAPE_ATTRIBUTES:
                 raise ValueError(f"The attribute '.{node.attr}' is not allowed (files, add-ons and internals are off limits){where}")
             if (isinstance(node.value, ast.Attribute) and node.value.attr == "ops"
@@ -221,6 +261,8 @@ def check_bpy_code(code: object) -> str:
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, int) and abs(arg.value) > 200_000:
                     raise ValueError(f"range() above 200000 would stall the viewport{where}")
         elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            if id(node) in formatted and not _PATH_IN_FSTRING.search(node.value):
+                continue   # a literal piece of an f-string such as f"{a}/{b}" is a label, not a path
             if _PATH_LIKE.search(node.value):
                 raise ValueError(f"Text that looks like a path or URL is not allowed{where}")
     return code
@@ -278,6 +320,20 @@ bpy.ops.wm.open_mainfile(filepath=path)
 result = dict(_stats(), scene=@@SCENE@@, objects=len(bpy.context.scene.objects))
 """
 
+# Blender can be restarted under STAR (its 30-minute run limit, or a crash such as running out of its memory cap):
+# the fresh Blender shows the factory scene. Every scene-bound action first makes sure ITS scene is the open file,
+# otherwise a run_bpy would edit the factory cube and the save after it would overwrite the real scene.
+ENSURE_SCENE = _HEAD + """\
+path = os.path.join(SB, @@SCENE@@ + ".blend")
+if os.path.normpath(bpy.data.filepath or "") != os.path.normpath(path):
+    if not os.path.isfile(path):
+        raise RuntimeError("that scene is not in the sandbox; create it with new_scene first")
+    bpy.ops.wm.open_mainfile(filepath=path)
+    result = {"reopened": True}
+else:
+    result = {"reopened": False}
+"""
+
 SAVE_SCENE = _HEAD + """\
 path = os.path.join(SB, @@SCENE@@ + ".blend")
 bpy.ops.wm.save_as_mainfile(filepath=path)
@@ -314,6 +370,8 @@ if meshes:
     with bpy.context.temp_override(window=win, area=area, region=region):
         bpy.ops.view3d.view_selected()
     r3d.view_distance *= 0.95 / @@ZOOM@@
+    if @@HASC@@:
+        r3d.view_location = mathutils.Vector((@@CX@@, @@CY@@, @@CZ@@))
 for o in bpy.data.objects:
     o.select_set(False)
 with bpy.context.temp_override(window=win, area=area, region=region):
@@ -330,7 +388,12 @@ if not meshes:
 st = _stats()
 lo, hi = mathutils.Vector(st["min"]), mathutils.Vector(st["max"])
 center = (lo + hi) / 2.0
+if @@HASC@@:   # look at a chosen point (e.g. the head for a face close-up); zoom still sets the distance
+    center = mathutils.Vector((@@CX@@, @@CY@@, @@CZ@@))
 radius = max((hi - lo).length / 2.0, 0.05)
+use_scene_camera = @@CAMERA@@ == "scene"
+if use_scene_camera and (scene.camera is None or scene.camera.type != 'CAMERA'):
+    raise RuntimeError("camera 'scene' needs a scene camera (scene.camera); none is set")
 cam_data = bpy.data.cameras.new("STAR_PreviewCam")
 cam = bpy.data.objects.new("STAR_PreviewCam", cam_data)
 scene.collection.objects.link(cam)
@@ -344,19 +407,24 @@ try:
     az, el = math.radians(@@AZ@@), math.radians(@@EL@@)
     cam.location = center + mathutils.Vector((math.sin(az) * math.cos(el), -math.cos(az) * math.cos(el), math.sin(el))) * dist
     cam.rotation_euler = (center - cam.location).to_track_quat('-Z', 'Y').to_euler()
-    scene.camera = cam
+    scene.camera = old_cam if use_scene_camera else cam
     engine = @@ENGINE@@
+    samples, denoise = @@SAMPLES@@, bool(@@DENOISE@@)
     scene.render.engine = {"workbench": "BLENDER_WORKBENCH", "eevee": "BLENDER_EEVEE", "cycles": "CYCLES"}[engine]
     if engine == "workbench":
         scene.display.shading.light = 'STUDIO'
         scene.display.shading.color_type = 'MATERIAL'
     if engine == "cycles":
         scene.cycles.device = 'CPU'
-        scene.cycles.samples = 24
-        scene.cycles.use_denoising = False
-    if scene.world is None:
+        scene.cycles.samples = samples or 24
+        scene.cycles.use_denoising = denoise
+        if denoise:
+            scene.cycles.denoiser = 'OPENIMAGEDENOISE'
+    if engine == "eevee" and samples:
+        scene.eevee.taa_render_samples = samples
+    if scene.world is None:   # a world the scene already has (its own lighting design) is kept as it is
         scene.world = bpy.data.worlds.new("StarWorld")
-    scene.world.color = (0.12, 0.13, 0.16)
+        scene.world.color = (0.12, 0.13, 0.16)
     if engine != "workbench" and not any(o.type == 'LIGHT' for o in scene.objects):
         sun_data = bpy.data.lights.new("STAR_PreviewSun", 'SUN')
         sun_data.energy = 3.0
@@ -375,6 +443,109 @@ finally:
         bpy.data.objects.remove(o)
 out = os.path.join(SB, "previews", @@NAME@@ + ".png")
 result = {"file": "previews/" + @@NAME@@ + ".png", "bytes": os.path.getsize(out), "engine": @@ENGINE@@, "size": [@@W@@, @@H@@]}
+"""
+
+BAKE = _HEAD + """\
+import time
+scene = bpy.context.scene
+target = bpy.data.objects.get(@@OBJECT@@)
+if target is None or target.type != 'MESH':
+    raise RuntimeError("bake: no mesh object with that name")
+if not target.data.uv_layers:
+    raise RuntimeError("bake: the target mesh has no UV map (unwrap it first, e.g. bpy.ops.uv.smart_project)")
+if not target.material_slots or any(s.material is None for s in target.material_slots):
+    raise RuntimeError("bake: every material slot of the target needs a material")
+source = None
+if @@SOURCE@@:
+    source = bpy.data.objects.get(@@SOURCE@@)
+    if source is None or source.type != 'MESH':
+        raise RuntimeError("bake: no source mesh with that name")
+    if not source.visible_get() or source.hide_render:
+        raise RuntimeError("bake: the source mesh must be visible in the viewport and in renders while baking")
+size, maps = @@SIZE@@, @@MAPS@@.split(",")
+KIND = {"normal": ("NORMAL", "Non-Color"), "ao": ("AO", "Non-Color"), "color": ("DIFFUSE", "sRGB"),
+        "emit": ("EMIT", "sRGB"), "roughness": ("ROUGHNESS", "Non-Color"), "lit": ("COMBINED", "sRGB")}
+old_engine, old_samples = scene.render.engine, scene.cycles.samples
+scene.render.engine = 'CYCLES'
+scene.cycles.device = 'CPU'
+scene.cycles.samples = @@SAMPLES@@
+bake = scene.render.bake
+bake.target = 'IMAGE_TEXTURES'
+bake.use_clear = True
+os.makedirs(os.path.join(SB, "textures"), exist_ok=True)
+safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in target.name)
+for o in bpy.data.objects:
+    o.select_set(False)
+if source is not None:
+    source.select_set(True)
+target.select_set(True)
+bpy.context.view_layer.objects.active = target
+# Only the target and its source take part: every other object is left out of the bake (memory on a capped Blender,
+# and no stray occluders in AO); their render visibility is restored afterwards.
+hidden = [o for o in scene.objects if o not in (target, source) and not o.hide_render]
+for o in hidden:
+    o.hide_render = True
+done = []
+try:
+    for kind in maps:
+        bake_type, space = KIND[kind]
+        name = target.name + "_" + kind
+        img = bpy.data.images.get(name)
+        if img is not None and tuple(img.size) != (size, size):
+            bpy.data.images.remove(img)
+            img = None
+        if img is None:
+            img = bpy.data.images.new(name, size, size, alpha=False)
+        img.colorspace_settings.name = space
+        img.use_fake_user = True
+        for slot in target.material_slots:
+            slot.material.use_nodes = True
+            nt = slot.material.node_tree
+            node = nt.nodes.get("STAR_Bake") or nt.nodes.new("ShaderNodeTexImage")
+            node.name, node.label, node.image = "STAR_Bake", "STAR bake target", img
+            for n in nt.nodes:
+                n.select = False
+            node.select = True
+            nt.nodes.active = node
+        began = time.time()
+        options = dict(type=bake_type, use_selected_to_active=source is not None, cage_extrusion=@@EXTRUSION@@,
+                       max_ray_distance=@@EXTRUSION@@ * 3.0, margin=@@MARGIN@@, use_clear=True)
+        if bake_type == 'DIFFUSE':
+            options["pass_filter"] = {'COLOR'}
+        if bake_type == 'NORMAL':
+            options["normal_space"] = 'TANGENT'
+        old_world = scene.world
+        if kind == "lit":
+            # "lit" = albedo x ambient occlusion + glow in ONE colour map (what a game engine without AO/emission
+            # maps shows): diffuse colour/direct/indirect + emission under a uniform white sky, no lamps, no gloss.
+            options["pass_filter"] = {'DIFFUSE', 'DIRECT', 'INDIRECT', 'COLOR', 'EMIT'}
+            sky = bpy.data.worlds.get("STAR_BakeSky") or bpy.data.worlds.new("STAR_BakeSky")
+            sky.use_nodes = True
+            bg = sky.node_tree.nodes.get("Background")
+            bg.inputs[0].default_value = (1.0, 1.0, 1.0, 1.0)
+            bg.inputs[1].default_value = 1.0
+            scene.world = sky
+        try:
+            bpy.ops.object.bake(**options)
+        finally:
+            scene.world = old_world
+        rel = "textures/" + @@SCENE@@ + "-" + safe + "-" + kind + ".png"
+        path = os.path.join(SB, rel)
+        img.filepath_raw = path
+        img.file_format = 'PNG'
+        img.save()
+        img.source = 'FILE'
+        img.filepath = path
+        img.reload()
+        done.append({"map": kind, "image": name, "file": rel, "bytes": os.path.getsize(path),
+                     "seconds": round(time.time() - began, 2)})
+finally:
+    scene.render.engine, scene.cycles.samples = old_engine, old_samples
+    for o in hidden:
+        o.hide_render = False
+    for o in bpy.data.objects:
+        o.select_set(False)
+result = {"object": target.name, "source": source.name if source else "", "size": size, "maps": done}
 """
 
 EXPORT = _HEAD + """\
@@ -427,6 +598,21 @@ def _at_frame(code: str, frame) -> str:
     if type(frame) is not int or not 0 <= frame <= 100000:
         raise ValueError("frame must be a whole number from 0 to 100000")
     return "import bpy\nbpy.context.scene.frame_set(" + str(frame) + ")\n" + code
+
+
+def _centre(center) -> dict:
+    """Template values for an optional look-at point (three validated numbers)."""
+    if center is None:
+        return {"HASC": 0, "CX": 0.0, "CY": 0.0, "CZ": 0.0}
+    if type(center) is not list or len(center) != 3 or any(type(v) not in (int, float) or isinstance(v, bool)
+                                                           for v in center):
+        raise ValueError("center must be three numbers")
+    return {"HASC": 1, "CX": float(center[0]), "CY": float(center[1]), "CZ": float(center[2])}
+
+
+def _named(prefix: str, name: str) -> str:
+    """Evidence file name, with the caller's pass label in front so a later call does not overwrite it."""
+    return f"{prefix}-{name}" if prefix else name
 
 
 def fill(template: str, **values) -> str:
@@ -556,8 +742,13 @@ class BrainTwoBlender:
         self.home = Path(home)
         self.edit = bool(edit)
         self._run = runner or _run
+        self._custom_sessions = session_factory is not None
         self._session_factory = session_factory or (lambda: _stdio_session(self.command, call_seconds))
         self.catalog = [{"name": TOOL, "description": DESCRIPTION, "inputSchema": self._schema()}]
+
+    def _long_session(self, seconds: float):
+        """A session whose calls may take minutes (Cycles bakes and renders on brain 2's few cores)."""
+        return self._session_factory() if self._custom_sessions else _stdio_session(self.command, seconds)
 
     def _schema(self) -> dict:
         actions = list(READ_ACTIONS + (EDIT_ACTIONS if self.edit else ()))
@@ -605,6 +796,12 @@ class BrainTwoBlender:
             raise LabError("Blender is not running on brain 2 and starting it needs the Blender edit permission")
         await self._control_json("start", timeout=60.0)
         return await self._control_json("status")
+
+    async def _scene_open(self, session, scene: str) -> bool:
+        """Open the action's scene if Blender shows another file (True when it had to be reopened)."""
+        if not scene:
+            return False
+        return bool((await self._exec(session, fill(ENSURE_SCENE, SCENE=scene))).get("reopened"))
 
     @staticmethod
     async def _exec(session, code: str) -> dict:
@@ -671,9 +868,13 @@ class BrainTwoBlender:
         action = arguments["action"]
         if action in EDIT_ACTIONS and not self.edit:
             raise PermissionError("This action needs the Blender edit permission in STAR settings")
-        needs_scene = {"new_scene", "open_scene", "run_bpy", "export"}
+        needs_scene = {"new_scene", "open_scene", "run_bpy", "export", "bake"}
         if action in needs_scene and "scene" not in arguments:
             raise ValueError(f"{action} needs a scene name")
+        if action == "bake" and "object" not in arguments:
+            raise ValueError("bake needs the target object (the low-poly mesh with a UV map)")
+        if action == "bake" and arguments.get("source") == arguments.get("object"):
+            raise ValueError("bake: source and object must be different meshes")
         if action == "run_bpy":
             check_bpy_code(arguments.get("code"))
         if action == "docs" and "query" not in arguments:
@@ -718,10 +919,14 @@ class BrainTwoBlender:
 
     async def _do_run_bpy(self, args):
         await self._ensure_running()
-        async with self._session_factory() as session:
+        async with self._long_session(600.0) as session:
+            reopened = await self._scene_open(session, args["scene"])
             ran = await self._exec(session, args["code"])
             saved = await self._exec(session, fill(SAVE_SCENE, SCENE=args["scene"]))
-        return self._result({"ran": ran, "scene": saved})
+        info = {"ran": ran, "scene": saved}
+        if reopened:
+            info["note"] = "Blender had restarted; the saved scene was reopened before your code ran"
+        return self._result(info)
 
     async def _do_inspect(self, args):
         status = await self._control_json("status")
@@ -739,14 +944,16 @@ class BrainTwoBlender:
             reply = _text_payload(await session.call_tool("search_api_docs", arguments={"query": args["query"], "max_results": 8}))
         return self._result({"docs": json.dumps(reply.get("result", reply))[:3500]})
 
-    async def _view_images(self, angles, scene, zoom: float = 1.0, frame=None):
-        images, notes = [], []
+    async def _view_images(self, angles, scene, zoom: float = 1.0, frame=None, label: str = "", center=None):
+        images, notes, prefix = [], [], label
         status = await self._control_json("status")
         if not (status.get("running") and status.get("mcp_port_open")):
             raise LabError("Blender is not running on brain 2 (start it first, or ask for an edit action)")
         async with self._session_factory() as session:
+            await self._scene_open(session, scene)
             for label, azimuth, elevation in angles:
-                geometry = await self._exec(session, _at_frame(fill(VIEW, AZ=azimuth, EL=elevation, ZOOM=zoom), frame))
+                geometry = await self._exec(session, _at_frame(fill(VIEW, AZ=azimuth, EL=elevation, ZOOM=zoom,
+                                                                   **_centre(center)), frame))
                 if not geometry.get("meshes"):
                     raise LabError("the scene has no visible mesh to look at")
                 await asyncio.sleep(0.4)
@@ -758,38 +965,70 @@ class BrainTwoBlender:
                     raise LabError("the screenshot was not a PNG")
                 images.append(png)
                 notes.append({"angle": label, "size": list(png_size(png)),
-                              "evidence": self._evidence(scene or "view", f"{label}.png", png)})
+                              "evidence": self._evidence(scene or "view", _named(prefix, f"{label}.png"), png)})
         return images, notes
 
     async def _do_screenshot(self, args):
         images, notes = await self._view_images(self._angles(args), args.get("scene", ""), float(args.get("zoom", 1.0)),
-                                                args.get("frame"))
+                                                args.get("frame"), args.get("label", ""), args.get("center"))
         return self._result({"screenshots": notes}, images)
 
     async def _do_render_preview(self, args):
         await self._ensure_running()
         scene = args.get("scene", "") or "preview"
         width, height = int(args.get("width", 640)), int(args.get("height", 360))
+        camera = args.get("camera", "auto")
+        angles = [("camera", 0.0, 0.0)] if camera == "scene" else self._angles(args)[:4]
         images, notes = [], []
-        async with self._session_factory() as session:
-            for label, azimuth, elevation in self._angles(args)[:4]:
+        async with self._long_session(900.0) as session:
+            await self._scene_open(session, args.get("scene", ""))
+            for label, azimuth, elevation in angles:
                 name = re.sub(r"[^a-z0-9_-]", "", f"{scene}-{label}")[:60]
                 began = time.monotonic()
-                info = await self._exec(session, _at_frame(fill(RENDER, W=width, H=height, AZ=azimuth, EL=elevation, ZOOM=float(args.get("zoom", 1.0)),
-                                                      ENGINE=args.get("engine", "workbench"), NAME=name), args.get("frame")))
+                info = await self._exec(session, _at_frame(fill(
+                    RENDER, W=width, H=height, AZ=azimuth, EL=elevation, ZOOM=float(args.get("zoom", 1.0)),
+                    ENGINE=args.get("engine", "workbench"), NAME=name, SAMPLES=int(args.get("samples", 0)),
+                    DENOISE=int(bool(args.get("denoise", False))), CAMERA=camera, **_centre(args.get("center"))),
+                    args.get("frame")))
                 png = await self._fetch(info["file"], MAX_IMAGE)
                 if not is_png(png):
                     raise LabError("the preview was not a PNG")
                 images.append(png)
                 notes.append({"angle": label, "engine": info["engine"], "size": list(png_size(png)),
                               "seconds": round(time.monotonic() - began, 2),
-                              "evidence": self._evidence(scene, f"render-{label}.png", png)})
+                              "evidence": self._evidence(scene, _named(args.get("label", ""), f"render-{label}.png"), png)})
         return self._result({"previews": notes}, images)
+
+    async def _do_bake(self, args):
+        """Cycles bakes (normal / AO / colour / emission / roughness) onto the target's UV map, saved as PNG files in
+        the sandbox by our own code (model code may not write files), then fetched back as evidence."""
+        await self._ensure_running()
+        maps = args.get("maps") or ["normal"]
+        async with self._long_session(1200.0) as session:
+            await self._scene_open(session, args["scene"])
+            info = await self._exec(session, fill(
+                BAKE, SCENE=args["scene"], OBJECT=args["object"], SOURCE=args.get("source", ""),
+                SIZE=int(args.get("size", 1024)), MAPS=",".join(maps), SAMPLES=int(args.get("samples", 16)),
+                EXTRUSION=float(args.get("extrusion", 0.05)), MARGIN=int(args.get("margin", 8))))
+            saved = await self._exec(session, fill(SAVE_SCENE, SCENE=args["scene"]))
+        images = []
+        for entry in info.get("maps", []):
+            data = await self._fetch(str(entry.get("file", "")), MAX_FILE)
+            if not is_png(data):
+                raise LabError("a baked texture was not a PNG")
+            entry["size"] = list(png_size(data))
+            entry["evidence"] = self._evidence(args["scene"], _named(args.get("label", ""), Path(entry["file"]).name), data)
+            if len(data) <= MAX_IMAGE and len(images) < 2:
+                images.append(data)
+        info.pop("stdout", None)
+        info["scene_saved_bytes"] = saved.get("saved_bytes")
+        return self._result(info, images)
 
     async def _do_export(self, args):
         await self._ensure_running()
         fmt = args["format"]
         async with self._session_factory() as session:
+            await self._scene_open(session, args["scene"])
             info = await self._exec(session, fill(EXPORT, SCENE=args["scene"], FORMAT=fmt))
         data = await self._fetch(info["file"], MAX_FILE)
         if fmt == "glb":

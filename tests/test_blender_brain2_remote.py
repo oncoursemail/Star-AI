@@ -66,11 +66,17 @@ class FakeLauncher:
 
 
 class FakeSession:
-    def __init__(self, replies=None):
+    def __init__(self, replies=None, reopen=False):
         self.calls = []
         self.replies = replies or []
+        self.ensures = []          # the "is my scene the open file?" checks, answered separately
+        self.reopen = reopen
 
     async def call_tool(self, name, arguments):
+        if "create it with new_scene first" in arguments.get("code", ""):
+            self.ensures.append(arguments["code"])
+            return SimpleNamespace(structuredContent={"status": "ok", "result": {"reopened": self.reopen}}, content=[],
+                                   isError=False)
         self.calls.append((name, arguments))
         reply = self.replies.pop(0) if self.replies else {"status": "ok", "result": {}}
         return SimpleNamespace(structuredContent=reply, content=[], isError=reply.get("status") != "ok")
@@ -102,6 +108,12 @@ GOOD = [
     "import bpy\nbpy.ops.mesh.primitive_cube_add(size=2)\nresult = {'n': len(bpy.data.objects)}",
     "import bpy, math, mathutils\nfor i in range(5):\n    bpy.ops.mesh.primitive_uv_sphere_add(location=(i, 0, 0))\n",
     "import bmesh, bpy\nm = bpy.data.meshes.new('x')\nb = bmesh.new()\nbmesh.ops.create_cube(b, size=1)\nb.to_mesh(m)\nb.free()",
+    # learned on the dragon builds: bmesh.utils, f-string labels, sculpt/paint operators, bakes kept in memory
+    "import bmesh\nb = bmesh.new()\ne = b.edges.new((b.verts.new((0, 0, 0)), b.verts.new((1, 0, 0))))\nbmesh.utils.edge_split(e, e.verts[0], 0.5)",
+    "a, b = 1, 2\nlabel = f'{a}/{b} done'",
+    "import bpy\nbpy.ops.object.mode_set(mode='SCULPT')\nbpy.ops.sculpt.mesh_filter(type='INFLATE', strength=0.1)",
+    "import bpy\nbpy.ops.paint.vertex_color_dirt(blur_strength=1.0)",
+    "import bpy\nbpy.ops.object.bake(type='NORMAL', use_selected_to_active=True, cage_extrusion=0.05)",
 ]
 BAD = [
     ("import os", "Import of 'os'"),
@@ -109,7 +121,17 @@ BAD = [
     ("from os import path", "Import of 'os'"),
     ("import bpy\nx = bpy.ops\nx.wm.quit_blender()", "bpy.ops must be used directly"),
     ("import bpy\nbpy.ops.wm.save_mainfile()", "bpy.ops.wm is not allowed"),
-    ("import bpy\nbpy.ops.export_scene.fbx(filepath='a')", "bpy.ops.export_scene is not allowed"),
+    ("import bpy\nbpy.ops.export_scene.fbx(filepath='a')", "is not allowed"),
+    ("import bpy\nbpy.ops.object.bake(type='AO', save_mode='EXTERNAL')", "'save_mode=' is not allowed"),
+    ("import bpy\nbpy.ops.object.bake(type='AO', filepath=chr(47) + 'tmp')", "'filepath=' is not allowed"),
+    ("import bpy\nopts = dict(directory='x')", "'directory=' is not allowed"),
+    ("import bpy as bmesh\nbmesh.utils.register_class(1)", "is not allowed"),
+    ("import bpy, bmesh\nbmesh = bpy\nbmesh.utils.execfile('x')", ".utils"),
+    ("import bpy, bmesh\ndef f(bmesh):\n    return bmesh.utils\n", ".utils"),
+    ("import bpy\nx = f'{1}/etc/passwd'", "path or URL"),
+    ("import bpy\nx = f'..{1}'", "path or URL"),
+    ("import bpy\nbpy.ops.image.new(name='x')", "bpy.ops.image is not allowed"),
+    ("import bpy\nbpy.ops.render.render()", "bpy.ops.render is not allowed"),
     ("import bpy\nbpy.ops.script.python_file_run()", "bpy.ops.script is not allowed"),
     ("from bpy import ops", "Importing bpy.ops"),
     ("open('a')", "'open'"),
@@ -171,8 +193,11 @@ def test_code_size_and_type_limits():
 
 @pytest.mark.parametrize("template,values", [
     (bb.NEW_SCENE, {"SCENE": "lantern"}), (bb.OPEN_SCENE, {"SCENE": "lantern"}), (bb.SAVE_SCENE, {"SCENE": "lantern"}),
-    (bb.VIEW, {"AZ": 40.0, "EL": 25.0, "ZOOM": 1.0}),
-    (bb.RENDER, {"W": 640, "H": 360, "AZ": 0.0, "EL": 0.0, "ZOOM": 1.0, "ENGINE": "workbench", "NAME": "a-front"}),
+    (bb.VIEW, {"AZ": 40.0, "EL": 25.0, "ZOOM": 1.0, "HASC": 0, "CX": 0.0, "CY": 0.0, "CZ": 0.0}),
+    (bb.RENDER, {"W": 640, "H": 360, "AZ": 0.0, "EL": 0.0, "ZOOM": 1.0, "ENGINE": "workbench", "NAME": "a-front",
+                 "SAMPLES": 0, "DENOISE": 0, "CAMERA": "auto", "HASC": 1, "CX": 0.0, "CY": -3.1, "CZ": 5.6}),
+    (bb.BAKE, {"SCENE": "dragon", "OBJECT": "Low Body", "SOURCE": "High", "SIZE": 2048, "MAPS": "normal,ao,color",
+               "SAMPLES": 16, "EXTRUSION": 0.05, "MARGIN": 8}),
     (bb.EXPORT, {"SCENE": "lantern", "FORMAT": "glb"}),
 ])
 def test_templates_are_valid_python_with_values_as_literals(template, values):
@@ -590,3 +615,151 @@ def test_command_line_call_file_avoids_argument_quoting(tmp_path, monkeypatch, c
     call.write_text(json.dumps({"action": "run_bpy", "scene": "dragon", "code": code}), encoding="utf-8")
     assert bb.main(["--home", str(tmp_path), "--edit", "--call-file", str(call)]) == 0
     assert seen == [{"action": "run_bpy", "scene": "dragon", "code": code}]
+
+
+# --------------------------------------------------------------------------- dragon v3: bakes, scene camera, labels
+
+def test_bake_saves_textures_fetches_them_and_saves_the_scene(tmp_path):
+    files = {"textures/dragon-Dragon_Low-normal.png": PNG, "textures/dragon-Dragon_Low-ao.png": PNG}
+    session = FakeSession([
+        {"status": "ok", "result": {"object": "Dragon_Low", "source": "Dragon_High", "size": 2048, "maps": [
+            {"map": "normal", "image": "Dragon_Low_normal", "file": "textures/dragon-Dragon_Low-normal.png", "seconds": 3.1},
+            {"map": "ao", "image": "Dragon_Low_ao", "file": "textures/dragon-Dragon_Low-ao.png", "seconds": 40.2}]}},
+        {"status": "ok", "result": {"saved_bytes": 12345}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files=files), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "bake", "scene": "dragon", "object": "Dragon_Low", "source": "Dragon_High",
+                                 "maps": ["normal", "ao"], "size": 2048, "samples": 16, "extrusion": 0.06,
+                                 "label": "p3"}))
+    info = text(reply)
+    assert not reply["isError"], info
+    code = session.calls[0][1]["code"]
+    ast.parse(code)
+    assert "size, maps = 2048, 'normal,ao'.split(\",\")" in code and "bpy.ops.object.bake(**options)" in code
+    assert "cage_extrusion=0.06" in code and "scene.cycles.samples = 16" in code and "img.save()" in code
+    assert "os.path.join(SB, rel)" in code and "'Dragon_High'" in code
+    assert "o.hide_render = True" in code and "o.hide_render = False" in code   # others sit out, then come back
+    assert "save_as_mainfile" in session.calls[1][1]["code"]   # the scene (with the new image links) is saved
+    assert [m["evidence"] for m in info["maps"]] == ["blender/brain2/dragon/p3-dragon-Dragon_Low-normal.png",
+                                                    "blender/brain2/dragon/p3-dragon-Dragon_Low-ao.png"]
+    assert (tmp_path / info["maps"][0]["evidence"]).read_bytes() == PNG and info["maps"][0]["size"] == [640, 360]
+    assert len([b for b in reply["content"] if b["type"] == "image"]) == 2 and info["scene_saved_bytes"] == 12345
+
+
+@pytest.mark.parametrize("bad", [
+    {"action": "bake", "scene": "dragon"},                                                    # no target
+    {"action": "bake", "scene": "dragon", "object": "A", "source": "A"},                      # same mesh
+    {"action": "bake", "scene": "dragon", "object": "A", "maps": ["albedo"]},                 # unknown map
+    {"action": "bake", "scene": "dragon", "object": "A", "size": 4096},                       # too big for Roblox
+    {"action": "bake", "scene": "dragon", "object": "A", "maps": ["ao", "ao"]},               # duplicate
+    {"action": "bake", "object": "A"},                                                        # no scene
+    {"action": "bake", "scene": "dragon", "object": "A/../x"},                                # bad name
+    {"action": "render_preview", "camera": "orbit"}, {"action": "render_preview", "samples": 0},
+    {"action": "render_preview", "label": "../x"}, {"action": "render_preview", "width": 1920},
+])
+def test_bake_and_render_options_are_validated(tmp_path, bad):
+    c, launcher, session = client(tmp_path)
+    reply = run(c.call(bb.TOOL, bad))
+    assert reply["isError"] and not session.calls and launcher.calls == []
+
+
+def test_bake_needs_the_edit_permission(tmp_path):
+    c, launcher, session = client(tmp_path, edit=False)
+    reply = run(c.call(bb.TOOL, {"action": "bake", "scene": "dragon", "object": "A"}))
+    assert reply["isError"] and "edit permission" in text(reply)["error"] and not session.calls
+    assert "bake" not in c.catalog[0]["inputSchema"]["properties"]["action"]["enum"]
+
+
+def test_a_failed_bake_is_reported_and_nothing_is_fetched(tmp_path):
+    session = FakeSession([{"status": "error", "message": "Traceback\nRuntimeError: bake: the target mesh has no UV map"}])
+    c, launcher, _ = client(tmp_path, session=session)
+    reply = run(c.call(bb.TOOL, {"action": "bake", "scene": "dragon", "object": "A"}))
+    assert reply["isError"] and "no UV map" in text(reply)["error"]
+    assert not [call for call in launcher.calls if call[0] == "fetch"]
+
+
+def test_render_through_the_scene_camera_with_samples_denoise_and_a_label(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-camera.png", "engine": "cycles", "size": [1280, 720]}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-camera.png": PNG}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "cycles", "camera": "scene",
+                                 "angles": ["front", "right"], "width": 1280, "height": 720, "samples": 96,
+                                 "denoise": True, "label": "hero-p3"}))
+    info = text(reply)
+    assert not reply["isError"], info
+    assert len(session.calls) == 1   # the scene camera is one view; the angles do not apply
+    code = session.calls[0][1]["code"]
+    ast.parse(code)
+    assert "use_scene_camera = 'scene' == \"scene\"" in code and "samples, denoise = 96, bool(1)" in code
+    assert "scene.camera = old_cam if use_scene_camera else cam" in code
+    assert info["previews"][0]["evidence"] == "blender/brain2/dragon/hero-p3-render-camera.png"
+
+
+def test_screenshot_label_keeps_earlier_passes(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"crop": [0, 0, 10, 10], "meshes": 1}},
+                           {"status": "ok", "result": {"crop": [0, 0, 10, 10], "meshes": 1}}])
+    c, _, _ = client(tmp_path, edit=False, launcher=FakeLauncher(files={"shots/dragon-front.png": PNG}), session=session)
+    one = text(run(c.call(bb.TOOL, {"action": "screenshot", "scene": "dragon", "angles": ["front"], "label": "p1"})))
+    two = text(run(c.call(bb.TOOL, {"action": "screenshot", "scene": "dragon", "angles": ["front"], "label": "p2"})))
+    assert one["screenshots"][0]["evidence"].endswith("/p1-front.png")
+    assert two["screenshots"][0]["evidence"].endswith("/p2-front.png")
+    assert (tmp_path / one["screenshots"][0]["evidence"]).exists()
+
+
+def test_existing_world_is_kept_by_renders():
+    code = bb.fill(bb.RENDER, W=64, H=64, AZ=0.0, EL=0.0, ZOOM=1.0, ENGINE="eevee", NAME="x", SAMPLES=32, DENOISE=0,
+                   CAMERA="auto", **bb._centre(None))
+    assert "    if scene.world is None:   # a world the scene already has" in code
+    assert "scene.eevee.taa_render_samples = samples" in code
+
+
+def test_scene_actions_reopen_their_scene_after_a_blender_restart(tmp_path):
+    # Blender restarted (30-minute limit or a crash): the factory scene is open. run_bpy must not edit and then save
+    # the factory cube over the real scene, and a render must not show the cube.
+    session = FakeSession([{"status": "ok", "result": {"made": 1}}, {"status": "ok", "result": {"saved_bytes": 9}}],
+                          reopen=True)
+    c, _, _ = client(tmp_path, session=session)
+    reply = run(c.call(bb.TOOL, {"action": "run_bpy", "scene": "dragon", "code": "result = {'made': 1}"}))
+    info = text(reply)
+    assert not reply["isError"] and "reopened" in info["note"]
+    assert len(session.ensures) == 1 and "'dragon' + \".blend\"" in session.ensures[0]
+    assert "bpy.ops.wm.open_mainfile(filepath=path)" in session.ensures[0]
+    ast.parse(session.ensures[0])
+    for call, files in (({"action": "render_preview", "scene": "dragon", "angles": ["front"]}, {"previews/dragon-front.png": PNG}),
+                        ({"action": "export", "scene": "dragon"}, {"exports/dragon.glb": make_glb()}),
+                        ({"action": "bake", "scene": "dragon", "object": "Low"}, {})):
+        s2 = FakeSession([{"status": "ok", "result": {"file": next(iter(files), ""), "maps": []}},
+                          {"status": "ok", "result": {"saved_bytes": 1}}])
+        c2, _, _ = client(tmp_path, launcher=FakeLauncher(files=files), session=s2)
+        run(c2.call(bb.TOOL, call))
+        assert len(s2.ensures) == 1, call
+    shot = FakeSession([{"status": "ok", "result": {"crop": [0, 0, 10, 10], "meshes": 1}}])
+    c3, _, _ = client(tmp_path, edit=False, launcher=FakeLauncher(files={"shots/view-front.png": PNG}), session=shot)
+    run(c3.call(bb.TOOL, {"action": "screenshot", "angles": ["front"]}))
+    assert shot.ensures == []          # no scene named: nothing to reopen
+
+
+def test_lit_bake_combines_colour_ao_and_glow_under_a_white_sky():
+    code = bb.fill(bb.BAKE, SCENE="dragon", OBJECT="Low", SOURCE="High", SIZE=1024, MAPS="lit", SAMPLES=32,
+                   EXTRUSION=0.05, MARGIN=8)
+    ast.parse(code)
+    assert '"lit": ("COMBINED", "sRGB")' in code and "{'DIFFUSE', 'DIRECT', 'INDIRECT', 'COLOR', 'EMIT'}" in code
+    assert "scene.world = sky" in code and "scene.world = old_world" in code
+    assert "lit" in bb.BAKE_MAPS
+
+
+def test_close_ups_look_at_a_chosen_point(tmp_path):
+    session = FakeSession([{"status": "ok", "result": {"file": "previews/dragon-az30_el10.png", "engine": "eevee", "size": [960, 540]}}])
+    c, _, _ = client(tmp_path, launcher=FakeLauncher(files={"previews/dragon-az30_el10.png": PNG}), session=session)
+    reply = run(c.call(bb.TOOL, {"action": "render_preview", "scene": "dragon", "engine": "eevee", "azimuth": 30,
+                                 "elevation": 10, "zoom": 6, "center": [0, -3.1, 5.6]}))
+    assert not reply["isError"], text(reply)
+    code = session.calls[0][1]["code"]
+    ast.parse(code)
+    assert "if 1:   # look at a chosen point" in code and "mathutils.Vector((0.0, -3.1, 5.6))" in code
+    shot = FakeSession([{"status": "ok", "result": {"crop": [0, 0, 10, 10], "meshes": 1}}])
+    c2, _, _ = client(tmp_path, edit=False, launcher=FakeLauncher(files={"shots/view-front.png": PNG}), session=shot)
+    run(c2.call(bb.TOOL, {"action": "screenshot", "angles": ["front"], "center": [1, 2, 3]}))
+    assert "r3d.view_location = mathutils.Vector((1.0, 2.0, 3.0))" in shot.calls[0][1]["code"]
+    for bad in ([1, 2], [1, 2, "3"], [1, 2, 1e9], "1,2,3"):
+        assert run(c2.call(bb.TOOL, {"action": "screenshot", "center": bad}))["isError"]
+    with pytest.raises(ValueError):
+        bb._centre([True, 1, 2])

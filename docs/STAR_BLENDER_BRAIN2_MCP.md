@@ -119,3 +119,24 @@ anything that changes a scene or starts Blender); off by default. The tool is `s
 official Blender Lab MCP add-on through an operator-chosen ssh command, like the Studio connector, and model-written Python
 (`run_bpy`) passes an AST allow-list first. Details, measurements, security model and the live demo evidence:
 `docs/agents/blender-brain2-20261013.md` and `docs/agents/blender-brain2-20261013/`. Launcher and setup script: `server/brain2_blender/`.
+
+## Update 2026-10-14: bake pipeline and the lessons of the dragon v3 build (stylized high-detail -> game-ready)
+
+Learned by building a high-detail stylized dragon (565k-face sculpt-style body, 86k-face wings) and baking it onto
+a 25k-triangle rigged game model entirely through `star_blender` (evidence and the capability-gap report:
+`docs/agents/dragon-v3-20261013/` in the workspace). What changed in the tool:
+
+- `bake {scene, object, source?, maps, size, samples, extrusion, margin}`: Cycles bakes (normal, ao, color, emit,
+  roughness, and `lit` = albedo x ambient occlusion + glow in ONE colour map for engines that read only a colour map)
+  from a high mesh onto a low mesh's UV map (selected-to-active) or from a mesh's own material. STAR's own code saves the
+  PNGs into the sandbox (`textures/`) and relinks the images to those files, so the maps survive a Blender restart and
+  go into the GLB; model code still cannot write files. Other objects sit out of the bake (memory, no stray AO).
+- `render_preview`: `samples`, `denoise`, `camera: scene` (render through the scene's own camera and lights, e.g. a
+  3-point setup), up to 1280x720, and an existing world is kept. `screenshot`/`render_preview`: `center [x,y,z]` to look
+  at a point (face close-ups), zoom up to 8, and `label` to keep each pass's evidence files.
+- Restart safety: every scene action first reopens its scene if Blender restarted (30-minute limit or a memory-cap
+  kill); before this a `run_bpy` after a restart edited the factory cube and the save overwrote the real scene file.
+- Filter: `bmesh.utils` allowed (only while `bmesh` is the real module), f-string labels like `f"{a}/{b}"` no longer
+  read as paths, `bpy.ops.sculpt` / `bpy.ops.paint` allowed, and file keywords (`filepath=`, `save_mode=`, ...) are
+  refused on every call (`bpy.ops.object.bake(save_mode='EXTERNAL', filepath=...)` could write anywhere before).
+  `run_bpy` code limit 12k -> 24k characters.
