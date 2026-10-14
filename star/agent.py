@@ -22,6 +22,25 @@ class HistoryWindowPressure(RuntimeError):
         self.dispatched = dispatched
         self.tool_actions_started = tool_actions_started
 
+# Tools whose results carry text written by third parties (web pages, search snippets, MCP servers).
+# Once one of them has returned in a turn, full Luau execution is refused for the rest of that turn:
+# an instruction hidden in a page must not become code that runs in Studio without the owner seeing it.
+# DevForum posts, YouTube metadata, Roblox experience names/descriptions/thumbnails, Creator Store search
+# results, public GitHub repositories, read-only MCP connections and the research team (it reads the web)
+# are written by other users too. (Studio's http_get is not listed: the connector only fetches Roblox's own
+# documentation.)
+UNTRUSTED_SOURCE_TOOLS = frozenset({
+    "star_web_fetch", "star_web_search", "star_mcp_registry_search",
+    "star_roblox_forum_search", "star_roblox_forum_topic", "star_roblox_forum_latest",
+    "star_roblox_youtube_search", "star_roblox_youtube_video",
+    "star_roblox_search_games", "star_roblox_game_report", "star_roblox_compare_games",
+    "star_roblox_game_image", "search_asset",
+    "star_github_tree", "star_github_read", "star_mcp_search", "star_mcp_call", "star_delegate_research",
+})
+LUAU_AFTER_UNTRUSTED = ("Full Luau execution is off for the rest of this turn because it read web or "
+                        "third-party content. Ask again in a new message to run Luau.")
+
+
 RULES = """You are STAR Genesis, an early-stage Roblox development AI.
 Truthfully report uncertainty and failed operations. Never claim a game was edited without a successful tool result.
 For images, identify what is actually visible before inferring interactions.
@@ -482,6 +501,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         {"type": "text", "text": prompt}, *content[1:]]}], "The original request alone is too large. ")
     calls_count = 0
     tool_actions_started = False
+    untrusted_read = False   # a third-party-text tool has returned in this turn (UNTRUSTED_SOURCE_TOOLS)
     delegations = 0
     if callable(request_extras):   # the slot depends on whether tools are attached
         request_extras = request_extras(tools_attached)
@@ -704,6 +724,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                             raise PermissionError("Document tool not authorized for this task")
                     elif name not in TOOL_NAMES:
                         enforce(name, args, registry, studio_id, may_edit, allow_luau=allow_luau)
+                        if name == "execute_luau" and untrusted_read:
+                            raise PermissionError(LUAU_AFTER_UNTRUSTED)
                     elif workspace is None or (name in WORKSPACE_WRITE_TOOLS and not workspace_edit):
                         raise PermissionError("Workspace tool not authorized")
                 except Exception as exc:
@@ -854,6 +876,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         data = raw.model_dump(by_alias=True, exclude_none=True)
                     result = tool_payload(data)
                     images = mcp_images(data)
+                    if (name in UNTRUSTED_SOURCE_TOOLS
+                            or (mcp_gateway is not None and mcp_gateway.owns(name))
+                            or (mcp_registry is not None and mcp_registry.owns(name))):
+                        untrusted_read = True
                     event({"event": "tool_finished", "tool": name, "is_error": bool(data.get("isError"))})
                 messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result})
                 if images:

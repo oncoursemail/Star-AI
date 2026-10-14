@@ -9,8 +9,39 @@ from typing import Any
 
 MAX_READ_BYTES = 250_000
 MAX_WRITE_BYTES = 250_000
-DENIED_NAMES = {'.env', '.git', '.github', '.ssh', '.aws', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519'}
+DENIED_NAMES = {'.env', '.git', '.github', '.ssh', '.aws', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519',
+                '.netrc', '.git-credentials'}
 DENIED_SUFFIXES = {'.pem', '.p12', '.pfx', '.key'}
+# `.env.local`, `.env.production` ... hold the same secrets as `.env`; these few are templates.
+_ENV_TEMPLATES = {'.env.example', '.env.sample', '.env.template'}
+# Windows device names (also with an extension: `nul.txt` opens the device).
+# Windows also treats the superscript digits COM¹-³/LPT¹-³ and the console names as devices.
+_RESERVED = {'con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
+             *(f'{dev}{i}' for dev in ('com', 'lpt') for i in (*range(1, 10), '¹', '²', '³'))}
+
+
+def _bad_component(part: str) -> str:
+    """Why one path component is refused, or ''.
+
+    Windows drops trailing dots and spaces when it opens a path, so `.git./config` would write
+    `.git/config` and `.env.` would write `.env`; `name:stream` opens an NTFS alternate data
+    stream. These spellings are refused on every platform, so the protected-name checks always
+    see the name the file system uses.
+    """
+    if part in ('.', '..'):
+        return ''
+    if part != part.rstrip('. '):
+        return 'Path parts may not end with a dot or a space'
+    if any(ord(ch) < 32 or ch in '<>:"|?*' for ch in part):
+        return 'Path contains a character Windows does not allow'
+    if part.split('.', 1)[0].strip().lower() in _RESERVED:
+        return 'Windows device names are not files'
+    return ''
+
+
+def _protected(part: str) -> bool:
+    name = part.rstrip('. ').lower()
+    return name in DENIED_NAMES or (name.startswith('.env.') and name not in _ENV_TEMPLATES)
 
 TOOLS = [
     {"name": "workspace_list", "description": "List files and folders relative to the selected workspace. Does not read outside it.",
@@ -53,14 +84,21 @@ class Workspace:
         if not relative or len(relative) > 500:
             raise ValueError('Invalid file path')
         value = Path(relative)
-        if value.is_absolute():
+        if value.is_absolute() or value.drive or value.root:
             raise PermissionError('Absolute paths are blocked')
+        for part in value.parts:
+            problem = _bad_component(part)
+            if problem:
+                raise PermissionError(problem)
+            if _protected(part):
+                raise PermissionError('Private/credential directories and files are protected')
         candidate = (self.root / value).resolve(strict=not allow_missing)
         if not candidate.is_relative_to(self.root):
             raise PermissionError('Path escapes the selected workspace')
-        if any(part.lower() in DENIED_NAMES for part in candidate.relative_to(self.root).parts):
+        # The resolved file too: a link may point at a protected one.
+        if any(_protected(part) for part in candidate.relative_to(self.root).parts):
             raise PermissionError('Private/credential directories and files are protected')
-        if candidate.suffix.lower() in DENIED_SUFFIXES:
+        if any(Path(name.rstrip('. ')).suffix.lower() in DENIED_SUFFIXES for name in (value.name, candidate.name)):
             raise PermissionError('Sensitive file type blocked')
         return candidate
 
