@@ -40,6 +40,7 @@ import subprocess
 import sys
 import threading
 import time
+from typing import Any
 
 from . import map_plan
 
@@ -122,15 +123,16 @@ def check_spec(spec) -> tuple[dict | None, list[str]]:
         problems.append(f"playSeconds must be 10..{MAX_PLAY_SECONDS:g}")
     plan = spec.get("plan")
     report = map_plan.dry_run(plan, include_operations=False)
+    route_plan = plan if isinstance(plan, dict) else {}   # a non-dict plan already fails the dry run above
     if not report["ok"]:
         problems.append("plan blockers: " + ", ".join(item["code"] for item in report["blockers"]))
     elif report["counts"]["parts"] + report["counts"]["spawns"] > MAX_PARTS:
         problems.append(f"the lab builds at most {MAX_PARTS} parts per run")
     elif report["counts"]["assets"]:
         problems.append("the lab does not insert assets (insert_asset is a blocked tool); remove 'assets'")
-    elif not (plan.get("route") or {}).get("waypoints"):
+    elif not (route_plan.get("route") or {}).get("waypoints"):
         problems.append("the lab needs plan.route.waypoints to playtest (names of the surfaces in order)")
-    elif any(not isinstance(w, str) for w in plan["route"]["waypoints"]):
+    elif any(not isinstance(w, str) for w in route_plan["route"]["waypoints"]):
         problems.append("the lab route must name objects (coordinates are not playtested)")
     expect, issue = check_expect(spec.get("expect"))
     if issue:
@@ -153,7 +155,7 @@ def check_expect(raw) -> tuple[dict, str]:
     first = raw.get("first_pass")
     if first is not None and not isinstance(first, bool):
         return {}, "expect.first_pass must be true, false or null"
-    out = {"first_pass": first}
+    out: dict[str, Any] = {"first_pass": first}
     for key in ("defects", "fixes"):
         value = raw.get(key, [])
         if not isinstance(value, list) or len(value) > 8 or any(not isinstance(v, str) or not 0 < len(v) <= 40
@@ -211,7 +213,7 @@ def check_ui_spec(spec: dict) -> tuple[dict | None, list[str]]:
             or any(d not in DEVICES for d in devices)):
         problems.append("devices must be 1..3 of " + ", ".join(DEVICES))
     try:
-        compiled = roblox_ui_compiler.compile_ui(spec.get("ui"))
+        compiled = roblox_ui_compiler.compile_ui(spec.get("ui"))  # pyright: ignore[reportArgumentType]  # None -> TypeError, caught
     except (roblox_ui_compiler.SpecError, TypeError, ValueError) as error:
         problems.append("ui spec: " + str(error)[:300])
         compiled = None
@@ -223,6 +225,7 @@ def check_ui_spec(spec: dict) -> tuple[dict | None, list[str]]:
         problems.append(issue)
     if problems:
         return None, problems
+    assert compiled is not None  # compile_ui failing adds a problem
     return {"name": name, "kind": "ui", "ui": copy.deepcopy(spec["ui"]), "devices": list(devices),
             "description": str(spec.get("description", ""))[:600], "defect": str(spec.get("defect", ""))[:80],
             "warnings": [str(w) for w in compiled.warnings][:10], "maxIterations": iterations, "expect": expect}, []
@@ -624,7 +627,7 @@ def verify(plan: dict, read: dict | None, run: str, *, tolerance: float = 0.02) 
     if not read or not read.get("exists"):
         return {"ok": False, "exists": False, "problems": ["the draft folder is not in Studio"]}
     want = expected_parts(plan)
-    have = {item.get("name"): item for item in read.get("parts", []) if isinstance(item, dict)}
+    have: dict[Any, Any] = {item.get("name"): item for item in read.get("parts", []) if isinstance(item, dict)}
     missing = sorted(set(want) - set(have))
     extra = sorted(set(have) - set(want))
     mismatched = []
@@ -1021,6 +1024,7 @@ def extend_platform(plan: dict, target: str) -> dict | None:
         return None
     trial = copy.deepcopy(plan)
     grown = _part(trial, target)
+    assert grown is not None  # the same part in a copy of the plan
     grown["size"][axis] = round(grown["size"][axis] + grow, 3)
     grown["position"][axis] = round(grown["position"][axis] - direction * grow / 2, 3)
     box = _part_box(grown)
@@ -1046,8 +1050,10 @@ def ease_rise(plan: dict, target: str) -> dict | None:
         next_rise = _leg(b, boxes[route[index + 1]])[1] if index + 1 < len(route) else 0.0
         if next_rise + drop <= SAFE_RISE:
             trial = copy.deepcopy(plan)
-            _move(_part(trial, target), [0.0, -drop, 0.0])
-            box = _part_box(_part(trial, target))
+            moved = _part(trial, target)
+            assert moved is not None  # the same part in a copy of the plan
+            _move(moved, [0.0, -drop, 0.0])
+            box = _part_box(moved)
             if _fits(trial, target, box["lo"], box["hi"]):
                 return {"plan": trial, "change": {"fix": "lower-target", "object": target, "lowered_by": drop}}
     if gap >= 2.0:
@@ -1115,7 +1121,9 @@ def fix_plan(plan: dict, defects: list[dict]) -> tuple[dict, list[dict]]:
                 chosen = clearing_strategy(new, name, source, target)
                 strategy = chosen.get("strategy")
                 if strategy in ("move-aside", "raise-overhead"):
-                    _move(_part(new, name), chosen["delta"])
+                    moved = _part(new, name)
+                    assert moved is not None  # checked at the top of this loop
+                    _move(moved, chosen["delta"])
                     changes.append({"fix": strategy, "object": name, "delta": chosen["delta"]})
                 elif strategy == "remove":
                     new["parts"] = [p for p in new["parts"] if p["name"] != name]
@@ -1200,7 +1208,7 @@ class BrainCritic:
 
     def __call__(self, images: list[tuple[str, bytes, str]], summary: str) -> dict:
         import urllib.request
-        content = [{"type": "text", "text": (
+        content: list[dict[str, Any]] = [{"type": "text", "text": (
             "You are checking screenshots of a Roblox obby/map blockout built from a plan. Plan summary:\n" + summary +
             "\nLook for visible defects: platforms floating or missing, gaps that look too wide to jump, parts "
             "blocking the path or the head room above it, clipping or z-fighting, the route not visible. Answer ONLY "
@@ -1229,7 +1237,8 @@ class BrainCritic:
         result = {"ok": isinstance(found, dict), "seconds": round(time.monotonic() - started, 1),
                   "model": self.model, "advisory": True}
         if isinstance(found, dict):
-            defects = found.get("defects") if isinstance(found.get("defects"), list) else []
+            listed = found.get("defects")
+            defects = listed if isinstance(listed, list) else []
             result["defects"] = [{"code": str(d.get("code", ""))[:40], "object": str(d.get("object", ""))[:64],
                                   "detail": str(d.get("detail", ""))[:300]} for d in defects if isinstance(d, dict)][:12]
             result["looks_ok"] = found.get("looks_ok") is True
@@ -1571,7 +1580,8 @@ class Lab:
         entry = self.guarded.journal.entries[-1] if self.guarded.journal.entries else {}
         from .studio_loop import EDIT_MARK, _marked_json
         receipt = _marked_json(_text(result), EDIT_MARK) or {}
-        answer = receipt.get("result") if isinstance(receipt.get("result"), str) else _text(result)
+        got = receipt.get("result")
+        answer = got if isinstance(got, str) else _text(result)
         return (not _failed(result) and entry.get("ok") is True), answer, entry
 
     async def _read(self, name: str, **arguments):
@@ -1594,7 +1604,7 @@ class Lab:
         # Read-only Luau still goes through execute_luau, so it is journaled as an edit that changed nothing.
         ok, text, _entry = await self._luau(readback_luau(plan, 0))
         head = marked_json(text, READ_MARK) if ok else None
-        pages = [head]
+        pages: list[Any] = [head]
         if head and head.get("exists"):
             for page in range(1, math.ceil((head.get("total") or 0) / READ_PAGE) + 1):
                 ok, text, _entry = await self._luau(readback_luau(plan, page))

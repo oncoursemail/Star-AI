@@ -233,7 +233,8 @@ class Worker:
         try:
             lab_class = studio_lab.UiLab if spec.get("kind") == "ui" else studio_lab.Lab
             lab = lab_class(guarded, folder, log=lambda text: self.say(f"{spec['name']} {text}"), **self.lab_kwargs)
-            report = await (lab.run(spec, keep=self.keep_drafts) if spec.get("kind") == "ui" else lab.run(spec))
+            report = await (lab.run(spec, keep=self.keep_drafts) if spec.get("kind") == "ui"  # pyright: ignore[reportCallIssue]  # UiLab.run
+                            else lab.run(spec))
             if spec.get("kind", "map") == "map" and not self.keep_drafts:
                 report["cleanup"] = await lab.remove([spec["plan"]["mapName"]], slot_root(self.slot))
         except Exception as error:
@@ -472,7 +473,7 @@ def nightly(spec_folder: Path, *, home, out: Path, outbox: Path | None, studios:
     if run is None:
         from . import studio_loop
         account = studio_loop.own_account_id(home) or configured_account(home)
-    runner = run or (lambda: asyncio.run(run_cli(chosen, connector(command), out, home=home, studios=studios,
+    runner = run or (lambda: asyncio.run(run_cli(chosen, connector(command or []), out, home=home, studios=studios,
                                                  keep_drafts=False, log=log, max_seconds=max_minutes * 60,
                                                  prefix="nightly", own_account_id=account)))
     report = runner()
