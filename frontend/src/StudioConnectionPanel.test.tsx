@@ -7,7 +7,7 @@ import {initializeBridge} from './bridge'
 import {installFakeDesktop,backendSettings,type FakeDesktop} from './fake-desktop'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {Desktop} from './Desktop'
-import type {AppSettings,StudioConnectionStatus,StudioTarget} from './types'
+import type {AppSettings,StudioConnectionStatus} from './types'
 
 let desktop:FakeDesktop
 beforeAll(async()=>{desktop=installFakeDesktop();await initializeBridge()})

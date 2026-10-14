@@ -101,7 +101,7 @@ describe('reading public repository data',()=>{
   expect((error as RateLimitError).retryAt).toBe(reset*1000)
  })
  it('reads the latest stable published release from GitHub directly, without credentials',async()=>{
-  const get=vi.fn(async(url:string)=>new Response(JSON.stringify(release('v0.9.0','2026-10-11T17:00:00Z')),{status:200}))
+  const get=vi.fn(async(_url:string)=>new Response(JSON.stringify(release('v0.9.0','2026-10-11T17:00:00Z')),{status:200}))
   vi.stubGlobal('fetch',get)
   const result=await fetchLatestStableRelease()
   expect(get).toHaveBeenCalledWith(API+LATEST_RELEASE_ENDPOINT,expect.objectContaining({
