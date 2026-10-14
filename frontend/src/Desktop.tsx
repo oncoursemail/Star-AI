@@ -32,6 +32,8 @@ import {ChatRow} from './ChatRow'
 import {ScreenConsent} from './ScreenConsent'
 import {useDismiss} from './Composer'
 import './redesign.css'
+import './resilience.css'
+import {EmptyState} from './states'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -49,6 +51,8 @@ const defaultSettings:AppSettings={endpoint:'http://127.0.0.1:8080/v1',provider:
 const makeMsg=(role:ChatMessage['role'],text:string,attachments?:string[]):ChatMessage=>({id:crypto.randomUUID(),role,text,created:new Date().toISOString(),attachments})
 const emptyAnalytics:Analytics={started:0,succeeded:0,failed:0,tools:0,rejected:0,median_ms:null,messages:0,project:'STAR',period_days:14,trend:[],recent:[]}
 const CHAT_ACTIONS=['sendMessage','generateImage','runTeam']
+/** The sidebar lists this many recent chats; search covers all of them. */
+const CHAT_WINDOW=60
 
 /** Starter prompts for things STAR can really do. They fill the composer so you can finish the sentence. */
 const starters=[
@@ -459,12 +463,14 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      if(!live)return
      const chosen:Fixture|undefined=module.FIXTURES[fixture]
      if(!chosen)return
-     setData(d=>({...d,chats:module.fixtureChats,active_chat:'fx-1',server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
+     const chats=chosen.chats||module.fixtureChats
+     const open=chats[0]?.id||''
+     setData(d=>({...d,chats,active_chat:open,project:chosen.project||d.project,projects:chosen.projects||d.projects,server:chosen.server||module.fixtureServer,retry:chosen.retry||null,settings:{...d.settings,...module.fixtureSettings,...chosen.settings}}))
      // The scripted turn belongs to the fixture chat from its first event (React has not re-rendered yet).
-     chatRef.current='fx-1'
+     chatRef.current=open
      setDraft(d=>({...d,...module.fixtureSettings,...chosen.settings}))
      setMessages(chosen.messages)
-     if(chosen.finishedRun)setLastRun({chat:'fx-1',run:chosen.finishedRun})
+     if(chosen.finishedRun)setLastRun({chat:open,run:chosen.finishedRun})
      if(chosen.script)play(chosen.script,chosen.messages)
    })
    return ()=>{
@@ -550,7 +556,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  const chooseWorkflow=async()=>{const v=await act('pickFiles',{kind:'workflow'});if(Array.isArray(v)&&v[0])setDraft(d=>({...d,comfy_workflow:String(v[0])}))}
  const filteredChats=data.chats.filter(c=>c.id!==pendingDelete?.id&&c.title.toLowerCase().includes(historyQuery.toLowerCase()))
- const chatGroups=groupChats(filteredChats.slice(0,60))
+ const chatGroups=groupChats(filteredChats.slice(0,CHAT_WINDOW))
  const saveSettings=async()=>{const v=await act('saveSettings',{settings:draft});if(v){setNotice('Settings saved.');setModelCheck(null);void sync()}}
  /** Reduced motion applies at once and is stored straight away, not only on Save. */
  const setReducedMotion=(reduced:boolean)=>{
@@ -708,7 +714,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
        {historySearchOpen&&<div className="rail-search"><input type="search" autoFocus aria-label="Find a conversation" placeholder="Find a chat" value={historyQuery} onChange={e=>setHistoryQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();setHistorySearchOpen(false);setHistoryQuery('')}}}/><button type="button" aria-label="Close search" onClick={()=>{setHistorySearchOpen(false);setHistoryQuery('')}}><X size={14}/></button></div>}
      </div>
      <nav className="rail-group" aria-label="Workspace">
-       {sections.filter(([id])=>id==='projects'||id==='tools').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{name}</span>{id==='projects'&&<small title={'Current project: '+data.project}>{data.project}</small>}</button>)}
+       {sections.filter(([id])=>id==='projects'||id==='tools').map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{name}</span>{id==='projects'&&<small dir="auto" title={'Current project: '+data.project}>{data.project}</small>}</button>)}
        <button className="rail-item rail-more" type="button" aria-expanded={showMore} onClick={()=>setMoreOpen(v=>!v)}><ChevronRight size={16} className={showMore?'is-open':undefined}/><span>More</span></button>
        {showMore&&<div className="rail-more-group">
          {sections.filter(([id])=>extraPages.includes(id)).map(([id,name,Icon])=><button className={'rail-item '+(tab===id?'is-current':'')} type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>nav(id)}><Icon size={16}/><span>{id==='brain'?'Model':name}</span></button>)}
@@ -726,7 +732,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </motion.div>)}
          </AnimatePresence>
        </Fragment>)}
-       {!filteredChats.length&&<p className="rail-empty">{historyQuery?'No chats match that search.':'Chats you start are saved here.'}</p>}
+       {!filteredChats.length&&<EmptyState compact title={historyQuery?'No chats match that search.':'Chats you start are saved here.'}/>}
+       {filteredChats.length>CHAT_WINDOW&&<p className="rail-window-note">Showing the {CHAT_WINDOW} most recent chats. Search finds older ones.</p>}
      </div>
      <div className="rail-foot">
        <button className={'rail-item '+(tab==='settings'?'is-current':'')} type="button" aria-current={tab==='settings'?'page':undefined} onClick={()=>nav('settings')}><Settings2 size={16}/><span>Settings</span><small>v{data.version}</small></button>
@@ -736,10 +743,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      <header className="bar">
        <div className="bar-left">
          <button className="bar-action bar-reveal" type="button" aria-label="Show sidebar" title="Show sidebar" onClick={()=>{if(narrow())setLeftOpen(true);else setSidebarCollapsed(false)}}><PanelLeftOpen size={18}/></button>
-         {tab==='chat'?<div className="bar-title"><span className="bar-crumb">{data.project}</span><span className="bar-sep" aria-hidden="true">/</span>{renamingTitle&&currentChat?<input className="bar-rename" aria-label="Chat name" autoFocus defaultValue={chatTitle} maxLength={80}
+         {tab==='chat'?<div className="bar-title"><span className="bar-crumb" dir="auto" title={data.project}>{data.project}</span><span className="bar-sep" aria-hidden="true">/</span>{renamingTitle&&currentChat?<input className="bar-rename" aria-label="Chat name" dir="auto" autoFocus defaultValue={chatTitle} maxLength={80}
              onBlur={event=>{const next=event.currentTarget.value.trim();setRenamingTitle(false);if(next&&next!==chatTitle)void renameChat(currentChat.id,next)}}
              onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.currentTarget.value=chatTitle;setRenamingTitle(false)}}}/>
-           :<h1 title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
+           :<h1 dir="auto" title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
            :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
        </div>
        <div className="bar-right">
@@ -785,7 +792,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                      {at===lastUser&&timelineNode}
                    </Fragment>
                  })}
-                 {query&&!matchingMessages.length&&<div className="thread-none"><Search size={18} aria-hidden="true"/><span>No messages match “{chatSearch.trim()}”.</span></div>}
+                 {query&&!matchingMessages.length&&<EmptyState compact icon={<Search size={16}/>} title={'No messages match “'+chatSearch.trim()+'”.'} description="Try a shorter word, or close search to see the whole chat."/>}
                  {busy&&run&&!timeline&&!streamingText&&<RunStatus run={run} label={stopping?'Stopping':undefined}/>}
                  {busy&&run?.mode==='image'&&viewingAnswer&&!stopping&&<div className={'image-pending is-'+imageSize} role="img" aria-label="Image being created"><span className="image-pending-sheen" aria-hidden="true"/><span className="image-pending-label"><ImagePlus size={15} aria-hidden="true"/> Your image will appear here</span></div>}
                  {interrupted&&<Message entry={{id:'interrupted',role:'event',text:interrupted.detail,status:'cancelled'}} animated={false} pinned onRetry={retryNow} onEdit={()=>fillComposer(interrupted.prompt)}/>}
@@ -812,7 +819,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='brain-overview'&&<div className="scroll-region"><div className="page-wrap"><BrainOverview load={!inactive}/></div></div>}
-         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
+         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong dir="auto" title={name}>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
             {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
@@ -919,7 +926,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      </AnimatePresence>
      <AnimatePresence>
        {pendingDelete&&<motion.div key={'undo-'+pendingDelete.id} role="status" className="undo-toast" initial={reducedMotion?false:{opacity:0,y:12,scale:.98}} animate={{opacity:1,y:0,scale:1}} exit={{opacity:0,y:8}} transition={reducedMotion?instant:{duration:.2,ease:[0.23,1,0.32,1]}}>
-         <Trash2 size={15} aria-hidden="true"/><span>Deleted <strong>{pendingDelete.title}</strong></span>
+         <Trash2 size={15} aria-hidden="true"/><span title={pendingDelete.title}>Deleted <strong dir="auto">{pendingDelete.title}</strong></span>
          <button type="button" onClick={undoDelete}><Undo2 size={14} aria-hidden="true"/> Undo</button>
        </motion.div>}
      </AnimatePresence>

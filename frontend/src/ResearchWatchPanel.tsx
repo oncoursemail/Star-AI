@@ -3,6 +3,7 @@ import {useCallback,useEffect,useRef,useState} from 'react'
 import {BookOpen,ChevronRight,ExternalLink,LoaderCircle,RefreshCcw,ShieldCheck} from 'lucide-react'
 import {onBackendEvent,request} from './bridge'
 import {Panel,Tag} from './components'
+import {EmptyState} from './states'
 
 type Source = {
   source_id:string
@@ -137,7 +138,7 @@ export function ResearchWatchPanel({disabled=false,autoCheck=false,onAutoChange}
           Inspect <ChevronRight size={14}/>
         </button>
       </div>)}
-    </>:<p>No research snapshots are recorded on this device yet.</p>}
+    </>:<EmptyState compact icon={<BookOpen size={15}/>} title="No research snapshots are recorded on this device yet." description="Run a check to record the first one."/>}
     {evidence&&<section aria-label="Research evidence">
       <h3>{sourceTitle(evidence.source_id)}</h3>
       <p><ShieldCheck size={15}/> Untrusted source excerpt. Not approved as fact or executable instruction.</p>
