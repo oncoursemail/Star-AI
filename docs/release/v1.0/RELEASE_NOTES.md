@@ -46,6 +46,13 @@ Learning (what "self-learning" means in this release)
   automatically. The bundled lesson file in this release is empty.
 - STAR does not retrain its model. Lessons are text you can read, change and remove.
 
+Answers and web
+- STAR knows the current date and time: every turn gives the model a "Now: ..." line with your local time.
+- Questions that need fresh information can search the web automatically when a search provider is configured
+  (Brave or Tavily key, or STAR Server's own search gateway); a new tool can read one web page (private network
+  addresses are refused). Faster chat on STAR Server: a lighter template for the small model and the fine-tuned
+  embedding model loaded on the server.
+
 Other
 - Discord bot for the owner only (a separate program, not in the installer): DM chat, /ask /image /screen /status
   /digest. Screenshots over Discord are off by default and need a button press each time.
@@ -69,8 +76,38 @@ training-data generator (#148), evaluation-driven code generation fixes (#147).
 
 ## Measured results (STAR Server, model star-fast, mode auto, skill packs off, knowledge on, temperature 0)
 
-EVALUATION_RESULTS_PENDING
+In short: **about the same as v0.9.0 on the evaluations, plus the new features.** None of the differences below is
+statistically meaningful (paired per-task comparison, one run per task and version: every suite is "inconclusive").
+
+| Suite | v0.9.0 | v1.0.0 | 95% range for v1.0.0 |
+|---|---|---|---|
+| Golden tasks v2 (34) | 13/34 | 16/34 | 31-63% |
+| Creation tasks (23) | 11/23 | 10/23 | 26-63% |
+| Blind holdout (24) | 8/24 | 9/24 | 21-57% |
+
+- Measured on the code at commit 72767e1. The release also contains three later changes that were **not** in the
+  evaluated code: a "Now: ..." local-time line in the context of every turn, automatic web search for questions that need
+  fresh information (news, latest versions, weather, prices) when a search provider is configured, and a web page
+  fetch tool with a private-address guard.
+- Four tasks hit server timeouts while the server was overloaded by other test traffic; each got one re-run on a quiet
+  server and is scored by that re-run (creation ENG-03, holdout HO-UI-02, HO-UI-03, HO-ANI-01).
+- Answer times are not comparable with v0.9.0's: v1.0.0's suites ran two at a time on a busy server.
 
 ## Not tested on real hardware or against real services
 
-EVIDENCE_PENDING
+What was checked for this release (owner's Windows 11 PC, October 13, 2026), and what was not:
+
+- Checked on the packaged app from this release's CI build (portable ZIP, disposable profile, real STAR Server):
+  start, version 1.0.0 shown, a real answer with sources, the "+" menu, Create image mode, the Look at my screen
+  consent dialog (cancelled: nothing captured, nothing attached), Settings, Test server, Check for updates, the
+  server key never shown, clean exit. Packaged doctors pass with the exact build commit. Screens: `docs/release/v1.0/`.
+- Found and fixed during that check: the Windows package (also v0.9.0's) did not contain the voice catalogue, so
+  Settings could not list voices.
+- **Not checked by an agent:** installing v1.0.0 **over an installed v0.9.0** with Setup (the test PC has an all-users
+  install, so Setup needs the Windows administrator prompt, which only the owner may approve), the refused/cancelled
+  upgrade path (W04c, pull request #217, still a draft), and taking a real screenshot with Look at my screen.
+- Not run by anyone yet: picture generation with a real picture engine from the installed app, voice with sound,
+  Roblox Studio editing from the installed app, the in-app "Install & restart" from v0.9.0 to v1.0.0, Blender tools in a whole chat turn, research watch against real pages, the Brain 2 practice runner,
+  the mascot over a long session, other GPUs and Windows profiles. 28 Luau runtime tests of the VFX compiler skip on
+  Windows. Night school's lessons have not changed the app's answers in this release (the bundled lesson file is
+  empty; importing is opt-in and every lesson waits for review).
