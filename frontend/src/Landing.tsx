@@ -8,6 +8,7 @@ import {StarLockup,StarMark} from './SiteBrand'
 import {SiteMascotHero,SiteMascotFooter} from './SiteMascot'
 import {SiteFeatures} from './SiteFeatures'
 import {SiteLearning} from './SiteLearning'
+import {SiteBrain} from './SiteBrain'
 import {SiteHonest} from './SiteHonest'
 import {SiteDownload} from './SiteDownload'
 import {LINKS,SOURCE_VERSION,formatDate,releaseFiles} from './siteContent'
@@ -19,6 +20,7 @@ import './site.css'
 const sections=[
  {id:'features',label:'Features'},
  {id:'learning',label:'How it learns'},
+ {id:'brain',label:'Brain map'},
  {id:'honest',label:'Honest numbers'}
 ] as const
 const sectionIds=sections.map(section=>section.id)
@@ -121,6 +123,7 @@ export function Landing(){
    {/* Each boundary hydrates as its own task, so the prerendered page never blocks input for long. */}
    <Suspense><SiteFeatures latest={latest}/></Suspense>
    <Suspense><SiteLearning/></Suspense>
+   <Suspense><SiteBrain/></Suspense>
    <Suspense><SiteHonest/></Suspense>
    <Suspense><SiteDownload latest={latest} files={files} releaseLive={liveRelease!==null} snapshotAt={builtSnapshot?.generatedAt??null}/></Suspense>
   </main>

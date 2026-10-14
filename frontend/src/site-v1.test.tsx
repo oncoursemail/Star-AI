@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 import {afterEach,describe,expect,it} from 'vitest'
 import {cleanup,render,screen} from '@testing-library/react'
-import {existsSync,readFileSync} from 'node:fs'
+import {existsSync,readFileSync,readdirSync} from 'node:fs'
 import {resolve} from 'node:path'
 import {renderToString} from 'react-dom/server'
 import {Landing} from './Landing'
 import {SiteDownload} from './SiteDownload'
 import {SiteFeatures} from './SiteFeatures'
 import media from './siteMedia.json'
-import {LINKS,evaluation,featureGroups,learnSteps,limits,releaseFiles} from './siteContent'
+import {LINKS,brainCounts,evaluation,featureGroups,learnSteps,limits,releaseFiles} from './siteContent'
 import type {ReleaseInfo} from './githubPublic'
 
 afterEach(()=>cleanup())
@@ -63,6 +63,35 @@ describe('website v1.0 claims',()=>{
   const text=page.body.textContent||''
   for(const fact of ['not code-signed','installing over v0.9.0','not a frontier model','no licence file','Windows 10 is untested'])
    expect(text.toLowerCase(),fact).toContain(fact.toLowerCase())
+ })
+})
+
+describe('STAR\'s brain map',()=>{
+ const brainSource=readFileSync(resolve(process.cwd(),'src','SiteBrain.tsx'),'utf8')
+ it('calls it code structure, not neurons, and dates the data',()=>{
+  const text=page.body.textContent||''
+  expect(text).toContain('It shows structure, not neurons')
+  expect(text).toContain('a bigger map does not mean a smarter STAR')
+  expect(text).toMatch(/Built with graphify extract \. --code-only on [A-Z][a-z]+ \d{1,2}, 20\d\d/)
+  expect(text).toContain('Counted October 13, 2026')
+ })
+ it('prerenders the static map and growth numbers, and loads the interactive graph only on demand',()=>{
+  expect(page.querySelector('#brain img.sw-brain-fallback')?.getAttribute('src')).toBe('./site/brain-graph.svg')
+  expect(existsSync(resolve(process.cwd(),'public','site','brain-graph.svg'))).toBe(true)
+  expect(page.querySelector('#brain canvas')).toBeNull()
+  expect(brainSource).toContain("import('./brainGraph.json')")
+  expect(brainSource).not.toMatch(/^import .*brainGraph\.json/m)
+  const rows=[...page.querySelectorAll('.sw-growth tbody th')].map(node=>node.textContent)
+  expect(rows).toEqual(['v0.6.0','v0.8.1','v0.9.0','v1.0'])
+ })
+ it('shows only counts that come from the repository or the project notes',()=>{
+  const text=page.body.textContent||''
+  for(const fact of ['300 with runnable checks','137 checked practice answers','64 pass','0 so far','18,133 passages'])
+   expect(text.replace(/\s+/g,' '),fact).toContain(fact)
+  const packs=readdirSync(resolve(process.cwd(),'..','star','skill_packs'),{withFileTypes:true}).filter(entry=>entry.isDirectory()&&!entry.name.startsWith('_'))
+  expect(brainCounts.items.find(item=>item.label==='Skill packs')?.value).toBe(String(packs.length))
+  const bundled=JSON.parse(readFileSync(resolve(process.cwd(),'..','star','skill_packs','lessons_bundled.json'),'utf8'))
+  expect(brainCounts.items.find(item=>item.label==='Lessons promoted')?.value).toBe(String(bundled.lessons.length))
  })
 })
 

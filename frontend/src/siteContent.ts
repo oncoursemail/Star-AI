@@ -123,6 +123,23 @@ export const evaluation={
  setup:'STAR Server, model star-fast, auto mode, skill packs off. One run per task, v0.9.0 and v1.0.0 measured a day apart in October 2026.',
 } as const
 
+/**
+ * Counts from STAR's learning systems, next to the code map. Sources (no server access needed):
+ * skill packs = folders in star/skill_packs; practice tasks = PR #255 (300 tasks, 300/300 verified on the server
+ * harness); worked examples = night school's outbox export of October 13, 2026 (docs/agents/self-learning-loop-20261013.md);
+ * lessons = star/skill_packs/lessons_bundled.json; knowledge = docs/agents/knowledge-study.md.
+ */
+export const brainCounts={
+ asOf:'Counted October 13, 2026, from the repository and the project notes.',
+ items:[
+  {label:'Skill packs',value:'33',note:' task-specific instruction packs; most are opt-in'},
+  {label:'Practice tasks',value:'300',note:' with runnable checks, all 300 verified on the server'},
+  {label:'Worked examples',value:'137',note:' checked practice answers in night school’s outbox; 64 pass the app’s import checks'},
+  {label:'Lessons promoted',value:'0',note:' so far: none has passed the paired gate, and the 1.0 lesson file is empty'},
+  {label:'Knowledge',value:'18,133',note:' passages of official Roblox documentation, indexed and embedded on the server'},
+ ],
+} as const
+
 export const limits=[
  {title:'It is early software.',body:'Most testing happened on one Windows 11 PC. Other graphics cards and Windows setups are largely untested.',link:{href:LINKS.acceptance,label:'Acceptance issue #15'}},
  {title:'Not everything was tried for real.',body:'Not yet tested end to end: installing over v0.9.0, a real Look at my screen capture, pictures from the installed app, voice with sound, and the Discord bot on Discord.',link:{href:LINKS.notes,label:'What was and was not tested'}},
