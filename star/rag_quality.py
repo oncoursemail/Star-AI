@@ -17,7 +17,6 @@ import json
 import math
 from pathlib import Path
 import re
-import stat
 import sys
 
 MAX_BYTES = 1_000_000

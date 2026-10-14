@@ -418,3 +418,81 @@ def test_capture_screen_normalizes_a_stub_grab_and_reports_missing_desktop():
 
     with pytest.raises(ValueError, match="no desktop session"):
         capture_screen(no_desktop)
+
+
+
+def test_lab_readonly_screenshot_checksum_in_existing_discord_workflow(tmp_path):
+    """The dedicated Discord workflow must exercise the new Lab artifact gate."""
+    import hashlib
+    import json
+    from star.discord_bot.lab_status import LabSettings, read_receipt, read_capture, format_receipt
+
+    image_out = BytesIO()
+    Image.new("RGB", (35, 24), (5, 15, 45)).save(image_out, format="PNG")
+    blob = image_out.getvalue()
+    photo = tmp_path / "studio-frame.png"
+    photo.write_bytes(blob)
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    manifest = tmp_path / "latest.json"
+    manifest.write_text(json.dumps({
+        "version": 1, "job_id": "testplace-42",
+        "engine": "roblox-studio", "state": "running",
+        "phase": "playtesting", "task": "Verify map obstacle",
+        "next_step": "Inspect the jump with four cameras",
+        "checked": 2, "total": 5, "evidence": "native-studio",
+        "updated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "capture_kind": "studio-viewport", "capture_file": photo.name,
+        "capture_sha256": hashlib.sha256(blob).hexdigest(),
+    }), encoding="utf-8")
+    config = LabSettings.from_env({"STAR_DISCORD_LAB_STATUS": "1",
+                                   "STAR_DISCORD_LAB_REPORT": str(manifest)})
+    receipt = read_receipt(config)
+    assert "**Status:** running" in format_receipt(receipt, now=now)
+    filename, jpeg = read_capture(config, now=now)
+    assert filename == "star-lab.jpg" and jpeg.startswith(b"\xff\xd8")
+    photo.write_bytes(blob + b"corruption")
+    with pytest.raises(ValueError, match="matches"):
+        read_capture(config, now=now)
+    assert not LabSettings.from_env({}).enabled
+
+
+def test_reference_compare_and_lab_slash_are_in_discord_workflow(tmp_path):
+    """Owner permissions, command availability and visual critique classifier."""
+    from star.discord_bot.dm_mode import DMSettings, classify_owner_dm, is_visual_critique
+
+    assert classify_owner_dm(
+        "Not what I wanted", attachments=2, options=DMSettings(True, True)
+    ).kind == "compare"
+    assert is_visual_critique("I don't like that")
+    assert is_visual_critique("I don’t like the animation")
+    assert not is_visual_critique("Tell me about Roblox particle emitters")
+    discord, bot, _, _ = make_bot(extra={
+        "STAR_DISCORD_LAB_STATUS": "1",
+        "STAR_DISCORD_LAB_REPORT": str(tmp_path / "latest.json"),
+    })
+    try:
+        compare_command = bot.tree.get_command("compare")
+        assert compare_command is not None
+        assert compare_command.to_dict(bot.tree)["integration_types"] == [0]
+        group = bot.tree.get_command("star")
+        assert group.get_command("lab") is not None
+        assert group.get_command("labshot") is not None
+        assert not bot.intents.message_content and not bot.intents.guild_messages
+        assert not bot.intents.presences
+    finally:
+        asyncio.run(bot.close())
+
+
+def test_lab_phrases_stay_normal_chat_when_lab_reports_are_off():
+    """Default-off Lab must not change DM behaviour: 'what is star working on' goes to the brain."""
+    discord, bot, _, brain = make_bot()
+
+    async def run():
+        try:
+            channel = DMChannel(discord)
+            await bot.on_message(dm(discord, channel, "What is STAR working on?"))
+            assert brain.prompts and "working on" in brain.prompts[-1]
+            assert not any("Lab reports are disabled" in (c or "") for c, _ in channel.sent)
+        finally:
+            await bot.close()
+    asyncio.run(run())

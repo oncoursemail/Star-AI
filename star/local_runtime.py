@@ -8,7 +8,6 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 import threading
-import time
 from .model_fleet import inspect_models_dir
 
 
