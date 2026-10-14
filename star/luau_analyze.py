@@ -29,7 +29,7 @@ _DIAGNOSTIC = re.compile(
     r"(?P<kind>[A-Za-z][A-Za-z0-9]*): (?P<message>[^\r\n]*)$"
 )
 _UNKNOWN_SYMBOL = re.compile(
-    r"""^Unknown (?:global|type) ['"](?P<name>[A-Za-z_][A-Za-z_0-9]*)['"]""",
+    r"""^Unknown (?P<what>global|type) ['"](?P<name>[A-Za-z_][A-Za-z_0-9]*)['"]""",
     re.IGNORECASE,
 )
 # The standalone CLI has no Roblox-specific engine type definitions.
@@ -39,7 +39,53 @@ _ROBLOX_SYMBOLS = frozenset({
     "OverlapParams", "BasePart", "Player", "Players", "Model", "Humanoid",
     "Animation", "RBXScriptSignal", "RBXScriptConnection", "TweenInfo",
     "NumberSequence", "ColorSequence", "BrickColor", "Region3",
+    # Engine data types and Roblox-only globals.
+    "Vector2", "Vector2int16", "Vector3int16", "Region3int16", "NumberRange",
+    "NumberSequenceKeypoint", "ColorSequenceKeypoint", "Random", "Ray", "RaycastResult",
+    "DateTime", "Rect", "PhysicalProperties", "Font", "Faces", "Axes", "PathWaypoint",
+    "SharedTable", "Content", "EnumItem", "Enums", "tick", "wait", "spawn", "delay", "time",
+    "elapsedTime", "warn", "settings", "UserSettings", "version", "stats",
 })
+# Classes and services commonly named in --!strict annotations ("Unknown type 'Part'"). Types only:
+# as a global (`RunService:Connect`, `Part.new()`) each is a real mistake and stays a finding.
+_ROBLOX_CLASS_TYPES = frozenset({
+    "Part", "MeshPart", "UnionOperation", "TrussPart", "WedgePart", "SpawnLocation", "Seat",
+    "VehicleSeat", "Terrain", "PVInstance", "Folder", "Configuration", "Script", "LocalScript",
+    "ModuleScript", "LuaSourceContainer", "RemoteEvent", "RemoteFunction",
+    "UnreliableRemoteEvent", "BindableEvent", "BindableFunction", "Tool", "Accessory",
+    "Attachment", "Weld", "WeldConstraint", "Motor6D", "Constraint", "AlignPosition",
+    "AlignOrientation", "LinearVelocity", "AngularVelocity", "Sound", "SoundGroup",
+    "ParticleEmitter", "Beam", "Trail", "Light", "PointLight", "SpotLight", "SurfaceLight",
+    "Decal", "Texture", "Highlight", "Camera", "Workspace", "DataModel", "ScreenGui",
+    "BillboardGui", "SurfaceGui", "LayerCollector", "GuiBase2d", "GuiObject", "GuiButton",
+    "Frame", "TextLabel", "TextButton", "TextBox", "ImageLabel", "ImageButton",
+    "ScrollingFrame", "CanvasGroup", "ViewportFrame", "UIListLayout", "UIGridLayout",
+    "UICorner", "UIStroke", "UIPadding", "UIScale", "UIGradient", "UIAspectRatioConstraint",
+    "ProximityPrompt", "ClickDetector", "Animator", "AnimationTrack", "AnimationController",
+    "HumanoidDescription", "Backpack", "PlayerGui", "PlayerScripts", "Team", "Tween",
+    "TweenBase", "InputObject", "Mouse", "PlayerMouse", "ObjectValue", "IntValue",
+    "NumberValue", "StringValue", "BoolValue", "CFrameValue", "Vector3Value", "Color3Value",
+    "Sky", "Atmosphere", "Path", "DataStore", "GlobalDataStore", "OrderedDataStore",
+    "DataStoreKeyInfo", "MemoryStoreQueue", "MemoryStoreSortedMap",
+    "ReplicatedStorage", "ReplicatedFirst", "ServerStorage", "ServerScriptService",
+    "StarterGui", "StarterPack", "StarterPlayer", "Teams", "Lighting", "SoundService",
+    "RunService", "UserInputService", "ContextActionService", "TweenService",
+    "DataStoreService", "MemoryStoreService", "MessagingService", "HttpService",
+    "CollectionService", "PathfindingService", "PhysicsService", "MarketplaceService",
+    "TeleportService", "BadgeService", "GroupService", "TextChatService", "TextService",
+    "GuiService", "ContentProvider", "InsertService", "Debris", "ProximityPromptService",
+    "LocalizationService", "SocialService", "PolicyService", "AssetService",
+    "AvatarEditorService", "HapticService", "VRService",
+})
+
+
+def _engine_symbol(message: str) -> bool:
+    """True for an "Unknown global/type" error about a Roblox engine name."""
+    symbol = _UNKNOWN_SYMBOL.match(message)
+    return bool(symbol) and (symbol["name"] in _ROBLOX_SYMBOLS or (
+        symbol["what"].lower() == "type" and symbol["name"] in _ROBLOX_CLASS_TYPES))
+
+
 _notified: set[str] = set()
 _notice_lock = threading.Lock()
 
@@ -80,8 +126,7 @@ def parse_diagnostics(output: str) -> list[Finding]:
             continue
         kind = match["kind"]
         message = match["message"]
-        symbol = _UNKNOWN_SYMBOL.match(message)
-        if kind == "TypeError" and symbol and symbol["name"] in _ROBLOX_SYMBOLS:
+        if kind == "TypeError" and _engine_symbol(message):
             continue
         if kind == "SyntaxError":
             fix, severity = "Repair Luau syntax before running the script.", "error"
@@ -142,8 +187,7 @@ def analyze(source: str, *, tools_root: Path | None = None) -> list[Finding]:
         # that a failure could not be interpreted rather than alleging success.
         if not output.strip() or not all(
             (m := _DIAGNOSTIC.fullmatch(line)) and m["kind"] == "TypeError"
-            and (symbol := _UNKNOWN_SYMBOL.match(m["message"]))
-            and symbol["name"] in _ROBLOX_SYMBOLS
+            and _engine_symbol(m["message"])
             for line in output.splitlines() if line.strip()
         ):
             _notice_once("unparsed", "Luau analyzer diagnostics were not understood; static checks remain available.")
