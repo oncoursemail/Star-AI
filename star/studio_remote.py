@@ -32,6 +32,7 @@ import os
 from pathlib import Path
 import sys
 import time
+from typing import Any
 
 from . import studio, studio_loop
 from .policy import classify
@@ -168,7 +169,7 @@ class PinnedSession:
     nothing from it: whatever calls `call_tool` gets the pin.
     """
 
-    def __init__(self, session, planner=None):
+    def __init__(self, session, planner: Any = None):
         self._session = session
         self.refusals = 0
         # STAR's resource planner (optional, star/planner_client.py): a playtest holds a "studio-test" lease on

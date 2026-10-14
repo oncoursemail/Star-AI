@@ -295,17 +295,18 @@ class LivePolicy:
     exclusive_quiet_s: float = 30.0                   # a timing window needs this much quiet first
     exclusive_pending_s: float = 90.0                 # a waiting timing request blocks new batch work this long
     preempt_window_s: float = 30.0                    # a refused higher-priority request makes lower leases yield
-    reserve_slots: Mapping[str, int] | None = None    # slots of a model kept free for chat
-    mem_reserve_mib: Mapping[str, int] | None = None  # RAM never handed to batch work (pc: the owner's floor)
-    cpu_reserve_threads: Mapping[str, int] | None = None  # hardware threads never handed to batch work
-    stale_s: Mapping[str, float] | None = None        # a machine snapshot older than this is not trusted
+    reserve_slots: Mapping[str, int] = None  # pyright: ignore[reportAssignmentType]  # slots of a model kept free for chat
+    mem_reserve_mib: Mapping[str, int] = None  # pyright: ignore[reportAssignmentType]  # RAM never handed to batch work (pc: the owner's floor)
+    cpu_reserve_threads: Mapping[str, int] = None  # pyright: ignore[reportAssignmentType]  # hardware threads never handed to batch work
+    stale_s: Mapping[str, float] = None  # pyright: ignore[reportAssignmentType]  # a machine snapshot older than this is not trusted
     cpu_busy_max: float = 0.95                        # sustained CPU above this: no new batch process on the machine
-    min_free_mib: Mapping[str, int] | None = None     # running batch yields below this much available RAM
+    min_free_mib: Mapping[str, int] = None  # pyright: ignore[reportAssignmentType]  # running batch yields below this much available RAM
     studio_reserve_mib: int = 2560                    # kept free for an attached Studio's playtests (brain 2 measured:
                                                       # Studio + WebView ~5.8 GiB of a 12 GiB container, peaks at it)
     helper_models: frozenset = HELPER_MODELS          # used by batch jobs themselves: never a sign of chat
 
     def __post_init__(self) -> None:
+        # The Mapping fields accept None and get these defaults, so they are never None after construction.
         defaults = {
             "reserve_slots": {"star-fast": 1},
             "mem_reserve_mib": {"brain1": 24576, "brain2": 1024, "pc": 6144},
@@ -334,8 +335,9 @@ class MachineSnapshot:
     cpu_busy: float
     mem_total_mib: int
     mem_available_mib: int
-    models: Mapping[str, tuple] | None = None
-    deferred: Mapping[str, int] | None = None        # requests queued per model (llama-server /metrics)
+    # None is accepted and becomes {} in __post_init__, so the attributes are never None after construction.
+    models: Mapping[str, tuple] = None  # pyright: ignore[reportAssignmentType]
+    deferred: Mapping[str, int] = None  # pyright: ignore[reportAssignmentType]  # requests queued per model (llama-server /metrics)
     lock_owner: str = ""                             # fresh quiet-lock owner, "" when free
     gpu_util: float | None = None                    # 0..1
     vram_total_mib: int = 0
@@ -686,6 +688,7 @@ def decide_admit(req: JobRequest, snap: MachineSnapshot | None, leases: list, *,
     problem = _snapshot_problem(snap, cls.machine, now, policy)
     if problem:
         return Decision("fallback", problem, retry_after_s=30)
+    assert snap is not None  # _snapshot_problem reports a missing snapshot
     problem = _lock_problem(snap, req.holder, cls) or _blocked_by_window(cls, req.holder, leases, list(pending), now,
                                                                           policy, classes)
     if problem:
@@ -744,6 +747,7 @@ def decide_renew(lease: Lease, snap: MachineSnapshot | None, leases: list, *, no
     problem = _snapshot_problem(snap, cls.machine, now, policy)
     if problem:
         return Decision("fallback", problem, retry_after_s=30)
+    assert snap is not None  # _snapshot_problem reports a missing snapshot
     others = [l for l in leases if l.lease_id != lease.lease_id]
     problem = _lock_problem(snap, lease.holder, cls) or _blocked_by_window(cls, lease.holder, others, list(pending),
                                                                             now, policy, classes)

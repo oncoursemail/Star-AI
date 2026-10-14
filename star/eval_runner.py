@@ -38,6 +38,7 @@ import sys
 import tempfile
 import threading
 import time
+from typing import Any
 
 from . import eval_checks as checks
 
@@ -298,7 +299,7 @@ def _planner_job_id(task_id: str) -> str:
 
 def run_suite(suite: Suite, *, out: Path, ask, scorer, lock_probe=None, run_info: dict, task_ids=None,
               resume: bool = True, retry_errors: bool = False, sleep=time.sleep, now=time.monotonic,
-              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS, planner=None,
+              log=print, secrets=(), watch_interval: float = LOCK_WATCH_SECONDS, planner: Any = None,
               planner_holder: str = "") -> dict:
     """Run the runnable tasks one at a time, checkpointing after each. Returns the result dict.
 

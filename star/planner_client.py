@@ -197,6 +197,7 @@ class Pacer:
     def step(self, work_seconds: float, base_duty: float = 1.0) -> bool:
         if self.grant is None:
             self.wait()
+        assert self.grant is not None  # wait() sets it
         grant = self.client.renew(self.grant)
         if grant.action == "refuse":                      # lease lost: ask again
             grant = self.client.admit(self.job_class, self.holder, self.job_id, **self.extra)

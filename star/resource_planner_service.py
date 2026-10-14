@@ -346,8 +346,8 @@ def make_handler(planner: Planner, key: str, report_token: str = ""):
                 if path == "/v1/release":
                     return self._send(200, planner.release(payload))
                 if path == "/v1/report":
-                    planner.observe(payload.get("snapshot") if isinstance(payload.get("snapshot"), dict) else payload,
-                                    remote=True)
+                    snapshot = payload.get("snapshot")
+                    planner.observe(snapshot if isinstance(snapshot, dict) else payload, remote=True)
                     return self._send(200, {"ok": True})
                 if path == "/v1/interactive":
                     planner.interactive(str(payload.get("machine", planner.local_machine))[:20],
@@ -433,7 +433,7 @@ def show_status(args) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.resource_planner_service", description=__doc__.split("\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.resource_planner_service", description=(__doc__ or "").split("\n")[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("serve", help="run the planner (brain 1)")
     s.add_argument("--host", default="0.0.0.0")

@@ -19,6 +19,7 @@ import subprocess
 import time
 from typing import Callable
 import urllib.error
+import urllib.parse
 import urllib.request
 
 LOCK_DIR = os.environ.get("STAR_LOCK_DIR", "/opt/star/lock")
@@ -164,7 +165,7 @@ class BrainProbe:
         return names
 
     def slots(self, model: str) -> list[dict]:
-        data = json.loads(self._fetch("/slots?model=" + urllib.request.quote(model)).decode("utf-8", "replace"))
+        data = json.loads(self._fetch("/slots?model=" + urllib.parse.quote(model)).decode("utf-8", "replace"))
         if not isinstance(data, list):
             raise OSError("slots")
         return [{"id": s["id"], "processing": bool(s.get("is_processing")),
@@ -174,7 +175,7 @@ class BrainProbe:
     def deferred(self, model: str) -> int | None:
         """Requests waiting for a slot (`llamacpp:requests_deferred`), None when /metrics is off."""
         try:
-            text = self._fetch("/metrics?model=" + urllib.request.quote(model)).decode("utf-8", "replace")
+            text = self._fetch("/metrics?model=" + urllib.parse.quote(model)).decode("utf-8", "replace")
         except OSError:
             return None
         return parse_metric(text, "llamacpp:requests_deferred")
