@@ -255,26 +255,30 @@ end
 return decide
 ```
 
-### RT-10: Unequipped inventory slot needs an optional named type
-**Context:** An empty selected inventory slot before the player equips an item.
-**Failure:** An annotation of EquippedItem alone does not permit nil at initialization.
-**Correction:** Use EquippedItem? for a slot whose valid states are a record or nil.
+### RT-10: Optional return type for an unequipped inventory slot
+**Context:** A getter for the selected inventory item returns nil until something is equipped.
+**Failure:** The getter promises a non-optional EquippedItem but returns nil in the no-selection case.
+**Correction:** Annotate the getter return as EquippedItem? so the no-item branch is represented in its contract.
 **Source:** https://luau.org/syntax/
 **Verification:** pure-luau-illustrative
-**Witness:** local equipped: EquippedItem? = nil
+**Witness:** local function selectedItem(): EquippedItem?
 **Incorrect (Luau):**
 ```luau
 --!strict
 type EquippedItem = {itemId: string}
-local equipped: EquippedItem = nil
-return equipped
+local function selectedItem(): EquippedItem
+    return nil
+end
+return selectedItem
 ```
 **Corrected (Luau):**
 ```luau
 --!strict
 type EquippedItem = {itemId: string}
-local equipped: EquippedItem? = nil
-return equipped
+local function selectedItem(): EquippedItem?
+    return nil
+end
+return selectedItem
 ```
 
 ### RT-11: ModuleScript function must satisfy its typed return contract
