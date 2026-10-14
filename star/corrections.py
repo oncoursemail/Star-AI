@@ -84,7 +84,11 @@ class CorrectionStore:
     def __init__(self, home: Path):
         self.home = Path(home)
         self.home.mkdir(parents=True, exist_ok=True)
-        self.db = sqlite3.connect(self.home / "corrections.sqlite3")
+        # The desktop and the Discord bot open this file from separate processes: WAL lets one read while the
+        # other writes, and the busy timeout makes a writer wait for the lock instead of failing at once.
+        self.db = sqlite3.connect(self.home / "corrections.sqlite3", timeout=10)
+        self.db.execute("PRAGMA busy_timeout=10000")
+        self.db.execute("PRAGMA journal_mode=WAL")
         self.db.row_factory = sqlite3.Row
         self.db.execute("""CREATE TABLE IF NOT EXISTS corrections (
             id INTEGER PRIMARY KEY AUTOINCREMENT, project TEXT NOT NULL, created TEXT NOT NULL, source TEXT NOT NULL,
