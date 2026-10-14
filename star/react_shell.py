@@ -45,6 +45,8 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
+from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
+from .corrections import CORRECTION_ACTIONS, handle_action as handle_correction_action
 from .lesson_digest import Digester, may_start_automatic
 from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
@@ -73,6 +75,9 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
+# What STAR learned this week (undo / restore / keep) and owner corrections that may become regression tests
+# (star/learned_week.py, star/corrections.py, docs/SELF_LEARNING_LOOP.md).
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | LEARNED_ACTIONS | CORRECTION_ACTIONS
 # Media: where images, voice and video run, the image engine on this PC, and a project's
 # visual references (star/media_actions.py, docs/STAR_MEDIA.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | MEDIA_ACTIONS
@@ -103,8 +108,9 @@ PERMITTED_SETTINGS = frozenset({
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
     'blender_enabled','blender_edit','blender_executable',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
+    'instant_route_enabled',
     'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','research_auto_check',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
 })
@@ -323,6 +329,30 @@ def sanitize_event(event: dict) -> dict:
             activity['model']=event['model']       # the model this message is sent to
         return {'phase': 'STAR · ' + str(event.get('description', 'Selecting model'))[:90],
                 'activity':activity}
+    if kind == 'instant_selected':
+        activity = {'type': 'instant'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'Answering on this PC', 'activity': activity}
+    if kind == 'instant_fallback':
+        activity = {'type': 'instant_fallback'}
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        return {'phase': 'On-device answer unavailable; using STAR Server', 'activity': activity}
+    if kind == 'answer_stats':
+        activity = {'type': 'answer_stats'}
+        if event.get('brain') in {'pc', 'server', 'cloud'}:
+            activity['brain'] = event['brain']
+        if _model_name(event.get('model')):
+            activity['model'] = event['model']
+        first = _bounded_int(event.get('first_token_ms'), 3_600_000)
+        if first is not None:
+            activity['first_token_ms'] = first
+        rate = event.get('tokens_per_second')
+        if type(rate) in (int, float) and 0 <= rate <= 10000:
+            activity['tokens_per_second'] = round(float(rate), 1)
+        activity['estimated_tokens'] = event.get('estimated_tokens') is True
+        return {'phase': 'Answer complete', 'activity': activity}
     if kind == 'route_fallback':
         # The model chosen for this job is missing or did not load; the configured one answers.
         activity={'type':'route','fallback':True}
@@ -512,6 +542,11 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
     except (OSError, ValueError, sqlite3.Error) as exc:
         lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
+    try:
+        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
+                                                 project=settings.project)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -553,6 +588,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         'analytics':get_dashboard(home,settings.project),
         'learning':learning_status(home,settings.project),
         'lesson_bundle':lesson_bundle,
+        'learning_bundle':learning_bundle,
         'credentials':credential_status(),
         'server':server_status(settings),
         'roblox':roblox_state(home),
@@ -808,7 +844,11 @@ def launch():
                 full_prompt=media.prompt(prompt)
                 documents=media.documents
                 learned={}
+                instant_used=False
                 def relay(e):
+                    nonlocal instant_used
+                    if e.get('event') == 'instant_selected':
+                        instant_used = True
                     # What the turn taught is reported with the result, not as a progress step.
                     if e.get('event')=='lessons_captured':
                         learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
@@ -820,13 +860,13 @@ def launch():
                                    'Other features depend on the current setup.\n\n' + full_prompt)
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
-                    owner_text=prompt, studio_configuration_home=self.settings_file.parent,
+                    owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
                     **({'documents': documents} if documents else {}))
                 # STAR states what a video answer was based on, whatever the model wrote.
                 answer+=media.footer
             if self.cancel_chat.is_set():
                 raise RuntimeError('cancelled by user')
-            if provider_kind(settings)=='lan':
+            if provider_kind(settings)=='lan' and not instant_used:
                 note_server_result(settings,True,'ok')
             chats=Conversations(home/'conversations.sqlite3')
             try:
@@ -836,7 +876,8 @@ def launch():
             # While the owner reads the answer, let the server read it too: the next
             # message then starts from a fully cached conversation. Cancelled by any request.
             # Once that is done the server is idle, which is when raw captures get reworded.
-            self._warm(check=False,then=self._digest_when_idle)
+            if not instant_used:
+                self._warm(check=False,then=self._digest_when_idle)
             return {'answer':answer,'learned':learned} if learned else {'answer':answer}
 
         def _run_image(self, request_id, prompt, files=(), size='square', followup=False, display_prompt=None, retry_id=None):
@@ -1038,6 +1079,11 @@ def launch():
                     # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
                     require_screen_consent(body)
                     return json.dumps({'ok':True,'data':self._capture_screen()})
+                if action in LEARNED_ACTIONS or action in CORRECTION_ACTIONS:
+                    # Owner clicks in What STAR learned this week / corrections; `approved` is the click itself.
+                    settings=Settings.load(self.settings_file)
+                    handler=handle_learned_action if action in LEARNED_ACTIONS else handle_correction_action
+                    return json.dumps({'ok':True,'data':handler(app_data(),settings.project,action,body)},default=str)
                 if action in LESSON_ACTIONS:
                     # Review, export and feedback are explicit owner actions in the interface.
                     settings=Settings.load(self.settings_file)

@@ -1,0 +1,438 @@
+{
+ "model": "work/gpu/train/runs/ft-B2/final",
+ "tag": "ft-B2",
+ "sets": {
+  "dev": {
+   "summary": {
+    "vector": {
+     "n": 30,
+     "recall@1": 0.8,
+     "recall@3": 0.9333,
+     "recall@5": 0.9667,
+     "recall@10": 0.9667,
+     "mrr@10": 0.8694,
+     "hits@5": 29,
+     "recall@5_by_type": {
+      "howto": "10/10",
+      "identifier": "10/10",
+      "paraphrase": "9/10"
+     },
+     "latency_ms": {
+      "mean": 80.9,
+      "median": 70.8,
+      "p95": 102.6,
+      "max": 328.2
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 70.5,
+      "vector_ms": 2.0
+     },
+     "missed@5": [
+      "pa-04"
+     ]
+    },
+    "hybrid": {
+     "n": 30,
+     "recall@1": 0.6,
+     "recall@3": 0.8333,
+     "recall@5": 0.8667,
+     "recall@10": 0.8667,
+     "mrr@10": 0.7194,
+     "hits@5": 26,
+     "recall@5_by_type": {
+      "howto": "9/10",
+      "identifier": "10/10",
+      "paraphrase": "7/10"
+     },
+     "latency_ms": {
+      "mean": 89.2,
+      "median": 89.7,
+      "p95": 111.3,
+      "max": 119.1
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 79.6,
+      "vector_ms": 2.1,
+      "bm25_ms": 6.6
+     },
+     "missed@5": [
+      "pa-01",
+      "pa-04",
+      "pa-07",
+      "ho-01"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "id-01": 2,
+     "id-02": 1,
+     "id-03": 1,
+     "id-04": 1,
+     "id-05": 1,
+     "id-06": 1,
+     "id-07": 2,
+     "id-08": 1,
+     "id-09": 1,
+     "id-10": 2,
+     "pa-01": 1,
+     "pa-02": 1,
+     "pa-03": 1,
+     "pa-04": null,
+     "pa-05": 1,
+     "pa-06": 1,
+     "pa-07": 1,
+     "pa-08": 1,
+     "pa-09": 1,
+     "pa-10": 1,
+     "ho-01": 4,
+     "ho-02": 1,
+     "ho-03": 1,
+     "ho-04": 1,
+     "ho-05": 1,
+     "ho-06": 1,
+     "ho-07": 3,
+     "ho-08": 1,
+     "ho-09": 1,
+     "ho-10": 1
+    },
+    "hybrid": {
+     "id-01": 1,
+     "id-02": 1,
+     "id-03": 1,
+     "id-04": 1,
+     "id-05": 1,
+     "id-06": 1,
+     "id-07": 2,
+     "id-08": 2,
+     "id-09": 2,
+     "id-10": 1,
+     "pa-01": null,
+     "pa-02": 4,
+     "pa-03": 1,
+     "pa-04": null,
+     "pa-05": 1,
+     "pa-06": 2,
+     "pa-07": null,
+     "pa-08": 1,
+     "pa-09": 1,
+     "pa-10": 1,
+     "ho-01": null,
+     "ho-02": 3,
+     "ho-03": 1,
+     "ho-04": 2,
+     "ho-05": 1,
+     "ho-06": 1,
+     "ho-07": 2,
+     "ho-08": 1,
+     "ho-09": 1,
+     "ho-10": 1
+    }
+   }
+  },
+  "heldout": {
+   "summary": {
+    "vector": {
+     "n": 40,
+     "recall@1": 0.725,
+     "recall@3": 0.8,
+     "recall@5": 0.875,
+     "recall@10": 0.95,
+     "mrr@10": 0.7879,
+     "hits@5": 35,
+     "recall@5_by_type": {
+      "howto": "9/10",
+      "identifier": "9/10",
+      "paraphrase": "8/10",
+      "task": "9/10"
+     },
+     "latency_ms": {
+      "mean": 92.0,
+      "median": 86.4,
+      "p95": 119.3,
+      "max": 337.7
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 83.4,
+      "vector_ms": 2.0
+     },
+     "missed@5": [
+      "h-id-10",
+      "h-how-09",
+      "h-para-06",
+      "h-para-10",
+      "h-task-02"
+     ]
+    },
+    "hybrid": {
+     "n": 40,
+     "recall@1": 0.65,
+     "recall@3": 0.75,
+     "recall@5": 0.85,
+     "recall@10": 0.875,
+     "mrr@10": 0.7219,
+     "hits@5": 34,
+     "recall@5_by_type": {
+      "howto": "9/10",
+      "identifier": "10/10",
+      "paraphrase": "6/10",
+      "task": "9/10"
+     },
+     "latency_ms": {
+      "mean": 86.7,
+      "median": 87.4,
+      "p95": 104.7,
+      "max": 114.4
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 73.2,
+      "vector_ms": 2.0,
+      "bm25_ms": 10.6
+     },
+     "missed@5": [
+      "h-how-09",
+      "h-para-05",
+      "h-para-06",
+      "h-para-08",
+      "h-para-10",
+      "h-task-02"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "h-id-01": 1,
+     "h-id-02": 1,
+     "h-id-03": 1,
+     "h-id-04": 2,
+     "h-id-05": 1,
+     "h-id-06": 1,
+     "h-id-07": 1,
+     "h-id-08": 1,
+     "h-id-09": 1,
+     "h-id-10": 10,
+     "h-how-01": 1,
+     "h-how-02": 1,
+     "h-how-03": 1,
+     "h-how-04": 4,
+     "h-how-05": 1,
+     "h-how-06": 1,
+     "h-how-07": 1,
+     "h-how-08": 1,
+     "h-how-09": 7,
+     "h-how-10": 2,
+     "h-para-01": 1,
+     "h-para-02": 1,
+     "h-para-03": 1,
+     "h-para-04": 1,
+     "h-para-05": 5,
+     "h-para-06": null,
+     "h-para-07": 1,
+     "h-para-08": 1,
+     "h-para-09": 1,
+     "h-para-10": 8,
+     "h-task-01": 5,
+     "h-task-02": null,
+     "h-task-03": 1,
+     "h-task-04": 1,
+     "h-task-05": 1,
+     "h-task-06": 1,
+     "h-task-07": 1,
+     "h-task-08": 1,
+     "h-task-09": 1,
+     "h-task-10": 2
+    },
+    "hybrid": {
+     "h-id-01": 1,
+     "h-id-02": 1,
+     "h-id-03": 1,
+     "h-id-04": 1,
+     "h-id-05": 1,
+     "h-id-06": 1,
+     "h-id-07": 2,
+     "h-id-08": 1,
+     "h-id-09": 1,
+     "h-id-10": 5,
+     "h-how-01": 1,
+     "h-how-02": 2,
+     "h-how-03": 1,
+     "h-how-04": 1,
+     "h-how-05": 1,
+     "h-how-06": 1,
+     "h-how-07": 1,
+     "h-how-08": 1,
+     "h-how-09": null,
+     "h-how-10": 4,
+     "h-para-01": 2,
+     "h-para-02": 1,
+     "h-para-03": 4,
+     "h-para-04": 1,
+     "h-para-05": null,
+     "h-para-06": null,
+     "h-para-07": 1,
+     "h-para-08": 7,
+     "h-para-09": 3,
+     "h-para-10": null,
+     "h-task-01": 5,
+     "h-task-02": null,
+     "h-task-03": 1,
+     "h-task-04": 1,
+     "h-task-05": 1,
+     "h-task-06": 1,
+     "h-task-07": 1,
+     "h-task-08": 1,
+     "h-task-09": 1,
+     "h-task-10": 1
+    }
+   }
+  },
+  "golden": {
+   "summary": {
+    "vector": {
+     "n": 25,
+     "recall@1": 0.32,
+     "recall@3": 0.52,
+     "recall@5": 0.6,
+     "recall@10": 0.8,
+     "mrr@10": 0.4512,
+     "hits@5": 15,
+     "recall@5_by_type": {
+      "animation": "1/1",
+      "datastore": "1/1",
+      "economy": "0/1",
+      "gameplay": "1/1",
+      "luau": "2/5",
+      "npc": "1/1",
+      "remote": "2/3",
+      "rig": "1/1",
+      "server": "0/1",
+      "studio": "0/2",
+      "ui": "6/8"
+     },
+     "latency_ms": {
+      "mean": 86.2,
+      "median": 77.4,
+      "p95": 105.1,
+      "max": 283.5
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 75.3,
+      "vector_ms": 2.0
+     },
+     "missed@5": [
+      "LUA-01",
+      "LUA-02",
+      "LUA-03",
+      "NET-04",
+      "UI-01",
+      "UI-04",
+      "SYS-01",
+      "SYS-03",
+      "STU-01",
+      "STU-02"
+     ]
+    },
+    "hybrid": {
+     "n": 25,
+     "recall@1": 0.32,
+     "recall@3": 0.52,
+     "recall@5": 0.64,
+     "recall@10": 0.76,
+     "mrr@10": 0.453,
+     "hits@5": 16,
+     "recall@5_by_type": {
+      "animation": "0/1",
+      "datastore": "0/1",
+      "economy": "0/1",
+      "gameplay": "1/1",
+      "luau": "3/5",
+      "npc": "1/1",
+      "remote": "3/3",
+      "rig": "1/1",
+      "server": "0/1",
+      "studio": "0/2",
+      "ui": "7/8"
+     },
+     "latency_ms": {
+      "mean": 97.0,
+      "median": 96.8,
+      "p95": 116.9,
+      "max": 119.8
+     },
+     "stage_mean_ms": {
+      "embed_query_ms": 74.2,
+      "vector_ms": 2.0,
+      "bm25_ms": 19.8
+     },
+     "missed@5": [
+      "LUA-01",
+      "LUA-03",
+      "NET-05",
+      "UI-03",
+      "SYS-01",
+      "SYS-03",
+      "STU-01",
+      "STU-02",
+      "ANI-01"
+     ]
+    }
+   },
+   "ranks": {
+    "vector": {
+     "LUA-01": null,
+     "LUA-02": 9,
+     "LUA-03": 6,
+     "LUA-04": 1,
+     "LUA-05": 2,
+     "NET-01": 1,
+     "NET-03": 2,
+     "NET-04": 10,
+     "NET-05": 3,
+     "UI-01": 7,
+     "UI-02": 1,
+     "UI-03": 4,
+     "UI-04": 7,
+     "UI-05": 5,
+     "UI-06": 1,
+     "UI-07": 2,
+     "UI-08": 1,
+     "SYS-01": null,
+     "SYS-02": 1,
+     "SYS-03": null,
+     "SYS-04": 3,
+     "STU-01": null,
+     "STU-02": null,
+     "ANI-01": 1,
+     "ANI-02": 1
+    },
+    "hybrid": {
+     "LUA-01": null,
+     "LUA-02": 1,
+     "LUA-03": null,
+     "LUA-04": 5,
+     "LUA-05": 2,
+     "NET-01": 1,
+     "NET-03": 1,
+     "NET-04": 2,
+     "NET-05": 8,
+     "UI-01": 5,
+     "UI-02": 1,
+     "UI-03": 10,
+     "UI-04": 5,
+     "UI-05": 2,
+     "UI-06": 1,
+     "UI-07": 2,
+     "UI-08": 1,
+     "SYS-01": null,
+     "SYS-02": 1,
+     "SYS-03": null,
+     "SYS-04": 3,
+     "STU-01": null,
+     "STU-02": null,
+     "ANI-01": 6,
+     "ANI-02": 1
+    }
+   }
+  }
+ }
+}

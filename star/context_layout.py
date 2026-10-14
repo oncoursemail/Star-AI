@@ -132,16 +132,19 @@ def clean_history(history) -> list[dict]:
                       if isinstance(item, dict)], message_chars=10 ** 9)
 
 
-def context_block(sections=(), *, facts=(), limit: int = 10000) -> str:
+def context_block(sections=(), *, facts=(), tail=(), limit: int = 10000) -> str:
     """Format one turn's context block. Callers use `star.agent.volatile_context`.
 
-    `facts` are short one-line strings; `sections` are (heading, text) pairs.
+    `facts` are short one-line strings; `sections` are (heading, text) pairs;
+    `tail` are short lines that always close the block (the current time), so the
+    most turn-specific text is the last thing before the end marker.
     Empty entries are skipped, earlier sections win when space runs out, and
     with nothing to say the result is "". The two markers appear exactly once:
     a marker inside the reference text is defused (see `_inert`).
     """
     lines = [_inert(str(fact).strip()) for fact in facts if str(fact).strip()]
-    room = max(0, limit - sum(len(line) + 1 for line in lines))
+    closing = [_inert(str(line).strip()) for line in tail if str(line).strip()]
+    room = max(0, limit - sum(len(line) + 1 for line in lines + closing))
     for heading, text in sections:
         heading, text = _inert(str(heading)), _inert(str(text or "").strip())
         if not text or room <= len(str(heading)) + 40:
@@ -149,6 +152,7 @@ def context_block(sections=(), *, facts=(), limit: int = 10000) -> str:
         body = _clip(text, room - len(str(heading)) - 2)
         lines.append(f"{heading}:\n{body}")
         room -= len(str(heading)) + 2 + len(body)
+    lines.extend(closing)
     if not lines:
         return ""
     return "\n".join([CONTEXT_OPEN, *lines, CONTEXT_CLOSE])
@@ -157,6 +161,12 @@ def context_block(sections=(), *, facts=(), limit: int = 10000) -> str:
 def final_user_text(prompt: str, context: str = "") -> str:
     """The user's words first, then this turn's context block (if any)."""
     return prompt if not context else prompt + "\n\n" + context
+
+
+def owner_words(text: str) -> str:
+    """The user's own words of a message built by `final_user_text` (the app's block removed)."""
+    head, marker, _ = str(text).partition("\n\n" + CONTEXT_OPEN)
+    return head if marker else str(text)
 
 
 def assemble(system: dict, history: list[dict], final_user: dict) -> tuple[list[dict], int]:
