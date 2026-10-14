@@ -1,35 +1,43 @@
 """Regressions found by the independent review of the request-layout change.
 
 Each test failed on the branch as it was handed over (7d743ba) and names the
-behaviour that was wrong.
+behaviour that was wrong. History-shaping now deliberately excludes stopped
+turns instead of replaying them with a synthetic assistant response.
 """
 import json
 
-from star.context_layout import NO_REPLY, conversation_window, exchanges
+from star.context_layout import NO_REPLY, conversation_window, exchanges, owner_words
 
-from test_first_token import desk, text_of   # noqa: F401  (pytest fixture and helper)
+from test_first_token import desk, rendered, text_of   # noqa: F401  (pytest fixture and helpers)
 
 
 # ------------------------------------------------------------------ stopped and failed turns
 
-def test_a_stopped_turn_is_still_known_to_the_next_one(desk):
-    """Stop a long answer, then refine the request: the model must know what "it" is.
+def test_a_stopped_turn_is_excluded_without_changing_the_completed_prefix(desk):
+    """A stopped request stays in storage, not in subsequent conversation turns.
 
-    The old layout replayed the unanswered message in its transcript; the new one
-    dropped it, so "make it shorter" reached the model with nothing to refer to.
+    The history-shaping rule intentionally drops the orphan question rather than
+    inventing an assistant reply. Completed turns must still be append-only,
+    including when the next question is a referential refinement.
     """
-    desk.turn("first", "one")
+    first = desk.turn("first", "one")["messages"]
     stopped = desk.chats.add("STAR", "user", "Write a long sword combat script", chat_id=desk.chat)
     desk.chats.add_terminal("STAR", desk.chat, stopped, "cancelled", "SECRET-FAILURE-TEXT")
+    originals = desk.chats.raw_history_records("STAR", desk.chat)
     messages = desk.turn("make it shorter please", "A short one.")["messages"]
-    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user", "assistant", "user"]
-    assert [text_of(m) for m in messages[1:]] == [
-        "first", "one", "Write a long sword combat script", NO_REPLY, "make it shorter please"]
-    assert "SECRET-FAILURE-TEXT" not in json.dumps(messages)       # the failure record itself stays out
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user"]
+    assert [owner_words(text_of(m)) for m in messages[1:]] == ["first", "one", "make it shorter please"]
+    for excluded in ("Write a long sword combat script", NO_REPLY, "SECRET-FAILURE-TEXT"):
+        assert excluded not in json.dumps(messages)
+    cached = rendered(first) + "<|im_start|>assistant\none<|im_end|>\n"
+    assert rendered(messages).startswith(cached)
     # It is ordinary append-only history from then on: the next request starts with the same bytes.
     later = desk.turn("thanks", "You are welcome.")["messages"]
-    assert later[:5] == messages[:5]
-    assert [text_of(m) for m in later[5:]] == ["make it shorter please", "A short one.", "thanks"]
+    assert later[:3] == messages[:3]
+    assert [owner_words(text_of(m)) for m in later[3:]] == ["make it shorter please", "A short one.", "thanks"]
+    assert rendered(later).startswith(rendered(messages) + "<|im_start|>assistant\nA short one.<|im_end|>\n")
+    assert [m["role"] for m in later] == ["system", "user", "assistant", "user", "assistant", "user"]
+    assert desk.chats.raw_history_records("STAR", desk.chat)[:len(originals)] == originals
 
 
 def test_sending_the_same_message_again_is_not_replayed_twice():

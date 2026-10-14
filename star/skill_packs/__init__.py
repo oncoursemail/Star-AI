@@ -9,10 +9,9 @@ Where it goes: `desktop_core.run_task` appends the rendered block to `turn_secti
 `star.agent.volatile_context` puts after the user's own words. It never enters the system message,
 which stays byte-stable for the model server's prompt cache.
 
-Cost: the text is read by the model on every turn it is added. Each pack is about 240 tokens (measured
-with the server's tokenizer) and only the best-matching pack is added (MAX_PACKS_PER_TURN = 1), so the
-first token is delayed by about 4 seconds at the server's prompt-reading speed of roughly 65 tokens per
-second, and only for matching prompts.
+Cost: the text is read by the model on every turn it is added. Only the best-matching pack is added
+(MAX_PACKS_PER_TURN = 1). Bodies must fit MAX_BODY_CHARS; richer, unmeasured design packs remain opt-in.
+Do not extend latency measurements from the shorter measured packs to these longer packs.
 
 Whether a pack is on is decided by evidence, not by hope: a pack is enabled by default (DEFAULT_ENABLED)
 only after the evaluation gate (docs/evals.md) showed that it does not lower the golden-task score.
@@ -33,7 +32,7 @@ ENV_VAR = "STAR_SKILL_PACKS"
 MAX_BODY_CHARS = 6400
 MAX_PACKS_PER_TURN = 1
 MAX_BLOCK_CHARS = 6500
-BLOCK_HEADING = "ROBLOX SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
+BLOCK_HEADING = "SKILL PACKS (guidance from STAR, distilled from the official documentation; not part of the request)"
 
 # Enabled by default: only packs the gate allowed with at least one measured improvement (docs/evals.md,
 # "Measured results"). The others stay shipped and can be switched on with STAR_SKILL_PACKS, but were either
@@ -52,8 +51,16 @@ _ROBLOX_CONTEXT = re.compile(
     r"StarterGui|StarterPlayer\w*|StarterCharacterScripts|PlayerGui|ScreenGui|Instance\.new|game:GetService|"
     r"Humanoid|RemoteEvent|RemoteFunction|DataStore\w*|OnServerEvent|BindToClose|R6|R15)\b", re.IGNORECASE)
 
+_GODOT_CONTEXT = re.compile(r"\b(?:godot(?:\s*4)?|gdscript|PackedScene|CharacterBody2D|Node2D|Control\s+node)\b", re.IGNORECASE)
+GODOT_PACKS = frozenset(("godot-scenes-and-nodes", "godot-gdscript-typing-and-signals",
+                         "godot-physics-and-input", "godot-ui-and-themes"))
+
 # ... and name the pack's topic.
 TRIGGERS: dict[str, re.Pattern] = {
+    "godot-scenes-and-nodes": re.compile(r"\b(?:PackedScene|instantiate|scene tree|node tree|add_child|owner|@onready|scenes|nodes)\b", re.IGNORECASE),
+    "godot-gdscript-typing-and-signals": re.compile(r"\b(?:gdscript|static typing|typed|signal|signals|@export|Callable|emit|connect)\b", re.IGNORECASE),
+    "godot-physics-and-input": re.compile(r"\b(?:CharacterBody2D|move_and_slide|physics|InputMap|input action|is_on_floor|velocity|_physics_process)\b", re.IGNORECASE),
+    "godot-ui-and-themes": re.compile(r"\b(?:Control|Theme|Button|Container|anchors|size_flags|UI|themes|layout)\b", re.IGNORECASE),
     "roblox-ui-layout": re.compile(
         r"\b(?:ScreenGui|SurfaceGui|BillboardGui|UDim2|UIListLayout|UIGridLayout|UIScale|UIPadding|UICorner|UIStroke|"
         r"UIAspectRatioConstraint|UISizeConstraint|UITextSizeConstraint|ScrollingFrame|TextButton|TextLabel|TextBox|"
@@ -89,6 +96,12 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-ui-styles": re.compile(
         r"\b(?:theme[sd]?|style[sd]?|styling|palette|glass|neon|gradient|UIGradient|UIStroke|UICorner|hover|dark mode|contrast|"
         r"readable|design system|flat|cartoon\w*|chunky|skeuomorphic|look and feel)\b", re.IGNORECASE),
+    "roblox-environment-art": re.compile(
+        r"\b(?:environment art|environment design|foliage|swaying trees?|tree sway|wind sway|"
+        r"winter shrine|torii|snowy forest|volcanic crypt|catacombs?|dungeon|"
+        r"SurfaceAppearance|PBR|texture atlas|reference screenshot|art direction|"
+        r"volumetric|skinned trees?|environmental storytelling|lighting preset)\b",
+        re.IGNORECASE),
     # Engineering-method packs adapted from MIT-licensed collections (see THIRD_PARTY_NOTICES.md).
     "game-obby": re.compile(r"\b(?:obby|checkpoint|checkpoints|kill brick|stage progression|obstacle course)\b", re.IGNORECASE),
     "game-tycoon": re.compile(r"\b(?:tycoon|dropper|droppers|collector|collectors|purchase button|factory plot)\b", re.IGNORECASE),
@@ -105,6 +118,38 @@ TRIGGERS: dict[str, re.Pattern] = {
     "eng-verify-before-done": re.compile(
         r"\b(?:verif\w*|double-?check\w*|how (?:do|can) I (?:know|confirm|be sure)|(?:what|how) you (?:checked|tested)|"
         r"make sure (?:it|this) works|confirm (?:that|it))\b", re.IGNORECASE),
+    # Shipped for explicit evaluation only; do not enable before the gate passes.
+    "roblox-game-math": re.compile(
+        r"\b(?:vectors?|Vector3|dot products?|cross products?|CFrame composition|CFrame|look[- ]?at|"
+        r"lerp|easing(?: families)?|critically damped|springs?|quadratic|cubic|B[eé]zier|projectiles?|gravity|"
+        r"angle wrapping|weighted random|seeded random|fixed[- ]timestep|raycast geometry)\b", re.IGNORECASE),
+    # Design guidance, not implementation recipes; unmeasured and OFF by default.
+    "design-core-loop-and-progression": re.compile(
+        r"\b(?:core loops?|progression design|progression pacing|reward schedules?|difficulty curves?)\b", re.IGNORECASE),
+    "design-onboarding-and-tutorial": re.compile(
+        r"\b(?:onboarding|first[- ]time user experience|first (?:60|sixty) seconds|teaching by doing|tutorial design)\b",
+        re.IGNORECASE),
+    "design-game-feel": re.compile(
+        r"\b(?:game feel|action feedback|input feel|impact feedback|camera feedback|sound feedback|feedback timing)\b",
+        re.IGNORECASE),
+    "design-level-and-obby-layout": re.compile(
+        r"\b(?:obby layout|checkpoint spacing|level readability|level flow|risk and reward|risk[- ]reward)\b", re.IGNORECASE),
+    "design-economy-and-fair-monetisation": re.compile(
+        r"\b(?:economy|currency sinks?|currency sources?|inflation|fair moneti[sz]ation|paid random items?|odds disclosure)\b",
+        re.IGNORECASE),
+    "design-ui-ux-for-games": re.compile(
+        r"\b(?:game UX|UI hierarchy|information hierarchy|thumb zones?|mobile[- ]first|readable text|colou?r[- ]blind)\b",
+        re.IGNORECASE),
+    # Service implementation recipes. Default OFF until an independent evaluation passes.
+    "roblox-datastore-service-patterns": re.compile(
+        r"\b(?:DataStoreService|GetRequestBudgetForRequestType|StandardRead|StandardWrite|UpdateAsync|session[- ]locks?)\b",
+        re.IGNORECASE),
+    "roblox-remote-event-function-patterns": re.compile(
+        r"\b(?:RemoteFunction|OnServerInvoke|InvokeServer|RemoteEvent|OnServerEvent|FireClient|remote rate limits?)\b",
+        re.IGNORECASE),
+    "roblox-tweenservice-easing": re.compile(
+        r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
+        re.IGNORECASE),
 }
 
 
@@ -154,11 +199,16 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     if not isinstance(prompt, str) or not prompt.strip() or len(prompt) > 20_000:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
-    if not allowed or not _ROBLOX_CONTEXT.search(prompt):
+    if not allowed:
+        return []
+    roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
+    godot_context = bool(_GODOT_CONTEXT.search(prompt))
+    if not roblox_context and not godot_context:
         return []
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed:
+        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
+                                    (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):

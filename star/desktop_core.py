@@ -10,6 +10,7 @@ import sqlite3
 import time
 from .analytics import AnalyticsStore
 from dataclasses import dataclass, asdict, replace, field
+from contextlib import AsyncExitStack
 from typing import Callable
 
 from .agent import execute, HistoryWindowPressure
@@ -22,12 +23,15 @@ from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
 from .providers import (ALL_PROVIDERS, background_client, call_limits, connection_for, llama_request_fields,
+                        look_for_busy_slots, model_slots_full,
                         model_unavailable, open_client,
                         provider_kind, server_context_tokens, validate_lan_endpoint)
-from .brain_router import select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES
+from .brain_router import (select_route, validate_alias, is_roblox_task, deep_request, ROBLOX_QUALITY_NOTES,
+                           busy_downgrade_allowed)
+from .instant_route import decide_instant_route, loaded_local_model, answer_on_pc
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
-from . import doc_grounding, skill_packs
+from . import doc_grounding, skill_packs, roblox_errors
 from . import studio_loop
 from .studio_connections import default_target, validate_target
 
@@ -73,6 +77,8 @@ class Settings:
     media_images: str = 'pc'
     media_voice: str = 'pc'
     media_video: str = 'servers'
+    media_chat_auto: bool = True
+    session_capabilities_prompt: bool = False
     media_use_references: bool = True     # give a project's pinned reference images to image and UI work
     comfy_home: str = ''                  # folder of the ComfyUI install STAR may start ('' = started by hand)
     ffmpeg_dir: str = ''                  # folder with ffmpeg and ffprobe ('' = look on PATH)
@@ -84,6 +90,7 @@ class Settings:
     skills_enabled: bool = True
     graphify_enabled: bool = True
     roblox_research_enabled: bool = True
+    asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
     specialist_parallelism: int = 1
@@ -93,19 +100,35 @@ class Settings:
     mcp_graphify_local: bool = False
     mcp_graphify_port: int = 8931
     mcp_obsidian_live: bool = False
+    blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
+    blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
+    blender_executable: str = ''           # installed local executable; '' = discover without downloading
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
+    allow_cgnat: bool = False         # opt in to Tailscale / carrier-grade NAT; metadata IP stays blocked
     server_timeout: int = 600        # seconds of silence allowed for one server request
     server_parallel: int = 1         # match the server's llama.cpp -np slot count
     server_context_tokens: int = 0   # per-request context; 0 = use what the server reports
+    instant_route_enabled: bool | None = False   # Explicit opt-in; legacy None stays off
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    # STAR search (self-hosted SearXNG behind star-search-gateway, server/searxng): '' = the STAR
+    # Server's host on port 8093, 'off' = never ask it. Used when no Brave/Tavily key is set.
+    search_endpoint: str = ''
+    # Search the web automatically for questions about news, prices, weather or "latest" things.
+    web_auto_search: bool = True
     # Learning (star/lessons.py). Lessons are local project notes, never weights.
     learning_auto_accept: bool = True     # False = "review everything": even my own words wait for approval
     learning_digest: bool = True          # let the fast model reword raw captures into candidates, in the background
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
+    practice_lessons_enabled: bool = False  # off until the owner opts in
+    worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
+    # Owner default (O1): night school's text lessons that won the paired gate go live for 14 days, visibly, with undo
+    # (star/learned_week.py). False = bundles only add candidates that wait for review.
+    learning_auto_live: bool = True
+    research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
 
     @classmethod
     def load(cls, file: Path):
@@ -129,14 +152,17 @@ class Settings:
         if not 1 <= port <= 65535:
             raise ValueError('Invalid local inference port')
         self._validate_server()
+        if self.instant_route_enabled is not None and type(self.instant_route_enabled) is not bool:
+            raise ValueError('Instant answers setting must be true, false or automatic')
         if not self.project.strip() or len(self.project) > 100:
             raise ValueError('Project name is invalid')
         if any(type(getattr(self, key)) is not bool
                for key in ('obsidian_enabled', 'skills_enabled', 'graphify_enabled',
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
-                            'roblox_research_enabled', 'tool_workshop_enabled',
+                            'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'media_use_references', 'studio_own_places', 'studio_luau')):
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -151,6 +177,13 @@ class Settings:
             raise ValueError('Team timeout minimum/maximum must be 1 to 1800 seconds')
         if type(self.mcp_graphify_port) is not int or not 1024 <= self.mcp_graphify_port <= 65535:
             raise ValueError('Invalid local Graphify MCP port')
+        if self.blender_edit and not self.blender_enabled:
+            raise ValueError('Enable Blender before enabling Blender scene creation')
+        if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
+                or '\x00' in self.blender_executable
+                or self.blender_executable.startswith(('\\\\', '//'))
+                or '://' in self.blender_executable):
+            raise ValueError('Choose a trusted local Blender executable, not a URL or network share')
         if self.studio_edit and not self.studio_id.strip():
             raise ValueError('Choose a disposable Studio instance before editing')
         if not 1 <= self.comfy_port <= 65535 or not re.fullmatch(r'[A-Za-z0-9_-]{1,40}', self.comfy_prompt_node):
@@ -183,13 +216,20 @@ class Settings:
         if not isinstance(self.server_endpoint, str):
             raise ValueError('STAR Server address must be text')
         if self.server_endpoint:
-            validate_lan_endpoint(self.server_endpoint)
+            validate_lan_endpoint(self.server_endpoint, allow_cgnat=self.allow_cgnat)
         elif provider_kind(self) == 'lan':
             validate_lan_endpoint('')  # raises the "enter your server address" message
         if not isinstance(self.knowledge_endpoint, str):
             raise ValueError('STAR Knowledge address must be text')
         if self.knowledge_endpoint and self.knowledge_endpoint != 'off':
             validate_knowledge_endpoint(self.knowledge_endpoint)
+        if not isinstance(self.search_endpoint, str):
+            raise ValueError('STAR search address must be text')
+        if self.search_endpoint and self.search_endpoint != 'off':
+            from .web_search import validate_search_endpoint
+            validate_search_endpoint(self.search_endpoint)
+        if not isinstance(self.web_auto_search, bool):
+            raise ValueError('Automatic web search must be on or off')
         if type(self.server_timeout) is not int or not 30 <= self.server_timeout <= 1800:
             raise ValueError('STAR Server timeout must be 30 to 1800 seconds')
         if type(self.server_parallel) is not int or not 1 <= self.server_parallel <= 4:
@@ -543,6 +583,50 @@ class Conversations:
             raise ValueError('The question is no longer available for Retry')
         return message_id
 
+    def rename_chat(self, project: str, chat_id: str, title: str) -> str:
+        """Give one conversation of this project a title the owner chose. Returns the stored title."""
+        clean = ' '.join(str(title or '').split())
+        if not clean:
+            raise ValueError('A chat name cannot be empty')
+        if len(clean) > 80:
+            clean = clean[:79].rstrip() + '…'
+        if any(ord(ch) < 32 for ch in clean):
+            raise ValueError('A chat name cannot contain control characters')
+        with self.connection:
+            changed = self.connection.execute(
+                'UPDATE chats SET title=? WHERE project=? AND id=?', (clean, project, chat_id)
+            ).rowcount
+        if not changed:
+            raise ValueError('Conversation not found in this workspace')
+        return clean
+
+    def delete_chat(self, project: str, chat_id: str) -> str:
+        """Remove one conversation of this project: its messages, thumbs and context checkpoint.
+
+        Generated image files are not touched (they stay in the STAR data folder). When the
+        deleted chat was the open one, the newest remaining chat opens (or a new blank one).
+        Returns the chat that is open afterwards.
+        """
+        if not self.connection.execute(
+            'SELECT 1 FROM chats WHERE project=? AND id=?', (project, chat_id)
+        ).fetchone():
+            raise ValueError('Conversation not found in this workspace')
+        with self.connection:
+            self.connection.execute(
+                'DELETE FROM message_feedback WHERE project=? AND chat_id=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM messages WHERE project=? AND chat_id=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM chats WHERE project=? AND id=?', (project, chat_id))
+            if self.connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='conversation_checkpoints'"
+            ).fetchone():
+                self.connection.execute(
+                    'DELETE FROM conversation_checkpoints WHERE project=? AND chat=?', (project, chat_id))
+            self.connection.execute(
+                'DELETE FROM active_chats WHERE project=? AND chat_id=?', (project, chat_id))
+        return self.active_chat(project)
+
     def projects(self):
         return [r[0] for r in self.connection.execute('SELECT DISTINCT project FROM messages ORDER BY project')]
 
@@ -594,7 +678,8 @@ def redact_for_logs(value):
     return value
 
 
-def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None, *,
+                        blender: bool = False) -> bool:
     """Load task tools on explicit request or scoped short edit follow-up.
 
     User context hints are not permissions; executable scopes remain enforced.
@@ -602,6 +687,8 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
     text = prompt.lower()
     scopes = ('studio', 'roblox', 'workspace', 'my project', 'my game', 'my files',
               'project folder', 'current place')
+    if blender:   # only with the Blender switch on (Settings.blender_enabled); off, these stay plain chat
+        scopes += ('blender', '3d asset', '3d model', '3d mesh', 'gltf', 'glb')
     actions = ('inspect', 'modify', 'edit', 'read ', 'fix ', 'fix it', 'change ',
                'create ', 'build ', 'implement', 'open ', 'scan ', 'add ',
                'remove ', 'delete ', 'test ', 'make it', 'update ')
@@ -626,7 +713,8 @@ def needs_project_tools(prompt: str, prior_user_turns: list[str] | None = None) 
                 and any(any(x in turn.lower() for x in scopes)
                         for turn in prior_user_turns[-3:] if isinstance(turn,str)))
 
-def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None) -> bool:
+def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = None, *,
+                            blender: bool = False) -> bool:
     """Only connect to Roblox Studio for an actual selected-place operation.
 
     A configured studio_id is NOT a request to connect for every agent call.
@@ -636,6 +724,12 @@ def needs_studio_connection(prompt: str, prior_user_turns: list[str] | None = No
     if not isinstance(prompt,str) or not prompt.strip():
         return False
     text=prompt.lower()
+    # Exporting a Blender asset for Roblox does not itself authorize Studio edits. Only with the Blender
+    # switch on: with it off, a prompt that mentions Blender attaches Studio exactly as before.
+    if blender and 'blender' in text and not any(term in text for term in (
+            'studio', 'current place', 'selected place', 'my game', 'the place',
+            'game hierarchy', 'explorer tree', 'datamodel', 'my project', 'my roblox game')):
+        return False
     actions=('inspect','edit','modify','build','create','fix','test ','run ','playtest',
              'open ','change ','update ','delete ','remove ','add ','insert ','scan ')
     requests_action=any(a in text for a in actions)
@@ -730,8 +824,9 @@ def chat_history(settings: Settings, home: Path, chat_id: str | None):
     Returns (history messages, newest stored rows). The same function feeds a
     real turn and the cache warm-up, so both start with identical bytes. A
     trailing user row is the message being answered now (already saved by the
-    UI) and is not history; an earlier message that never got a reply is kept,
-    marked as unanswered (see context_layout.exchanges).
+    UI) and is not history; an earlier message that never got a reply (failed,
+    stopped or interrupted) is left out, with no placeholder answer (see
+    conversation_memory.select_window).
     """
     window, rows = chat_history_snapshot(settings, home, chat_id)
     return window.messages, [(row['role'], row['body']) for row in rows
@@ -749,7 +844,40 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     window = conversation_memory.select_window(rows, budget, current_text=current_text)
     checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
                                                       chat_id, records=rows)
-    return conversation_memory.respect_checkpoint(window, checkpoint), rows
+    return with_sent_times(conversation_memory.respect_checkpoint(window, checkpoint)), rows
+
+
+def with_sent_times(window):
+    """Each replayed user turn ends with the time line it was first sent with.
+
+    A plain chat turn is sent as the owner's words plus a context block holding only the
+    current time (star.agent.volatile_context). Replaying the earlier turns with the same
+    block, rebuilt from each message's stored timestamp, keeps the request starting with the
+    bytes the model server already read. Same number and order of messages as the window.
+    """
+    from .clock import sent_line
+    from .context_layout import context_block, final_user_text
+    messages = list(window.messages)
+    for index, group in enumerate(window.exchanges):
+        position = 2 * index
+        if position >= len(messages) or messages[position].get('role') != 'user':
+            break
+        line = sent_line(group[0].get('created', '')) if group else ''
+        if line:
+            messages[position] = {'role': 'user', 'content': final_user_text(
+                messages[position]['content'], context_block((), tail=[line]))}
+    return replace(window, messages=messages)
+
+
+def current_turn_line(records) -> str:
+    """The time line for the message being answered: from its stored timestamp (so the next turn
+    replays the same bytes), with a live server-clock note if the clocks differ; else the time now."""
+    from .clock import now_line, sent_line
+    if records and records[-1].get('role') == 'user':
+        line = sent_line(records[-1].get('created', ''), offset=None)
+        if line:
+            return line
+    return now_line()
 
 
 def picture_limit(settings) -> int | None:
@@ -764,7 +892,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
              stream_tokens: bool = False, mode: str = 'auto', research: bool = False,
              cancel_event=None, github_enabled: bool = False, chat_id: str | None = None,
              owner_text: str | None = None, documents: list[Path] | None = None,
-             studio_configuration_home: Path | None = None) -> str:
+             studio_configuration_home: Path | None = None, attachment_count: int = 0) -> str:
     """User-controlled fast/automatic/agent routing; all hosted calls are opt-in.
 
     `owner_text` is what the owner typed, when `prompt` also carries text STAR added (an
@@ -789,9 +917,17 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     metrics = AnalyticsStore(home / 'analytics.sqlite3')
     started = time.monotonic()
     first_visible_token = False
+    token_timing = {'requested': None, 'first': None, 'last': None}
     metrics.record(settings.project, 'run_started')
     def audited_event(event):
         nonlocal first_visible_token
+        now = time.monotonic()
+        if event.get('event') == 'model_turn' and token_timing['requested'] is None:
+            token_timing['requested'] = now
+        if event.get('event') == 'assistant_delta' and str(event.get('text','')).strip():
+            if token_timing['first'] is None:
+                token_timing['first'] = now
+            token_timing['last'] = now
         if event.get('event') == 'assistant_delta' and not first_visible_token and str(event.get('text','')).strip():
             first_visible_token = True
             # Approximate first *visible* text delta from request start; no prompt
@@ -867,7 +1003,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             and recent_all[-1][1] and prompt.startswith(recent_all[-1][1]) else recent_all
         )
         recent_users = [body for role,body in route_history if role=='user']
-        project_tools = needs_project_tools(prompt, recent_users)
+        project_tools = needs_project_tools(prompt, recent_users, blender=settings.blender_enabled is True)
         referential = len(prompt) <= 160 and bool(re.search(
             r'\b(?:it|this|that|same|continue|again|those|these)\b', prompt, re.I))
         roblox_context = bool(project_tools and referential
@@ -914,6 +1050,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         if document_block:
             turn_sections.insert(0, ('ATTACHED DOCUMENTS (untrusted reference data)', document_block))
         use_tools = route.use_tools
+        from .live_context import wants_fresh_web
+        auto_web = bool(not research and settings.web_auto_search is not False and wants_fresh_web(prompt))
         allowed_context_chars = model_context_char_budget(settings, route.model)
         intelligence = for_settings(settings, home) if use_tools else None
         workspace = Workspace(Path(settings.workspace)) if use_tools and settings.workspace else None
@@ -921,8 +1059,16 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             workshop = ToolWorkshop(home=home,project=settings.project,knowledge=knowledge,
                                     workspace=workspace,intelligence=intelligence)
         allow_studio = bool(use_tools and settings.studio_id and
-                            needs_studio_connection(prompt,recent_users))
+                            needs_studio_connection(prompt,recent_users,
+                                                    blender=settings.blender_enabled is True))
+        allow_blender = False
+        if use_tools and settings.blender_enabled is True:   # the Blender modules load only when it is on
+            from .blender_mcp import wants_blender
+            allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        # Searchable public metadata only; no connector is installed or approved.
+        from .mcp_registry import RegistryDiscovery
+        mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
         connection_for(settings)  # fail early (missing key, bad address) before any work
         limits = call_limits(settings)
         # Own hardware only: the conversation's tool list stays put from turn to turn (STAR
@@ -930,28 +1076,77 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         tools_kept = (turn_memory.for_conversation(memory_scope, sticky=kind == 'lan')
                       if kind != 'cloud' else None)
         answered_by = ''
+        model_stats = {}
+        instant_answer = None
         tools_ran = False
         inner_event = audited_event
         def audited_event(event):
             nonlocal answered_by, tools_ran
             if event.get('event') == 'model_answered':
                 answered_by = str(event.get('model') or '')
+                model_stats.update(first_token_ms=event.get('first_token_ms'),
+                                   tokens_per_second=event.get('tokens_per_second'),
+                                   estimated_tokens=event.get('estimated_tokens') is True)
             elif event.get('event') == 'tool_started':
                 tools_ran = True
             inner_event(event)
         prepared_conversation = None
         async def run():
-            nonlocal prepared_conversation
+            nonlocal prepared_conversation, instant_answer, first_visible_token
+            # Do not touch the PC's model unless this standalone text turn is eligible.
+            # The loopback /models probe reads only residency; a router's unloaded model
+            # is never selected and no llama.cpp process is started or downloaded.
+            eligible = dict(prompt=prompt, mode=mode, provider=kind,
+                            enabled=settings.instant_route_enabled is True,
+                            installed=bool(settings.gguf_model or settings.router_models_dir),
+                            attachments=len(images) + len(documents or ()) + max(0, attachment_count),
+                            tools=use_tools or document_tools is not None or bool(github_enabled),
+                            research=research or auto_web, documentation=route.grounding.retrieve != 'none',
+                            deep=wants_deep, followup=referential or roblox_context
+                            or bool(owner_text is not None and owner_text != prompt))
+            if decide_instant_route(**eligible, loaded_model='resident').use_local:
+                try:
+                    local_model = await loaded_local_model(settings.endpoint)
+                except Exception:
+                    local_model = ''
+                if decide_instant_route(**eligible, loaded_model=local_model).use_local:
+                    try:
+                        instant_answer = await answer_on_pc(settings.endpoint, local_model, prompt)
+                    except Exception:
+                        # Local text was buffered, not streamed to the chat. The original
+                        # server request can now run unchanged, exactly once.
+                        audited_event({'event': 'instant_fallback', 'model': route.model})
+                    else:
+                        first_visible_token = True
+                        metrics.record(settings.project, 'first_token',
+                                       elapsed_ms=instant_answer.first_token_ms)
+                        audited_event({'event': 'instant_selected', 'model': instant_answer.model})
+                        audited_event({'event': 'model_answered', 'model': instant_answer.model})
+                        audited_event({'event': 'assistant_delta', 'text': instant_answer.text})
+                        audited_event({'event': 'finished', 'model_calls': 1, 'tool_calls': 0})
+                        return (instant_answer.text,
+                                [{'role': 'user', 'content': prompt},
+                                 {'role': 'assistant', 'content': instant_answer.text}], [])
             from .web_search import search_web, source_context
+            from . import live_context
+            live_context.refresh_server_clock_soon(settings)   # the STAR Server's clock, for the time line
             if research:
                 audited_event({'event': 'search_started'})
                 found = await search_web(prompt[:600], limit=5)
                 turn_sections.append(('WEB SEARCH', source_context(found)))
                 audited_event({'event': 'search_finished'})
+            elif auto_web:
+                # A question about what is happening now: search without waiting for the switch.
+                # A failure is one line in the context (the model says so), never a failed turn.
+                audited_event({'event': 'search_started'})
+                web_text, _sources = await live_context.auto_search(prompt, settings=settings)
+                if web_text:
+                    turn_sections.append(('WEB SEARCH', web_text))
+                audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
                 # Summaries, sub-agents, specialists and code repair are not the conversation:
-                # on STAR Server they use the slot next to it (providers.llama_request_fields).
+                # on STAR Server they carry no id_slot, the server places them (providers.llama_request_fields).
                 helper = background_client(client, settings, conversation=memory_scope)
                 specialists = (ResearchTeam(
                     client=helper,model=route.subagent_model,project=settings.project,
@@ -960,6 +1155,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     speed_key=(settings.provider, settings.server_endpoint if provider_kind(settings) == "lan"
                                else settings.endpoint, route.subagent_model),
                     timeout_min=settings.team_timeout_min, timeout_max=settings.team_timeout_max,
+                    web_enabled=bool(research),
                 ) if use_tools and settings.specialists_enabled else None)
                 # Stable part: the compacted checkpoint only changes when one is written.
                 # Reserve room for the system instructions, user text and
@@ -987,7 +1183,34 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
                     audited_event({'event': 'skill_packs', 'names': [pack.name for pack in packs], 'chars': len(pack_block)})
                 # <<< Skill packs
+                # Pasted Studio output uses the same per-turn path, including Fast mode.
+                error_block = roblox_errors.reference_context(prompt)
+                if error_block:
+                    turn_sections.insert(1 if docs.block else 0, (roblox_errors.BLOCK_HEADING, error_block))
+                # Checked practice is opt-in and treated as untrusted reference data, not a lesson.
+                example_block = ''
+                example_extra_chars = 0
+                if settings.worked_examples_enabled is True:
+                    from . import worked_examples
+                    base_chars = (min(3000 if quick else 10000, memory_limit)
+                                  + len(docs.block) + len(document_block) + len(pack_block)
+                                  + len(error_block))
+                    heading_chars = len(worked_examples.HEADING) + 2
+                    room = min(worked_examples.MAX_PROMPT_CHARS - heading_chars,
+                               max(0, allowed_context_chars - 3200 - base_chars - heading_chars))
+                    if room >= 200:
+                        try:
+                            example_block, selected_examples = worked_examples.select(
+                                home, settings.project, prompt, max_chars=room)
+                        except (OSError, sqlite3.DatabaseError, ValueError):
+                            example_block, selected_examples = '', []
+                        if example_block:
+                            example_extra_chars = len(example_block) + heading_chars
+                            turn_sections.append((worked_examples.HEADING, example_block))
+                            audited_event({'event': 'worked_example_used',
+                                           'count': len(selected_examples), 'chars': len(example_block)})
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
+                              now=current_turn_line(conversation_records),
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
                               history=history,
                               preserve_history=True,
@@ -995,7 +1218,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               turn_sections=learning.guard_sections(turn_sections), mode=mode,
                               # The documentation block has its own budget (brain_router.GROUNDING_BUDGET);
                               # it is added on top so stored notes keep the room they had before.
-                              turn_context_chars=min(3000 if quick else 10000, memory_limit) + len(docs.block) + len(document_block) + len(pack_block),
+                              turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
+                                                  + len(document_block) + len(pack_block) + len(error_block)
+                                                  + example_extra_chars),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
@@ -1008,11 +1233,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               workspace=workspace, workspace_edit=settings.workspace_edit and use_tools,
                               stream_tokens=stream_tokens, response_tokens=route.response_tokens,
                               subagent_model=route.subagent_model,
-                              web_search_enabled=bool(research and mode == 'agent'),
+                              web_search_enabled=bool((research or auto_web) and mode == 'agent'),
+                              web_settings=settings,
                               subagents_enabled=(mode == 'agent'),
                               subagent_parallelism=limits.parallel,
                               github_enabled=bool(mode == 'agent' and github_enabled),
                               intelligence=intelligence, mcp_gateway=mcp_gateway,
+                              mcp_registry=mcp_registry,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
@@ -1026,16 +1253,26 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             conversation_records, window,
                             summary_chars=min(6000, max(700, allowed_context_chars // 4)),
                             cancel_event=cancel_event, on_event=audited_event, candidate=candidate)
+                        # Issue 118: is the chat's slot busy with another client right now? Then this
+                        # turn takes an idle slot (providers.look_for_busy_slots; never raises, <0.5 s).
+                        await look_for_busy_slots(settings, model, conversation=memory_scope)
                         kwargs.update(model=model, request_extras=slot_fields(model), history=window.messages,
                             project_memory=conversation_memory.compose_memory(
                                 stable_memory(settings, memory.get(memory_scope)), candidate.checkpoint))
                         try:
-                            if allow_studio:
-                                from .local_mcp import connect_studio
+                            async with AsyncExitStack() as connections:
+                                tool_kwargs = dict(kwargs)
+                                if allow_blender:
+                                    from .blender_mcp import connect_blender
+                                    tool_kwargs["blender"] = await connections.enter_async_context(
+                                        connect_blender(settings, home))
+                                if allow_studio:
+                                    from .local_mcp import connect_studio
                                 # One guarded connection per attempt: a retry below happens only when
                                 # nothing was sent to the model or to Studio, so nothing is replayed.
-                                async with connect_studio(settings, home,
-                                        studio_configuration_home=studio_configuration_home) as guarded:
+                                    guarded = await connections.enter_async_context(
+                                        connect_studio(settings, home,
+                                            studio_configuration_home=studio_configuration_home))
                                     # The tool list is the connector's own, read now. What STAR may do in
                                     # the open place is decided in code from what that place is.
                                     discovered = guarded.discovered
@@ -1044,13 +1281,13 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     # it may not look like lessons (guard_sections).
                                     sections.extend(learning.guard_sections(
                                         [('ROBLOX STUDIO PLACE', guarded.verdict.reason)]))
-                                    outcome = await execute(**{**kwargs, 'turn_sections': sections}, studio=guarded,
+                                    outcome = await execute(**{**tool_kwargs, 'turn_sections': sections}, studio=guarded,
                                         discovered=discovered, studio_id=settings.studio_id,
                                         may_edit=guarded.verdict.editable,
                                         allow_luau=guarded.verdict.editable and settings.studio_luau)
                                     result = studio_loop.with_report(outcome, guarded)
-                            else:
-                                result = await execute(**kwargs)
+                                else:
+                                    result = await execute(**tool_kwargs)
                         except HistoryWindowPressure as pressure:
                             if pressure.dispatched or pressure.tool_actions_started:
                                 raise conversation_memory.ConversationRetentionError(
@@ -1068,15 +1305,25 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                         prepared_conversation = candidate
                         return result
                 used = route
+                # Interactive chat must not queue behind background answers (evals, night school) that hold
+                # every slot of the main model: general chat (no tools, images, documents or code) is answered
+                # by the quick model instead (brain_router.busy_downgrade_allowed; one probe, <0.5 s).
+                quick_name = str(getattr(server_roles.effective(settings), 'fast_model', '') or '')
+                if (kind == 'lan' and not use_tools and not images and document_tools is None
+                        and not document_block and quick_name and quick_name != route.model
+                        and busy_downgrade_allowed(prompt, route.profile)
+                        and await model_slots_full(settings, route.model)):
+                    used = replace(route, model=quick_name)
+                    audited_event({'event': 'route_busy_quick', 'model': quick_name})
                 try:
-                    result = await answer_with(route.model)
+                    result = await answer_with(used.model)
                 except Exception as exc:
                     # A role's model that is missing or will not load: answer with the single
                     # configured model instead, once, and only if nothing was shown or run yet.
-                    if (kind != 'lan' or route.model == settings.model or first_visible_token
+                    if (kind != 'lan' or used.model == settings.model or first_visible_token
                             or tools_ran or not model_unavailable(exc)):
                         raise
-                    server_roles.mark_failed(settings, route.model)
+                    server_roles.mark_failed(settings, used.model)
                     used = replace(route, model=settings.model, subagent_model=(
                         settings.model if route.subagent_model == route.model else route.subagent_model))
                     if specialists is not None:
@@ -1114,6 +1361,21 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       if provider_kind(settings) == 'lan' else
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
+        first = token_timing['first']
+        last = token_timing['last']
+        requested = token_timing['requested']
+        measured_first = (instant_answer.first_token_ms if instant_answer is not None else
+                          model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else
+                          max(0, int((first - requested) * 1000)) if first is not None and requested is not None else None)
+        throughput = (instant_answer.tokens_per_second if instant_answer is not None else
+                      model_stats.get('tokens_per_second'))
+        brain = ('pc' if instant_answer is not None or kind == 'local'
+                 else 'server' if kind == 'lan' else 'cloud')
+        stats = {'brain': brain, 'model': answered_by or route.model,
+                 'first_token_ms': measured_first, 'tokens_per_second': throughput,
+                 'estimated_tokens': (instant_answer.estimated_tokens if instant_answer is not None
+                                      else model_stats.get('estimated_tokens', True))}
+        audited_event({'event': 'answer_stats', **stats})
         stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%f')
         runs = home / 'runs' / stamp
         runs.mkdir(parents=True, exist_ok=True)
@@ -1121,13 +1383,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             'messages': msgs, 'archive': archive,
             # Which model was asked and which one the server said answered.
             'route': {'profile': route.profile, 'requested_model': route.model,
-                      'answered_model': answered_by or route.model}}), ensure_ascii=False, default=str), encoding='utf-8')
+                      'answered_model': answered_by or route.model},
+            'answer_stats': stats}), ensure_ascii=False, default=str), encoding='utf-8')
         (runs / 'answer.md').write_text(redact_text(answer), encoding='utf-8')
         memory.event(memory_scope, {'run_id': stamp, 'answer': redact_text(answer[:10000])})
         # Failed/cancelled answers, budget refusals and required archive/log
         # failures never advance retention. Validate source/CAS after persistence.
-        conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
-                                   cancel_event=cancel_event)
+        if prepared_conversation is not None:
+            conversation_memory.commit(home / 'conversations.sqlite3', prepared_conversation,
+                                       cancel_event=cancel_event)
         audited_event({'event': 'saved', 'run_id': stamp})
         metrics.record(settings.project, 'run_succeeded',elapsed_ms=int((time.monotonic()-started)*1000))
         # The answer exists: count the lessons that were in its context, then learn from the turn.

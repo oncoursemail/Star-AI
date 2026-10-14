@@ -1,0 +1,38 @@
+return build({
+    name = "Rain",
+    cleanup_after = 6.05,
+    effects = {
+        {
+            id = "drops",
+            class = "ParticleEmitter",
+            at = 0,
+            duration = 5,
+            tail = 1,
+            emit = 0,
+            offset = Vector3.new(0, 20, 0),
+            properties = {
+                {"Acceleration", Vector3.new(0, -20, 0)},
+                {"Brightness", 1},
+                {"Color", ColorSequence.new({ColorSequenceKeypoint.new(0, Color3.new(0.6, 0.7, 0.8)), ColorSequenceKeypoint.new(1, Color3.new(0.6, 0.7, 0.8))})},
+                {"Drag", 0},
+                {"EmissionDirection", Enum.NormalId.Bottom},
+                {"Lifetime", NumberRange.new(0.5, 1)},
+                {"LightEmission", 0},
+                {"LightInfluence", 0},
+                {"LockedToPart", false},
+                {"Orientation", Enum.ParticleOrientation.VelocityParallel},
+                {"Rate", 100},
+                {"RotSpeed", NumberRange.new(0, 0)},
+                {"Rotation", NumberRange.new(0, 0)},
+                {"Size", NumberSequence.new({NumberSequenceKeypoint.new(0, 0.08, 0), NumberSequenceKeypoint.new(1, 0.08, 0)})},
+                {"Speed", NumberRange.new(25, 35)},
+                {"SpreadAngle", Vector2.new(10, 10)},
+                {"Texture", "rbxasset://textures/particles/sparkles_main.dds"},
+                {"Transparency", NumberSequence.new({NumberSequenceKeypoint.new(0, 0.5, 0), NumberSequenceKeypoint.new(1, 0.5, 0)})},
+                {"VelocityInheritance", 0},
+            },
+            tweens = {
+            },
+        },
+    },
+})

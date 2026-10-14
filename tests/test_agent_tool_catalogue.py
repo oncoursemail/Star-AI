@@ -34,7 +34,7 @@ ALWAYS = ["star_delegate"]
 # Agent Skills (star/intelligence.py SKILL_TOOLS): on by default (Settings.skills_enabled).
 SKILLS = ["star_skill_catalog", "star_skill_load", "star_skill_reference"]
 # The owner's Obsidian vault, read-only (OBSIDIAN_TOOLS): Settings.obsidian_enabled and a vault folder.
-OBSIDIAN = ["star_obsidian_search", "star_obsidian_read", "star_obsidian_list"]
+OBSIDIAN = ["star_obsidian_search", "star_obsidian_read", "star_obsidian_list", "star_obsidian_links"]
 # The workspace's Graphify graph (GRAPHIFY_TOOLS): a workspace with graphify-out/graph.json.
 GRAPHIFY = ["star_graphify_query", "star_graphify_explain", "star_graphify_path", "star_graphify_stats"]
 # Public Roblox research (ROBLOX_GAME_TOOLS, ROBLOX_KNOWLEDGE_TOOLS, ROBLOX_VIDEO_TOOLS).
@@ -49,6 +49,16 @@ STAR_KNOWLEDGE = ["star_docs_search", "star_api_lookup", "star_luau_check"]
 ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_roblox_cloud_place",
                 "star_roblox_cloud_data_stores", "star_roblox_cloud_action", "star_roblox_cloud_request_publish",
                 "star_roblox_cloud_request_test"]
+# Prompt-scoped craft tools; not part of the ordered general-prompt lists below.
+CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
+# Experimental Asset Forge (star/intelligence.py ASSET_TOOLS); owner opt-in required.
+ASSET = ["star_asset_search", "star_building_plan", "star_terrain_preview"]
+# Prepared shared stores only: not in ordered general-prompt tool expectations.
+SHARED_BRAIN = ["shared_brain_query", "shared_brain_stats"]
+# Prompt-scoped design and map-plan tools, and the opt-in live Roblox docs (off unless enabled); not part
+# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating).
+DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan",
+               "star_roblox_docs_live_search", "star_roblox_docs_live_page"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
 WORKSPACE_WRITE = ["workspace_write"]
@@ -56,12 +66,16 @@ WORKSPACE_WRITE = ["workspace_write"]
 WORKSPACE_GAME = ["workspace_game_discover", "workspace_game_inspect", "workspace_game_plan"]
 # Read-only MCP connections (star/mcp_connections.py TOOLS): when one is switched on in Settings.
 MCP = ["star_mcp_search", "star_mcp_call"]
+# Public MCP Registry search (star/mcp_registry.py TOOLS): Agent mode with "Search the web" on, and a prompt
+# that names MCP. It reads metadata only and connects nothing.
+REGISTRY = ["star_mcp_registry_search"]
 # Tool Workshop (star/tool_workshop.py TOOL_SCHEMAS).
 WORKSHOP = ["star_toolforge_list", "star_toolforge_propose", "star_toolforge_test", "star_toolforge_run"]
 # The research team (star/specialist_agents.py DELEGATE_TOOL).
 SPECIALISTS = ["star_delegate_research"]
+CALCULATOR = ["star_calculate"]
 # Composer switches: research (web search) and the STAR source reader.
-WEB = ["star_web_search"]
+WEB = ["star_web_search", "star_web_fetch"]   # star_web_fetch (star/web_fetch.py) comes with search
 GITHUB = ["star_github_tree", "star_github_read"]
 
 
@@ -172,7 +186,7 @@ def test_a_scripted_model_calls_the_skill_catalogue_and_gets_the_real_list(desk)
 
 
 EVERYTHING_PROMPT = (
-    "Research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
+     "Calculate 2 + 2, then research this Roblox game and its players for my notes: search the devforum, watch the YouTube "
     "video tutorial, read the docs, check the Open Cloud data store, look at the graph of the codebase, "
     "list the MCP connector tool catalog, build a custom tool, and delegate to the research team.")
 
@@ -194,6 +208,8 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
     import star.roblox_cloud as roblox_cloud
     import star.web_search as web_search
 
+    assert intelligence._VAULT_TRIGGER.search(EVERYTHING_PROMPT)
+
     async def no_search(*_args, **_kwargs):
         return []
     monkeypatch.setattr(web_search, "search_web", no_search)
@@ -206,19 +222,23 @@ def everything_on(desk, monkeypatch, *, knowledge: bool, **fields):
 
 
 def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch):
-    names = everything_on(desk, monkeypatch, knowledge=False)
-    expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
-                + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + WORKSHOP
+    # Every source on is more tool text than the default 26,000-character request budget (the web
+    # page reader, star_web_fetch, tipped it over); this test is about which tools are offered.
+    names = everything_on(desk, monkeypatch, knowledge=False, context_chars=40000)
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
+                + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
     assert names == expected          # the order is part of the request the server caches
     assert len(names) == len(set(names))
 
 
 def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch(desk, monkeypatch):
-    names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True)
-    expected = (GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
+    # Every source on plus the calculator is more tool text than the default 26,000-character request budget;
+    # this test is about which tools are offered, not about the budget, so give it room.
+    names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True, context_chars=40000)
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
                 + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
-                + WORKSHOP + SPECIALISTS)
+                + REGISTRY + WORKSHOP + SPECIALISTS)
     assert names == expected
     assert not set(ROBLOX_LINKS) & set(names)
 
@@ -232,11 +252,133 @@ def test_switching_agent_skills_off_removes_only_the_skill_tools(desk):
 
 def test_the_written_lists_are_the_whole_built_in_catalogue():
     """A built-in tool added to (or dropped from) a source table must be added to the lists above."""
-    from star import intelligence, mcp_connections, specialist_agents, tool_workshop, workspace
+    from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
-                                             + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD)
+                                             + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
+                                             + CRAFT + ASSET + SHARED_BRAIN + DESIGN_MAPS)
+    assert [tool["name"] for tool in intelligence.ASSET_TOOLS] == ASSET
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
+    assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN
     assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)
     assert [tool["name"] for tool in mcp_connections.TOOLS] == MCP
+    assert [tool["name"] for tool in mcp_registry.TOOLS] == REGISTRY
     assert [tool["name"] for tool in tool_workshop.TOOL_SCHEMAS] == WORKSHOP
     assert specialist_agents.DELEGATE_TOOL["name"] == SPECIALISTS[0]
+    from star.calc import TOOL
+    assert TOOL["name"] == CALCULATOR[0]
+
+
+def test_the_registry_search_needs_the_search_the_web_switch(desk):
+    """Without "Search the web" the registry tool is not offered, whatever the prompt says."""
+    result = desk.turn(EVERYTHING_PROMPT, settings=everything_settings(desk))
+    assert "star_mcp_registry_search" not in offered(result.requests[0])
+
+
+@pytest.mark.parametrize("term", ["backlink", "backlinks", "wikilink", "wikilinks",
+                                  "wiki-link", "wiki-links", "WIKI-LINKS"])
+def test_obsidian_link_prompts_offer_ordered_tools_through_run_task(desk, term):
+    settings = everything_settings(desk, skills_enabled=False, roblox_research_enabled=False)
+    result = desk.turn(f"Show {term}.", settings=settings)
+    assert len(result.requests) == 1
+    assert [name for name in offered(result.requests[0]) if name.startswith("star_obsidian_")] == OBSIDIAN
+
+
+@pytest.mark.parametrize("prompt", ["Give me a link.", "Give me links.", "Show a hyperlink.",
+                                    "Show hyperlinks.", "Explain backlinking.", "Explain wikilinking."])
+def test_generic_links_do_not_offer_obsidian_through_run_task(desk, prompt):
+    # Do not include existing vault triggers such as "docs", "notes" or "research".
+    settings = everything_settings(desk, skills_enabled=False, roblox_research_enabled=False)
+    result = desk.turn(prompt, settings=settings)
+    assert len(result.requests) == 1
+    assert not set(OBSIDIAN) & set(offered(result.requests[0]))
+
+
+def test_docs_remains_a_vault_trigger_when_generic_links_are_removed(desk):
+    settings = everything_settings(desk, skills_enabled=False, roblox_research_enabled=False)
+    result = desk.turn("Give me links to the docs.", settings=settings)
+    assert len(result.requests) == 1
+    assert [name for name in offered(result.requests[0]) if name.startswith("star_obsidian_")] == OBSIDIAN
+
+
+def test_link_prompt_cannot_enable_a_disabled_vault_through_run_task(desk):
+    settings = everything_settings(desk, obsidian_enabled=False, skills_enabled=False,
+                                   roblox_research_enabled=False)
+    result = desk.turn("Show backlinks and wiki-links.", settings=settings)
+    assert len(result.requests) == 1
+    assert not set(OBSIDIAN) & set(offered(result.requests[0]))
+
+
+def test_scripted_obsidian_links_call_returns_real_evidence_through_run_task(desk):
+    settings = everything_settings(desk, skills_enabled=False, roblox_research_enabled=False)
+    (desk.tmp / "vault" / "Target.md").write_text("# Target\n", encoding="utf-8")
+    (desk.tmp / "vault" / "Source.md").write_text("# Source\n[[Target]]\n", encoding="utf-8")
+    result = desk.turn("Show backlinks for Target.md.", settings=settings, answers=[
+        reply(None, [tool_call("star_obsidian_links", json.dumps({"path": "Target.md"}))]),
+        reply("The backlink comes from Source.md."),
+    ])
+    assert result.answer == "The backlink comes from Source.md."
+    assert len(result.requests) == 2
+    for request in result.requests:
+        assert [name for name in offered(request) if name.startswith("star_obsidian_")] == OBSIDIAN
+    assert {"event": "tool_started", "tool": "star_obsidian_links"} in desk.events
+    assert {"event": "tool_finished", "tool": "star_obsidian_links", "is_error": False} in desk.events
+    sent_back = [message for message in result.requests[1]["messages"] if message["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    evidence = json.loads(payload["output"])
+    assert evidence["path"] == "Target.md"
+    assert evidence["backlinks"] == [{"path": "Source.md", "line": 2}]
+    assert evidence["backlinks_total"] == 1
+    assert evidence["partial_scan"] is False
+    assert evidence["read_only"] is True
+
+
+def test_calculator_runs_through_real_agent_loop(desk):
+    result = desk.turn("Calculate 1/3 + 1/6", answers=[
+        reply(None, [tool_call("star_calculate", '{"expression":"1/3+1/6"}')]),
+        reply("The result is 1/2."),
+    ])
+    assert result.answer == "The result is 1/2."
+    assert offered(result.requests[0]) == CALCULATOR + ALWAYS      # no skills: the prompt does not ask for them
+    assert {"event": "tool_started", "tool": "star_calculate"} in desk.events
+    assert {"event": "tool_finished", "tool": "star_calculate", "is_error": False} in desk.events
+    sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    assert json.loads(payload["output"]) == {"result": "1/2"}
+
+
+def test_ordinary_prompts_do_not_offer_the_calculator_and_it_cannot_be_called_unoffered(desk):
+    result = desk.turn("Roblox 0.9.0 shipped on 2026-10-12. What do you mean by the average player?", answers=[
+        reply(None, [tool_call("star_calculate", '{"expression":"1+1"}')]),
+        reply("Understood."),
+    ])
+    assert "star_calculate" not in offered(result.requests[0])
+    sent_back = [m for m in result.requests[1]["messages"] if m["role"] == "tool"]
+    assert json.loads(sent_back[0]["content"])["isError"] is True      # refused: the tool was never offered
+
+
+@pytest.mark.parametrize("source,expected_rules", [
+    ("--!strict\ntask.wait(1)", set()),
+    ("--!strict\nwait(1)", {"luau-legacy-task"}),
+])
+def test_craft_audit_is_offered_and_runs_through_real_agent(desk, source, expected_rules):
+    arguments = json.dumps({"instances": [], "scripts": [
+        {"path": "ServerScriptService.Timer", "class": "Script", "source": source}]})
+    result = desk.turn("Audit this Roblox UI source with star_roblox_craft_audit.", answers=[
+        reply(None, [tool_call("star_roblox_craft_audit", arguments)]),
+        reply("The craft audit finished."),
+    ])
+    assert set(CRAFT) <= set(offered(result.requests[0]))
+    assert len(result.requests) == 2
+    assert {"event": "tool_finished", "tool": "star_roblox_craft_audit", "is_error": False} in desk.events
+    sent_back = [message for message in result.requests[1]["messages"] if message["role"] == "tool"]
+    assert len(sent_back) == 1
+    payload = json.loads(sent_back[0]["content"])
+    assert payload["isError"] is False
+    report = json.loads(payload["output"])
+    assert report["reviewed_scripts"] == 1
+    assert report["read_only"] is True and report["executed"] is False
+    assert {item["rule"] for item in report["findings"]} == expected_rules

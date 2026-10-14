@@ -12,16 +12,15 @@ import {LINKS,capabilities,evalResults,releaseFiles} from './siteContent'
 afterEach(()=>cleanup())
 
 describe('website v0.9.0 claims',()=>{
- it('keeps source-backed feature descriptions with the precise measured baselines',()=>{
+ it('keeps source-backed feature descriptions with dated and qualified evaluation results',()=>{
   expect(capabilities.map(item=>item.name)).toEqual([
    'STAR Server on your network','Roblox answers with sources','Studio and Open Cloud',
    'Skills and the evaluation gate','Project learning','Voice calls','Images and video','Documents and tables'
   ])
   expect(capabilities.every(item=>item.since==='0.9.0')).toBe(true)
   expect(evalResults).toEqual([
-   {suite:'Roblox v2 (34 automated of 50)',passed:'18 / 34',rate:'52.9 %'},
-   {suite:'Creation v1 (23 automated)',passed:'11 / 23',rate:'47.8 %'},
-   {suite:'Both baselines',passed:'29 / 57',rate:'50.9 %'}
+   {suite:'Roblox v2 scripting (October 12 and earlier runs)',passed:'13–18 / 34',rate:'varies by run'},
+   {suite:'Creation v1 (earlier; not reproduced on v0.9.0)',passed:'11 / 23 (historical)',rate:'unverified on release'}
   ])
   const prefix=LINKS.repo+'/blob/main/'
   for(const feature of capabilities){
@@ -30,12 +29,12 @@ describe('website v0.9.0 claims',()=>{
    expect(existsSync(resolve(process.cwd(),'..',source)),source).toBe(true)
   }
  })
- it('does not call candidate source a published release',()=>{
+ it('renders variable evaluation results without claiming a single best combined score',()=>{
   const html=renderToString(<Landing/>)
-  expect(html).toContain('18 / 34')
-  expect(html).toContain('52.9 %')
-  expect(html).toContain('47.8 %')
-  expect(html).toContain('50.9 %')
+  expect(html).toContain('13–18 / 34')
+  expect(html).toContain('varies by run')
+  expect(html).toContain('11 / 23 (historical)')
+  expect(html).not.toContain('29 / 57')
   expect(html).toContain('Three of 18 unchanged')
   expect(html).toContain('not a combined production benchmark')
   expect(html).toContain('Not in a release yet')
@@ -87,8 +86,32 @@ describe('GitHub release fallback',()=>{
  it('offers the official release page, not fabricated ZIP or checksum URLs',()=>{
   render(<SiteDownload latest={null} files={releaseFiles(null)} releaseLive={false} snapshotAt={null}/>)
   expect(screen.getByRole('link',{name:/Open the latest release/i}).getAttribute('href')).toBe(LINKS.latest)
-  expect(screen.getByRole('link',{name:/Portable ZIP on GitHub/i}).getAttribute('href')).toBe(LINKS.latest)
+  expect(screen.getByRole('link',{name:/View release assets/i}).getAttribute('href')).toBe(LINKS.latest)
   expect(screen.getByRole('link',{name:/Checksums on GitHub Releases/i}).getAttribute('href')).toBe(LINKS.latest)
   expect(screen.getByText(/Live release details unavailable/)).toBeTruthy()
+ })
+})
+
+
+describe('website claim accuracy regressions',()=>{
+ it('qualifies installation, hardware, speed, evaluations and GitHub snapshots in the rendered page',()=>{
+  const html=renderToString(<Landing/>)
+  expect(html).toContain('all-users installation or upgrade may require it')
+  expect(html).toContain('guidance, not a hardware benchmark')
+  expect(html).toContain('speed varies with hardware')
+  expect(html).toContain('October 11–12, 2026')
+  expect(html).toContain('pack-by-pack experiments recorded October 11, 2026')
+  expect(html).toContain('browser-cached snapshot')
+  expect(html).toContain('Read-only when connected')
+  expect(html).not.toContain('there is no administrator prompt')
+  expect(html).not.toContain('It is quick and private')
+  expect(html).not.toContain('This board is read from the public GitHub repository when you open the page')
+ })
+ it('never promises a ZIP or checksum when published assets are unknown',()=>{
+  render(<SiteDownload latest={null} files={releaseFiles(null)} releaseLive={false} snapshotAt={null}/>)
+  expect(screen.getByRole('link',{name:/View release assets/i}).getAttribute('href')).toBe(LINKS.latest)
+  expect(screen.getByText(/If a release provides SHA256SUMS.txt/)).toBeTruthy()
+  expect(screen.getByText(/older published builds and any checksums provided/)).toBeTruthy()
+  expect(screen.queryByText('The checksum is listed in SHA256SUMS.txt on the release.')).toBeNull()
  })
 })

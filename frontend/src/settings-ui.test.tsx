@@ -405,3 +405,25 @@ describe('Settings > Roblox Studio', () => {
     expect(section.textContent).not.toContain('Connected.')
   })
 })
+
+
+describe('Tools > Asset Forge opt-in', () => {
+  it('keeps experimental asset tools off until the owner saves an explicit choice', async () => {
+    desktop.onAction('saveSettings', call => {
+      const settings = {...backendSettings, ...(call.payload.settings as Record<string, unknown>)}
+      desktop.host({settings})
+      return {ok: true, data: settings}
+    })
+    const user = userEvent.setup()
+    render(<App/>)
+    await screen.findByRole('textbox', {name: /message star/i})
+    await user.click(screen.getByRole('button', {name: /^tools$/i}))
+    const toggle = await screen.findByRole('checkbox', {name: /Enable experimental Asset Forge planning/})
+    expect(toggle).toHaveProperty('checked', false)
+    await user.click(toggle)
+    expect(desktop.sent('saveSettings')).toHaveLength(0)
+    await user.click(screen.getByRole('button', {name: /save connector settings/i}))
+    await waitFor(() => expect(desktop.sent('saveSettings')).toHaveLength(1))
+    expect(desktop.sent('saveSettings')[0].payload.settings).toMatchObject({asset_forge_enabled: true})
+  })
+})

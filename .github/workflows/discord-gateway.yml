@@ -1,0 +1,57 @@
+name: Discord gateway offline verification
+
+on:
+  pull_request:
+    paths:
+      - "star/discord_bot/**"
+      - "tests/test_discord_bot.py"
+      - "tests/test_discord_owner_dm.py"
+      - "tests/test_discord_learning_digests.py"
+      - "tests/test_discord_gateway_fake.py"
+      - "scripts/star_discord.cmd"
+      - "requirements-discord.txt"
+      - "scripts/star_discord_windows.ps1"
+      - "scripts/test_star_discord_windows_setup.ps1"
+      - ".github/workflows/discord-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discord-offline:
+    name: Discord gateway / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install regular STAR and Discord dependencies
+        run: python -m pip install -r requirements.txt -r requirements-dev.txt -r requirements-discord.txt
+      - name: Verify Discord gateway source compiles
+        run: python -m compileall -q star/discord_bot
+      - name: Verify Windows Discord setup helper is syntactically valid
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            'scripts/star_discord_windows.ps1', [ref]$tokens, [ref]$errors)
+          if ($errors.Count) { $errors | ForEach-Object { Write-Error $_.Message }; throw 'Invalid Discord setup PowerShell' }
+      - name: Exercise encrypted Windows setup with fake input (no network)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./scripts/test_star_discord_windows_setup.ps1
+      - name: Exercise owner permissions, AI stubs, commands, audio and startup diagnostics
+        run: python -m pytest -q tests/test_discord_bot.py tests/test_discord_owner_dm.py tests/test_discord_learning_digests.py tests/test_discord_gateway_fake.py
+      - name: Offline doctor must not require a token or remote service
+        run: python -m star.discord_bot doctor
+        continue-on-error: true

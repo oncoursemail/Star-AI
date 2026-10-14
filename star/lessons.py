@@ -35,7 +35,7 @@ MANUAL = "manual"              # typed by the owner in the review panel
 CONTEXT = "chat-correction"    # the owner's words, but they only make sense next to one answer
 # Signals STAR worked out for itself. They can only ever start as candidates.
 INFERRED = (CONTEXT, "feedback", "retry", "verified-fix", "doc", "summary")
-SOURCE_TYPES = (OWNER, MANUAL, *INFERRED)
+SOURCE_TYPES = (OWNER, MANUAL, *INFERRED, "practice", "import")
 # Raw captures the optional background step may rewrite into concise candidates.
 DIGESTIBLE = (CONTEXT, "feedback", "retry", "verified-fix", "doc")
 # Older notes the owner approved by hand are shown and recalled as lessons too.
@@ -347,6 +347,8 @@ def describe_source(source_type: str, source: str) -> str:
         "verified-fix": "A Luau check failed and the code was repaired" + where,
         "doc": "A documentation search found nothing" + where,
         "summary": "Summarised by the fast model from raw captures",
+        "practice": "Imported from STAR practice (awaiting your review)",
+        "import": "Imported from a lesson file (awaiting your review)",
     }.get(source_type or "", "Stored note")
 
 
@@ -436,7 +438,10 @@ class LessonStore:
         uses = self.db.execute(
             "SELECT COALESCE(SUM(u.uses),0) FROM lesson_use u JOIN notes n ON n.id=u.note_id WHERE n.project=?",
             (project,)).fetchone()[0]
-        return {**found, "pending": found["candidate"], "uses": int(uses)}
+        practice = self.db.execute(
+            "SELECT COUNT(*) FROM notes WHERE project=? AND status IS NOT NULL AND source_type='practice'",
+            (_project(project),)).fetchone()[0]
+        return {**found, "pending": found["candidate"], "uses": int(uses), "practice": int(practice)}
 
     # -- writing ---------------------------------------------------------------------------
 
@@ -660,9 +665,12 @@ class LessonStore:
         if not 1 <= limit <= 20 or not 100 <= max_chars <= 8000:
             raise ValueError("Recall budget outside the supported range")
         marks = ",".join("?" for _ in RECALLED_KINDS)
+        # A provisional lesson from night school (star/learned_week.py) carries its expiry in `revision`; once its 14
+        # days are over it is not recalled, even before the next sweep marks it expired.
         rows = self.db.execute(
             _SELECT + f"WHERE n.project=? AND n.status='accepted' AND n.reviewed=1 AND n.kind IN ({marks}) "
-            "ORDER BY n.id DESC LIMIT ?", (_project(project), *RECALLED_KINDS, RECALL_SCAN)).fetchall()
+            "AND NOT (n.revision LIKE 'provisional:%' AND substr(n.revision, 13) <= ?) "
+            "ORDER BY n.id DESC LIMIT ?", (_project(project), *RECALLED_KINDS, now(), RECALL_SCAN)).fetchall()
         wanted = subject_tokens(str(prompt)[:4000])
         seen: set[str] = set()
         ranked = []
@@ -881,6 +889,30 @@ def record_feedback(store: LessonStore, *, project: str, chat_id: str, message_i
                                   evidence=f"STAR's answer began: \"{str(answer or '')[:500]}\"")
 
 
+def record_correction(home: Path, store: LessonStore, *, project: str, chat_id: str, message_id: int, value: str,
+                      correction: str, question: str, answer: str) -> dict | None:
+    """Thumbs-down plus the owner's correction (W8): a regression-test candidate (star/corrections.py) and a lesson
+    candidate in the owner's words, both waiting for review. Any other thumb withdraws an unreviewed one."""
+    from .corrections import CorrectionStore
+    ref, source = f"{chat_id}#{message_id}", f"correction:{chat_id}#{message_id}"
+    corrections = CorrectionStore(home)
+    try:
+        if value != "down" or not correction.strip():
+            corrections.withdraw(project=project, source="app", ref=ref)
+            store.withdraw(project, CONTEXT, source)
+            return None
+        item = corrections.record(project=project, source="app", ref=ref, prompt=question, answer=answer,
+                                  correction=correction)
+    finally:
+        corrections.close()
+    store.withdraw(project, CONTEXT, source)
+    asked = " ".join(str(question or "").split())[:120]
+    store.capture_inferred(project=project, kind="correction", source_type=CONTEXT, source=source,
+                           text=f"Correction to an answer about \"{asked}\": {item['correction'][:400]}",
+                           evidence=f"STAR's answer began: \"{str(answer or '')[:500]}\"")
+    return {"id": item["id"], "status": item["status"], "cause": item["cause"]}
+
+
 # --- bridge ----------------------------------------------------------------------------------
 
 LESSON_ACTIONS = frozenset({"listLessons", "reviewLesson", "exportLessons", "messageFeedback"})
@@ -897,11 +929,11 @@ def learning_status(home: Path, project: str) -> dict:
     try:
         store = LessonStore(home)
     except (sqlite3.Error, OSError, ValueError):
-        return {name: 0 for name in (*STATUSES, "pending", "uses")}
+        return {name: 0 for name in (*STATUSES, "pending", "uses", "practice")}
     try:
         return store.counts(project)
     except ValueError:
-        return {name: 0 for name in (*STATUSES, "pending", "uses")}
+        return {name: 0 for name in (*STATUSES, "pending", "uses", "practice")}
     finally:
         store.close()
 
@@ -970,6 +1002,9 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
         value = body.get("value")
         if isinstance(message_id, bool) or not isinstance(message_id, int) or value not in ("up", "down", ""):
             raise ValueError("Invalid feedback")
+        correction = body.get("correction")
+        if correction is not None and (not isinstance(correction, str) or value != "down" or len(correction) > 1000):
+            raise ValueError("A correction goes with a thumbs-down and is text of at most 1000 characters")
         chats = Conversations(Path(home) / "conversations.sqlite3")
         try:
             rated = chats.set_feedback(project, message_id, value)
@@ -977,8 +1012,54 @@ def handle_action(home: Path, project: str, action: str, body: dict) -> dict:
             chats.close()
         captured = record_feedback(store, project=project, chat_id=rated["chat_id"], message_id=message_id,
                                    value=value, question=rated["question"], answer=rated["answer"])
+        regression = record_correction(home, store, project=project, chat_id=rated["chat_id"],
+                                       message_id=message_id, value=value, correction=correction or "",
+                                       question=rated["question"], answer=rated["answer"])
         return {"messageId": message_id, "value": value, "counts": store.counts(project),
-                "lesson_id": captured.lesson_id if captured else None}
+                "lesson_id": captured.lesson_id if captured else None, "correction": regression}
     finally:
         store.close()
         metrics.close()
+
+
+# --- offline import --------------------------------------------------------------------------
+
+def import_lessons(path: Path, *, home: Path | None = None) -> dict:
+    """Import a star-lessons-v1 file as candidates, without overwriting local records."""
+    from .lesson_import import import_export, read_export
+    from .desktop_core import app_data
+    data = read_export(path)
+    store = LessonStore(home if home is not None else app_data())
+    try:
+        return import_export(store, data)
+    finally:
+        store.close()
+
+
+def import_bundled_lessons(home: Path, version: str, *, enabled: bool = False,
+                           bundle: Path | None = None) -> dict:
+    """Opt-in once per app version; all new records still need review."""
+    from .lesson_import import bundled_once
+    return bundled_once(home, version, enabled=enabled, bundle=bundle)
+
+
+def main(argv=None) -> int:
+    """CLI: python -m star.lessons import FILE [--home DATA_FOLDER]."""
+    import argparse
+    parser = argparse.ArgumentParser(description="STAR local lessons")
+    sub = parser.add_subparsers(dest="command", required=True)
+    importing = sub.add_parser("import", help="import a star-lessons-v1 file as unreviewed candidates")
+    importing.add_argument("file", type=Path)
+    importing.add_argument("--home", type=Path, default=None)
+    args = parser.parse_args(argv)
+    try:
+        receipt = import_lessons(args.file, home=args.home)
+    except (ValueError, OSError) as exc:
+        parser.error(str(exc))
+    print(f"Imported {receipt['imported']} candidates; skipped {receipt['skipped']} "
+          f"in project {receipt['project']}. Review them in STAR.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

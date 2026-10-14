@@ -1,0 +1,16 @@
+{
+ "model": "Qwen/Qwen3.5-2B",
+ "trainable_params_m": 10.9,
+ "rank": 16,
+ "max_len": 1024,
+ "accum": 8,
+ "steps_done": 30,
+ "stopped": null,
+ "load_seconds": 3.2,
+ "median_step_seconds": 6.56,
+ "examples_seen": 240,
+ "peak_vram_gb": 3.53,
+ "heldout_loss_before": 2.6892,
+ "heldout_loss_after": 1.9683,
+ "note": "feasibility only: passage-recall SFT, not a coding-quality measurement"
+}

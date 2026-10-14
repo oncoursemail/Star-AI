@@ -50,8 +50,13 @@ return {
 		expect(profile.coins == 415 and profile.pets.bunny == true, "server price deducted")
 		expect(not act(profile, "BuyPet", "bunny"), "cannot purchase pet twice")
 		expect(not act(profile, "EquipPet", "dragon"), "cannot equip an unowned pet")
+		-- Rewards are floored to whole coins, so the 1.25x bunny adds nothing at upgrade
+		-- level 1 (1.5 * 1.25 = 1.875 -> 1). Compare at level 6, where base 4 becomes 5.
+		profile.upgradeLevel = 6
+		local withoutPet = Service.reward(profile)
+		expect(withoutPet == 4, "level 6 earns four without a pet")
 		expect(act(profile, "EquipPet", "bunny"), "owned pet equipped")
-		expect(Service.reward(profile) > 1, "equipped pet increases rewards")
+		expect(Service.reward(profile) == 5, "equipped pet increases rewards from four to five")
 	end,
 	["zone gates use server-recorded run earnings"] = function()
 		local profile = Service.newProfile()

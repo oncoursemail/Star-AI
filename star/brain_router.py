@@ -231,6 +231,18 @@ def is_roblox_task(prompt: str) -> bool:
     return isinstance(prompt, str) and bool(_ROBLOX.search(prompt))
 
 
+def busy_downgrade_allowed(prompt: str, profile: str) -> bool:
+    """May the quick model answer a message routed to the main model because every main-model slot is busy?
+
+    Interactive chat should not wait minutes behind background answers (evals, night school). Only general
+    'reasoning' chat qualifies: never Roblox, code, documentation-grounded, tool or research questions, which
+    keep the model that is good at them and wait for a slot. Pure; the slot check is the caller's.
+    """
+    return (profile == "reasoning" and isinstance(prompt, str) and not _CODING.search(prompt)
+            and not is_roblox_task(prompt) and not is_roblox_dev_prompt(prompt)
+            and grounding_plan(prompt, mode="auto").retrieve == "none")
+
+
 def deep_request(prompt: str) -> tuple[bool, str]:
     """(did the owner ask for the slow best-quality model, the prompt without a leading `/deep`).
 

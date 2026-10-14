@@ -13,6 +13,7 @@ from star import conversation_memory as cm
 from star import desktop_core as core
 from star import agent
 from star.warmup import prefix_request
+from star.context_layout import owner_words
 
 
 class Models:
@@ -286,3 +287,43 @@ def test_agent_typed_pressure_contains_whole_turns_before_dispatch():
     assert failure.value.dropped == history
     assert failure.value.dispatched is failure.value.tool_actions_started is False
     assert not models.requests and gateway.calls == 0
+
+
+def test_real_desktop_request_omits_stopped_and_failed_image_rows(desk):
+    desk.chats.add(desk.settings.project, 'user', 'Good earlier question',
+                   chat_id=desk.chat)
+    desk.chats.add(desk.settings.project, 'assistant', 'Good earlier answer',
+                   chat_id=desk.chat)
+    stopped = desk.chats.add(desk.settings.project, 'user', 'stop this request',
+                             chat_id=desk.chat)
+    desk.chats.add_terminal(desk.settings.project, desk.chat, stopped, 'cancelled',
+                            'Interrupted reply')
+    image = desk.chats.add(desk.settings.project, 'user', 'generate an image',
+                           chat_id=desk.chat)
+    desk.chats.add_terminal(desk.settings.project, desk.chat, image, 'failed',
+                            'Image generation failed')
+    assert turn(desk, 'what is 2+2?') == 'Fixture answer.'
+    messages = desk.models.requests[-1]['messages']
+    assert [item['role'] for item in messages] == [
+        'system', 'user', 'assistant', 'user']
+    # Replayed turns are the owner's words plus the time they were sent (star.clock.sent_line).
+    assert [(m['role'], owner_words(m['content'])) for m in messages[1:3]] == [
+        ('user', 'Good earlier question'), ('assistant', 'Good earlier answer')]
+    assert messages[-1]['content'][0]['text'].startswith('what is 2+2?')
+    assert 'stop this request' not in json.dumps(messages)
+    assert 'generate an image' not in json.dumps(messages)
+
+
+def test_real_desktop_request_keeps_a_retried_turn_that_has_a_failure_record(desk):
+    """Retry reuses the failed question's row; its answer is stored after the failure record."""
+    project = desk.settings.project
+    asked = desk.chats.add(project, 'user', 'Retry this question', chat_id=desk.chat)
+    desk.chats.add_terminal(project, desk.chat, asked, 'failed', 'Cannot reach STAR Brain.')
+    assert desk.chats.recover_turn(project, desk.chat, asked, 'Retry this question') == asked
+    desk.chats.add(project, 'assistant', 'Answer after retry.', chat_id=desk.chat)
+    assert turn(desk, 'what did I just ask?') == 'Fixture answer.'
+    messages = desk.models.requests[-1]['messages']
+    assert [item['role'] for item in messages] == ['system', 'user', 'assistant', 'user']
+    assert [(m['role'], owner_words(m['content'])) for m in messages[1:3]] == [
+        ('user', 'Retry this question'), ('assistant', 'Answer after retry.')]
+    assert 'Cannot reach STAR Brain' not in json.dumps(messages)

@@ -14,17 +14,19 @@ import {act} from '@testing-library/react'
 
 export type Call = {action: string; payload: Record<string, unknown>; requestId: string}
 export type Reply = {ok: boolean; data?: unknown; pending?: boolean; error?: string}
-type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string}
+type Row = {id: string; role: 'user' | 'assistant' | 'event'; text: string; created: string; status?: string; mid?: number; feedback?: string; image?: string}
 
 /** Mirrors `asdict(Settings())` in star/desktop_core.py; loosely typed on purpose. */
 export const backendSettings = {
   endpoint: 'http://127.0.0.1:8080/v1', provider: 'local', model: 'qwen-test', fast_model: '',
   reasoning_model: '', roblox_model: '', vision_model: '', router_models_dir: '', router_context: 4096,
-  gpu_layers: 25, project: 'STAR', workspace: '', studio_id: '', studio_target: 'local_pc', studio_edit: false, workspace_edit: false,
+  gpu_layers: 25, instant_route_enabled: false, project: 'STAR', workspace: '', studio_id: '', studio_target: 'local_pc', studio_edit: false, workspace_edit: false,
   max_calls: 12, context_chars: 26000, reduced_motion: true, obsidian_vault: '', obsidian_enabled: false,
   skills_enabled: true, graphify_enabled: true, comfy_workflow: '', comfy_prompt_node: '6', comfy_port: 8188,
   mcp_graphify_docs: false, mcp_graphify_local: false, mcp_graphify_port: 8931, mcp_obsidian_live: false,
-  roblox_research_enabled: true, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
+  blender_enabled: false, blender_edit: false, blender_executable: '',
+  roblox_research_enabled: true, asset_forge_enabled: false, tool_workshop_enabled: true, specialists_enabled: true, specialist_parallelism: 1,
+  practice_lessons_enabled: false, worked_examples_enabled: false,
 }
 
 const analytics = {started: 0, succeeded: 0, failed: 0, tools: 0, rejected: 0, median_ms: null, messages: 0,
@@ -42,7 +44,7 @@ export function installFakeDesktop() {
   const handlers = new Map<string, (call: Call) => Reply | void>()
 
   const boot = () => ({
-    version: '0.9.0', project: 'STAR', projects: ['STAR'], active_chat: 'chat-1',
+    version: '1.0.0', project: 'STAR', projects: ['STAR'], active_chat: 'chat-1',
     chats: [{id: 'chat-1', title: 'Test chat', created: stamp(), updated: stamp()}],
     // Like the real host: every stored answer carries its row id, so it can be rated.
     messages: db.map((m, i) => ({...m, id: `saved-${i}`, ...(m.role === 'assistant' ? {mid: m.mid ?? i + 1} : {})})), retry,
@@ -102,6 +104,8 @@ export function installFakeDesktop() {
 
   return {
     calls,
+    snapshot: () => boot(),
+    saved: () => db.map((m,i) => ({...m,id: `saved-${i}`})),
     sent: (action: string) => calls.filter(c => c.action === action),
     requestOf,
     /** Start every test from a clean backend. */
