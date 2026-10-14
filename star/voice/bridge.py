@@ -26,7 +26,7 @@ import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .catalog import STYLES, VoiceEntry, find_voice, kokoro_recipe, load_catalog
 from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, TTS_ENGINES, VoiceSettings
@@ -93,7 +93,7 @@ class _SpeechJob:
     def __init__(self, request_id: str) -> None:
         self.id = request_id
         self.cancel = threading.Event()
-        self.speaker = None
+        self.speaker: Any = None  # the SoundSpeaker while it plays
         self.thread: threading.Thread | None = None
 
 
