@@ -564,3 +564,45 @@ def test_heic_photo_is_converted_when_pillow_heif_is_installed():
     jpeg = prepare_discord_image("IMG_0003.HEIC", "image/heic", len(data), data)
     with Image.open(BytesIO(jpeg)) as shown:
         assert shown.format == "JPEG" and shown.size == (320, 240)
+
+
+def _photo_48mp(fmt):
+    """An 8000 x 6000 (48 MP) picture: a smooth gradient, so the file stays small enough to build quickly."""
+    gradient = Image.linear_gradient("L").resize((8000, 6000))
+    picture = Image.merge("RGB", (gradient, gradient.transpose(Image.Transpose.FLIP_LEFT_RIGHT), gradient))
+    out = BytesIO()
+    if fmt == "JPEG":
+        exif = Image.Exif()
+        exif[0x0112] = 6                                  # portrait phone photo
+        picture.save(out, format="JPEG", quality=90, exif=exif)
+    else:
+        picture.save(out, format=fmt)
+    return out.getvalue()
+
+
+@pytest.mark.parametrize("name,kind,fmt", [("IMG_48MP.JPG", "image/jpeg", "JPEG"),
+                                           ("IMG_48MP.PNG", "image/png", "PNG"),
+                                           ("IMG_48MP.HEIC", "image/heic", "HEIF")])
+def test_a_48_mp_phone_photo_is_shrunk_despite_star_global_pixel_limit(name, kind, fmt):
+    from star.pil_safe import Image as SafeImage           # sets STAR's global limit (20 MP, error above 40 MP)
+    assert SafeImage.MAX_IMAGE_PIXELS == 20_000_000
+    if fmt == "HEIF":
+        pillow_heif = pytest.importorskip("pillow_heif")
+        pillow_heif.register_heif_opener()
+    data = _photo_48mp(fmt)
+    with pytest.raises(SafeImage.DecompressionBombError):
+        SafeImage.open(BytesIO(data))                        # the global limit still applies everywhere else
+    jpeg = prepare_discord_image(name, kind, len(data), data)
+    with Image.open(BytesIO(jpeg)) as shown:
+        expected = (1176, 1568) if fmt == "JPEG" else (1568, 1176)
+        assert shown.size == expected
+    assert SafeImage.MAX_IMAGE_PIXELS == 20_000_000         # unchanged
+
+
+def test_oversized_uploads_are_still_refused_on_the_discord_path():
+    from star.pil_safe import Image as SafeImage  # noqa: F401  (global limit active)
+    out = BytesIO()
+    Image.new("L", (9000, 7000)).save(out, format="PNG")    # 63 MP: above the 60 MP Discord limit for non-JPEG
+    data = out.getvalue()
+    with pytest.raises(ValueError, match="too large"):
+        prepare_discord_image("huge.png", "image/png", len(data), data)
