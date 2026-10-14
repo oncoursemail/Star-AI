@@ -238,6 +238,12 @@ export function SettingsPage(props:SettingsPageProps) {
        <Switch label="Read the live Roblox documentation" hint="Off by default. When on, STAR may look up pages on create.roblox.com while answering Roblox questions. Read-only; only the search words leave this PC." checked={draft.roblox_docs_live_enabled===true} onChange={on=>set({roblox_docs_live_enabled:on})}/>
      </Panel>
    </Block>
+   <Block id="roblox-code" keywords="luau code studio tools examples retry fix thinking">
+     <Panel className="settings-section"><h3 className="settings-group-title">Roblox code help</h3>
+       <Switch label="Show example Studio tool calls" hint="Off by default. Adds one fixed example call to each Studio tool so the model makes fewer refused calls. Permissions do not change." checked={draft.studio_tool_examples===true} onChange={on=>set({studio_tool_examples:on})}/>
+       <Switch label="Retry a failed Luau fix with more thinking" hint="Off by default. When STAR's fix still fails the Luau check, it tries once more with the new errors (thinking on with your own brain). Answers can take longer." checked={draft.luau_retry_ladder===true} onChange={on=>set({luau_retry_ladder:on})}/>
+     </Panel>
+   </Block>
    <Block id="studio-target" keywords="studio place practice host this pc mcp">
      <StudioTargetSettings settings={data.settings} disabled={inactive} onSaved={sync} openTools={()=>nav('tools')}/>
    </Block>
@@ -276,11 +282,12 @@ export function SettingsPage(props:SettingsPageProps) {
        <SearchKey provider="tavily" label="Tavily" stored={!!data.credentials?.tavily} invoke={act} disabled={inactive} onSaved={sync}/>
      </Panel>
    </Block>
-   <Block id="knowledge-tools" keywords="skills graphify obsidian notes vault practice examples knowledge">
+   <Block id="knowledge-tools" keywords="skills graphify obsidian notes vault practice examples knowledge agents.md project rules">
      <Panel className="settings-section">
        <div className="section-heading"><div><h3 className="settings-group-title">Knowledge & expert tools</h3><p>New tools are strictly read-only. STAR discovers them on demand to avoid slowing ordinary conversations.</p></div><BookOpen size={20} aria-hidden="true"/></div>
        <Switch label="Enable Agent Skills" hint="Load relevant local SKILL.md instructions; never auto-run bundled code." checked={draft.skills_enabled??true} onChange={on=>set({skills_enabled:on})}/>
        <Switch label="Use checked practice examples" hint="Off by default. Manually imported night-school answers are untrusted local references, never training data." checked={draft.worked_examples_enabled===true} onChange={on=>set({worked_examples_enabled:on})}/>
+       <Switch label="Follow my workspace's project rules" hint="Off by default. Adds AGENTS.md (or CLAUDE.md, .cursorrules) from your workspace folder to each answer, up to 2,000 characters. Conventions only, never permissions." checked={draft.project_rules_enabled===true} onChange={on=>set({project_rules_enabled:on})}/>
        <Switch label="Enable Graphify graph queries" hint="Use graphify-out/graph.json in your selected project workspace; generation is a separate local step." checked={draft.graphify_enabled??true} onChange={on=>set({graphify_enabled:on})}/>
        <Switch label="Allow read-only Obsidian vault access" hint="STAR may search Markdown notes only in the folder you explicitly select." checked={draft.obsidian_enabled??false} onChange={on=>set({obsidian_enabled:on})}/>
        <div className="intelligence-folder-row"><label>Obsidian vault folder<input aria-label="Obsidian vault folder" value={draft.obsidian_vault??''} onChange={e=>set({obsidian_vault:e.target.value})} placeholder="Choose an Obsidian Markdown vault"/></label><button type="button" className="secondary-button" onClick={async()=>{const result=await act('selectFolder');if(result&&typeof result==='object'&&'path' in result&&typeof result.path==='string'&&result.path){const path=result.path;set({obsidian_vault:path})}}}><FolderOpen size={15} aria-hidden="true"/> Browse folder</button></div>
