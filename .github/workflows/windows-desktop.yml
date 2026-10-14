@@ -31,9 +31,9 @@ concurrency:
   cancel-in-progress: true
 
 # Layout (2026-10-13): the React bundle is built and tested once on Linux; the Windows offline
-# suite runs as three parallel shards (tests/sharding.py) while windows-build packages the EXE.
+# suite runs as two parallel shards (tests/sharding.py) while windows-build packages the EXE.
 # A release still needs every shard green: attest-release needs windows-tests, and
-# publish-release needs attest-release.
+# publish-release needs attest-release. Check names: "Windows offline tests (1/2)" and "(2/2)".
 jobs:
   frontend:
     name: React desktop assets
@@ -67,7 +67,7 @@ jobs:
           retention-days: 1
 
   windows-tests:
-    name: Windows offline tests (${{ matrix.shard }}/3)
+    name: Windows offline tests (${{ matrix.shard }}/2)
     needs: frontend
     runs-on: windows-latest
     timeout-minutes: 30
@@ -76,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,7 +108,7 @@ jobs:
       - name: Run offline tests
         shell: pwsh
         env:
-          STAR_TEST_SHARD: ${{ matrix.shard }}/3
+          STAR_TEST_SHARD: ${{ matrix.shard }}/2
         run: |
           python -m pytest -q --durations=15 --junitxml=test-results/windows-shard.xml
           if ($LASTEXITCODE -ne 0) { throw 'Offline tests failed' }
@@ -121,22 +121,6 @@ jobs:
           path: test-results/windows-shard.xml
           if-no-files-found: ignore
           retention-days: 7
-
-  # One stable check name for all shards (a matrix check's name changes with the matrix).
-  windows-tests-gate:
-    name: Windows offline tests
-    needs: windows-tests
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Every shard passed
-        env:
-          RESULT: ${{ needs.windows-tests.result }}
-        run: |
-          echo "windows-tests: $RESULT"
-          test "$RESULT" = success
 
   windows-build:
     needs: frontend

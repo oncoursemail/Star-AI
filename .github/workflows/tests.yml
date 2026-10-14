@@ -43,15 +43,11 @@ jobs:
           python3 scripts/ci_changed_scope.py --root . --files "$list" >> "$GITHUB_OUTPUT" || echo docs_only=false >> "$GITHUB_OUTPUT"
 
   checks:
-    name: Offline Python checks (${{ matrix.shard }}/2)
+    name: Offline Python checks
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -68,25 +64,7 @@ jobs:
       - name: Validate research evaluation catalog
         run: python -m pytest -q tests/test_star_research.py
       - name: Run all offline regression tests
-        env:
-          STAR_TEST_SHARD: ${{ matrix.shard }}/2
         run: python -m pytest -q
-
-  # Stable check name for both shards. Skipped (like the shards) for documentation-only changes.
-  checks-gate:
-    name: Offline Python checks
-    needs: [changes, checks]
-    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Every shard passed
-        env:
-          RESULT: ${{ needs.checks.result }}
-        run: |
-          echo "checks: $RESULT"
-          test "$RESULT" = success
 
   react:
     name: React UI compile and tests
