@@ -35,6 +35,7 @@ from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs, roblox_errors
 from . import studio_loop
+from . import project_rules
 from .studio_connections import default_target, validate_target
 
 
@@ -131,6 +132,7 @@ class Settings:
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    project_rules_enabled: bool = False    # opt-in: add the workspace's AGENTS.md (star/project_rules.py) to each turn
 
     @classmethod
     def load(cls, file: Path):
@@ -165,7 +167,7 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'project_rules_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
                             'blender_enabled', 'blender_edit', 'allow_cgnat')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
@@ -1256,6 +1258,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             turn_sections.append((worked_examples.HEADING, example_block))
                             audited_event({'event': 'worked_example_used',
                                            'count': len(selected_examples), 'chars': len(example_block)})
+                # Opt-in project rules (star/project_rules.py): the workspace's AGENTS.md, as reference data.
+                rules_chars = 0
+                if settings.project_rules_enabled is True and settings.workspace and not quick:
+                    rules = project_rules.load(settings.workspace)
+                    if rules:
+                        turn_sections.append((project_rules.HEADING, rules[1]))
+                        rules_chars = len(rules[1]) + len(project_rules.HEADING) + 2
+                        audited_event({'event': 'project_rules', 'file': rules[0], 'chars': len(rules[1])})
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               now=current_turn_line(conversation_records),
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
@@ -1267,7 +1277,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               # it is added on top so stored notes keep the room they had before.
                               turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
                                                   + len(document_block) + len(pack_block) + len(error_block)
-                                                  + example_extra_chars),
+                                                  + example_extra_chars + rules_chars),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
