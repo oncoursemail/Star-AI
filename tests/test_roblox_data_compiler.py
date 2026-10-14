@@ -226,3 +226,13 @@ def test_spec_requires_studio_services_and_makes_no_cli_claim():
     assert "Not executable by a standalone Luau CLI" in spec
     assert "Standalone pure-Luau test" not in spec
     assert "PlayerData Studio spec passed" in spec
+
+
+@pytest.mark.parametrize("word", ["and", "break", "do", "elseif", "for", "in", "not", "or", "return", "while"])
+def test_every_luau_keyword_is_refused_as_a_field_or_migration_name(word):
+    with pytest.raises(ValueError):
+        validate_schema({"version": 1, "fields": {word: {"type": "number", "default": 0}}})
+    with pytest.raises(ValueError):
+        validate_schema({"version": 2, "fields": {"A": {"type": "number", "default": 0}},
+                         "migrations": [{"from": 1, "to": 2,
+                                         "operations": [{"op": "rename", "field": "A", "to": word}]}]})

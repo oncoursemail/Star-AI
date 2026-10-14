@@ -1,7 +1,8 @@
 """Offline evidence ledger and opt-in practice-task generator for stored STAR evaluation results.
 
-Reads results already on disk. Never runs a model, calls a server, opens a holdout
-suite, or changes the evaluation corpus.
+Reads results already on disk. Never runs a model, opens a holdout suite, or changes the evaluation corpus.
+Practice tasks come from one family per failure cause (star/practice_gen.py); only `ledger verify` contacts the STAR
+server, and only its Luau checker and sandboxed Luau VM (no model call).
 """
 from __future__ import annotations
 
@@ -14,6 +15,8 @@ import json
 from pathlib import Path
 import re
 import sys
+
+from . import practice_gen
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RESULTS = ROOT / "evals" / "results"
@@ -49,6 +52,9 @@ RULES = (
                  r"^(?:luau_check\[\d+\]|typecheck_probe):"),
     EvidenceRule("self-check error left unrepaired", "check",
                  r"^unit_tests:.*(?:did not load|no assertions ran|harness did not finish)"),
+    # A unit-test assertion named "required feature: X" checks that a requested function exists (practice tasks of
+    # star/practice_gen.py); its failure is a missing feature, not wrong logic.
+    EvidenceRule("required feature missing", "check", r"^unit_tests:.*failed:.*\brequired feature: "),
     EvidenceRule("wrong logic", "check", r"^unit_tests:"),
     EvidenceRule("required feature missing", "check", r"^(?:require:|forbid:|citation:)"),
 )
@@ -61,13 +67,6 @@ class Failure:
     topic: str
     cause: str
     evidence: str
-
-
-@dataclass(frozen=True)
-class Practice:
-    task: dict
-    test_body: str
-    reference_answer: str  # For offline tests only; NEVER serialized to practice pool.
 
 
 def _signals(record: dict) -> list[tuple[str, str]]:
@@ -171,120 +170,67 @@ def report_table(failures: list[Failure]) -> str:
     return "\n".join(table)
 
 
-# Topic contexts come from catalog categories, never from golden prompt text.
-CONTEXTS = (
-    ("ui-", "a game menu's accessibility meter"),
-    ("remote-", "a multiplayer ability's charge meter"),
-    ("datastore-", "a persistent progression bar"),
-    ("server-", "an inventory capacity indicator"),
-    ("animation-", "a character movement blend meter"),
-    ("rig-", "a character accessory's alignment meter"),
-    ("tool-", "an equipped item's durability bar"),
-    ("vfx-", "a visual effect's intensity meter"),
-    ("performance", "a streaming zone's detail budget"),
-    ("building-", "a modular construction budget"),
-    ("engineering-", "a gameplay diagnostic's counter"),
-    ("luau-", "a round-based scoreboard value"),
-    ("economy-", "a shop's discount meter"),
-    ("gameplay-", "a quest's progression meter"),
-    ("npc-", "a pathfinding retry meter"),
-)
+# --- targeted practice: one family of task specifications per cause (star/practice_gen.py) -----------------------
+
+# The harness prelude of the evaluation suites: the generated unit tests run exactly like the suites' own tests.
+PRELUDE = (ROOT / "evals" / "roblox" / "prelude.luau").read_text(encoding="utf-8").replace("\r\n", "\n")
+Practice = practice_gen.Generated
 
 
-def context_for(topic: str) -> str:
-    return next((value for prefix, value in CONTEXTS if topic.startswith(prefix)),
-                "a Roblox round's resource meter")
+def _digest(*parts: str) -> int:
+    return int(hashlib.sha256(":".join(parts).encode("utf-8")).hexdigest()[:12], 16)
 
 
-OPENINGS = {
-    "wrong logic": "A boundary-case regression escaped the previous solution. Exercise the exact arithmetic.",
-    "required feature missing": "A requested operation was omitted in the previous solution. Show every required step.",
-    "self-check error left unrepaired": "A static-check failure was left unfixed. Submit a clean and complete module.",
-    "answer cut off": "The prior reply was incomplete. Finish the full implementation and its module return.",
-    "invented API name": "A nonexistent helper was used. Use only actual Luau math.floor and math.clamp functions.",
-}
-
-PRELUDE = """-- Self-contained practice harness; answer globals are restricted.
-local emit = print
-local function check(label, passed)
-    emit("@@T\\t" .. (passed and "pass" or "fail") .. "\\t" .. label)
-end
-local function load_answer()
-    local chunk, reason = loadstring(__SRC, "=practice")
-    if not chunk then
-        emit("@@LOADERR\\t" .. tostring(reason))
-        error("answer did not load")
-    end
-    setfenv(chunk, { math = math, type = type, assert = assert })
-    return chunk()
-end
-"""
-
-
-def practice_for(source: Failure, index: int) -> Practice:
-    """Create a new scenario from a bounded template and the failure's topic."""
-    if source.cause not in OPENINGS:
+def practice_for(source: Failure, index: int = 0, taken: set[str] | None = None) -> Practice:
+    """A task from the family of the failure's own cause, chosen by the failed task id (stable), skipping ids in
+    `taken`. `index` asks for the index-th different task for the same failure."""
+    family = practice_gen.specs_for(source.cause)
+    if not family:
         raise ValueError("unsupported failure cause")
-    digest = hashlib.sha256((source.task_id + ":" + source.cause + ":" + source.topic).encode("utf-8")).hexdigest()
-    task_id = "LEDGER-" + digest[:12].upper()
-    name = f"boundResource{index + 1}"
-    factor = 2 + index % 5
-    minimum = index % 3
-    maximum = 47 + index * 7
-    prompt = (
-        f"{OPENINGS[source.cause]} While working on {context_for(source.topic)}, "
-        f"create a Luau ModuleScript returning a function named {name}(value: number): number. "
-        f"Round value down with math.floor, multiply the integer by {factor}, then use math.clamp "
-        f"to confine the output to [{minimum}, {maximum}]. Return the function itself. "
-        "Provide exactly one finished fenced Luau code block."
-    )
-    task = {
-        "id": task_id, "category": "targeted-practice", "difficulty": 1, "run_mode": "automated",
-        "goal": f"Repair {source.cause} in {context_for(source.topic)}",
-        "prompt": prompt,
-        "required_evidence": ["one complete Luau function"],
-        "pass_conditions": ["static Luau checking succeeds", "all four independent boundary checks pass",
-                            "required arithmetic is present and nonexistent math helpers are absent"],
-        "auto": {
-            "compile_mode": "exact",
-            "unit_test": {"file": f"tests/{task_id}.luau", "checks": 4},
-            "require": [
-                {"id": "round_down", "re": r"\bmath\s*\.\s*floor\s*\(", "why": "round using math.floor"},
-                {"id": "limit_output", "re": r"\bmath\s*\.\s*clamp\s*\(", "why": "bound using math.clamp"},
-            ],
-            "forbid": [
-                {"id": "no_imaginary_helper", "re": r"\bmath\s*\.\s*constrain\s*\(",
-                 "why": "math.constrain is not a Luau API"},
-            ],
-        },
-    }
-    expected = f"math.clamp(4 * {factor}, {minimum}, {maximum})"
-    body = (
-        "local fn = load_answer()\n"
-        'check("returns callable function", type(fn) == "function")\n'
-        f'check("fractional input is floored", type(fn) == "function" and fn(4.9) == {expected})\n'
-        f'check("lower bound", type(fn) == "function" and fn(-100) == {minimum})\n'
-        f'check("upper bound", type(fn) == "function" and fn(1000) == {maximum})\n'
-    )
-    code = (f"local function {name}(value: number): number\n"
-            f"    return math.clamp(math.floor(value) * {factor}, {minimum}, {maximum})\n"
-            f"end\nreturn {name}")
-    fence = chr(96) * 3
-    return Practice(task, body, fence + "luau\n" + code + "\n" + fence)
+    slots = [(spec, v) for spec in family for v in range(spec.variants)]
+    start = _digest(source.task_id, source.cause, source.topic) % len(slots)
+    taken = taken if taken is not None else set()
+    seen = 0
+    for step in range(len(slots)):
+        spec, v = slots[(start + step * 7) % len(slots)] if len(slots) % 7 else slots[(start + step) % len(slots)]
+        if practice_gen.task_id(spec, v) in taken:
+            continue
+        if seen == index:
+            return practice_gen.build(spec, v, source=f"{source.result_file}:{source.task_id}")
+        seen += 1
+    raise ValueError(f"no unused practice task left for cause: {source.cause}")
 
 
-def generate_practice(failures: list[Failure], count: int | None = None) -> tuple[str, list[Practice]]:
-    """One new exercise per distinct failed task in the largest failure category."""
-    cause = leading_cause(failures)
-    sources = sorted((f for f in failures if f.cause == cause),
-                     key=lambda f: (f.task_id, f.result_file))
-    sources = list({f.task_id: f for f in reversed(sources)}.values())
-    sources.sort(key=lambda f: f.task_id)
+def generate_practice(failures: list[Failure], count: int | None = None, *, per_failure: int = 1,
+                      leading_only: bool = False) -> tuple[dict[str, int], list[Practice]]:
+    """`per_failure` new exercises per distinct failed (task, cause), each from that cause's own family.
+    Returns ({cause: number of exercises}, exercises)."""
+    if not failures:
+        raise ValueError("no failed tasks were found")
+    if per_failure < 1:
+        raise ValueError("per-failure must be at least 1")
+    wanted = {leading_cause(failures)} if leading_only else set(CAUSES)
+    sources = {}
+    for f in sorted(failures, key=lambda f: (f.task_id, f.cause, f.result_file)):
+        if f.cause in wanted:
+            sources.setdefault((f.task_id, f.cause), f)
+    ordered = [sources[k] for k in sorted(sources, key=lambda k: (CAUSES.index(k[1]), k[0]))]
     if count is not None:
-        if count < 1 or count > len(sources):
-            raise ValueError(f"count must be between 1 and {len(sources)} distinct failures")
-        sources = sources[:count]
-    return cause, [practice_for(source, n) for n, source in enumerate(sources)]
+        if count < 1 or count > len(ordered):
+            raise ValueError(f"count must be between 1 and {len(ordered)} distinct failures")
+        ordered = ordered[:count]
+    taken: set[str] = set()
+    items: list[Practice] = []
+    for source in ordered:
+        for _ in range(per_failure):
+            try:
+                item = practice_for(source, 0, taken)
+            except ValueError:
+                break                      # the family is used up; never repeat a task
+            taken.add(item.task["id"])
+            items.append(item)
+    by_cause = {c: sum(i.task["targets_cause"] == c for i in items) for c in CAUSES}
+    return {c: n for c, n in by_cause.items() if n}, items
 
 
 def _words(value: str) -> list[str]:
@@ -314,37 +260,114 @@ def _golden_prompts(suites: Path) -> list[str]:
     return prompts
 
 
-def write_practice(items: list[Practice], out: Path, *, suites: Path = DEFAULT_SUITES) -> None:
-    """Write opt-in night-school files, without modifying an evaluation file."""
+def _refuse_eval_target(path: Path) -> None:
+    if any(part.casefold() == "evals" for part in Path(path).parts) or re.search(r"golden|holdout", str(path), re.I):
+        raise ValueError("refusing to write to the evaluation corpus (practice never enters evals/ or the holdout)")
+
+
+def write_practice(items: list[Practice], out: Path, *, suites: Path = DEFAULT_SUITES,
+                   selftest_dir: Path | None = None) -> None:
+    """Write an opt-in night-school pool file with its tests and the harness prelude. Never an evaluation file.
+
+    Reference and bad answers are written only to `selftest_dir` (a complete suite layout for
+    `python -m star.evals selftest` / `ledger verify`), never next to the pool."""
     out = Path(out)
     if not items or out.suffix.lower() != ".json":
         raise ValueError("provide a nonempty practice list and a .json output filename")
-    if any(part.casefold() == "evals" for part in out.parts) or re.search(r"golden|holdout", out.name, re.I):
-        raise ValueError("refusing to write to the evaluation corpus")
+    _refuse_eval_target(out)
+    targets = [out.parent]
+    if selftest_dir is not None:
+        selftest_dir = Path(selftest_dir)
+        _refuse_eval_target(selftest_dir)
+        if selftest_dir.resolve() == out.parent.resolve():
+            raise ValueError("the self-test folder (with reference answers) must not be the practice pool folder")
+        targets.append(selftest_dir)
     golden = _golden_prompts(Path(suites))
     for item in items:
         if any(overlaps_golden(item.task["prompt"], prompt) for prompt in golden):
             raise ValueError(f"practice prompt overlaps a golden task: {item.task['id']}")
-    prelude = out.parent / "prelude.luau"
-    test_files = [out.parent / item.task["auto"]["unit_test"]["file"] for item in items]
-    if len(set(test_files)) != len(items) or len({x.task["id"] for x in items}) != len(items):
+        if item.task["id"].upper().startswith("HO-"):
+            raise ValueError("practice ids never use the holdout prefix")
+    if len({x.task["id"] for x in items}) != len(items):
         raise ValueError("duplicate practice task identifier")
-    for path in [out, *test_files]:
+    plan: list[tuple[Path, str]] = []
+    for folder in targets:
+        suite_file = out if folder == out.parent else folder / out.name
+        plan.append((suite_file, json.dumps([item.task for item in items], ensure_ascii=False, indent=2) + "\n"))
+        plan.extend((folder / item.task["auto"]["unit_test"]["file"], item.test_body) for item in items)
+        if folder != out.parent:
+            plan.extend((folder / "reference" / f"{item.task['id']}.md", item.reference_answer) for item in items)
+            plan.extend((folder / "reference" / f"{item.task['id']}.bad.md", item.bad_answer) for item in items)
+    for path, _ in plan:
         if path.exists():
             raise FileExistsError(f"refusing to replace existing file: {path}")
-    if prelude.exists() and prelude.read_text(encoding="utf-8") != PRELUDE:
-        raise FileExistsError("existing practice prelude is different; use a new output folder")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    (out.parent / "tests").mkdir(parents=True, exist_ok=True)
-    if not prelude.exists():
-        with prelude.open("x", encoding="utf-8") as stream:
-            stream.write(PRELUDE)
-    for path, item in zip(test_files, items):
-        with path.open("x", encoding="utf-8") as stream:
-            stream.write(item.test_body)
-    with out.open("x", encoding="utf-8") as stream:
-        json.dump([item.task for item in items], stream, ensure_ascii=False, indent=2)
-        stream.write("\n")
+    for folder in targets:
+        prelude = folder / "prelude.luau"
+        if prelude.exists() and prelude.read_text(encoding="utf-8").replace("\r\n", "\n") != PRELUDE:
+            raise FileExistsError(f"existing practice prelude is different; use a new output folder: {prelude}")
+    for folder in targets:
+        (folder / "tests").mkdir(parents=True, exist_ok=True)
+        prelude = folder / "prelude.luau"
+        if not prelude.exists():
+            with prelude.open("x", encoding="utf-8", newline="\n") as stream:
+                stream.write(PRELUDE)
+    for path, text in plan:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(text)
+
+
+def check_record(task: dict, answer: str, score) -> dict:
+    """The result record eval_runner would store for this answer (status, checks, truncated)."""
+    from .eval_checks import looks_truncated
+    record = {"status": "pass" if score.passed else "fail", "passed": score.passed, "reasons": score.reasons,
+              "checks": [c.record() for c in score.checks]}
+    if looks_truncated(answer):
+        record["truncated"] = True
+    return record
+
+
+def verify(items: list[Practice], scorer, *, log=print) -> int:
+    """Reference answers must pass; bad answers must fail AND be labelled with the task's own cause by the ledger
+    rules; empty answers must fail. Returns the number of problems."""
+    problems = 0
+    for item in items:
+        task, cause = item.task, item.task["targets_cause"]
+        good = scorer(task, item.reference_answer)
+        bad = scorer(task, item.bad_answer)
+        empty = scorer(task, "")
+        label = label_failure(check_record(task, item.bad_answer, bad))
+        ok = good.passed and not bad.passed and not empty.passed and label is not None and label[0] == cause
+        problems += 0 if ok else 1
+        detail = "" if ok else (f" reference={'pass' if good.passed else 'FAIL: ' + '; '.join(good.reasons)[:240]}"
+                                f" bad={'PASSED' if bad.passed else 'fail'} label={label[0] if label else None}"
+                                f" ({label[1][:160] if label else ''})")
+        log(f"{'ok  ' if ok else 'FAIL'} {task['id']} [{cause}]" + detail)
+    return problems
+
+
+def _real_scorer(suite_file: Path, server: str, ssh: str, key_file):
+    """The evaluation harness's own scorer (knowledge-service Luau check + the server's Luau VM). No model call."""
+    from types import SimpleNamespace
+    from .eval_runner import DEFAULT_KEY_FILE, build_real, load_suite
+    suite = load_suite(suite_file)
+    args = SimpleNamespace(server=server, ssh=ssh, key_file=str(key_file or DEFAULT_KEY_FILE), model="star-fast",
+                           mode="auto", packs="off", _suite=suite)
+    _, _, scorer, _, _ = build_real(args)
+    return suite, scorer
+
+
+def load_selftest(folder: Path) -> list[Practice]:
+    """Re-read a self-test folder written by `--selftest-out`."""
+    files = sorted(Path(folder).glob("*.json"))
+    if len(files) != 1:
+        raise ValueError("a self-test folder holds exactly one task file")
+
+    def read(rel: str) -> str:
+        return (Path(folder) / rel).read_text(encoding="utf-8").replace("\r\n", "\n")
+    return [Practice(task, read(task["auto"]["unit_test"]["file"]), read(f"reference/{task['id']}.md"),
+                     read(f"reference/{task['id']}.bad.md"), task.get("spec", ""))
+            for task in json.loads(files[0].read_text(encoding="utf-8"))]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -352,22 +375,55 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results", type=Path, default=DEFAULT_RESULTS)
     parser.add_argument("--suites", type=Path, default=DEFAULT_SUITES)
     sub = parser.add_subparsers(dest="command")
-    practice = sub.add_parser("practice", help="write exercises for the leading cause (opt-in)")
+    practice = sub.add_parser("practice", help="write exercises targeting each recorded failure's cause (opt-in)")
     practice.add_argument("--results", type=Path, default=argparse.SUPPRESS)
     practice.add_argument("--suites", type=Path, default=argparse.SUPPRESS)
     practice.add_argument("--out", required=True, type=Path)
-    practice.add_argument("--count", type=int, default=None)
+    practice.add_argument("--count", type=int, default=None, help="only the first N distinct failures")
+    practice.add_argument("--per-failure", type=int, default=1)
+    practice.add_argument("--leading-only", action="store_true", help="only the most frequent cause")
+    practice.add_argument("--selftest-out", type=Path, default=None,
+                          help="also write a self-test suite (with reference and bad answers) to this other folder")
+    grow = sub.add_parser("pool", help="write the whole per-cause practice catalogue (or --total N of it)")
+    grow.add_argument("--suites", type=Path, default=argparse.SUPPRESS)
+    grow.add_argument("--out", required=True, type=Path)
+    grow.add_argument("--total", type=int, default=None)
+    grow.add_argument("--selftest-out", type=Path, default=None)
+    check = sub.add_parser("verify", help="score a self-test folder with the real harness (Luau check + server VM)")
+    check.add_argument("--dir", required=True, type=Path)
+    check.add_argument("--server", default="", help="STAR Server URL (or STAR_EVAL_SERVER)")
+    check.add_argument("--ssh", default="", help="user@host of the server's LXD host (or STAR_EVAL_SSH)")
+    check.add_argument("--key-file", type=Path, default=None)
     args = parser.parse_args(argv)
     try:
+        if args.command == "verify":
+            import os
+            items = load_selftest(args.dir)
+            suite_file = next(Path(args.dir).glob("*.json"))
+            _, scorer = _real_scorer(suite_file, args.server or os.environ.get("STAR_EVAL_SERVER", ""),
+                                     args.ssh or os.environ.get("STAR_EVAL_SSH", ""), args.key_file)
+            problems = verify(items, scorer)
+            print(f"verify: {len(items)} tasks, " + ("all good" if not problems else f"{problems} problem(s)"))
+            return 1 if problems else 0
+        if args.command == "pool":
+            items = practice_gen.pool(args.total)
+            write_practice(items, args.out, suites=args.suites, selftest_dir=args.selftest_out)
+            by_cause = Counter(i.task["targets_cause"] for i in items)
+            print(f"Wrote {len(items)} practice tasks with runtime unit tests: "
+                  + ", ".join(f"{c} {by_cause[c]}" for c in CAUSES if by_cause[c]))
+            print(f"Night-school pool: {args.out.parent}")
+            return 0
         failures = read_failures(args.results, args.suites)
         print(report_table(failures))
         if args.command == "practice":
-            cause, items = generate_practice(failures, args.count)
-            write_practice(items, args.out, suites=args.suites)
-            print(f"\nWrote {len(items)} independent practice tasks for: {cause}")
+            by_cause, items = generate_practice(failures, args.count, per_failure=args.per_failure,
+                                                leading_only=args.leading_only)
+            write_practice(items, args.out, suites=args.suites, selftest_dir=args.selftest_out)
+            print(f"\nWrote {len(items)} independent practice tasks: "
+                  + ", ".join(f"{c} {n}" for c, n in by_cause.items()))
             print(f"Night-school pool: {args.out.parent}")
         return 0
-    except (ValueError, OSError, TypeError) as exc:
+    except (ValueError, OSError, TypeError, StopIteration) as exc:
         print(f"ledger: {exc}", file=sys.stderr)
         return 2
 

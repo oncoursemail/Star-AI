@@ -9,7 +9,7 @@
 # What "apply" does, in order:
 #   1. takes the SERVER LOCK (/opt/star/lock) so no other agent measures or restarts at the same time
 #   2. runs validate.py against the live brain            -> validate-before.json
-#   3. copies models.ini, star-brain.service and star-brain-prestart.sh into /opt/star/setup-proposed
+#   3. copies models.ini, star-brain.service, star-brain-prestart.sh and templates/*.jinja into /opt/star/setup-proposed
 #   4. pre-flight inside the container (files exist, every models.ini key is a real llama-server option, RAM)
 #   5. backs up the live unit + models.ini to /opt/star/config/backups/<UTC time>/
 #   6. moves the newly chosen model files from /opt/star/models-candidates into /opt/star/models (same disk: instant)
@@ -33,8 +33,9 @@ remote() { # remote <MODE> [extra env assignments]   (reads the script to run fr
 run_remote() { remote "$@" < "$HERE/apply-remote.sh"; }
 stage_and() { # stage_and <MODE>: ship the three files (base64 inside the script, checked by md5) and run the remote half
   {
-    echo 'set -u; STAGE=/opt/star/setup-proposed; mkdir -p "$STAGE"'
-    for f in models.ini star-brain.service star-brain-prestart.sh; do
+    echo 'set -u; STAGE=/opt/star/setup-proposed; mkdir -p "$STAGE/templates"; rm -f "$STAGE"/templates/*.jinja'
+    # chat templates referenced by models.ini (chat-template-file = /opt/star/config/templates/<name>)
+    for f in models.ini star-brain.service star-brain-prestart.sh $(cd "$HERE" && ls templates/*.jinja 2>/dev/null); do
       echo "base64 -d > \"\$STAGE/$f\" <<'STAR_B64_EOF'"
       base64 -w 76 "$HERE/$f"
       echo 'STAR_B64_EOF'
