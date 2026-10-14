@@ -322,8 +322,8 @@ async def review_luau(answer: str, check, *, repair=None, retry=None, on_event=N
         if (not (isinstance(second, dict) and second.get("ran") is True and second.get("ok") is True)
                 and retry is not None):
             # Second rung: the repaired code's own diagnostics when it was checked, else the original ones.
-            checked = isinstance(second, dict) and second.get("ran") is True and second.get("errors")
-            latest, latest_errors = (fixed, list(second["errors"])) if checked else (code, record["errors"])
+            checked = second.get("errors") if isinstance(second, dict) and second.get("ran") is True else None
+            latest, latest_errors = (fixed, list(checked)) if checked else (code, record["errors"])
             _emit(on_event, {"event": "luau_repair_started", "block": number, "attempt": 2})
             try:
                 again = await retry(latest, latest_errors)
@@ -403,7 +403,7 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
                         timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS))
             retry = None
             if repair is not None and retry_ladder:
-                async def retry(code: str, errors: list[dict]) -> str:
+                async def thinking_retry(code: str, errors: list[dict]) -> str:
                     if timed and left() < RETRY_MIN_SECONDS:
                         return ""            # not enough of the turn left for a longer, thinking attempt
                     tokens = min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)
@@ -411,6 +411,7 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
                         _repair(model_client, route.model, prompt, code, errors,
                                 tokens + (RETRY_THINKING_TOKENS if thinking else 0), thinking=thinking),
                         timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS) if timed else None)
+                retry = thinking_retry
             review = review_luau(answer, knowledge.luau_check, repair=repair, retry=retry, on_event=on_event)
             try:
                 answer, grounding.checks = await (
