@@ -26,6 +26,7 @@ from pathlib import Path
 import re
 
 from ..agent_skills import _frontmatter
+from .engines import ENGINE_CONTEXTS, ENGINE_TOPICS
 
 PACKS_DIR = Path(__file__).resolve().parent
 ENV_VAR = "STAR_SKILL_PACKS"
@@ -171,6 +172,54 @@ TRIGGERS: dict[str, re.Pattern] = {
         r"\b(?:multi-?agents?|several agents|two agents|parallel agents|Codex|Claude|integrator|claims?|claimed|"
         r"Studio lock|mutex|handoff|hand-?off|normal play|playtest acceptance|acceptance tests?|verdicts?|"
         r"INCOMPLETE|two clients|Server and Clients|late join)\b", re.IGNORECASE),
+    "roblox-architecture-blender": re.compile(
+        r"\b(?:Blender|architecture|architectural|facades?|rooflines?|gables?|glTF|GLB|FBX|3D Importer|"
+        r"UV unwrap\w*|modelling|modeling)\b", re.IGNORECASE),
+    # Other-engine packs (star/skill_packs/engines.py): opt-in, each chosen only when the prompt names its engine.
+    **ENGINE_TOPICS,
+    # Gameplay and platform recipes with typed (--!strict) examples. Default OFF until the evaluation gate passes.
+    "roblox-combat-hitboxes": re.compile(
+        r"\b(?:hit ?box(?:es)?|hitscan|hit detection|hit validation|melee|swords?|guns?|weapons?|damage|TakeDamage|"
+        r"GetPartBoundsInBox|GetPartBoundsInRadius|GetPartsInPart|OverlapParams|RaycastParams|combat|attack cooldown)\b",
+        re.IGNORECASE),
+    "roblox-pathfinding-npc": re.compile(
+        r"\b(?:PathfindingService|pathfinding|CreatePath|ComputeAsync|GetWaypoints|MoveToFinished|PathWaypoint|"
+        r"PathfindingModifier|PathfindingLink|navigation mesh|navmesh|NPC (?:AI|movement|chase|patrol)|chase|patrol)\b",
+        re.IGNORECASE),
+    "roblox-physics-constraints": re.compile(
+        r"\b(?:LinearVelocity|AngularVelocity|AlignPosition|AlignOrientation|VectorForce|BodyVelocity|BodyPosition|BodyGyro|"
+        r"BodyForce|body movers?|mover constraints?|constraints?|ApplyImpulse|AssemblyLinearVelocity|SetNetworkOwner|"
+        r"network ownership|knockback|HingeConstraint|SpringConstraint)\b", re.IGNORECASE),
+    "roblox-collection-tags": re.compile(
+        r"\b(?:CollectionService|GetTagged|AddTag|HasTag|GetInstanceAddedSignal|GetInstanceRemovedSignal|tags?|tagged|"
+        r"attributes?|SetAttribute|GetAttribute|GetAttributeChangedSignal|component pattern)\b", re.IGNORECASE),
+    "roblox-input-devices": re.compile(
+        r"\b(?:ContextActionService|BindAction|UserInputService|InputBegan|gameProcessedEvent|PreferredInput|"
+        r"LastInputTypeChanged|TouchEnabled|GamepadEnabled|gamepad|controller|touch controls?|mobile buttons?|keybinds?|"
+        r"InputAction|InputContext|InputBinding|cross-?platform input|console)\b", re.IGNORECASE),
+    "roblox-sound-design": re.compile(
+        r"\b(?:SoundService|SoundGroup|Sound|sounds?|audio|music|sfx|RollOffMode|RollOffMaxDistance|PlaybackSpeed|"
+        r"AudioPlayer|AudioEmitter|AudioListener|AudioDeviceOutput|Wire|PlayLocalSound|footsteps?|volume)\b",
+        re.IGNORECASE),
+    "roblox-luau-specs": re.compile(
+        r"\b(?:TestEZ|describe|expect|specs?|unit tests?|test suites?|spec files?|test runner|testable|"
+        r"dependency injection|pure functions?|Jest|beforeEach)\b", re.IGNORECASE),
+    "roblox-marketplace-purchases": re.compile(
+        r"\b(?:MarketplaceService|ProcessReceipt|PromptProductPurchase|PromptGamePassPurchase|UserOwnsGamePassAsync|"
+        r"developer products?|game ?pass(?:es)?|Robux|purchases?|PurchaseGranted|NotProcessedYet|receipts?)\b",
+        re.IGNORECASE),
+    "roblox-teleport-matchmaking": re.compile(
+        r"\b(?:TeleportService|TeleportAsync|TeleportOptions|ReserveServer|reserved servers?|TeleportInitFailed|"
+        r"GetJoinData|teleport\w*|matchmaking|match ?queue|queues?|MemoryStoreService|MemoryStoreQueue|"
+        r"MemoryStoreSortedMap|lobby to match|party|parties)\b", re.IGNORECASE),
+    "roblox-open-cloud": re.compile(
+        r"\b(?:Open Cloud|OpenCloud|apis\.roblox\.com|cloud/v2|x-api-key|HttpService|RequestAsync|GetSecret|secrets? store|"
+        r"MessagingService|SubscribeAsync|webhooks?|external (?:server|service|tool)|from (?:outside|Python|Node))\b",
+        re.IGNORECASE),
+    "roblox-purchases-badges": re.compile(
+        r"\b(?:ProcessReceipt|PurchaseId|PromptProductPurchase|PromptGamePassPurchase|UserOwnsGamePassAsync|"
+        r"BadgeService|AwardBadgeAsync|UserHasBadgeAsync|developer products?|game passes?|purchase receipts?|leaderstats)\b",
+        re.IGNORECASE),
     # Style-agnostic ability VFX (style profiles + timeline composer + typed Luau modules). OFF until evaluated.
     "roblox-vfx-composer": re.compile(
         r"\b(?:ability (?:vfx|effects?)|anime (?:vfx|effects?|ability)|vfx style|art style|style profiles?|"
@@ -223,7 +272,11 @@ def enabled_names(environ=None, *, home=None) -> frozenset[str]:
         return frozenset()
     if raw in {"all", "on", "true", "1"}:
         return frozenset(known)
-    return frozenset(known & {part.strip() for part in raw.split(",")})
+    parts = {part.strip() for part in raw.split(",")}
+    if "engines" in parts:
+        # Shorthand for every other-engine pack, on top of the packs enabled by default.
+        parts |= set(ENGINE_CONTEXTS) | set(DEFAULT_ENABLED)
+    return frozenset(known & parts)
 
 
 def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) -> list[Pack]:
@@ -235,20 +288,29 @@ def select(prompt, *, enabled=None, limit: int = MAX_PACKS_PER_TURN, home=None) 
     # questions and return here without touching it. Same result in either order.
     roblox_context = bool(_ROBLOX_CONTEXT.search(prompt))
     godot_context = bool(_GODOT_CONTEXT.search(prompt))
-    if not roblox_context and not godot_context:
+    # Other-engine packs: the prompt must name that engine (ENGINE_CONTEXTS); naming it is enough.
+    engines = {name for name, context in ENGINE_CONTEXTS.items() if context.search(prompt)}
+    if not roblox_context and not godot_context and not engines:
         return []
     allowed = enabled_names(home=home) if enabled is None else frozenset(enabled)
     if not allowed:
         return []
+    engines &= allowed
     scored = []
     for order, pack in enumerate(available()):
-        if pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
-                                    (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
+        if pack.name in ENGINE_CONTEXTS:
+            if pack.name in engines:
+                hits = ({m.group(0).lower() for m in ENGINE_CONTEXTS[pack.name].finditer(prompt)} |
+                        {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)})
+                # A named engine outranks Roblox packs: "port my RemoteEvent to Bevy" wants the Bevy pack.
+                scored.append((0, -len(hits), order, pack))
+        elif pack.name in allowed and ((pack.name in GODOT_PACKS and godot_context and not roblox_context) or
+                                      (pack.name not in GODOT_PACKS and roblox_context and not godot_context)):
             hits = {m.group(0).lower() for m in TRIGGERS[pack.name].finditer(prompt)}
             # One generic word ("UI", "Tool", "validate") is not enough to spend the reader's time.
             if len(hits) >= 2 or any(len(h) > 6 for h in hits):
-                scored.append((-len(hits), order, pack))
-    return [pack for _, _, pack in sorted(scored)[:max(0, limit)]]
+                scored.append((1, -len(hits), order, pack))
+    return [item[-1] for item in sorted(scored, key=lambda item: item[:3])[:max(0, limit)]]
 
 
 def render(packs) -> str:

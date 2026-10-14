@@ -20,12 +20,14 @@ import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
 import {VoiceSettings} from './VoiceSettings'
+import {DiscordSettings} from './DiscordSettings'
 import {StudioTargetSettings} from './StudioTargetSettings'
 import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesStarServer} from './IntegrationPanels'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
 import {imageReadiness,webSearchAvailability} from './availability'
+import {overLimitMessage,promptKind} from './promptLimits'
 import {StarPet,type PetState} from './StarPet'
 import {StarFace,type StarMood} from './StarFace'
 import {ChatRow} from './ChatRow'
@@ -34,6 +36,7 @@ import {useDismiss} from './Composer'
 import './redesign.css'
 import './resilience.css'
 import {EmptyState} from './states'
+import './polish.css'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -402,6 +405,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    // `sending` closes the gap before React re-renders, so a fast double press cannot send twice.
    const value=text.trim();if(busy||sending.current||!value)return
    if(inactive){setNotice('This preview is not connected to a model. Open STAR Desktop to chat.');return}
+   // Retry and Edit resend old text: the host would refuse it, so keep it in place with the reason instead.
+   const tooLong=overLimitMessage(value,promptKind(imageMode,teamMode));if(tooLong){setNotice(tooLong);return}
    const selected=attachments.slice()
    if(imageMode&&selected.length>2){setNotice('To change a picture, attach the picture and, if you want, one mask. Remove the other attachments.');return}
    if(teamMode&&selected.length){setNotice('A team run is text only. Remove the attachments or turn Team off.');return}
@@ -703,6 +708,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const announce=busy?'STAR is working on your message.':failedLast?classifyFailure(lastMessage.text).title:lastStar>lastUser&&lastStar>=0?'STAR replied.':''
  const timelineNode=timeline&&<ActivityTimeline key={'run-'+timeline.id} run={timeline} onStop={busy?stop:undefined} stopping={stopping}/>
  return <MotionPolicy reduced={reducedMotion}><div className={wrapper} data-preview={preview} data-reduced-motion={reducedMotion}>
+   <a className="skip-link" href="#star-main" onClick={e=>{e.preventDefault();const main=document.getElementById('star-main');main?.focus();if(tab==='chat')composerRef.current?.focus()}}>Skip to {tab==='chat'?'message box':'page content'}</a>
    <aside className="rail" aria-label="STAR navigation">
      <div className="rail-head">
        <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span>STAR</span></button>
@@ -747,7 +753,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              onBlur={event=>{const next=event.currentTarget.value.trim();setRenamingTitle(false);if(next&&next!==chatTitle)void renameChat(currentChat.id,next)}}
              onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur()}else if(event.key==='Escape'){event.preventDefault();event.stopPropagation();event.currentTarget.value=chatTitle;setRenamingTitle(false)}}}/>
            :<h1 dir="auto" title={chatTitle} onDoubleClick={()=>{if(currentChat)setRenamingTitle(true)}}>{chatTitle}</h1>}</div>
-           :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span><h1>{sections.find(x=>x[0]===tab)?.[1]}</h1></div>}
+           :<div className="bar-title"><button className="bar-back" type="button" onClick={()=>nav('chat')}>Chat</button><span className="bar-sep" aria-hidden="true">/</span>{/* Pages with their own <h1> get a plain breadcrumb here; Brain draws no page title, so the bar keeps its h1. */}{tab==='brain-overview'?<h1>{sections.find(x=>x[0]===tab)?.[1]}</h1>:<span className="bar-page" aria-current="page">{sections.find(x=>x[0]===tab)?.[1]}</span>}</div>}
        </div>
        <div className="bar-right">
          {tab==='chat'&&<>
@@ -767,9 +773,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          </>}
        </div>
      </header>
-     {preview&&<div className="preview-ribbon" role="note"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
+     {preview&&<div className="preview-ribbon" role="region" aria-label="Preview notice"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
-       <MotionSurface as="main" key={tab} className="page-stage" variants={pageFade}>
+       <MotionSurface as="main" id="star-main" tabIndex={-1} key={tab} className="page-stage" variants={pageFade}>
          {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
@@ -886,6 +892,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
            <label className="setting-switch"><span><strong>Describe session capabilities to the model</strong><small>Experimental prompt addition; off until evaluated.</small></span><input type="checkbox" checked={draft.session_capabilities_prompt===true} onChange={e=>setDraft(d=>({...d,session_capabilities_prompt:e.target.checked}))}/></label>
            <MediaPlaces settings={data.settings} invoke={act} disabled={inactive} refresh={()=>void sync()}/>
            <VoiceSettings disabled={inactive}/>
+           <DiscordSettings disabled={inactive}/>
            <details className="settings-expander" open={imageMode}>
              <summary><span className="settings-expander-icon"><ImagePlus size={20}/></span><span><strong>Image generation</strong><small>Advanced: use your own ComfyUI workflow</small></span><ChevronDown size={18}/></summary>
              <div className="settings-expander-body">

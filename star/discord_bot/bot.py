@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import asyncio
 import io
 import logging
+import math
 import os
 
 from .audio import MAX_ATTACHMENT_BYTES, ffmpeg_path, post_voice_message, validate_attachment, pcm_to_wav
@@ -75,8 +76,11 @@ class BotConfig:
                    lab=LabSettings.from_env(vars))
 
 
-def create_bot(config: BotConfig, *, service: DiscordService | None = None):
-    """Create a Gateway-connected bot; importing this module remains dependency-light."""
+def create_bot(config: BotConfig, *, service: DiscordService | None = None, reporter=None):
+    """Create a Gateway-connected bot; importing this module remains dependency-light.
+
+    ``reporter`` (runtime_status.StatusReporter) lets STAR Desktop show whether the bot is connected.
+    """
     import discord
     from discord import app_commands
     from discord.ext import commands
@@ -108,6 +112,8 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 await self.tree.sync(guild=guild)
             if config.digest.enabled:
                 self.loop.create_task(digest_loop())
+            if reporter is not None:
+                self.loop.create_task(heartbeat_loop())
 
     bot = StarBot(command_prefix=commands.when_mentioned, help_command=None,
                   intents=intents, allowed_mentions=discord.AllowedMentions.none())
@@ -856,8 +862,30 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 part = part[:1900] + "\n\n*Full answer attached.*"
             await message.channel.send(content=part, **options)
 
+    def report_status():
+        if reporter is None:
+            return
+        if bot.is_ready():
+            latency = bot.latency
+            reporter.write("connected", guilds=len(bot.guilds),
+                         **({"latency_ms": round(latency * 1000)} if isinstance(latency, (int, float)) and math.isfinite(latency) else {}))
+        else:
+            reporter.write("reconnecting")
+
+    async def heartbeat_loop():
+        # Keeps the "connected" report fresh; a stalled gateway shows up as reconnecting.
+        while not bot.is_closed():
+            report_status()
+            await asyncio.sleep(30)
+
     @bot.event
     async def on_ready():
         _LOG.info("STAR Discord bot connected (guild count: %s)", len(bot.guilds))
+        report_status()
+
+    @bot.event
+    async def on_disconnect():
+        if reporter is not None:
+            reporter.write("reconnecting")
 
     return bot

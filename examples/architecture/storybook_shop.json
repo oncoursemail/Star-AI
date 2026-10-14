@@ -1,0 +1,9 @@
+{
+  "name": "Storybook Village Shop",
+  "style": "storybook",
+  "width_studs": 36,
+  "depth_studs": 24,
+  "floors": 2,
+  "bays": 3,
+  "story_height_studs": 13
+}

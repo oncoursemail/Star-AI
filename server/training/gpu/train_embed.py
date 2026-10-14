@@ -15,7 +15,7 @@ from pathlib import Path
 import random
 import time
 
-from common import RAM_FLOOR_GB, free_ram_gb, load_model
+from common import RAM_FLOOR_GB, TrainingGate, load_model
 
 
 def main() -> None:
@@ -69,23 +69,43 @@ def main() -> None:
                                      "max_steps": state.max_steps, "peak_vram_gb": round(mem, 2), **(logs or {})}) + "\n")
 
         def on_step_end(self, targs, state, control, **kw):
-            low = free_ram_gb() < RAM_FLOOR_GB   # owner's rule: keep at least 6 GB of RAM free
-            if stop_file.exists() or low:
+            # Owner's rules: keep at least 6 GB of RAM free (checked every step) and give the PC back when he games
+            # (the resource planner's renewal says "yield"). A planner pause is resumed below; a RAM stop is not.
+            reason = gate.stop_reason()
+            low = reason.startswith("free RAM")
+            if stop_file.exists() or reason:
                 if low:
                     stop_file.write_text(f"free RAM below {RAM_FLOOR_GB} GB at step {state.global_step}\n")
+                elif reason:
+                    paused["reason"] = reason
                 control.should_save = True
                 control.should_training_stop = True
                 with log_path.open("a", encoding="utf-8") as fh:
-                    fh.write(json.dumps({"stopped_by": str(stop_file), "step": state.global_step}) + "\n")
+                    fh.write(json.dumps({"stopped_by": reason or str(stop_file), "step": state.global_step}) + "\n")
 
     targs = SentenceTransformerTrainingArguments(
         output_dir=str(args.out / "checkpoints"), num_train_epochs=args.epochs, per_device_train_batch_size=args.batch,
         learning_rate=args.lr, warmup_steps=0.1, lr_scheduler_type="linear", weight_decay=0.01, bf16=True,
         batch_sampler=BatchSamplers.NO_DUPLICATES, logging_steps=5, save_strategy="steps", save_steps=args.save_steps,
         save_total_limit=2, seed=args.seed, report_to="none", dataloader_num_workers=0, optim=args.optim)
-    trainer = SentenceTransformerTrainer(model=model, args=targs, train_dataset=data, loss=loss, callbacks=[Progress()])
-    ckpts = sorted((args.out / "checkpoints").glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
-    trainer.train(resume_from_checkpoint=str(ckpts[-1]) if ckpts else None)
+    gate = TrainingGate("embed-" + args.out.name, log=lambda m: print(m, flush=True))
+    paused = {"reason": ""}
+    try:
+        while True:
+            if not gate.start(stop=stop_file.exists):
+                print("not started (RAM floor or STOP-TRAIN); rerun to resume")
+                return
+            paused["reason"] = ""
+            trainer = SentenceTransformerTrainer(model=model, args=targs, train_dataset=data, loss=loss,
+                                                 callbacks=[Progress()])
+            ckpts = sorted((args.out / "checkpoints").glob("checkpoint-*"), key=lambda p: int(p.name.split("-")[1]))
+            trainer.train(resume_from_checkpoint=str(ckpts[-1]) if ckpts else None)
+            if not paused["reason"] or stop_file.exists():
+                break
+            print(f"paused ({paused['reason']}); waiting until the planner admits the run again", flush=True)
+            gate.close()
+    finally:
+        gate.close()
     if stop_file.exists():
         print("stopped early; rerun to resume")
         return
