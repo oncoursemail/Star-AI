@@ -15,6 +15,7 @@ import re
 from typing import Mapping
 
 from .orchestration import TaskPlan, overlaps
+from .validation_messages import describe_invalid
 
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,79}$")
 _BOUNDARIES = frozenset({"private", "cloud"})
@@ -35,15 +36,15 @@ class ResourcePool:
 
     def __post_init__(self) -> None:
         if not _identifier(self.id):
-            raise ValueError("Invalid resource pool id")
+            raise ValueError(f"Invalid resource pool id: id must start alphanumeric and contain 1-80 letters, digits, dots, hyphens or underscores (got {describe_invalid(self.id)}). Choose a valid id.")
         if type(self.memory_mib) is not int or not 1 <= self.memory_mib <= 2_000_000:
-            raise ValueError("Invalid memory capacity")
+            raise ValueError("Invalid memory capacity: memory_mib must be an integer between 1 and 2000000 MiB. Set a supported capacity.")
         if type(self.cpu_threads) is not int or not 1 <= self.cpu_threads <= 4096:
-            raise ValueError("Invalid CPU capacity")
+            raise ValueError("Invalid CPU capacity: cpu_threads must be an integer between 1 and 4096. Set a supported capacity.")
         if type(self.max_jobs) is not int or not 1 <= self.max_jobs <= 8:
-            raise ValueError("Invalid worker concurrency")
+            raise ValueError("Invalid worker concurrency: max_jobs must be an integer between 1 and 8. Reduce concurrency.")
         if self.boundary not in _BOUNDARIES:
-            raise ValueError("Unknown trust boundary")
+            raise ValueError("Unknown trust boundary: boundary must be private or cloud. Select a supported boundary.")
 
 
 @dataclass(frozen=True)
@@ -55,13 +56,13 @@ class ModelWorker:
 
     def __post_init__(self) -> None:
         if not _identifier(self.id) or not _identifier(self.pool_id):
-            raise ValueError("Invalid worker id")
+            raise ValueError("Invalid worker id: worker id and pool_id must be 1-80 character valid identifiers. Correct the invalid id.")
         if type(self.slots) is not int or not 1 <= self.slots <= 8:
-            raise ValueError("Invalid model slot count")
+            raise ValueError("Invalid model slot count: slots must be an integer between 1 and 8. Set a supported slot count.")
         if not isinstance(self.capabilities, frozenset) or any(
             not _identifier(x) for x in self.capabilities
         ):
-            raise ValueError("Invalid worker capabilities")
+            raise ValueError("Invalid worker capabilities: capabilities must be a frozenset of 1-80 character identifiers. Fix invalid names or type.")
 
 
 @dataclass(frozen=True)
@@ -76,19 +77,19 @@ class TaskDemand:
 
     def __post_init__(self) -> None:
         if not _identifier(self.task_id):
-            raise ValueError("Invalid demand task id")
+            raise ValueError("Invalid demand task id: task_id must be a valid 1-80 character identifier. Match a planned task.")
         if type(self.memory_mib) is not int or not 1 <= self.memory_mib <= 2_000_000:
-            raise ValueError("Invalid memory demand")
+            raise ValueError("Invalid memory demand: memory_mib must be an integer between 1 and 2000000 MiB. Reduce demand.")
         if type(self.cpu_threads) is not int or not 1 <= self.cpu_threads <= 4096:
-            raise ValueError("Invalid CPU demand")
+            raise ValueError("Invalid CPU demand: cpu_threads must be an integer between 1 and 4096. Reduce demand.")
         if not isinstance(self.capabilities, frozenset) or any(
             not _identifier(x) for x in self.capabilities
         ):
-            raise ValueError("Invalid task capabilities")
+            raise ValueError("Invalid task capabilities: capabilities must be a frozenset of 1-80 character identifiers. Fix invalid names or type.")
         if type(self.priority) is not int or not -100 <= self.priority <= 100:
-            raise ValueError("Invalid priority")
+            raise ValueError("Invalid priority: priority must be an integer between -100 and 100. Choose a supported value.")
         if type(self.interactive) is not bool or type(self.allow_cloud) is not bool:
-            raise ValueError("Explicit boolean permissions required")
+            raise ValueError("Explicit boolean permissions required: interactive and allow_cloud must both be bool. Use True or False.")
 
 
 @dataclass(frozen=True)
@@ -124,33 +125,33 @@ def preview_assignments(
     - Every result is advisory; the runtime must recheck capacity/permissions.
     """
     if type(enable_cloud) is not bool:
-        raise ValueError("External-provider consent must be explicit")
+        raise ValueError("External-provider consent must be explicit: enable_cloud must be bool. Use True or False.")
     if not isinstance(plan, TaskPlan) or len(plan.tasks) > _MAX_TASKS:
-        raise ValueError("Invalid or excessively large plan")
+        raise ValueError("Invalid or excessively large plan: plan must be TaskPlan with no more than 32 tasks. Supply a valid smaller plan.")
     if any(task.writes for task in plan.tasks.values()):
-        raise PermissionError("Resource planner only admits read-only tasks")
+        raise PermissionError("Resource planner only admits read-only tasks: plan.tasks must not request writes. Remove mutations or use an authorized executor.")
     if set(demands) != set(plan.tasks) or any(
         not isinstance(v, TaskDemand) or v.task_id != k for k, v in demands.items()
     ):
-        raise ValueError("Every task requires exactly one matching demand")
+        raise ValueError("Every task requires exactly one matching demand: demands must match the plan task ids and each TaskDemand.task_id. Supply one demand per task.")
     if len({p.id for p in pools}) != len(pools):
-        raise ValueError("Duplicate resource pool")
+        raise ValueError("Duplicate resource pool: ResourcePool.id must be unique. Rename or remove duplicate pools.")
     if len({w.id for w in workers}) != len(workers):
-        raise ValueError("Duplicate model worker")
+        raise ValueError("Duplicate model worker: ModelWorker.id must be unique. Rename or remove duplicate workers.")
     pool_by_id = {p.id: p for p in pools}
     worker_by_id = {w.id: w for w in workers}
     if any(w.pool_id not in pool_by_id for w in workers):
-        raise ValueError("Worker references an unknown resource pool")
+        raise ValueError("Worker references an unknown resource pool: worker.pool_id must reference an existing ResourcePool.id. Supply or correct its pool.")
     running = dict(running or {})
     active = set(running)
     if not (set(completed) | active | set(finished)) <= set(plan.tasks):
-        raise ValueError("Unknown task status")
+        raise ValueError("Unknown task status: completed, running and finished ids must exist in plan.tasks. Remove unknown ids.")
     if (set(completed) & active) or (set(completed) & set(finished)) or (active & set(finished)):
-        raise ValueError("Contradictory task statuses")
+        raise ValueError("Contradictory task statuses: task ids must occur in only one of completed, running and finished. Resolve the overlap.")
     if any(wid not in worker_by_id for wid in running.values()):
-        raise ValueError("Unknown running model worker")
+        raise ValueError("Unknown running model worker: running worker ids must match ModelWorker.id. Correct the mapping.")
     if len(active) > plan.max_parallel:
-        raise ValueError("Running above the plan's concurrency limit")
+        raise ValueError("Running above the plan's concurrency limit: number of running tasks must not exceed plan.max_parallel. Reduce assignments.")
 
     # Copy resource counts; never mutate a caller's state.
     slot_used = {w.id: 0 for w in workers}
@@ -177,7 +178,7 @@ def preview_assignments(
 
     for task_id, worker_id in running.items():
         if not reserve(task_id, worker_id):
-            raise ValueError("Running assignments exceed declared capacity or permissions")
+            raise ValueError("Running assignments exceed declared capacity or permissions: running assignments must fit pool RAM, CPU, job slots and consent. Reduce reservations.")
 
     locked_reads = [path for tid in active for path in plan.tasks[tid].reads]
     locked_writes = [path for tid in active for path in plan.tasks[tid].writes]
