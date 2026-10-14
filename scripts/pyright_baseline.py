@@ -5,6 +5,9 @@ code. They are counted per file and rule in scripts/pyright_baseline.json. The
 check fails when a file gains an error of some rule, so new code cannot add type
 errors, while edits that move existing lines do not matter.
 
+Run it against a Python with no third-party packages installed (CI does), so that
+library stub updates never change the counts.
+
     npx --yes pyright@1.1.414 --outputjson > pyright.json
     python scripts/pyright_baseline.py check pyright.json
     python scripts/pyright_baseline.py update pyright.json   # after fixing errors

@@ -95,12 +95,11 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-          cache: 'pip'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
-      - name: Install reviewed dependencies
-        run: python -m pip install -r requirements.txt
+      # No third-party packages on purpose: their stubs change between releases, so the
+      # baseline stays stable and only STAR's own code is judged.
       - name: Run pyright on star/ (settings in pyrightconfig.json)
         run: npx --yes pyright@1.1.414 --pythonpath "$(command -v python)" --outputjson > pyright.json || test -s pyright.json
       - name: Fail on errors beyond scripts/pyright_baseline.json
