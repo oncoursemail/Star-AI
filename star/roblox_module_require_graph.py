@@ -6,7 +6,6 @@ Unrecognized require forms are *unresolved*, never presumed absent or safe.
 """
 from __future__ import annotations
 
-from collections import defaultdict
 
 from .roblox_api_checker import _tokens
 from .roblox_place import Node, SERVICES, _script

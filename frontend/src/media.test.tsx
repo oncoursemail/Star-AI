@@ -24,10 +24,10 @@ const settings = backendSettings as unknown as AppSettings
 const status = (over: Partial<MediaStatus> = {}): MediaStatus => ({
   places: [
     {id: 'images', title: 'Images', field: 'media_images', chosen: 'pc', options: [
-      {id: 'servers', label: 'STAR Brains (servers)', available: false, note: '', reason: 'Not available: no image model is installed on the servers, and they have no graphics card. Estimated at 8 to 25 minutes.'},
+      {id: 'servers', label: 'STAR Brains (servers)', available: false, fixable: false, note: '', reason: 'Not available: no image model is installed on the servers, and they have no graphics card. Estimated at 8 to 25 minutes.'},
       {id: 'pc', label: 'This PC (your GPU)', available: true, note: 'Measured on this PC (RTX 3060 Ti, 8 GB, 2026-10-11): 1024x1024 in 6.8 s.', reason: ''}]},
     {id: 'voice', title: 'Voice', field: 'media_voice', chosen: 'pc', options: [
-      {id: 'servers', label: 'STAR Brains (servers)', available: false, note: '', reason: 'Not available: no speech recogniser or voice is installed on the servers.'},
+      {id: 'servers', label: 'STAR Brains (servers)', available: false, fixable: false, note: '', reason: 'Not available: no speech recogniser or voice is installed on the servers.'},
       {id: 'pc', label: 'This PC (your GPU)', available: true, note: 'Speech recognition and Star\'s voice run on this PC.', reason: ''}]},
     {id: 'video', title: 'Video understanding', field: 'media_video', chosen: 'servers', options: [
       {id: 'servers', label: 'STAR Brains (servers)', available: true, note: 'Measured (2026-10-11): a 16 s clip, 4 frames plus its transcript, answered in 93 s.', reason: ''},
@@ -52,20 +52,47 @@ function mediaHost(initial: MediaStatus) {
 }
 
 describe('where STAR generates', () => {
-  it('shows both places for each capability, with the host\'s measured notes and reasons unchanged', async () => {
+  it('shows the places for each capability, with the host\'s measured notes and reasons unchanged', async () => {
     const host = mediaHost(status())
     render(<MediaPlaces settings={settings} invoke={host.invoke}/>)
-    for (const name of ['Images', 'Voice', 'Video understanding']) {
-      const group = await screen.findByRole('radiogroup', {name})
-      expect(within(group).getAllByRole('radio')).toHaveLength(2)
-    }
+    const video = await screen.findByRole('radiogroup', {name: 'Video understanding'})
+    expect(within(video).getAllByRole('radio')).toHaveLength(2)
     expect(screen.getByText(/Measured on this PC \(RTX 3060 Ti, 8 GB, 2026-10-11\): 1024x1024 in 6\.8 s\./)).toBeTruthy()
     expect(screen.getByText(/they have no graphics card\. Estimated at 8 to 25 minutes\./)).toBeTruthy()
     expect(screen.getByText(/answered in 93 s\./)).toBeTruthy()
   })
 
-  it('does not let an unavailable place be chosen', async () => {
+  it('states where images and voice run instead of offering a place this install can never use', async () => {
     const host = mediaHost(status())
+    render(<MediaPlaces settings={settings} invoke={host.invoke}/>)
+    for (const [name, reason] of [['Images', /no image model is installed on the servers/], ['Voice', /no speech recogniser or voice is installed/]] as const) {
+      const group = await screen.findByRole('group', {name})
+      expect(within(group).queryAllByRole('radio')).toHaveLength(0)
+      expect(within(group).getByText('Runs on this PC (your GPU)')).toBeTruthy()
+      expect(within(group).queryByText(/\(unavailable\)/)).toBeNull()
+      // The reason is still there, one click away, in the host's own words.
+      const why = within(group).getByText('Why not the STAR Brains?').closest('details') as HTMLDetailsElement
+      expect(why.open).toBe(false)
+      expect(within(why).getByText(reason)).toBeTruthy()
+    }
+    expect(screen.queryByRole('radiogroup', {name: 'Images'})).toBeNull()
+  })
+
+  it('still shows a place a setting could make available as unavailable, with its reason', async () => {
+    const offline = status()
+    offline.places[2].options[0] = {...offline.places[2].options[0], available: false, fixable: true, note: '', reason: 'Not available: no STAR Server is connected. Add its address and key in Settings → STAR Server.'}
+    offline.places[2].chosen = 'pc'
+    render(<MediaPlaces settings={settings} invoke={mediaHost(offline).invoke}/>)
+    const video = await screen.findByRole('radiogroup', {name: 'Video understanding'})
+    const [servers] = within(video).getAllByRole('radio') as HTMLInputElement[]
+    expect(servers.disabled).toBe(true)
+    expect(within(video).getByText(/no STAR Server is connected/)).toBeTruthy()
+  })
+
+  it('does not let an unavailable place be chosen (a host that does not say whether it can be fixed)', async () => {
+    const older = status()
+    for (const place of older.places) for (const option of place.options) delete option.fixable
+    const host = mediaHost(older)
     render(<MediaPlaces settings={settings} invoke={host.invoke}/>)
     const images = await screen.findByRole('radiogroup', {name: 'Images'})
     const [servers, pc] = within(images).getAllByRole('radio') as HTMLInputElement[]
@@ -238,6 +265,35 @@ describe('creating and changing a picture from the composer', () => {
     await waitFor(() => expect(desktop.sent('generateImage')).toHaveLength(1))
     expect(desktop.sent('generateImage')[0].payload).toEqual({
       prompt: 'a red door with a round window', files: ['C:/art/room.png', 'C:/art/room-mask.png'], size: 'square'})
+  })
+
+  it('offers "Set up image creation" only when the host says no picture can be made yet', async () => {
+    // Not running, and no ComfyUI folder to start it from: the same case the host refuses before generating.
+    desktop.onAction('mediaStatus', () => ({ok: true, data: status({can_start: false})}))
+    const user = await openImageMode()
+    await waitFor(() => expect(desktop.sent('mediaStatus').length).toBeGreaterThan(0))
+    const setup = await screen.findByRole('button', {name: /set up image creation/i})
+    await user.click(setup)
+    expect((await screen.findAllByRole('heading', {name: 'Settings', level: 1})).length).toBeGreaterThan(0)
+    expect(desktop.sent('generateImage')).toHaveLength(0)
+  })
+
+  it('does not offer setup when ComfyUI can be started or is ready', async () => {
+    desktop.onAction('mediaStatus', () => ({ok: true, data: status({can_start: true})}))
+    await openImageMode()
+    await waitFor(() => expect(desktop.sent('mediaStatus').length).toBeGreaterThan(0))
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(screen.queryByRole('button', {name: /set up image creation/i})).toBeNull()
+  })
+
+  it('reads a slow answer from the host too (the status arrives as an event)', async () => {
+    desktop.onAction('mediaStatus', () => ({ok: true, pending: true}))
+    await openImageMode()
+    await waitFor(() => expect(desktop.sent('mediaStatus').length).toBeGreaterThan(0))
+    expect(screen.queryByRole('button', {name: /set up image creation/i})).toBeNull()
+    const missing = status({images: {running: true, ready: false, missing: ['flux-2-klein-4b-fp8.safetensors'], model: 'FLUX.2 klein', message: 'ComfyUI is running but model files are missing'}})
+    await desktop.emitRaw(desktop.requestOf('mediaStatus'), 'result', missing)
+    expect(await screen.findByRole('button', {name: /set up image creation/i})).toBeTruthy()
   })
 
   it('shows the host\'s own explanation when the image engine is not running', async () => {

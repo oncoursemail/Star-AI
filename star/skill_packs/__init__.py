@@ -150,6 +150,27 @@ TRIGGERS: dict[str, re.Pattern] = {
     "roblox-tweenservice-easing": re.compile(
         r"\b(?:TweenService|TweenInfo|EasingDirection|EasingStyle|TweenBase|PlaybackState|tween cancellation)\b",
         re.IGNORECASE),
+    # Field lessons from a large Studio port project (docs/research/paintball-practice-proposals.md has the practice
+    # ideas). Shipped OFF until the evaluation gate measures them.
+    "roblox-studio-mcp-workflow": re.compile(
+        r"\b(?:Studio MCP|MCP|cloud save|save confirmation|Version History|ChangeHistoryService|undo|Rojo|installer|"
+        r"install (?:script|pipeline|snippet)|require coverage|screen ?capture|screenshots?|Edit mode|datamodel|"
+        r"Archivable|rbxl|rbxm|place backup)\b", re.IGNORECASE),
+    "roblox-replication-hot-paths": re.compile(
+        r"\b(?:replication|replicat\w+|PivotTo|SetAttribute|GetAttribute|attributes?|UnreliableRemoteEvent|bandwidth|"
+        r"network budget|network traffic|items per second|per-frame|hot path|allocations?|GetDescendants|"
+        r"LocalTransparencyModifier|sequence numbers?)\b", re.IGNORECASE),
+    "roblox-editable-memory-streaming": re.compile(
+        r"\b(?:EditableMesh|EditableImage|CreateEditableMeshAsync|CreateEditableImage\w*|FixedSize|memory budget|"
+        r"Content\.fromObject|TintMask|AlphaMode|ModelStreamingMode|Persistent|Atomic|streams? in|streamed in|"
+        r"BatchSetValues)\b", re.IGNORECASE),
+    "roblox-asset-upload-moderation": re.compile(
+        r"\b(?:upload\w*|moderat\w+|off-?platform|barcodes?|QR codes?|asset review|asset approval|SHA-?256|hash gate|"
+        r"thumbnail state|blocked assets?|re-?upload\w*|import queue)\b", re.IGNORECASE),
+    "roblox-multi-agent-studio": re.compile(
+        r"\b(?:multi-?agents?|several agents|two agents|parallel agents|Codex|Claude|integrator|claims?|claimed|"
+        r"Studio lock|mutex|handoff|hand-?off|normal play|playtest acceptance|acceptance tests?|verdicts?|"
+        r"INCOMPLETE|two clients|Server and Clients|late join)\b", re.IGNORECASE),
     "roblox-architecture-blender": re.compile(
         r"\b(?:Blender|architecture|architectural|facades?|rooflines?|gables?|glTF|GLB|FBX|3D Importer|"
         r"UV unwrap\w*|modelling|modeling)\b", re.IGNORECASE),

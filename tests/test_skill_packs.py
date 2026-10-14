@@ -19,7 +19,9 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing", "roblox-architecture-blender"]
+         "roblox-tweenservice-easing",
+         "roblox-studio-mcp-workflow", "roblox-replication-hot-paths", "roblox-editable-memory-streaming",
+         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
                       "roblox-tweenservice-easing"}

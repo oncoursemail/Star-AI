@@ -64,7 +64,7 @@ DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan", "
                "star_roblox_docs_live_search", "star_roblox_docs_live_page"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
-WORKSPACE_WRITE = ["workspace_write"]
+WORKSPACE_WRITE = ["workspace_write", "workspace_edit"]
 # Added in integration round 5 (pull request 69, game projects of several engines); not in a7a36a3.
 WORKSPACE_GAME = ["workspace_game_discover", "workspace_game_inspect", "workspace_game_plan"]
 # Read-only MCP connections (star/mcp_connections.py TOOLS): when one is switched on in Settings.
