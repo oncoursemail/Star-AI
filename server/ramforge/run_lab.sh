@@ -7,6 +7,7 @@
 #   run_lab.sh server LABEL [ENV=V ...] -- [llama-server flags]   temp server :8094 + specbench, then stop
 #   run_lab.sh experts                     llama-imatrix routing counts on code.txt / prose.txt, ~6 min
 #   run_lab.sh busy                        CPU use of the live star-fast process over 3 s (should be ~0 before a run)
+#   run_lab.sh quiet                       busy live slots + busy cores in the container over 3 s (both ~0 = go)
 #
 # Paths can be overridden: RF (lab dir), BIN (RAMForge build), M (model), OUT (results).
 set -u
@@ -35,8 +36,19 @@ busy() {
   echo "live star-fast pid $pid: $(( (b - a) / 3 ))% CPU over 3 s (100 = one core)"
 }
 
+quiet() {  # live slots busy (star-fast, star-voice; never asks an unloaded model) + whole-container CPU over 3 s
+  local K b=0 m a1 i1 a2 i2; K=$(head -1 /opt/star/secrets/api_keys)
+  for m in star-fast star-voice; do
+    b=$((b + $(curl -s -H "Authorization: Bearer $K" "localhost:8080/slots?model=$m" | grep -o '"is_processing":true' | wc -l)))
+  done
+  read -r a1 i1 < <(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat); sleep 3
+  read -r a2 i2 < <(awk '/^cpu /{print $2+$3+$4+$5+$6+$7+$8, $5+$6}' /proc/stat)
+  echo "slots_busy=$b cpu_cores_busy=$(( ( (a2-a1) - (i2-i1) ) / 300 ))"
+}
+
 case "${1:-}" in
   busy) busy ;;
+  quiet) quiet ;;
   bw)
     busy
     numastat -m | grep MemFree
@@ -85,5 +97,5 @@ PY
     done
     OUT_JSON="$OUT/expert-stats.json"
     OUT=$OUT_JSON /opt/star/knowledge/venv/bin/python "$RF/expert_stats.py" analyse "$OUT/code.imatrix.gguf" "$OUT/prose.imatrix.gguf" ;;
-  *) sed -n 2,12p "$0"; exit 2 ;;
+  *) sed -n 2,13p "$0"; exit 2 ;;
 esac
