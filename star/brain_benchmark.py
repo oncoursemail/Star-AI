@@ -9,6 +9,7 @@ No background jobs, uploads, or model changes.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import json
 import math
@@ -96,6 +97,9 @@ def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
     first_visible = None
     output_chars = 0
     actual_tokens = None
+    prompt_evaluated = None
+    prompt_cached = None
+    prompt_ms = None
     with client.stream("POST", endpoint + "/chat/completions", json=payload,
                        headers={"Authorization": f"Bearer {api_key}"}) as response:
         response.raise_for_status()
@@ -107,8 +111,16 @@ def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
             if isinstance(usage, dict) and type(usage.get("completion_tokens")) is int:
                 actual_tokens = usage["completion_tokens"]
             timings = item.get("timings")
-            if isinstance(timings, dict) and type(timings.get("predicted_n")) is int:
-                actual_tokens = timings["predicted_n"]
+            if isinstance(timings, dict):
+                if type(timings.get("predicted_n")) is int and timings["predicted_n"] >= 0:
+                    actual_tokens = timings["predicted_n"]
+                if type(timings.get("prompt_n")) is int and timings["prompt_n"] >= 0:
+                    prompt_evaluated = timings["prompt_n"]
+                if type(timings.get("cache_n")) is int and timings["cache_n"] >= 0:
+                    prompt_cached = timings["cache_n"]
+                reported_ms = timings.get("prompt_ms")
+                if type(reported_ms) in (int, float) and math.isfinite(reported_ms) and reported_ms >= 0:
+                    prompt_ms = round(reported_ms, 1)
             choices = item.get("choices")
             if not isinstance(choices, list) or not choices:
                 continue
@@ -129,26 +141,87 @@ def measure_one(client: httpx.Client, endpoint: str, model: str, prompt: str,
         "output_chars": output_chars,
         "output_chars_per_s": round(output_chars / generation_s, 2),
         "actual_completion_tokens": actual_tokens,
+        "prompt_tokens_evaluated": prompt_evaluated,
+        "prompt_tokens_cached": prompt_cached,
+        "prompt_eval_ms": prompt_ms,
         "approx_tokens_per_s": round(actual_tokens / generation_s, 2)
         if actual_tokens is not None and actual_tokens > 0 else None,
     }
 
 
-def summarize(measurements: list[dict]) -> dict:
+def summarize(measurements: list[dict], *, wall_ms: int | None = None, parallel: int = 1) -> dict:
+    """Summarize observed response latency without inferring server queue time.
+
+    Wall-time throughput is only meaningful when requests were measured as a group.
+    Optional server cache/timing fields are excluded if the endpoint omits them.
+    """
     if not measurements:
         raise ValueError("Provide at least one actual measurement")
+    if type(parallel) is not int or not 1 <= parallel <= 4:
+        raise ValueError("Parallel slots must be 1..4")
+    if wall_ms is not None and (type(wall_ms) is not int or wall_ms <= 0):
+        raise ValueError("Wall time must be a positive number of milliseconds")
+
     def percentile(key: str, p: float) -> float:
         ordered = sorted(float(row[key]) for row in measurements)
         return round(ordered[min(len(ordered) - 1, max(0, math.ceil(p * len(ordered)) - 1))], 1)
-    return {
+
+    report = {
         "runs": len(measurements),
         "median_ttft_ms": round(statistics.median(row["ttft_ms"] for row in measurements), 1),
         "p95_ttft_ms": percentile("ttft_ms", .95),
         "median_total_ms": round(statistics.median(row["total_ms"] for row in measurements), 1),
         "p95_total_ms": percentile("total_ms", .95),
         "median_output_chars_per_s": round(statistics.median(row["output_chars_per_s"] for row in measurements), 2),
-        "note": "TTFT/elapsed/text throughput observed locally; token/s available only if server reports completion token counts.",
+        "note": "TTFT includes queueing, prompt processing, first decode and network. Server prompt/cache counters "
+                "are included only when reported; they do not isolate queue time.",
     }
+    for key, label in (("prompt_tokens_evaluated", "median_prompt_tokens_evaluated"),
+                       ("prompt_tokens_cached", "median_prompt_tokens_cached"),
+                       ("prompt_eval_ms", "median_prompt_eval_ms")):
+        values = [row[key] for row in measurements if type(row.get(key)) in (int, float)]
+        if len(values) == len(measurements):
+            report[label] = round(statistics.median(values), 1)
+    if wall_ms is not None:
+        report.update({
+            "wall_ms": wall_ms,
+            "parallel": parallel,
+            "requests_per_second": round(len(measurements) * 1000 / wall_ms, 3),
+        })
+        tokens = [row.get("actual_completion_tokens") for row in measurements]
+        if all(type(n) is int and n >= 0 for n in tokens):
+            report["aggregate_output_tokens_per_second"] = round(sum(tokens) * 1000 / wall_ms, 2)
+    return report
+
+
+def run_samples(client: httpx.Client, endpoint: str, model: str, prompt: str, *,
+                runs: int = 3, parallel: int = 1, max_tokens: int = 96,
+                api_key: str = "local-only") -> tuple[list[dict], int]:
+    """Benchmark bounded concurrent real requests against a user-selected local brain.
+
+    A shared HTTP client reuses connections; each request is independently streamed.
+    The aggregate wall time includes server scheduling and contention. Runs are
+    deliberately capped to avoid turning a benchmark into an unbounded load test.
+    """
+    if type(runs) is not int or not 1 <= runs <= 10:
+        raise ValueError("Benchmark requires 1..10 runs")
+    if type(parallel) is not int or not 1 <= parallel <= min(runs, 4):
+        raise ValueError("Parallel slots must be between 1 and min(runs, 4)")
+    if not 16 <= max_tokens <= 512:
+        raise ValueError("Benchmark output token budget must be 16..512")
+
+    def request() -> dict:
+        return measure_one(client, endpoint, model, prompt, max_tokens=max_tokens, api_key=api_key)
+
+    started = time.perf_counter()
+    if parallel == 1:
+        results = [request() for _ in range(runs)]
+    else:
+        # Executor.map preserves input order. Workers share only the connection pool;
+        # no model selection, system setting, file write, or agent task is changed.
+        with ThreadPoolExecutor(max_workers=parallel) as executor:
+            results = list(executor.map(lambda _index: request(), range(runs)))
+    return results, max(1, round((time.perf_counter() - started) * 1000))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -161,21 +234,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", required=True, help="Model ID shown in the local server /models endpoint")
     parser.add_argument("--scenario", choices=sorted(_PROMPTS), default="chat")
     parser.add_argument("--runs", type=int, default=3)
+    parser.add_argument("--parallel", type=int, default=1,
+                        help="Concurrent requests, 1..4 and no more than --runs (default 1)")
     parser.add_argument("--tokens", type=int, default=96)
     args = parser.parse_args(argv)
     endpoint, api_key = benchmark_target(args.endpoint, server=args.server)
     validate_alias(args.model)
     if not 1 <= args.runs <= 10:
         parser.error("--runs must be 1..10")
+    if not 1 <= args.parallel <= min(args.runs, 4):
+        parser.error("--parallel must be between 1 and min(--runs, 4)")
     if not 16 <= args.tokens <= 512:
         parser.error("--tokens must be 16..512")
-    observations = []
     # A CPU server can need minutes for one answer; loopback keeps its 180 s limit.
     read_limit = 600.0 if args.server else 180.0
     with httpx.Client(timeout=httpx.Timeout(read_limit, connect=5.0), trust_env=False) as client:
-        for _ in range(args.runs):
-            observations.append(measure_one(client, endpoint, args.model, _PROMPTS[args.scenario],
-                                            max_tokens=args.tokens, api_key=api_key))
+        observations, wall_ms = run_samples(
+            client, endpoint, args.model, _PROMPTS[args.scenario],
+            runs=args.runs, parallel=args.parallel, max_tokens=args.tokens, api_key=api_key)
     report = {
         "observed_at_utc": datetime.now(timezone.utc).isoformat(),
         "model": args.model,
@@ -183,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
         "endpoint": endpoint,
         "target": "star_server" if args.server else "local",
         "measurements": observations,
-        "summary": summarize(observations),
+        "summary": summarize(observations, wall_ms=wall_ms, parallel=args.parallel),
     }
     print(json.dumps(report, indent=2))
     return 0
