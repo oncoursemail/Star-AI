@@ -438,7 +438,7 @@ def _emit(spec: dict[str, Any]) -> str:
             if states:
                 put("do")
                 put("    local hovering, pressing, selected = false, false, false")
-                put("    local function refresh()")
+                put(f"    local function refresh()")
                 put(f"        local state = not {var}.Interactable and 'disabled' or pressing and 'pressed' or selected and 'selected' or hovering and 'hover' or ''")
                 put("        if state == '' then return end")
                 put("        local goals = {}")

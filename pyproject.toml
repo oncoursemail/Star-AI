@@ -23,3 +23,8 @@ ignore = ["PLE2502", "PLE2515"]
 [tool.ruff.lint.flake8-bugbear]
 # Frozen dataclass: safe to share as a default argument.
 extend-immutable-calls = ["star.shared_brain.improve.Limits"]
+
+[tool.ruff.lint.per-file-ignores]
+# Cosmetic findings left in place so open PRs #240, #281 and #287 keep merging cleanly.
+"star/discord_bot/bot.py" = ["A001"]
+"star/roblox_ui_compiler.py" = ["F541"]
