@@ -17,7 +17,7 @@ from pathlib import Path
 import random
 import time
 
-from common import RAM_FLOOR_GB, free_ram_gb
+from common import TrainingGate, free_ram_gb
 
 
 def main() -> None:
@@ -93,13 +93,17 @@ def main() -> None:
     stop_file = args.out.parent / "STOP-TRAIN"
     log = (args.out / "progress.log").open("a", encoding="utf-8")
     step_times, i, stopped = [], 0, None
+    gate = TrainingGate("qlora-" + args.out.name, log=lambda m: print(m, flush=True))
+    if not gate.start(stop=stop_file.exists):
+        stopped = "not admitted (RAM floor, stop file or planner)"
     model.train()
-    for step in range(args.steps):
+    for step in range(args.steps if stopped is None else 0):
         if stop_file.exists():
             stopped = "stop file"
             break
-        if free_ram_gb() < RAM_FLOOR_GB:
-            stopped = f"free RAM below {RAM_FLOOR_GB} GB"
+        reason = gate.stop_reason()      # the free-RAM floor every step; a planner "yield" (owner gaming) every 30 s
+        if reason:
+            stopped = reason
             break
         s0 = time.monotonic()
         loss_sum = 0.0
@@ -116,6 +120,7 @@ def main() -> None:
                               "peak_vram_gb": round(torch.cuda.max_memory_allocated() / 2**30, 2),
                               "free_ram_gb": round(free_ram_gb(), 1)}) + "\n")
         log.flush()
+    gate.close()
     after = eval_loss()
     model.save_pretrained(str(args.out / "adapter"))
     summary = {"model": args.model, "trainable_params_m": round(trainable / 1e6, 1), "rank": args.rank,

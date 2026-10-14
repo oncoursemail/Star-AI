@@ -22,7 +22,7 @@ import uuid
 
 from .desktop_core import Settings, Conversations, app_data, run_task, query_models, check_studio
 from .analytics import get_dashboard
-from .brain_overview import brain_snapshot
+from .brain_overview import brain_snapshot, planner_snapshot
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
@@ -58,7 +58,7 @@ from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','brainSnapshot','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','brainSnapshot','plannerStatus','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
@@ -1042,6 +1042,7 @@ def launch():
                     return json.dumps({'ok':True,'data':research_task()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
+                if action=='plannerStatus':return json.dumps({'ok':True,'data':planner_snapshot(self.settings_file)})
                 if action=='pickFiles':
                     kind=body.get('kind')
                     if kind=='audio':

@@ -50,3 +50,52 @@ def brain_snapshot(settings_file: Path, home: Path) -> dict:
         "tools": sorted(ALL_TOOLS),
         "evaluation": evaluation,
     }
+
+
+def planner_snapshot(settings_file: Path, *, client=None) -> dict:
+    """Per-machine load, running jobs and the queue from STAR's resource planner, for the Brain page. Asked only when
+    the page is open; the planner is the STAR Server's address on port 8098 (or ~/.star/planner_url /
+    $STAR_PLANNER_URL). Not a STAR Server, no planner, or no answer: {"available": False} and nothing else."""
+    from urllib.parse import urlsplit
+    from .planner_client import PlannerClient, configured_url
+    if client is None:
+        settings = Settings.load(settings_file)
+        if settings.provider != "star_server":
+            return {"available": False, "reason": "not using a STAR Server"}
+        url = configured_url()
+        if not url:
+            parts = urlsplit(str(settings.server_endpoint))
+            if not parts.hostname:
+                return {"available": False, "reason": "no STAR Server address"}
+            host = f"[{parts.hostname}]" if ":" in parts.hostname else parts.hostname
+            url = f"http://{host}:8098"
+        try:
+            from .providers import connection_for
+            _endpoint, key = connection_for(settings)
+        except Exception:                       # no key: the planner answers 401 -> not available
+            key = ""
+        client = PlannerClient(url, key=key, timeout=2.0, down_for=0.0)
+    data = client.status()
+    if not isinstance(data, dict) or "machines" not in data:
+        return {"available": False, "reason": "the resource planner did not answer"}
+    machines = []
+    for name, m in sorted((data.get("machines") or {}).items()):
+        if not isinstance(m, dict):
+            continue
+        slots = {model: [bool(s.get("processing")) for s in rows if isinstance(s, dict)]
+                 for model, rows in (m.get("models") or {}).items() if isinstance(rows, list)}
+        machines.append({
+            "name": str(name)[:20], "cpu": float(m.get("cpu_busy") or 0.0),
+            "memFreeGiB": round(float(m.get("mem_available_mib") or 0) / 1024, 1),
+            "memTotalGiB": round(float(m.get("mem_total_mib") or 0) / 1024, 1),
+            "ageSeconds": float(m.get("age_s") or 0.0), "chatActive": bool(m.get("chat_active")),
+            "ownerBusy": str(m.get("owner_busy") or "")[:80], "quietLock": str(m.get("lock_owner") or "")[:40],
+            "gpu": (float(m["gpu_util"]) if m.get("gpu_util") is not None else None),
+            "studios": len(m.get("studios") or []),
+            "slots": {k: {"busy": sum(v), "total": len(v)} for k, v in slots.items()}})
+    jobs = [{"jobClass": str(l.get("job_class", ""))[:20], "holder": str(l.get("holder", ""))[:40],
+             "machine": str(l.get("machine", ""))[:20], "seconds": float(l.get("age_s") or 0)}
+            for l in data.get("leases") or [] if isinstance(l, dict)]
+    queue = [{"jobClass": str(w.get("job_class", ""))[:20], "holder": str(w.get("holder", ""))[:40],
+              "machine": str(w.get("machine", ""))[:20]} for w in data.get("waiting") or [] if isinstance(w, dict)]
+    return {"available": True, "machines": machines, "jobs": jobs, "queue": queue}
