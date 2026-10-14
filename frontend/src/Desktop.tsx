@@ -1,12 +1,12 @@
 import {Fragment,useCallback,useEffect,useRef,useState} from 'react'
 import {AnimatePresence,motion} from 'motion/react'
-import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,Ellipsis,ExternalLink,Folder,FolderOpen,Gauge,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Pencil,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Trash2,Undo2,Workflow,X,Zap} from 'lucide-react'
+import {Activity,ArrowRight,BookOpen,Box,Boxes,Braces,BrainCircuit,Check,ChevronDown,ChevronRight,CircleAlert,Copy,Download,Ellipsis,ExternalLink,Folder,FolderOpen,Gauge,GraduationCap,ImagePlus,Info,LayoutDashboard,LoaderCircle,MessageCircleMore,PanelLeftClose,PanelLeftOpen,Pencil,Plus,RefreshCcw,Search,Settings2,Shield,SquarePen,Trash2,Undo2,Workflow,X,Zap} from 'lucide-react'
 import {AnalyticsView} from './Charts'
 import {BrainOverview} from './BrainOverview'
 import {Message,Panel,StarMark,Tag} from './components'
 import {WEBSITE_RELEASES} from './constants'
 import {onBackendEvent,request} from './bridge'
-import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts} from './types'
+import type {Analytics,AppSettings,BackendEvent,BootData,ChatMessage,ChatThread,CustomToolRecipe,CustomToolCatalog,LessonCounts,MediaStatus} from './types'
 import './tokens.css'
 import './stellar-ui.css'
 import './chat.css'
@@ -16,7 +16,6 @@ import {RobloxPanel} from './RobloxPanel'
 import {BlenderPanel} from './BlenderPanel'
 import {StudioConnectionPanel} from './StudioConnectionPanel'
 import {LearningPanel} from './LearningPanel'
-import {LearnedThisWeek} from './LearnedThisWeek'
 import {ResearchWatchPanel} from './ResearchWatchPanel'
 import {MediaPlaces,ReferencesPanel} from './MediaPanel'
 import {chatImageRequest} from './imageIntent'
@@ -26,6 +25,7 @@ import {ServerBrainPanel,LocalBrainFallback,brainStatus,runsOnOwnHardware,usesSt
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
 import {ReviewToolsPanel} from './ReviewToolsPanel'
 import {Composer,type Availability,type ChatMode} from './Composer'
+import {imageReadiness,webSearchAvailability} from './availability'
 import {StarPet,type PetState} from './StarPet'
 import {StarFace,type StarMood} from './StarFace'
 import {ChatRow} from './ChatRow'
@@ -125,6 +125,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>readPreference('star.sidebar')==='collapsed')
  const [showJump,setShowJump]=useState(false)
  const [imageMode,setImageMode]=useState(false)
+ // The image engine's real state, read when Create image is switched on: the composer offers setup only when it is not ready.
+ const [imageStatus,setImageStatus]=useState<MediaStatus|null>(null)
+ const imageStatusRequest=useRef('')
  const [imageSize,setImageSize]=useState('square')
  const [historySearchOpen,setHistorySearchOpen]=useState(false)
  const [historyQuery,setHistoryQuery]=useState('')
@@ -346,6 +349,23 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    else void sync()
  },[sync,updateRun,refreshConnection])
  useEffect(()=>onBackendEvent(handleEvent),[handleEvent])
+ // Create image switched on: ask the host whether pictures can be made (the same checks it runs before making one).
+ useEffect(()=>onBackendEvent(event=>{
+   if(!imageStatusRequest.current||event.requestId!==imageStatusRequest.current||event.kind==='progress')return
+   imageStatusRequest.current=''
+   if(event.kind==='result'&&event.data&&typeof event.data==='object')setImageStatus(event.data as MediaStatus)
+ }),[])
+ useEffect(()=>{
+   if(!imageMode||inactive)return
+   let live=true
+   const requestId=crypto.randomUUID()
+   imageStatusRequest.current=requestId // Subscribe before a fast worker can answer.
+   void request<MediaStatus>('mediaStatus',{},requestId).then(reply=>{
+     if(!reply.ok||!reply.pending){if(imageStatusRequest.current===requestId)imageStatusRequest.current=''}
+     if(live&&reply.ok&&!reply.pending&&reply.data&&typeof reply.data==='object')setImageStatus(reply.data)
+   })
+   return ()=>{live=false}
+ },[imageMode,inactive])
  // Once per provider, model and address: the host checks the selected model server in the background and
  // lets it read the start of the conversation, so the status is truthful and the first message is not the slow one.
  const warmTarget=connectionTarget(data.settings as AppSettings&Record<string,unknown>)
@@ -620,6 +640,17 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  }
  // A notice belongs to the page where the action happened: it must not follow to another page and cover it.
  const nav=(id:Tab)=>{if(id!==tab)setNotice('');setTab(id);setLeftOpen(false);if(id==='analytics')void sync()}
+ /** "What STAR learned this week" lives once, on the Projects page; the Model page links to it. */
+ const openLearned=()=>{
+   nav('projects')
+   let tries=0
+   const reveal=()=>{
+     const found=document.querySelector('.learn-week')
+     if(found){found.scrollIntoView({block:'start',behavior:reducedMotion?'auto':'smooth'});return}
+     if(++tries<20)window.setTimeout(reveal,50)
+   }
+   window.setTimeout(reveal,0)
+ }
  const extraPages:Tab[]=['library','analytics','brain-overview','brain']
  const showMore=moreOpen||extraPages.includes(tab)
  const fillComposer=(text:string)=>{
@@ -637,7 +668,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const brain=brainStatus(data)
  const connection=describeConnection({settings:data.settings as AppSettings&Record<string,unknown>,brain,server:data.server,ownHardware:runsOnOwnHardware(data.settings),credentials:data.credentials||{},preview:inactive&&!fixture,last:lastOutcome})
  // STAR Server brings its own search (self-hosted SearXNG, server/searxng); a Brave/Tavily key also works.
- const web:Availability=data.credentials?.brave||data.credentials?.tavily||(serverMode&&(data.settings as AppSettings&Record<string,unknown>).search_endpoint!=='off')?{ok:true}:{ok:false,reason:'Needs STAR Server or a search key'}
+ const web:Availability=webSearchAvailability(data.settings as AppSettings&Record<string,unknown>,data.credentials)
  const team:Availability=!runsOnOwnHardware(data.settings)?{ok:false,reason:'Own hardware only'}:files.length?{ok:false,reason:'Text only'}:{ok:true}
  const teamSlots=serverMode?Math.max(1,Math.min(2,Number(data.settings.server_parallel)||1)):2
  // The timeline belongs to the turn that started it: right after the last message you sent.
@@ -768,7 +799,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
              <Composer inputRef={composerRef} value={prompt} onChange={setPrompt} onSend={()=>void send()} onStop={stop} busy={busy} stopping={stopping}
                files={files} onRemoveFile={index=>setFiles(list=>list.filter((_,at)=>at!==index))} onAttach={()=>void attach()} onTranscribe={()=>void transcribe()}
                mode={chatMode} onMode={value=>{setChatMode(value);if(value!=='agent')setGithubSource(false)}}
-               imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles(f=>f.filter(p=>/\.(png|jpe?g|webp)$/i.test(p)).slice(0,2));setTeamMode(false)}composerRef.current?.focus()}} imageReady={true} onImageSetup={()=>nav('settings')} imageSize={imageSize} onImageSize={setImageSize}
+               imageMode={imageMode} onImageMode={on=>{setImageMode(on);if(on){setFiles(f=>f.filter(p=>/\.(png|jpe?g|webp)$/i.test(p)).slice(0,2));setTeamMode(false)}composerRef.current?.focus()}} imageReady={imageReadiness(imageStatus)} onImageSetup={()=>nav('settings')} imageSize={imageSize} onImageSize={setImageSize}
                teamMode={teamMode} onTeamMode={on=>{setTeamMode(on);composerRef.current?.focus()}} team={team}
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}
@@ -810,7 +841,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
               {brainProgress&&<div className="brain-progress"><p>{brainProgress.phase}</p><div className="progress-track"><motion.div animate={{width:brainProgress.total?Math.max(2,brainProgress.downloaded/brainProgress.total*100)+'%':'9%'}} transition={reducedMotion?instant:{duration:.2}}/></div></div>}
             </Panel>
             </LocalBrainFallback>
-            <section className="learn learn-brain" aria-label="Learning"><LearnedThisWeek invoke={act} disabled={inactive} project={data.project}/></section>
+            <section className="learn learn-brain" aria-label="What STAR learned"><div className="learn-head"><GraduationCap size={18} aria-hidden="true"/><div className="learn-title"><h2>What STAR learned</h2><p>This week’s lessons and your corrections are on the Projects page.</p></div><button type="button" className="learn-button" onClick={openLearned}>Open <ArrowRight size={14} aria-hidden="true"/></button></div></section>
           </div></div>}
           {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
