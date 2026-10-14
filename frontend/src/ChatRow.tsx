@@ -31,7 +31,7 @@ export function ChatRow({chat,current,disabled,onOpen,onRename,onDelete}:{chat:C
   window.requestAnimationFrame(()=>trigger.current?.focus())
  }
  if(editing)return <div className="rail-chat-row is-editing">
-  <input ref={input} className="rail-rename" aria-label="Chat name" value={draft} maxLength={80}
+  <input ref={input} className="rail-rename" aria-label="Chat name" dir="auto" value={draft} maxLength={80}
    onChange={event=>setDraft(event.target.value)} onBlur={()=>finish(true)}
    onKeyDown={event=>{
     if(event.key==='Enter'){event.preventDefault();finish(true)}
@@ -40,7 +40,7 @@ export function ChatRow({chat,current,disabled,onOpen,onRename,onDelete}:{chat:C
  </div>
  return <div ref={wrap} className={'rail-chat-row'+(current?' is-current':'')+(menu?' is-menu':'')}>
   <button type="button" title={chat.title} className={'rail-item rail-chat '+(current?'is-current':'')} aria-current={current?'page':undefined} onClick={onOpen}
-   onDoubleClick={()=>{if(!disabled)setEditing(true)}}><span>{chat.title}</span></button>
+   onDoubleClick={()=>{if(!disabled)setEditing(true)}}><span dir="auto">{chat.title}</span></button>
   <button ref={trigger} type="button" className="rail-chat-more" aria-label={'More options for '+chat.title} title="More options" aria-haspopup="menu" aria-expanded={menu} onClick={()=>setMenu(open=>!open)}>
    <Ellipsis size={16} aria-hidden="true"/>
   </button>
