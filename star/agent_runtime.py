@@ -14,6 +14,7 @@ from time import monotonic
 import math
 
 from .orchestration import Task, TaskPlan
+from .mission_checkpoint import MissionCheckpoint
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ async def run_plan(
     allow_writes: bool = False,
     on_event: Observer | None = None,
     partial_answers: Mapping[str, str] | None = None,
+    checkpoint: MissionCheckpoint | None = None,
 ) -> TeamResult:
     """Execute eligible tasks concurrently, isolating failures and enforcing scopes.
 
@@ -80,6 +82,9 @@ async def run_plan(
     - A failed dependency blocks descendants; independent tasks may finish.
     - Global/per-task timeouts and a hard concurrency limit prevent recursive
       swarms from growing unchecked.
+    - Optional read-only mission checkpoint resumes only completed nodes whose
+      task contracts, worker revision, and source-context revision still match.
+      A write-capable plan cannot use automatic resume.
     """
     seconds = {t.id: task_timeout(t) if callable(task_timeout) else task_timeout
                for t in plan.tasks.values()}
@@ -93,11 +98,21 @@ async def run_plan(
         raise PermissionError("Parallel agent writes require explicit authorization")
     if len(plan.tasks) > 32:
         raise ValueError("Live team runs are limited to 32 tasks")
+    if checkpoint is not None and not isinstance(checkpoint, MissionCheckpoint):
+        raise TypeError("Expected a trusted MissionCheckpoint instance")
+    if checkpoint is not None and (allow_writes or any(t.writes for t in plan.tasks.values())):
+        raise PermissionError("Mission replay is only available to read-only tasks")
+    restored = checkpoint.load(plan) if checkpoint is not None else {}
 
     started = monotonic()
     deadline = started + total_timeout
     running: dict[str, asyncio.Task] = {}
-    results: dict[str, TaskResult] = {}
+    results: dict[str, TaskResult] = {
+        task_id: TaskResult(task_id, plan.tasks[task_id].role, "completed",
+                            answer=data["answer"], evidence=data["evidence"],
+                            elapsed_ms=data["elapsed_ms"])
+        for task_id, data in restored.items()
+    }
     peak = 0
 
     def partial_for(task_id: str) -> str:
@@ -111,6 +126,10 @@ async def run_plan(
             except Exception:
                 # UI notifications are best effort; completion records stay true.
                 pass
+
+    for task_id, entry in results.items():
+        observe({"event": "agent_resumed", "task": task_id, "role": entry.role,
+                 "status": "completed", "from_checkpoint": True})
 
     async def execute_one(task: Task, snapshot: Mapping[str, TaskResult]):
         began = monotonic()
@@ -200,6 +219,9 @@ async def run_plan(
                     entry = job.result()
                 except asyncio.CancelledError:
                     entry = TaskResult(item.id, item.role, "cancelled", error="Worker cancelled")
+                if checkpoint is not None and entry.status == "completed":
+                    checkpoint.save(item, answer=entry.answer, evidence=entry.evidence,
+                                    elapsed_ms=entry.elapsed_ms)
                 results[item.id] = entry
                 del running[item.id]
                 observe({"event": "agent_finished", "task": item.id, "role": item.role,
