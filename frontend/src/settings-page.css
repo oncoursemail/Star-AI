@@ -16,9 +16,13 @@
   justify-content: space-between;
   gap: var(--star-6);
   margin-bottom: var(--star-6);
+  padding-bottom: var(--star-5);
+  border-bottom: 1px solid var(--star-stroke-soft);
 }
 .shell .settings-head .page-intro {
   margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: 0;
   min-width: 0;
 }
 
