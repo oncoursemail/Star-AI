@@ -478,7 +478,7 @@ def wanted(settings, kwargs: dict) -> bool:
 
 def for_local(kwargs: dict) -> dict:
     """The same request for the PC server: its own model name, and no server slot number (it has one slot)."""
-    local = dict(kwargs, model=NAME)
+    local: dict = {**kwargs, "model": NAME}
     extra = local.get("extra_body")
     if isinstance(extra, dict) and "id_slot" in extra:
         local["extra_body"] = {key: value for key, value in extra.items() if key != "id_slot"}
