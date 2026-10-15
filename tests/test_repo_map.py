@@ -74,7 +74,7 @@ def test_map_does_not_execute_workspace_source(tmp_path):
 def test_credential_literal_in_signature_is_redacted(tmp_path):
     token = "sk-" + "A" * 32
     write(tmp_path, "source.py",
-          f"def connect(api_key='{token}'):\\n    pass\\n".replace("\\\\n", "\\n"))
+          f"def connect(api_key='{token}'):\n    pass\n")
     report = Workspace(tmp_path).call("workspace_search",
                                       {"query": "connect", "mode": "map"})
     serialized = json.dumps(report)
