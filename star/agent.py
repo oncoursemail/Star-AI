@@ -809,6 +809,8 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     event({"event": "tool_started", "tool": name})
                     if name == 'star_evidence_read':
                         try:
+                            if evidence_broker is None:
+                                raise ValueError('Evidence retrieval is not enabled')
                             chunk = evidence_broker.read(args['reference'], args['offset'],
                                                          args.get('limit', 4000))
                             data = {"isError": False, "content": [{"type": "text",
