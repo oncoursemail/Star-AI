@@ -93,7 +93,15 @@ def capture_evidence(workspace: Path, manifest: dict) -> dict:
     if not isinstance(manifest, dict):
         raise ValueError("Review manifest must be an object")
     project, artifact = _name(manifest.get("project"), "project"), _name(manifest.get("artifact"), "artifact")
-    source_file = _file(workspace, manifest.get("source"), max_bytes=_MAX_SOURCE_BYTES)
+    source = manifest.get("source")
+    source_file = _file(workspace, source, max_bytes=_MAX_SOURCE_BYTES)
+    source_paths = manifest.get("sources", [source])
+    if (not isinstance(source_paths, list) or not 1 <= len(source_paths) <= 32
+            or any(not isinstance(entry, str) for entry in source_paths)
+            or len(source_paths) != len(set(source_paths)) or source not in source_paths):
+        raise ValueError("Sources must be unique workspace files and include the primary source")
+    source_hashes = {entry: _hash(_file(workspace, entry, max_bytes=_MAX_SOURCE_BYTES))
+                     for entry in sorted(source_paths)}
     views, baselines = manifest.get("views"), manifest.get("baselines", {})
     if not isinstance(views, dict) or not 1 <= len(views) <= _MAX_VIEWS:
         raise ValueError("One to twelve captured views are required")
@@ -120,7 +128,8 @@ def capture_evidence(workspace: Path, manifest: dict) -> dict:
         captures[name] = capture
 
     source_sha = _hash(source_file)
-    stable = {"project": project, "artifact": artifact, "source_sha256": source_sha, "captures": captures}
+    stable = {"project": project, "artifact": artifact, "source_sha256": source_sha,
+              "sources_sha256": source_hashes, "captures": captures}
     evidence_key = hashlib.sha256(json.dumps(stable, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {**stable, "evidence_key": evidence_key,
             "warning": "File presence and pixel similarity never establish design quality or functionality."}
