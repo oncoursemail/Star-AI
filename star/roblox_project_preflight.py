@@ -108,7 +108,9 @@ def _lint_report(source: str, script_class: str) -> list[dict]:
 
 def preflight(source: str | Path, *, api_dump: str | Path | None = None,
               api_confusions: bool = False, native_luau: bool = False,
-              module_requires: bool = False) -> dict:
+              module_requires: bool = False, futuresight: bool = False,
+              knowledge_root: str | Path | None = None,
+              project: str | None = None) -> dict:
     """Inspect a bounded script-only Roblox place tree with explicit evidence.
 
     Return invalid for malformed structures or API dumps; never conflate missing
@@ -135,6 +137,8 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
         confusion_candidates = 0
         confusion_reported = 0
         admitted_sources: dict[str, str] = {}
+        # Only the existing bounded, admitted source snapshot feeds Futuresight.
+        future_sources: dict[str, tuple[str, str]] = {}
         skipped_sources: list[str] = []
         limited = False
         native_attempted = 0
@@ -146,6 +150,8 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
             scopes: list[str] = []
             warnings: list[str] = []
             findings: list[dict] = []
+            if futuresight and len(code.encode("utf-8")) <= MAX_CHECK_SOURCE_BYTES:
+                future_sources[relative] = (code, script_class)
             if len(code.encode("utf-8")) > MAX_CHECK_SOURCE_BYTES:
                 warnings.append("Source exceeds 20 KB per-file static-check budget")
                 if module_requires:
@@ -305,6 +311,10 @@ def preflight(source: str | Path, *, api_dump: str | Path | None = None,
         report["limitations"].append(
             "Require graph covers admitted static source paths only; dynamic modules, "
             "runtime-created Instances and real Roblox require behavior remain unverified.")
+    if futuresight:
+        from .omega_futuresight import predict_preflight
+        report["futuresight"] = predict_preflight(
+            future_sources, report, knowledge_root=knowledge_root, project=project)
     return report
 
 
@@ -320,10 +330,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--module-requires", action="store_true",
         help="opt in to static ModuleScript require edges and unresolved evidence")
+    parser.add_argument("--futuresight", action="store_true",
+                        help="opt in to OMEGA's evidence-led, unexecuted failure-test suggestions")
+    parser.add_argument("--knowledge-root", type=Path,
+                        help="optional existing local STAR knowledge store (read-only)")
+    parser.add_argument("--project", help="scope for reviewed historical knowledge evidence")
     args = parser.parse_args(argv)
+    if args.knowledge_root is not None and (not args.futuresight or not args.project):
+        parser.error("--knowledge-root requires --futuresight and --project")
     report = preflight(args.source, api_dump=args.api_dump,
                        api_confusions=args.api_confusions, native_luau=args.native_luau,
-                       module_requires=args.module_requires)
+                       module_requires=args.module_requires,
+                       futuresight=args.futuresight,
+                       knowledge_root=args.knowledge_root, project=args.project)
     print(json.dumps(report, sort_keys=True, ensure_ascii=True))
     if report["status"] == "invalid":
         return 2
