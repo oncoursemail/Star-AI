@@ -79,7 +79,7 @@ def estimate_etsy(financials: Mapping[str, Any]) -> dict[str, str]:
         (gross * offsite_rate).quantize(_CENT, rounding=ROUND_HALF_UP), Decimal("100.00")
     )
     total_costs = sum((production, supplier_shipping, listing, transaction_fee, payment_fee,
-                       offsite_ads, paid_ads, ai_generation, labor, refunds, other))
+                       offsite_ads, paid_ads, ai_generation, labor, refunds, other), Decimal("0"))
     contribution = gross - total_costs
     return {
         "classification": "hypothetical_estimate_not_revenue",
@@ -116,7 +116,7 @@ def estimate_fiverr(financials: Mapping[str, Any]) -> dict[str, str]:
     advertising = _amount(costs, "advertising")
     refunds = _amount(costs, "refund_allowance")
     other = _amount(costs, "other_costs")
-    total_costs = sum((platform_fee, ai_cost, labor, revisions, advertising, refunds, other))
+    total_costs = sum((platform_fee, ai_cost, labor, revisions, advertising, refunds, other), Decimal("0"))
     contribution = order_price - total_costs
     return {
         "classification": "hypothetical_estimate_not_revenue",
@@ -253,6 +253,8 @@ def inspect_offer(data: Mapping[str, Any]) -> dict[str, Any]:
     """Pure JSON-ready output for offline business research/quality planning."""
     record = _mapping(data, "request")
     channel = record.get("channel")
+    if not isinstance(channel, str):
+        raise ValueError("channel must be 'etsy' or 'fiverr'")
     offer_id = record.get("offer_id")
     if not isinstance(offer_id, str):
         raise ValueError("offer_id is required")
