@@ -1,0 +1,37 @@
+[Unit]
+Description=STAR Discord bot (owner DMs and slash commands, answered by the STAR brain; installed by server/discord/deploy.sh)
+After=network-online.target star-egress-redirect.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=star-discord
+Group=star-discord
+WorkingDirectory=/opt/star/discord/current
+# server: drawing and /screen answer that they need the PC. Token, settings and brain key: secrets/ (0700).
+# STAR settings (brain address, model names): state/star-ai/settings.json.
+Environment=STAR_DISCORD_HOST=server STAR_DISCORD_CONFIG_DIR=/opt/star/discord/secrets
+Environment=XDG_DATA_HOME=/opt/star/discord/state HOME=/opt/star/discord/state
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+# Draw jobs for the STAR GPU worker on the owner's PC (it connects out over SSH; star/discord_bot/gpu_link.py).
+Environment=STAR_DISCORD_GPU_SOCKET=/opt/star/discord/state/gpu-worker.sock
+ExecStart=/opt/star/discord/venv/bin/python -m star.discord_bot
+Restart=on-failure
+RestartSec=15
+# 2 configuration problem, 3 library missing, 4 another copy already runs: retrying would not help.
+RestartPreventExitStatus=2 3 4
+# Ctrl-C equivalent: discord.py closes the gateway session cleanly.
+KillSignal=SIGINT
+TimeoutStopSec=30
+# Keep it light next to Studio and Blender (12 GB container).
+MemoryHigh=400M
+MemoryMax=512M
+TasksMax=64
+Nice=5
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

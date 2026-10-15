@@ -10,7 +10,6 @@ from dataclasses import dataclass
 import io
 import math
 import shutil
-import struct
 import subprocess
 import wave
 from pathlib import Path
@@ -45,9 +44,17 @@ def ffmpeg_path(folder: str = "") -> str:
     return result
 
 
+# Input bytes come from a Discord attachment, possibly another user's message. A playlist-style file
+# (HLS, concat, ...) would make FFmpeg open the URLs or local files it names; only stdin may be read.
+_INPUT_GUARD = ("-protocol_whitelist", "pipe")
+
+
 def _ffmpeg(arguments: list[str], payload: bytes, *, executable: str) -> bytes:
+    if arguments[:2] != ["-i", "pipe:0"]:
+        raise ValueError("Discord audio is only read from stdin")
     try:
-        result = subprocess.run([executable, "-hide_banner", "-loglevel", "error", "-nostdin", *arguments],
+        result = subprocess.run([executable, "-hide_banner", "-loglevel", "error", "-nostdin", *_INPUT_GUARD,
+                                 *arguments],
                                 input=payload, capture_output=True, timeout=35, check=False)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Audio conversion exceeded its time limit") from exc

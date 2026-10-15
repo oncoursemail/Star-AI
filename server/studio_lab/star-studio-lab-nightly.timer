@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the STAR Studio Lab nightly at 03:30 UTC
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+RandomizedDelaySec=300
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,31 @@
+[Unit]
+Description=STAR resource planner reporter (brain 2: sends this machine's CPU/RAM and attached Roblox Studio processes to the planner every 10 s)
+After=network-online.target
+
+# It only reads /proc and the quiet lock and posts one small JSON document. The planner's address is operator
+# configuration in /opt/star/planner/env (STAR_PLANNER_REPORT_TO=http://<brain 1 container>:8098), never in the
+# repository; the report token (/opt/star/secrets/planner_report_token) allows nothing but reports.
+[Service]
+Type=simple
+User=star
+Group=star
+WorkingDirectory=/opt/star/planner/app
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+EnvironmentFile=/opt/star/planner/env
+ExecStart=/bin/sh -c 'exec /usr/bin/python3 -m star.resource_planner_service agent --machine brain2 --studios --report-to "$STAR_PLANNER_REPORT_TO" --key-file /opt/star/secrets/planner_report_token'
+Nice=10
+Restart=always
+RestartSec=30
+MemoryMax=96M
+TasksMax=16
+LimitCORE=0
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,7 +1,7 @@
 {
   "name": "star-intelligence-interface",
   "private": true,
-  "version": "0.9.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
@@ -29,6 +29,7 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
+    "axe-core": "^4.10.3",
     "jsdom": "^27.4.0",
     "typescript": "~5.9.2",
     "vite": "^7.1.7",

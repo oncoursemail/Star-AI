@@ -1,0 +1,190 @@
+{
+ "scene": "lantern",
+ "steps": [
+  {
+   "step": "status",
+   "ok": true,
+   "seconds": 0.7,
+   "info": {
+    "running": true,
+    "mcp_port_open": true,
+    "display": ":1",
+    "port": 9876,
+    "available_mb": 7082,
+    "min_available_mb": 3000,
+    "blender_mb": 818,
+    "mem_max": "2560M",
+    "studios": 1,
+    "runtime_max_s": 1800,
+    "blender": "Blender 5.2.2 LTS",
+    "edit_permission": true
+   }
+  },
+  {
+   "step": "new_scene",
+   "ok": true,
+   "seconds": 3.28,
+   "info": {
+    "scene": "lantern",
+    "file": "lantern.blend",
+    "bytes": 84413,
+    "stdout": "Info: Saved as \"lantern.blend\"\n"
+   }
+  },
+  {
+   "step": "run_bpy",
+   "ok": true,
+   "seconds": 2.41,
+   "info": {
+    "ran": {
+     "built": [
+      "Lantern_Iron",
+      "Lantern_Glass",
+      "Lantern_Flame"
+     ]
+    },
+    "scene": {
+     "meshes": [
+      "Lantern_Iron",
+      "Lantern_Glass",
+      "Lantern_Flame"
+     ],
+     "triangles": 636,
+     "vertices": 336,
+     "size_m": [
+      0.54,
+      0.54,
+      0.872
+     ],
+     "min": [
+      -0.27,
+      -0.27,
+      0.0
+     ],
+     "max": [
+      0.27,
+      0.27,
+      0.872
+     ],
+     "materials": [
+      "Lantern_Flame",
+      "Lantern_Glass",
+      "Lantern_Iron"
+     ],
+     "scene": "lantern",
+     "saved_bytes": 108552,
+     "objects": 3,
+     "stdout": "Info: Saved as \"lantern.blend\"\n"
+    }
+   }
+  },
+  {
+   "step": "screenshot",
+   "ok": true,
+   "seconds": 9.47,
+   "info": {
+    "screenshots": [
+     {
+      "angle": "three_quarter",
+      "size": [
+       1574,
+       932
+      ],
+      "evidence": "blender/brain2/lantern/three_quarter.png"
+     },
+     {
+      "angle": "front",
+      "size": [
+       1574,
+       932
+      ],
+      "evidence": "blender/brain2/lantern/front.png"
+     },
+     {
+      "angle": "top",
+      "size": [
+       1574,
+       932
+      ],
+      "evidence": "blender/brain2/lantern/top.png"
+     }
+    ]
+   }
+  },
+  {
+   "step": "render_preview",
+   "ok": true,
+   "seconds": 4.2,
+   "info": {
+    "previews": [
+     {
+      "angle": "three_quarter",
+      "engine": "eevee",
+      "size": [
+       640,
+       360
+      ],
+      "seconds": 2.14,
+      "evidence": "blender/brain2/lantern/render-three_quarter.png"
+     }
+    ]
+   }
+  },
+  {
+   "step": "export",
+   "ok": true,
+   "seconds": 2.66,
+   "info": {
+    "meshes": [
+     "Lantern_Iron",
+     "Lantern_Glass",
+     "Lantern_Flame"
+    ],
+    "triangles": 636,
+    "vertices": 336,
+    "size_m": [
+     0.54,
+     0.54,
+     0.872
+    ],
+    "min": [
+     -0.27,
+     -0.27,
+     0.0
+    ],
+    "max": [
+     0.27,
+     0.27,
+     0.872
+    ],
+    "materials": [
+     "Lantern_Flame",
+     "Lantern_Glass",
+     "Lantern_Iron"
+    ],
+    "file": "exports/lantern.glb",
+    "bytes": 24680,
+    "format": "glb",
+    "glb": {
+     "version": 2,
+     "declared_bytes": 24680,
+     "actual_bytes": 24680,
+     "meshes": 3,
+     "nodes": 3,
+     "materials": [
+      "Lantern_Flame",
+      "Lantern_Glass",
+      "Lantern_Iron"
+     ],
+     "triangles": 636,
+     "extensions": [
+      "KHR_materials_emissive_strength"
+     ]
+    },
+    "evidence": "blender/brain2/lantern/lantern.glb",
+    "roblox_note": "Import with Studio's Asset Importer (File > Import 3D); Blender is Z-up and meters, Roblox is Y-up and studs: check size and orientation after import. Nothing was uploaded."
+   }
+  }
+ ],
+ "gui_window_bytes": 158903
+}

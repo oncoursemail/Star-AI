@@ -1,0 +1,69 @@
+{
+  "name": "GentleR15Wave",
+  "rig": "r15",
+  "fps": 30,
+  "frame_count": 30,
+  "loop": true,
+  "keyframes": [
+    {
+      "frame": 0,
+      "bones": {
+        "RightUpperArm": [
+          0,
+          0,
+          0
+        ],
+        "RightLowerArm": [
+          0,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "frame": 8,
+      "bones": {
+        "RightUpperArm": [
+          -25,
+          5,
+          15
+        ],
+        "RightLowerArm": [
+          30,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "frame": 16,
+      "bones": {
+        "RightUpperArm": [
+          -35,
+          0,
+          -10
+        ],
+        "RightLowerArm": [
+          12,
+          0,
+          0
+        ]
+      }
+    },
+    {
+      "frame": 30,
+      "bones": {
+        "RightUpperArm": [
+          0,
+          0,
+          0
+        ],
+        "RightLowerArm": [
+          0,
+          0,
+          0
+        ]
+      }
+    }
+  ]
+}

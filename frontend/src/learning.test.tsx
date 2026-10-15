@@ -121,6 +121,17 @@ describe('rating an answer', () => {
     expect(await screen.findByText(/That was not kept as a lesson: it reads like a permission or setting/)).toBeTruthy()
     expect(screen.queryByText(/Noted for this project/)).toBeNull()
   })
+
+  it('says so when the lesson store failed, instead of silently learning nothing', async () => {
+    const user = userEvent.setup()
+    render(<App/>)
+    const box = await screen.findByRole('textbox', {name: /message star/i})
+    await user.type(box, 'Always use camelCase here.')
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(desktop.sent('sendMessage')).toHaveLength(1))
+    await desktop.emitRaw(desktop.requestOf('sendMessage'), 'result', {answer: 'Understood.', learned: {capture_failed: 1}})
+    expect(await screen.findByText(/STAR could not save what this turn taught/)).toBeTruthy()
+  })
 })
 
 describe('reviewing lessons', () => {
@@ -245,7 +256,12 @@ describe('reviewing lessons', () => {
     const {user, refresh} = open(host, {practice_lessons_enabled: false})
     expect(await screen.findByText('Check RemoteEvent arguments on the server.')).toBeTruthy()
     expect(screen.getByText(/1 lesson has been imported from STAR’s own practice/)).toBeTruthy()
-    expect(screen.getByText(/python -m star.lessons import lessons.json/)).toBeTruthy()
+    // The developer command is kept, but only inside a closed "Advanced" disclosure.
+    const command = screen.getByText(/python -m star.lessons import lessons.json/)
+    const advanced = command.closest('details') as HTMLDetailsElement
+    expect(advanced).toBeTruthy()
+    expect(advanced.open).toBe(false)
+    expect(within(advanced).getByText(/Advanced: import a lesson file/)).toBeTruthy()
     const enabled = screen.getByRole('checkbox', {name: /Import bundled STAR practice lessons/i}) as HTMLInputElement
     expect(enabled.checked).toBe(false)
     await user.click(enabled)

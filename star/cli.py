@@ -9,6 +9,34 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 
+_IMAGE_TYPES = {"PNG": "image/png", "JPEG": "image/jpeg", "WEBP": "image/webp"}
+
+
+def loopback_endpoint(url: str) -> bool:
+    """True only for a plain-http model endpoint on this machine with an explicit port.
+
+    A prefix test let ``http://localhost:1234@example.com/v1`` through: everything before the
+    ``@`` is a user name, so requests (and the prompt) would have gone to example.com.
+    """
+    from urllib.parse import urlsplit
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return False
+    return (parts.scheme == "http" and parts.hostname in {"127.0.0.1", "localhost"} and port is not None
+            and parts.username is None and parts.password is None)
+
+
+def image_media_type(path: Path) -> str:
+    """The media type of the picture's real format (validated by image_part), not of its file name."""
+    from .pil_safe import Image
+    with Image.open(path) as image:
+        media_type = _IMAGE_TYPES.get(image.format or "")
+    if media_type is None:
+        raise ValueError("Only PNG/JPEG/WebP reference images are allowed")
+    return media_type
+
 
 def setup():
     from dotenv import load_dotenv
@@ -29,7 +57,11 @@ def doctor():
     try:
         from .studio import launcher
         _, _, path = launcher()
-        print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
+        if path is None:
+            # A host-defined launcher command has no local file to look for (and may name a host).
+            print("Roblox MCP: custom launcher configured")
+        else:
+            print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
     except Exception as exc:
         print("Roblox MCP:", type(exc).__name__)
     print("This is not a live model or Roblox tool smoke test.")
@@ -73,13 +105,11 @@ async def main(args):
                 store.review_note(project=args.project, note_id=args.note_id, evidence=args.evidence)
                 print("Note marked reviewed with a separate evidence record:", args.note_id)
             else:
-                import mimetypes
                 from .media import image_part
                 path = Path(args.file).expanduser().resolve()
                 image_part(path)  # Verify image bytes; extension alone isn't enough.
-                mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-                if mime not in {"image/png", "image/jpeg", "image/webp"}:
-                    raise ValueError("Only PNG/JPEG/WebP reference images are allowed")
+                # The stored type follows the bytes: a PNG saved as "shot.jpg" used to be recorded as JPEG.
+                mime = image_media_type(path)
                 digest, dest = store.ingest_artifact(project=args.project, path=path,
                     origin=f"local-upload:{path.name}", media_type=mime)
                 print("Locally stored image:", digest, "at", dest)
@@ -100,7 +130,7 @@ async def main(args):
         if not model or model == "your-loaded-lm-studio-model-id":
             raise RuntimeError("Load a local model in LM Studio and configure STAR_MODEL")
         base_url = os.environ.get("STAR_BASE_URL", "http://127.0.0.1:1234/v1")
-        if not base_url.startswith(("http://127.0.0.1:", "http://localhost:")):
+        if not loopback_endpoint(base_url):
             raise RuntimeError("Self-build requires a loopback local model endpoint")
         github = from_env() if args.publish_draft else None
         async with AsyncOpenAI(base_url=base_url, api_key="local-only", timeout=180.0, max_retries=0) as client:
@@ -133,23 +163,16 @@ async def main(args):
         from .agent import execute
         from .studio import connect, list_tools
         from .memory import Memory
-        db = Memory(ROOT / ".local" / "star-memory.sqlite3")
-        project = args.project
         from .knowledge import KnowledgeStore
-        knowledge = KnowledgeStore(ROOT / ".local" / "star-knowledge")
-        approved = knowledge.find(project, args.prompt, reviewed_only=True, limit=8)
-        trusted_notes = "\n".join(f"[{n.kind} ref={n.source} rev={n.revision}] {n.text}" for n in approved)
-        for image in args.image:
-            from .media import image_part
-            path = Path(image).expanduser().resolve()
-            image_part(path) # Validate format and size before preserving raw image.
-            knowledge.ingest_artifact(project=project, path=path, origin=f"task-reference:{path.name}", media_type="image/" + ("jpeg" if path.suffix.lower() in (".jpg", ".jpeg") else "webp" if path.suffix.lower() == ".webp" else "png"))
-        knowledge.close()
+        from .media import image_part
+        project = args.project
+        # Every refusal comes before anything is stored: a refused run used to have copied its
+        # reference images into the knowledge store already (and left both databases open).
         model = os.environ.get("STAR_MODEL", "").strip()
         if not model or model == "your-loaded-lm-studio-model-id":
             raise RuntimeError("Set STAR_MODEL to the identifier of your loaded model in LM Studio")
         base_url = os.environ.get("STAR_BASE_URL", "http://127.0.0.1:1234/v1")
-        if not base_url.startswith(("http://127.0.0.1:", "http://localhost:")):
+        if not loopback_endpoint(base_url):
             raise RuntimeError("STAR v0.1 requires a local loopback model endpoint")
         if args.unsafe_luau and not args.edit:
             raise RuntimeError("--unsafe-luau requires --edit in a disposable place")
@@ -159,6 +182,21 @@ async def main(args):
             raise RuntimeError("Edit blocked: pin your disposable Studio ID in STAR_SANDBOX_STUDIO_ID first")
         if not args.no_studio and not args.studio_id:
             raise RuntimeError("Run `studios` and specify --studio-id, or use --no-studio")
+        references = []
+        for image in args.image:
+            path = Path(image).expanduser().resolve()
+            image_part(path)  # Validate format and size before preserving raw image.
+            references.append((path, image_media_type(path)))
+        knowledge = KnowledgeStore(ROOT / ".local" / "star-knowledge")
+        try:
+            approved = knowledge.find(project, args.prompt, reviewed_only=True, limit=8)
+            for path, media_type in references:
+                knowledge.ingest_artifact(project=project, path=path, origin=f"task-reference:{path.name}",
+                                          media_type=media_type)
+        finally:
+            knowledge.close()
+        trusted_notes = "\n".join(f"[{n.kind} ref={n.source} rev={n.revision}] {n.text}" for n in approved)
+        db = Memory(ROOT / ".local" / "star-memory.sqlite3")
         run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
         target = ROOT / "runs" / run_id
         target.mkdir(parents=True)

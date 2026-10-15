@@ -82,6 +82,36 @@ def test_run_suite_resumes_without_asking_again(tmp_path):
     assert third.log == ["A-2"] and result["summary"]["pass"] == 2
 
 
+def test_retry_of_some_tasks_keeps_every_other_result_in_the_file(tmp_path):
+    """--tasks X --retry-errors on a full result file re-runs X only and keeps the other records (the v1.0 holdout
+    re-runs lost 23 of 24 records when this rewrote the file with the selected tasks only)."""
+    tasks = [mini_task("A-1"), mini_task("A-2"), mini_task("A-3")]
+    suite, out = mini_suite(tmp_path, tasks), tmp_path / "r.json"
+    er.run_suite(suite, out=out, ask=asker(fail_on=("A-2", "A-3")), scorer=scorer_for({"A-1", "A-2"}),
+                 run_info=dict(RUN_INFO), log=lambda m: None)
+    retry = asker()
+    result = er.run_suite(suite, out=out, ask=retry, scorer=scorer_for({"A-1", "A-2"}), run_info=dict(RUN_INFO),
+                          task_ids=["A-2"], retry_errors=True, log=lambda m: None)
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert retry.log == ["A-2"]
+    assert set(saved["tasks"]) == {"A-1", "A-2", "A-3"}
+    assert [saved["tasks"][t]["status"] for t in ("A-1", "A-2", "A-3")] == ["pass", "pass", "error"]
+    assert saved["summary"]["pass"] == 2 and saved["summary"]["error"] == 1 and result["complete"]
+    assert saved["suite"]["selected"] == ["A-1", "A-2", "A-3"]
+    last = asker()
+    er.run_suite(suite, out=out, ask=last, scorer=scorer_for(set()), run_info=dict(RUN_INFO),
+                 task_ids=["A-3"], retry_errors=True, log=lambda m: None)
+    saved = json.loads(out.read_text(encoding="utf-8"))
+    assert last.log == ["A-3"] and saved["tasks"]["A-1"]["status"] == "pass" and saved["summary"]["scored"] == 3
+
+
+def test_a_tasks_run_on_a_new_file_covers_only_those_tasks(tmp_path):
+    suite, out = mini_suite(tmp_path), tmp_path / "r.json"
+    result = er.run_suite(suite, out=out, ask=asker(), scorer=scorer_for({"A-1"}), run_info=dict(RUN_INFO),
+                          task_ids=["A-1"], log=lambda m: None)
+    assert set(result["tasks"]) == {"A-1"} and result["complete"] and result["suite"]["selected"] == ["A-1"]
+
+
 def test_infrastructure_failures_are_errors_not_failures_and_are_scrubbed(tmp_path):
     suite, out = mini_suite(tmp_path), tmp_path / "r.json"
     result = er.run_suite(suite, out=out, ask=asker(fail_on=("A-1",)), scorer=scorer_for({"A-2"}),
