@@ -35,6 +35,8 @@ describe('STAR professional desktop structure', () => {
   it('marks the actual current workspace rather than a decorative status badge', async () => {
     render(<Desktop preview/>)
     await userEvent.click(screen.getByRole('button', {name: /^Projects/}))
+    // MotionSurface completes the outgoing page transition before mounting Projects.
+    await screen.findByRole('heading', {name: 'Your workspaces'})
     const main = screen.getByRole('main')
     expect(within(main).getByRole('heading', {name: 'Your workspaces'})).toBeTruthy()
     const current = within(main).getByRole('button', {name: /STAR Current workspace/})
