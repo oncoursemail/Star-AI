@@ -43,32 +43,31 @@ export function StartCanvas({
 }) {
   return (
     <section className="start-canvas" aria-labelledby="start-canvas-title">
+      <div className="start-project">
+        <span className="start-project-mark" aria-hidden="true"/>
+        <span>Working in</span>
+        <strong dir="auto" title={project}>{project}</strong>
+      </div>
       <div className="start-hero">
         <div className="start-hero-copy">
-          <div className="start-project"><span className="start-project-mark" aria-hidden="true"/>In <strong dir="auto" title={project}>{project}</strong></div>
           <h2 id="start-canvas-title">Make something <span>worth keeping.</span></h2>
-          <p>Ideas are easy. The details make them good. Show STAR what you're building, and work through the design, code and evidence together.</p>
+          <p>From the first sketch to the final playtest. Design, build and check the details with STAR in one workspace.</p>
         </div>
         <div className="start-portrait">
-          <StarFace mood={mood} size={96} follow className="start-portrait-face" label="Star, STAR's mascot"/>
-          <span>Ready when you are.</span>
+          <StarFace mood={mood} size={128} follow className="start-portrait-face" label="Star, STAR's mascot"/>
+          <span>Here to help you make it.</span>
         </div>
       </div>
       <div className="start-section-heading">
-        <h3>Where to begin</h3>
-        <span>Choose a direction, then edit your brief</span>
+        <h3>Choose a starting point</h3>
+        <span>Or describe your own task below</span>
       </div>
       <div className="start-actions" role="group" aria-label="Starting points">
         {startActions.map(({title, detail, prompt, Icon}) => (
-          <button
-            className="start-action"
-            key={title}
-            type="button"
-            onClick={() => onStart(prompt)}
-          >
-            <span className="start-action-icon" aria-hidden="true"><Icon size={19} strokeWidth={1.7}/></span>
+          <button className="start-action" key={title} type="button" onClick={() => onStart(prompt)}>
+            <span className="start-action-icon" aria-hidden="true"><Icon size={18} strokeWidth={1.65}/></span>
             <span className="start-action-copy"><strong>{title}</strong><small>{detail}</small></span>
-            <ArrowUpRight className="start-action-arrow" size={16} strokeWidth={1.7} aria-hidden="true"/>
+            <ArrowUpRight className="start-action-arrow" size={16} strokeWidth={1.8} aria-hidden="true"/>
           </button>
         ))}
       </div>
