@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import json
+from pathlib import Path
 import sys
 
 import pytest
@@ -33,7 +34,7 @@ def test_catalog_preserves_all_66_hypotheses():
     {"opportunities": {}},
 ])
 def test_catalog_rejects_invalid_envelope(tmp_path, mutation):
-    data = json.loads((__import__("pathlib").Path(__file__).parents[1] /
+    data = json.loads((Path(__file__).parents[1] /
                        "star/business/candidate_catalog.json").read_text(encoding="utf-8"))
     data.update(mutation)
     target = tmp_path / "bad.json"
@@ -142,3 +143,39 @@ def test_cli_filters_category(monkeypatch, capsys):
     output = json.loads(capsys.readouterr().out)
     assert len(output["opportunities"]) == 14
     assert all(o["category"] == "roblox_creator_tools" for o in output["opportunities"])
+
+def test_opt_in_knowledge_import_is_idempotent_and_never_trusted(tmp_path):
+    from star.business.knowledge_bridge import seed_candidate_notes
+    from star.knowledge import KnowledgeStore
+
+    root = tmp_path / "star-research"
+    assert seed_candidate_notes(root) == 66
+    assert seed_candidate_notes(root) == 0
+    store = KnowledgeStore(root)
+    try:
+        summary = store.db.execute(
+            "SELECT COUNT(*), SUM(reviewed) FROM notes WHERE project=?",
+            ("STAR Business OS",),
+        ).fetchone()
+        assert tuple(summary) == (66, 0)
+        assert store.find("STAR Business OS", "Roblox", reviewed_only=True) == []
+        assert store.find("STAR Business OS", "Roblox", reviewed_only=False, limit=10)
+        assert store.db.execute(
+            "SELECT COUNT(*) FROM notes WHERE project=? AND kind='unknown'",
+            ("STAR Business OS",),
+        ).fetchone()[0] == 66
+    finally:
+        store.close()
+
+
+def test_knowledge_import_does_not_leak_across_projects(tmp_path):
+    from star.business.knowledge_bridge import seed_candidate_notes
+    from star.knowledge import KnowledgeStore
+
+    root = tmp_path / "notes"
+    assert seed_candidate_notes(root, project="Business Experiment A") == 66
+    store = KnowledgeStore(root)
+    try:
+        assert store.find("Business Experiment B", "", reviewed_only=False) == []
+    finally:
+        store.close()
