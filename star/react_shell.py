@@ -53,6 +53,7 @@ from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
                             handle as handle_media_action)
 from . import media_places
+from . import gpu_helper
 from .chat_media import prepare_turn
 from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
@@ -70,6 +71,8 @@ ALLOWED_ACTIONS = frozenset({
     # Sidebar chat menu (rename, delete after the Undo window) and the composer's
     # "Look at my screen", which needs the owner's per-use consent (star/screen_capture.py).
     'renameChat','deleteChat','captureScreen',
+    # Settings > Use my GPU (star/gpu_helper.py): its status line and the on/off switch.
+    'gpuHelperStatus','gpuHelperSet',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
@@ -120,6 +123,8 @@ PERMITTED_SETTINGS = frozenset({
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
     'best_of_n','best_of_n_max',
+    # Use my GPU: where its files are and when it unloads. The switch itself is `gpuHelperSet`, saved at once.
+    'gpu_helper_server','gpu_helper_model','gpu_idle_minutes',
 })
 
 
@@ -712,6 +717,10 @@ def launch():
             self.discord.begin()
             # Opt-in only; a few seconds after launch so the window is not kept waiting.
             QTimer.singleShot(3_000, self._discord_autostart)
+            try:   # Use my GPU: armed, not loaded; it loads with the first question that needs it
+                gpu_helper.HELPER.configure(Settings.load(self.settings_file), app_data())
+            except Exception:
+                pass
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
 
@@ -964,6 +973,9 @@ def launch():
                     raise ValueError('The previous picture is no longer available to edit.')
             # The chosen place first: a choice that cannot make pictures fails here, before ComfyUI is started.
             media_places.require(settings,'images',home)
+            if settings.media_images=='pc':
+                # Never two big models on the card: Use my GPU unloads before the picture is made.
+                gpu_helper.HELPER.yield_to('the image engine is making a picture')
             if not image_gen.status(settings)['running']:
                 if not effective_comfy_home(settings):
                     raise ComfyError('not_running', 'No image engine is set up: pictures are made by ComfyUI on this PC, it is not '
@@ -1046,6 +1058,15 @@ def launch():
                         # Speech runs where Settings says; a place that does not exist is refused, not replaced.
                         media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
+                if action in ('gpuHelperStatus','gpuHelperSet'):
+                    if action=='gpuHelperSet':
+                        enabled=body.get('enabled')
+                        if type(enabled) is not bool:raise ValueError('Choose on or off')
+                        saved=Settings.load(self.settings_file)
+                        saved.use_my_gpu=enabled
+                        saved.save(self.settings_file)
+                        gpu_helper.HELPER.configure(saved,app_data(),start=enabled)
+                    return json.dumps({'ok':True,'data':gpu_helper.HELPER.status()})
                 if action in DISCORD_ACTIONS:
                     saved=Settings.load(self.settings_file)
                     if action=='discordSetAutostart':
@@ -1210,6 +1231,7 @@ def launch():
                         raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
+                    gpu_helper.HELPER.configure(old,app_data())
                     if old.research_auto_check:
                         QTimer.singleShot(200, self._research_tick)
                     return json.dumps({'ok':True,'data':asdict(old)})
@@ -1520,6 +1542,7 @@ def launch():
                 record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
+            gpu_helper.HELPER.shutdown()    # Use my GPU: the model server STAR started
             self.discord.close()            # the Discord bot STAR started (if any) stops with STAR
             self.warmer.cancel()
             self.runtime.stop()

@@ -38,6 +38,7 @@ from . import doc_grounding, skill_packs, roblox_errors
 from . import best_of_n
 from . import studio_loop, studio_tool_examples
 from . import project_rules
+from . import gpu_helper
 from .studio_connections import default_target, validate_target
 
 
@@ -149,6 +150,12 @@ class Settings:
     project_rules_enabled: bool = False    # opt-in: add the workspace's AGENTS.md (star/project_rules.py) to each turn
     luau_retry_ladder: bool = False        # opt-in: a second, thinking repair after a failed Luau repair
     skill_pack_embeddings: bool = False    # opt-in: STAR Server embeddings pick a skill pack the keywords missed
+    # Settings > "Use my GPU" (star/gpu_helper.py): STAR's code model on this PC's NVIDIA card, per request, the
+    # server as fallback. Off by default. Paths '' = <app data>/gpu-helper/llama-server.exe and star-fast.gguf.
+    use_my_gpu: bool = False
+    gpu_helper_server: str = ''
+    gpu_helper_model: str = ''
+    gpu_idle_minutes: int = 10
 
     @classmethod
     def load(cls, file: Path):
@@ -234,6 +241,15 @@ class Settings:
                 or '\x00' in self.router_models_dir
                 or self.router_models_dir.lower().startswith(('http:', 'https:', 'file:'))):
             raise ValueError('Choose a local folder for the GGUF model router')
+        if type(self.use_my_gpu) is not bool:
+            raise ValueError('Use my GPU must be on or off')
+        for key in ('gpu_helper_server', 'gpu_helper_model'):
+            value = getattr(self, key)
+            if (not isinstance(value, str) or len(value) > 1024 or '\x00' in value
+                    or value.lower().startswith(('http:', 'https:', 'file:', '\\\\', '//'))):
+                raise ValueError('Choose local files for Use my GPU, not a URL or network share')
+        if type(self.gpu_idle_minutes) is not int or not 1 <= self.gpu_idle_minutes <= 240:
+            raise ValueError('Use my GPU: idle minutes must be 1 to 240')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
 
@@ -1264,6 +1280,12 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
+                if kind == 'lan' and settings.use_my_gpu is True:
+                    # STAR's code model on this PC's graphics card when it is ready; the server otherwise and
+                    # whenever the PC fails (star/gpu_helper.py). Everything else in this turn is unchanged.
+                    if not gpu_helper.HELPER.enabled:
+                        gpu_helper.HELPER.configure(settings, home)
+                    client = gpu_helper.GpuRoutingClient(client, settings)
                 # Summaries, sub-agents, specialists and code repair are not the conversation:
                 # on STAR Server they carry no id_slot, the server places them (providers.llama_request_fields).
                 helper = background_client(client, settings, conversation=memory_scope)
