@@ -14,6 +14,7 @@ import re
 
 from .code_navigation import (_IDENTIFIER, SOURCE_TYPES, _files, _other_symbols,
                               _py_symbols, _rank)
+from .redact import redact_text
 
 MAX_MAP_FILES = 320
 MAX_MAP_SOURCE_BYTES = 6_000_000
@@ -143,7 +144,7 @@ def code_map(workspace, query: str) -> dict:
             omitted += 1
             continue
         item = {"file": path, "symbols": [
-            {"line": line, "name": name, "kind": kind, "text": signature}
+            {"line": line, "name": name, "kind": kind, "text": redact_text(signature)}
             for line, name, kind, signature in symbols[:MAX_MAP_LINES_PER_FILE]
         ]}
         preview = {**output, "files": output["files"] + [item], "incomplete": True}
