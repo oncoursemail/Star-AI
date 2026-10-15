@@ -1,0 +1,669 @@
+{
+  "schema_version": 1,
+  "research_date": "2026-10-14",
+  "state": "hypotheses_not_sales",
+  "source": "docs/research/STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md",
+  "disclaimer": "Test prices are assumptions, not observed market rates or earnings. No idea is approved for publication or expenditure.",
+  "opportunities": [
+    {
+      "id": 1,
+      "category": "roblox_creator_tools",
+      "name": "Roblox UI Accessibility Auditor",
+      "buyer": "Roblox Studio teams",
+      "deliverable": "Plugin checks contrast, missing focus states, mobile tap targets; gives actionable fixes",
+      "proposed_test_price": "$24–$59",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 2,
+      "category": "roblox_creator_tools",
+      "name": "Luau Security Review Toolkit",
+      "buyer": "Roblox programmers",
+      "deliverable": "Local/static rules for remotes, trust boundaries, deprecated APIs, unsafe datastore patterns",
+      "proposed_test_price": "$29–$89",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 3,
+      "category": "roblox_creator_tools",
+      "name": "Studio Visual Regression Reporter",
+      "buyer": "Studio teams",
+      "deliverable": "Captures same camera states, image comparisons, change reports",
+      "proposed_test_price": "$49–$149",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 4,
+      "category": "roblox_creator_tools",
+      "name": "Studio Performance Inspector",
+      "buyer": "Roblox developers",
+      "deliverable": "Find costly render, particle, asset, and network patterns; quantify before/after",
+      "proposed_test_price": "$29–$99",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 5,
+      "category": "roblox_creator_tools",
+      "name": "Professional Settings UI Kit",
+      "buyer": "Roblox indie studios",
+      "deliverable": "Accessible responsive settings menus with Luau sources and demos",
+      "proposed_test_price": "$9–$39",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 6,
+      "category": "roblox_creator_tools",
+      "name": "Inventory and Shop UI Kit",
+      "buyer": "Roblox studios",
+      "deliverable": "Responsive inventory/trading/shop views, hooks and saved settings",
+      "proposed_test_price": "$19–$49",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 7,
+      "category": "roblox_creator_tools",
+      "name": "Camera and Cutscene Editor",
+      "buyer": "Roblox creators",
+      "deliverable": "Timeline tools, presets, cinematic shot controls",
+      "proposed_test_price": "$29–$79",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 8,
+      "category": "roblox_creator_tools",
+      "name": "Roblox VFX Performance Pack",
+      "buyer": "VFX artists",
+      "deliverable": "Original effect presets with lower-end mobile benchmarks",
+      "proposed_test_price": "$9–$39",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 9,
+      "category": "roblox_creator_tools",
+      "name": "Weather and Biome System",
+      "buyer": "Roblox world builders",
+      "deliverable": "Atmospheric rain, snow, day/night, LOD and optimized audio",
+      "proposed_test_price": "$19–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 10,
+      "category": "roblox_creator_tools",
+      "name": "Secure Inventory Framework",
+      "buyer": "Game teams",
+      "deliverable": "Versioned persistence, migration tests, typed Luau interfaces",
+      "proposed_test_price": "$19–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 11,
+      "category": "roblox_creator_tools",
+      "name": "Quest and Dialogue Framework",
+      "buyer": "Game developers",
+      "deliverable": "UI + quest persistence + localization + clean extension points",
+      "proposed_test_price": "$19–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 12,
+      "category": "roblox_creator_tools",
+      "name": "Multiplayer Round System",
+      "buyer": "Party/arena game teams",
+      "deliverable": "Matchmaking lobby, role transitions, anti-exploit checks",
+      "proposed_test_price": "$19–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 13,
+      "category": "roblox_creator_tools",
+      "name": "NPC Behavior Starter",
+      "buyer": "Adventure games",
+      "deliverable": "Behavior tree examples, paths, enemy health and testing place",
+      "proposed_test_price": "$9–$39",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 14,
+      "category": "roblox_creator_tools",
+      "name": "Roblox Asset Audit Plugin",
+      "buyer": "Studio teams",
+      "deliverable": "Detect broken content refs, naming problems, oversized assets and unsafe dependencies",
+      "proposed_test_price": "$29–$79",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 15,
+      "category": "cross_engine_game_products",
+      "name": "Unity Scene Audit Editor Tool",
+      "buyer": "Unity developers",
+      "deliverable": "Warnings for missing references, bad assets, huge texture budgets",
+      "proposed_test_price": "$15–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 16,
+      "category": "cross_engine_game_products",
+      "name": "Unity Animation Event Toolkit",
+      "buyer": "Unity developers",
+      "deliverable": "Preview and inspect events, retiming, validation",
+      "proposed_test_price": "$19–$69",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 17,
+      "category": "cross_engine_game_products",
+      "name": "Unity Mobile Optimization Presets",
+      "buyer": "Indie mobile teams",
+      "deliverable": "Proven project settings, comparison scenes, benchmarking guide",
+      "proposed_test_price": "$19–$59",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 18,
+      "category": "cross_engine_game_products",
+      "name": "Godot 2D Starter Kit",
+      "buyer": "Godot devs",
+      "deliverable": "Polished original platformer/roguelike starter scenes and scripts",
+      "proposed_test_price": "$9–$39",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 19,
+      "category": "cross_engine_game_products",
+      "name": "Godot UI Components",
+      "buyer": "Godot devs",
+      "deliverable": "Accessible menus, inventory, dialog, responsive controls",
+      "proposed_test_price": "$9–$39",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 20,
+      "category": "cross_engine_game_products",
+      "name": "Stylized Forest Asset Pack",
+      "buyer": "Unity/Unreal/Blender",
+      "deliverable": "Original optimized trees, rocks, textures, LODs, demo scene",
+      "proposed_test_price": "$19–$79",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 21,
+      "category": "cross_engine_game_products",
+      "name": "Alien Biome 3D Pack",
+      "buyer": "Indie studios",
+      "deliverable": "Distinctive glowing plants, rocks, shader materials and compatibility previews",
+      "proposed_test_price": "$19–$79",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 22,
+      "category": "cross_engine_game_products",
+      "name": "Cartoon Impact VFX Pack",
+      "buyer": "Indie studios",
+      "deliverable": "High-quality stylized impact/charge/dash effects",
+      "proposed_test_price": "$15–$59",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 23,
+      "category": "cross_engine_game_products",
+      "name": "Sci-Fi Sound and UI Pack",
+      "buyer": "Indie devs",
+      "deliverable": "Original licensed UI sounds, HUD icons, functional menus",
+      "proposed_test_price": "$12–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 24,
+      "category": "cross_engine_game_products",
+      "name": "Game QA Bug Reproduction Kit",
+      "buyer": "Small studios",
+      "deliverable": "Template and desktop tool collecting repro steps/screenshots safely",
+      "proposed_test_price": "$15–$99",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 25,
+      "category": "productized_services",
+      "name": "Roblox UI Redesign Sprint",
+      "buyer": "Roblox teams",
+      "deliverable": "1–3 menus redesigned and implemented with revision scope",
+      "proposed_test_price": "$149–$699",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 26,
+      "category": "productized_services",
+      "name": "Luau Bug-Fix Sprint",
+      "buyer": "Roblox teams",
+      "deliverable": "Diagnose and repair scoped errors with reproducible tests",
+      "proposed_test_price": "$99–$499",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 27,
+      "category": "productized_services",
+      "name": "Roblox Performance Audit",
+      "buyer": "Live game teams",
+      "deliverable": "Profiling plus written optimization findings and before/after proof",
+      "proposed_test_price": "$149–$799",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 28,
+      "category": "productized_services",
+      "name": "Roblox Gameplay System Build",
+      "buyer": "Roblox studio owners",
+      "deliverable": "Implement one clearly scoped system and tests",
+      "proposed_test_price": "$250–$1,500",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 29,
+      "category": "productized_services",
+      "name": "Game Trailer & Screenshot Pack",
+      "buyer": "Game developers",
+      "deliverable": "Short video, store media, screenshots, captions",
+      "proposed_test_price": "$100–$599",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 30,
+      "category": "productized_services",
+      "name": "YouTube Gaming Thumbnail Service",
+      "buyer": "Small channels",
+      "deliverable": "Custom thumbnail concepts and validated text/composition",
+      "proposed_test_price": "$20–$79",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 31,
+      "category": "productized_services",
+      "name": "Indie Game Landing Page",
+      "buyer": "Solo game makers",
+      "deliverable": "Responsive site with trailer, waitlist, download links",
+      "proposed_test_price": "$199–$999",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 32,
+      "category": "productized_services",
+      "name": "Discord Community Setup",
+      "buyer": "Small studios",
+      "deliverable": "Roles, onboarding, support channel, authorized bot configuration",
+      "proposed_test_price": "$149–$699",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 33,
+      "category": "productized_services",
+      "name": "Website Speed & Accessibility Sprint",
+      "buyer": "Small businesses",
+      "deliverable": "Measured page improvements and a clear issue report",
+      "proposed_test_price": "$199–$999",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 34,
+      "category": "productized_services",
+      "name": "Etsy Catalog Cleanup",
+      "buyer": "Etsy sellers",
+      "deliverable": "Fix descriptions, inconsistent listing images, tracking and accuracy",
+      "proposed_test_price": "$99–$399",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 35,
+      "category": "productized_services",
+      "name": "Small Business CRM Workflow Setup",
+      "buyer": "Local service businesses",
+      "deliverable": "With authorization, automate consented intake and follow-up handoffs",
+      "proposed_test_price": "$299–$1,500",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 36,
+      "category": "productized_services",
+      "name": "Support Knowledge Base Setup",
+      "buyer": "Small SaaS firms",
+      "deliverable": "Build/help test FAQs, routing and draft replies from approved docs",
+      "proposed_test_price": "$299–$1,500",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 37,
+      "category": "web_templates",
+      "name": "Indie Game Launch Framer Template",
+      "buyer": "Solo developers",
+      "deliverable": "Homepage, trailer, wishlist, press kit",
+      "proposed_test_price": "$29–$79",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 38,
+      "category": "web_templates",
+      "name": "Roblox Studio Portfolio Template",
+      "buyer": "Small Roblox studios",
+      "deliverable": "Case studies, team, careers, games portfolio",
+      "proposed_test_price": "$29–$99",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 39,
+      "category": "web_templates",
+      "name": "Streamer / VTuber Press Kit",
+      "buyer": "Creators",
+      "deliverable": "Sponsor page, scheduling, social links, media kit",
+      "proposed_test_price": "$19–$69",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 40,
+      "category": "web_templates",
+      "name": "Esports Team Website Template",
+      "buyer": "Teams",
+      "deliverable": "Schedule, players, sponsors, news CMS",
+      "proposed_test_price": "$29–$99",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 41,
+      "category": "web_templates",
+      "name": "Game Asset Storefront Template",
+      "buyer": "Digital creators",
+      "deliverable": "Gallery, asset details, demo and checkout link",
+      "proposed_test_price": "$29–$79",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 42,
+      "category": "web_templates",
+      "name": "Small Agency Framer Template",
+      "buyer": "Freelancers",
+      "deliverable": "Conversion-oriented services, process, case studies",
+      "proposed_test_price": "$39–$99",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 43,
+      "category": "web_templates",
+      "name": "Webflow Game Festival Template",
+      "buyer": "Event organizers",
+      "deliverable": "Submissions, agenda, teams, newsletter",
+      "proposed_test_price": "$39–$119",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 44,
+      "category": "web_templates",
+      "name": "Accessible Dark Dashboard Component Pack",
+      "buyer": "Designers",
+      "deliverable": "Polished annotated components with focus and contrast states",
+      "proposed_test_price": "$19–$79",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 45,
+      "category": "web_templates",
+      "name": "Animated Landing Page Microinteractions",
+      "buyer": "Web designers",
+      "deliverable": "Accessible motion components that respect reduced motion",
+      "proposed_test_price": "$9–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 46,
+      "category": "web_templates",
+      "name": "Figma-to-React Design System",
+      "buyer": "Dev agencies",
+      "deliverable": "Tokens, components, stories, responsive source code",
+      "proposed_test_price": "$49–$199",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 47,
+      "category": "recurring_software",
+      "name": "Roblox Release Checklist SaaS",
+      "buyer": "Multi-developer studios",
+      "deliverable": "Track pre-release bugs, API changes, approvals and rollbacks",
+      "proposed_test_price": "$9–$49/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 48,
+      "category": "recurring_software",
+      "name": "Game Change Screenshot Monitor",
+      "buyer": "Development teams",
+      "deliverable": "Scheduled before/after gallery and regressions",
+      "proposed_test_price": "$9–$59/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 49,
+      "category": "recurring_software",
+      "name": "Roblox Community Changelog Bot",
+      "buyer": "Game teams",
+      "deliverable": "Reviewable release notes generated from approved changes",
+      "proposed_test_price": "$9–$39/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 50,
+      "category": "recurring_software",
+      "name": "Discord Support Triage Bot",
+      "buyer": "Community owners",
+      "deliverable": "Ticket categorization, escalation and evidence collection",
+      "proposed_test_price": "$19–$99/mo",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 51,
+      "category": "recurring_software",
+      "name": "Shopify Product Data Quality App",
+      "buyer": "Store merchants",
+      "deliverable": "Spot missing variants, bad images, stale descriptions",
+      "proposed_test_price": "$9–$49/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 52,
+      "category": "recurring_software",
+      "name": "Shopify FAQ Draft Assistant",
+      "buyer": "Merchants",
+      "deliverable": "Draft accurate policy-grounded answers for human approval",
+      "proposed_test_price": "$19–$79/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 53,
+      "category": "recurring_software",
+      "name": "Booking Inquiry Organizer",
+      "buyer": "Service businesses",
+      "deliverable": "Consolidate opted-in inquiries and draft scheduling replies",
+      "proposed_test_price": "$29–$149/mo",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 54,
+      "category": "recurring_software",
+      "name": "Local Business Review Insight Reporter",
+      "buyer": "Service businesses",
+      "deliverable": "Authorized review analysis and theme reports, no fabricated reviews",
+      "proposed_test_price": "$29–$99/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 55,
+      "category": "recurring_software",
+      "name": "Client Deliverable Portal",
+      "buyer": "Creative agencies",
+      "deliverable": "Status, approval, file versions, handoff audit",
+      "proposed_test_price": "$19–$99/mo",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 56,
+      "category": "recurring_software",
+      "name": "Lead Intake Quality Checker",
+      "buyer": "B2B businesses",
+      "deliverable": "Duplicate screening, required fields, consent flags, routing",
+      "proposed_test_price": "$29–$149/mo",
+      "priority": "A",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 57,
+      "category": "other_goods_content",
+      "name": "Original Custom Pet Portraits",
+      "buyer": "Pet owners",
+      "deliverable": "Human-approved artwork and print-ready variants",
+      "proposed_test_price": "$20–$75",
+      "priority": "C",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 58,
+      "category": "other_goods_content",
+      "name": "Personalized Event Invitation Kits",
+      "buyer": "Event planners",
+      "deliverable": "Editable invitation suite made from original designs",
+      "proposed_test_price": "$10–$39",
+      "priority": "C",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 59,
+      "category": "other_goods_content",
+      "name": "Niche Teacher Classroom Resources",
+      "buyer": "Teachers",
+      "deliverable": "Original worksheets, checklists and branded packs",
+      "proposed_test_price": "$5–$29",
+      "priority": "C",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 60,
+      "category": "other_goods_content",
+      "name": "Specialist Obsidian or Notion Templates",
+      "buyer": "Researchers and teams",
+      "deliverable": "Useful specialized workflows, docs, sample data",
+      "proposed_test_price": "$9–$49",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 61,
+      "category": "other_goods_content",
+      "name": "Developer Productivity Newsletter",
+      "buyer": "Game developers",
+      "deliverable": "Distinctive researched weekly workflows; sponsorship later",
+      "proposed_test_price": "Free → sponsor",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 62,
+      "category": "other_goods_content",
+      "name": "Roblox Dev Tutorials and Courses",
+      "buyer": "Roblox learners",
+      "deliverable": "Thorough runnable code examples and Studio demos",
+      "proposed_test_price": "$19–$99",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 63,
+      "category": "other_goods_content",
+      "name": "Indie Game Tool Comparison Site",
+      "buyer": "Engine/tool buyers",
+      "deliverable": "Hands-on tests and transparent affiliate links",
+      "proposed_test_price": "Affiliate",
+      "priority": "C",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 64,
+      "category": "other_goods_content",
+      "name": "Print-on-Demand Niche Gifts",
+      "buyer": "Gift shoppers",
+      "deliverable": "Original designs, disclosed production partners, Printify fulfillment",
+      "proposed_test_price": "$20–$55",
+      "priority": "C",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 65,
+      "category": "other_goods_content",
+      "name": "Custom Brand Logo Animation Service",
+      "buyer": "Small businesses",
+      "deliverable": "Original animated identity, transparent deliverables",
+      "proposed_test_price": "$79–$399",
+      "priority": "B",
+      "validation": "unvalidated"
+    },
+    {
+      "id": 66,
+      "category": "other_goods_content",
+      "name": "Software Micro-Utility Desktop Apps",
+      "buyer": "Niche professionals",
+      "deliverable": "Single-purpose CSV, screenshot, batch media or QA helper",
+      "proposed_test_price": "$9–$79",
+      "priority": "A",
+      "validation": "unvalidated"
+    }
+  ]
+}
