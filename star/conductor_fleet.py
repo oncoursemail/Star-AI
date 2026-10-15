@@ -13,7 +13,7 @@ import asyncio
 from dataclasses import dataclass, replace
 from hashlib import sha256
 import re
-from typing import Callable, Mapping
+from typing import Any, Callable, Mapping
 
 from .agent_runtime import TeamResult, run_plan
 from .orchestration import Task, TaskPlan
@@ -104,7 +104,7 @@ async def run_fleet_team(
     enabled: bool = False,
     allow_cloud_workers: bool = False,
     allow_cloud_project_data: bool = False,
-    clients: Mapping[str, object] | None = None,
+    clients: Mapping[str, Any] | None = None,
     on_event: Callable[[dict], None] | None = None,
     task_timeout: float = 90.0,
     total_timeout: float = 300.0,
@@ -171,8 +171,8 @@ async def run_fleet_team(
         capacity = 1 if kinds[member.id] == "local" else min(2, call_limits(settings).parallel)
         server_semaphores.setdefault(key, asyncio.Semaphore(capacity))
 
-    active_clients: dict[str, object] = {}
-    created_clients: list[object] = []
+    active_clients: dict[str, Any] = {}
+    created_clients: list[Any] = []
     observations: dict[str, dict] = {}
     attempt_counts = {member.id: 0 for member in members}
 
