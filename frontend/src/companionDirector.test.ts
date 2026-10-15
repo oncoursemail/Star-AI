@@ -11,7 +11,15 @@ describe('STAR companions truthful activity contract',()=>{
    expect(applyCompanionEvent(working,{actorId:'claude',runId:'r2',sequence:0,at:20,phase:'finished'})).toBe(working)
    const complete=applyCompanionEvent(working,{actorId:'claude',runId:'r1',sequence:1,at:21,phase:'finished'})
    expect(complete.phase).toBe('finished')
-   expect(applyCompanionEvent(complete,{actorId:'claude',runId:'r2',sequence:0,at:25,phase:'thinking'}).runId).toBe('r2')
+   expect(applyCompanionEvent(complete,{actorId:'claude',runId:'r2',sequence:2,at:25,phase:'thinking'}).runId).toBe('r2')
+ })
+ it('returns to idle on an observed scheduler event before decorative play',()=>{
+   const start=initialCompanion('star')
+   const a=applyCompanionEvent(start,{actorId:'star',runId:'r1',sequence:0,at:5,phase:'thinking'})
+   const b=applyCompanionEvent(a,{actorId:'star',runId:'r1',sequence:1,at:100,phase:'finished'})
+   const c=applyCompanionEvent(b,{actorId:'star',runId:'r1',sequence:2,at:300,phase:'idle'})
+   expect(c.phase).toBe('idle')
+   expect(c.lastChangedAt).toBe(300)
  })
  it('defaults to human form and only transforms on explicit approval',()=>{
    const base=initialCompanion('star')
