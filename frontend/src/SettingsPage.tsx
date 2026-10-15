@@ -12,6 +12,7 @@ import {VoiceSettings} from './VoiceSettings'
 import {DiscordSettings} from './DiscordSettings'
 import {StudioTargetSettings} from './StudioTargetSettings'
 import {ModelFleetPanel,type ModelTeamReport} from './ModelFleetPanel'
+import {GpuHelperSettings} from './GpuHelperSettings'
 import './settings-page.css'
 
 type Invoke=(action:string,payload?:Record<string,unknown>)=>Promise<unknown>
@@ -139,7 +140,7 @@ function SearchKey({provider,label,stored,invoke,disabled,onSaved}:{provider:'br
  </div>
 }
 
-const SETTINGS_KEYS_IGNORED_FOR_DIRTY=new Set(['reduced_motion'])
+const SETTINGS_KEYS_IGNORED_FOR_DIRTY=new Set(['reduced_motion','use_my_gpu'])  // both save themselves
 /** True when the form differs from what was last saved. Reduced motion saves itself, so it never counts. */
 export function settingsDirty(draft:AppSettings,saved:AppSettings):boolean {
  const a=draft as unknown as Record<string,unknown>,b=saved as unknown as Record<string,unknown>
@@ -221,6 +222,9 @@ export function SettingsPage(props:SettingsPageProps) {
    </Block>
    <Block id="fleet" keywords="router specialists team models gpu local">
      <ModelFleetPanel draft={draft} onChange={setDraft} models={modelList} routerRunning={!!data.model_router_running} brainRunning={data.brain_running} disabled={inactive} busy={busy} routerBusy={props.routerBusy} teamChecking={props.teamChecking} teamResult={props.teamResult} chooseFolder={props.selectRouterFolder} startRouter={props.startLocalRouter} stopBrain={props.stopLocalBrain} testTeam={props.testSpecialists}/>
+   </Block>
+   <Block id="gpu-helper" keywords="use my gpu graphics card nvidia cuda speed faster local llama">
+     <GpuHelperSettings draft={draft} set={set} disabled={inactive}/>
    </Block>
    <Block id="limits" keywords="limits turns context budget tokens performance prompt">
      <Panel className="settings-section"><h3 className="settings-group-title">Limits</h3>

@@ -72,6 +72,8 @@ class ComfyLauncher:
         with self._lock:
             if not self.running():
                 command, folder = self.command(effective_comfy_home(settings), settings.comfy_port)
+                from .gpu_helper import HELPER
+                HELPER.yield_to('the image engine is using the graphics card')   # never both on the card
                 logs = home / 'logs'
                 logs.mkdir(parents=True, exist_ok=True)
                 with open(logs / 'comfyui.log', 'ab') as log:
