@@ -88,12 +88,13 @@ describe('STAR\'s brain map',()=>{
  })
  it('shows only counts that come from the repository or the project notes',()=>{
   const text=page.body.textContent||''
-  for(const fact of ['300 with runnable checks','137 checked practice answers','64 pass','0 so far','18,133 passages'])
+  for(const fact of ['300 with runnable checks','137 checked practice answers','64 pass','18,133 passages'])
    expect(text.replace(/\s+/g,' '),fact).toContain(fact)
   const packs=readdirSync(resolve(process.cwd(),'..','star','skill_packs'),{withFileTypes:true}).filter(entry=>entry.isDirectory()&&!entry.name.startsWith('_'))
   expect(brainCounts.items.find(item=>item.label==='Skill packs')?.value).toBe(String(packs.length))
   const bundled=JSON.parse(readFileSync(resolve(process.cwd(),'..','star','skill_packs','lessons_bundled.json'),'utf8'))
-  expect(brainCounts.items.find(item=>item.label==='Lessons promoted')?.value).toBe(String(bundled.lessons.length))
+  expect(brainCounts.items.find(item=>item.label==='Lesson candidates')?.value).toBe(String(bundled.lessons.length))
+  expect(text.replace(/\s+/g,' ')).toContain(`${bundled.lessons.length} waiting for review`)
  })
 })
 

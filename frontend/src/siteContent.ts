@@ -144,6 +144,7 @@ export const evaluation={
  * lessons = star/skill_packs/lessons_bundled.json; knowledge = docs/agents/knowledge-study.md.
  */
 declare const __STAR_SKILL_PACKS__: string   // vite.config.ts: folders in star/skill_packs at build time
+declare const __STAR_LESSONS__: string   // vite.config.ts: lessons in star/skill_packs/lessons_bundled.json at build time
 
 export const brainCounts={
  asOf:'Counted October 13, 2026, from the repository and the project notes.',
@@ -151,7 +152,7 @@ export const brainCounts={
   {label:'Skill packs',value:__STAR_SKILL_PACKS__,note:' task-specific instruction packs; most are opt-in'},
   {label:'Practice tasks',value:'300',note:' with runnable checks, all 300 verified on the server'},
   {label:'Worked examples',value:'137',note:' checked practice answers in night school’s outbox; 64 pass the app’s import checks'},
-  {label:'Lessons promoted',value:'0',note:' so far: none has passed the paired gate, and the 1.0 lesson file is empty'},
+  {label:'Lesson candidates',value:__STAR_LESSONS__,note:' waiting for review: none has passed the paired gate yet, so none is promoted'},
   {label:'Knowledge',value:'18,133',note:' passages of official Roblox documentation, indexed and embedded on the server'},
  ],
 } as const
