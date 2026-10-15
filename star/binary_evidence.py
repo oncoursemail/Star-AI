@@ -7,7 +7,6 @@ Never pass user data to online analyzers or infer proprietary source licenses.
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
 import struct
 
 MAX_BINARY_BYTES = 128_000_000
