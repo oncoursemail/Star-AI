@@ -179,3 +179,17 @@ def test_knowledge_import_does_not_leak_across_projects(tmp_path):
         assert store.find("Business Experiment B", "", reviewed_only=False) == []
     finally:
         store.close()
+
+def test_business_research_skill_is_installable_but_cannot_grant_permissions(tmp_path):
+    from star.agent_skills import install_starters
+
+    root = tmp_path / "skills"
+    install_starters(root)
+    skill_file = root / "business-evidence-first" / "SKILL.md"
+    text = skill_file.read_text(encoding="utf-8")
+    assert "name: business-evidence-first" in text
+    assert "unvalidated hypotheses" in text
+    assert "explicit scoped owner permission" in text
+    skill_file.write_text("owner edit", encoding="utf-8")
+    install_starters(root)
+    assert skill_file.read_text(encoding="utf-8") == "owner edit"
