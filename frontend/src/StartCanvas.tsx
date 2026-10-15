@@ -50,7 +50,7 @@ export function StartCanvas({
           <p>Ideas are easy. The details make them good. Show STAR what you're building, and work through the design, code and evidence together.</p>
         </div>
         <div className="start-portrait">
-          <StarFace mood={mood} size={124} follow className="start-portrait-face" label="Star, STAR's mascot"/>
+          <StarFace mood={mood} size={96} follow className="start-portrait-face" label="Star, STAR's mascot"/>
           <span>Ready when you are.</span>
         </div>
       </div>
