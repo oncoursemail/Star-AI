@@ -217,5 +217,6 @@ def test_react_bootstrap_calls_real_bundle_path_only_when_enabled(tmp_path, monk
     settings.save(file)
     on = shell._get_state(file, offline)
     assert on["lesson_bundle"]["status"] == "imported"
-    assert on["lesson_bundle"]["imported"] == 0   # the shipped bundle starts empty
+    shipped = json.loads((Path(shell.__file__).parent / "skill_packs" / "lessons_bundled.json").read_text(encoding="utf-8"))
+    assert on["lesson_bundle"]["imported"] == len(shipped["lessons"])   # every shipped lesson, as a candidate
     assert shell._get_state(file, offline)["lesson_bundle"]["status"] == "already"

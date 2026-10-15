@@ -1,0 +1,414 @@
+[
+ {
+  "id": "practice-learned-char-existing-and-new",
+  "category": "character-lifecycle",
+  "difficulty": 1,
+  "goal": "Handle characters that already exist and every respawn",
+  "prompt": "In my Roblox game: write a server Script that adds a BoolValue named \"Tagged\" (Value false) to every player's character, every time a character spawns, including players who joined before the script started and characters that already exist.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Misses players or characters that already exist"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "added",
+     "re": "\\.PlayerAdded\\s*:\\s*Connect",
+     "why": "PlayerAdded"
+    },
+    {
+     "id": "char",
+     "re": "\\.CharacterAdded\\s*:\\s*Connect",
+     "why": "CharacterAdded"
+    },
+    {
+     "id": "existing_players",
+     "re": ":GetPlayers\\s*\\(",
+     "why": "handles players already in the game"
+    },
+    {
+     "id": "existing_char",
+     "re": "\\.Character\\b",
+     "why": "handles a character that already exists"
+    },
+    {
+     "id": "bool",
+     "re": "Instance\\.new\\s*\\(\\s*\\\"BoolValue\\\"",
+     "why": "creates the BoolValue"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-died-event",
+  "category": "character-lifecycle",
+  "difficulty": 1,
+  "goal": "React to death with Humanoid.Died, not polling",
+  "prompt": "In my Roblox game: write a server Script that counts deaths: each player gets a leaderstats folder with an IntValue \"Deaths\"; each time the player's Humanoid dies, add 1. Hook up every new character.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Polls Health in a loop"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "died",
+     "re": "\\.Died\\s*:\\s*(Connect|Once)",
+     "why": "uses Humanoid.Died"
+    },
+    {
+     "id": "humanoid",
+     "any": [
+      "WaitForChild\\s*\\(\\s*\\\"Humanoid\\\"",
+      "FindFirstChildOfClass\\s*\\(\\s*\\\"Humanoid\\\"",
+      "FindFirstChildWhichIsA\\s*\\(\\s*\\\"Humanoid\\\""
+     ],
+     "why": "gets the Humanoid"
+    },
+    {
+     "id": "leaderstats",
+     "re": "\\\"leaderstats\\\"",
+     "why": "leaderstats folder"
+    },
+    {
+     "id": "char",
+     "re": "CharacterAdded",
+     "why": "every new character"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_poll",
+     "re": "while\\b[^\\n]*\\bdo\\b[\\s\\S]{0,200}\\.Health\\s*<=?\\s*0",
+     "why": "do not poll Health in a loop"
+    },
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-removing-cleanup",
+  "category": "character-lifecycle",
+  "difficulty": 2,
+  "goal": "Disconnect per-character connections on respawn and leave",
+  "prompt": "In my Roblox game: write a server Script that, for every character, connects the Humanoid's HealthChanged event to print the new health. Keep the connection per player in a table and disconnect it when the character is removed (CharacterRemoving) and when the player leaves (PlayerRemoving), then remove the player's entry.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Leaks connections across respawns"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "removing",
+     "re": "\\.CharacterRemoving\\b",
+     "why": "uses CharacterRemoving"
+    },
+    {
+     "id": "leaving",
+     "re": "\\.PlayerRemoving\\b",
+     "why": "uses PlayerRemoving"
+    },
+    {
+     "id": "disconnect",
+     "re": ":Disconnect\\s*\\(",
+     "why": "disconnects"
+    },
+    {
+     "id": "clear",
+     "re": "\\[\\s*\\w+\\s*\\]\\s*=\\s*nil",
+     "why": "removes the player's entry"
+    },
+    {
+     "id": "health",
+     "re": "\\.HealthChanged\\b",
+     "why": "HealthChanged"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-manual-respawn",
+  "category": "character-lifecycle",
+  "difficulty": 2,
+  "goal": "Spawn characters by hand with CharacterAutoLoads off",
+  "prompt": "In my Roblox game: write a server Script that turns automatic spawning off with Players.CharacterAutoLoads, spawns each player once when they join, and respawns them 5 seconds after their Humanoid dies. Use LoadCharacterAsync (the non-Async LoadCharacter is deprecated) and make sure a player who left in the meantime is not spawned.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses the deprecated LoadCharacter"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "autoloads",
+     "re": "CharacterAutoLoads\\s*=\\s*false",
+     "why": "CharacterAutoLoads = false"
+    },
+    {
+     "id": "load",
+     "re": ":LoadCharacterAsync\\s*\\(",
+     "why": "LoadCharacterAsync"
+    },
+    {
+     "id": "delay",
+     "any": [
+      "task\\.delay\\s*\\(\\s*5\\b",
+      "task\\.wait\\s*\\(\\s*5\\b"
+     ],
+     "why": "waits 5 seconds"
+    },
+    {
+     "id": "still_here",
+     "any": [
+      "\\.Parent\\b",
+      "IsDescendantOf\\s*\\(",
+      "FindFirstChild\\s*\\(\\s*\\w+\\.Name"
+     ],
+     "why": "checks the player is still in the game"
+    },
+    {
+     "id": "died",
+     "re": "\\.Died\\b",
+     "why": "Humanoid.Died"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_deprecated_load",
+     "re": ":LoadCharacter\\s*\\(",
+     "why": "LoadCharacter is deprecated; use LoadCharacterAsync"
+    },
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-rig-type",
+  "category": "character-lifecycle",
+  "difficulty": 2,
+  "goal": "Support R6 and R15 rigs",
+  "prompt": "In my Roblox game: write a ModuleScript `Rig` with `Rig.torsoOf(character: Model): BasePart?` that returns UpperTorso for an R15 rig and Torso for an R6 rig, deciding by the Humanoid's RigType (nil when there is no Humanoid or no torso).",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Assumes one rig type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "rigtype",
+     "re": "\\.RigType\\b",
+     "why": "reads Humanoid.RigType"
+    },
+    {
+     "id": "enum",
+     "re": "Enum\\.HumanoidRigType\\.R(15|6)\\b",
+     "why": "compares with Enum.HumanoidRigType"
+    },
+    {
+     "id": "upper",
+     "re": "\\\"UpperTorso\\\"",
+     "why": "R15 UpperTorso"
+    },
+    {
+     "id": "torso",
+     "re": "\\\"Torso\\\"",
+     "why": "R6 Torso"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-isa-inheritance",
+  "category": "character-lifecycle",
+  "difficulty": 1,
+  "goal": "IsA follows class inheritance",
+  "prompt": "In my Roblox game: write a server Script that makes every physical part inside workspace.Ghost (a Model; get it with WaitForChild) non-collidable and half transparent. It must also work for MeshParts, WedgeParts and unions, so check the class family, not one class name.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Compares ClassName with Part"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "isa",
+     "re": ":IsA\\s*\\(\\s*\\\"BasePart\\\"\\s*\\)",
+     "why": "IsA(\"BasePart\") covers every part class"
+    },
+    {
+     "id": "desc",
+     "re": ":GetDescendants\\s*\\(",
+     "why": "visits every descendant"
+    },
+    {
+     "id": "collide",
+     "re": "\\.CanCollide\\s*=\\s*false",
+     "why": "CanCollide false"
+    },
+    {
+     "id": "transp",
+     "re": "\\.Transparency\\s*=\\s*0?\\.5",
+     "why": "half transparent"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_classname",
+     "re": "\\.ClassName\\s*==\\s*\\\"Part\\\"",
+     "why": "ClassName == \"Part\" misses MeshPart and the others"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-char-spawn-teleport",
+  "category": "character-lifecycle",
+  "difficulty": 2,
+  "goal": "Move a fresh character with PivotTo after its root exists",
+  "prompt": "In my Roblox game: write a server Script that moves every newly spawned character to workspace.SpawnPad (a Part; get it with WaitForChild) plus 3 studs up. Wait for HumanoidRootPart with a 10 second timeout and give up when it does not appear. Move the whole model.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses SetPrimaryPartCFrame"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "root",
+     "re": "WaitForChild\\s*\\(\\s*\\\"HumanoidRootPart\\\"\\s*,\\s*10\\s*\\)",
+     "why": "waits for the root with a timeout"
+    },
+    {
+     "id": "pivot",
+     "re": ":PivotTo\\s*\\(",
+     "why": "moves the model with PivotTo"
+    },
+    {
+     "id": "up",
+     "re": "Vector3\\.new\\s*\\(\\s*0\\s*,\\s*3\\s*,\\s*0\\s*\\)",
+     "why": "3 studs up"
+    },
+    {
+     "id": "char",
+     "re": "CharacterAdded",
+     "why": "every spawn"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_setprimary",
+     "re": "SetPrimaryPartCFrame",
+     "why": "SetPrimaryPartCFrame is deprecated; use PivotTo"
+    },
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ }
+]
