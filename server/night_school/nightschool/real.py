@@ -455,19 +455,34 @@ def export_outbox(settings, state: dict) -> dict:
             except ValueError:
                 continue
             newest[row["task"]] = row
+    # Only rows the app's importer accepts (star/worked_examples.py refuses a whole file for one bad row or for more
+    # than MAX_ROWS rows), newest first, so the file imports as it is.
+    from star.worked_examples import MAX_ROWS, validate_row
+    rows, refused = [], 0
+    for task_id, row in sorted(newest.items(), key=lambda item: (str(item[1].get("ts", "")), item[0]), reverse=True):
+        out = {
+            "id": "night-school-" + task_id, "group_id": task_id, "task_category": row.get("category", ""),
+            "instruction": row["prompt"], "response": scrub(row["answer"]),
+            "evidence": ["night-school automated checks: " + ", ".join(str(c) for c in row.get("checks", []))[:150]],
+            "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
+            "lessons_in_context": row.get("lessons", [])}
+        try:
+            validate_row(out)
+        except ValueError:
+            refused += 1
+            continue
+        if len(rows) < MAX_ROWS:
+            rows.append(out)
     with open(outbox / "worked-examples.jsonl", "w", encoding="utf-8", newline="\n") as handle:
-        for task_id, row in sorted(newest.items()):
-            handle.write(json.dumps({
-                "id": "night-school-" + task_id, "group_id": task_id, "task_category": row.get("category", ""),
-                "instruction": row["prompt"], "response": scrub(row["answer"]),
-                "evidence": ["night-school automated checks: " + ", ".join(str(c) for c in row.get("checks", []))[:150]],
-                "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
-                "lessons_in_context": row.get("lessons", [])}, ensure_ascii=False) + "\n")
+        for out in sorted(rows, key=lambda r: r["group_id"]):
+            handle.write(json.dumps(out, ensure_ascii=False) + "\n")
     (outbox / "README.txt").write_text(
         "STAR night school outbox\n\n"
         "star-lessons-night-school.json  promoted lessons in the app's export format (star-lessons-v1), as candidates\n"
         "worked-examples.jsonl           the newest verified answer per practice task (instruction / response rows;\n"
-        "                                reviewed=false: a person must review them before any training use)\n\n"
+        "                                reviewed=false: a person must review them before any training use)\n"
+        f"                                {len(rows)} rows; {refused} verified answers left out because the app's\n"
+        f"                                importer refuses them (e.g. longer than its answer limit); at most {MAX_ROWS}\n\n"
         "The installed app cannot read this folder. These files reach STAR only through a pull request and the\n"
-        "next release.\n", encoding="utf-8")
-    return {"lessons": len(active), "examples": len(newest)}
+        "next release (python -m star.learned_week bundle; see docs/SELF_LEARNING_LOOP.md).\n", encoding="utf-8")
+    return {"lessons": len(active), "examples": len(rows)}

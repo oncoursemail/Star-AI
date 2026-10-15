@@ -551,8 +551,14 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
             "fixed_tasks": ["P-01", "P-02"], "validation_before": "1/2", "validation_with": "2/2"}}}}
         (settings.data / "examples.jsonl").write_text(json.dumps({
             "task": "P-01", "category": "luau", "prompt": task["prompt"], "answer": again.answer,
-            "checks": ["luau_block"], "lessons": ["L1"]}) + "\n", encoding="utf-8")
+            "checks": ["luau_block"], "lessons": ["L1"]}) + "\n" + json.dumps({
+            "task": "P-02", "category": "luau", "prompt": task["prompt"], "answer": "local x = 1\n" * 500,
+            "checks": ["luau_block"], "lessons": []}) + "\n", encoding="utf-8")
+        # The answer over the importer's limit is left out, so the file imports as it is.
         assert export_outbox(settings, state) == {"lessons": 1, "examples": 1}
+        from star.worked_examples import import_file
+        assert import_file(settings.outbox / "worked-examples.jsonl", home=tmp_path / "app-home",
+                           project="STAR")["imported"] == 1
         exported = json.loads((settings.outbox / "star-lessons-night-school.json").read_text(encoding="utf-8"))
         assert exported["format"] == "star-lessons-v1" and exported["lessons"][0]["text"] == fake.LESSON
         assert exported["lessons"][0]["status"] == "candidate" and "validation" in exported["lessons"][0]["evidence"]
