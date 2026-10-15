@@ -44,6 +44,7 @@ from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_action as handle_discord_action, start_if_opted_in
+from .clips_obs import CLIP_ACTIONS, ClipService
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -93,6 +94,8 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 # Settings > Discord: status, Start/Stop and the opt-in autostart for the Discord bot process
 # (star/discord_supervisor.py). Never carries the token, the owner's IDs or any key.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | DISCORD_ACTIONS
+# STAR Clips only accepts explicit desktop UI clicks; never model tool calls.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_ACTIONS
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -708,6 +711,7 @@ def launch():
             self.warmer = Warmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
+            self.clips = ClipService()  # No capture until explicit owner-controlled OBS actions.
             self.discord = DiscordSupervisor(app_data())
             self.discord.begin()
             # Opt-in only; a few seconds after launch so the window is not kept waiting.
@@ -1054,6 +1058,11 @@ def launch():
                         saved.discord_autostart=enabled
                         saved.save(self.settings_file)
                     return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
+                if action in CLIP_ACTIONS:
+                    # Local OBS WebSocket I/O is kept off the Qt/React UI thread.
+                    # No model tool exposes these recording controls.
+                    self._run(rid, action, lambda: self.clips.handle(action, body))
+                    return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
                 if action in MEDIA_ACTIONS:
                     def media_worker():
                         return handle_media_action(
