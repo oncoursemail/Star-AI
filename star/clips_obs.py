@@ -117,8 +117,6 @@ class ClipService:
                 self._client.save_replay_buffer()
                 return {"connected": True, "buffer_active": True, "save_requested": True,
                         "message": "Save requested. Verify the video in OBS's recording folder."}
-            except RuntimeError:
-                raise
             except Exception:
                 raise RuntimeError(
                     "OBS could not complete the replay action. Check OBS's log and replay settings."
