@@ -19,7 +19,7 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from .settings import ASR_MODELS, ENDPOINTERS, OUTPUT_MODES, VoiceSettings
+from .settings import ASR_MODELS, CALL_MODES, ENDPOINTERS, OUTPUT_MODES, VoiceSettings
 
 # The scripted caller. Short, natural questions; the third one is cut off by the fourth (barge-in test).
 TEST_LINES = {
@@ -51,6 +51,7 @@ def _add_engine_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--endpointer", choices=ENDPOINTERS)
     parser.add_argument("--output", choices=OUTPUT_MODES, help="speakers turns the echo gate on")
     parser.add_argument("--max-reply-tokens", dest="max_reply_tokens", type=int)
+    parser.add_argument("--call-mode", dest="call_mode", choices=CALL_MODES, help="push-to-talk (default) or hands-free")
     parser.add_argument("--offline-brain", action="store_true",
                         help="use built-in scripted replies instead of the STAR Server (audio path test)")
 

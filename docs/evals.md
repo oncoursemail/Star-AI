@@ -18,6 +18,7 @@ the numbers can and cannot tell you.
 | Harness-owned Luau: prelude, 28 unit-test bodies, reference answers (`<ID>.md` must pass, `<ID>.bad.md` must fail) | `evals/roblox/prelude.luau`, `evals/roblox/tests/*.luau`, `evals/roblox/reference/*.md` |
 | Stored results | `evals/results/*.json` (no private addresses; the answers are kept so a result can be re-scored) |
 | Skill packs | `star/skill_packs/<name>/SKILL.md` + `references/sources.md` |
+| Other-engine packs and suite (27 opt-in `engine-*` packs, 54 static golden tasks; not wired into `python -m star.evals run`, which scores Luau) | `star/skill_packs/engines.py`, `evals/engines/golden-tasks-other-engines-v1.json`, `tests/test_engine_skill_packs.py`, research in `docs/research/engines/` |
 | Tests of all of the above | `tests/test_eval_*.py`, `tests/test_skill_packs.py` |
 
 The harness files are owned by the harness: `star/selfbuild.py` only writes `star/skills/*.py` and `docs/skills/*.md`, and

@@ -125,6 +125,8 @@ describe('owner corrections', () => {
     await user.type(box, 'Use task.wait instead of wait.')
     await user.click(screen.getByRole('button', {name: /save correction/i}))
     await waitFor(() => expect(onCorrect).toHaveBeenCalledWith('Use task.wait instead of wait.'))
-    expect(await screen.findByText(/Correction saved/)).toBeTruthy()
+    // It names the section the owner can actually find (there is no "Learning panel").
+    expect(await screen.findByText('Correction saved. It waits under Your corrections on the Projects page, where you can make it a test.')).toBeTruthy()
+    expect(screen.queryByText(/Learning panel/)).toBeNull()
   })
 })

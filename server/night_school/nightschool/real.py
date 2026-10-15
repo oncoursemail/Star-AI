@@ -25,6 +25,12 @@ from .fake import DIAGNOSE_MARK
 from .idle import read_key
 
 PROJECT = "night-school"
+# Failing answers (docs/research/multi-model-20261014.md, idea 10): passes already go to examples.jsonl; failures go to
+# data/failures.jsonl so pass/fail pairs exist for preference training and routing. Server-only (never exported),
+# scrubbed, joinable to attempts.jsonl by answer_sha256. Read by nothing in the engine or the gate.
+FAILURES_FILE = "failures.jsonl"
+FAILURES_MAX_BYTES = 50 * 1024 * 1024
+FAILURE_ANSWER_CHARS = 8000
 DIAGNOSE_SYSTEM = (
     "This is a " + DIAGNOSE_MARK + ". You are given a Roblox Luau task, an answer that failed automatic checks, and "
     "the failed checks. Reply with JSON only, no other text: {\"cause\": \"one sentence: why the answer failed\", "
@@ -162,10 +168,39 @@ class RealModel:
         self._knowledge = client_for(self.app_settings)
         self._luau_check = luau_check
         self._sandbox = sandbox or LocalSandbox(settings.luau_vm)
+        # Parallel lanes: lane 0 is this process (the old path, unchanged); lane k >= 1 has its own gate (its own
+        # planner lease) and its own slot, and runs each answer in a child process (`python -m nightschool
+        # lane-solve`), because the application keeps its data folder in process-wide environment variables.
+        self._lane = threading.local()
+        self.gates = [gate]
+        self.lane_slots = [int(settings.slot)]
+        self.child_env = dict(os.environ)
         self.close = pin_slots(self.slot_of)      # close() gives the application its own client factory back
+
+    def add_lane(self, gate, slot: int) -> int:
+        self.gates.append(gate)
+        self.lane_slots.append(int(slot))
+        return len(self.gates) - 1
+
+    @property
+    def lane(self) -> int:
+        return getattr(self._lane, "index", 0)
+
+    def in_lane(self, index: int, work):
+        """Run `work()` as lane `index` (its slot, its gate). False when the lane's gate says stop."""
+        self._lane.index = index
+        try:
+            if not self.gates[index].wait(self.stop):
+                return False
+            work()
+            return True
+        finally:
+            self._lane.index = 0
 
     # --- slot and politeness ----------------------------------------------------------------------------
     def slot_of(self, model: str) -> int:
+        if self.lane and model in (self.settings.model, ""):
+            return self.lane_slots[self.lane]
         if time.monotonic() - self._slots_at > 600:
             try:
                 self._slots = self.gate.watch.slot_for(self.settings.slot)
@@ -179,7 +214,7 @@ class RealModel:
         return slot
 
     def _ready(self) -> None:
-        if self._wait and not self.gate.wait(self.stop):
+        if self._wait and not self.gates[self.lane].wait(self.stop):
             raise Yielded("stopping")
         if self.stop():
             raise Yielded("stopping")
@@ -187,10 +222,11 @@ class RealModel:
     def _watched(self, work):
         """Run `work(cancel)` while a watcher looks for another client every `watch_s` seconds."""
         cancel, done, why = threading.Event(), threading.Event(), {"text": ""}
+        gate, slot = self.gates[self.lane], self.lane_slots[self.lane]
 
         def watch():
             while not done.wait(self.settings.watch_s):
-                reason = "stopping" if self.stop() else self.gate.intruder(self.settings.slot)
+                reason = "stopping" if self.stop() else gate.intruder(slot)
                 if reason:
                     why["text"] = reason
                     cancel.set()
@@ -208,9 +244,29 @@ class RealModel:
         finally:
             done.set()
             watcher.join(self.settings.watch_s + 8)
-            self.gate.own_work_done()
+            gate.own_work_done()
             if cancel.is_set():
                 raise Yielded(why["text"])
+
+    def keep_failure(self, task: dict, answer: str, reasons: list[str], recalled: list[str]) -> None:
+        """Append one failing answer to data/failures.jsonl; a full file or a write problem only skips it."""
+        import hashlib
+        from .engine import utc
+        from .pool import is_validation
+        path = Path(self.settings.data) / FAILURES_FILE
+        try:
+            if path.exists() and path.stat().st_size >= FAILURES_MAX_BYTES:
+                return
+            row = {"ts": utc(), "task": task["id"], "category": task.get("category", ""),
+                   "validation": is_validation(task["id"], self.settings.validation_percent),
+                   "prompt": scrub(task["prompt"]), "answer": scrub(answer[:FAILURE_ANSWER_CHARS]),
+                   "answer_sha256": hashlib.sha256(answer.encode("utf-8")).hexdigest(),
+                   "reasons": [scrub(r) for r in reasons[:6]], "lessons": list(recalled)}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+        except (OSError, ValueError, KeyError):
+            return
 
     def check_lesson(self, text: str) -> str:
         """The app's own rule for a lesson text (no secret, no grant of permissions); "" when refused."""
@@ -241,7 +297,40 @@ class RealModel:
                                    prelude=self.prelude, test_body=task.get("_test_body", ""))
 
     # --- the two calls the engine needs --------------------------------------------------------------------
+    def _solve_in_child(self, task: dict, lessons: list[dict]) -> Result:
+        """Lane k >= 1: the answer and its checks run in a child process; a yield of this lane kills it."""
+        self._ready()
+        started = time.monotonic()
+        gate, slot = self.gates[self.lane], self.lane_slots[self.lane]
+        request = json.dumps({"task": task, "lessons": lessons, "slot": slot, "prelude": self.prelude}).encode("utf-8")
+        child = subprocess.Popen([sys.executable, "-m", "nightschool", "lane-solve"], stdin=subprocess.PIPE,
+                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, env=dict(self.child_env))
+        out: list[bytes] = []
+        reader = threading.Thread(target=lambda: out.append(child.communicate(request)[0]), daemon=True)
+        reader.start()
+        try:
+            while reader.is_alive():
+                reader.join(self.settings.watch_s)
+                if not reader.is_alive():
+                    break
+                reason = "stopping" if self.stop() else gate.intruder(slot)
+                if reason:
+                    child.kill()
+                    reader.join(10)
+                    raise Yielded(reason)
+        finally:
+            gate.own_work_done()
+        text = (out[0] if out else b"").decode("utf-8", "replace").strip().splitlines()
+        try:
+            data = json.loads(text[-1]) if text else {}
+            return Result(**{k: v for k, v in data.items() if k in Result.__dataclass_fields__})
+        except (ValueError, TypeError):
+            return Result(error=f"lane worker gave no answer (exit {child.returncode})",
+                          seconds=time.monotonic() - started)
+
     def solve(self, task: dict, lessons: list[dict]) -> Result:
+        if self.lane:
+            return self._solve_in_child(task, lessons)
         from star import eval_checks as checks
         from star.desktop_core import Settings as AppSettings, app_data, run_task
         from star.eval_runner import PRODUCT_FAILURES, isolated_appdata
@@ -275,8 +364,10 @@ class RealModel:
             score = self.score(task, answer)
         except checks.InfraError as exc:
             return Result(error=scrub(str(exc))[:200], answer=answer, seconds=seconds, recalled=recalled)
-        return Result(score.passed, [scrub(r) for r in score.reasons], [c.record() for c in score.checks],
-                      answer, seconds, recalled)
+        reasons = [scrub(r) for r in score.reasons]
+        if not score.passed and answer.strip():
+            self.keep_failure(task, answer, reasons, recalled)
+        return Result(score.passed, reasons, [c.record() for c in score.checks], answer, seconds, recalled)
 
     def diagnose(self, task: dict, result: Result) -> dict:
         from star import providers
@@ -289,7 +380,8 @@ class RealModel:
         async def ask(cancel):
             async with providers.open_client(self.app_settings) as client:
                 job = asyncio.ensure_future(client.chat.completions.create(
-                    model=self.settings.model, messages=messages, max_tokens=260, temperature=0.2,
+                    model=getattr(self.settings, "diagnose_model", "") or self.settings.model, messages=messages,
+                    max_tokens=260, temperature=0.2,
                     extra_body={"cache_prompt": False, "chat_template_kwargs": {"enable_thinking": False}}))
                 while not job.done():
                     if cancel.is_set():
@@ -363,19 +455,34 @@ def export_outbox(settings, state: dict) -> dict:
             except ValueError:
                 continue
             newest[row["task"]] = row
+    # Only rows the app's importer accepts (star/worked_examples.py refuses a whole file for one bad row or for more
+    # than MAX_ROWS rows), newest first, so the file imports as it is.
+    from star.worked_examples import MAX_ROWS, validate_row
+    rows, refused = [], 0
+    for task_id, row in sorted(newest.items(), key=lambda item: (str(item[1].get("ts", "")), item[0]), reverse=True):
+        out = {
+            "id": "night-school-" + task_id, "group_id": task_id, "task_category": row.get("category", ""),
+            "instruction": row["prompt"], "response": scrub(row["answer"]),
+            "evidence": ["night-school automated checks: " + ", ".join(str(c) for c in row.get("checks", []))[:150]],
+            "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
+            "lessons_in_context": row.get("lessons", [])}
+        try:
+            validate_row(out)
+        except ValueError:
+            refused += 1
+            continue
+        if len(rows) < MAX_ROWS:
+            rows.append(out)
     with open(outbox / "worked-examples.jsonl", "w", encoding="utf-8", newline="\n") as handle:
-        for task_id, row in sorted(newest.items()):
-            handle.write(json.dumps({
-                "id": "night-school-" + task_id, "group_id": task_id, "task_category": row.get("category", ""),
-                "instruction": row["prompt"], "response": scrub(row["answer"]),
-                "evidence": ["night-school automated checks: " + ", ".join(str(c) for c in row.get("checks", []))[:150]],
-                "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
-                "lessons_in_context": row.get("lessons", [])}, ensure_ascii=False) + "\n")
+        for out in sorted(rows, key=lambda r: r["group_id"]):
+            handle.write(json.dumps(out, ensure_ascii=False) + "\n")
     (outbox / "README.txt").write_text(
         "STAR night school outbox\n\n"
         "star-lessons-night-school.json  promoted lessons in the app's export format (star-lessons-v1), as candidates\n"
         "worked-examples.jsonl           the newest verified answer per practice task (instruction / response rows;\n"
-        "                                reviewed=false: a person must review them before any training use)\n\n"
+        "                                reviewed=false: a person must review them before any training use)\n"
+        f"                                {len(rows)} rows; {refused} verified answers left out because the app's\n"
+        f"                                importer refuses them (e.g. longer than its answer limit); at most {MAX_ROWS}\n\n"
         "The installed app cannot read this folder. These files reach STAR only through a pull request and the\n"
-        "next release.\n", encoding="utf-8")
-    return {"lessons": len(active), "examples": len(newest)}
+        "next release (python -m star.learned_week bundle; see docs/SELF_LEARNING_LOOP.md).\n", encoding="utf-8")
+    return {"lessons": len(active), "examples": len(rows)}

@@ -16,6 +16,7 @@ Honesty rules:
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass, field
 import re
 from time import monotonic
@@ -33,6 +34,11 @@ MAX_CHECKED_BLOCKS = 2
 # repair call is stopped REPAIR_RESERVE before the deadline (time for the re-check and the save).
 REVIEW_RESERVE_SECONDS = 10.0
 REPAIR_RESERVE_SECONDS = 45.0
+# Opt-in retry ladder (setting `luau_retry_ladder`): after a failed repair, one more attempt fed with the repaired
+# code's own diagnostics, with thinking on for llama.cpp brains. Only when this much of the turn is still left.
+RETRY_MIN_SECONDS = 120.0
+RETRY_THINKING_TOKENS = 1500
+_THINK = re.compile(r"<think>.*?</think>", re.S | re.I)
 MIN_PASSAGE_CHARS = 300
 _FENCE = re.compile(r"```[ \t]*(?:lua|luau)\b[^\n]*\n(.*?)```", re.S | re.I)
 _ANY_FENCE = re.compile(r"```.*?```", re.S)
@@ -189,6 +195,18 @@ async def prepare_async(settings, route, prompt: str, prior_user_turns: list[str
                         on_event=None, *, mode: str = "auto", client=_UNSET) -> Grounding:
     """`prepare` off the event loop (it does blocking HTTP), with its progress events delivered
     on the loop's own thread, in order, like every other event of the turn."""
+    # Experimental opt-in: when even referential follow-up grounding is off,
+    # prepare() returns this exact empty result without accessing the client.
+    # Avoid scheduling a needless worker thread for that common fast route.
+    if os.environ.get("STAR_FAST_GROUNDING_NOOP") == "1":
+        try:
+            plan = getattr(route, "grounding", NO_GROUNDING) or NO_GROUNDING
+            if plan.retrieve == "none":
+                follow, _ = followup_grounding(prompt, prior_user_turns, mode=mode)
+                if follow.retrieve == "none":
+                    return Grounding(plan=plan)
+        except Exception:
+            pass  # Unusual route data must retain the original prepare() path.
     loop = asyncio.get_running_loop()
 
     def relay(event: dict) -> None:
@@ -249,24 +267,30 @@ def _describe(errors: list[dict], limit: int = 4) -> str:
     return "\n".join(f"- line {e['line']}: {e['message']} ({e['kind']})" for e in errors[:limit])
 
 
-async def _repair(model_client, model: str, prompt: str, code: str, errors: list[dict], max_tokens: int) -> str:
+async def _repair(model_client, model: str, prompt: str, code: str, errors: list[dict], max_tokens: int,
+                  *, thinking: bool = False) -> str:
     listing = "\n".join(f"- line {e['line']}, column {e['column']}: {e['message']} ({e['kind']})" for e in errors[:8])
+    # llama.cpp only (local brain, STAR Server): a cloud vendor never gets this non-OpenAI field.
+    extra = {"extra_body": {"chat_template_kwargs": {"enable_thinking": True}}} if thinking else {}
     response = await model_client.chat.completions.create(
-        model=model, temperature=0, max_tokens=max_tokens,
+        model=model, temperature=0, max_tokens=max_tokens, **extra,
         messages=[{"role": "system", "content": _REPAIR_SYSTEM},
                   {"role": "user", "content": f"The code was written for this request:\n{prompt[:1200]}\n\n"
                                               f"Code:\n```luau\n{code.rstrip()}\n```\n\nDiagnostics:\n{listing}"}])
-    text = response.choices[0].message.content or ""
+    text = _THINK.sub("", response.choices[0].message.content or "")
     found = _FENCE.search(text)
     return found.group(1) if found and found.group(1).strip() else ""
 
 
-async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tuple[str, list[dict]]:
+async def review_luau(answer: str, check, *, repair=None, retry=None, on_event=None,
+                      runtime_requested=False) -> tuple[str, list[dict]]:
     """Check up to two fenced Luau blocks; repair a failing block once when `repair` is given.
 
     `check(code)` returns the luau_check dict or raises OSError/ValueError when it could not run.
-    `repair(code, errors)` returns corrected code ('' when it has none). Returns the answer with
-    its note appended and one record per block examined. Says nothing when no check ran.
+    `repair(code, errors)` returns corrected code ('' when it has none). `retry(code, errors)` is the
+    optional second rung: called once, only after a repair that completed and still failed, with the
+    latest code and that code's own diagnostics. Returns the answer with its note appended and one
+    record per block examined. Says nothing when no check ran.
     """
     blocks = luau_blocks(answer)
     if not blocks:
@@ -296,6 +320,23 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
         except Exception:
             continue   # the repair attempt failed: the original block stays, with its diagnostics
         record["repair_attempted"] = True
+        if (not (isinstance(second, dict) and second.get("ran") is True and second.get("ok") is True)
+                and retry is not None):
+            # Second rung: the repaired code's own diagnostics when it was checked, else the original ones.
+            checked = second.get("errors") if isinstance(second, dict) and second.get("ran") is True else None
+            latest, latest_errors = (fixed, list(checked)) if checked else (code, record["errors"])
+            _emit(on_event, {"event": "luau_repair_started", "block": number, "attempt": 2})
+            try:
+                again = await retry(latest, latest_errors)
+                third = (await asyncio.to_thread(check, again)
+                         if again and again.strip() not in (code.strip(), latest.strip()) else None)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                again, third = "", None
+            record["retry_attempted"] = True
+            if isinstance(third, dict) and third.get("ran") is True and third.get("ok") is True:
+                fixed, second = again, third
         if isinstance(second, dict) and second.get("ran") is True and second.get("ok") is True:
             # `fix` is the short list of changed lines, kept for the lesson this repair may become.
             record.update(repaired=True, ok=True, fix=_changed_lines(code, fixed))
@@ -311,6 +352,8 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
     if not ran:
         return answer, records
     scope = "Roblox API names and types were not verified, and the code was not run."
+    if runtime_requested:
+        scope = "Roblox API names and types were not verified, and the code was not run by this static check."
     notes = []
     for r in ran:
         name = "The code block" if len(blocks) == 1 else f"Code block {r['block']}"
@@ -321,7 +364,8 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
         elif r["ok"]:
             notes.append(f"{name} compiles and passes Luau type analysis.")
         else:
-            tried = " An automatic fix was tried and did not pass either." if r.get("repair_attempted") else ""
+            tried = (" Two automatic fixes were tried and did not pass either." if r.get("retry_attempted")
+                     else " An automatic fix was tried and did not pass either." if r.get("repair_attempted") else "")
             notes.append(f"{name} did not pass the static Luau check and is shown unchanged.{tried} "
                          f"Treat it as unverified:\n{_describe(r['errors'])}")
     skipped = len(blocks) - len(ran)
@@ -333,9 +377,11 @@ async def review_luau(answer: str, check, *, repair=None, on_event=None) -> tupl
 
 
 async def finalize(grounding: Grounding, route, result, *, model_client=None, prompt: str = "",
-                   started: float | None = None, on_event=None):
+                   started: float | None = None, on_event=None, settings=None, retry_ladder: bool = False,
+                   thinking: bool = False):
     """Luau self-check, then the sources list. Returns the same (answer, messages, archive) shape.
-    Any failure here leaves the model's answer exactly as it was."""
+    Any failure here leaves the model's answer exactly as it was. `retry_ladder` adds the second repair
+    rung; `thinking` (llama.cpp brains only) asks that rung with thinking on."""
     answer, messages, archive = result
     original = answer
     try:
@@ -359,18 +405,47 @@ async def finalize(grounding: Grounding, route, result, *, model_client=None, pr
                         _repair(model_client, route.model, prompt, code, errors,
                                 min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)),
                         timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS))
-            review = review_luau(answer, knowledge.luau_check, repair=repair, on_event=on_event)
+            retry = None
+            if repair is not None and retry_ladder:
+                async def thinking_retry(code: str, errors: list[dict]) -> str:
+                    if timed and left() < RETRY_MIN_SECONDS:
+                        return ""            # not enough of the turn left for a longer, thinking attempt
+                    tokens = min(getattr(route, "response_tokens", 1600), len(code) // 3 + 220)
+                    return await asyncio.wait_for(
+                        _repair(model_client, route.model, prompt, code, errors,
+                                tokens + (RETRY_THINKING_TOKENS if thinking else 0), thinking=thinking),
+                        timeout=max(0.05, left() - REPAIR_RESERVE_SECONDS) if timed else None)
+                retry = thinking_retry
+            review = review_luau(answer, knowledge.luau_check, repair=repair, retry=retry, on_event=on_event,
+                                 runtime_requested=getattr(settings, "luau_run_before_answer", False) is True)
             try:
                 answer, grounding.checks = await (
                     asyncio.wait_for(review, timeout=left() - REVIEW_RESERVE_SECONDS) if timed else review)
             except asyncio.TimeoutError:
                 # The check did not finish in the time the turn had left: no claim about the code.
                 _emit(on_event, {"event": "luau_check_finished", "state": "unavailable", "blocks": 0, "errors": 0})
+        runs = []
+        if getattr(settings, "luau_run_before_answer", False) is True:
+            if model_client is None:
+                # Compatibility path for callers without a separate assertion writer.
+                from .luau_run_review import review
+                answer, runs = await review(answer, settings, route, started=started, on_event=on_event)
+            else:
+                from .luau_run_repair import review
+                answer, runs = await review(
+                    answer, settings, route, prompt=prompt, model_client=model_client,
+                    checker=knowledge.luau_check if knowledge is not None else None,
+                    started=started, on_event=on_event)
+            if runs:
+                archive = [*archive, {"star_luau_run": {"blocks": runs}}]
         answer = answer.rstrip() + sources_footer(grounding.passages, answer) if grounding.passages else answer
         if grounding.status != "off" or grounding.checks:
             archive = [*archive, {"star_knowledge": grounding.record()}]
-        if answer != original and messages and messages[-1].get("role") == "assistant":
-            messages = [*messages[:-1], {**messages[-1], "content": answer}]
+        if answer != original:
+            if messages and messages[-1].get("role") == "assistant":
+                messages = [*messages[:-1], {**messages[-1], "content": answer}]
+            elif runs:
+                messages = [*messages, {"role": "assistant", "content": answer}]
         return answer, messages, archive
     except asyncio.CancelledError:
         raise

@@ -14,9 +14,9 @@ import asyncio
 from copy import deepcopy
 import json
 import re
-from typing import Any
 
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 from .orchestration import ROLES, Task, TaskPlan
 from .team_deadlines import DeadlinePolicy, ProviderSpeeds, SPEEDS, collect_text
 from .web_search import _safe_results, search_web

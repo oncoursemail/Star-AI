@@ -1,8 +1,29 @@
 [project]
 name = "star-genesis"
-version = "0.9.0"
+version = "1.0.0"
 description = "Local AI prototype for Roblox Studio, image understanding and GitHub App development"
 requires-python = ">=3.11"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+# star/re_scripts holds Ghidra scripts (PR #344) that run with Ghidra-injected globals.
+extend-exclude = ["frontend", "site", "data", "evals", "star/re_scripts"]
+
+[tool.ruff.lint]
+# Correctness-focused rules only (no style churn): pyflakes (unused imports and
+# variables, undefined names, redefinitions, import shadowing), syntax errors,
+# bare except, mutable default arguments, and builtin shadowing.
+select = ["F", "E9", "E722", "B002", "B006", "B012", "B015", "B018", "A001", "A002", "PLE"]
+# Invisible characters in these two literals are deliberate (filters and a Discord blank message).
+ignore = ["PLE2502", "PLE2515"]
+
+[tool.ruff.lint.per-file-ignores]
+# Cosmetic findings left in place so open PRs (#240, #281, #287, #333, #339) keep merging cleanly.
+"star/discord_bot/bot.py" = ["A001"]
+"star/roblox_ui_compiler.py" = ["F541"]
+"star/comfy.py" = ["F401"]
+"star/media_features.py" = ["F401"]

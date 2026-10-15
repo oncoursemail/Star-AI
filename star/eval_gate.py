@@ -21,6 +21,10 @@ loss or a reproducible canary failure is BLOCKED (REJECT); anything else is INCO
 
 Stored baselines from another day are refused in paired mode. The single-file mode below is kept for legacy files.
 
+Comparing two models (e.g. a star-fast candidate preset against star-fast) needs `--allow-model-change` (paired mode
+only): the two arms may then name different models, each arm must still be one model, and every other rule and the
+statistics are unchanged.
+
 Only tasks scored (`pass` or `fail`) in the baseline take part. Tasks that errored (server down) are
 never counted as failures, but they also never count as passes: the gate says "incomplete" instead.
 
@@ -320,12 +324,14 @@ def _when(value) -> datetime | None:
 
 def compare_paired(baseline_runs: list, candidate_runs: list, *, alpha: float = eval_stats.DEFAULT_ALPHA,
                    method: str = "sign", canary=(), seed: int = 0, allow_partial: bool = False,
-                   max_session_hours: float = MAX_SESSION_HOURS) -> Verdict:
+                   max_session_hours: float = MAX_SESSION_HOURS, allow_model_change: bool = False) -> Verdict:
     """Paired verdict from k result files per arm that were run in the same session.
 
     Sample j of the baseline (the j-th run by start time) is paired with sample j of the candidate. All runs must be
     the same suite, identity, grader, model and mode, carry `run.started_at`, and fall inside `max_session_hours`.
-    Stored legacy baselines are refused: the point of this mode is a baseline measured next to the candidate."""
+    Stored legacy baselines are refused: the point of this mode is a baseline measured next to the candidate.
+    `allow_model_change` lets the candidate arm name another model than the baseline arm (model comparisons); the
+    runs inside each arm must still agree, and nothing else changes."""
     if not isinstance(baseline_runs, list) or not isinstance(candidate_runs, list) or not baseline_runs or not candidate_runs:
         return Verdict(UNUSABLE, notes=["paired mode needs at least one run per arm"])
     problems: list[str] = []
@@ -346,7 +352,9 @@ def compare_paired(baseline_runs: list, candidate_runs: list, *, alpha: float = 
             if run["suite"].get(key) != first["suite"].get(key):
                 return Verdict(UNUSABLE, notes=[f"{arm} run {index + 1}: suite {key} differs: not a like-for-like comparison"])
         for key in ("model", "mode", "grader_sha256"):
-            if run["run"].get(key) != first["run"].get(key):
+            # With allow_model_change the model is compared within each arm: the arm's first run is the reference.
+            same_as = (candidate_runs[0] if allow_model_change and key == "model" and arm == "candidate" else first)
+            if run["run"].get(key) != same_as["run"].get(key):
                 return Verdict(UNUSABLE, notes=[f"{arm} run {index + 1}: {key} differs: not a like-for-like comparison"])
     starts = {}
     for arm, index, run in runs:
@@ -362,6 +370,9 @@ def compare_paired(baseline_runs: list, candidate_runs: list, *, alpha: float = 
     base_order = [baseline_runs[i] for i in sorted(range(len(baseline_runs)), key=lambda i: starts[("baseline", i)])]
     cand_order = [candidate_runs[i] for i in sorted(range(len(candidate_runs)), key=lambda i: starts[("candidate", i)])]
     notes = []
+    if first["run"].get("model") != candidate_runs[0]["run"].get("model"):
+        notes.append(f"model comparison (allow-model-change): baseline {first['run'].get('model')}, "
+                     f"candidate {candidate_runs[0]['run'].get('model')}")
     arms_in_order = [arm for arm, _ in sorted(starts, key=lambda key: starts[key])]
     switches = sum(1 for a, b in zip(arms_in_order, arms_in_order[1:]) if a != b)
     if len(baseline_runs) >= 2 and len(candidate_runs) >= 2 and switches <= 1:
@@ -439,12 +450,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--canary", default="", help="comma list of canary task ids (a reproducible failure vetoes)")
     parser.add_argument("--seed", type=int, default=0, help="bootstrap seed (the verdict is deterministic for a seed)")
     parser.add_argument("--max-session-hours", type=float, default=MAX_SESSION_HOURS)
+    parser.add_argument("--allow-model-change", action="store_true",
+                        help="paired mode only: the candidate arm may use another model than the baseline arm")
     parser.add_argument("--json", action="store_true", help="print the verdict as JSON")
     args = parser.parse_args(argv)
     if args.paired_session:
         verdict = evaluate_paired(args.baseline, args.candidate, alpha=args.alpha, method=args.method,
                                   canary=[c.strip() for c in args.canary.split(",") if c.strip()], seed=args.seed,
-                                  allow_partial=args.allow_partial, max_session_hours=args.max_session_hours)
+                                  allow_partial=args.allow_partial, max_session_hours=args.max_session_hours,
+                                  allow_model_change=args.allow_model_change)
+    elif args.allow_model_change:
+        parser.error("--allow-model-change needs --paired-session")
     elif len(args.baseline) != 1 or len(args.candidate) != 1:
         parser.error("several files per arm need --paired-session")
     else:
