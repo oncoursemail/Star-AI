@@ -10,7 +10,7 @@ export type CompanionEvent={
   runId:string
   sequence:number
   at:number
-  phase:Exclude<WorkPhase,'idle'>
+  phase:WorkPhase
 }
 export type CompanionState={
   actorId:string
@@ -24,7 +24,7 @@ export type SceneAction='wave'|'tag'|'high-five'|'hug'|'kiss'
 export type CompanionScene={actorId:string;partnerId:string;action:SceneAction}
 
 const phaseMap:Readonly<Record<CompanionEvent['phase'],WorkPhase>>={
-  thinking:'thinking',tool:'tool',speaking:'speaking',
+  idle:'idle',thinking:'thinking',tool:'tool',speaking:'speaking',
   finished:'finished',failed:'failed'
 }
 const done=new Set<WorkPhase>(['finished','failed'])
@@ -36,7 +36,8 @@ export const initialCompanion=(actorId:string,at=0):CompanionState=>({
 export function applyCompanionEvent(state:CompanionState,event:CompanionEvent):CompanionState {
   if(state.actorId!==event.actorId||!event.runId||!Number.isSafeInteger(event.sequence)||
      event.sequence<0||!Number.isFinite(event.at))return state
-  if(state.runId===event.runId&&event.sequence<=state.sequence)return state
+  // Sequence is monotonically increasing per actor across runs, not reset per run.
+  if(event.sequence<=state.sequence)return state
   if(state.runId!==event.runId&&state.phase!=='idle'&&!done.has(state.phase))return state
   return {...state,runId:event.runId,sequence:event.sequence,
     phase:phaseMap[event.phase],lastChangedAt:Math.max(state.lastChangedAt,event.at)}
