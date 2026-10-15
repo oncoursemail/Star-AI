@@ -137,7 +137,7 @@ def _has_matching_receipt(home: Path, candidate: BankPlan, *, now: float) -> boo
         return False
     stamp = record.get("saved_at")
     return (record.get("fingerprint") == candidate.fingerprint
-            and type(stamp) in (int, float) and 0 <= now - stamp <= MAX_BANK_AGE_SECONDS)
+            and isinstance(stamp, (int, float)) and not isinstance(stamp, bool) and 0 <= now - stamp <= MAX_BANK_AGE_SECONDS)
 
 
 def _record(home: Path, candidate: BankPlan, *, now: float, n_saved: int) -> None:
