@@ -83,6 +83,8 @@ export function ClipPanel({disabled=false}:{disabled?:boolean}){
      {busy&&<span> · Working…</span>}
    </div>
    <div className="star-clips__actions">
+     <button type="button" className="secondary-button" disabled={disabled||busy||!report.connected}
+       onClick={()=>void invoke('clipStatus')}>Refresh OBS status</button>
      <button type="button" className="secondary-button" disabled={disabled||busy||!report.connected||report.buffer_active} onClick={()=>void invoke('clipStartBuffer')}>
        <Play size={15}/> Start replay
      </button>
