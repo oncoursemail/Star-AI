@@ -47,9 +47,9 @@ class AgentSpec:
             raise ValueError("Agent needs a source URL")
 
 
-def _spec(id: str, name: str, kind: Kind, integration: Integration, access: Access,
+def _spec(agent_id: str, name: str, kind: Kind, integration: Integration, access: Access,
           capabilities: str, source: str, notes: str, *, oss: bool = True) -> AgentSpec:
-    return AgentSpec(id, name, kind, integration, access, frozenset(capabilities.split()),
+    return AgentSpec(agent_id, name, kind, integration, access, frozenset(capabilities.split()),
                      source, notes, oss)
 
 
