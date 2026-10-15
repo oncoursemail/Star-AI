@@ -106,6 +106,9 @@ class ClipService:
             if not state["connected"]:
                 raise ConnectionError("OBS connection lost. Reconnect.")
             running = state["buffer_active"]
+            # An expected user-state error must not be disguised as an OBS RPC failure.
+            if action == "clipSaveReplay" and not running:
+                raise RuntimeError("Start the OBS replay buffer before saving a clip.")
             try:
                 if action == "clipStartBuffer":
                     if not running:
@@ -117,8 +120,6 @@ class ClipService:
                         self._client.stop_replay_buffer()
                     return {"connected": True, "buffer_active": False,
                             "message": "OBS accepted the replay-buffer stop request."}
-                if not running:
-                    raise RuntimeError("Start the OBS replay buffer before saving a clip.")
                 # A successful request is not proof that the file was written.
                 self._client.save_replay_buffer()
                 return {"connected": True, "buffer_active": True, "save_requested": True,
