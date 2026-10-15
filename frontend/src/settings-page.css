@@ -393,6 +393,9 @@
   .shell .settings-tab.is-current {
     border-color: var(--star-stroke-strong);
   }
+  .shell .settings-tab.is-current::before {
+    content: none;
+  }
 }
 @media (max-width: 600px) {
   .settings-savebar:not(.is-dirty) .settings-savebar-state {
