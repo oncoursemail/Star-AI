@@ -19,17 +19,25 @@ NAMES = ["godot-scenes-and-nodes", "godot-gdscript-typing-and-signals", "godot-p
          "design-core-loop-and-progression", "design-onboarding-and-tutorial", "design-game-feel",
          "design-level-and-obby-layout", "design-economy-and-fair-monetisation", "design-ui-ux-for-games",
          "roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-         "roblox-tweenservice-easing"]
+         "roblox-tweenservice-easing",
+         "roblox-studio-mcp-workflow", "roblox-replication-hot-paths", "roblox-editable-memory-streaming",
+         "roblox-asset-upload-moderation", "roblox-multi-agent-studio", "roblox-architecture-blender", "roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints", "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs", "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud",
+         "roblox-purchases-badges", "roblox-vfx-composer", "roblox-cutscenes"]
 ENGINEERING = {"eng-debugging", "eng-test-first", "eng-verify-before-done"}
 CORE_SERVICE_PACKS = {"roblox-datastore-service-patterns", "roblox-remote-event-function-patterns",
-                      "roblox-tweenservice-easing"}
+                      "roblox-tweenservice-easing", "roblox-purchases-badges"}
+# Typed gameplay and platform packs; their grounding is checked in test_roblox_gameplay_skill_packs.py.
+GAMEPLAY_PACKS = {"roblox-combat-hitboxes", "roblox-pathfinding-npc", "roblox-physics-constraints",
+                  "roblox-collection-tags", "roblox-input-devices", "roblox-sound-design", "roblox-luau-specs",
+                  "roblox-marketplace-purchases", "roblox-teleport-matchmaking", "roblox-open-cloud"}
 UI_PROMPT = "In my Roblox game: write a LocalScript that builds a ScreenGui with a ScrollingFrame and a UIListLayout."
 REMOTE_PROMPT = "In my Roblox game, my RemoteEvent handler trusts the client price. Make the server validate it."
+ENGINE_NAMES = set(skill_packs.ENGINE_CONTEXTS)   # other-engine packs, tested in test_engine_skill_packs.py
 
 
 def test_all_packs_ship_in_the_existing_skill_format():
     packs = skill_packs.available()
-    assert [p.name for p in packs] == NAMES
+    assert [p.name for p in packs if p.name not in ENGINE_NAMES] == NAMES
     for pack in packs:
         assert pack.file.parent.name == pack.name and 1 <= len(pack.description) <= 1024
         assert pack.body.startswith("# ")
@@ -47,11 +55,17 @@ def test_each_pack_is_short_enough_not_to_slow_the_first_token():
 def test_implementation_packs_cite_official_documentation_and_list_the_api_names_it_checked():
     for pack in skill_packs.available():
         # Design-source grounding is exercised through SkillLibrary in test_design_skill_packs.py.
-        if pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS:
+        if (pack.name in ENGINEERING or pack.name.startswith("design-") or pack.name in CORE_SERVICE_PACKS
+                or pack.name in GAMEPLAY_PACKS or pack.name in ENGINE_NAMES):
             continue
         sources = (pack.file.parent / "references" / "sources.md").read_text(encoding="utf-8")
         if pack.name in skill_packs.GODOT_PACKS:
             assert sources.count("https://docs.godotengine.org/en/stable/") >= 5, pack.name
+        elif pack.name == "roblox-architecture-blender":
+            # Experimental pack is OFF until API lookup and independent evaluation.
+            assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
+            assert pack.name not in skill_packs.DEFAULT_ENABLED
+            assert "API names not yet verified by STAR Knowledge /api-lookup" in sources
         else:
             assert sources.count("https://create.roblox.com/docs/") >= 5, pack.name
             assert "verified with the knowledge service /api-lookup" in sources, pack.name
@@ -100,7 +114,7 @@ def test_only_the_best_matching_pack_is_added():
 def test_environment_switch(monkeypatch):
     monkeypatch.delenv(skill_packs.ENV_VAR, raising=False)
     assert skill_packs.enabled_names() == frozenset(skill_packs.DEFAULT_ENABLED) & frozenset(NAMES)
-    for value, expected in (("off", set()), ("none", set()), ("0", set()), ("all", set(NAMES)),
+    for value, expected in (("off", set()), ("none", set()), ("0", set()), ("all", set(NAMES) | ENGINE_NAMES),
                             ("roblox-ui-layout", {"roblox-ui-layout"}),
                             ("roblox-ui-layout, roblox-secure-remotes ,nonsense", {"roblox-ui-layout", "roblox-secure-remotes"}),
                             ("nonsense", set())):
@@ -261,6 +275,33 @@ def test_run_task_delivers_service_pack_only_when_enabled(monkeypatch, tmp_path,
     assert skill_packs.BLOCK_HEADING not in off_text
     assert not any(e["event"] == "skill_packs" for e in off_events)
     assert messages[0] == off_messages[0]
+
+
+def test_architecture_blender_skill_is_relevant_but_off_until_evaluated():
+    prompt = "In my Roblox project design an architectural facade in Blender and import a glTF."
+    assert skill_packs.matching_names(prompt, enabled={"roblox-architecture-blender"}) == ["roblox-architecture-blender"]
+    assert "roblox-architecture-blender" not in skill_packs.matching_names(prompt)
+    assert "roblox-architecture-blender" not in skill_packs.DEFAULT_ENABLED
+    assert skill_packs.enabled_names({skill_packs.ENV_VAR: "roblox-architecture-blender"}) == {"roblox-architecture-blender"}
+
+
+def test_architecture_guidance_documents_opt_in_and_source_only():
+    # The skill is bundled for future opt-in, but it may not suggest the installed
+    # application can export Blender files or that native CI proves Studio import.
+    pack = next(pack for pack in skill_packs.available() if pack.name == "roblox-architecture-blender")
+    assert "STAR_ARCHITECTURE_TOOLS=1" in pack.body
+    assert "source checkout of STAR" in pack.body
+    assert "installed app does not include" in pack.body
+
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / "README.md").read_text(encoding="utf-8")
+    guide = (root / "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md").read_text(encoding="utf-8")
+    # The v1.0 README lists it as one Opt-in row; the caveats live in the guide it links.
+    assert "Architecture planning prototype and Blender building kit (source checkout only" in readme
+    assert "STAR_ARCHITECTURE_TOOLS=1" in readme
+    assert "docs/STAR_ARCHITECTURE_BLENDER_RESEARCH.md" in readme
+    assert "omits that protected workflow" in guide
+    assert "Roblox Studio never ran" in guide
 
 
 @pytest.mark.parametrize(("name", "prompt"), (

@@ -243,7 +243,9 @@ def test_slow_drip_response_has_one_elapsed_deadline_and_closes_without_replay(m
 
 
 def test_legacy_initialize_and_operation_share_the_same_elapsed_budget(monkeypatch):
-    monkeypatch.setattr(connections, "CALL_SECONDS", .08)
+    # 0.4 s per phase against a 0.6 s budget: each phase fits alone with 0.2 s to spare, so a
+    # loaded machine cannot push initialize itself past the budget (it could with 0.05 / 0.08 s).
+    monkeypatch.setattr(connections, "CALL_SECONDS", .6)
     methods = []
     cancelled = []
     async def handler(request):
@@ -255,7 +257,7 @@ def test_legacy_initialize_and_operation_share_the_same_elapsed_budget(monkeypat
         try:
             # Each phase fits the full call budget independently. Together they
             # exceed it, so the already-started operation must be cancelled.
-            await asyncio.sleep(.05)
+            await asyncio.sleep(.4)
         except asyncio.CancelledError:
             cancelled.append(method)
             raise

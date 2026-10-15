@@ -191,3 +191,115 @@ class IdleGate:
             self._last = self.watch.snapshot()
         except OSError:
             self._last, self._quiet_since = None, None
+
+
+class PlannedGate(IdleGate):
+    """The idle gate with STAR's resource planner (star/resource_planner_service.py) in front of it.
+
+    With the planner up, night school holds a "nightschool" lease for its slot: it starts as soon as the planner
+    admits it (no 10-minute wait: the planner knows which busy slots belong to leased batch work such as an eval, and
+    which are chat) and backs off when a renewal says "yield" (chat active, a timing window, a higher-priority job
+    that needs the slot). The HOLD file and the quiet lock are still checked here first, every time.
+    With the planner down, slow, or without fresh data ("fallback"), every call is exactly the old IdleGate.
+    """
+
+    def __init__(self, settings, watch: BrainWatch, *, planner=None, holder: str = "nightschool",
+                 slot: int | None = None, extra_lane: bool = False, **kwargs):
+        super().__init__(settings, watch, **kwargs)
+        self.planner, self.holder = planner, holder
+        self.slot = int(settings.slot if slot is None else slot)
+        self.extra_lane = extra_lane         # lanes 2..N exist only by the planner's leave: no idle-gate fallback
+        self.grant = None
+        self.mode = "idle-gate"
+
+    def _local_stop(self) -> str:
+        if Path(self.settings.hold_file).exists():
+            return "HOLD file present, paused"
+        if self.lock_held():
+            return "quiet lock held, waiting"
+        return ""
+
+    def _ask(self):
+        """Renew the lease, or ask for one. A Grant (see star/planner_client.py)."""
+        if self.grant is not None and self.grant.planned:
+            grant = self.planner.renew(self.grant)
+            if grant.action != "refuse":
+                return grant
+        extra = {}
+        drafts = getattr(self.settings, "diagnose_model", "")
+        if drafts and drafts != getattr(self.settings, "model", ""):
+            extra["extra_models"] = [drafts]       # its lesson drafts on that model are not "chat"
+        return self.planner.admit("nightschool", self.holder, "practice", slot=self.slot, **extra)
+
+    def look(self) -> str:
+        if self.planner is None or not getattr(self.planner, "enabled", False):
+            return "extra lanes run only with the resource planner" if self.extra_lane else super().look()
+        local = self._local_stop()
+        if local:
+            self._quiet_since = None
+            self._drop()
+            return local
+        grant = self._ask()
+        if grant.action == "run":
+            self.grant, self.mode = grant, "planner"
+            return ""
+        if grant.action == "fallback":
+            self.grant = grant if grant.lease_id else None
+            if self.extra_lane:
+                self.grant, self.mode = None, "planner"
+                return "extra lanes run only with the resource planner (" + (grant.reason or "fallback") + ")"
+            self.mode = "idle-gate"
+            return super().look()
+        self.grant, self.mode = None, "planner"
+        self._quiet_since = None
+        return "planner: " + (grant.reason or grant.action)
+
+    def wait(self, stop=lambda: False) -> bool:
+        while not stop():
+            reason = self.look()
+            if not reason:
+                self._say("planner admitted, working" if self.mode == "planner" else "brain idle, working")
+                return True
+            self._say(reason)
+            self._sleep(self.settings.poll_s)
+        return False
+
+    def intruder(self, own_slot: int) -> str:
+        if self.mode != "planner" or self.grant is None or not self.grant.planned:
+            return super().intruder(own_slot)
+        local = self._local_stop()
+        if local:
+            return local.split(",")[0]
+        grant = self.planner.renew(self.grant)
+        if grant.action == "run":
+            self.grant = grant
+            return ""
+        if grant.action == "fallback":          # the planner went away mid-request: the old watch decides
+            if self.extra_lane:
+                self.grant = None
+                return "planner gone (extra lane stops)"
+            self.mode = "idle-gate"
+            return super().intruder(own_slot)
+        self.grant = None
+        self._quiet_since = None
+        return "planner: " + (grant.reason or grant.action)
+
+    def _drop(self) -> None:
+        if self.grant is not None and self.planner is not None:
+            self.planner.release(self.grant)
+        self.grant = None
+
+    def close(self) -> None:
+        self._drop()
+
+
+def make_planner(settings, key: str):
+    """The planner client for night school, or None when switched off (STAR_NS_PLANNER_URL=off) or not importable."""
+    url = getattr(settings, "planner_url", "")
+    if not url or url.lower() in ("off", "0", "none"):
+        return None
+    try:
+        from star.planner_client import PlannerClient
+    except ImportError:
+        return None
+    return PlannerClient(url, key=key, timeout=2.0, down_for=30.0)

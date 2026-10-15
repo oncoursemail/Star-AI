@@ -1,6 +1,6 @@
 import {useEffect,useRef,useState} from 'react'
 import type {ReactNode} from 'react'
-import {BookOpen,Check,ChevronDown,Globe,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
+import {Check,ChevronDown,KeyRound,LoaderCircle,Minus,RefreshCcw,Server,Settings2,ShieldCheck,Workflow,X} from 'lucide-react'
 import {onBackendEvent} from './bridge'
 import type {AppSettings,McpStatus,ServerReport,ServerRole,ServerStatus} from './types'
 import './integrated-tools.css'
@@ -244,6 +244,9 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
      </select>
    </label>
    <p className="integrated-help">After changing provider, save Settings. STAR sends your prompt only to the provider you explicitly selected; ordinary local chat never silently falls back to a cloud model.</p>
+   <label className="integrated-switch"><input type="checkbox" disabled={disabled} checked={draft.luau_run_before_answer===true}
+     onChange={e=>onChange({...draft,luau_run_before_answer:e.target.checked})}/><span>Run my Luau before answering</span></label>
+   <p className="integrated-help">Off by default. Save Settings to run assertions in your STAR Knowledge sandbox before displaying code. Up to two repair rounds; this cannot validate Roblox services or Studio. The server must separately enable execution.</p>
    {(connecting||usesStarServer(draft))?<ServerSetup draft={draft} onChange={onChange} credentials={credentials} invoke={invoke} disabled={disabled}/>:<>
    <div className="integrated-key-controls">
      <label className="integrated-field">Cloud key provider
@@ -268,7 +271,6 @@ export function ProviderPanel({draft,onChange,credentials,invoke,refresh,disable
 const targets=[{name:'graphify_docs',flag:'mcp_graphify_docs',label:'Graphify documentation',note:'Fixed remote read-only Graphify documentation tools'},
  {name:'graphify_local',flag:'mcp_graphify_local',label:'Local Graphify MCP',note:'Explicit localhost Graphify MCP; read-only tools'},
  {name:'obsidian_live',flag:'mcp_obsidian_live',label:'Obsidian live MCP',note:'Existing local vault integration remains independently scoped'}] as const
-type Flag=typeof targets[number]['flag']
 
 export function McpPanel({draft,onChange,status,invoke,disabled=false}:{draft:AppSettings;onChange:(settings:AppSettings)=>void;status?:McpStatus;invoke:Invoke;disabled?:boolean}){
  const [pending,setPending]=useState('')

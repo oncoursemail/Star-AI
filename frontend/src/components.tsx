@@ -1,5 +1,7 @@
 import {CorrectionBox} from './CorrectionBox'
+import {LiveAnswerMarker, ReadAloudButton} from './ReadAloud'
 import {splitSources, type AnswerSource} from './sources'
+import {splitStreaming} from './streamSplit'
 import type {ReactNode} from 'react'
 import {isValidElement, memo, useState} from 'react'
 import {ArrowUpRight, Check, CircleAlert, CircleSlash, Copy, Image as ImageIcon, LoaderCircle, LockKeyhole, Pencil, RotateCcw, ThumbsDown, ThumbsUp, X} from 'lucide-react'
@@ -129,6 +131,17 @@ const Prose = memo(function Prose({text}: {text: string}) {
   )
 })
 
+/** A streaming answer: finished blocks keep their memoized render; only the live tail is parsed per delta. */
+function StreamingProse({text}: {text: string}) {
+  const [done, live] = splitStreaming(text)
+  return (
+    <>
+      {done && <Prose text={done} />}
+      <Prose text={live} />
+    </>
+  )
+}
+
 /** Official documentation STAR retrieved for this answer. Links are https and host-checked in sources.ts. */
 function SourcesRow({sources}: {sources: AnswerSource[]}) {
   return (
@@ -255,7 +268,7 @@ export function Message(props: MessageProps) {
         <div className="msg-bubble">{entry.text}</div>
       ) : (
         <div className="msg-prose">
-          <Prose text={body} />
+          {partial ? <StreamingProse text={body} /> : <Prose text={body} />}
         </div>
       )}
       {sources.length > 0 && <SourcesRow sources={sources} />}
@@ -283,11 +296,13 @@ export function Message(props: MessageProps) {
         <div className="msg-actions is-live" aria-hidden="true">
           <LoaderCircle size={14} className="act-spin" />
           <span>Writing</span>
+          {entry.role === 'assistant' && <LiveAnswerMarker />}
         </div>
       )}
       {!partial && (
         <div className="msg-actions">
           <CopyButton text={entry.text} label={isUser ? 'Copy your message' : 'Copy response'} className="msg-action" />
+          {!isUser && entry.role === 'assistant' && <ReadAloudButton id={entry.id} text={entry.text} newest={pinned} />}
           {onEdit && (
             <button type="button" className="msg-action" title="Put this message back in the composer" onClick={onEdit}>
               <Pencil size={14} aria-hidden="true" />

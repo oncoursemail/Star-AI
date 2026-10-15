@@ -1,0 +1,226 @@
+[
+ {
+  "id": "practice-learned-integrity-refund-validate-first",
+  "category": "economy-integrity",
+  "difficulty": 3,
+  "goal": "Validate every condition before changing state",
+  "prompt": "In my Roblox game: write a ModuleScript `ShopCore` with a server-side `PRICES` table (itemId to coins) and `ShopCore.refund(state, userId: number, itemId: string): (boolean, string?)`. state.owned[userId] is a set of item ids and state.coins[userId] a number. Refund only when the player owns the item, the item has a price and the player has a coins entry: check all three first and return false and a reason without changing anything when one fails. Only then remove the item and add its price to the coins, and return true.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Changes state before the last check"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "prices",
+     "re": "\\bPRICES\\b",
+     "why": "prices live on the server"
+    },
+    {
+     "id": "validate_first",
+     "re": "(?s)return\\s+false.*?coins\\s*\\[[^\\]]+\\]\\s*(\\+=|=(?!=))",
+     "why": "a refusal path comes before the coins are changed"
+    },
+    {
+     "id": "remove",
+     "re": "\\[\\s*itemId\\s*\\]\\s*=\\s*(nil|false)\\b",
+     "why": "removes ownership"
+    },
+    {
+     "id": "true",
+     "re": "return\\s+true\\b",
+     "why": "returns true on success"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_mutate_then_check",
+     "re": "(?s)coins\\s*\\[[^\\]]+\\]\\s*(\\+=|=(?!=))[^\\n]*\\n(?:(?!\\breturn\\s+true\\b).)*?return\\s+false",
+     "why": "state is changed before a later refusal"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-integrity-lock-expiry",
+  "category": "economy-integrity",
+  "difficulty": 3,
+  "goal": "Session-lock expiry must outlast autosave with a margin",
+  "prompt": "In my Roblox game: write a ModuleScript `LockRules` with `LockRules.AUTOSAVE_SECONDS = 60`, `LockRules.expiryFor(now: number): number` returning now + 2 * AUTOSAVE_SECONDS + 30, and `LockRules.canAcquire(lock: {owner: string, expires: number}?, jobId: string, now: number): boolean` that is true when there is no lock, the lock is expired (expires <= now) or the lock already belongs to jobId.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Locks expire before the next autosave"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "autosave",
+     "re": "AUTOSAVE_SECONDS\\s*=\\s*60\\b",
+     "why": "AUTOSAVE_SECONDS = 60"
+    },
+    {
+     "id": "expiry",
+     "re": "2\\s*\\*\\s*[\\w.]*AUTOSAVE_SECONDS\\s*\\+\\s*30",
+     "why": "expiry is 2 x autosave + 30"
+    },
+    {
+     "id": "expired",
+     "re": "expires\\s*<=\\s*now|now\\s*>=\\s*[\\w.]*expires",
+     "why": "expired when expires <= now"
+    },
+    {
+     "id": "owner",
+     "re": "\\.owner\\s*==\\s*jobId|jobId\\s*==\\s*[\\w.]*owner",
+     "why": "own lock can be re-acquired"
+    },
+    {
+     "id": "nil_lock",
+     "re": "\\bnot\\s+lock\\b|lock\\s*==\\s*nil",
+     "why": "no lock means free"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_strict_lt",
+     "re": "expires\\s*<\\s*now\\b",
+     "why": "a lock that expires exactly now is free (<=)"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-integrity-autosave-snapshot",
+  "category": "economy-integrity",
+  "difficulty": 2,
+  "goal": "Snapshot the player list before yielding",
+  "prompt": "In my Roblox game: write a server Script that autosaves every 60 seconds: `local sessions = {}` maps players to data tables. Each round, first copy the players to save into a separate list, then save each one with DataStore:UpdateAsync inside pcall, warning on failure. Players may leave while saves yield, so the loop must not iterate the live sessions table across a yield.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Iterates the live table across yields"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "snapshot",
+     "any": [
+      "table\\.clone\\s*\\(",
+      "table\\.insert\\s*\\(\\s*\\w+\\s*,\\s*\\w+\\s*\\)"
+     ],
+     "why": "copies the list first"
+    },
+    {
+     "id": "update",
+     "re": ":UpdateAsync\\s*\\(",
+     "why": "UpdateAsync"
+    },
+    {
+     "id": "pcall",
+     "re": "\\bpcall\\s*\\(",
+     "why": "pcall"
+    },
+    {
+     "id": "warn",
+     "re": "\\bwarn\\s*\\(",
+     "why": "warns on failure"
+    },
+    {
+     "id": "sixty",
+     "re": "task\\.wait\\s*\\(\\s*60\\b",
+     "why": "every 60 seconds"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_setasync",
+     "re": ":SetAsync\\s*\\(",
+     "why": "use UpdateAsync for player data"
+    },
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-integrity-purchase-once",
+  "category": "economy-integrity",
+  "difficulty": 2,
+  "goal": "A repeated purchase request is processed once",
+  "prompt": "In my Roblox game: write a ModuleScript `PurchaseCore` with `PurchaseCore.buy(state, userId: number, requestId: string, price: number): (boolean, string)`. state.done is a set of processed request ids and state.coins[userId] a number. A requestId that was already processed returns true, \"duplicate\" without charging again; otherwise refuse when the coins are too few, else subtract the price, remember the requestId and return true, \"ok\".",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Charges twice for one request"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "done_check",
+     "re": "done\\s*\\[\\s*requestId\\s*\\]",
+     "why": "looks up the request id"
+    },
+    {
+     "id": "dup",
+     "re": "\\\"duplicate\\\"",
+     "why": "answers duplicate"
+    },
+    {
+     "id": "remember",
+     "re": "done\\s*\\[\\s*requestId\\s*\\]\\s*=\\s*true",
+     "why": "remembers the request"
+    },
+    {
+     "id": "charge",
+     "re": "coins\\s*\\[\\s*userId\\s*\\]\\s*(-=|=\\s*[\\w.\\[\\]]+\\s*-)",
+     "why": "subtracts the price"
+    }
+   ],
+   "forbid": [],
+   "compile_mode": "lenient"
+  }
+ }
+]

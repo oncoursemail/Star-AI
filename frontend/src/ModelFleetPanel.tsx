@@ -49,13 +49,13 @@ export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunnin
       </label>)}
     </div>
     <datalist id="star-model-ids">{models.map(id=><option key={id} value={id}/>)}</datalist>
-    {onServer?<p className="integrated-help">STAR Server manages its own models. Each ID above must be a model the server offers; run Test server in the provider section to list them. No GGUF folder or local router is needed.</p>:<>
+    {onServer?<p className="integrated-help">STAR Server manages its own models. Each name above must be a model the server offers; run Test server in the provider section to list them. No model folder is needed on this PC.</p>:<>
     <div className="integrated-heading"><ShieldCheck size={18}/><div>
-      <strong>Managed local GGUF runtime</strong>
-      <span>{routerRunning?'Model router is running':'Optional; current single-model STAR Brain still works'}</span>
+      <strong>Several models on this PC (advanced)</strong>
+      <span>{routerRunning?'The model switcher is running':'Optional; the single on-device model keeps working without it'}</span>
     </div></div>
-    <p className="integrated-help">A real llama.cpp router loads from a folder you select, with only one resident model to limit RAM usage. No automatic weight downloads. Stop your current managed Brain before starting the router.</p>
-    <label className="integrated-field">GGUF model folder
+    <p className="integrated-help">STAR loads model files (.gguf) from a folder you choose, one at a time, to keep memory use low. Nothing is downloaded for you. Stop the current on-device model before starting.</p>
+    <label className="integrated-field">Model folder (.gguf files)
       <input value={draft.router_models_dir??''} placeholder="C:\\Models\\STAR" disabled={disabled}
         onChange={e=>update('router_models_dir',e.target.value)}/>
     </label>
@@ -91,6 +91,6 @@ export function ModelFleetPanel({draft,onChange,models,routerRunning,brainRunnin
       </small>)}
       <small>{teamResult.note}</small>
     </div>}
-    <p className="integrated-help"><Check size={13}/> A text response is not proof of image, tools or Roblox Studio capability.{onServer?'':' Benchmark Qwen3.8-27B locally before assigning it to everyday requests.'}</p>
+    <p className="integrated-help"><Check size={13}/> A text response is not proof of image, tools or Roblox Studio capability.{onServer?'':' Try a model on a few real tasks before you rely on it every day.'}</p>
   </section>
 }

@@ -1,7 +1,6 @@
 """Audited file tools confined to a user-selected workspace. Never a shell escape hatch."""
 from __future__ import annotations
 
-import json
 import os
 import tempfile
 from pathlib import Path
@@ -9,8 +8,39 @@ from typing import Any
 
 MAX_READ_BYTES = 250_000
 MAX_WRITE_BYTES = 250_000
-DENIED_NAMES = {'.env', '.git', '.github', '.ssh', '.aws', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519'}
+DENIED_NAMES = {'.env', '.git', '.github', '.ssh', '.aws', '.npmrc', '.pypirc', 'id_rsa', 'id_ed25519',
+                '.netrc', '.git-credentials'}
 DENIED_SUFFIXES = {'.pem', '.p12', '.pfx', '.key'}
+# `.env.local`, `.env.production` ... hold the same secrets as `.env`; these few are templates.
+_ENV_TEMPLATES = {'.env.example', '.env.sample', '.env.template'}
+# Windows device names (also with an extension: `nul.txt` opens the device).
+# Windows also treats the superscript digits COM¹-³/LPT¹-³ and the console names as devices.
+_RESERVED = {'con', 'prn', 'aux', 'nul', 'conin$', 'conout$',
+             *(f'{dev}{i}' for dev in ('com', 'lpt') for i in (*range(1, 10), '¹', '²', '³'))}
+
+
+def _bad_component(part: str) -> str:
+    """Why one path component is refused, or ''.
+
+    Windows drops trailing dots and spaces when it opens a path, so `.git./config` would write
+    `.git/config` and `.env.` would write `.env`; `name:stream` opens an NTFS alternate data
+    stream. These spellings are refused on every platform, so the protected-name checks always
+    see the name the file system uses.
+    """
+    if part in ('.', '..'):
+        return ''
+    if part != part.rstrip('. '):
+        return 'Path parts may not end with a dot or a space'
+    if any(ord(ch) < 32 or ch in '<>:"|?*' for ch in part):
+        return 'Path contains a character Windows does not allow'
+    if part.split('.', 1)[0].strip().lower() in _RESERVED:
+        return 'Windows device names are not files'
+    return ''
+
+
+def _protected(part: str) -> bool:
+    name = part.rstrip('. ').lower()
+    return name in DENIED_NAMES or (name.startswith('.env.') and name not in _ENV_TEMPLATES)
 
 TOOLS = [
     {"name": "workspace_list", "description": "List files and folders relative to the selected workspace. Does not read outside it.",
@@ -24,6 +54,10 @@ TOOLS = [
     {"name": "workspace_write", "description": "Create or update a UTF-8 text file inside the selected workspace. Requires workspace edit mode.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}},
                      "required": ["path", "content"], "additionalProperties": False}},
+    {"name": "workspace_edit", "description": "Replace old_string with new_string in one existing UTF-8 text file in the selected workspace. old_string must identify exactly one place (copy it from workspace_read); a different indentation is tolerated. Requires workspace edit mode.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "old_string": {"type": "string"},
+                                                "new_string": {"type": "string"}, "replace_all": {"type": "boolean", "default": False}},
+                     "required": ["path", "old_string", "new_string"], "additionalProperties": False}},
     {"name": "workspace_binary_triage", "description": "Identify and SHA-256 fingerprint an explicitly selected PE/ELF/Mach-O/WASM binary for approved REA/Ghidra investigations. Does not execute or disassemble it.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}},
                      "required": ["path"], "additionalProperties": False}},
@@ -46,6 +80,7 @@ TOOLS = [
          "required": ["path", "action"], "additionalProperties": False}},
 ]
 TOOL_NAMES = {t['name'] for t in TOOLS}
+WRITE_TOOLS = frozenset({'workspace_write', 'workspace_edit'})
 
 
 class Workspace:
@@ -59,14 +94,21 @@ class Workspace:
         if not relative or len(relative) > 500:
             raise ValueError('Invalid file path')
         value = Path(relative)
-        if value.is_absolute():
+        if value.is_absolute() or value.drive or value.root:
             raise PermissionError('Absolute paths are blocked')
+        for part in value.parts:
+            problem = _bad_component(part)
+            if problem:
+                raise PermissionError(problem)
+            if _protected(part):
+                raise PermissionError('Private/credential directories and files are protected')
         candidate = (self.root / value).resolve(strict=not allow_missing)
         if not candidate.is_relative_to(self.root):
             raise PermissionError('Path escapes the selected workspace')
-        if any(part.lower() in DENIED_NAMES for part in candidate.relative_to(self.root).parts):
+        # The resolved file too: a link may point at a protected one.
+        if any(_protected(part) for part in candidate.relative_to(self.root).parts):
             raise PermissionError('Private/credential directories and files are protected')
-        if candidate.suffix.lower() in DENIED_SUFFIXES:
+        if any(Path(name.rstrip('. ')).suffix.lower() in DENIED_SUFFIXES for name in (value.name, candidate.name)):
             raise PermissionError('Sensitive file type blocked')
         return candidate
 
@@ -123,8 +165,22 @@ class Workspace:
             return search_workspace(self, args['query'], mode=args.get('mode', 'text'))
         if not allow_write:
             raise PermissionError('Workspace editing is switched off')
+        if name == 'workspace_edit':
+            from .edit_match import apply_edit
+            path = self.resolve(args['path'])
+            if not path.is_file() or path.stat().st_size > MAX_READ_BYTES:
+                raise ValueError('Not a small text file')
+            with path.open(encoding='utf-8', newline='') as handle:
+                edited = apply_edit(handle.read(), args['old_string'], args['new_string'],
+                                    replace_all=args.get('replace_all', False))
+            result = self._replace(path, edited.text.encode('utf-8'))
+            result.update({'replacements': edited.count, 'match': edited.strategy})
+            return _with_lint(result, path, edited.text)
         path = self.resolve(args['path'], allow_missing=True)
-        data = args['content'].encode('utf-8')
+        result = self._replace(path, args['content'].encode('utf-8'))
+        return _with_lint(result, path, args['content'])
+
+    def _replace(self, path: Path, data: bytes) -> dict[str, Any]:
         if len(data) > MAX_WRITE_BYTES:
             raise ValueError('File exceeds write limit')
         if path.exists() and not path.is_file():
@@ -143,3 +199,29 @@ class Workspace:
             if tmp_path is not None:
                 tmp_path.unlink(missing_ok=True)
         return {'path': path.relative_to(self.root).as_posix(), 'bytes_written': len(data)}
+
+
+LINTED_SUFFIXES = frozenset({'.lua', '.luau'})
+MAX_LINT_FINDINGS = 8
+
+
+def _with_lint(result: dict[str, Any], path: Path, text: str) -> dict[str, Any]:
+    """Lint-on-edit: a written Luau file comes back with STAR's offline findings, so the model can fix them now.
+
+    Advisory only: the write has already happened and a finding never blocks it (star/luau_lint.py is a pattern
+    checker, not a parser). The SWE-agent ACI study (arXiv 2405.15793) found that showing lint results right after an
+    edit cut broken edits; this is the same idea with STAR's own Roblox rules.
+    """
+    if path.suffix.lower() not in LINTED_SUFFIXES:
+        return result
+    from .luau_lint import lint
+    try:
+        findings = lint(text)
+    except Exception:       # a checker bug must never turn a successful write into a failed tool call
+        return result
+    if findings:
+        result['lint'] = [{'line': f.line, 'rule': f.rule_id, 'severity': f.severity, 'message': f.message,
+                           'fix': f.suggested_fix} for f in findings[:MAX_LINT_FINDINGS]]
+        if len(findings) > MAX_LINT_FINDINGS:
+            result['lint_more'] = len(findings) - MAX_LINT_FINDINGS
+    return result
