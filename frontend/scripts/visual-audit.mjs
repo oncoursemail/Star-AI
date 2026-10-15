@@ -68,13 +68,16 @@ async function snapshot(page) {
         style.opacity !== '0' && style.pointerEvents !== 'none' &&
         box.width > 0 && box.height > 0 &&
         !node.closest('[inert], [aria-hidden="true"]') && !node.disabled)
-    }).slice(0, 800)
-    const ids = new Map(candidates.map((node, index) => [node, 'control-' + index]))
+    })
+    const controlsOmitted = Math.max(0, candidates.length - 800)
+    const measured = candidates.slice(0, 800)
+    const ids = new Map(measured.map((node, index) => [node, 'control-' + index]))
     const round = number => Math.round(number * 10) / 10
     return {
       viewport: {width: window.innerWidth, height: window.innerHeight},
       documentWidth: Math.max(document.body.scrollWidth, document.documentElement.scrollWidth),
-      controls: candidates.map(node => {
+      controlsOmitted,
+      controls: measured.map(node => {
         const box = node.getBoundingClientRect()
         const style = getComputedStyle(node)
         const labelledBy = (node.getAttribute('aria-labelledby') || '').split(/\s+/)
@@ -92,7 +95,7 @@ async function snapshot(page) {
             ? 'button' : 'other',
           rect: {x:round(box.x), y:round(box.y),
                  width:round(box.width), height:round(box.height)},
-          ancestors: candidates.filter(other => other !== node && other.contains(node))
+          ancestors: measured.filter(other => other !== node && other.contains(node))
             .map(other => ids.get(other)),
           textClipped,
           visible: true,
@@ -110,6 +113,8 @@ try {
   throw Error('Install playwright-core in a reviewed tools folder and pass --tools <folder>. No automatic installation occurs.')
 }
 const {chromium} = requireTools('playwright-core')
+const requireFrontend = createRequire(pathToFileURL(path.join(frontend, 'package.json')))
+const axePath = requireFrontend.resolve('axe-core')
 await readFile(path.join(dist, 'index.html')) // fail before creating any browser if not built
 const server = await createPreviewServer()
 let browser
@@ -138,9 +143,24 @@ try {
         await page.evaluate(() => document.fonts.ready)
         const data = await snapshot(page)
         const audit = auditLayoutSnapshot(data)
+        // axe's color-contrast check needs a real rendered browser; jsdom
+        // tests deliberately cannot perform this measurement.
+        await page.addScriptTag({path: axePath})
+        const accessibility = await page.evaluate(async () => {
+          const checks = await window.axe.run(document.body, {
+            runOnly: {type:'rule', values:['color-contrast', 'button-name', 'link-name']},
+          })
+          return checks.violations.map(issue => ({
+            id:issue.id, impact:issue.impact,
+            targets:issue.nodes.slice(0, 8).map(node => node.target.join(' ')),
+            omittedNodes:Math.max(0, issue.nodes.length - 8),
+          }))
+        })
         await page.screenshot({path: path.join(outputDir, id + '.png')})
-        results.push({id, screenshot:id + '.png', ...audit})
-        console.log(id, audit.issues.length + ' measured findings')
+        results.push({id, screenshot:id + '.png', controlsOmitted:data.controlsOmitted,
+                      accessibility, ...audit})
+        console.log(id, (audit.issues.length + accessibility.length) +
+                           ' geometry/a11y findings')
       } finally {
         await context.close()
       }
@@ -160,6 +180,8 @@ const report = {
 }
 await writeFile(path.join(outputDir, 'report.json'), JSON.stringify(report, null, 2) + '\n')
 console.log('Evidence: ' + outputDir)
-if (strict && results.some(row => row.issues.some(issue => issue.severity === 'error'))) {
+if (strict && results.some(row =>
+  row.issues.some(issue => issue.severity === 'error') ||
+  row.accessibility.length > 0 || row.controlsOmitted > 0)) {
   process.exitCode = 1
 }
