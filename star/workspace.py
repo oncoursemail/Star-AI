@@ -58,6 +58,17 @@ TOOLS = [
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}, "old_string": {"type": "string"},
                                                 "new_string": {"type": "string"}, "replace_all": {"type": "boolean", "default": False}},
                      "required": ["path", "old_string", "new_string"], "additionalProperties": False}},
+    {"name": "workspace_binary_triage", "description": "Identify and SHA-256 fingerprint an explicitly selected PE/ELF/Mach-O/WASM binary for approved REA/Ghidra investigations. Does not execute or disassemble it.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}},
+                     "required": ["path"], "additionalProperties": False}},
+    {"name": "workspace_asset_audit", "description": "Audit a selected .gltf/.glb 3D asset's meshes, triangle budget, materials, skins and animations without running Blender or reading external assets.",
+     "inputSchema": {"type": "object", "properties": {
+         "path": {"type": "string"}, "target": {"type": "string", "enum": ["general", "roblox", "godot", "unity", "unreal"]},
+         "triangle_budget": {"type": "integer", "minimum": 1000, "maximum": 10000000}},
+         "required": ["path"], "additionalProperties": False}},
+    {"name": "workspace_game_graph", "description": "Trace bounded static Godot res:// or Unity YAML GUID dependencies with source/line evidence. Unreal reports approved manifest plugins only; no editor or arbitrary binary runs.",
+     "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}},
+                     "required": ["path"], "additionalProperties": False}},
     {"name": "workspace_game_discover", "description": "Discover Godot, Unity, and Unreal game projects in this selected workspace; read-only, bounded scan.",
      "inputSchema": {"type": "object", "properties": {"path": {"type": "string", "default": "."}}, "additionalProperties": False}},
     {"name": "workspace_game_inspect", "description": "Inspect one Godot, Unity, or Unreal project: engine metadata, languages, sample scenes and export presets. Read-only.",
@@ -112,6 +123,16 @@ class Workspace:
             validate(args, schema)
         except ValidationError:
             raise ValueError('Invalid workspace tool arguments') from None
+        if name == 'workspace_binary_triage':
+            from . import binary_evidence
+            return binary_evidence.triage(self, args['path'])
+        if name == 'workspace_asset_audit':
+            from . import artifact_intelligence
+            return artifact_intelligence.audit(self, args['path'], target=args.get('target', 'general'),
+                                               triangle_budget=args.get('triangle_budget', 100_000))
+        if name == 'workspace_game_graph':
+            from . import engine_evidence
+            return engine_evidence.inspect(self, args['path'])
         if name in {'workspace_game_discover', 'workspace_game_inspect', 'workspace_game_plan'}:
             from . import game_projects
             if name == 'workspace_game_discover':
