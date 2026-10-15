@@ -10,7 +10,8 @@ from dataclasses import dataclass
 import re
 import time
 
-import httpx
+from ._lazy import lazy_module
+httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from .brain_router import _CODING, _DEEP, deep_request, grounding_plan, is_roblox_dev_prompt, is_roblox_task
 

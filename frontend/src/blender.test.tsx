@@ -12,10 +12,13 @@ describe('Brain 2 Blender MCP setup',()=>{
  it('is off by default and cannot permit writes before enabling the connector',()=>{
    const change=vi.fn()
    render(<BlenderPanel draft={settings()} onChange={change} invoke={async()=>null}/>)
-   expect((screen.getByRole('checkbox',{name:'Enable Blender MCP'}) as HTMLInputElement).checked).toBe(false)
+   expect((screen.getByRole('checkbox',{name:'Use Blender on this PC'}) as HTMLInputElement).checked).toBe(false)
+   // Plain words for the owner: no internal server names or protocol jargon in the heading.
+   expect(screen.getByText('Blender')).toBeTruthy()
+   expect(screen.queryByText(/Brain 2|MCP/)).toBeNull()
    expect((screen.getByRole('checkbox',{name:'Allow Blender scene creation'}) as HTMLInputElement).disabled).toBe(true)
    expect((screen.getByRole('button',{name:'Test local Blender'}) as HTMLButtonElement).disabled).toBe(true)
-   fireEvent.click(screen.getByRole('checkbox',{name:'Enable Blender MCP'}))
+   fireEvent.click(screen.getByRole('checkbox',{name:'Use Blender on this PC'}))
    expect(change).toHaveBeenCalledWith(expect.objectContaining({blender_enabled:true,blender_edit:false}))
  })
  it('allows an owner to enable only new scene creation after enabling Blender',()=>{

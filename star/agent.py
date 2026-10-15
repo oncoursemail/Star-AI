@@ -1,6 +1,8 @@
 """A working local vision + tool-calling agent loop with bounded autonomy."""
 import json
 import asyncio
+import os
+import re
 from datetime import datetime
 from time import monotonic
 from types import SimpleNamespace
@@ -10,8 +12,23 @@ from .media import image_part, mcp_images
 from .redact import redact_text
 from .policy import allowed_registry, enforce
 from .memory import compact
-from .workspace import TOOLS, TOOL_NAMES
+from .workspace import TOOLS, TOOL_NAMES, WRITE_TOOLS as WORKSPACE_WRITE_TOOLS
 from . import code_answer_completion
+
+
+# A server's "the prompt does not fit" refusal (llama.cpp exceed_context_size_error, OpenAI-compatible
+# "maximum context length", vLLM, Ollama). Sending the same prompt again without the cache fields or
+# without streaming cannot fit it, so such a 400 is raised at once instead of being retried twice.
+_CONTEXT_REFUSAL = re.compile(
+    r"exceed_context|exceeds? the (?:available )?context|context (?:size|length|window) (?:exceeded|is too)"
+    r"|maximum context length|too many tokens|prompt is too long|input is too long|context_length_exceeded",
+    re.IGNORECASE)
+
+
+def is_context_refusal(exc: BaseException) -> bool:
+    """True when a model server refused the request because the prompt is larger than its context."""
+    parts = [str(exc), getattr(exc, "message", ""), getattr(exc, "body", "")]
+    return bool(_CONTEXT_REFUSAL.search(" ".join(str(part) for part in parts if part)))
 
 
 class HistoryWindowPressure(RuntimeError):
@@ -21,6 +38,25 @@ class HistoryWindowPressure(RuntimeError):
         self.dropped = dropped
         self.dispatched = dispatched
         self.tool_actions_started = tool_actions_started
+
+# Tools whose results carry text written by third parties (web pages, search snippets, MCP servers).
+# Once one of them has returned in a turn, full Luau execution is refused for the rest of that turn:
+# an instruction hidden in a page must not become code that runs in Studio without the owner seeing it.
+# DevForum posts, YouTube metadata, Roblox experience names/descriptions/thumbnails, Creator Store search
+# results, public GitHub repositories, read-only MCP connections and the research team (it reads the web)
+# are written by other users too. (Studio's http_get is not listed: the connector only fetches Roblox's own
+# documentation.)
+UNTRUSTED_SOURCE_TOOLS = frozenset({
+    "star_web_fetch", "star_web_search", "star_mcp_registry_search",
+    "star_roblox_forum_search", "star_roblox_forum_topic", "star_roblox_forum_latest",
+    "star_roblox_youtube_search", "star_roblox_youtube_video",
+    "star_roblox_search_games", "star_roblox_game_report", "star_roblox_compare_games",
+    "star_roblox_game_image", "search_asset",
+    "star_github_tree", "star_github_read", "star_mcp_search", "star_mcp_call", "star_delegate_research",
+})
+LUAU_AFTER_UNTRUSTED = ("Full Luau execution is off for the rest of this turn because it read web or "
+                        "third-party content. Ask again in a new message to run Luau.")
+
 
 RULES = """You are STAR Genesis, an early-stage Roblox development AI.
 Truthfully report uncertainty and failed operations. Never claim a game was edited without a successful tool result.
@@ -239,7 +275,10 @@ async def read_stream(stream, event, *, lead: str = '', call_prefix: str = 'call
             seen['last_text_at'] = now
             seen['text_chars'] = seen.get('text_chars', 0) + len(text)
         pending += text
-        if len(pending) >= 90 or monotonic() - last_flush >= .075:
+        # The early first-delta fast path is opt-in until comparative evaluation.
+        # Without it, preserve the existing batching cadence exactly.
+        if (len(pending) >= 90 or monotonic() - last_flush >= .075
+                or (len(chunks) == 1 and os.environ.get('STAR_FAST_FIRST_DELTA') == '1')):
             event({'event': 'assistant_delta', 'text': pending})
             pending = ''
             last_flush = monotonic()
@@ -262,6 +301,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                   history=None, turn_sections=None, mode="", guidance="",
                   turn_context_chars=10000, request_extras=None, today=None,
                   tool_memory=None, helper_client=None, document_tools=None, image_max_side=None,
+                  reverse_engineering=None,
                   preserve_history=False, complete_code_answers=None,
                   tool_discovery_enabled=False, candidate_code_team_enabled=False, now=None,
                   web_settings=None, on_first_request=None):
@@ -366,7 +406,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             "parameters": tool["inputSchema"]}} for tool in code_team_tools)
     code_team_enabled = bool(code_team_tools)
     if workspace is not None:
-        definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] != 'workspace_write')
+        definitions.extend({"type": "function", "function": {"name": tool['name'], "description": tool['description'], "parameters": tool['inputSchema']}} for tool in TOOLS if workspace_edit or tool['name'] not in WORKSPACE_WRITE_TOOLS)
     def selected(source) -> list[dict]:
         # The prompt-gated sources. With a tool memory, what earlier prompts of this
         # conversation selected stays selected (re-checked against today's settings).
@@ -409,6 +449,11 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                        "description": tool["description"], "parameters": tool["inputSchema"]}}
                        for tool in document_definitions)
     enabled_documents = {tool["name"] for tool in document_definitions}
+    re_definitions = selected(reverse_engineering)
+    definitions.extend({"type": "function", "function": {"name": tool["name"],
+                       "description": tool["description"], "parameters": tool["inputSchema"]}}
+                       for tool in re_definitions)
+    enabled_re = {tool["name"] for tool in re_definitions}
     # Qwen templates render the tool list before the system text. Tools that are attached on
     # every turn stay first and the Studio tools (present only for a Studio request) go last,
     # so a change at the end of the list leaves the start of the request cached.
@@ -485,6 +530,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
         {"type": "text", "text": prompt}, *content[1:]]}], "The original request alone is too large. ")
     calls_count = 0
     tool_actions_started = False
+    untrusted_read = False   # a third-party-text tool has returned in this turn (UNTRUSTED_SOURCE_TOOLS)
     delegations = 0
     if callable(request_extras):   # the slot depends on whether tools are attached
         request_extras = request_extras(tools_attached)
@@ -578,7 +624,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             except Exception as exc:
                 # An OpenAI-compatible server that is not llama.cpp may refuse the cache
                 # fields. Nothing was generated, so ask again without them, once.
-                if getattr(exc, 'status_code', None) not in (400, 422):
+                if getattr(exc, 'status_code', None) not in (400, 422) or is_context_refusal(exc):
                     raise
                 extras = None
                 return await client.chat.completions.create(**options, **more)
@@ -621,7 +667,7 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
             except Exception as exc:
                 # Rejection of the *stream mode* is safe to retry without streaming:
                 # the server did not accept the request, so no output was emitted.
-                if getattr(exc, 'status_code', None) not in (400, 422, 501):
+                if getattr(exc, 'status_code', None) not in (400, 422, 501) or is_context_refusal(exc):
                     raise
                 stream_tokens = False
             else:
@@ -711,9 +757,14 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                     elif document_tools is not None and document_tools.owns(name):
                         if name not in enabled_documents:
                             raise PermissionError("Document tool not authorized for this task")
+                    elif reverse_engineering is not None and reverse_engineering.owns(name):
+                        if name not in enabled_re:
+                            raise PermissionError("Reverse-engineering tool not authorized for this task")
                     elif name not in TOOL_NAMES:
                         enforce(name, args, registry, studio_id, may_edit, allow_luau=allow_luau)
-                    elif workspace is None or (name == "workspace_write" and not workspace_edit):
+                        if name == "execute_luau" and untrusted_read:
+                            raise PermissionError(LUAU_AFTER_UNTRUSTED)
+                    elif workspace is None or (name in WORKSPACE_WRITE_TOOLS and not workspace_edit):
                         raise PermissionError("Workspace tool not authorized")
                 except Exception as exc:
                     result = json.dumps({"isError": True, "output": f"Tool request rejected: {type(exc).__name__}"})
@@ -825,6 +876,15 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         # Keep SQLite-backed document access on the caller's thread.
                         # Only the prompt-selected/attached capability set is allowed.
                         data = document_tools.call(name, args, enabled=enabled_documents)
+                    elif reverse_engineering is not None and reverse_engineering.owns(name):
+                        # Local, workspace-confined binary analysis. Output is untrusted data.
+                        try:
+                            local_output = reverse_engineering.call(name, args, enabled=enabled_re)
+                            data = {"isError": False, "content": [{"type": "text",
+                                    "text": json.dumps(local_output, ensure_ascii=False)}]}
+                        except (ValueError, PermissionError, OSError, UnicodeError) as exc:
+                            data = {"isError": True, "content": [{"type": "text",
+                                    "text": f"Reverse-engineering tool failed: {type(exc).__name__}: {exc}"}]}
                     elif blender is not None and blender.owns(name):
                         try:
                             data = await blender.call(name, args)
@@ -863,6 +923,10 @@ async def execute(*, client, model: str, prompt: str, image_paths: list[Path], s
                         data = raw.model_dump(by_alias=True, exclude_none=True)
                     result = tool_payload(data)
                     images = mcp_images(data)
+                    if (name in UNTRUSTED_SOURCE_TOOLS
+                            or (mcp_gateway is not None and mcp_gateway.owns(name))
+                            or (mcp_registry is not None and mcp_registry.owns(name))):
+                        untrusted_read = True
                     event({"event": "tool_finished", "tool": name, "is_error": bool(data.get("isError"))})
                 messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": result})
                 if images:

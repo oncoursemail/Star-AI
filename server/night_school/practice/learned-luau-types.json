@@ -1,0 +1,758 @@
+[
+ {
+  "id": "practice-learned-types-player-param",
+  "category": "luau-types",
+  "difficulty": 1,
+  "goal": "Annotate Roblox player parameters with the Player type",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Greeter`. `Greeter.welcome(player: Player): string` returns \"Welcome, \" followed by the player's DisplayName and \"!\". `Greeter.countPlayers(list: {Player}): number` returns how many players are in the list. Annotate every parameter and return type with Roblox's own class types.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses Players.Player as a type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "player_type",
+     "re": ":\\s*Player\\b",
+     "why": "a parameter is annotated with the Player type"
+    },
+    {
+     "id": "player_list",
+     "re": "\\{\\s*Player\\s*\\}",
+     "why": "the list is typed {Player}"
+    },
+    {
+     "id": "display",
+     "re": "\\.DisplayName\\b",
+     "why": "uses DisplayName"
+    },
+    {
+     "id": "ret",
+     "re": "\\breturn\\s+Greeter\\b",
+     "why": "returns Greeter"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_players_player",
+     "re": "\\bPlayers\\.Player\\b",
+     "why": "Players.Player is not a type; the player class type is Player"
+    },
+    {
+     "id": "no_void",
+     "re": "\\bvoid\\b",
+     "why": "Luau has no void type; an empty return is ()"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-empty-return",
+  "category": "luau-types",
+  "difficulty": 1,
+  "goal": "Write the empty return type as () instead of void",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Log`. `Log.setLevel(level: number)` stores the level, `Log.getLevel(): number` returns it (default 1), and `Log.info(message: string)` prints the message only when the level is 1 or lower. Give every function an explicit return type annotation, including the functions that return nothing.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses void as a type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "empty_ret",
+     "re": "\\)\\s*:\\s*\\(\\s*\\)",
+     "why": "a function that returns nothing is annotated : ()"
+    },
+    {
+     "id": "num_ret",
+     "re": "\\)\\s*:\\s*number\\b",
+     "why": "getLevel returns number"
+    },
+    {
+     "id": "ret",
+     "re": "\\breturn\\s+Log\\b",
+     "why": "returns Log"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_void",
+     "re": "\\bvoid\\b",
+     "why": "Luau has no void type; an empty return is ()"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-optional-fields",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Optional table-type fields are written field: Type?",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Orders`. Export a type `Order` with the fields itemId (string), quantity (number), coupon (an optional string) and note (an optional string). `Orders.make(itemId: string, quantity: number, coupon: string?): Order` returns a new Order without a note; it errors with error() when quantity is not a whole number from 1 to 99.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses name?: Type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "export",
+     "re": "\\bexport\\s+type\\s+Order\\s*=",
+     "why": "exports the Order type"
+    },
+    {
+     "id": "optional",
+     "re": "\\bcoupon\\s*:\\s*string\\s*\\?",
+     "why": "coupon is typed string?"
+    },
+    {
+     "id": "error",
+     "re": "\\berror\\s*\\(",
+     "why": "rejects bad quantities with error()"
+    },
+    {
+     "id": "whole",
+     "any": [
+      "math\\.floor\\s*\\(",
+      "%\\s*1\\s*[~=]=\\s*0"
+     ],
+     "why": "checks the quantity is whole"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_ts_optional",
+     "re": "\\b\\w+\\s*\\?\\s*:",
+     "why": "TypeScript optional field syntax name?: ; Luau writes name: Type?"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-function-type",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Function values are typed with arrow function types",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Rewards`. Define `type Handler = (player: Player, amount: number) -> ()`. `Rewards.connect(handler: Handler): () -> ()` stores the handler and returns a function that removes it again; `Rewards.fire(player: Player, amount: number)` calls every stored handler in the order they were connected.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses function as a type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "handler_type",
+     "re": "\\btype\\s+Handler\\s*=\\s*\\(",
+     "why": "defines the Handler function type"
+    },
+    {
+     "id": "arrow_unit",
+     "re": "->\\s*\\(\\s*\\)",
+     "why": "a function type returning nothing"
+    },
+    {
+     "id": "ipairs",
+     "re": "\\b(ipairs|for\\s+\\w+\\s*=\\s*1)\\b",
+     "why": "calls the handlers in order"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_function_type",
+     "re": ":\\s*function\\b",
+     "why": "'function' is not a type; write a function type such as (Player, number) -> ()"
+    },
+    {
+     "id": "no_players_player",
+     "re": "\\bPlayers\\.Player\\b",
+     "why": "Players.Player is not a type; the player class type is Player"
+    },
+    {
+     "id": "no_void",
+     "re": "\\bvoid\\b",
+     "why": "Luau has no void type; an empty return is ()"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-multiple-returns",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Several return values are typed as a plain type list",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Wallet`. `Wallet.trySpend(balance: number, cost: number): (boolean, number, string?)` returns true, the new balance and nil when the purchase works; otherwise false, the unchanged balance and a short reason. Refuse a cost that is NaN, negative or larger than the balance.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Names its return values in the type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "ret_list",
+     "re": "\\)\\s*:\\s*\\(\\s*boolean\\s*,\\s*number\\s*,\\s*string\\s*\\?\\s*\\)",
+     "why": "the return type is (boolean, number, string?)"
+    },
+    {
+     "id": "nan",
+     "any": [
+      "\\b(\\w+)\\s*~=\\s*\\1\\b",
+      "math\\.huge"
+     ],
+     "why": "checks for NaN"
+    },
+    {
+     "id": "false",
+     "re": "\\breturn\\s+false\\b",
+     "why": "refuses with false"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_named_returns",
+     "re": "\\)\\s*:\\s*\\(\\s*\\w+\\s*:",
+     "why": "return types are a type list, not named fields"
+    },
+    {
+     "id": "no_void",
+     "re": "\\bvoid\\b",
+     "why": "Luau has no void type; an empty return is ()"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-pathwaypoint",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Pathfinding waypoints use the PathWaypoint type",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Route`. `Route.totalLength(waypoints: {PathWaypoint}): number` adds up the distances between consecutive waypoint positions (0 for fewer than two). `Route.jumpCount(waypoints: {PathWaypoint}): number` counts the waypoints whose Action is Enum.PathWaypointAction.Jump.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses PathfindingService.PathWaypoint as a type"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "wp_type",
+     "re": "\\{\\s*PathWaypoint\\s*\\}",
+     "why": "typed {PathWaypoint}"
+    },
+    {
+     "id": "jump",
+     "re": "Enum\\.PathWaypointAction\\.Jump\\b",
+     "why": "compares with Enum.PathWaypointAction.Jump"
+    },
+    {
+     "id": "magnitude",
+     "re": "\\.Magnitude\\b",
+     "why": "measures distance with Magnitude"
+    },
+    {
+     "id": "pos",
+     "re": "\\.Position\\b",
+     "why": "uses Position"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_service_type",
+     "re": "PathfindingService\\.\\w+\\s*[},)]",
+     "why": "PathWaypoint is its own type, not PathfindingService.X"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-no-is-operator",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Check Roblox types with typeof and IsA, not an is operator",
+  "prompt": "In my Roblox game: write a server Script with a function `getPlayerFromHit(hit: Instance): Player?` that returns the player whose character contains the touched part: find the part's ancestor Model, check that it has a Humanoid, and use Players:GetPlayerFromCharacter. Connect it to the Touched event of workspace.Goal (get it with WaitForChild) and print the player's Name. Before using `hit`, check with typeof that it is an Instance and with IsA that it is a BasePart.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses an is operator"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "gpfc",
+     "re": ":GetPlayerFromCharacter\\s*\\(",
+     "why": "uses GetPlayerFromCharacter"
+    },
+    {
+     "id": "typeof",
+     "re": "\\btypeof\\s*\\(",
+     "why": "checks the argument with typeof"
+    },
+    {
+     "id": "isa",
+     "re": ":IsA\\s*\\(\\s*\\\"BasePart\\\"\\s*\\)",
+     "why": "checks IsA(\"BasePart\")"
+    },
+    {
+     "id": "model",
+     "any": [
+      "FindFirstAncestorOfClass\\s*\\(\\s*\\\"Model\\\"",
+      "FindFirstAncestorWhichIsA\\s*\\(\\s*\\\"Model\\\"",
+      "\\.Parent\\b"
+     ],
+     "why": "walks up to the character model"
+    },
+    {
+     "id": "humanoid",
+     "re": "Humanoid",
+     "why": "checks for a Humanoid"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_is",
+     "re": "\\b(is|instanceof)\\b",
+     "why": "Luau has no is/instanceof operator",
+     "scope": "code_nostr"
+    },
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-types-class-queue",
+  "category": "luau-types",
+  "difficulty": 3,
+  "goal": "A typed metatable class without annotating the class table",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a first-in-first-out `Queue` class for strings. `Queue.new(): Queue`, `queue:push(value: string)`, `queue:pop(): string?` (nil when empty) and `queue:size(): number`. Use a metatable with __index, keep head and tail indices so pop does not shift the array, and export the Queue type built with typeof(setmetatable(...)).",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Pops with table.remove(t, 1)"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "setmeta",
+     "re": "\\bsetmetatable\\s*\\(",
+     "why": "uses setmetatable"
+    },
+    {
+     "id": "index",
+     "re": "\\.__index\\s*=",
+     "why": "sets __index"
+    },
+    {
+     "id": "export",
+     "re": "\\bexport\\s+type\\s+Queue\\b",
+     "why": "exports the Queue type"
+    },
+    {
+     "id": "typeof_meta",
+     "re": "typeof\\s*\\(\\s*setmetatable",
+     "why": "the type is built with typeof(setmetatable(...))"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_typed_class_table",
+     "re": "\\blocal\\s+Queue\\s*:\\s*Queue\\b",
+     "why": "annotating the class table with the instance type breaks __index"
+    },
+    {
+     "id": "no_shift",
+     "re": "table\\.remove\\s*\\(\\s*[\\w.]+\\s*,\\s*1\\s*\\)",
+     "why": "pop must not shift the array"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-comments-and-floor-div",
+  "category": "luau-types",
+  "difficulty": 1,
+  "goal": "Comments start with --; // is floor division",
+  "prompt": "In my Roblox game: write a ModuleScript that returns a table `Grid` with `Grid.cellOf(position: Vector3, size: number): (number, number)` that returns the grid column and row of a world position (X and Z divided by size, rounded down). Explain each step with a short comment on its own line.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Writes // comments"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "floor",
+     "any": [
+      "//",
+      "math\\.floor\\s*\\("
+     ],
+     "why": "rounds down with // or math.floor"
+    },
+    {
+     "id": "comment",
+     "re": "(?m)^\\s*--(?!!)\\S*",
+     "why": "has comments on their own lines",
+     "scope": "raw"
+    },
+    {
+     "id": "xz",
+     "re": "\\.Z\\b",
+     "why": "uses the Z axis"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_slash_comment",
+     "re": "(?m)^\\s*//",
+     "why": "// starts a floor division, not a comment; comments start with --"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ },
+ {
+  "id": "practice-learned-types-dictionary",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Dictionary types use [key]: value",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `Votes`. Keep `votes: {[number]: string}` (UserId to map name). `Votes.cast(userId: number, mapName: string)` records or replaces a vote, `Votes.tally(): {[string]: number}` counts votes per map, and `Votes.winner(): string?` returns the map with most votes (ties go to the alphabetically first name, nil when nobody voted).",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Writes {number: string} for a dictionary"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "dict_num",
+     "re": "\\{\\s*\\[\\s*number\\s*\\]\\s*:\\s*string\\s*\\}",
+     "why": "typed {[number]: string}"
+    },
+    {
+     "id": "dict_str",
+     "re": "\\{\\s*\\[\\s*string\\s*\\]\\s*:\\s*number\\s*\\}",
+     "why": "typed {[string]: number}"
+    },
+    {
+     "id": "tie",
+     "re": "<\\s*\\w+|\\w+\\s*<",
+     "why": "breaks ties by comparing names"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_field_dict",
+     "re": "\\{\\s*(number|string)\\s*:\\s*(number|string)\\s*\\}",
+     "why": "{number: string} is a table with a field named number; a dictionary is {[number]: string}"
+    },
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-narrow-instance",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Narrow Instance types with IsA instead of casts",
+  "prompt": "In my Roblox game: write a ModuleScript that starts with --!strict and returns a table `UiUtil`. `UiUtil.setLabel(gui: Instance, text: string): boolean` finds the child named \"Label\"; when it exists and is a TextLabel, set its Text and return true, otherwise return false. Do not cast with :: any.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles and type-checks under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Casts instead of checking"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": true,
+   "require": [
+    {
+     "id": "strict_header",
+     "re": "\\A\\s*--!strict",
+     "why": "the file starts with --!strict",
+     "scope": "first_raw"
+    },
+    {
+     "id": "find",
+     "re": ":FindFirstChild\\s*\\(\\s*\\\"Label\\\"",
+     "why": "finds the child"
+    },
+    {
+     "id": "isa",
+     "re": ":IsA\\s*\\(\\s*\\\"TextLabel\\\"\\s*\\)",
+     "why": "narrows with IsA(\"TextLabel\")"
+    },
+    {
+     "id": "text",
+     "re": "\\.Text\\s*=",
+     "why": "sets Text"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_any",
+     "re": "::\\s*any\\b",
+     "why": "no any casts"
+    },
+    {
+     "id": "no_as_cast",
+     "re": "\\bas\\s+TextLabel\\b",
+     "why": "Luau has no `as` cast; narrow with IsA"
+    }
+   ]
+  }
+ },
+ {
+  "id": "practice-learned-types-forward-declare",
+  "category": "luau-types",
+  "difficulty": 2,
+  "goal": "Declare a local before the callback that uses it",
+  "prompt": "In my Roblox game: write a server Script for a part named Lava in workspace (get it with WaitForChild). When a character touches it, call TakeDamage(15) on its Humanoid at most once per second per character (keep a debounce table keyed by the character model). Keep the Touched connection in a local variable and disconnect it, and clear the debounce table, when the Lava part's Destroying event fires.",
+  "run_mode": "automated",
+  "required_evidence": [
+   "answer/script.luau"
+  ],
+  "pass_conditions": [
+   "Compiles under the Luau check",
+   "Every required pattern is present",
+   "No forbidden pattern is present"
+  ],
+  "hard_fail": [
+   "Uses a variable before declaring it"
+  ],
+  "source": "learned-20261014",
+  "auto": {
+   "strict": false,
+   "require": [
+    {
+     "id": "takedamage",
+     "re": ":TakeDamage\\s*\\(\\s*15\\s*\\)",
+     "why": "TakeDamage(15)"
+    },
+    {
+     "id": "destroying",
+     "re": "\\.Destroying\\b",
+     "why": "listens to Destroying"
+    },
+    {
+     "id": "disconnect",
+     "re": ":Disconnect\\s*\\(",
+     "why": "disconnects the connection"
+    },
+    {
+     "id": "conn_local",
+     "re": "\\blocal\\s+\\w+\\s*(:\\s*RBXScriptConnection\\??\\s*)?=\\s*[\\w.]+\\.Touched\\s*:\\s*Connect",
+     "why": "the Touched connection is kept in a local"
+    },
+    {
+     "id": "clock",
+     "any": [
+      "os\\.clock\\s*\\(",
+      "\\btime\\s*\\(",
+      "task\\.delay\\s*\\(",
+      "workspace:GetServerTimeNow"
+     ],
+     "why": "times the one-second debounce"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_legacy_wait",
+     "re": "(?<![.\\w:])(wait|spawn|delay)\\s*\\(",
+     "why": "deprecated global wait/spawn/delay; use task.wait/task.spawn/task.delay"
+    }
+   ],
+   "compile_mode": "lenient"
+  }
+ }
+]

@@ -1,6 +1,7 @@
 import {useEffect,useState} from 'react'
 import {request} from './bridge'
 import './BrainOverview.css'
+import {MachineLoad} from './MachineLoad'
 
 export type BrainSnapshot = {
  provider: string
@@ -44,5 +45,6 @@ export function BrainOverview({snapshot,load=true}:{snapshot?:BrainSnapshot;load
    <Card title="Hands" count={data.tools.length||null} facts={data.tools.slice(0,3)}/>
    <Card title="Senses" count={data.evaluation?Object.keys(data.evaluation).length:null} facts={data.evaluation?Object.entries(data.evaluation).slice(0,3).map(([k,v])=>`${k}: ${v}`):[]}/>
   </div>
+  <MachineLoad load={load}/>
  </section>
 }

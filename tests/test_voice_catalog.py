@@ -54,7 +54,7 @@ def test_each_style_has_one_recommendation_for_live_calls_that_runs_in_calls():
 
 def test_default_voice_is_the_warm_one():
     assert VoiceSettings().voice_style == "warm-caring" == catalog.DEFAULT_STYLE
-    assert catalog.find_voice(VoiceSettings().voice) is not None            # "heart" is in the catalog
+    assert catalog.find_voice(VoiceSettings().voice_id) is not None         # "star-mum" is in the catalog
 
 
 def test_loading_rejects_unknown_style_and_duplicate_ids(tmp_path):

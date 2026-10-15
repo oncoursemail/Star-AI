@@ -5,7 +5,9 @@ import io
 from functools import lru_cache
 from pathlib import Path
 import re
-from PIL import Image, ImageOps
+from ._lazy import lazy_attr, lazy_module
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+ImageOps = lazy_module("PIL.ImageOps")
 
 PREFIX = "STAR_GENERATED_IMAGE:"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,190}$")

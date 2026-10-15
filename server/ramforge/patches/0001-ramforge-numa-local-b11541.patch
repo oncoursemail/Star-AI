@@ -1,0 +1,331 @@
+diff --git a/ggml/src/ggml-cpu/ggml-cpu.c b/ggml/src/ggml-cpu/ggml-cpu.c
+index 7c274c0..635a679 100644
+--- a/ggml/src/ggml-cpu/ggml-cpu.c
++++ b/ggml/src/ggml-cpu/ggml-cpu.c
+@@ -573,11 +573,15 @@ struct ggml_state {
+ 
+ static struct ggml_state g_state = {0};
+ 
++static void rf_barrier(int n_threads);
++static int rf_barrier_on;
+ void ggml_barrier(struct ggml_threadpool * tp) {
+     int n_threads = atomic_load_explicit(&tp->n_graph, memory_order_relaxed) & GGML_THREADPOOL_N_THREADS_MASK;
+     if (n_threads == 1) {
+         return;
+     }
++    if (rf_barrier_on < 0) { const char * e = getenv("GGML_RF_BARRIER"); rf_barrier_on = (e && atoi(e) > 0) ? 1 : 0; }
++    if (rf_barrier_on && g_state.numa.n_nodes > 1) { rf_barrier(n_threads); return; }
+ 
+ #ifdef GGML_USE_OPENMP
+     #pragma omp barrier
+@@ -2174,7 +2178,97 @@ static void ggml_compute_forward(struct ggml_compute_params * params, struct ggm
+ 
+ // Android's libc implementation "bionic" does not support setting affinity
+ #if defined(__gnu_linux__)
+-static void set_numa_thread_affinity(int thread_n) {
++
++// ---- RAMForge node subset (GGML_NUMA_NODES=0,1,2): --numa distribute uses only these nodes ----
++static int rf_nodes_n = -1;
++static int rf_nodes_list[GGML_NUMA_MAX_NODES];
++static pthread_once_t rf_nodes_once = PTHREAD_ONCE_INIT;
++static void rf_nodes_init_once(void) {
++    int n = 0;
++    const char * e = getenv("GGML_NUMA_NODES");
++    if (e && *e) {
++        char buf[128]; strncpy(buf, e, sizeof(buf) - 1); buf[sizeof(buf) - 1] = 0;
++        char * save = NULL;
++        for (char * t = strtok_r(buf, ",", &save); t && n < GGML_NUMA_MAX_NODES; t = strtok_r(NULL, ",", &save)) {
++            const int v = atoi(t);
++            if (v >= 0 && v < (int) g_state.numa.n_nodes) rf_nodes_list[n++] = v;
++        }
++    }
++    if (n == 0) { for (uint32_t i = 0; i < g_state.numa.n_nodes && n < GGML_NUMA_MAX_NODES; i++) rf_nodes_list[n++] = (int) i; }
++    rf_nodes_n = n;
++}
++static void rf_nodes_init(void) { pthread_once(&rf_nodes_once, rf_nodes_init_once); }
++
++// ---- RAMForge op profiler (GGML_RF_PROFILE=<file>) ----
++#define RF_MAXK (GGML_OP_COUNT * 64)
++#define RF_NTH 2
++static int rf_prof_on = -1;
++static const char * rf_prof_path = NULL;
++static double rf_compute[RF_NTH][RF_MAXK], rf_wall[RF_NTH][RF_MAXK];
++static int64_t rf_count[RF_NTH][RF_MAXK], rf_graphs[RF_NTH], rf_nodes[RF_NTH];
++static double rf_graph_s[RF_NTH];
++static int rf_nth_of[RF_NTH] = {0, 0};
++static double rf_now(void) { struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts); return ts.tv_sec + ts.tv_nsec * 1e-9; }
++static int rf_slot(int nth) {
++    for (int i = 0; i < RF_NTH; i++) { if (rf_nth_of[i] == nth) return i; if (rf_nth_of[i] == 0) { rf_nth_of[i] = nth; return i; } }
++    return -1;
++}
++static void rf_dump(void) {
++    FILE * f = fopen(rf_prof_path, "w");
++    if (!f) return;
++    for (int s = 0; s < RF_NTH; s++) {
++        if (!rf_nth_of[s]) continue;
++        fprintf(f, "# nth=%d graphs=%lld nodes=%lld graph_wall_s=%.3f\n", rf_nth_of[s], (long long) rf_graphs[s], (long long) rf_nodes[s], rf_graph_s[s]);
++        for (int k = 0; k < RF_MAXK; k++) {
++            if (!rf_count[s][k]) continue;
++            const int op = k / 64, ty = k % 64;
++            fprintf(f, "nth=%d\t%s\t%s\tcount=%lld\tcompute_s=%.4f\twall_s=%.4f\n", rf_nth_of[s], ggml_op_name((enum ggml_op) op),
++                    (op == GGML_OP_MUL_MAT || op == GGML_OP_MUL_MAT_ID) ? ggml_type_name((enum ggml_type) ty) : "-",
++                    (long long) rf_count[s][k], rf_compute[s][k], rf_wall[s][k]);
++        }
++    }
++    fclose(f);
++}
++
++static int ramforge_numa_block = -1;
++// ---- RAMForge two-level NUMA barrier (GGML_RF_BARRIER=1) ----
++static int rf_barrier_on = -1; // (tentative definition above)
++static __thread int rf_tls_ith = 0;
++static struct { atomic_int v; char pad[60]; } rf_node_cnt[GGML_NUMA_MAX_NODES];
++static struct { atomic_int v; char pad[60]; } rf_glob_cnt;
++static struct { atomic_int v; char pad[60]; } rf_gen;
++static inline int rf_node_of(int ith, int nth, int nn) {
++    return ramforge_numa_block > 0 ? (int) (((int64_t) ith * nn) / nth) : ith % nn;
++}
++static void rf_barrier(int n_threads) {
++    rf_nodes_init();
++    const int nn = rf_nodes_n;
++    const int ith = rf_tls_ith;
++    const int node = rf_node_of(ith, n_threads, nn);
++    int members = 0, active = 0;
++    for (int q = 0; q < nn; q++) {
++        int m = 0;
++        for (int i = 0; i < n_threads; i++) { if (rf_node_of(i, n_threads, nn) == q) m++; }
++        if (q == node) members = m;
++        if (m > 0) active++;
++    }
++    const int gen = atomic_load_explicit(&rf_gen.v, memory_order_acquire);
++    if (atomic_fetch_add_explicit(&rf_node_cnt[node].v, 1, memory_order_acq_rel) == members - 1) {
++        atomic_store_explicit(&rf_node_cnt[node].v, 0, memory_order_relaxed);
++        if (atomic_fetch_add_explicit(&rf_glob_cnt.v, 1, memory_order_acq_rel) == active - 1) {
++            atomic_store_explicit(&rf_glob_cnt.v, 0, memory_order_relaxed);
++            atomic_fetch_add_explicit(&rf_gen.v, 1, memory_order_seq_cst);
++            return;
++        }
++    }
++    while (atomic_load_explicit(&rf_gen.v, memory_order_relaxed) == gen) {
++        ggml_thread_cpu_relax();
++    }
++    atomic_thread_fence(memory_order_seq_cst);
++}
++ // RAMForge: GGML_NUMA_BLOCK=1 -> threads [k*n/N, (k+1)*n/N) on node k
++
++static void set_numa_thread_affinity(int thread_n, int n_threads) {
+     if (!ggml_is_numa()) {
+         return;
+     }
+@@ -2186,7 +2280,18 @@ static void set_numa_thread_affinity(int thread_n) {
+     switch(g_state.numa.numa_strategy) {
+         case GGML_NUMA_STRATEGY_DISTRIBUTE:
+             // run thread on node_num thread_n / (threads per node)
+-            node_num = thread_n % g_state.numa.n_nodes;
++            if (ramforge_numa_block < 0) {
++                const char * e = getenv("GGML_NUMA_BLOCK");
++                ramforge_numa_block = (e && atoi(e) > 0) ? 1 : 0;
++            }
++            rf_nodes_init();
++            if (ramforge_numa_block && n_threads > 0) {
++                node_num = (int) (((int64_t) thread_n * rf_nodes_n) / n_threads);
++                if (node_num >= rf_nodes_n) node_num = rf_nodes_n - 1;
++            } else {
++                node_num = thread_n % rf_nodes_n;
++            }
++            node_num = rf_nodes_list[node_num];
+             break;
+         case GGML_NUMA_STRATEGY_ISOLATE:
+             // run thread on current_node
+@@ -2242,7 +2347,7 @@ static void clear_numa_thread_affinity(void) {
+ #else
+ // TODO: Windows etc.
+ // (the linux implementation may also work on BSD, someone should test)
+-static void set_numa_thread_affinity(int thread_n) { UNUSED(thread_n);  }
++static void set_numa_thread_affinity(int thread_n, int n_threads) { UNUSED(thread_n); UNUSED(n_threads); }
+ static void clear_numa_thread_affinity(void) {}
+ #endif
+ 
+@@ -3108,7 +3213,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
+ #ifdef GGML_USE_CPU_RISCV64_SPACEMIT
+     ggml_backend_cpu_riscv64_spacemit_set_numa_thread_affinity(state->ith);
+ #else
+-    set_numa_thread_affinity(state->ith);
++    set_numa_thread_affinity(state->ith, atomic_load_explicit(&tp->n_graph, memory_order_relaxed) & GGML_THREADPOOL_N_THREADS_MASK);
+ #endif
+ 
+     struct ggml_compute_params params = {
+@@ -3126,8 +3231,18 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
+     GGML_PRINT_DEBUG("thread #%d compute-start cplan %p last-graph %d\n", state->ith, (const void *)cplan, state->last_graph);
+ #endif
+ 
++    rf_tls_ith = state->ith;
++    if (rf_prof_on < 0) { rf_prof_path = getenv("GGML_RF_PROFILE"); rf_prof_on = rf_prof_path ? 1 : 0; }
++    const int rf_s = (rf_prof_on && state->ith == 0) ? rf_slot(params.nth) : -1;
++    const double rf_g0 = rf_s >= 0 ? rf_now() : 0.0;
++    double rf_t0 = rf_g0, rf_t1 = 0.0; int rf_k = 0;
+     for (int node_n = 0; node_n < cgraph->n_nodes && atomic_load_explicit(&tp->abort, memory_order_relaxed) != node_n; node_n++) {
+         struct ggml_tensor * node = cgraph->nodes[node_n];
++        if (rf_s >= 0) {
++            rf_k = (int) node->op * 64;
++            if ((node->op == GGML_OP_MUL_MAT || node->op == GGML_OP_MUL_MAT_ID) && node->src[0]) rf_k += (int) node->src[0]->type % 64;
++            rf_t0 = rf_now();
++        }
+ 
+         if (ggml_op_is_empty(node->op)) {
+             // skip NOPs
+@@ -3146,6 +3261,7 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
+         } else {
+             ggml_compute_forward(&params, node);
+         }
++        if (rf_s >= 0) { rf_t1 = rf_now(); }
+ 
+         if (state->ith == 0 && cplan->abort_callback &&
+                 cplan->abort_callback(cplan->abort_callback_data)) {
+@@ -3156,6 +3272,14 @@ static thread_ret_t ggml_graph_compute_thread(void * data) {
+         if (node_n + 1 < cgraph->n_nodes) {
+             ggml_barrier(state->threadpool);
+         }
++        if (rf_s >= 0) {
++            const double rf_t2 = rf_now();
++            rf_compute[rf_s][rf_k] += rf_t1 - rf_t0; rf_wall[rf_s][rf_k] += rf_t2 - rf_t0; rf_count[rf_s][rf_k]++; rf_nodes[rf_s]++;
++        }
++    }
++    if (rf_s >= 0) {
++        rf_graph_s[rf_s] += rf_now() - rf_g0;
++        if (++rf_graphs[rf_s] % 64 == 0) rf_dump();
+     }
+ 
+ #ifdef GGML_USE_OPENMP
+diff --git a/src/llama.cpp b/src/llama.cpp
+index 9beb148..986fb24 100644
+--- a/src/llama.cpp
++++ b/src/llama.cpp
+@@ -26,6 +26,12 @@
+ #include <ctime>
+ #include <stdexcept>
+ #include <vector>
++#include <string>
++#include <chrono>
++#if defined(__linux__)
++#include <unistd.h>
++#include <sys/syscall.h>
++#endif
+ 
+ #if defined(_MSC_VER)
+ #pragma warning(disable: 4244 4267) // possible loss of data
+@@ -312,6 +318,105 @@ static bool llama_prepare_model_devices(const llama_model_params & params, llama
+     return true;
+ }
+ 
++// ---- RAMForge ExpertFlow prototype: NUMA-local weight placement ----------------------------------
++// With GGML_NUMA_BLOCK=1 and --numa distribute, compute thread ith runs on node ith*N/nth, and every
++// matmul kernel used for decode on this CPU (repack Q4_K gemv/mul_mat_id, llamafile Q8_0, ggml mul_mat)
++// splits src0 rows statically by ith when NUMA is on. This binds the rows each node's threads read to
++// that node (per expert slice for 3-D expert tensors), so decode reads weights through the local memory
++// channel instead of 3/4 remote (page interleave).
++#if defined(__linux__)
++static int rf_count_nodes() {
++    int n = 0;
++    for (;; n++) {
++        std::string p = "/sys/devices/system/node/node" + std::to_string(n);
++        if (access(p.c_str(), F_OK) != 0) break;
++    }
++    return n;
++}
++
++static int64_t rf_row_start(const ggml_tensor * t, bool repacked, int64_t ith, int64_t nth) {
++    const int64_t nr = t->ne[1];
++    if (ith >= nth) return nr;
++    int64_t s;
++    if (repacked && t->ne[2] > 1) {                 // repack forward_mul_mat_id: (ith*ne01)/nth, aligned up to 8
++        s = (ith * nr) / nth; s = (s + 7) / 8 * 8;
++    } else if (repacked) {                          // repack forward_mul_mat, NUMA: dr0 = ceil(nr/nth), aligned up to 8
++        const int64_t dr = (nr + nth - 1) / nth; s = dr * ith; s = (s + 7) / 8 * 8;
++    } else if (t->type == GGML_TYPE_Q8_0) {         // llamafile tinyBLAS_Q0_AVX gemm4xN: tiles of 4 rows, duty = ceil(tiles/nth)
++        const int64_t tiles = nr / 4; const int64_t duty = (tiles + nth - 1) / nth; s = 4 * duty * ith;
++    } else {                                        // ggml mul_mat NUMA path: dr0 = ceil(nr/nth)
++        const int64_t dr = (nr + nth - 1) / nth; s = dr * ith;
++    }
++    return s < nr ? s : nr;
++}
++
++static void ramforge_place_weights(llama_model * model) {
++    const char * e = getenv("LLAMA_RAMFORGE_PLACE");
++    if (!e || atoi(e) <= 0) return;
++    std::vector<int> nodes;
++    if (const char * en2 = getenv("GGML_NUMA_NODES")) {
++        const std::string l = en2; size_t p0 = 0;
++        while (p0 < l.size()) {
++            size_t p1 = l.find(',', p0); if (p1 == std::string::npos) p1 = l.size();
++            if (p1 > p0) nodes.push_back(atoi(l.substr(p0, p1 - p0).c_str()));
++            p0 = p1 + 1;
++        }
++    }
++    if (nodes.empty()) { for (int q = 0; q < rf_count_nodes(); q++) nodes.push_back(q); }
++    const int nn = (int) nodes.size();
++    if (nn < 2) { fprintf(stderr, "ramforge: fewer than 2 NUMA nodes, placement skipped\n"); return; }
++    const char * en = getenv("LLAMA_RAMFORGE_NTH");
++    const int64_t nth = en ? atoll(en) : 24;
++    const size_t pg = (size_t) sysconf(_SC_PAGESIZE);
++    const int64_t min_bytes = 1 << 20;
++    auto t0 = std::chrono::steady_clock::now();
++    size_t placed = 0, failed = 0, n_calls = 0, n_t = 0, n_probe = 0, n_probe_ok = 0;
++    std::vector<size_t> per_node(nn, 0);
++    for (const auto & it : model->tensors_by_name) {
++        const ggml_tensor * t = it.second;
++        if (!t || !t->data || !t->buffer) continue;
++        // CPU_REPACK buffers (the Q4_K experts, repacked to 8x8 interleaved rows) are plain host memory but do not
++        // report is_host, because their layout differs; they hold most of the weight bytes, so include them.
++        const bool repacked = strstr(ggml_backend_buffer_name(t->buffer), "REPACK") != nullptr;
++        if (!repacked && !ggml_backend_buffer_is_host(t->buffer)) continue;
++        if ((int64_t) ggml_nbytes(t) < min_bytes || t->ne[1] < 2 * nn) continue;
++        if (it.first == "token_embd.weight") continue;   // get_rows: one row per token, any node is fine
++        const int64_t nslices = t->ne[2] * t->ne[3];
++        n_t++;
++        for (int64_t sl = 0; sl < nslices; sl++) {
++            const uintptr_t base = (uintptr_t) t->data + (uintptr_t) ((sl % t->ne[2]) * t->nb[2] + (sl / t->ne[2]) * t->nb[3]);
++            for (int q = 0; q < nn; q++) {
++                const int64_t r0 = rf_row_start(t, repacked, (q * nth) / nn, nth);
++                const int64_t r1 = q == nn - 1 ? t->ne[1] : rf_row_start(t, repacked, ((q + 1) * nth) / nn, nth);
++                if (r1 <= r0) continue;
++                uintptr_t a = base + (uintptr_t) (r0 * t->nb[1]);
++                uintptr_t b = base + (uintptr_t) (r1 * t->nb[1]);
++                a = (a + pg / 2) / pg * pg;                // each page goes to the node that owns most of it
++                b = (b + pg / 2) / pg * pg;
++                if (b <= a) continue;
++                unsigned long mask = 1ul << nodes[q];
++                // mode MPOL_BIND = 2, flags MPOL_MF_MOVE = 2
++                long rc = syscall(SYS_mbind, (void *) a, (unsigned long) (b - a), 2, &mask, (unsigned long) 64, 2);
++                n_calls++;
++                if (rc == 0) { placed += b - a; per_node[q] += b - a; } else { failed += b - a; }
++                // verify: ask the kernel where the middle page of this range now lives (move_pages, query only)
++                void * probe = (void *) (a + ((b - a) / pg / 2) * pg); int st = -1;
++                if (syscall(SYS_move_pages, 0, 1ul, &probe, nullptr, &st, 0) == 0) { n_probe++; if (st == nodes[q]) n_probe_ok++; }
++            }
++        }
++    }
++    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
++    std::string pn;
++    for (int q = 0; q < nn; q++) { pn += (q ? " " : ""); pn += std::to_string(per_node[q] >> 20); }
++    fprintf(stderr, "ramforge: placed %.2f GiB of %zu weight tensors on %d nodes (MiB per node: %s), %zu mbind calls, "
++                    "%.2f GiB failed, probe %zu/%zu pages on the intended node, nth=%" PRId64 ", %.0f ms\n",
++                    placed / 1073741824.0, n_t, nn, pn.c_str(), n_calls, failed / 1073741824.0, n_probe_ok, n_probe, nth, ms);
++}
++#else
++static void ramforge_place_weights(llama_model *) {}
++#endif
++// ---------------------------------------------------------------------------------------------------
++
+ // Returns 0 on success, -1 on error, and -2 on cancellation via llama_progress_callback
+ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * metadata, llama_model_set_tensor_data_t set_tensor_data, void * set_tensor_data_ud,
+         const std::string & fname, std::vector<std::string> & splits, FILE * file, llama_model_params & params) {
+@@ -370,6 +475,8 @@ static std::pair<int, llama_model *> llama_model_load(struct gguf_context * meta
+             return {-2, nullptr};
+         }
+ 
++        ramforge_place_weights(model);
++
+         return {0, model_ptr.release()};
+     } catch (const std::exception & err) {
+         LLAMA_LOG_ERROR("%s: error loading model: %s\n", __func__, err.what());

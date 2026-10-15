@@ -62,7 +62,7 @@ Implementation modules:
 | Button: Voice message (public) | Speak first 500 chars of the answer as native voice message |
 | Button: Clear context | Forget only this Discord session's volatile history |
 
-The bot is **not** a general voice listener, image generator, multimodal app, channel monitor or autonomous Studio controller at this stage. More capabilities need separate permission/data-flow reviews.
+Update 2026-10-14: the bot now makes images (`/draw`, `draw ...` DMs) through STAR Desktop's own local ComfyUI path; see STAR_DISCORD_SETUP.md. Otherwise the bot is **not** a general voice listener, multimodal app, channel monitor or autonomous Studio controller at this stage. More capabilities need separate permission/data-flow reviews.
 
 ## Owner installation (Windows development)
 

@@ -3,10 +3,10 @@ name: roblox-datastore-safety
 description: Save Roblox player data safely with DataStoreService. Use for saving and loading, retries, UpdateAsync, BindToClose, autosave, request limits, session locking and purchase records.
 ---
 # DataStore safety
-- Wrap every DataStore call in pcall: requests fail when throttled or the service is down. Retry a bounded number of times (for example 3) with growing task.wait delays, then give up and keep the data in memory.
-- For data that exists use UpdateAsync, not GetAsync then SetAsync: the callback gets the old value and returns the new one, or nil to cancel. It must not yield. Never overwrite existing player data with SetAsync.
-- Key: "Player_" .. player.UserId. Plain serializable tables, under the 4 MB per-key limit.
-- Save on Players.PlayerRemoving and in game:BindToClose. Bound functions run in parallel and the server waits 30 seconds: save players with task.spawn and wait with a deadline.
-- Never save on every change. Autosave on an interval (for example 60 s), staggered, to stay in the request budget; past it requests queue, then drop (error codes 301-306).
-- ProcessReceipt returns PurchaseGranted only after the grant and PurchaseId are saved, else NotProcessedYet.
-- Several servers may write one key: use session locking (a lock id kept in the data).
+- Wrap yielding data-store calls in pcall. Retry transient failures in key order with bounded exponential backoff and jitter; do not retry invalid requests. A failed response can have an unknown write outcome: retain unsaved state while the server lives and do not promise recovery after shutdown.
+- Use UpdateAsync when the new value depends on the current key or several servers may write. Its transform receives the current value, returns a new value or nil to cancel, must not yield, and can be retried. SetAsync is valid for an independent replacement/new key, but can lose concurrent changes.
+- Use a stable per-player key such as "Player_" .. player.UserId. Store serializable values and keep the JSON-serialized key value within 4,194,304 characters; check its encoded length.
+- Save on Players.PlayerRemoving and game:BindToClose; BindToClose callbacks run in parallel with a bounded shutdown window (30 seconds). Finish critical saves within it; a shutdown save is not guaranteed.
+- Do not persist every change. Stagger autosaves and check budgets; throttled requests can queue (30 per queue), then drop (error codes 301-306) when queues fill. An interval such as 60 s is a design choice, not an engine limit.
+- For a retryable developer product, persist the award and its PurchaseId atomically before ProcessReceipt returns PurchaseGranted; return NotProcessedYet for uncertain or failed persistence and never grant the same ID twice.
+- When multiple servers can hold a live profile, consider an owner-checked session lock with lease renewal, release and crash recovery. A lock alone does not prevent stale writes without ownership checks.

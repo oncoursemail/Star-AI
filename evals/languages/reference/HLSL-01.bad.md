@@ -1,0 +1,1 @@
+HLSL matrices are row-major by default, just like your CPU library, so the layout matches. The skew must come from the projection itself: check your field of view and aspect ratio, and make sure the near plane is not zero. Rebuild the projection with a positive near plane and the mesh will render correctly.

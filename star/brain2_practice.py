@@ -18,7 +18,7 @@ import time
 from typing import Any, Callable
 
 from .roblox_cloud import CloudError, RobloxCloud
-from .roblox_pipeline import run_pipeline, summarize_test
+from .roblox_pipeline import run_pipeline
 
 
 class PracticeRefused(RuntimeError):

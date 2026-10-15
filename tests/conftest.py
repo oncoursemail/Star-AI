@@ -3,8 +3,29 @@
 STAR reads the owner's Roblox API key from a key file in the home folder (star/roblox_cloud.py). No
 test may depend on, or use, the key of the machine it runs on: the file path points nowhere here.
 The one live test names the real file itself.
+
+CI may run the suite as parallel shards (STAR_TEST_SHARD="i/N", see tests/sharding.py). Unset, the
+whole suite runs, as it always did.
 """
+import os
+
 import pytest
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config, items):
+    spec = os.environ.get("STAR_TEST_SHARD", "").strip()
+    if not spec:
+        return
+    from tests.sharding import split_items
+    kept, dropped = split_items(items, spec)
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    items[:] = kept
+    reporter = config.pluginmanager.get_plugin("terminalreporter")
+    if reporter is not None:
+        files = len({item.nodeid.split("::", 1)[0] for item in kept})
+        reporter.write_line(f"STAR_TEST_SHARD {spec}: {len(kept)} of {len(kept) + len(dropped)} tests in {files} files")
 
 
 @pytest.fixture(autouse=True)
@@ -18,6 +39,14 @@ def _no_owner_roblox_key(monkeypatch, tmp_path_factory):
 def _default_slot_pinning(monkeypatch):
     """The slot rules are tested as the app ships them, whatever the machine's environment says."""
     monkeypatch.delenv("STAR_SERVER_SLOT_PINNING", raising=False)
+
+
+@pytest.fixture(autouse=True)
+def _no_resource_planner(monkeypatch):
+    """No test may talk to a real resource planner (star/planner_client.py reads $STAR_PLANNER_URL or
+    ~/.star/planner_url). Tests of the planner hand in their own URL or client."""
+    monkeypatch.setenv("STAR_PLANNER_URL", "off")
+    monkeypatch.setenv("STAR_NS_PLANNER_URL", "off")
 
 
 @pytest.fixture(autouse=True)

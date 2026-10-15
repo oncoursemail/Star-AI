@@ -69,8 +69,12 @@ def _initializing(directory: Path):
             descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.close(descriptor)
             break
-        except FileExistsError:
+        except (FileExistsError, PermissionError) as exc:
+            # Windows reports a lock file that another process is still deleting as PermissionError, not
+            # FileExistsError (seen in CI on test_simultaneous_* tests): wait for it like a held lock.
             if perf_counter() >= deadline:
+                if isinstance(exc, PermissionError):
+                    raise
                 raise RuntimeError("Shared store initialization is in use; retry after the host operation finishes") from None
             sleep(.025)
     try:
