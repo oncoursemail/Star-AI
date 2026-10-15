@@ -150,6 +150,24 @@ description: Plan and validate delegated Star research using real bounded subage
 5. Require each specialist to label directly retrieved evidence vs hypothesis and to admit missing data. Do not treat an untested child report as a final verified artifact.
 6. Reconcile conflicts and perform independent tests/visual inspection before stating any implementation is finished.
 """,
+    "business-evidence-first": """---
+name: business-evidence-first
+description: Research viable businesses, evaluate product-market fit, price experiments and AI-agent commerce workflows without inventing profits or bypassing approvals.
+---
+# STAR evidence-first business research
+1. Identify the buyer, exact costly problem, existing workaround and desired paid outcome before generating products. Separate source-observed facts, model inference and assumptions.
+2. Use official seller/API documentation for platform rules, eligibility, fees, categories and approval. Record source URLs, effective date and unknown terms; terms can change.
+3. Research legitimate customer problems and competitors using authorized public resources or consensual interviews. Do not copy protected artwork, private data, customer lists or proprietary paid content.
+4. Score buyer pain, deliverability, distribution, contribution margin and maintenance risk separately. A high score is not a probability of earning money.
+5. Track real buyer interviews and willingness to pay as *claims requiring human verification*. Never generate fake buyers, sales, reviews, testimonials or success metrics.
+6. Model full unit economics (refunds, platform/payment fees, production, fulfillment, marketing, model inference, support time). Always label scenarios hypothetical until reconciled with actual provider events.
+7. Prefer a single original high-quality service or developer tool with independent reproducible tests, then expand only from paid demand and customer feedback.
+8. For code/Roblox/UI products, require independent QA evidence, licenses, supported platform compatibility, accessible design and measured performance before offering a release.
+9. External publication, purchases, ad spend, mass messages, fulfillment promises, refunds, OAuth changes, or financial transfers require explicit scoped owner permission. A skill is never a permission grant.
+10. For Star's existing research, inspect docs/research/STAR_BUSINESS_EMPIRE_BLUEPRINT_20261014.md and star/business/candidate_catalog.json when the authorized source workspace contains them. Treat all 66 opportunities and price tests as unvalidated hypotheses.
+11. Define next action using available evidence: interview buyers, build a small prototype, fix defects, prepare a reviewable draft, or stop. Say clearly if no customers, real sales, or tests have been observed.
+Sources to recheck: https://create.roblox.com/docs/production/creator-store ; https://developers.etsy.com/documentation/tutorials/listings/ ; https://docs.stripe.com/webhooks ; https://www.ftc.gov/business-guidance/advertising-marketing
+""",
     "evidence-first-debugging": """---
 name: evidence-first-debugging
 description: Diagnose runtime, model, integration and application failures by reproducing errors, tracing causes and validating fixes. Use for bugs, crashes and broken features.
