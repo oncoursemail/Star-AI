@@ -41,7 +41,8 @@ fi
 
 root="$(git rev-parse --show-toplevel)"
 cd "$root"
-run() { as_star "bash -c 'cd $home/app/server/night_school && HOME=$home/data/home STAR_NS_HOME=$home nice -n 19 $home/venv/bin/python -m nightschool $*'"; }
+# The checks read the service's own settings file (key file, knowledge address) when there is one.
+run() { as_star "bash -c 'cd $home/app/server/night_school && if [ -f $home/env ]; then set -a; . $home/env; set +a; fi && HOME=$home/data/home STAR_NS_HOME=$home nice -n 19 $home/venv/bin/python -m nightschool $*'"; }
 if [ "$pool_only" = 0 ]; then
   echo "== code (git HEAD $(git rev-parse --short HEAD))"
   remote "install -d -o star -g star $home $home/app $home/pool $home/data $home/data/home $home/report $home/outbox"
