@@ -15,7 +15,7 @@ def ready(agent_id, capabilities, *, no_charge=True):
 
 
 def test_catalog_is_curated_source_linked_not_model_entitlements():
-    assert len(AGENTS) >= 15
+    assert len(AGENTS) >= 21
     assert len({entry.id for entry in AGENTS}) == len(AGENTS)
     assert all(x.source.startswith("https://") for x in AGENTS)
     assert any(x.id == "gemini_cli" and x.access == "account_quota" for x in AGENTS)
@@ -24,6 +24,9 @@ def test_catalog_is_curated_source_linked_not_model_entitlements():
     assert any(x.id == "pi" and x.integration == "rpc" for x in AGENTS)
     assert any(x.id == "ollama" and x.kind == "inference_runtime" for x in AGENTS)
     assert any(x.id == "comfyui" and x.kind == "media_runtime" for x in AGENTS)
+    assert any(x.id == "hermes_agent" and "independent review" in x.notes for x in AGENTS)
+    assert any(x.id == "plandex" and "WSL" in x.notes for x in AGENTS)
+    assert any(x.id == "openclaw" and "default-off" in x.notes for x in AGENTS)
 
 
 def test_catalog_capability_filter_and_fixed_limit():
