@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections import defaultdict
 import json
-from pathlib import Path
 import re
 
 from .code_navigation import (_IDENTIFIER, SOURCE_TYPES, _files, _other_symbols,
