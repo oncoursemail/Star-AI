@@ -254,7 +254,7 @@
               background-color var(--star-dur-hover) var(--star-ease);
 }
 .cmp:focus-within {
-  border-color: var(--star-gold-soft);
+  border-color: var(--star-stroke-focus);
   background: var(--star-surface-2);
 }
 .shell .cmp-input {
