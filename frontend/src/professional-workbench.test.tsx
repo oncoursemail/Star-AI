@@ -39,7 +39,7 @@ describe('STAR professional desktop structure', () => {
     await screen.findByRole('heading', {name: 'Your workspaces'})
     const main = screen.getByRole('main')
     expect(within(main).getByRole('heading', {name: 'Your workspaces'})).toBeTruthy()
-    const current = within(main).getByRole('button', {name: /STAR Current workspace/})
+    const current = within(main).getByRole('button', {name: 'Workspace STAR — current workspace'})
     expect(current.getAttribute('aria-current')).toBe('page')
     expect(within(main).getByRole('textbox', {name: 'New project name'})).toBeTruthy()
   })
