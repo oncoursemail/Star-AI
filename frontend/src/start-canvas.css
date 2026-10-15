@@ -223,9 +223,6 @@
   .start-hero p {
     margin-top: var(--star-3);
   }
-  .start-portrait-face {
-    max-width: 104px;
-  }
   .start-portrait > span {
     display: none;
   }
@@ -251,7 +248,7 @@
     padding-bottom: var(--star-3);
   }
   .start-hero {
-    grid-template-columns: minmax(0, 1fr) 82px;
+    grid-template-columns: minmax(0, 1fr) 96px;
     padding-bottom: var(--star-6);
   }
   .start-hero h2 {
@@ -264,9 +261,6 @@
   .start-hero p {
     font-size: var(--star-fs-nav);
     line-height: 1.5;
-  }
-  .start-portrait-face {
-    max-width: 82px;
   }
   .start-action {
     min-height: 60px;
