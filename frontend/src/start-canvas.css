@@ -10,7 +10,8 @@
 }
 .thread.is-empty.is-crafted-home .thread-column {
   min-height: 100%;
-  justify-content: center;
+  /* safe center falls back to top alignment when the workbench is taller than the window. */
+  justify-content: safe center;
   padding-top: var(--star-6);
   padding-bottom: var(--star-6);
 }
