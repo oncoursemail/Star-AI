@@ -34,6 +34,11 @@ def _check_sha(value: str, field: str, *, source: bool = False) -> None:
         raise ValueError(f"Invalid {field} digest")
 
 
+def _check_choice(value: str, choices: frozenset[str], field: str) -> None:
+    if type(value) is not str or value not in choices:
+        raise ValueError(f"Invalid {field} value")
+
+
 @dataclass(frozen=True, slots=True)
 class CheckEvidence:
     """A single report tied to a specific project, source revision and artifact.
@@ -52,10 +57,9 @@ class CheckEvidence:
     report_sha256: str
 
     def __post_init__(self) -> None:
-        if self.name not in _CHECK_TYPES or self.status not in _CHECK_STATUSES:
-            raise ValueError("Unknown check type or status")
-        if self.provenance not in _PROVENANCE:
-            raise ValueError("Unknown evidence provenance")
+        _check_choice(self.name, _CHECK_TYPES, "check name")
+        _check_choice(self.status, _CHECK_STATUSES, "check status")
+        _check_choice(self.provenance, _PROVENANCE, "check provenance")
         for field in ("verifier_id", "project_id"):
             _check_id(getattr(self, field), field)
         _check_sha(self.source_sha, "source", source=True)
@@ -82,8 +86,8 @@ class TaskEvidence:
     def __post_init__(self) -> None:
         for field in ("mission_id", "project_id", "task_id", "worker_id", "provider_id"):
             _check_id(getattr(self, field), field)
-        if self.transport not in _TRANSPORTS or self.status not in _TASK_STATUSES:
-            raise ValueError("Unknown agent transport or task status")
+        _check_choice(self.transport, _TRANSPORTS, "transport")
+        _check_choice(self.status, _TASK_STATUSES, "task status")
         # A model ID is metadata, never a URL, command, key or execution instruction.
         if (type(self.model_id) is not str or not 1 <= len(self.model_id) <= 120
                 or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/+\-]{0,119}", self.model_id) is None):
