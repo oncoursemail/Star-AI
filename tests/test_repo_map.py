@@ -71,6 +71,17 @@ def test_map_does_not_execute_workspace_source(tmp_path):
     assert report["files"][0]["symbols"][0]["name"] == "inspected_symbol"
 
 
+def test_credential_literal_in_signature_is_redacted(tmp_path):
+    token = "sk-" + "A" * 32
+    write(tmp_path, "source.py",
+          f"def connect(api_key='{token}'):\\n    pass\\n".replace("\\\\n", "\\n"))
+    report = Workspace(tmp_path).call("workspace_search",
+                                      {"query": "connect", "mode": "map"})
+    serialized = json.dumps(report)
+    assert token not in serialized
+    assert "[REDACTED]" in serialized
+
+
 def test_reindex_after_file_edits_and_keep_legacy_search(tmp_path):
     path = write(tmp_path, "module.py", "def initial_symbol():\n    return 1\n")
     ws = Workspace(tmp_path)
