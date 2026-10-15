@@ -175,6 +175,8 @@ class CampaignLedger:
                 "VALUES(?,?,?,'running',?)",
                 (cfg.project, target_key, now, cfg.rounds))
             self.db.commit()
+            if entry.lastrowid is None:
+                raise sqlite3.DatabaseError("Self-play campaign row was not created")
             return int(entry.lastrowid)
         except BaseException:
             self.db.rollback()
@@ -276,6 +278,7 @@ async def run_approved_campaign(cfg: Curriculum, home: Path, *, approved: bool =
         # alternate target or gets to set the place from a language-model reply.
         target = (10770312935, 128074805767678)
         validate = lambda spec: (spec, [])
+        assert lab_runner is not None  # the ImportError branch above returned when it was None
         runner = lab_runner
 
     home = Path(home).expanduser().resolve()
