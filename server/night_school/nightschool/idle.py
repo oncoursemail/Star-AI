@@ -146,7 +146,9 @@ class IdleGate:
         except OSError:
             self._last, self._quiet_since = None, None
             return "brain not reachable, waiting"
-        signs = activity(self._last if self._last is not None else {}, table)
+        # Helper models alone (embeddings, rerank: a documentation search, an index job, another night-school
+        # worker's checks) are not somebody using the brain; every chat turn also shows on a chat model's slot.
+        signs = activity(self._last if self._last is not None else {}, table, skip_helpers=True)
         self._last = table
         if signs:
             self._quiet_since = None

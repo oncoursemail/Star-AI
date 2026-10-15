@@ -65,7 +65,7 @@ def run(settings: Settings) -> int:
     gate = PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner, log=gate_log)
     pool = load_pool(settings.pool)
     log("night school started; " + pool.summary() + f"; lanes {settings.lanes}")
-    model = RealModel(settings, gate, stop=stop)
+    model = RealModel(settings, gate, knowledge=settings.knowledge_url, stop=stop)
     for k in range(1, settings.lanes):
         model.add_lane(PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner,
                                    holder=f"nightschool-{k}", slot=settings.slot + k, extra_lane=True,
