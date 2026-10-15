@@ -37,7 +37,7 @@ import os
 from pathlib import Path
 import re
 from time import monotonic
-from typing import Awaitable, Callable
+from typing import Any, Awaitable, Callable
 
 MIN_N, MAX_N = 1, 8
 DEFAULT_MAX_N = 4
@@ -195,7 +195,7 @@ def mode_from_env(environ=None) -> tuple[bool, int | None]:
 class Target:
     model: str
     free: int                 # slots free right now (after the main answer took its slot, for the main model)
-    client: object = None     # None: the caller's default client
+    client: Any = None        # None: the caller's default client
 
 
 def capacity_from_planner(status: dict | None, machine: str = "brain1") -> dict[str, int]:
@@ -465,6 +465,8 @@ class LuauChecker:
     def run_tests(self, code: str, tests: str) -> tuple[dict | None, str]:
         """{assertion name: passed} from the sandbox, or (None, reason) when it could not run."""
         from .eval_checks import build_test_script, parse_test_output
+        if self.runner is None:
+            return None, "sandbox: not configured"
         try:
             run = self.runner.run(build_test_script(self.prelude, code, tests))
         except Exception as exc:
@@ -613,7 +615,7 @@ class BestOfN:
     repair(prompt, code, problems) -> code           (optional; once, when no candidate passes)
     """
 
-    def __init__(self, plan: SamplePlan, *, prompt: str, checker, sample: Sample, targets: list[Target],
+    def __init__(self, plan: SamplePlan, *, prompt: str, checker, sample: Sample | None, targets: list[Target],
                  write_tests=None, judge=None, repair=None, on_event=None, clock=monotonic):
         self.plan, self.prompt, self.checker, self._sample = plan, prompt, checker, sample
         self.targets = allocate(max(0, plan.n - 1), targets)
@@ -648,6 +650,8 @@ class BestOfN:
     async def _run_one(self, candidate: Candidate, target: Target) -> None:
         began = self._clock()
         try:
+            if self._sample is None:
+                raise RuntimeError("no sampler")
             text = await self._sample(target, candidate.temperature)
             if not isinstance(text, str) or not text.strip():
                 raise ValueError("empty answer")
@@ -663,6 +667,8 @@ class BestOfN:
                                "state": "written" if candidate.ok else "failed"})
 
     async def _tests(self) -> str | None:
+        if self._write_tests is None:
+            return None
         try:
             return parse_tests(await self._write_tests(self.prompt))
         except asyncio.CancelledError:
@@ -772,6 +778,8 @@ class BestOfN:
     async def _try_repair(self, best: Candidate, tests: str | None) -> str | None:
         problems = [f"{c.name}: {c.detail}" if c.detail else c.name for c in best.checks
                     if c.status == "fail" and c.hard]
+        if self._repair is None:
+            return None
         _emit(self._on_event, {"event": "best_of_n_repair", "index": best.index})
         try:
             fixed = await self._repair(self.prompt, best.code, problems)
@@ -882,7 +890,7 @@ def _first_text(response) -> str:
 def model_writer(client, model: str, *, max_tokens: int = 700, extra_body: dict | None = None):
     """write_tests(prompt) on `client` (temperature 0)."""
     async def write(prompt: str) -> str:
-        kwargs = dict(model=model, temperature=0, max_tokens=max_tokens,
+        kwargs: dict = dict(model=model, temperature=0, max_tokens=max_tokens,
                       messages=[{"role": "system", "content": TEST_SYSTEM},
                                 {"role": "user", "content": "REQUEST:\n" + prompt[:4000]}])
         if extra_body:
@@ -895,7 +903,7 @@ def model_judge(client, model: str, *, extra_body: dict | None = None):
     """judge(prompt, answers) -> index, one short call; the code is shown, prose is clipped."""
     async def judge(prompt: str, answers: list[str]) -> int:
         listing = "\n\n".join(f"CANDIDATE {i + 1}:\n{a[:3500]}" for i, a in enumerate(answers))
-        kwargs = dict(model=model, temperature=0, max_tokens=8,
+        kwargs: dict = dict(model=model, temperature=0, max_tokens=8,
                       messages=[{"role": "system", "content": JUDGE_SYSTEM},
                                 {"role": "user", "content": f"REQUEST:\n{prompt[:2000]}\n\n{listing}\n\n"
                                                             f"Best candidate number (1-{len(answers)}):"}])
@@ -912,7 +920,7 @@ def model_repair(client, model: str, kind: str, *, max_tokens: int = 1600, extra
 
     async def repair(prompt: str, code: str, problems: list[str]) -> str:
         listing = "\n".join("- " + _clean(p, 200) for p in problems[:8])
-        kwargs = dict(model=model, temperature=0, max_tokens=max_tokens,
+        kwargs: dict = dict(model=model, temperature=0, max_tokens=max_tokens,
                       messages=[{"role": "system", "content": REPAIR_SYSTEM},
                                 {"role": "user", "content": f"Request:\n{prompt[:1500]}\n\nCode:\n```{fence}\n"
                                                             f"{code.rstrip()}\n```\n\nProblems:\n{listing}"}])
