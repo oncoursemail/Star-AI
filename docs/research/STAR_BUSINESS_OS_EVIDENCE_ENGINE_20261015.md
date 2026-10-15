@@ -99,13 +99,13 @@ Build a deterministic preflight that estimates the *probability of a test failin
 For a developer on a STAR source checkout, an **optional** import into a chosen local knowledge folder is:
 
 ```python
-from pathlib import Path
 from star.business.knowledge_bridge import seed_candidate_notes
-added = seed_candidate_notes(Path.home() / "STAR-business-research-notes")
-print(f"Added {added} unreviewed notes. Review evidence before trusting.")
+from star.desktop_core import app_data
+added = seed_candidate_notes(app_data() / "knowledge", project="STAR")
+print(f"Added {added} unreviewed STAR-project notes. Review evidence before trusting.")
 ```
 
-This example does **not** edit STAR's normal profile or run automatically. Integrating the installer/app UI and reviewed knowledge search is a separate gate.
+This optional example **does** add unreviewed notes to the current STAR profile's knowledge database; it never runs automatically and does not approve the notes. The UI and explicit reviewed-knowledge workflow are separate implementation gates.
 
 ### Tests and acceptance
 
