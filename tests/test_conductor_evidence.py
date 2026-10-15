@@ -117,6 +117,8 @@ def test_required_check_policy_is_strict(required):
     {"artifact_sha256": "0" * 63},
     {"model_id": "claude; rm -rf /"},
     {"transport": "not-a-provider"},
+    {"transport": []},
+    {"status": None},
     {"status": "passed"},  # task status vs independent check status
     {"checks": [check()]},
     {"checks": (check(),) * 25},
@@ -133,8 +135,11 @@ def test_task_contract_rejects_unsafe_or_invalid_metadata(bad):
     {"artifact_sha256": "e" * 63},
     {"verifier_id": "../escape"},
     {"name": "arbitrary"},
+    {"name": []},
     {"status": "pretend-passed"},
+    {"status": None},
     {"provenance": "signed-by-model"},
+    {"provenance": []},
 ])
 def test_individual_check_contract_rejects_bogus_metadata(bad):
     with pytest.raises(ValueError):
