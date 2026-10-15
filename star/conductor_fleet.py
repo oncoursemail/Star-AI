@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, replace
 from hashlib import sha256
+import inspect
 import re
 from typing import Any, Callable, Mapping
 
@@ -252,7 +253,9 @@ async def run_fleet_team(
             close = getattr(client, "aclose", None)
             if callable(close):
                 try:
-                    await close()
+                    closing = close()
+                    if inspect.isawaitable(closing):
+                        await closing
                 except Exception:
                     pass
 
