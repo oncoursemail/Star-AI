@@ -177,7 +177,7 @@ def plan_candidates(
     approved_ids: frozenset[str] = frozenset(),
     allow_external_data: bool = False,
     require_zero_spend: bool = True,
-    limit: int = 18,
+    limit: int = len(AGENTS),
 ) -> tuple[CandidatePreview, ...]:
     """Preview *potential* team members without launching/authorizing any agent.
 
