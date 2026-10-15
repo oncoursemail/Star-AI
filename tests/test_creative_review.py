@@ -103,3 +103,19 @@ def test_review_cli_refuses_automated_approval(tmp_path, capsys):
         main(["review", "manifest.json", "--workspace", str(tmp_path), "--database", str(db),
               "--decision", "approve"])
     assert assess(db, capture_evidence(tmp_path, manifest))["status"] == "awaiting_owner_review"
+
+
+def test_stylesheet_change_invalidates_review_when_in_source_manifest(tmp_path):
+    manifest = _fixture(tmp_path)
+    (tmp_path / "theme.css").write_text(".window { color: gold; }", encoding="utf-8")
+    manifest["sources"] = ["app.tsx", "theme.css"]
+    db = tmp_path / "reviews.db"
+    first = capture_evidence(tmp_path, manifest)
+    record_owner_review(db, first, "approve")
+    (tmp_path / "theme.css").write_text(".window { color: violet; }", encoding="utf-8")
+    second = capture_evidence(tmp_path, manifest)
+    assert second["evidence_key"] != first["evidence_key"]
+    assert assess(db, second)["status"] == "awaiting_owner_review"
+    manifest["sources"] = ["theme.css"]
+    with pytest.raises(ValueError, match="primary source"):
+        capture_evidence(tmp_path, manifest)
