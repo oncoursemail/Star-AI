@@ -135,8 +135,17 @@
   transform: scale(0.98);
 }
 .shell .settings-tab.is-current {
-  background: var(--star-surface-2);
+  background: var(--star-surface-1);
   color: var(--star-text);
+}
+.shell .settings-tab.is-current::before {
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: 0;
+  width: 2px;
+  background: var(--star-gold);
+  content: '';
 }
 .shell .settings-tab.is-current > svg {
   color: var(--star-gold);
@@ -156,7 +165,9 @@
   display: none;
 }
 .settings-panel-head {
-  margin-bottom: var(--star-4);
+  margin-bottom: var(--star-6);
+  padding-bottom: var(--star-4);
+  border-bottom: 1px solid var(--star-stroke-soft);
 }
 .shell .settings-panel-head h2 {
   margin: 0;
