@@ -11,12 +11,12 @@ Current baseline: the React frontend already has OLED/gold tokens, accessibility
 - An offline quality evidence module at star/creative_review.py.
 - Validates actual, local PNG screenshots at declared pixel dimensions and source files, with size limits and SHA-256 hashes.
 - Optionally compares pixel drift against a local baseline screenshot; identical pixels are never described as proof of good taste.
-- A local SQLite review ledger stores approve/reject decisions against the exact source/screenshot evidence. Every changed candidate returns awaiting_owner_review until separately approved.
+- A local SQLite review ledger stores approve/reject decisions against the exact source/screenshot evidence. Every changed candidate (including declared CSS dependencies) returns awaiting_owner_review until separately approved.
 - Rejection requires a concrete feedback reason. Prior rejection feedback remains visible when a new version is inspected.
 - An owner CLI review requires an interactive terminal and exact confirmation. Do not expose the review-write function as an LLM tool. SQLite and a terminal check are not tamper-resistant security boundaries.
-- 10 targeted tests cover changed source, changed pictures, rejected designs, stale approval, malformed files, path escapes, symlinks and noninteractive review refusal.
+- 11 targeted tests cover changed source, changed pictures, rejected designs, stale approval, malformed files, path escapes, symlinks and noninteractive review refusal.
 
-This is a tested **foundation**, not yet a UI redesign, a release-blocking CI job, an authenticated desktop approval button, or proof that the owner's desired design has been achieved.
+The caller must list all source/CSS dependencies and refresh trusted screenshots from the actual build; the module cannot prove a screenshot came from a particular commit. This is a tested **foundation**, not yet a UI redesign, a release-blocking CI job, an authenticated desktop approval button, or proof that the owner's desired design has been achieved.
 
 ## Example evidence manifest
 
@@ -27,6 +27,7 @@ Paths are examples only; the real application screenshots must be captured separ
   "project": "STAR",
   "artifact": "desktop-chat",
   "source": "frontend/src/Desktop.tsx",
+  "sources": ["frontend/src/Desktop.tsx", "frontend/src/tokens.css", "frontend/src/stellar-ui.css", "frontend/src/chat.css"],
   "views": {
     "desktop": {"file": "review/chat-1440.png", "width": 1440, "height": 900},
     "compact": {"file": "review/chat-1050.png", "width": 1050, "height": 680}
