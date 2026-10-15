@@ -897,10 +897,16 @@ def history_char_budget(settings: Settings) -> int:
 
 
 def stable_memory(settings: Settings, checkpoint: str) -> str:
-    """The part of the compacted checkpoint that goes into the system message."""
-    # Request budgeting must see all of it. Silently taking the suffix can drop
-    # earlier requirements before the agent has a chance to detect overflow.
-    return checkpoint
+    """The byte-stable model prefix, shared with warm-up; no changed context hidden.
+
+    Optional finite owner-reviewed knowledge is reference DATA, never new
+    instructions. The same function is used by run_task and warm-up, so their
+    leading tokens match and llama.cpp can reuse the prompt. Invalid banks fail
+    closed to ordinary retrieval and the prior checkpoint.
+    """
+    # The bank is opt-in and local-private only; importing does no I/O or setup.
+    from .knowledge_bank import stable_checkpoint
+    return stable_checkpoint(settings, app_data(), checkpoint)
 
 
 def memory_scope_for(settings: Settings, chat_id: str | None) -> str:
