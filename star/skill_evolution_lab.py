@@ -6,12 +6,10 @@ The model proposer never sees the sealed holdout cases or their scores.
 """
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 import hashlib
-import inspect
 import re
-from typing import Awaitable, Callable
+from typing import Callable
 
 from . import frontier_lab, selfbuild
 

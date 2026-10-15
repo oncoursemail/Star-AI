@@ -14,7 +14,6 @@ import json
 import os
 from pathlib import Path
 import re
-import tempfile
 from typing import Mapping
 
 MAX_EXAMPLES = 5000

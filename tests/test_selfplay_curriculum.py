@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import sys
 
 import pytest
 
@@ -98,7 +99,10 @@ def test_ledger_serializes_and_never_retries_uncertain_status(tmp_path):
         ledger.close()
 
 
-def test_owner_permission_and_missing_studio_lab_are_honest(tmp_path):
+def test_owner_permission_and_missing_studio_lab_are_honest(tmp_path, monkeypatch):
+    # star/studio_lab.py now exists; hide it so this test never drives a real Studio.
+    monkeypatch.setitem(sys.modules, "star.studio_lab", None)
+    monkeypatch.delattr(sys.modules["star"], "studio_lab", raising=False)
     cfg = sp.Curriculum(project="studio", rounds=1)
     with pytest.raises(PermissionError):
         asyncio.run(sp.run_approved_campaign(cfg, tmp_path))

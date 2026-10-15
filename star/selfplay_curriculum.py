@@ -342,7 +342,6 @@ async def run_approved_campaign(cfg: Curriculum, home: Path, *, approved: bool =
 def main(argv=None) -> int:
     """Owner-only command: preview without Studio, run with explicit approval."""
     import argparse
-    import sys
 
     parser = argparse.ArgumentParser(description="STAR bounded Roblox Studio self-play curriculum")
     commands = parser.add_subparsers(dest="command", required=True)
