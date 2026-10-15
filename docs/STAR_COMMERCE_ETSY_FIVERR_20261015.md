@@ -102,6 +102,17 @@ Treat agent-produced text and attached evidence labels as *untrusted*. A string 
 
 The included offline engine only checks whether the requested evidence fields have been supplied. It **cannot verify the authenticity** of those fields, score the actual image, check a marketplace account or replace human decisions.
 
+### Deterministic artwork checks (now in the PR)
+
+STAR also has a local Pillow-based raster preflight at star/commerce/art_quality.py. Use inspect_artwork on a user-selected file for:
+- Etsy print: pixel dimensions matched to intended physical print size and requested DPI, actual transparency when required, basic blank-image detection.
+- Fiverr thumbnails: at least 1280×720 geometry, a 16:9 aspect ratio and blank-image detection.
+- Both: safe image decoding, upper bound on file size and pixels, image SHA-256 fingerprint, and explicit human-review-required status.
+
+A passed raster preflight **does not** prove that the art is beautiful, legally owned, free of typographic mistakes, color-accurate, or suitable for production. Asset previews and real product samples still require independent review.
+
+Tests are in tests/test_commerce_art_quality.py. Call the function from Python after generating an image and before presenting the image for review; it makes no network calls.
+
 ## 6. Technical integration with existing STAR
 
 Implementation in this draft PR:
