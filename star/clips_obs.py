@@ -52,7 +52,13 @@ class ClipService:
             return {"connected": True, "buffer_active": bool(state.output_active),
                     "message": "OBS replay buffer is running." if state.output_active
                     else "Connected to OBS. Replay buffer is stopped."}
-        except Exception:
+        except Exception as exc:
+            # OBS can be connected while its Replay Buffer feature is disabled.
+            # Show an actionable status, but never forward the raw exception text.
+            detail = str(exc).lower()
+            if "replay" in detail and ("not available" in detail or "not enabled" in detail):
+                return {"connected": True, "buffer_active": False,
+                        "message": "Enable Replay Buffer in OBS → Settings → Output."}
             # OBS may close or revoke its WebSocket while STAR is open.
             self._client = None
             return {"connected": False, "buffer_active": False,
