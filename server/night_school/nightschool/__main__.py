@@ -65,7 +65,7 @@ def run(settings: Settings) -> int:
     gate = PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner, log=gate_log)
     pool = load_pool(settings.pool)
     log("night school started; " + pool.summary() + f"; lanes {settings.lanes}")
-    model = RealModel(settings, gate, stop=stop)
+    model = RealModel(settings, gate, knowledge=settings.knowledge_url, stop=stop)
     for k in range(1, settings.lanes):
         model.add_lane(PlannedGate(settings, BrainWatch(settings.brain_url, key), planner=planner,
                                    holder=f"nightschool-{k}", slot=settings.slot + k, extra_lane=True,
@@ -125,6 +125,7 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
         dry = Settings(home=Path(folder), brain_url=brain.url, key_file=settings.key_file, luau_vm=settings.luau_vm,
                        idle_s=0, poll_s=0.2, watch_s=0.5, validation_percent=100,
                        validation_max=len(fake.DRY_VALIDATION_IDS), samples=2, recheck_samples=2, batch=items,
+                       share="", validation_share=0, knowledge_url=settings.knowledge_url,
                        lock_dir=str(Path(folder) / "no-lock"))
         dry.ensure_dirs()
         import os
@@ -137,7 +138,7 @@ def dry_run(settings: Settings, items: int, real_checks: bool) -> int:
             from star.desktop_core import Settings as AppSettings
             from star.doc_knowledge import client_for
             model._knowledge = client_for(AppSettings(provider="star_server", server_endpoint=settings.brain_url.rstrip("/") + "/v1",
-                                                      model=settings.model))
+                                                      model=settings.model, knowledge_endpoint=settings.knowledge_url))
         tasks = fake.dry_tasks()
         pool = load_pool(dry.pool, extra=tasks)
         log("dry run: " + pool.summary())

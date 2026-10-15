@@ -45,6 +45,15 @@ class Result:
     error: str = ""                                # the check could not run (service, sandbox): not a failure
 
 
+def in_share(task_id: str, share: str) -> bool:
+    """True when the task belongs to this worker's share ("k/n" or "k1,k2/n"; "" = all tasks)."""
+    if not share:
+        return True
+    picks, total = share.split("/", 1)
+    bucket = int(hashlib.sha256(task_id.encode("utf-8")).hexdigest(), 16) % int(total)
+    return bucket in {int(k) for k in picks.split(",")}
+
+
 def utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -154,8 +163,10 @@ class Engine:
             if task_id not in frozen and task_id not in self.store.state["tasks"]:
                 frozen.append(task_id)
         self.validation = [t for t in pool.tasks if t["id"] in frozen]
-        self.training = [t for t in pool.tasks if t["id"] not in frozen]
-        self.store.state["pool"] = pool.summary() + f"; {len(self.validation)} set aside for validation"
+        share = getattr(self.settings, "share", "")
+        self.training = [t for t in pool.tasks if t["id"] not in frozen and in_share(t["id"], share)]
+        self.store.state["pool"] = pool.summary() + f"; {len(self.validation)} set aside for validation" + (
+            f"; share {share}: {len(self.training)} practice tasks" if share else "")
         self.store.state["validation_missing"] = len([i for i in frozen if i not in present])
 
     # --- helpers ------------------------------------------------------------------------------------------
@@ -171,7 +182,18 @@ class Engine:
             "answer_sha256": hashlib.sha256(result.answer.encode("utf-8")).hexdigest() if result.answer else ""})
         self.store.count("answers")
         self.store.state["answer_seconds"] = round(self.store.state.get("answer_seconds", 0.0) + result.seconds, 1)
+        bucket = "validation_seconds" if purpose.startswith("validation") else "practice_seconds"
+        self.store.state[bucket] = round(self.store.state.get(bucket, 0.0) + result.seconds, 1)
         return result
+
+    def validation_allowed(self) -> bool:
+        """The validation budget (settings.validation_share): True while validation answers have taken less than
+        that share of the answer time counted since the budget exists. 0 or 1 = no limit (the old behaviour)."""
+        share = float(getattr(self.settings, "validation_share", 0) or 0)
+        if not 0 < share < 1:
+            return True
+        state = self.store.state
+        return state.get("validation_seconds", 0.0) < share / (1 - share) * state.get("practice_seconds", 0.0)
 
     def _example(self, task: dict, result: Result, lessons: list[dict], kind: str) -> None:
         self.store.append("examples", {
@@ -356,6 +378,10 @@ class Engine:
             for j in range(samples):
                 for index, task in enumerate(self.validation):
                     order = ("base", "trial") if (index + j) % 2 == 0 else ("trial", "base")
+                    if any(len(run[arm].get(task["id"], [])) <= j for arm in order) and not self.validation_allowed():
+                        self.store.count("validation_budget_waits")     # both arms of a task stay side by side
+                        self.store.save()
+                        return None
                     for arm in order:
                         got = run[arm].setdefault(task["id"], [])
                         if len(got) > j:

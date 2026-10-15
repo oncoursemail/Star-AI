@@ -84,7 +84,9 @@ def test_the_gate_waits_while_the_brain_is_busy_and_needs_ten_quiet_minutes(tmp_
     assert "quiet" in gate.look()
     clock.sleep(599)
     assert "quiet" in gate.look()
-    slots.table[("star-embed", 0)][1] += 1                      # somebody searched the documentation
+    slots.table[("star-embed", 0)][1] += 1                      # a documentation search alone (helper model)
+    assert "quiet" in gate.look()                               # is not somebody using the brain
+    slots.table[("star-fast", 0)][1] += 1                       # a chat turn is
     assert gate.look() == "brain busy, waiting"
     assert "quiet" in gate.look()
     clock.sleep(601)
@@ -783,3 +785,68 @@ def test_candidate_retry_budget_is_bounded_and_writes_one_final_task_record(tmp_
     assert store.state["tasks"]["X-1"]["tries"] == 1
     assert store.state["counters"]["still_failing"] == 1
     assert not (settings.data / "examples.jsonl").exists()
+
+
+# --- validation budget (STAR_NS_VALIDATION_SHARE) and worker shares (STAR_NS_SHARE) ---------------------------------
+
+def test_without_a_validation_budget_the_gate_runs_in_one_go_as_before(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1"] + NEEDS, script, batch=3,
+                                         recheck_every=99)
+    assert settings.validation_share == 0 and engine.validation_allowed()
+    engine.run_batch()
+    assert store.state["lessons"]["L1"]["status"] == "active"
+    assert store.state["counters"].get("validation_budget_waits", 0) == 0
+
+
+def test_the_validation_budget_spreads_a_gate_over_practice_and_still_needs_a_significant_win(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1"] + NEEDS
+                                         + [f"E-{n}" for n in range(2, 40)], script, batch=3, recheck_every=999,
+                                         validation_share=1 / 3)
+    engine.run_batch()                                  # H-1 fixed, E-1 passes, H-2 fixed: 2 fixes, the gate starts
+    lesson = store.state["lessons"]["L1"]
+    state = store.state
+    assert lesson["status"] == "candidate"              # paused: the budget is used up before the slice is done
+    assert state["counters"]["validation_budget_waits"] >= 1
+    assert state["validation_seconds"] <= 0.5 * state["practice_seconds"] + 2 * 2.0     # at most one pair over
+    paired = [a for a in map(json.loads, (settings.data / "attempts.jsonl").read_text(encoding="utf-8").splitlines())
+              if a["purpose"].startswith("validation ")]
+    done = len(paired)
+    assert done < 16 and done % 2 == 0                  # both arms of a task always side by side
+    for _ in range(20):                                 # more practice: the paused run resumes where it stopped
+        if lesson["status"] != "candidate":
+            break
+        engine.run_batch()
+    assert lesson["status"] == "active" and lesson["promotion"]["gate"]["decision"] == "PROMOTE"
+    assert lesson["promotion"]["gate"]["wins"] == 6 and lesson["promotion"]["gate"]["k"] == 2
+    paired = [a for a in map(json.loads, (settings.data / "attempts.jsonl").read_text(encoding="utf-8").splitlines())
+              if a["purpose"].startswith("validation ")]
+    assert len(paired) == 16                            # 4 tasks x 2 arms x k=2: nothing measured twice
+    total = state["validation_seconds"] + state["practice_seconds"]
+    assert state["validation_seconds"] / total <= 1 / 3 + 0.05
+
+
+def test_a_budget_paused_gate_never_promotes_on_an_incomplete_slice(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1"] + NEEDS, script, batch=2,
+                                         recheck_every=999, validation_share=0.01)
+    engine.run_batch()
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "candidate" and "promotion" not in lesson and "gates" not in lesson
+    run = next(iter(store.state["paired_runs"].values()))
+    assert run["done"] is False
+
+
+def test_shares_split_the_practice_tasks_without_overlap_and_keep_the_validation_slice(tmp_path):
+    from nightschool.engine import in_share
+    ids = [f"T-{n}" for n in range(200)]
+    assert all(in_share(i, "") for i in ids)
+    first = {i for i in ids if in_share(i, "0,1,2/4")}
+    second = {i for i in ids if in_share(i, "3/4")}
+    assert not first & second and first | second == set(ids) and 30 < len(second) < 70
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["V-1", "V-2"] + ids, script, share="3/4")
+    assert {t["id"] for t in engine.training} == second
+    assert [t["id"] for t in engine.validation] == ["V-1", "V-2"]
+    assert "share 3/4" in store.state["pool"]

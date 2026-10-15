@@ -49,6 +49,15 @@ class Settings:
     batch: int = field(default_factory=lambda: int(_env("STAR_NS_BATCH", "5")))
     recheck_every: int = field(default_factory=lambda: int(_env("STAR_NS_RECHECK_EVERY", "40")))
     retry_candidates: int = field(default_factory=lambda: int(_env("STAR_NS_RETRY_CANDIDATES", "1")))
+    # Validation budget: validation answers (gates, rechecks) may take at most this share of all answer time; a gate
+    # run pauses between tasks when it is used up and resumes after more practice. 0 = no limit (the old behaviour).
+    # The gate itself is unchanged: only a significant paired win on the validation slice promotes.
+    validation_share: float = field(default_factory=lambda: float(_env("STAR_NS_VALIDATION_SHARE", "0")))
+    # A disjoint share of the practice tasks for one of several workers, "k/n" or "k1,k2/n": a task belongs to this
+    # worker when sha256(id) mod n is one of the k's. "" = every task. The validation slice is not affected.
+    share: str = field(default_factory=lambda: _env("STAR_NS_SHARE", ""))
+    # The documentation and Luau-check service; "" = the brain's own host on the knowledge port (as before).
+    knowledge_url: str = field(default_factory=lambda: _env("STAR_NS_KNOWLEDGE_URL", ""))
 
     @property
     def app(self) -> Path:          # a copy of the repository (the folder that holds `star/`)
