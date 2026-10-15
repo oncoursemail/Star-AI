@@ -108,6 +108,18 @@ def test_failed_status_drops_stale_connection():
     assert not result["buffer_active"]
 
 
+def test_replay_unavailable_does_not_lose_valid_obs_connection():
+    service, fake, _ = make_service()
+    service.handle("clipConnect", {"confirm": True, "password": "test"})
+    fake.get_replay_buffer_status = lambda: (_ for _ in ()).throw(
+        RuntimeError("Replay buffer is not available.")
+    )
+    report = service.handle("clipStatus", {})
+    assert report["connected"] is True
+    assert report["buffer_active"] is False
+    assert "Enable Replay Buffer" in report["message"]
+
+
 def test_invalid_requests_and_unprivileged_actions_are_rejected():
     service, _, _ = make_service()
     assert len(CLIP_ACTIONS) == 6
