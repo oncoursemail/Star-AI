@@ -1,6 +1,6 @@
 # STAR Creator Workbench — design system acceptance, October 15, 2026
 
-**Status:** a real React/TypeScript interface change on a draft branch, not an approved final visual design. No screenshot, Windows Qt inspection, or user preference study has been performed by this change. Existing STAR behavior stays intact.
+**Status:** real React/TypeScript UI changes on a draft branch, not a final owner-approved design. GitHub Actions produced an initial **actual 1440×900 browser-rendered chat screenshot** (workflow run 38800863881), which was manually inspected on October 15, 2026. **No Windows Qt inspection, phone-sized chat screenshot, or owner preference review has been performed.** Existing STAR behavior stays intact.
 
 ## Goal
 
@@ -33,6 +33,14 @@ Owner-established visual direction: near-OLED black, warm gold in a few meaningf
 - `frontend/src/StartCanvas.test.tsx`: honest button semantics, a current project, distinct editable briefs, and no automatic action on mount.
 
 No Business/Etsy/Fiverr buttons were added to the UI; they would be fake, because #412 currently plans offers offline and has no connected seller accounts. Do not present revenue or orders in the application until sourced data exists.
+
+## First actual screenshot review (browser preview, not Windows Desktop)
+
+- Verified source: GitHub Actions `STAR-v08-React-Visual-QA` screenshot artifact from run https://github.com/oncoursemail/Star-AI/actions/runs/38800863881 , `chat-desktop.png`, **1440×900**. It renders the committed StartCanvas with the current STAR sidebar, real composer, mascot image and preview notice. These are not invented drawings.
+- Observation: the primary title, two-column task rows, project indicator and brand hierarchy rendered legibly with no obvious overlap at this one resolution. The design still needs owner's *aesthetic* approval; the image is a baseline, not a stamp of quality.
+- Measured visually: the task canvas's original left edge landed around x=492, while the composer inner text began around x=477. The follow-up CSS revision expands the canvas maximum from 704px to 736px to improve optical gutter alignment. The follow-up revision needs a fresh screenshot check.
+- The existing Model & connection browser screenshot from the same run still uses largely generic stacked panels. This PR does not falsely claim to redesign every screen; future per-screen art direction needs the same evidence-based loop.
+- No phone chat screenshot is included in this workflow's initial artifact (website-mobile.png is the *website*, not STAR chat). Obtain real 390px and 320px app-preview and native Qt captures before considering approval.
 
 ## Required visual sign-off — manual, using real rendered images
 
