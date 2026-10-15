@@ -86,6 +86,13 @@ def _images_loaded_by_the_code():
         for item in (alternate, name):
             if item:
                 wanted.add(f"{kind}s/{item}.png")
+    # StarFace.tsx (the chat's living face): one face per mood in its FACE map, plus the blink overlay.
+    face_source = (REPO / "frontend" / "src" / "StarFace.tsx").read_text(encoding="utf-8")
+    assert "const faces='./assets/mascot/faces/'" in face_source
+    moods = re.search(r"const FACE:[^{]*\{(.*?)\}", face_source, re.S)
+    assert moods, "StarFace.tsx has no FACE map"
+    wanted |= {f"faces/{face}.png" for face in re.findall(r":'([a-z-]+)'", moods.group(1))}
+    wanted |= {f"faces/{face}.png" for face in re.findall(r"faces\+'([a-z-]+)\.png'", face_source)}
     return wanted
 
 
@@ -94,7 +101,7 @@ def test_every_image_the_website_and_the_pet_load_exists():
     wanted = _images_loaded_by_the_code()
     assert {"star-hero.png", "faces/normal.png", "faces/nervous.png", "poses/stand.png", "poses/wave-a.png",
             "poses/type-1.png", "poses/type-2.png", "poses/letter.png"} <= wanted
-    assert len(wanted) >= 19
+    assert len(wanted) >= 18  # 19 until the site stopped showing the face gallery (proud.png moved to docs/mascot/art)
     for rel in sorted(wanted):
         assert (site_root / rel).is_file(), f"the app loads ./assets/mascot/{rel} but it is missing"
 

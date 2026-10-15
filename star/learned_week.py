@@ -163,6 +163,15 @@ def parse_bundle(data: object) -> dict:
     return {"project": project, "digest": hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()}
 
 
+def bundle_error(data: object) -> str | None:
+    """None when `data` is a well-formed bundle, otherwise one plain sentence saying what is wrong (never raises)."""
+    try:
+        parse_bundle(data)
+    except (ValueError, TypeError, RecursionError, LessonRefused) as exc:
+        return str(exc) or type(exc).__name__
+    return None
+
+
 def read_bundle(path: Path) -> dict:
     with Path(path).open("rb") as handle:
         raw = handle.read(MAX_BUNDLE_BYTES + 1)
@@ -249,12 +258,22 @@ class Registry:
             self.db.rollback()
             raise
         if data["examples"]:
+            from .worked_examples import MAX_ROWS
             examples = self._examples()
             try:
                 with examples:
+                    # The same per-project cap as worked_examples.import_file: retrieval refuses a
+                    # corpus over MAX_ROWS usable (unexpired) rows, so a full corpus takes no more.
+                    usable = examples.execute(
+                        "SELECT COUNT(*) FROM worked_examples WHERE project=? AND id NOT IN "
+                        "(SELECT id FROM example_expiry WHERE project=? AND expires_at<=?)",
+                        (project, project, stamp)).fetchone()[0]
                     for row in data["examples"]:
                         if self.db.execute("SELECT 1 FROM learned_items WHERE project=? AND kind='example' AND ref=?",
                                            (project, row["id"])).fetchone():
+                            receipt["skipped"] += 1
+                            continue
+                        if usable >= MAX_ROWS:
                             receipt["skipped"] += 1
                             continue
                         values = (project, row["id"], row["group_id"], row["task_category"], row["instruction"],
@@ -271,6 +290,7 @@ class Registry:
                             (project, "example", row["id"], row["instruction"][:300],
                              "; ".join(row["evidence"])[:1200], "{}", stamp, expires, "live",
                              json.dumps(list(values)), info["digest"][:12]))
+                        usable += 1
                         receipt["examples"] += 1
                 self.db.commit()
             finally:
@@ -467,7 +487,7 @@ def import_bundled(home: Path, version: str, *, auto_live: bool = True, bundle: 
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=__doc__.split("\n\n")[0])
+    parser = argparse.ArgumentParser(prog="python -m star.learned_week", description=(__doc__ or "").split("\n\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
     make = sub.add_parser("bundle", help="package night school's outbox as a reviewed bundle (for a draft PR)")
     make.add_argument("--outbox", required=True, type=Path)

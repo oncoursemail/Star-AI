@@ -79,7 +79,7 @@ def test_switch_chat_reports_running_turn_busy_only_in_origin_chat(tmp_path, mon
     finally:
         chats.close()
 
-    def retry_state(settings_path, runtime, busy=False):
+    def retry_state(settings_path, busy=False):
         assert settings_path == settings_file
         chats = Conversations(tmp_path / "conversations.sqlite3")
         try:
@@ -88,7 +88,7 @@ def test_switch_chat_reports_running_turn_busy_only_in_origin_chat(tmp_path, mon
         finally:
             chats.close()
 
-    monkeypatch.setattr(shell, "_get_state", retry_state)
+    monkeypatch.setattr(shell, "_chat_state", retry_state)
     instance = _invoke_bridge()()
     instance.settings_file = settings_file
     instance.runtime = object()

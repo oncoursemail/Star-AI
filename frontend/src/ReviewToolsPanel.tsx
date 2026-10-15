@@ -1,6 +1,7 @@
 import {BookOpen,Check,LoaderCircle,RefreshCcw,Search,ShieldCheck,Workflow,X} from 'lucide-react'
 import type {AppSettings,CustomToolRecipe,WorkshopStatus} from './types'
 import './integrated-tools.css'
+import {EmptyState} from './states'
 
 type Props = {
   settings: AppSettings
@@ -82,7 +83,7 @@ export function ReviewToolsPanel({settings,onChange,status,recipes,query,onQuery
           disabled={disabled||!!busy} onClick={()=>disable(tool.id)}><X size={14}/> Disable</button>}
       </div>
     </div>)}
-    {!recipes.length&&<p className="integrated-help">No proposals yet. Ask STAR to design a read-only tool that searches your approved project knowledge.</p>}
+    {!recipes.length&&<EmptyState compact icon={<Workflow size={15}/>} title="No proposals yet." description="Ask STAR to design a read-only tool that searches your approved project knowledge."/>}
     {preview&&<div role="status" className="integrated-confirm"><BookOpen size={15}/><strong>Latest preview evidence</strong>
       <pre className="tool-output">{preview}</pre></div>}
     <p className="integrated-help"><ShieldCheck size={14}/> Save Settings before requesting these integrations. Public Roblox stats are snapshots, not revenue, player retention or proof of game mechanics.</p>

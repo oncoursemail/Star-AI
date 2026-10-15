@@ -181,7 +181,7 @@ def effective_comfy_home(settings) -> str:
 
 
 def _data_url(path: Path, side: int = 1600) -> str:
-    from PIL import Image
+    from .pil_safe import Image
     with Image.open(path) as image:
         shown = image.convert('RGB')
         shown.thumbnail((side, side))

@@ -1,0 +1,2377 @@
+[
+ {
+  "id": "PY-01",
+  "category": "lang-python",
+  "difficulty": 1,
+  "goal": "Explain and fix the mutable default argument bug",
+  "prompt": "My Python function shares items between players and I don't know why:\n\ndef add_item(item, inventory=[]):\n    inventory.append(item)\n    return inventory\n\nEvery new player's inventory already contains the previous player's items. Explain why in plain words and give the fixed function.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-python"
+  ],
+  "expected_sources": [
+   "https://docs.python.org/3/tutorial/controlflow.html#default-argument-values"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims the default list is copied or recreated on every call"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "evaluated_once",
+     "re": "(?i)(evaluated|created|built|bound|made)\\W+(only\\s+)?once|definition time|def(inition)? (statement )?(runs|is executed)|when the function is (defined|created)",
+     "why": "says the default is evaluated once, when the function is defined",
+     "scope": "prose"
+    },
+    {
+     "id": "none_sentinel",
+     "re": "\\bNone\\b",
+     "why": "uses None as the sentinel default",
+     "scope": "prose"
+    },
+    {
+     "id": "shared",
+     "re": "(?i)\\bsame (list|object)|shared",
+     "why": "says the same list object is shared between calls",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "by_value",
+     "re": "(?i)passed by value|global variables? when declared|(is|gets) copied (on|for|at) each call",
+     "why": "claims the list is a global or is copied per call",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says the default is evaluated once, when the function is defined",
+    "Present: uses None as the sentinel default",
+    "Present: says the same list object is shared between calls",
+    "Absent: claims the list is a global or is copied per call"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PY-02",
+  "category": "lang-python",
+  "difficulty": 2,
+  "goal": "Explain why blocking sleep serializes asyncio coroutines and fix it with TaskGroup",
+  "prompt": "My Python 3.14 asyncio bot is slow:\n\nimport asyncio, time\n\nasync def poll(i):\n    time.sleep(1)\n    return i\n\nasync def main():\n    print(await asyncio.gather(*(poll(i) for i in range(5))))\n\nasyncio.run(main())\n\nIt takes 5 seconds instead of about 1. Explain why and fix it. I'd like structured concurrency.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-python"
+  ],
+  "expected_sources": [
+   "https://docs.python.org/3/library/asyncio-task.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Blames the GIL and recommends multiprocessing for an I/O wait"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "blocking",
+     "re": "(?i)block",
+     "why": "says time.sleep blocks the event loop",
+     "scope": "prose"
+    },
+    {
+     "id": "event_loop",
+     "re": "(?i)event loop",
+     "why": "names the event loop",
+     "scope": "prose"
+    },
+    {
+     "id": "async_sleep",
+     "re": "(?i)asyncio\\.sleep|to_thread",
+     "why": "uses await asyncio.sleep or asyncio.to_thread",
+     "scope": "prose"
+    },
+    {
+     "id": "taskgroup",
+     "re": "(?i)TaskGroup",
+     "why": "uses asyncio.TaskGroup for structured concurrency",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "gil_blame",
+     "re": "(?i)because of the GIL|slow because of the GIL|(use|switch to) multiprocessing",
+     "why": "blames the GIL or switches to multiprocessing",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says time.sleep blocks the event loop",
+    "Present: names the event loop",
+    "Present: uses await asyncio.sleep or asyncio.to_thread",
+    "Present: uses asyncio.TaskGroup for structured concurrency",
+    "Absent: blames the GIL or switches to multiprocessing"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "JS-01",
+  "category": "lang-javascript-typescript",
+  "difficulty": 1,
+  "goal": "Explain why forEach does not await async callbacks and fix it",
+  "prompt": "In my Node 24 script:\n\nids.forEach(async id => {\n  await save(id);\n});\nconsole.log('all saved');\n\n'all saved' prints before the saves finish, and when one save fails the process crashes with an unhandled rejection. Explain why and fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-javascript-typescript"
+  ],
+  "expected_sources": [
+   "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array/forEach"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims forEach waits for async callbacks or that `await ids.forEach(...)` fixes it"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "foreach_ignores",
+     "re": "(?i)forEach[^.]{0,80}(ignores|discards|throws away|does not|doesn't|never)|not (wait|await)",
+     "why": "says forEach does not wait for the returned promises",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)Promise\\.all|for\\s*\\(?\\s*const [^)]* of|for\\s*[.…]{1,3}\\s*of|for-of",
+     "why": "fixes with Promise.all or a for...of loop with await",
+     "scope": "prose"
+    },
+    {
+     "id": "rejection",
+     "re": "(?i)unhandled|reject|catch",
+     "why": "explains the unhandled rejection or handles errors",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "foreach_waits",
+     "re": "(?i)forEach (waits|awaits) for|forEach (does )?(wait|await)s? for each",
+     "why": "claims forEach waits for async callbacks",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says forEach does not wait for the returned promises",
+    "Present: fixes with Promise.all or a for...of loop with await",
+    "Present: explains the unhandled rejection or handles errors",
+    "Absent: claims forEach waits for async callbacks"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "JS-02",
+  "category": "lang-javascript-typescript",
+  "difficulty": 2,
+  "goal": "TypeScript: explain ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX under Node type stripping",
+  "prompt": "I run `node src/index.ts` on Node 24 (no build step) and get ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX on these lines:\n\nenum Team { Red, Blue }\nclass Player { constructor(private hp: number) {} }\n\nExplain why Node rejects them, rewrite them so they run, and tell me how to catch this earlier.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-javascript-typescript"
+  ],
+  "expected_sources": [
+   "https://nodejs.org/api/typescript.html",
+   "https://www.typescriptlang.org/docs/handbook/release-notes/typescript-5-8.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims Node type-checks TypeScript, or recommends the removed --experimental-transform-types flag as the fix"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "stripping",
+     "re": "(?i)strip",
+     "why": "explains that Node only strips types",
+     "scope": "prose"
+    },
+    {
+     "id": "runtime_code",
+     "re": "(?i)(generat|emit|produc|compil)\\w*[^.]{0,60}(runtime|javascript|JS|code)|runtime (code|JavaScript)",
+     "why": "says enums and parameter properties generate runtime code",
+     "scope": "prose"
+    },
+    {
+     "id": "erasable",
+     "re": "erasableSyntaxOnly",
+     "why": "recommends the erasableSyntaxOnly compiler option",
+     "scope": "prose"
+    },
+    {
+     "id": "replacement",
+     "re": "(?i)as const|union",
+     "why": "replaces the enum with an as-const object or union",
+     "scope": "prose"
+    },
+    {
+     "id": "typecheck",
+     "re": "(?i)tsc|--noEmit|type[- ]?check",
+     "why": "runs tsc separately because Node does not type-check",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "node_typechecks",
+     "re": "(?i)node (type-?checks|checks (the )?types|validates (the )?types)",
+     "why": "claims Node type-checks",
+     "scope": "prose"
+    },
+    {
+     "id": "transform_flag_fix",
+     "re": "(?i)(add|use|pass|run (it )?with|enable) (the )?`?--experimental-transform-types",
+     "why": "recommends --experimental-transform-types",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that Node only strips types",
+    "Present: says enums and parameter properties generate runtime code",
+    "Present: recommends the erasableSyntaxOnly compiler option",
+    "Present: replaces the enum with an as-const object or union",
+    "Present: runs tsc separately because Node does not type-check",
+    "Absent: claims Node type-checks",
+    "Absent: recommends --experimental-transform-types"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "LUA-01",
+  "category": "lang-lua",
+  "difficulty": 2,
+  "goal": "Port Luau-only syntax (continue, +=, string interpolation) to LuaJIT for LÖVE",
+  "prompt": "I copied this loop from my Roblox game into a LÖVE (LuaJIT) project and it fails to load with a syntax error. Explain in prose which parts are Luau-only and give the LuaJIT version.\n\nlocal total = 0\nfor _, e in ipairs(enemies) do\n\tif e.dead then continue end\n\ttotal += e.hp\n\tprint(`enemy {e.name} has {e.hp}`)\nend\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-lua-luajit"
+  ],
+  "expected_sources": [
+   "https://luajit.org/extensions.html",
+   "https://luau.org/compatibility",
+   "https://www.lua.org/manual/5.4/manual.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims LuaJIT or Lua supports continue, += or backtick interpolation"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "goto",
+     "re": "(?i)\\bgoto\\b",
+     "why": "replaces continue with goto and a label",
+     "scope": "prose"
+    },
+    {
+     "id": "compound",
+     "re": "(?i)(\\+=|compound assignment)",
+     "why": "names the compound assignment as Luau-only",
+     "scope": "prose"
+    },
+    {
+     "id": "format",
+     "re": "(?i)(string\\.format|:format\\(|\\.\\.)",
+     "why": "replaces interpolation with string.format or ..",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "false_support",
+     "re": "(?i)luajit (?:also )?(?:supports|has|allows) (?:`?continue`?|`?\\+=`?|compound|string interpolation|backtick)",
+     "why": "claims LuaJIT supports a Luau-only feature",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: replaces continue with goto and a label",
+    "Present: names the compound assignment as Luau-only",
+    "Present: replaces interpolation with string.format or ..",
+    "Absent: claims LuaJIT supports a Luau-only feature"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "LUA-02",
+  "category": "lang-lua",
+  "difficulty": 2,
+  "goal": "Explain Lua 5.4 float division and the 'number has no integer representation' error",
+  "prompt": "Lua 5.4: `print(string.format(\"%d avg\", total / count))` fails with \"bad argument #2 to 'format' (number has no integer representation)\" when total=7 and count=2, and even when total=8 it prints fine. Explain why in prose and fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-lua-luajit"
+  ],
+  "expected_sources": [
+   "https://www.lua.org/manual/5.4/manual.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims `/` performs integer division in Lua 5.4"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "float_div",
+     "re": "(?i)(/` always|/ always|float division|always (?:returns|produces|gives|yields) a float|result is a float)",
+     "why": "explains that / always yields a float",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)(//|math\\.floor|math\\.tointeger|%\\.\\d*f|%g|floor division)",
+     "why": "fixes with //, math.floor, math.tointeger or a float format",
+     "scope": "prose"
+    },
+    {
+     "id": "integer_repr",
+     "re": "(?i)(integer representation|fractional part|3\\.5|not an integer|has a fraction)",
+     "why": "says the value 3.5 has no integer representation",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "int_div_claim",
+     "re": "(?i)(/`? (?:operator )?(?:does|performs) integer division|integer division with `?/`?(?! is not))",
+     "why": "claims / is integer division",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that / always yields a float",
+    "Present: fixes with //, math.floor, math.tointeger or a float format",
+    "Present: says the value 3.5 has no integer representation",
+    "Absent: claims / is integer division"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-01",
+  "category": "lang-gdscript",
+  "difficulty": 1,
+  "goal": "Port Godot 3 GDScript (yield, instance, move_and_slide args) to Godot 4",
+  "prompt": "This Godot 3 script fails in Godot 4.7. Explain in prose what changed and give the Godot 4 version.\n\nextends KinematicBody2D\nexport var speed = 200\nvar bullet = preload(\"res://bullet.tscn\")\nfunc _physics_process(delta):\n    var velocity = Vector2(Input.get_axis(\"left\", \"right\") * speed, 0)\n    velocity = move_and_slide(velocity, Vector2.UP)\nfunc shoot():\n    var b = bullet.instance()\n    add_child(b)\n    yield(get_tree().create_timer(0.5), \"timeout\")\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-gdscript-verse"
+  ],
+  "expected_sources": [
+   "https://docs.godotengine.org/en/stable/tutorials/migrating/upgrading_to_godot_4.html",
+   "https://docs.godotengine.org/en/stable/tutorials/scripting/gdscript/gdscript_basics.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Keeps yield or instance() as valid Godot 4 code"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "await",
+     "re": "(?i)\\bawait\\b",
+     "why": "replaces yield with await",
+     "scope": "prose"
+    },
+    {
+     "id": "instantiate",
+     "re": "(?i)\\binstantiate\\b",
+     "why": "uses instantiate() instead of instance()",
+     "scope": "prose"
+    },
+    {
+     "id": "character_body",
+     "re": "(?i)CharacterBody2D",
+     "why": "renames KinematicBody2D to CharacterBody2D",
+     "scope": "prose"
+    },
+    {
+     "id": "velocity_prop",
+     "re": "(?i)(no arguments|without arguments|takes no|built-in `?velocity`? property|velocity property|set `?velocity`?)",
+     "why": "explains move_and_slide uses the velocity property and takes no arguments",
+     "scope": "prose"
+    },
+    {
+     "id": "export",
+     "re": "@export",
+     "why": "uses the @export annotation",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "yield_ok",
+     "re": "(?i)yield (?:still|also) works|yield is still (?:supported|valid)|instance\\(\\) (?:still|also) works",
+     "why": "claims Godot 3 API still works",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: replaces yield with await",
+    "Present: uses instantiate() instead of instance()",
+    "Present: renames KinematicBody2D to CharacterBody2D",
+    "Present: explains move_and_slide uses the velocity property and takes no arguments",
+    "Present: uses the @export annotation",
+    "Absent: claims Godot 3 API still works"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GD-02",
+  "category": "lang-gdscript",
+  "difficulty": 2,
+  "goal": "Fix 'Can't change this state while flushing queries' by deferring physics changes",
+  "prompt": "Godot 4: in my Area2D `body_entered` handler I disable the coin's CollisionShape2D (`$CollisionShape2D.disabled = true`) and add a particle node with add_child. Godot prints \"Can't change this state while flushing queries. Use call_deferred() or set_deferred() to change monitoring state instead.\" Explain why in prose and fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-gdscript-verse"
+  ],
+  "expected_sources": [
+   "https://docs.godotengine.org/en/stable/classes/class_object.html#class-object-method-set-deferred",
+   "https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Tells the user to ignore the error or to use a Thread"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "deferred",
+     "re": "(?i)(set_deferred|call_deferred)",
+     "why": "uses set_deferred or call_deferred",
+     "scope": "prose"
+    },
+    {
+     "id": "physics_callback",
+     "re": "(?i)(physics (?:step|callback|query|queries|server|flush)|during (?:the )?physics|flushing)",
+     "why": "explains the signal fires while the physics engine is flushing queries",
+     "scope": "prose"
+    },
+    {
+     "id": "end_of_frame",
+     "re": "(?i)(end of the (?:frame|physics step)|idle time|after the physics|once the physics)",
+     "why": "says the deferred change runs after the physics step",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "ignore",
+     "re": "(?i)(safe to ignore|just ignore|you can ignore|harmless)|use a (?:Thread|WorkerThreadPool)|into a Thread",
+     "why": "tells the user to ignore it or to use a thread",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: uses set_deferred or call_deferred",
+    "Present: explains the signal fires while the physics engine is flushing queries",
+    "Present: says the deferred change runs after the physics step",
+    "Absent: tells the user to ignore it or to use a thread"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "VRS-01",
+  "category": "lang-verse",
+  "difficulty": 2,
+  "goal": "Fix a Verse <decides> call made with parentheses outside a failure context",
+  "prompt": "Verse (UEFN): `OnInteract(Agent:agent):void = Char := Agent.GetFortCharacter(); Char.Damage(10.0)` does not compile; the error says the call has the 'decides' effect, which is not allowed by its context. Explain in prose and fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-gdscript-verse"
+  ],
+  "expected_sources": [
+   "https://github.com/verselang/book/blob/main/docs/08_failure.md",
+   "https://dev.epicgames.com/documentation/en-us/uefn/failure-in-verse"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Suggests try/catch, pcall or a null check instead of a failure context"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "brackets",
+     "re": "(?i)(square brackets|\\[\\]|GetFortCharacter\\[)",
+     "why": "calls the <decides> function with square brackets",
+     "scope": "prose"
+    },
+    {
+     "id": "failure_context",
+     "re": "(?i)failure context|inside an? `?if`?|in an? `?if`? (?:condition|expression)",
+     "why": "puts the call in a failure context such as if",
+     "scope": "prose"
+    },
+    {
+     "id": "decides",
+     "re": "(?i)decides|failable|can fail",
+     "why": "explains the function is failable (<decides>)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "trycatch",
+     "re": "(?i)(wrap (?:it |the call )?in (?:a )?(?:try|pcall)|try ?/ ?catch block|check (?:if|whether) (?:it|Char|the result) (?:is|==) (?:null|nil|none))",
+     "why": "suggests exceptions or a null check",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: calls the <decides> function with square brackets",
+    "Present: puts the call in a failure context such as if",
+    "Present: explains the function is failable (<decides>)",
+    "Absent: suggests exceptions or a null check"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "VRS-02",
+  "category": "lang-verse",
+  "difficulty": 2,
+  "goal": "Use spawn to run suspending work from an immediate Subscribe handler",
+  "prompt": "Verse (UEFN): my button handler `OnPressed(Agent:agent):void = Sleep(2.0); Door.Open(Agent)` subscribed with `Button.InteractedWithEvent.Subscribe(OnPressed)` fails to compile: the invocation calls a function that has the 'suspends' effect, which is not allowed by its context. Explain in prose and fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-gdscript-verse"
+  ],
+  "expected_sources": [
+   "https://github.com/verselang/book/blob/main/docs/14_concurrency.md",
+   "https://github.com/verselang/book/blob/main/docs/13_effects.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims the Subscribe handler itself can be made <suspends>"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "spawn",
+     "re": "(?i)\\bspawn\\b",
+     "why": "starts the async work with spawn",
+     "scope": "prose"
+    },
+    {
+     "id": "suspends",
+     "re": "(?i)suspends",
+     "why": "names the suspends effect",
+     "scope": "prose"
+    },
+    {
+     "id": "immediate",
+     "re": "(?i)(immediate|cannot (?:be )?(?:suspend|<suspends>|async)|synchronous|not (?:a )?suspend)",
+     "why": "explains Subscribe handlers are immediate (non-suspending)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "mark_handler",
+     "re": "(?i)(?:just|simply) (?:add|mark)[^.\\n]{0,40}<suspends>|(?:add|put) `?<suspends>`? (?:to|on) (?:the |your )?(?:handler|OnPressed)",
+     "why": "tells the user to mark the handler <suspends>",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: starts the async work with spawn",
+    "Present: names the suspends effect",
+    "Present: explains Subscribe handlers are immediate (non-suspending)",
+    "Absent: tells the user to mark the handler <suspends>"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "RB-01",
+  "category": "lang-ruby",
+  "difficulty": 2,
+  "goal": "Explain the shared-default bug of Hash.new([]) and fix it with the block form",
+  "prompt": "My Ruby code groups player names by team, but `groups` prints as an empty hash `{}` and every lookup returns all the names. Explain in prose what is wrong and give the fix.\n\ngroups = Hash.new([])\nplayers.each { |p| groups[p.team] << p.name }\np groups          # => {}\np groups[:red]    # => every name, also the blue ones\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-ruby-php"
+  ],
+  "expected_sources": [
+   "https://docs.ruby-lang.org/en/master/Hash.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends Hash.new(Array.new), which shares one array exactly like Hash.new([])"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "shared",
+     "re": "(?i)\\b(?:same|single|one|shared?)\\b[^.]{0,60}\\b(?:array|object|default)",
+     "why": "explains that one default array is shared by every key",
+     "scope": "prose"
+    },
+    {
+     "id": "not_stored",
+     "re": "(?i)(?:never|not|doesn'?t|does not)[^.]{0,40}\\b(?:stor|assign|sav|add|creat|insert)",
+     "why": "explains that << on the default does not store a key in the hash",
+     "scope": "prose"
+    },
+    {
+     "id": "block_form",
+     "re": "(?i)Hash\\.new\\s*\\{\\s*\\|\\s*h(?:ash)?\\s*,\\s*k(?:ey)?\\s*\\|\\s*h(?:ash)?\\[\\s*k(?:ey)?\\s*\\]\\s*=\\s*\\[\\]",
+     "why": "gives the block form Hash.new { |h, k| h[k] = [] } (or an equivalent group_by)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "array_new_default",
+     "re": "(?i)(?<!not )(?<!n't )(?<!never )\\buse\\s+`?Hash\\.new\\(\\s*Array\\.new\\s*\\)",
+     "why": "recommends Hash.new(Array.new), which has the same bug",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that one default array is shared by every key",
+    "Present: explains that << on the default does not store a key in the hash",
+    "Present: gives the block form Hash.new { |h, k| h[k] = [] } (or an equivalent group_by)",
+    "Absent: recommends Hash.new(Array.new), which has the same bug"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PHP-01",
+  "category": "lang-php",
+  "difficulty": 1,
+  "goal": "Explain why strpos(...) == false misses a match at position 0 and fix it",
+  "prompt": "In PHP 8.4, this check should block names that contain \"admin\", but `admin_bob` gets through. Explain in prose why, and show the correct check.\n\nif (strpos($name, 'admin') == false) {\n    allow($name);\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-ruby-php"
+  ],
+  "expected_sources": [
+   "https://www.php.net/manual/en/function.strpos.php",
+   "https://www.php.net/manual/en/function.str-contains.php"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Suggests !strpos(...) or == 0, which have the same position-0 bug"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "position_zero",
+     "re": "(?i)\\b(?:position|index|offset)\\s*`?0`?|\\bzero\\b|\\bstart(?:s)? of the string|\\bbeginning\\b",
+     "why": "explains the match is at position 0",
+     "scope": "prose"
+    },
+    {
+     "id": "loose",
+     "re": "(?i)loose|\\b0\\s*==\\s*false\\b|falsy|==\\s*`?\\s*false`?\\s*(?:is|treats)|type[- ]juggl|coerc",
+     "why": "explains that == loosely treats 0 as false",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)str_contains|===\\s*false|!==\\s*false",
+     "why": "uses str_contains or a strict === / !== false comparison",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "negation",
+     "re": "(?i)(?<!not )(?<!n't )(?<!never )\\buse\\s+`?!\\s*strpos\\(",
+     "why": "recommends !strpos(), which has the same bug",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains the match is at position 0",
+    "Present: explains that == loosely treats 0 as false",
+    "Present: uses str_contains or a strict === / !== false comparison",
+    "Absent: recommends !strpos(), which has the same bug"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PHP-02",
+  "category": "lang-php",
+  "difficulty": 2,
+  "goal": "Fix an SQL injection with PDO prepared statements instead of escaping",
+  "prompt": "My PHP 8.4 leaderboard endpoint does this. Is it safe? Explain in prose and fix it.\n\n$name = $_GET['name'];\n$rows = $pdo->query(\"SELECT score FROM players WHERE name = '$name'\")->fetchAll();\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-ruby-php"
+  ],
+  "expected_sources": [
+   "https://www.php.net/manual/en/pdo.prepared-statements.php",
+   "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends addslashes, mysql_real_escape_string or htmlspecialchars as the fix for SQL injection"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "injection",
+     "re": "(?i)sql injection|inject",
+     "why": "names SQL injection",
+     "scope": "prose"
+    },
+    {
+     "id": "prepared",
+     "re": "(?i)prepared statement|->\\s*prepare\\(|\\bprepare\\(\\)",
+     "why": "uses a prepared statement",
+     "scope": "prose"
+    },
+    {
+     "id": "placeholder",
+     "re": "(?i)placeholder|bound parameter|bind|\\?\\s*placeholder|:name\\b|parameteri[sz]ed",
+     "why": "binds the value through a placeholder",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "escaping",
+     "re": "(?i)(?<!not )(?<!n't )(?<!never )\\b(?:use|call|wrap(?: it)? (?:in|with))\\s+`?(?:addslashes|mysql_real_escape_string|htmlspecialchars)",
+     "why": "recommends string escaping instead of a prepared statement",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names SQL injection",
+    "Present: uses a prepared statement",
+    "Present: binds the value through a placeholder",
+    "Absent: recommends string escaping instead of a prepared statement"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "DART-01",
+  "category": "lang-dart",
+  "difficulty": 2,
+  "goal": "Explain why a public nullable field is not promoted after a null check and fix it with a local",
+  "prompt": "Dart 3 gives me an error on `name.length` even though I checked `name != null` right before. Explain in prose why, and fix it without using `!`.\n\nclass Player {\n  String? name;\n  int nameLength() {\n    if (name != null) {\n      return name.length; // error: The property 'length' can't be unconditionally accessed because the receiver can be 'null'.\n    }\n    return 0;\n  }\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-dart-elixir-functional"
+  ],
+  "expected_sources": [
+   "https://dart.dev/tools/non-promotion-reasons",
+   "https://dart.dev/null-safety/understanding-null-safety"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims the compiler is wrong or buggy, or recommends dynamic to silence the error"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "promotion",
+     "re": "(?i)promot",
+     "why": "names type promotion",
+     "scope": "prose"
+    },
+    {
+     "id": "why_field",
+     "re": "(?i)\\b(?:public|non-?final|mutable)\\b[^.]{0,60}\\bfield|field[^.]{0,60}\\b(?:could|can|might|may) (?:change|be (?:changed|overridden|reassigned))|getter|overrid",
+     "why": "explains a public non-final field could change or be overridden between check and use",
+     "scope": "prose"
+    },
+    {
+     "id": "local_fix",
+     "re": "(?i)local (?:variable|copy|final)|copy (?:it |the field |the value )?(?:in)?to a local|final \\w+ = (?:this\\.)?name|\\?\\.|\\?\\?",
+     "why": "fixes it by copying to a local variable (or with ?. / ??)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "dynamic_or_bug",
+     "re": "(?i)(?:compiler|analy[sz]er) (?:bug|is wrong|mistake)|(?:declare|make|change|type)[^.]{0,30}\\bas\\s+`?dynamic\\b",
+     "why": "blames a compiler bug or switches to dynamic",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names type promotion",
+    "Present: explains a public non-final field could change or be overridden between check and use",
+    "Present: fixes it by copying to a local variable (or with ?. / ??)",
+    "Absent: blames a compiler bug or switches to dynamic"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "EX-01",
+  "category": "lang-elixir",
+  "difficulty": 3,
+  "goal": "Diagnose a GenServer.call timeout caused by slow work inside handle_call and fix it without :infinity",
+  "prompt": "My Elixir game room process is a GenServer. When a player joins, other players' `GenServer.call(room, :state)` calls crash with:\n\n** (exit) exited in: GenServer.call(#PID<0.412.0>, :state, 5000)\n    ** (EXIT) time out\n\nhandle_call({:join, player}, _from, state) fetches the player's profile with a slow HTTP request (about 8 seconds) before replying. Explain in prose what is happening and how to fix it.\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-dart-elixir-functional"
+  ],
+  "expected_sources": [
+   "https://hexdocs.pm/elixir/GenServer.html",
+   "https://hexdocs.pm/elixir/Task.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends making every call use :infinity as the fix"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "one_at_a_time",
+     "re": "(?i)one (?:message|request|call) at a time|sequential|serial|mailbox|block(?:s|ed|ing)?\\b",
+     "why": "explains a GenServer handles one message at a time, so the slow call blocks the others",
+     "scope": "prose"
+    },
+    {
+     "id": "default_timeout",
+     "re": "(?i)\\b5\\s*(?:000|seconds?|s)\\b|default timeout",
+     "why": "names the default 5 second call timeout",
+     "scope": "prose"
+    },
+    {
+     "id": "offload",
+     "re": "(?i)\\bTask\\b|handle_continue|GenServer\\.reply|async|outside the (?:GenServer|server|process)|before (?:calling|the call)",
+     "why": "moves the slow work out of the callback (Task, handle_continue, GenServer.reply, or before the call)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "infinity_fix",
+     "re": "(?i)(?:just|simply|fix(?: is| it)?(?: by| to)?|solution is to) (?:set|use|pass|increase|raise)[^.]{0,40}(?::infinity|timeout)",
+     "why": "fixes the symptom by raising the timeout or using :infinity",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains a GenServer handles one message at a time, so the slow call blocks the others",
+    "Present: names the default 5 second call timeout",
+    "Present: moves the slow work out of the callback (Task, handle_continue, GenServer.reply, or before the call)",
+    "Absent: fixes the symptom by raising the timeout or using :infinity"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "HS-01",
+  "category": "lang-haskell",
+  "difficulty": 3,
+  "goal": "Explain the lazy-accumulator space leak in a foldl mean and fix it with foldl' and strict fields",
+  "prompt": "This Haskell function runs out of memory (or overflows the stack) on a list of 10 million Doubles. Explain in prose why, and fix it.\n\nmean :: [Double] -> Double\nmean xs = s / fromIntegral n\n  where (s, n) = foldl step (0, 0 :: Int) xs\n        step (a, c) x = (a + x, c + 1)\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-dart-elixir-functional"
+  ],
+  "expected_sources": [
+   "https://wiki.haskell.org/Foldr_Foldl_Foldl%27",
+   "https://hackage.haskell.org/package/base/docs/Data-List.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends only increasing the stack size, or claims foldl' alone fixes the lazy tuple"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "thunks",
+     "re": "(?i)thunk|lazy|laziness|unevaluated",
+     "why": "explains that laziness builds a chain of unevaluated thunks",
+     "scope": "prose"
+    },
+    {
+     "id": "foldl_strict",
+     "re": "(?i)foldl'",
+     "why": "uses foldl'",
+     "scope": "prose"
+    },
+    {
+     "id": "whnf",
+     "re": "(?i)weak head normal form|WHNF|bang pattern|\\bseq\\b|strict (?:pair|tuple|fields?|data|accumulator)|!a\\b|\\$!",
+     "why": "forces the tuple components too (bang patterns, seq or strict fields), since foldl' only evaluates to WHNF",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "stack_only",
+     "re": "(?i)(?:just|simply|fix(?: is| it)?(?: by)?|solution is to) (?:increase|raise|grow|enlarge)[^.]{0,30}stack|\\+RTS\\s+-K",
+     "why": "fixes it by growing the stack instead of removing the leak",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that laziness builds a chain of unevaluated thunks",
+    "Present: uses foldl'",
+    "Present: forces the tuple components too (bang patterns, seq or strict fields), since foldl' only evaluates to WHNF",
+    "Absent: fixes it by growing the stack instead of removing the leak"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SH-01",
+  "category": "lang-shell",
+  "difficulty": 1,
+  "goal": "Bash: explain why a loop over $(ls) with unquoted variables breaks on file names with spaces, and fix it",
+  "prompt": "My Bash script converts textures but it breaks on files like \"stone wall.png\" (it tries to open \"stone\" and \"wall.png\"). Explain why and give the fixed script.\n\n#!/usr/bin/env bash\nfor f in $(ls *.png); do\n  convert $f ${f%.png}.webp\ndone\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shell"
+  ],
+  "expected_sources": [
+   "https://www.gnu.org/software/bash/manual/bash.html#Word-Splitting",
+   "https://www.shellcheck.net/wiki/SC2086"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Recommends eval or keeps the unquoted $f"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "word_splitting",
+     "re": "(?i)word[- ]?split|split(s|ting)? (it |them )?on (spaces|whitespace|IFS)|\\bIFS\\b",
+     "why": "names word splitting as the cause",
+     "scope": "prose"
+    },
+    {
+     "id": "quote",
+     "re": "(?i)quot(e|es|ed|ing)",
+     "why": "says to quote the expansions",
+     "scope": "prose"
+    },
+    {
+     "id": "glob_not_ls",
+     "re": "(?i)glob|for f in \\*\\.png|\\*\\.png directly|instead of (parsing )?\\$?\\(?ls|don'?t parse ls|not .{0,20}parse .{0,10}ls",
+     "why": "iterates with a glob instead of parsing ls",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "eval",
+     "re": "(?i)\\buse eval\\b|\\beval \\\"?\\$",
+     "why": "recommends eval",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names word splitting as the cause",
+    "Present: says to quote the expansions",
+    "Present: iterates with a glob instead of parsing ls",
+    "Absent: recommends eval"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SH-02",
+  "category": "lang-shell",
+  "difficulty": 2,
+  "goal": "Bash: explain why set -e kills a script at (( count++ )) when count is 0, and fix it",
+  "prompt": "This Bash script stops silently after the first file, with exit code 1 and no error message. Why, and how do I fix it without turning off error checking?\n\n#!/usr/bin/env bash\nset -euo pipefail\ncount=0\nfor f in levels/*.json; do\n  (( count++ ))\n  echo \"loaded $f\"\ndone\necho \"total $count\"\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shell"
+  ],
+  "expected_sources": [
+   "https://www.gnu.org/software/bash/manual/bash.html#The-Set-Builtin",
+   "https://mywiki.wooledge.org/BashFAQ/105"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Blames pipefail or tells the user to remove set -e"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "status_one",
+     "re": "(?i)(exit|return)s? (status|code)? ?(of )?1|non-?zero (exit )?status|status (is )?1|evaluates to (zero|0)|value (is )?(zero|0)",
+     "why": "explains that an arithmetic command whose value is 0 returns status 1",
+     "scope": "prose"
+    },
+    {
+     "id": "errexit",
+     "re": "(?i)set -e|errexit",
+     "why": "connects it to set -e",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)count=\\$\\(\\(\\s*count\\s*\\+\\s*1\\s*\\)\\)|\\(\\(\\s*\\+\\+count\\s*\\)\\)|\\(\\(\\s*count\\s*\\+=\\s*1\\s*\\)\\)|\\|\\|\\s*true|:\\s*\\$\\(\\(",
+     "why": "gives a fix such as count=$((count + 1))",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "blame_pipefail",
+     "re": "(?i)caused by pipefail|pipefail (is|causes)|remove (the )?(pipefail|set -e)",
+     "why": "blames pipefail or removes error checking",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that an arithmetic command whose value is 0 returns status 1",
+    "Present: connects it to set -e",
+    "Present: gives a fix such as count=$((count + 1))",
+    "Absent: blames pipefail or removes error checking"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PS-01",
+  "category": "lang-shell",
+  "difficulty": 1,
+  "goal": "PowerShell: explain why try/catch does not catch a missing-file error from Get-Item, and fix it",
+  "prompt": "In PowerShell 7 this prints a red error but my catch block never runs. Why? Fix it.\n\ntry {\n    $cfg = Get-Item -Path .\\config\\game.json\n    Write-Host \"found $($cfg.FullName)\"\n}\ncatch {\n    Write-Warning \"config missing, using defaults\"\n}\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shell"
+  ],
+  "expected_sources": [
+   "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_try_catch_finally",
+   "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims Get-Item does not produce errors or that catch is broken"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "non_terminating",
+     "re": "(?i)non-?terminating",
+     "why": "names the error as non-terminating",
+     "scope": "prose"
+    },
+    {
+     "id": "stop",
+     "re": "(?i)-ErrorAction\\s+Stop|ErrorActionPreference\\s*=?\\s*'?\\\"?Stop|-EA\\s+Stop",
+     "why": "uses -ErrorAction Stop or $ErrorActionPreference = 'Stop'",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "policy",
+     "re": "(?i)execution policy",
+     "why": "blames the execution policy",
+     "scope": "prose"
+    },
+    {
+     "id": "catch_broken",
+     "re": "(?i)catch (blocks? )?(is|are) (broken|ignored) in (powershell|pwsh) 7",
+     "why": "claims catch is broken in PowerShell 7",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the error as non-terminating",
+    "Present: uses -ErrorAction Stop or $ErrorActionPreference = 'Stop'",
+    "Absent: blames the execution policy",
+    "Absent: claims catch is broken in PowerShell 7"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "PS-02",
+  "category": "lang-shell",
+  "difficulty": 2,
+  "goal": "PowerShell: answer 'running scripts is disabled on this system' correctly and state that execution policy is not a security boundary",
+  "prompt": "My teammate gets \"File C:\\tools\\build.ps1 cannot be loaded because running scripts is disabled on this system.\" Should I tell them to run Set-ExecutionPolicy Unrestricted for the whole machine? Is the execution policy what keeps malware PowerShell scripts off our PCs?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shell"
+  ],
+  "expected_sources": [
+   "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies",
+   "https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/set-executionpolicy"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Calls execution policy a security boundary or recommends Unrestricted for the whole machine"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "scope",
+     "re": "(?i)CurrentUser|-Scope\\s+Process|RemoteSigned|Unblock-File|-ExecutionPolicy\\s+Bypass",
+     "why": "suggests a narrow fix: CurrentUser scope, RemoteSigned, Unblock-File or a one-off Bypass",
+     "scope": "prose"
+    },
+    {
+     "id": "not_boundary",
+     "re": "(?i)not a security (boundary|feature|control|measure)|isn'?t a security (boundary|feature|control)|easily bypass|can be bypassed|safety (feature|net|belt)|seat ?belt",
+     "why": "says execution policy is not a security boundary",
+     "scope": "prose"
+    },
+    {
+     "id": "real_controls",
+     "re": "(?i)App(lication)? Control|WDAC|AppLocker|Constrained Language|antivirus|Defender|AMSI|code signing|signed",
+     "why": "names real controls such as App Control/WDAC, AppLocker or signing",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "is_boundary",
+     "re": "(?i)execution policy (is|provides|acts as) (a |an )?(strong |real |effective |important )?security (boundary|control|layer)|(prevents|blocks|stops) (all )?malicious scripts",
+     "why": "claims execution policy is a security boundary",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: suggests a narrow fix: CurrentUser scope, RemoteSigned, Unblock-File or a one-off Bypass",
+    "Present: says execution policy is not a security boundary",
+    "Present: names real controls such as App Control/WDAC, AppLocker or signing",
+    "Absent: claims execution policy is a security boundary"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SQL-01",
+  "category": "lang-sql",
+  "difficulty": 2,
+  "goal": "PostgreSQL: fix SQL injection in a leaderboard query, including a user-chosen sort column that cannot be a bound parameter",
+  "prompt": "My Python (psycopg 3) leaderboard endpoint builds SQL like this. Is it safe? Fix it.\n\nsort = request.args.get(\"sort\", \"score\")\nname = request.args.get(\"name\", \"\")\ncur.execute(f\"SELECT username, score, wins FROM leaderboard WHERE username LIKE '%{name}%' ORDER BY {sort} DESC LIMIT 50\")\n",
+  "run_mode": "automated",
+  "helps": [
+   "lang-sql"
+  ],
+  "expected_sources": [
+   "https://www.psycopg.org/psycopg3/docs/basic/params.html",
+   "https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html",
+   "https://www.postgresql.org/docs/current/sql-select.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says escaping quotes is enough, or passes the column name as a bound value"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "injection",
+     "re": "(?i)inject",
+     "why": "names SQL injection",
+     "scope": "prose"
+    },
+    {
+     "id": "params",
+     "re": "(?i)parameteri[sz]|bound (value|parameter)|bind (value|parameter)|placeholder|%s",
+     "why": "uses bound parameters for values",
+     "scope": "prose"
+    },
+    {
+     "id": "allowlist",
+     "re": "(?i)allow-?list|white-?list|fixed set|known (column|value)s|mapping|dict(ionary)? of (allowed )?columns|sql\\.Identifier",
+     "why": "restricts the sort column to an allow-list (or psycopg sql.Identifier)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "escaping_enough",
+     "re": "(?i)escap\\w* (the )?(single )?quotes?[^.\\n]{0,40}(enough|sufficient|safe)",
+     "why": "claims escaping quotes is enough",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names SQL injection",
+    "Present: uses bound parameters for values",
+    "Present: restricts the sort column to an allow-list (or psycopg sql.Identifier)",
+    "Absent: claims escaping quotes is enough"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SQL-02",
+  "category": "lang-sql",
+  "difficulty": 2,
+  "goal": "SQLite: explain why ON DELETE CASCADE does nothing (foreign_keys pragma off per connection) and fix 'database is locked' in a game save database",
+  "prompt": "My game stores saves in SQLite. Two problems: (1) deleting a row from players leaves its rows in inventory even though inventory has `player_id INTEGER REFERENCES players(id) ON DELETE CASCADE`; (2) when the autosave thread and the main thread both write I sometimes get `sqlite3.OperationalError: database is locked`. Explain both and fix them.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-sql"
+  ],
+  "expected_sources": [
+   "https://sqlite.org/foreignkeys.html",
+   "https://sqlite.org/wal.html",
+   "https://sqlite.org/pragma.html#pragma_busy_timeout",
+   "https://sqlite.org/lang_transaction.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims SQLite does not support foreign keys or cascades"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "fk_pragma",
+     "re": "(?i)foreign_keys",
+     "why": "names PRAGMA foreign_keys",
+     "scope": "prose"
+    },
+    {
+     "id": "per_connection",
+     "re": "(?i)(per|each|every) (new )?connection|off by default|disabled by default|default(s)? (to )?off",
+     "why": "says it is off by default and set per connection",
+     "scope": "prose"
+    },
+    {
+     "id": "locking_fix",
+     "re": "(?i)busy_timeout|busy timeout|\\btimeout\\b|\\bWAL\\b|BEGIN IMMEDIATE",
+     "why": "fixes locking with busy_timeout, WAL or BEGIN IMMEDIATE",
+     "scope": "prose"
+    },
+    {
+     "id": "one_writer",
+     "re": "(?i)one writer|single writer|only one (connection|writer)|one (write )?transaction at a time|serialize (the )?writes|write lock",
+     "why": "explains that SQLite allows one writer at a time",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_support",
+     "re": "(?i)sqlite (does not|doesn'?t|cannot|can'?t) (support|enforce) (foreign keys|cascad)|cascade (is not|isn'?t) supported",
+     "why": "claims SQLite lacks foreign key or cascade support",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names PRAGMA foreign_keys",
+    "Present: says it is off by default and set per connection",
+    "Present: fixes locking with busy_timeout, WAL or BEGIN IMMEDIATE",
+    "Present: explains that SQLite allows one writer at a time",
+    "Absent: claims SQLite lacks foreign key or cascade support"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WEB-01",
+  "category": "lang-html-css",
+  "difficulty": 2,
+  "goal": "Explain why a z-index 9999 modal sits under a transformed header and fix it with a real modal dialog",
+  "prompt": "My web game menu has a settings modal: a <div class=\"modal\"> with position: fixed and z-index: 9999. It is rendered inside <header class=\"hud\">, which has transform: translateZ(0) and z-index: 1. The modal still shows under the game canvas overlay (z-index: 10), the page behind it stays clickable, and Escape does nothing. Explain the cause and give the modern HTML/CSS fix.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-web-html-css-wasm"
+  ],
+  "expected_sources": [
+   "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_positioned_layout/Stacking_context",
+   "https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/dialog",
+   "https://developer.mozilla.org/en-US/docs/Glossary/Top_layer"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Tells the user to keep raising z-index as the fix"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "stacking_context",
+     "re": "(?i)stacking context",
+     "why": "explains that the transformed header creates a stacking context that traps the modal's z-index",
+     "scope": "prose"
+    },
+    {
+     "id": "modal_dialog",
+     "re": "(?i)showModal|show-modal|top layer",
+     "why": "uses dialog.showModal() (or command=\"show-modal\") so the modal goes to the top layer",
+     "scope": "prose"
+    },
+    {
+     "id": "inert_or_escape",
+     "re": "(?i)inert|escape|esc\\b|focus",
+     "why": "notes that a modal dialog makes the page inert / closes on Escape / traps focus",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "bigger_z",
+     "re": "(?i)z-index\\s*:?\\s*(?:99999|999999|9999999|2147483647)",
+     "why": "suggests an even larger z-index as the fix",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that the transformed header creates a stacking context that traps the modal's z-index",
+    "Present: uses dialog.showModal() (or command=\"show-modal\") so the modal goes to the top layer",
+    "Present: notes that a modal dialog makes the page inert / closes on Escape / traps focus",
+    "Absent: suggests an even larger z-index as the fix"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WEB-02",
+  "category": "lang-html-css",
+  "difficulty": 1,
+  "goal": "Explain why light-dark() always returns the light colour and fix it",
+  "prompt": "I wrote :root { --bg: light-dark(#ffffff, #0b0d10); } body { background: var(--bg); } but my page stays white even when my OS is in dark mode, in current Chrome, Firefox and Safari. Why, and how do I fix it?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-web-html-css-wasm"
+  ],
+  "expected_sources": [
+   "https://developer.mozilla.org/en-US/docs/Web/CSS/color_value/light-dark",
+   "https://developer.mozilla.org/en-US/docs/Web/CSS/color-scheme"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims light-dark() is unsupported in current browsers"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "color_scheme",
+     "re": "(?i)color-scheme",
+     "why": "names the color-scheme property as the missing piece",
+     "scope": "prose"
+    },
+    {
+     "id": "light_dark_value",
+     "re": "(?i)light\\s+dark",
+     "why": "sets color-scheme: light dark (on :root or an ancestor)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "unsupported",
+     "re": "(?i)light-dark\\(?\\)?`?\\s+(?:is|isn't|is not)\\s+(?:not\\s+)?(?:yet\\s+)?(?:supported|available|implemented)\\b(?!\\s+(?:everywhere|in all|across))",
+     "why": "wrongly claims light-dark() is not supported (it is Baseline newly available since 2024)",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the color-scheme property as the missing piece",
+    "Present: sets color-scheme: light dark (on :root or an ancestor)",
+    "Absent: wrongly claims light-dark() is not supported (it is Baseline newly available since 2024)"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WASM-01",
+  "category": "lang-webassembly",
+  "difficulty": 2,
+  "goal": "Diagnose 'SharedArrayBuffer is not defined' in a threaded Emscripten build and give the correct hosting fix",
+  "prompt": "I built my C++ game with Emscripten using -pthread. It works with emrun locally, but on my web host the console says 'ReferenceError: SharedArrayBuffer is not defined' and the game never starts. What is going on and how do I fix it?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-web-html-css-wasm"
+  ],
+  "expected_sources": [
+   "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer",
+   "https://web.dev/articles/coop-coep",
+   "https://emscripten.org/docs/porting/pthreads.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says SharedArrayBuffer was removed from browsers or tells the user to enable a browser flag"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "coop",
+     "re": "(?i)Cross-Origin-Opener-Policy|\\bCOOP\\b",
+     "why": "names the Cross-Origin-Opener-Policy header",
+     "scope": "prose"
+    },
+    {
+     "id": "coep",
+     "re": "(?i)Cross-Origin-Embedder-Policy|\\bCOEP\\b",
+     "why": "names the Cross-Origin-Embedder-Policy header",
+     "scope": "prose"
+    },
+    {
+     "id": "values",
+     "re": "(?i)same-origin",
+     "why": "gives COOP the value same-origin",
+     "scope": "prose"
+    },
+    {
+     "id": "isolation",
+     "re": "(?i)cross-origin isolat|crossOriginIsolated|single-threaded|without -pthread|without threads",
+     "why": "explains cross-origin isolation (or offers a single-threaded build as the alternative)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "removed",
+     "re": "(?i)SharedArrayBuffer\\s+(?:was|has been)\\s+(?:removed|deprecated|disabled permanently)|enable (?:a|the) (?:chrome|browser|experimental) flag",
+     "why": "wrongly says SharedArrayBuffer was removed or that users must enable a browser flag",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the Cross-Origin-Opener-Policy header",
+    "Present: names the Cross-Origin-Embedder-Policy header",
+    "Present: gives COOP the value same-origin",
+    "Present: explains cross-origin isolation (or offers a single-threaded build as the alternative)",
+    "Absent: wrongly says SharedArrayBuffer was removed or that users must enable a browser flag"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WASM-02",
+  "category": "lang-webassembly",
+  "difficulty": 2,
+  "goal": "Explain why a Float32Array view over Wasm memory goes stale after calls and fix it",
+  "prompt": "Rust + wasm-bindgen game. At startup I do const pos = new Float32Array(wasm.memory.buffer, world.positions_ptr(), world.len()); and read pos every frame for rendering. After I spawn more entities (which pushes to a Vec), pos suddenly reads as empty or throws 'Cannot perform %TypedArray%.prototype.set on a detached ArrayBuffer'. Why, and what is the right pattern?",
+  "run_mode": "automated",
+  "helps": [
+   "lang-web-html-css-wasm"
+  ],
+  "expected_sources": [
+   "https://developer.mozilla.org/en-US/docs/WebAssembly/Reference/JavaScript_interface/Memory/grow",
+   "https://rustwasm.github.io/docs/wasm-bindgen/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Blames the JavaScript garbage collector for freeing the Rust Vec"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "grow",
+     "re": "(?i)memory\\.grow|grow(?:s|n|ing)?\\b",
+     "why": "explains that linear memory grew (memory.grow)",
+     "scope": "prose"
+    },
+    {
+     "id": "detached",
+     "re": "(?i)detach",
+     "why": "explains that growth detaches the old ArrayBuffer and its views",
+     "scope": "prose"
+    },
+    {
+     "id": "recreate",
+     "re": "(?i)re-?creat|rebuild|new (?:Float32Array|view)|fresh view|each frame|every frame|after (?:each|every|any) call",
+     "why": "re-creates the view from memory.buffer after calls that may allocate (or each frame)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "gc_blame",
+     "re": "(?i)(?:javascript|js|browser)(?:'s)? (?:garbage collector|gc) (?:freed|collected|deleted|reclaimed)",
+     "why": "wrongly blames the JS garbage collector",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains that linear memory grew (memory.grow)",
+    "Present: explains that growth detaches the old ArrayBuffer and its views",
+    "Present: re-creates the view from memory.buffer after calls that may allocate (or each frame)",
+    "Absent: wrongly blames the JS garbage collector"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "HLSL-01",
+  "category": "lang-hlsl",
+  "difficulty": 2,
+  "goal": "Explain a transposed-looking object caused by HLSL matrix packing and mul order, and fix it",
+  "prompt": "My D3D12 renderer builds the view-projection matrix on the CPU with a row-major math library and memcpy's it into `cbuffer Frame { float4x4 ViewProj; }`. The vertex shader does `output.pos = mul(ViewProj, float4(input.pos, 1));` and the mesh renders skewed, as if the matrix were transposed. Explain in prose why this happens and give the fix.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shaders"
+  ],
+  "expected_sources": [
+   "https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-per-component-math",
+   "https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-packing-rules"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims HLSL constant-buffer matrices are row-major by default"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "column_major",
+     "re": "(?i)column[-_ ]major",
+     "why": "says HLSL packs constant-buffer matrices column-major by default",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)row_major|-Zpr|transpos|swap (?:the )?(?:arguments|operands|order)",
+     "why": "gives a fix: row_major / -Zpr, transpose on upload, or swap the mul argument order",
+     "scope": "prose"
+    },
+    {
+     "id": "mul_order",
+     "re": "(?i)\\bmul\\b",
+     "why": "explains the role of mul argument order",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "wrong_default",
+     "re": "(?i)HLSL(?: constant buffers?| cbuffers?| matrices| matrix packing)? (?:are|is|uses?|defaults? to) row[-_ ]major",
+     "why": "claims HLSL matrices are row-major by default",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: says HLSL packs constant-buffer matrices column-major by default",
+    "Present: gives a fix: row_major / -Zpr, transpose on upload, or swap the mul argument order",
+    "Present: explains the role of mul argument order",
+    "Absent: claims HLSL matrices are row-major by default"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "GLSL-01",
+  "category": "lang-glsl",
+  "difficulty": 1,
+  "goal": "Fix a WebGL 2 fragment shader that fails with a missing precision qualifier and an int literal",
+  "prompt": "My WebGL 2 fragment shader fails to compile with `ERROR: 0:3: '' : No precision specified for (float)`. The shader is:\n#version 300 es\nuniform sampler2D uTex;\nin vec2 vUv;\nout vec4 fragColor;\nvoid main() { float boost = 2; fragColor = texture(uTex, vUv) * boost; }\nExplain in prose what is wrong and how to fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shaders"
+  ],
+  "expected_sources": [
+   "https://registry.khronos.org/OpenGL/specs/es/3.2/GLSL_ES_Specification_3.20.pdf",
+   "https://registry.khronos.org/webgl/specs/latest/2.0/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Tells the user to switch a WebGL 2 shader to a desktop #version such as 330"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "precision",
+     "re": "(?i)precision\\s+(?:highp|mediump)\\s+float|(?:highp|mediump)[^.\\n]{0,40}precision",
+     "why": "adds a default float precision (precision highp/mediump float)",
+     "scope": "prose"
+    },
+    {
+     "id": "fragment_default",
+     "re": "(?i)no default (?:float )?precision|(?:does not|doesn't) have a default (?:float )?precision|lacks a default (?:float )?precision",
+     "why": "explains the fragment stage has no default float precision in GLSL ES",
+     "scope": "prose"
+    },
+    {
+     "id": "float_literal",
+     "re": "(?i)2\\.0|float literal|implicit(?:ly)? (?:int(?:eger)?[- ]to[- ]float )?conver|no implicit",
+     "why": "fixes the int literal (2.0 / no implicit int-to-float conversion)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "desktop_version",
+     "re": "(?i)#version\\s+(?:3[3-9]0|4[0-6]0)\\b",
+     "why": "recommends a desktop GLSL #version, which WebGL 2 rejects",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: adds a default float precision (precision highp/mediump float)",
+    "Present: explains the fragment stage has no default float precision in GLSL ES",
+    "Present: fixes the int literal (2.0 / no implicit int-to-float conversion)",
+    "Absent: recommends a desktop GLSL #version, which WebGL 2 rejects"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WGSL-01",
+  "category": "lang-wgsl",
+  "difficulty": 2,
+  "goal": "Explain WGSL uniform-buffer alignment for vec3 and scalar arrays and fix the layout",
+  "prompt": "WebGPU rejects my WGSL with an error saying uniform storage requires array elements to be aligned to 16 bytes. The struct is `struct Params { color : vec3f, intensity : f32, weights : array<f32, 4>, }` bound as `var<uniform>`. I fill it from JavaScript with a Float32Array of 8 floats. Explain in prose the layout rules involved and how to fix both the shader and the JavaScript side.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shaders"
+  ],
+  "expected_sources": [
+   "https://www.w3.org/TR/WGSL/",
+   "https://www.w3.org/TR/webgpu/"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Claims vec3 is tightly packed with no alignment padding in WGSL structs"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "align16",
+     "re": "(?i)16[- ]byte|16 bytes|align(?:ment|ed)?\\D{0,20}16|stride[^.\\n]{0,30}16",
+     "why": "names the 16-byte alignment/stride rule of the uniform address space",
+     "scope": "prose"
+    },
+    {
+     "id": "fix_shader",
+     "re": "(?i)array<\\s*vec4f?|vec4<f32>|vec4f|@align|var<storage",
+     "why": "fixes the shader (vec4 packing, @align, or a storage buffer)",
+     "scope": "prose"
+    },
+    {
+     "id": "js_side",
+     "re": "(?i)Float32Array|JavaScript|JS side|offset",
+     "why": "explains the JavaScript buffer must match the padded offsets/size",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "vec3_packed",
+     "re": "(?i)vec3\\w*(?:<f32>)?\\s+(?:is|are)\\s+(?:tightly packed|packed without padding|12[- ]byte aligned)",
+     "why": "claims vec3 is tightly packed or 12-byte aligned",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: names the 16-byte alignment/stride rule of the uniform address space",
+    "Present: fixes the shader (vec4 packing, @align, or a storage buffer)",
+    "Present: explains the JavaScript buffer must match the padded offsets/size",
+    "Absent: claims vec3 is tightly packed or 12-byte aligned"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "WGSL-02",
+  "category": "lang-wgsl",
+  "difficulty": 2,
+  "goal": "Explain a WGSL uniformity analysis error for textureSample in a branch and fix it",
+  "prompt": "Chrome rejects my WGSL fragment shader with: error: 'textureSample' must only be called from uniform control flow, note: control flow depends on possibly non-uniform value. The code is `if (in.mask > 0.5) { return textureSample(tex, smp, in.uv); } return vec4f(0.0);`. Explain in prose why WGSL rejects it and how to fix it properly.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shaders"
+  ],
+  "expected_sources": [
+   "https://www.w3.org/TR/WGSL/",
+   "https://dawn.googlesource.com/dawn/+/HEAD/docs/tint/uniformity_analysis.md"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Blames a browser or compiler bug instead of the uniformity rule"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "uniform_cf",
+     "re": "(?i)uniform(?:ity)?\\s+(?:control flow|analysis)",
+     "why": "explains the uniform-control-flow / uniformity analysis rule",
+     "scope": "prose"
+    },
+    {
+     "id": "derivatives",
+     "re": "(?i)derivative|quad|neighbou?r(?:ing)? (?:pixels|fragments|invocations)|\\bmip",
+     "why": "explains textureSample needs implicit derivatives from neighbouring fragments",
+     "scope": "prose"
+    },
+    {
+     "id": "fix",
+     "re": "(?i)textureSampleLevel|textureSampleGrad|(?:sample|textureSample)[^.\\n]{0,60}(?:before|outside)[^.\\n]{0,20}(?:the )?(?:branch|if)|hoist",
+     "why": "fixes it by sampling before the branch or using an explicit-LOD/gradient variant",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "bug",
+     "re": "(?i)(?:browser|compiler|chrome|tint|naga|WebGPU) bug|bug in (?:chrome|tint|the browser|the compiler|WebGPU)",
+     "why": "blames a browser or compiler bug",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains the uniform-control-flow / uniformity analysis rule",
+    "Present: explains textureSample needs implicit derivatives from neighbouring fragments",
+    "Present: fixes it by sampling before the branch or using an explicit-LOD/gradient variant",
+    "Absent: blames a browser or compiler bug"
+   ]
+  },
+  "split": "development"
+ },
+ {
+  "id": "SLANG-01",
+  "category": "lang-slang",
+  "difficulty": 2,
+  "goal": "Fix a Slang cross-module visibility error under language 2025/2026",
+  "prompt": "I split my Slang shaders into modules. `lighting.slang` starts with `module lighting;` and defines `float3 lambert(float3 albedo) { return albedo / 3.14159; }`. `main.slang` does `import lighting;` and calls `lambert(c)`. With `#language slang 2026` at the top of both files, slangc reports undefined identifier 'lambert'. With no #language line it compiled. Explain in prose why and how to fix it.",
+  "run_mode": "automated",
+  "helps": [
+   "lang-shaders"
+  ],
+  "expected_sources": [
+   "https://shader-slang.org/slang/user-guide/modules.html",
+   "https://shader-slang.org/slang/user-guide/language-version.html"
+  ],
+  "budget": {
+   "model_calls": 3,
+   "tool_calls": 4,
+   "output_tokens": 700,
+   "wall_seconds": 300
+  },
+  "hard_fail": [
+   "Says Slang does not support modules or tells the user to delete the module declaration"
+  ],
+  "fixture_status": "not_needed",
+  "fixtures": [],
+  "auto": {
+   "code": false,
+   "compile": false,
+   "require": [
+    {
+     "id": "internal_default",
+     "re": "(?i)\\binternal\\b",
+     "why": "explains declarations default to internal visibility (since language 2025)",
+     "scope": "prose"
+    },
+    {
+     "id": "public_fix",
+     "re": "(?i)\\bpublic\\b",
+     "why": "fixes it by marking lambert public",
+     "scope": "prose"
+    },
+    {
+     "id": "version",
+     "re": "(?i)legacy|2025|language version|#language",
+     "why": "connects the change to the language version (legacy vs 2025/2026)",
+     "scope": "prose"
+    }
+   ],
+   "forbid": [
+    {
+     "id": "no_modules",
+     "re": "(?i)slang (?:does not|doesn't) (?:support|have) modules|remove (?:the )?`?module`? declaration|delete (?:the )?`?module",
+     "why": "denies Slang modules or removes the required module declaration",
+     "scope": "prose"
+    }
+   ]
+  },
+  "pass_conditions": [
+   "All automated checks pass (see auto)"
+  ],
+  "required_evidence": [
+   "answer.md",
+   "check-results.json"
+  ],
+  "grader": {
+   "type": "static",
+   "checks": [
+    "Present: explains declarations default to internal visibility (since language 2025)",
+    "Present: fixes it by marking lambert public",
+    "Present: connects the change to the language version (legacy vs 2025/2026)",
+    "Absent: denies Slang modules or removes the required module declaration"
+   ]
+  },
+  "split": "development"
+ }
+]

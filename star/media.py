@@ -2,12 +2,13 @@
 import base64
 import io
 from pathlib import Path
-from PIL import Image, ImageOps
+from ._lazy import lazy_attr, lazy_module
 
 MAX_FILE = 8 * 1024 * 1024
 OWN_HARDWARE_MAX_SIDE = 1280        # default cap for pictures read by the STAR Server or the on-device brain
-MAX_PIXELS = 20_000_000
-Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+MAX_PIXELS = 20_000_000              # also Pillow's MAX_IMAGE_PIXELS, set by star/pil_safe.py
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+ImageOps = lazy_module("PIL.ImageOps")
 
 
 def image_part(filename: Path, max_side: int | None = None) -> dict:

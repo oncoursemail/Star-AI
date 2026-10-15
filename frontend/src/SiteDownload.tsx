@@ -6,7 +6,7 @@ import {useState} from 'react'
 import {ArrowUpRight,Check,Copy,Download,FileArchive} from 'lucide-react'
 import {compareVersions} from './githubPublic'
 import type {ReleaseInfo} from './githubPublic'
-import {LINKS,SOURCE_VERSION,formatBytes,formatDate} from './siteContent'
+import {LINKS,SOURCE_VERSION,formatBytes,formatDate,requirements} from './siteContent'
 import type {ReleaseFiles} from './siteContent'
 
 function CopyHash({value}:{value:string}){
@@ -32,10 +32,9 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
  return <section className="sw-download" id="download" aria-labelledby="sw-download-title">
   <div className="sw-wrap">
    <div className="sw-download-grid">
-    <div className="sw-download-main" data-reveal>
-     <p className="sw-kicker">Download</p>
-     <h2 id="sw-download-title">Get STAR for Windows.</h2>
-     <p className="sw-lede">Free, from GitHub Releases. No account to download; local inference needs no provider key.</p>
+    <div className="sw-download-main">
+     <h2 id="sw-download-title">Get STAR for Windows</h2>
+     <p className="sw-lede">Free, from GitHub Releases. No account, and no key for a model you run yourself.</p>
      <div className="sw-cta">
       {setup
        ?<a className="sw-btn sw-btn-primary sw-btn-large" href={setup.url}><Download size={19} aria-hidden="true"/> Download Setup {latest?.tag}</a>
@@ -46,17 +45,19 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
       {setup&&<div><dt>Setup</dt><dd><code>{setup.name}</code> · {formatBytes(setup.size)}</dd></div>}
       {files.zip&&<div><dt>Portable</dt><dd><code>{files.zip.name}</code> · {formatBytes(files.zip.size)}</dd></div>}
       {latest&&<div><dt>Published</dt><dd>{formatDate(latest.publishedAt,'long')} · <a href={latest.url} target="_blank" rel="noopener noreferrer">Release notes<ArrowUpRight size={13} aria-hidden="true"/><span className="sw-sr"> (opens in a new tab)</span></a></dd></div>}
-      <div><dt>Needs</dt><dd>Windows 11, 64-bit. v0.9.0 brain setup checks for 4.3 GB free (October 2026 source).</dd></div>
+     </dl>
+     <dl className="sw-needs">
+      {requirements.map(item=><div key={item.term}><dt>{item.term}</dt><dd>{item.detail}</dd></div>)}
      </dl>
      {!releaseLive&&<p className="sw-note">{latest&&snapshotAt?'Fallback release snapshot from '+formatDate(snapshotAt,'long')+'. ':'Live release details unavailable. '}
       <a href={LINKS.latest} target="_blank" rel="noopener noreferrer">Check the latest release directly on GitHub</a>.</p>}
      {sourceAhead&&latest&&<p className="sw-note">The source is at v{SOURCE_VERSION}, which has not been released. These buttons give you {latest.tag}, the latest published build.</p>}
     </div>
 
-    <div className="sw-verify" data-reveal>
+    <div className="sw-verify">
      <h3>Check the file before you run it</h3>
-     <p>The published v0.9.0 installer is not code-signed, so Windows may show a publisher warning. When a release
-      provides a SHA-256 checksum, compare it with your downloaded file.</p>
+     <p>The installer is not code-signed, so Windows may show a publisher warning. When a release provides a
+      SHA-256 checksum, compare it with your downloaded file.</p>
      {setup?.sha256
       ?<div className="sw-hash">
         <span className="sw-hash-label">SHA-256 of {setup.name}</span>
@@ -70,10 +71,10 @@ export function SiteDownload({latest,files,releaseLive,snapshotAt}:{
     </div>
    </div>
 
-   <dl className="sw-after" data-reveal>
+   <dl className="sw-after">
     <div>
      <dt>Updating</dt>
-     <dd>The tested v0.8.0-to-v0.9.0 Setup upgrade preserved chats, models and settings in <code>%APPDATA%\STAR</code>. Back up your data before updating.</dd>
+     <dd>Setup keeps your chats, models and settings in <code>%APPDATA%\STAR</code> (tested from v0.9.0 to v1.0.0 on one PC). Back up that folder before you update.</dd>
     </div>
     <div>
      <dt>Something wrong?</dt>

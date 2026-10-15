@@ -82,9 +82,19 @@ function Shop.rollback(state, userId, itemId)
     local pending = state.pending[userId]
     if not pending or pending[itemId] == nil then return false end
     local price = pending[itemId]
+    local items = state.owned[userId]
+    local wallet = state.wallets[userId]
+    -- Pending purchases are server-owned. Missing inventory or a changed refund
+    -- value is an internal invariant violation, not an ordinary client refusal.
+    -- Do not change the wallet or discard pending evidence before validating it.
+    if not items or not Inventory.has(items, itemId)
+        or price ~= state.prices[itemId] or type(wallet) ~= "number" then
+        error("inconsistent pending purchase state", 2)
+    end
+    assert(Inventory.revoke(items, itemId))
     pending[itemId] = nil
-    state.wallets[userId] += price
-    return Inventory.revoke(state.owned[userId], itemId)
+    state.wallets[userId] = wallet + price
+    return true
 end
 
 function Shop.removePlayer(state, userId)

@@ -606,7 +606,7 @@
    ],
    "notes": [],
    "in": [
-    "site"
+    "art"
    ]
   },
   {
@@ -1720,7 +1720,7 @@
    ]
   }
  ],
- "shipped_bytes": 5653422,
+ "shipped_bytes": 5385383,
  "art_bytes": 11680771,
  "roots_note": "site = the only copy shipped in the app and the website (everything the code loads: the hero, the faces and poses used by frontend/src/SiteMascot.tsx and frontend/src/StarPet.tsx). art = approved drawings kept in the repository but not copied into the app or the installer."
 }

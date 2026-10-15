@@ -51,7 +51,7 @@ def evaluate_readiness(*, bot_token: bool, owner_ids: bool, guild_ids: bool,
         Check("Speech synthesis", "ready" if tts else "optional",
               "Kokoro package/models present (not loaded)" if tts else "Install STAR voice dependencies/models"),
         Check("Transcription", "ready" if asr else "optional",
-              "Whisper package present (not loaded)" if asr else "Install requirements-voice.txt"),
+              "Whisper package present (not loaded)" if asr else "Voice transcription is not set up yet"),
         Check("Live voice listening", "optional", "Disabled; DAVE voice receive is not validated"),
     ]
 

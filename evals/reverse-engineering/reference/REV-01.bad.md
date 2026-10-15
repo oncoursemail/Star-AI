@@ -1,0 +1,1 @@
+Your friend is right. If the game runs the same, the function is functionally correct, and register swaps are just the compiler being picky. Close enough is fine here: go ahead and mark it done and move on to the next function, because chasing exact instructions is a waste of time. Readability matters more than identical output.

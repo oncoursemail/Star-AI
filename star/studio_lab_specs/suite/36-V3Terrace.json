@@ -1,0 +1,139 @@
+{
+ "name": "V3Terrace",
+ "kind": "map",
+ "description": "Two easy steps, then an 11.5-stud climb up to a terrace (maxJumpRise 12).",
+ "defect": "rise-too-high",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "jump-too-high"
+  ],
+  "fixes": [
+   "add-step",
+   "lower-target"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3Terrace",
+  "style": "modern",
+  "bounds": {
+   "size": [
+    65.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -19.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Step1",
+    "position": [
+     -29.0,
+     8.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     8.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Step2",
+    "position": [
+     -21.0,
+     10.0,
+     150.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     8.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Terrace",
+    "position": [
+     -10.0,
+     21.5,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     3.0,
+     21.5,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "Step1",
+    "Step2",
+    "Terrace",
+    "Goal"
+   ],
+   "maxJumpRise": 12
+  }
+ }
+}
