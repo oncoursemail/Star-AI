@@ -47,7 +47,7 @@
 .thread-turns {
   display: flex;
   flex-direction: column;
-  gap: var(--star-4);
+  gap: var(--star-6);
 }
 .thread-none {
   display: flex;
@@ -248,19 +248,21 @@
   gap: var(--star-2);
   padding: var(--star-3);
   border: 1px solid var(--star-stroke-control);
-  border-radius: var(--star-r-lg);
-  background: var(--star-surface-2);
-  transition: border-color var(--star-dur-hover) var(--star-ease);
+  border-radius: var(--star-r-md);
+  background: var(--star-surface-1);
+  transition: border-color var(--star-dur-hover) var(--star-ease),
+              background-color var(--star-dur-hover) var(--star-ease);
 }
 .cmp:focus-within {
-  border-color: var(--star-stroke-focus);
+  border-color: var(--star-gold-soft);
+  background: var(--star-surface-2);
 }
 .shell .cmp-input {
   display: block;
   width: 100%;
-  min-height: 28px;
+  min-height: 32px;
   max-height: 208px;
-  padding: 2px var(--star-1) 0;
+  padding: 3px var(--star-1) 0;
   overflow-y: auto;
   border: 0;
   outline: 0;
@@ -522,8 +524,8 @@
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border: 0;
   border-radius: var(--star-r-sm);
   background: var(--star-gold);
@@ -693,13 +695,14 @@
 }
 /* You: a quiet tone step, no border. */
 .msg-bubble {
-  max-width: min(82%, 620px);
-  padding: 10px var(--star-4);
-  border-radius: var(--star-r-lg) var(--star-r-lg) var(--star-1) var(--star-r-lg);
-  background: var(--star-surface-2);
+  max-width: min(80%, 620px);
+  padding: var(--star-3) var(--star-4);
+  border: 1px solid var(--star-stroke-soft);
+  border-radius: var(--star-r-md) var(--star-r-md) var(--star-1) var(--star-r-md);
+  background: var(--star-surface-1);
   color: var(--star-text);
   font-size: var(--star-fs-prose);
-  line-height: 1.55;
+  line-height: 1.6;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
@@ -874,7 +877,7 @@
   color: var(--star-text);
   font-family: var(--star-font-display);
   font-weight: 600;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.018em;
   line-height: 1.3;
 }
 .msg-prose h1 {
