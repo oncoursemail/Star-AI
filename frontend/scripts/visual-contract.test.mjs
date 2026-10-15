@@ -23,7 +23,7 @@ describe('actual-render snapshot geometry contract', () => {
   it('catches overlapping sibling interactive controls', () => {
     const found = auditLayoutSnapshot(base([
       control('send', 100, 100, 80, 50),
-      control('delete', 150, 100, 80, 50),
+      control('delete', 140, 100, 80, 50),
     ]))
     expect(found.issues.map(row => row.type)).toContain('interactive-overlap')
     const issue = found.issues.find(row => row.type === 'interactive-overlap')
