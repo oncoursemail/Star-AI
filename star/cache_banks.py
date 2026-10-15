@@ -11,7 +11,6 @@ other clients and expose cached prompt state on an unsecured server.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
 import os
