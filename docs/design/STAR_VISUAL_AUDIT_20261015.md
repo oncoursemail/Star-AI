@@ -13,7 +13,7 @@ STAR already has a design-token system, WCAG-oriented component checks and saved
 3. Run `npm run audit:visual -- --tools path/to/tools --channel msedge`.
 4. It serves **only** the built preview in `frontend/dist` on a random loopback port, with no real Qt bridge, chats, model, GitHub credentials or Studio session.
 5. Open the printed temporary output directory: `report.json` plus unmodified PNG captures for chat/tools at 1280×800, 900×700 and 390×844.
-6. For an explicit automated hard-fail on high-severity geometry results, add `--strict`. Do **not** enable it in CI without first reviewing baseline false positives and fixtures.
+6. For an explicit automated hard-fail on high-severity geometry results, any measured axe violation or truncated DOM controls, add `--strict`. Do **not** enable it in CI without first reviewing baseline false positives and fixtures.
 
 No package installation or downloads occur at runtime; missing `playwright-core`, compiled site or a browser produces a visible error. Capture is deliberately manual so unrelated CI doesn't become coupled to browser machine state.
 
@@ -24,6 +24,7 @@ No package installation or downloads occur at runtime; missing `playwright-core`
 - Visible buttons without accessible names (also run `axe-core` separately).
 - Interactive targets below a 24 px technical floor; 44 px is preferable for many touch designs.
 - Control text-clipping indicators where deliberate ellipsis/scroll is not configured.
+- In the actual browser, uses the already-installed axe-core package to test rendered color contrast and button/link accessible names; each violation records bounded CSS targets. No new dependencies or downloads.
 
 Errors and warnings reference specific `control-<index>` IDs from the **same captured DOM snapshot**. They are heuristics, not independent proof. A scrollable clipped item or intentional overlay can still produce a false positive. PNG screenshots are required for human review, art direction and deciding whether visual hierarchy, proportionality, type rhythm or subtle animations match the approved concept.
 
