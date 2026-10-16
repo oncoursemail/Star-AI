@@ -21,6 +21,7 @@ from .service import DiscordService
 from .streaming import LiveReply
 from .lab_status import (LabSettings, read_receipt, read_capture, format_receipt, classify_lab_question)
 from .presence import PresenceSettings, activity_at, rotate_presence
+from .work_status import WorkSettings, classify_work_question, format_work_report, read_work_report
 from .local_config import bot_host
 
 _LOG = logging.getLogger(__name__)
@@ -37,6 +38,7 @@ DM_HELP = (
     "- `wrong: ...` right after an answer saves a correction; approved in STAR Desktop, it becomes a regression test.\n"
     "- Slash commands: `/ask`, `/draw` (make an image), `/image` (look at an image), `/compare`, `/screen`, "
     "`/status`, `/digest`, `/star reset`.\n"
+    "Ask `what are you working on?` or use `/working` for real producer-reported activity.\n"
     "Ask `lab status` or `send lab screenshot` for approved, read-only Studio/Blender evidence (if enabled).\n"
     "STAR cannot touch your files, Roblox Studio, GitHub or a shell from Discord."
 )
@@ -56,6 +58,7 @@ class BotConfig:
     draw: DrawSettings = field(default_factory=DrawSettings)
     lab: LabSettings = field(default_factory=LabSettings)
     presence: PresenceSettings = field(default_factory=PresenceSettings)
+    work: WorkSettings = field(default_factory=WorkSettings)
     host: str = "pc"                # "server": no PC screen or graphics card (STAR_DISCORD_HOST)
 
     @classmethod
@@ -84,7 +87,8 @@ class BotConfig:
                    screen_capture=screen == "1", rate_limit=RateLimiter.from_env(vars).limit,
                    digest=DigestConfig.from_env(vars, policy=policy), draw=DrawSettings.from_env(vars),
                    lab=LabSettings.from_env(vars),
-                   presence=PresenceSettings.from_env(vars), host=bot_host(vars))
+                   presence=PresenceSettings.from_env(vars), work=WorkSettings.from_env(vars),
+                    host=bot_host(vars))
 
 
 def create_bot(config: BotConfig, *, service: DiscordService | None = None, drawer: Drawer | None = None,
@@ -299,6 +303,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
     @star.command(name="ask", description="Ask STAR's configured local or hosted brain")
     @app_commands.describe(prompt="Question or Roblox development request", private="Only show your answer to you")
     async def ask(interaction: discord.Interaction, prompt: str, private: bool = True):
+        if classify_work_question(prompt):
+            await send_work(interaction)
+            return
         key = await permit(interaction)
         if key is None:
             return
@@ -330,7 +337,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         result = embed("✦ STAR · Command Center",
             "**Quick**\n`/ask` — ask STAR · `/draw` — make an image · `/image` — look at an image you attach\n"
             "`/compare` — privately critique two images: reference vs STAR result\n"
-            "`/status` — what is switched on · `/digest` — latest Night School numbers\n"
+            "`/status` — settings · `/working` — actual live worker reports · `/digest` — Night School numbers\n"
             "`/screen` — STAR looks at this PC's screen (asks you to confirm every time)\n"
             "Or just **DM the bot** like a normal chat (text, one photo, or `draw a ...`).\n"
             "**Thinking**\n`/star ask` — ask Star (private by default)\n"
@@ -344,6 +351,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
             "`/star leave` — disconnect\n"
             "**Operations**\n`/star status` — model configuration and permission status\n"
             "`/star doctor` — private setup diagnostics\n"
+            "`/star working` — what coding, research, study and test workers reported\n"
             "`/star lab` — report the last verified Studio/Blender job receipt\n"
             "`/star labshot` — privately view one approved Studio/Blender render\n"
             "Right-click a text or voice message → **Apps → Ask STAR about this**.\n\n"
@@ -385,6 +393,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
                 f"**Draw (make images):** {drawer.describe()} · **@mentions:** {onoff(config.draw.mentions)}\n"
                 f"**Night School digests:** {digest}\n"
                 f"**Studio/Blender reports:** {onoff(config.lab.enabled)} (read-only, owner only)\n"
+                f"**Multi-worker status feed:** {onoff(config.work.enabled)} (read-only, owner only)\n"
                 "**Intents:** non-privileged (no server message content)\n"
                 "**Tools:** none from Discord (no files, Studio, GitHub or shell)\n"
                 "**Context:** temporary, in RAM (`/star reset` clears it)\n"
@@ -394,6 +403,46 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         if await permit(interaction) is None:
             return
         await interaction.response.send_message(embed=embed("✦ STAR · Status", status_text()), ephemeral=True)
+
+    def work_overview() -> str:
+        """Read host-reported facts only; never prompt the model to invent an activity."""
+        if config.work.enabled:
+            try:
+                summary = format_work_report(read_work_report(config.work))
+            except (OSError, ValueError) as exc:
+                summary = ("I can't confirm live worker activity. " + str(exc)[:200] +
+                           ". The worker feed is missing, invalid or not yet updated.")
+        else:
+            summary = ("**STAR · Work Pulse**\nI can't confirm what my coding, research or learning "
+                       "workers are doing right now: no live multi-worker report is connected. "
+                       "Set STAR_DISCORD_WORK_STATUS=1 and a trusted STAR_DISCORD_WORK_REPORT "
+                       "on the bot host to enable factual updates.")
+        if config.lab.enabled:
+            try:
+                lab_receipt = read_receipt(config.lab)
+                if lab_receipt.fresh():
+                    summary += ("\n\n**Studio/Blender producer report:** " +
+                                lab_receipt.engine + " · " + lab_receipt.state + " · " +
+                                lab_receipt.phase + " — " + lab_receipt.task +
+                                ". Checks " + str(lab_receipt.checked) + "/" + str(lab_receipt.total) +
+                                ". This is not independently verified by Discord.")
+            except (OSError, ValueError):
+                pass
+        if getattr(drawer, "busy", False):
+            summary += "\n\n**This Discord bot:** currently generating an image."
+        return summary[:MAX_EMBED_DESCRIPTION]
+
+    async def send_work(interaction):
+        if await permit(interaction) is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        content = await asyncio.to_thread(work_overview)
+        await interaction.followup.send(embed=embed("✦ STAR · Work Pulse", content),
+                                        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @star.command(name="working", description="What is STAR doing? Private live evidence, not a model guess")
+    async def working(interaction: discord.Interaction):
+        await send_work(interaction)
 
     @star.command(name="status", description="Check STAR's Discord configuration")
     async def status(interaction: discord.Interaction):
@@ -592,6 +641,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         return app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)(command)
 
     async def run_ask(interaction, prompt: str, private: bool):
+        if classify_work_question(prompt):
+            await send_work(interaction)
+            return
         key = await permit(interaction)
         if key is None:
             return
@@ -609,6 +661,11 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
                            private="Only show the answer to you")
     async def ask_top(interaction: discord.Interaction, prompt: str, private: bool = True):
         await run_ask(interaction, prompt, private)
+
+    @owner_contexts
+    @bot.tree.command(name="working", description="What STAR's workers are doing right now (private, factual)")
+    async def working_top(interaction: discord.Interaction):
+        await send_work(interaction)
 
     @owner_contexts
     @bot.tree.command(name="status", description="What STAR's Discord bot has switched on")
@@ -866,6 +923,10 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         if (message.content or "").strip().lower() in {"help", "/help", "?", "commands"} and not message.attachments:
             await message.channel.send(DM_HELP, allowed_mentions=discord.AllowedMentions.none())
             return
+        if not message.attachments and classify_work_question(message.content or ""):
+            report = await asyncio.to_thread(work_overview)
+            await message.channel.send(content=report, allowed_mentions=discord.AllowedMentions.none())
+            return
         # Strict owner-DM lab questions bypass the LLM entirely. A recorded
         # screenshot is returned only for an explicit owner request, never
         # because the model suggested taking a desktop capture.
@@ -1022,6 +1083,11 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
             await draw_in_channel(message.channel, wanted.prompt)
             return
         if not text:
+            return
+        if classify_work_question(text):
+            await message.channel.send(
+                "I'll show work details privately. Use /working or DM me so project activity is not posted publicly.",
+                allowed_mentions=discord.AllowedMentions.none())
             return
         try:
             async with message.channel.typing():
