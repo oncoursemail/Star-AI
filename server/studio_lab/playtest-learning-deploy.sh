@@ -8,6 +8,7 @@
 #                install the user units; the switch stays as it is (new install: OFF), the timer is not enabled
 #   --enable     switch ON (switch.env) and enable the timer (05:15 UTC daily)
 #   --disable    switch OFF and disable the timer
+#   --ideas-on   STAR invents 4 new games before each run (--ideas-off: stop)
 #   --run-now    start one run now in the background (systemctl --user start --no-block)
 #   --status     timer/service state and the last log lines
 #
@@ -31,6 +32,10 @@ case "$action" in
   --disable)
     remote "echo STAR_PLAYTEST_LEARNING=0 | runuser -u star -- tee $pt/switch.env >/dev/null"
     user_ctl "disable --now star-playtest-learning.timer" || true; exit 0;;
+  --ideas-on|--ideas-off)   # STAR invents its own games before each run (needs the main switch too)
+    value=$([ "$action" = --ideas-on ] && echo 1 || echo 0)
+    remote "cd $pt && grep -v '^STAR_PLAYTEST_IDEAS=' switch.env > switch.tmp; echo STAR_PLAYTEST_IDEAS=$value >> switch.tmp;
+      chown star:star switch.tmp; mv switch.tmp switch.env; cat switch.env"; exit 0;;
   --run-now)
     user_ctl "start --no-block star-playtest-learning.service"; exit 0;;
   '') ;;

@@ -72,8 +72,24 @@ def digest(value) -> str:
     return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
 
 
+_LUA_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
 def _lua_string(text: str) -> str:
-    return json.dumps(text, ensure_ascii=True)
+    """A Luau string literal for any text, in ASCII. Not json.dumps: JSON's \\u2019 is a compile error in Luau (it
+    wants \\u{2019}); one curly quote in STAR's answer once broke the whole apply (live run 2026-10-16)."""
+    out = []
+    for char in text:
+        code = ord(char)
+        if char in _LUA_ESCAPES:
+            out.append(_LUA_ESCAPES[char])
+        elif code < 0x20 or code == 0x7F:
+            out.append(f"\\{code:03d}")
+        elif code > 0x7E:
+            out.append(f"\\u{{{code:x}}}")
+        else:
+            out.append(char)
+    return '"' + "".join(out) + '"'
 
 
 def switched_on() -> bool:
@@ -434,7 +450,14 @@ class GameRun:
         return result_text(await self.guarded.call_tool("get_console_output", {"studio_id": self.guarded.studio_id}))
 
     async def apply(self, spec: dict, scripts: list[dict], run: str) -> dict:
-        ok, text = await self._luau(apply_luau(spec, scripts, run))
+        code = apply_luau(spec, scripts, run)
+        for attempt in range(3):
+            ok, text = await self._luau(code)
+            # Right after a playtest Studio sometimes cannot say which place is open; GuardedStudio then refuses
+            # only this change and sends nothing (live run 2026-10-16), so asking again a little later is safe.
+            if ok or "could not confirm which place is open" not in text or attempt == 2:
+                break
+            await self.sleep(5 * (attempt + 1))
         receipt = marked_json(text, APPLY_MARK) or {}
         return {"ok": ok and receipt.get("run") == run, "scripts": receipt.get("scripts"),
                 "detail": "" if ok else text[-300:]}
@@ -446,7 +469,12 @@ class GameRun:
     async def playtest(self, spec: dict, run: str, folder: Path) -> dict:
         from .studio_loop import result_failed, result_text
         console, robot = "", parse_robot("", run)
-        started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id, "is_start": True})
+        for attempt in range(3):        # same transient as in apply(): refused before anything was sent
+            started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                       "is_start": True})
+            if not result_failed(started) or "could not confirm which place is open" not in result_text(started):
+                break
+            await self.sleep(5 * (attempt + 1))
         if result_failed(started):
             return {"started": False, "stopped": True, "detail": result_text(started)[:300], "robot": robot,
                     "errors": {"game": [], "robot": [], "other": []}, "seconds": 0.0}
@@ -523,7 +551,7 @@ class GameRun:
                     report["studio_problem"] = True     # GuardedStudio refuses later edits until a person looks
                     break
                 play = await self.playtest(spec, token, folder)
-                step["playtest"] = {k: play[k] for k in ("started", "stopped", "seconds", "errors")}
+                step["playtest"] = {k: play.get(k) for k in ("started", "stopped", "seconds", "errors", "detail")}
                 step["robot"] = play["robot"]
                 step["report"] = judge(play["robot"], play["errors"], [])
                 if not play["stopped"] or not play["started"]:
@@ -672,40 +700,54 @@ def summarize(reports: list[dict], wall: float) -> dict:
 
 
 async def run_suite(specs: list[dict], open_guarded, brain, out: Path, *, log=print, max_seconds: float | None = None,
-                    run_kwargs=None) -> dict:
-    """open_guarded: async context manager yielding a GuardedStudio (or None with a problem)."""
+                    run_kwargs=None, reopen: int = 2) -> dict:
+    """open_guarded: async context manager yielding a GuardedStudio (or None with a problem). When Studio does not
+    confirm a playtest start/stop, the guard refuses further edits: the suite then opens a fresh session (the opener
+    takes Studio back to Edit mode on exit) and goes on with the next game, at most `reopen` times."""
     out.mkdir(parents=True, exist_ok=True)
-    reports, started = [], time.monotonic()
-    async with open_guarded() as (guarded, facts):
-        if guarded is None:
-            return {"ok": False, "problem": (facts or {}).get("problem") or "no verified STAR test place", "facts": facts}
-        # A run that stopped half-way may have left a playtest folder and paused place scripts: clean up first.
-        await GameRun(guarded, brain, out, log=log).remove()
-        for number, spec in enumerate(specs, 1):
-            if max_seconds and time.monotonic() - started > max_seconds:
-                log("runtime cap reached: no new game")
+    reports, started, queue = [], time.monotonic(), list(enumerate(specs, 1))
+    sessions, last_facts = 0, {}
+    while queue and sessions <= reopen:
+        sessions += 1
+        async with open_guarded() as (guarded, facts):
+            last_facts = facts
+            if guarded is None:
+                if not reports:
+                    return {"ok": False, "problem": (facts or {}).get("problem") or "no verified STAR test place",
+                            "facts": facts}
+                log("no verified Studio session to go on with")
                 break
-            log(f"== {spec['name']} ({number}/{len(specs)})")
-            game = GameRun(guarded, brain, out / f"{number:02d}-{spec['name']}", log=lambda t: log(f"{spec['name']} {t}"),
-                           **(run_kwargs or {}))
-            try:
-                report = await game.run(spec)
-            except Exception as error:
-                report = {"game": spec["name"], "run": "", "iterations": [], "passed": False,
-                          "problem": f"game run failed ({type(error).__name__}: {str(error)[:200]})"}
-                log(report["problem"])
-            reports.append(report)
-            try:
-                report["cleanup"] = await game.remove()
-            except Exception as error:
-                report["cleanup"] = {"ok": False, "error": type(error).__name__}
-            if report.get("studio_problem"):
-                log("Studio did not confirm a playtest start/stop: stopping the suite")
-                break
-            (out / "suite.json").write_text(json.dumps({"summary": summarize(reports, time.monotonic() - started),
-                                                        "games": [_row(r) for r in reports]}, indent=1), encoding="utf-8")
+            # A run that stopped half-way may have left a playtest folder and paused place scripts: clean up first.
+            await GameRun(guarded, brain, out, log=log).remove()
+            while queue:
+                if max_seconds and time.monotonic() - started > max_seconds:
+                    log("runtime cap reached: no new game")
+                    queue = []
+                    break
+                number, spec = queue.pop(0)
+                log(f"== {spec['name']} ({number}/{len(specs)})")
+                game = GameRun(guarded, brain, out / f"{number:02d}-{spec['name']}",
+                               log=lambda t, name=spec["name"]: log(f"{name} {t}"), **(run_kwargs or {}))
+                try:
+                    report = await game.run(spec)
+                except Exception as error:
+                    report = {"game": spec["name"], "run": "", "iterations": [], "passed": False,
+                              "problem": f"game run failed ({type(error).__name__}: {str(error)[:200]})"}
+                    log(report["problem"])
+                reports.append(report)
+                try:
+                    report["cleanup"] = await game.remove()
+                except Exception as error:
+                    report["cleanup"] = {"ok": False, "error": type(error).__name__}
+                (out / "suite.json").write_text(json.dumps({"summary": summarize(reports, time.monotonic() - started),
+                                                            "games": [_row(r) for r in reports]}, indent=1),
+                                                encoding="utf-8")
+                if report.get("studio_problem"):
+                    log("Studio did not confirm a playtest start/stop: new session for the next game")
+                    break
     summary = summarize(reports, time.monotonic() - started)
-    suite = {"ok": True, "started_utc": _now(), "summary": summary, "facts": facts, "games": [_row(r) for r in reports]}
+    summary["sessions"] = sessions
+    suite = {"ok": True, "started_utc": _now(), "summary": summary, "facts": last_facts, "games": [_row(r) for r in reports]}
     (out / "suite.json").write_text(json.dumps(suite, indent=1, default=str), encoding="utf-8")
     suite["reports"] = reports
     return suite
@@ -749,8 +791,26 @@ def studio_opener(home: Path):
             discovered = await studio.list_tools(session)
             guarded, facts = await parallel.open_instance(session, discovered, listed[0]["id"], home=home,
                                                           own_account_id=parallel.configured_account(home))
-            yield guarded, facts
+            try:
+                yield guarded, facts
+            finally:
+                if guarded is not None:
+                    await leave_edit_mode(session, listed[0]["id"], facts)
     return open_guarded
+
+
+async def leave_edit_mode(session, studio_id: str, facts: dict) -> None:
+    """A playtest start that Studio reached only after the guard's deadline leaves STAR Test Place in Play, and every
+    later session (the Studio Lab nightly too) then sees no Edit place (live run 2026-10-16). At the end of a run,
+    stop such a playtest on the same verified instance; it changes nothing in the place."""
+    from .studio_loop import result_text
+    try:
+        state = result_text(await session.call_tool("get_studio_state", arguments={"studio_id": studio_id}))
+        if "Mode: Play" in state:
+            await session.call_tool("start_stop_play", arguments={"studio_id": studio_id, "is_start": False})
+            facts["left_play_mode"] = True
+    except Exception as error:
+        facts["left_play_mode"] = f"failed ({type(error).__name__})"
 
 
 # --------------------------------------------------------------------------- CLI
@@ -762,6 +822,10 @@ def main(arguments=None) -> int:
     check.add_argument("specs")
     generate = sub.add_parser("generate", help="brain only: STAR writes the games, no Studio (parse + static checks)")
     run = sub.add_parser("run", help="build, playtest, fix, re-playtest every spec in Studio")
+    ideas = sub.add_parser("ideas", help="STAR invents new game specs into the idea ledger (needs STAR_PLAYTEST_IDEAS=1)")
+    ideas.add_argument("specs", help="existing specs (for de-duplication)")
+    ideas.add_argument("--ideas-dir", required=True)
+    ideas.add_argument("--count", type=int, default=4)
     for command in (generate, run):
         command.add_argument("specs")
         command.add_argument("--out", required=True)
@@ -769,6 +833,8 @@ def main(arguments=None) -> int:
     run.add_argument("--home", required=True, help="Studio Lab home with studio/lab-multi.json")
     run.add_argument("--outbox", default="", help="night-school outbox folder for examples and lesson candidates")
     run.add_argument("--max-minutes", type=float, default=0, help="no new game after this many minutes (0 = no cap)")
+    run.add_argument("--ideas-dir", default="", help="idea ledger: play its build list first, record fun signals "
+                                                     "(needs STAR_PLAYTEST_IDEAS=1)")
     chosen = parser.parse_args(arguments)
     only = {name for name in getattr(chosen, "only", "").split(",") if name}
     specs, bad = load_specs(Path(chosen.specs), only or None)
@@ -779,11 +845,22 @@ def main(arguments=None) -> int:
         print(f"playtest learning is switched off (set {SWITCH}=1)")
         return 3
     log = lambda text: print(time.strftime("%H:%M:%S"), text, flush=True)   # noqa: E731
-    out = Path(chosen.out) / time.strftime("playtest-%Y%m%dT%H%M%SZ", time.gmtime())
+    out = Path(getattr(chosen, "out", ".")) / time.strftime("playtest-%Y%m%dT%H%M%SZ", time.gmtime())
     brain = Brain()
     if not brain.url:
         print("no brain URL (STAR_PLAYTEST_BRAIN_URL)")
         return 2
+    from . import playtest_ideas
+    ideas_on = bool(getattr(chosen, "ideas_dir", "")) and playtest_ideas.switched_on()
+    if chosen.command == "ideas":
+        if not ideas_on:
+            print(f"game ideas are switched off (set {playtest_ideas.IDEAS_SWITCH}=1)")
+            return 3
+        result = playtest_ideas.invent(brain, Path(chosen.ideas_dir), specs, count=max(1, min(chosen.count, 8)), log=log)
+        return 0 if result["ok"] else 1
+    if ideas_on and chosen.command == "run":
+        names = {s["name"] for s in specs}
+        specs = [s for s in playtest_ideas.build_list(Path(chosen.ideas_dir)) if s["name"] not in names] + specs
     if chosen.command == "generate":
         out.mkdir(parents=True, exist_ok=True)
         rows = []
@@ -804,6 +881,8 @@ def main(arguments=None) -> int:
         suite = {"ok": False, "problem": f"Studio connection failed ({type(error).__name__})"}
     if chosen.outbox and suite.get("reports"):
         suite["outbox"] = write_outbox(Path(chosen.outbox), suite["reports"])
+    if ideas_on and suite.get("reports"):
+        suite["ideas_recorded"] = playtest_ideas.record_results(Path(chosen.ideas_dir), suite["reports"])
     print(json.dumps({k: v for k, v in suite.items() if k != "reports"}, indent=1, default=str))
     return 0 if suite.get("ok") else 1
 

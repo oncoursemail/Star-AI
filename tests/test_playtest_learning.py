@@ -2,7 +2,6 @@ import asyncio
 import contextlib
 import json
 import re
-from pathlib import Path
 
 import pytest
 
@@ -229,3 +228,44 @@ def test_brain_never_reports_url_or_key(tmp_path):
         raise OSError("http://brain.invalid:8080 refused")
     result = pl.Brain("http://brain.invalid:8080", key_file=str(key), opener=broken)([{"role": "user", "content": "x"}])
     assert result == {"ok": False, "text": "", "error": "OSError", "seconds": result["seconds"]}
+
+
+def test_luau_strings_escape_non_ascii_and_control_characters():
+    # JSON's ’ is a Luau compile error; a curly quote in STAR's answer broke a live apply.
+    assert pl._lua_string("it’s \\ \"x\"\n\t\x01") == r'"it\u{2019}s \\ \"x\"\n\t\001"'
+    assert pl._lua_string("\U0001F600").isascii()
+
+
+def test_apply_retries_when_studio_cannot_say_which_place_is_open(tmp_path):
+    class Flaky(FakeStudio):
+        refusals = 1
+
+        async def call_tool(self, name, arguments):
+            if name == "execute_luau" and "STAR playtest apply" in arguments["code"] and self.refusals:
+                self.refusals -= 1
+                return {"isError": True, "content": [{"type": "text", "text": "Edit refused: STAR could not confirm "
+                                                      "which place is open right now, so nothing was changed"}]}
+            return await super().call_tool(name, arguments)
+    report = asyncio.run(pl.GameRun(Flaky(), FakeBrain([answer("print('ok')")]), tmp_path, log=lambda *_: None,
+                                    sleep=no_sleep, poll=0).run(spec()))
+    assert report["passed"] and not report.get("studio_problem")
+
+
+def test_suite_reopens_a_session_after_a_studio_problem(tmp_path):
+    class NoStart(FakeStudio):
+        async def call_tool(self, name, arguments):
+            if name == "start_stop_play" and arguments["is_start"]:
+                return {"isError": True, "content": [{"type": "text", "text": "Playtest did not reach a confirmed state"}]}
+            return await super().call_tool(name, arguments)
+    studios = [NoStart(), FakeStudio()]
+    opened = []
+
+    @contextlib.asynccontextmanager
+    async def open_guarded():
+        opened.append(1)
+        yield studios[len(opened) - 1], {"verified": True}
+    brain = FakeBrain([answer("print('a')"), answer("print('b')")])
+    suite = asyncio.run(pl.run_suite([spec(), spec(name="DoorTwo")], open_guarded, brain, tmp_path, log=lambda *_: None,
+                                     run_kwargs={"sleep": no_sleep, "poll": 0}))
+    assert len(opened) == 2 and suite["summary"]["sessions"] == 2
+    assert [r["passed"] for r in suite["reports"]] == [False, True]
