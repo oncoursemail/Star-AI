@@ -98,6 +98,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [prompt,setPrompt]=useState('')
  const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
  const [newHome,setNewHome]=useState(()=>readPreference('star.home.workbench')==='on')
+ const [clipsOn,setClipsOn]=useState(()=>readPreference('star.clips.panels')==='on')
  const [petTerminal,setPetTerminal]=useState<{kind:PetState;at:number}|null>(null)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
@@ -179,6 +180,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const inactive=preview||!initial
  useEffect(()=>{writePreference('star.pet.visible',showStar?'on':'off')},[showStar])
  useEffect(()=>{writePreference('star.home.workbench',newHome?'on':'off')},[newHome])
+ useEffect(()=>{writePreference('star.clips.panels',clipsOn?'on':'off')},[clipsOn])
  useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
@@ -870,7 +872,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             </LocalBrainFallback>
             <section className="learn learn-brain" aria-label="What STAR learned"><div className="learn-head"><GraduationCap size={18} aria-hidden="true"/><div className="learn-title"><h2>What STAR learned</h2><p>This week’s lessons and your corrections are on the Projects page.</p></div><button type="button" className="learn-button" onClick={openLearned}>Open <ArrowRight size={14} aria-hidden="true"/></button></div></section>
           </div></div>}
-          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><ClipPanel disabled={inactive}/><GameLabPanel disabled={inactive}/><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
+          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div>{clipsOn&&<><ClipPanel disabled={inactive}/><GameLabPanel disabled={inactive}/></>}<div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
               <Panel className="settings-section integration-panel">
                 <div className="integration-head"><div className="tool-icon"><BookOpen size={22}/></div><Tag kind={data.intelligence?.obsidian.enabled?'green':'neutral'}>{data.intelligence?.obsidian.enabled?'Read-only connected':'Off'}</Tag></div>
@@ -900,7 +902,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><SettingsPage data={data} draft={draft} setDraft={setDraft} act={act} sync={()=>void sync()} inactive={inactive} busy={busy} nav={nav} serverDraft={serverDraft}
            modelChecking={modelChecking} modelCheck={modelCheck} modelList={modelList} testActualModel={()=>void testActualModel()} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult}
            selectRouterFolder={()=>void selectRouterFolder()} startLocalRouter={()=>void startLocalRouter()} stopLocalBrain={()=>void stopLocalBrain()} testSpecialists={()=>void testSpecialists()}
-           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} newHome={newHome} setNewHome={setNewHome} setReducedMotion={setReducedMotion}
+           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} newHome={newHome} setNewHome={setNewHome} clipsOn={clipsOn} setClipsOn={setClipsOn} setReducedMotion={setReducedMotion}
            update={update} updateBusy={updateBusy} updateProgress={updateProgress} checkForUpdates={()=>void checkForUpdates()} installVerifiedUpdate={()=>void installVerifiedUpdate()} saveSettings={()=>void saveSettings()}
            initialSection={preview?new URLSearchParams(window.location.search).get('section')||undefined:undefined}/></div></div>}
        </MotionSurface>

@@ -198,7 +198,7 @@ jobs:
             --collect-all ctranslate2 --collect-all av `
             --collect-all pypdf --collect-all docx --collect-all pptx --collect-all openpyxl `
             --collect-submodules pyttsx3 --collect-submodules jwt --collect-submodules keyring `
-            --collect-submodules cryptography star_desktop.py
+            --collect-submodules cryptography --collect-submodules obsws_python star_desktop.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller failed' }
       - name: Smoke test actual packaged EXE
         shell: pwsh

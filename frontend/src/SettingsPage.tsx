@@ -47,6 +47,8 @@ export type SettingsPageProps={
  setShowStar:(on:boolean)=>void
  newHome?:boolean
  setNewHome?:(on:boolean)=>void
+ clipsOn?:boolean
+ setClipsOn?:(on:boolean)=>void
  setReducedMotion:(on:boolean)=>void
  update:UpdateInfo|null
  updateBusy:boolean
@@ -197,10 +199,11 @@ export function SettingsPage(props:SettingsPageProps) {
 
  const panels:Record<SettingsSectionId,ReactNode>={
   general:<>
-   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility home start workbench">
+   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility home start workbench clips obs replay recording game lab">
      <Panel className="settings-section"><h3 className="settings-group-title">Interface</h3>
        <Switch label="Show Star" hint="Off by default. Display the mascot over the chat. Saved on this device." checked={props.showStar} onChange={props.setShowStar}/>
        {props.setNewHome&&<Switch label="Workbench home screen" hint="Off by default. Shows the new start canvas with starter tasks when a chat is empty. Saved on this device." checked={!!props.newHome} onChange={props.setNewHome}/>}
+       {props.setClipsOn&&<Switch label="STAR Clips and Game Lab" hint="Off by default. Shows the OBS replay, clip folder, SteelSeries Moments and Game Lab panels on the Tools page. Needs your own OBS Studio. Saved on this device." checked={!!props.clipsOn} onChange={props.setClipsOn}/>}
        <Switch label="Reduced motion" hint="Turns off animation everywhere in STAR. Applied and saved immediately." checked={draft.reduced_motion} onChange={props.setReducedMotion}/>
      </Panel>
    </Block>

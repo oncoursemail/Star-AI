@@ -127,3 +127,19 @@ def test_invalid_requests_and_unprivileged_actions_are_rejected():
         service.handle("clipDeleteAllFiles", {"confirm": True})
     with pytest.raises(ValueError):
         service.handle("clipConnect", {"confirm": True, "password": ""})
+
+
+def test_missing_obs_package_says_so_instead_of_a_connection_error(monkeypatch):
+    import builtins
+    real_import = builtins.__import__
+
+    def no_obsws(name, *args, **kwargs):
+        if name == "obsws_python":
+            raise ImportError("not installed")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_obsws)
+    service = ClipService()
+    with pytest.raises(RuntimeError, match="obsws-python"):
+        service.handle("clipConnect", {"confirm": True, "password": "pw"})
+    assert service.handle("clipStatus", {})["connected"] is False

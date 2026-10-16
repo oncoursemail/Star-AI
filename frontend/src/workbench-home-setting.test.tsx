@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** The workbench home (#418) is opt-in: the classic empty-chat home stays the default. */
+/** Opt-in Settings > Interface switches: the workbench home (#418) and the STAR Clips / Game Lab panels (#427, #429). */
 import {afterEach,beforeAll,beforeEach,describe,expect,it,vi} from 'vitest'
 import {cleanup,render,screen,waitFor} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -36,5 +36,21 @@ describe('Workbench home setting',()=>{
   view.unmount()
   await openChat()
   expect(document.querySelector('.is-crafted-home')).not.toBeNull()
+ })
+ it('hides STAR Clips and Game Lab on Tools until the Settings switch is on',async()=>{
+  const {user}=await openChat()
+  await user.click(screen.getByRole('button',{name:/^Tools/}))
+  await screen.findByRole('heading',{name:'Connect your tools'})
+  expect(screen.queryByRole('heading',{name:'STAR Clips'})).toBeNull()
+  expect(localStorage.getItem('star.clips.panels')).toBe('off')
+  expect(desktop.sent('clipStatus')).toHaveLength(0)
+  await user.click(screen.getByRole('button',{name:/^settings/i}))
+  await user.click(await screen.findByRole('tab',{name:'General'}))
+  const toggle=screen.getByRole('checkbox',{name:'STAR Clips and Game Lab'})
+  expect(toggle).toHaveProperty('checked',false)
+  await user.click(toggle)
+  expect(localStorage.getItem('star.clips.panels')).toBe('on')
+  await user.click(screen.getByRole('button',{name:/^Tools/}))
+  expect(await screen.findByRole('heading',{name:'STAR Clips'})).toBeTruthy()
  })
 })

@@ -19,11 +19,15 @@ CLIP_ACTIONS = frozenset({
 })
 
 
+class OBSPackageMissing(RuntimeError):
+    """obsws-python is not installed (a source run without the desktop requirements)."""
+
+
 def _obs_client(**kwargs):
     try:
         import obsws_python
     except ImportError as exc:
-        raise RuntimeError(
+        raise OBSPackageMissing(
             "OBS control needs the optional obsws-python package. "
             "Install STAR's Windows desktop dependencies, then try again."
         ) from exc
@@ -85,6 +89,8 @@ class ClipService:
                         host="127.0.0.1", port=4455, password=password, timeout=3
                     )
                     client.get_version()
+                except OBSPackageMissing:
+                    raise
                 except Exception:
                     # Do not echo third-party errors; they may contain authentication data.
                     raise ConnectionError(
