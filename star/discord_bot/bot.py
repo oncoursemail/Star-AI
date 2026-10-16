@@ -303,7 +303,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
     @star.command(name="ask", description="Ask STAR's configured local or hosted brain")
     @app_commands.describe(prompt="Question or Roblox development request", private="Only show your answer to you")
     async def ask(interaction: discord.Interaction, prompt: str, private: bool = True):
-        if classify_work_question(prompt):
+        if config.work.enabled and classify_work_question(prompt):
             await send_work(interaction)
             return
         key = await permit(interaction)
@@ -641,7 +641,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         return app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)(command)
 
     async def run_ask(interaction, prompt: str, private: bool):
-        if classify_work_question(prompt):
+        if config.work.enabled and classify_work_question(prompt):
             await send_work(interaction)
             return
         key = await permit(interaction)
@@ -923,7 +923,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
         if (message.content or "").strip().lower() in {"help", "/help", "?", "commands"} and not message.attachments:
             await message.channel.send(DM_HELP, allowed_mentions=discord.AllowedMentions.none())
             return
-        if not message.attachments and classify_work_question(message.content or ""):
+        if config.work.enabled and not message.attachments and classify_work_question(message.content or ""):
             report = await asyncio.to_thread(work_overview)
             await message.channel.send(content=report, allowed_mentions=discord.AllowedMentions.none())
             return
@@ -1084,7 +1084,7 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None, draw
             return
         if not text:
             return
-        if classify_work_question(text):
+        if config.work.enabled and classify_work_question(text):
             await message.channel.send(
                 "I'll show work details privately. Use /working or DM me so project activity is not posted publicly.",
                 allowed_mentions=discord.AllowedMentions.none())
