@@ -335,7 +335,8 @@ class Turbo:
                 self.log("merge failed: " + type(exc).__name__)
 
     def run(self, stop=lambda: False) -> None:
-        self.log("supervisor started")
+        self.log(f"supervisor started (home {self.home}; server_ssh {'set' if self.config['server_ssh'] else 'NOT set'}; "
+                 f"pool {'present' if (self.ns / 'pool').is_dir() else 'missing'})")
         try:
             while not stop():
                 try:
