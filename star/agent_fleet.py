@@ -92,7 +92,9 @@ def _run(cmd: list[str], cwd: Path, timeout: float, cancel: threading.Event) -> 
     proc = subprocess.Popen(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                             errors="replace")
     out: list[str] = []
-    reader = threading.Thread(target=lambda: out.append(proc.stdout.read()), daemon=True)
+    stream = proc.stdout
+    assert stream is not None
+    reader = threading.Thread(target=lambda: out.append(stream.read()), daemon=True)
     reader.start()
     end = time.monotonic() + timeout
     while proc.poll() is None:
