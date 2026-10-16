@@ -1,0 +1,26 @@
+{
+  "channel": "etsy",
+  "offer_id": "original-mugs",
+  "offer": {
+    "title": "Original constellation mug",
+    "product_concept": "Seller-directed star-map illustration with hand-refined lettering",
+    "product_type": "physical",
+    "rights_evidence": "replace-with-reviewed-license-record",
+    "visual_qa_evidence": "replace-with-reviewed-sample-record",
+    "accurate_mockup_reviewed": false,
+    "ai_used": true,
+    "ai_disclosed": false,
+    "production_partner_used": true,
+    "partner_disclosed": false,
+    "personalized": true,
+    "market_research_origin": "consenting-buyer-interviews",
+    "financials": {
+      "item_price": "30.00",
+      "buyer_shipping": "0",
+      "production": "15.00",
+      "supplier_shipping": "5.00",
+      "paid_ads": "3.00",
+      "ai_generation": "0.20"
+    }
+  }
+}
