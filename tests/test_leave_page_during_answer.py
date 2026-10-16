@@ -95,6 +95,7 @@ def test_switch_chat_reports_running_turn_busy_only_in_origin_chat(tmp_path, mon
     instance.active_task = True
     instance.turn = TurnRef("STAR", first, user_id)
     instance.warmer = Mock()
+    instance.draft_warmer = Mock()
     instance.digester = Mock()
     instance._warm = Mock()
 

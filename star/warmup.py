@@ -29,7 +29,7 @@ from .brain_router import select_route
 from .context_layout import assemble
 from .desktop_core import (Settings, app_data, chat_history, memory_scope_for, stable_memory)
 from .model_health import note_server_result, probe_server
-from .providers import llama_request_fields, open_client, provider_kind
+from .providers import llama_request_fields, open_client, own_warm_ended, own_warm_started, provider_kind
 from . import server_roles, turn_memory
 from .conversation_memory import compose_memory, read_checkpoint
 
@@ -57,6 +57,25 @@ def _checkpoint(home: Path, scope: str) -> str:
     return row[0] if row and isinstance(row[0], str) else ''
 
 
+def request_builder(settings: Settings, home: Path, chat_id: str | None):
+    """`(build, scope, history)`: `build(model, tools, guidance, text=PRIME_TEXT)` makes one request
+    with the conversation's real start (system message, memory, earlier turns) and `text` as the
+    last user message, on the conversation's slot of `model`."""
+    history = chat_history(settings, home, chat_id)[0] if (home / 'conversations.sqlite3').is_file() else []
+    scope = memory_scope_for(settings, chat_id)
+    memory = compose_memory(stable_memory(settings, _checkpoint(home, scope)),
+                            read_checkpoint(home / 'conversations.sqlite3', settings.project, chat_id))
+
+    def build(model: str, tools, guidance: str, text: str = PRIME_TEXT) -> dict:
+        system = make_system_message(memory, tools_attached=bool(tools), guidance=guidance if tools else '')
+        messages, _ = assemble(system, history, {'role': 'user', 'content': [{'type': 'text', 'text': text}]})
+        return {'model': model, 'messages': messages, 'tools': list(tools) if tools else None,
+                'extras': llama_request_fields(settings, conversation=scope, tools=bool(tools), model=model,
+                                               prime=True)}
+
+    return build, scope, history
+
+
 def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list[dict]:
     """The requests whose start equals the start of the next message, most likely first.
 
@@ -80,18 +99,7 @@ def prefix_requests(settings: Settings, home: Path, chat_id: str | None) -> list
     second request would replace the first. So on a single-model server there is
     one request, and after a tool turn it is the tool prompt, not plain chat.
     """
-    history = chat_history(settings, home, chat_id)[0] if (home / 'conversations.sqlite3').is_file() else []
-    scope = memory_scope_for(settings, chat_id)
-    memory = compose_memory(stable_memory(settings, _checkpoint(home, scope)),
-                            read_checkpoint(home / 'conversations.sqlite3', settings.project, chat_id))
-
-    def build(model: str, tools, guidance: str) -> dict:
-        system = make_system_message(memory, tools_attached=bool(tools), guidance=guidance if tools else '')
-        messages, _ = assemble(system, history, {'role': 'user', 'content': [{'type': 'text', 'text': PRIME_TEXT}]})
-        return {'model': model, 'messages': messages, 'tools': list(tools) if tools else None,
-                'extras': llama_request_fields(settings, conversation=scope, tools=bool(tools), model=model,
-                                               prime=True)}
-
+    build, scope, history = request_builder(settings, home, chat_id)
     routed = server_roles.effective(settings)
     quick = select_route(routed, 'hello', mode='fast').model
     main = select_route(routed, MAIN_MODEL_PROBE, mode='fast').model
@@ -141,6 +149,8 @@ async def _prime(settings: Settings, request: dict, cancel_event, timeout: float
                     raise
                 return await send(None)
 
+        # On STAR Server the slot is marked as this app's own, so the turn does not take it for another client.
+        mark = own_warm_started(settings, request['model'], (request.get('extras') or {}).get('id_slot'))
         job = asyncio.create_task(call())
         try:
             while True:
@@ -156,9 +166,11 @@ async def _prime(settings: Settings, request: dict, cancel_event, timeout: float
                                 found[name] = timings[key]
                     return found
         finally:
-            if not job.done():
-                job.cancel()   # closes the HTTP stream; the server drops the request
+            stopped = not job.done()
+            if stopped:
+                job.cancel()   # closes the HTTP stream; the server stops after the batch it is reading
                 await asyncio.gather(job, return_exceptions=True)
+            own_warm_ended(mark, cancelled=stopped)
 
 
 def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None = None,

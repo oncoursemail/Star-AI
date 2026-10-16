@@ -34,6 +34,7 @@ from .model_health import (explain_model_failure, missing_model_message, note_se
 from .chat_images import chat_image, generate_chat_image, latest_generated_path
 from .comfy import ComfyError
 from .warmup import Warmer
+from .prefill_warm import DraftWarmer
 from .diagnostics import export_review_bundle
 from .screen_capture import (require_consent as require_screen_consent, store_capture as store_screen_capture,
                              describe as describe_screen_capture, preview_url as screen_preview_url)
@@ -70,7 +71,7 @@ ALLOWED_ACTIONS = frozenset({
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'researchStatus','researchCheck','researchEvidence','researchNominate',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
+    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','warmDraft','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
     # Sidebar chat menu (rename, delete after the Undo window) and the composer's
     # "Look at my screen", which needs the owner's per-use consent (star/screen_capture.py).
@@ -139,7 +140,12 @@ PERMITTED_SETTINGS = frozenset({
     'best_of_n','best_of_n_max',
     # Use my GPU: where its files are and when it unloads. The switch itself is `gpuHelperSet`, saved at once.
     'gpu_helper_server','gpu_helper_model','gpu_idle_minutes',
+    'prefill_while_typing',   # star/prefill_warm.py: warm the prompt cache with the draft, off by default
 })
+
+# Settings > Media "session capabilities" line: put before the owner's words of every turn (and of a draft warm-up).
+SESSION_CAPABILITIES = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '
+                        'Other features depend on the current setup.\n\n')
 
 
 def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
@@ -725,6 +731,7 @@ def launch():
             self.pending_update = None
             self._closing = False
             self.warmer = Warmer()
+            self.draft_warmer = DraftWarmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
             self.clips = ClipService()  # No capture until explicit owner-controlled OBS actions.
@@ -804,6 +811,18 @@ def launch():
                 self._warm_target, check=check,
                 on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
                 on_done=finished if (request_id or then is not None) else None)
+
+        def _warm_draft(self, body: dict) -> dict:
+            """Settings > Start thinking while I type: the server reads the draft into its prompt cache.
+            Answers at once; the request runs on its own thread (star/prefill_warm.py)."""
+            text=body.get('prompt')
+            if not isinstance(text,str) or len(text)>30000:raise ValueError('Invalid draft')
+            if self.active_task:
+                return {'primed':False,'skipped':'busy'}
+            mode=str(body.get('mode')) if body.get('mode') in ('auto','fast','agent') else 'auto'
+            prefix=SESSION_CAPABILITIES if Settings.load(self.settings_file).session_capabilities_prompt else ''
+            self.draft_warmer.submit(self._warm_target,prefix+text,mode=mode,research=body.get('research') is True)
+            return {'queued':True}
 
         def _digest_target(self):
             settings=Settings.load(self.settings_file)
@@ -945,8 +964,7 @@ def launch():
                         return
                     self._emit(request_id,'progress',sanitize_event(e))
                 if settings.session_capabilities_prompt:
-                    full_prompt = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '
-                                   'Other features depend on the current setup.\n\n' + full_prompt)
+                    full_prompt = SESSION_CAPABILITIES + full_prompt
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
                     owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
@@ -1105,8 +1123,9 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
-                if action in WARM_UP_STOPPERS:self.warmer.cancel()
+                if action in WARM_UP_STOPPERS:self.warmer.cancel();self.draft_warmer.cancel()
                 if action in WARM_UP_STOPPERS or action in VOICE_ACTIONS:self.digester.cancel()
+                if action=='warmDraft':return json.dumps({'ok':True,'data':self._warm_draft(body)})
                 if action=='warmUp':
                     if self.active_task:
                         return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
@@ -1606,6 +1625,7 @@ def launch():
             gpu_helper.HELPER.shutdown()    # Use my GPU: the model server STAR started
             self.discord.close()            # the Discord bot STAR started (if any) stops with STAR
             self.warmer.cancel()
+            self.draft_warmer.cancel()
             self.runtime.stop()
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor
             # workers are non-daemon. The packaged Windows fallback starts only

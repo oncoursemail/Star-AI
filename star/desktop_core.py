@@ -157,6 +157,9 @@ class Settings:
     gpu_helper_server: str = ''
     gpu_helper_model: str = ''
     gpu_idle_minutes: int = 10
+    # Settings > "Start thinking while I type" (star/prefill_warm.py): while the owner types, the server reads the
+    # conversation and the draft into its prompt cache, so the answer starts sooner. Off by default.
+    prefill_while_typing: bool = False
 
     @classmethod
     def load(cls, file: Path):
@@ -244,6 +247,8 @@ class Settings:
             raise ValueError('Choose a local folder for the GGUF model router')
         if type(self.use_my_gpu) is not bool:
             raise ValueError('Use my GPU must be on or off')
+        if type(self.prefill_while_typing) is not bool:
+            raise ValueError('Start thinking while I type must be on or off')
         for key in ('gpu_helper_server', 'gpu_helper_model'):
             value = getattr(self, key)
             if (not isinstance(value, str) or len(value) > 1024 or '\x00' in value

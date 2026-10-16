@@ -123,6 +123,7 @@ def test_real_close_cleans_children_before_watchdog(
 
     bridge.comfy_launcher = SimpleNamespace(stop=lambda: cleanup('comfy', 8.0))
     bridge.warmer = SimpleNamespace(cancel=lambda: cleanup('warmer'))
+    bridge.draft_warmer = SimpleNamespace(cancel=lambda: None)
     bridge.runtime = SimpleNamespace(stop=lambda: cleanup('runtime', 10.0))
     bridge.voice = SimpleNamespace(close=close_voice)
     bridge.discord = SimpleNamespace(close=lambda: events.append('discord.close'))

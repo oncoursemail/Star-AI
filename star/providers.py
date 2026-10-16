@@ -376,8 +376,38 @@ async def look_for_busy_slots(settings, model: str = "", *, conversation: str = 
         return frozenset()
     if busy is None:
         return frozenset()
+    busy = frozenset(slot for slot in busy if not _own_warm(key, slot))
     _BUSY_SLOTS[key] = (time.monotonic(), busy)
     return busy
+
+# Slots busy with this app's own cache warm-up (star/warmup.py `_prime`: the post-answer warm-up or a draft
+# warm-up), per ((server, model), slot) -> until when (inf while the request runs). Such a slot is not
+# "another client": the turn stays there, waits for the warm-up and reuses what it read. A cancelled
+# warm-up keeps the mark for OWN_WARM_GRACE_S, because the server finishes the batch it is reading first.
+_OWN_WARMS: dict[tuple[tuple[str, str], int], float] = {}
+OWN_WARM_GRACE_S = 15.0
+
+def _own_warm(key: tuple[str, str], slot: int) -> bool:
+    import time
+    until = _OWN_WARMS.get((key, slot))
+    return until is not None and time.monotonic() < until
+
+def own_warm_started(settings, model: str, slot) -> tuple | None:
+    """Mark a slot as holding one of this app's warm-ups; returns the mark for `own_warm_ended`."""
+    if type(slot) is not int:
+        return None
+    mark = (_instance(settings, model or None), slot)
+    _OWN_WARMS[mark] = float("inf")
+    return mark
+
+def own_warm_ended(mark, *, cancelled: bool) -> None:
+    import time
+    if mark is None:
+        return
+    if cancelled:
+        _OWN_WARMS[mark] = time.monotonic() + OWN_WARM_GRACE_S
+    else:
+        _OWN_WARMS.pop(mark, None)
 
 async def model_slots_full(settings, model: str, *, probe=None) -> bool:
     """True when every slot of `model` on STAR Server is generating right now (so a new request would queue).
