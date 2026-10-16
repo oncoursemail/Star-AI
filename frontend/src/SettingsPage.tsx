@@ -45,6 +45,8 @@ export type SettingsPageProps={
  chooseWorkflow:()=>void
  showStar:boolean
  setShowStar:(on:boolean)=>void
+ newHome?:boolean
+ setNewHome?:(on:boolean)=>void
  setReducedMotion:(on:boolean)=>void
  update:UpdateInfo|null
  updateBusy:boolean
@@ -195,9 +197,10 @@ export function SettingsPage(props:SettingsPageProps) {
 
  const panels:Record<SettingsSectionId,ReactNode>={
   general:<>
-   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility">
+   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility home start workbench">
      <Panel className="settings-section"><h3 className="settings-group-title">Interface</h3>
        <Switch label="Show Star" hint="Off by default. Display the mascot over the chat. Saved on this device." checked={props.showStar} onChange={props.setShowStar}/>
+       {props.setNewHome&&<Switch label="Workbench home screen" hint="Off by default. Shows the new start canvas with starter tasks when a chat is empty. Saved on this device." checked={!!props.newHome} onChange={props.setNewHome}/>}
        <Switch label="Reduced motion" hint="Turns off animation everywhere in STAR. Applied and saved immediately." checked={draft.reduced_motion} onChange={props.setReducedMotion}/>
      </Panel>
    </Block>

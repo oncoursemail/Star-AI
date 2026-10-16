@@ -95,6 +95,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
+ const [newHome,setNewHome]=useState(()=>readPreference('star.home.workbench')==='on')
  const [petTerminal,setPetTerminal]=useState<{kind:PetState;at:number}|null>(null)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
@@ -175,6 +176,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const askedTarget=useRef('')
  const inactive=preview||!initial
  useEffect(()=>{writePreference('star.pet.visible',showStar?'on':'off')},[showStar])
+ useEffect(()=>{writePreference('star.home.workbench',newHome?'on':'off')},[newHome])
  useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
@@ -698,8 +700,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
  const turns:ChatMessage[]=viewingAnswer&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
  const empty=!messages.length&&!viewingAnswer
- // Use the original empty state only for deliberate side-by-side preview review.
- const classicHome=preview&&new URLSearchParams(window.location.search).get('home')==='classic'
+ // The workbench home is opt-in (Settings > Interface); preview review can force either with ?home=classic|workbench.
+ const homeParam=preview?new URLSearchParams(window.location.search).get('home'):null
+ const classicHome=homeParam==='classic'||(homeParam!=='workbench'&&!newHome)
  // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
  const pending=data.retry&&data.retry.prompt?data.retry:null
  const retryPrompt=retryText||pending?.prompt||''
@@ -895,7 +898,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><SettingsPage data={data} draft={draft} setDraft={setDraft} act={act} sync={()=>void sync()} inactive={inactive} busy={busy} nav={nav} serverDraft={serverDraft}
            modelChecking={modelChecking} modelCheck={modelCheck} modelList={modelList} testActualModel={()=>void testActualModel()} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult}
            selectRouterFolder={()=>void selectRouterFolder()} startLocalRouter={()=>void startLocalRouter()} stopLocalBrain={()=>void stopLocalBrain()} testSpecialists={()=>void testSpecialists()}
-           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} setReducedMotion={setReducedMotion}
+           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} newHome={newHome} setNewHome={setNewHome} setReducedMotion={setReducedMotion}
            update={update} updateBusy={updateBusy} updateProgress={updateProgress} checkForUpdates={()=>void checkForUpdates()} installVerifiedUpdate={()=>void installVerifiedUpdate()} saveSettings={()=>void saveSettings()}
            initialSection={preview?new URLSearchParams(window.location.search).get('section')||undefined:undefined}/></div></div>}
        </MotionSurface>
