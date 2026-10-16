@@ -1,0 +1,55 @@
+```lua
+local CollectionService = game:GetService("CollectionService")
+
+local function rotatePart(part)
+	local initialCFrame = part.CFrame
+	local angularVelocity = math.rad(90) -- 90 degrees per second
+	local lastTime = tick()
+
+	local connection
+	connection = RunService.Heartbeat:Connect(function()
+		local currentTime = tick()
+		local deltaTime = currentTime - lastTime
+		lastTime = currentTime
+
+		local rotationAngle = angularVelocity * deltaTime
+		local rotation = CFrame.new(0, 0, 0) * CFrame.Angles(0, rotation, 0)
+		part.CFrame = initialCFrame * rotation
+	end)
+
+	return connection
+end
+
+local connections = {}
+
+local function onPartAdded(part)
+	if part:IsA("BasePart") and part.Anchored then
+		local connection = rotatePart(part)
+		connections[part] = connection
+	end
+end
+
+local function onPartRemoved(part)
+	local connection = connections[part]
+	if connection then
+		connection:Disconnect()
+		connections[part] = nil
+	end
+end
+
+-- Connect to existing parts
+for _, part in ipairs(CollectionService:GetTagged("Spinner")) do
+	if part:IsA("BasePart") then
+		onPartAdded(part)
+	end
+end
+
+-- Connect to new parts
+CollectionService:GetInstanceAddedSignal("Spinner"):Connect(function(part)
+	onPartAdded(part)
+end)
+
+CollectionService:GetInstanceRemovedSignal("Spinner"):Connect(function(part)
+	onPartRemoved(part)
+end)
+```

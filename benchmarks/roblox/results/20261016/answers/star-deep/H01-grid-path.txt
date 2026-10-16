@@ -1,0 +1,88 @@
+```lua
+local Pathfinding = {}
+
+function Pathfinding.findPath(grid, start, goal)
+	local rows = #grid
+	if rows == 0 then
+		return nil
+	end
+	local cols = #grid[1]
+
+	local function inBounds(x, y)
+		return x >= 1 and x <= cols and y >= 1 and y <= rows
+	end
+
+	local function isWalkable(x, y)
+		if not inBounds(x, y) then
+			return false
+		end
+		return grid[y][x] == true
+	end
+
+	if not isWalkable(start.X, start.Y) or not isWalkable(goal.X, goal.Y) then
+		return nil
+	end
+
+	local function key(x, y)
+		return y * (cols + 1) + x
+	end
+
+	local visited = {}
+	local parent = {}
+	local queue = {}
+	local head = 1
+	local tail = 0
+
+	local function enqueue(x, y)
+		tail += 1
+		queue[tail] = Vector2.new(x, y)
+	end
+
+	local function dequeue()
+		local item = queue[head]
+		queue[head] = nil
+		head += 1
+		return item
+	end
+
+	enqueue(start.X, start.Y)
+	visited[key(start.X, start.Y)] = true
+	parent[key(start.X, start.Y)] = nil
+
+	local dirs = {
+		Vector2.new(0, 1),
+		Vector2.new(0, -1),
+		Vector2.new(1, 0),
+		Vector2.new(-1, 0),
+	}
+
+	while head <= tail do
+		local current = dequeue()
+		if current == goal then
+			local path = {}
+			local node = current
+			while node do
+				table.insert(path, 1, node)
+				local k = key(node.X, node.Y)
+				node = parent[k]
+			end
+			return path
+		end
+
+		for _, d in ipairs(dirs) do
+			local nx = current.X + d.X
+			local ny = current.Y + d.Y
+			local nk = key(nx, ny)
+			if isWalkable(nx, ny) and not visited[nk] then
+				visited[nk] = true
+				parent[nk] = current
+				enqueue(nx, ny)
+			end
+		end
+	end
+
+	return nil
+end
+
+return Pathfinding
+```

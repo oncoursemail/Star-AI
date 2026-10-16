@@ -1,0 +1,51 @@
+```lua
+local module = {}
+
+local function isDescendantOf(instance, ancestor)
+	if not instance or not ancestor then
+		return false
+	end
+	return instance:IsDescendantOf(ancestor)
+end
+
+local function isExcluded(part, exclude)
+	if not exclude then
+		return false
+	end
+	for _, excluded in exclude do
+		if part == excluded then
+			return true
+		end
+		if isDescendantOf(part, excluded) then
+			return true
+		end
+	end
+	return false
+end
+
+function module.partsInRadius(center, radius, exclude)
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterDescendantsInstances = {}
+	overlapParams.FilterDescendantsInstances[1] = workspace
+	overlapParams.MaxParts = 0
+
+	local parts = workspace:GetPartBoundsInRadius(center, radius, overlapParams)
+
+	local results = {}
+	for _, part in parts do
+		if part:IsA("BasePart") and not isExcluded(part, exclude) then
+			table.insert(results, part)
+		end
+	end
+
+	table.sort(results, function(a, b)
+		local distA = (a.Position - center).Magnitude
+		local distB = (b.Position - center).Magnitude
+		return distA < distB
+	end)
+
+	return results
+end
+
+return module
+```

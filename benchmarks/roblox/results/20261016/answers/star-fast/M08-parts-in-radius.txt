@@ -1,0 +1,37 @@
+```lua
+local function partsInRadius(center: Vector3, radius: number, exclude: {Instance}?)
+	local excludeSet = {}
+	if exclude then
+		for _, instance in exclude do
+			excludeSet[instance] = true
+			local descendants = instance:GetDescendants()
+			for _, descendant in descendants do
+				excludeSet[descendant] = true
+			end
+		end
+	end
+
+	local overlapParams = OverlapParams.new()
+	overlapParams.FilterDescendantsInstances = {}
+	overlapParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	local parts = workspace:GetPartBoundsInRadius(center, radius, overlapParams)
+
+	local result = {}
+	for _, part in parts do
+		if not excludeSet[part] then
+			table.insert(result, part)
+		end
+	end
+
+	table.sort(result, function(a, b)
+		return (a.Position - center).Magnitude < (b.Position - center).Magnitude
+	end)
+
+	return result
+end
+
+return {
+	partsInRadius = partsInRadius
+}
+```

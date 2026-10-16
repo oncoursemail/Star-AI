@@ -1,0 +1,78 @@
+```lua
+-- DamageGuard module script
+local DamageGuard = {}
+
+-- Store last allowed request time per player
+local lastAllowed = {}
+
+local function isFiniteNumber(v)
+	return typeof(v) == "number" and v ~= math.inf and v ~= math.nan
+end
+
+local function getHumanoid(target)
+	if target:IsA("Model") then
+		local humanoid = target:FindFirstChildWhichIsA("Humanoid")
+		if humanoid then
+			return humanoid
+		end
+		local humanoidRoot = target:FindFirstChild("HumanoidRootPart")
+		if humanoidRoot and humanoidRoot.Parent == target then
+			local h = Instance.new("Humanoid")
+			h.Parent = target
+			return h
+		end
+	end
+	return nil
+end
+
+function DamageGuard.allow(player, target, amount, now)
+	-- Validate amount
+	if not isFiniteNumber(amount) or amount <= 0 or amount > 25 then
+		return false
+	end
+
+	-- Validate target
+	if not target:IsA("Model") then
+		return false
+	end
+	local humanoid = getHumanoid(target)
+	if not humanoid then
+		return false
+	end
+	if humanoid.Health <= 0 then
+		return false
+	end
+	if target == player.Character then
+		return false
+	end
+
+	-- Check distance
+	local playerChar = player.Character
+	if not playerChar then
+		return false
+	end
+	local playerRoot = playerChar:FindFirstChild("HumanoidRootPart")
+	if not playerRoot then
+		return false
+	end
+	local targetRoot = target:FindFirstChildWhichIsA("BasePart")
+	if not targetRoot then
+		return false
+	end
+	if (playerRoot.Position - targetRoot.Position).Magnitude > 15 then
+		return false
+	end
+
+	-- Rate limit check
+	local lastTime = lastAllowed[player] or 0
+	if now - lastTime < 0.5 then
+		return false
+	end
+
+	-- Allow and update last time
+	lastAllowed[player] = now
+	return true
+end
+
+return DamageGuard
+```

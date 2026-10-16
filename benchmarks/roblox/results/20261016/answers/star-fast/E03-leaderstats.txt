@@ -1,0 +1,29 @@
+```lua
+local Players = game:GetService("Players")
+
+local function setupLeaderstats(player)
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats"
+	leaderstats.Parent = player
+
+	local coins = Instance.new("IntValue")
+	coins.Name = "Coins"
+	coins.Value = 0
+	coins.Parent = leaderstats
+
+	local wins = Instance.new("IntValue")
+	wins.Name = "Wins"
+	wins.Value = 0
+	wins.Parent = leaderstats
+end
+
+-- Handle existing players
+for _, player in ipairs(Players:GetPlayers()) do
+	setupLeaderstats(player)
+end
+
+-- Handle new players
+Players.PlayerAdded:Connect(function(player)
+	setupLeaderstats(player)
+end)
+```

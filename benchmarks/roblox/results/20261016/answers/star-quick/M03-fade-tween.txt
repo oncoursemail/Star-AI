@@ -1,0 +1,20 @@
+```lua
+local TweenService = game:GetService("TweenService")
+
+local module = {}
+
+function module.fadeOut(part: BasePart, duration: number): Tween
+	local info = {
+		 TweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+	}
+	local goal = {Transparency = 1}
+	local tween = TweenService:Create(part, info, goal)
+	tween:Play()
+	tween.Completed:Connect(function()
+		part.CanCollide = false
+	end)
+	return tween
+end
+
+return module
+```

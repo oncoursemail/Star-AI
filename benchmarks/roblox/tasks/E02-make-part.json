@@ -1,0 +1,8 @@
+{
+ "id": "E02-make-part",
+ "level": "easy",
+ "kind": "module",
+ "title": "Create a configured Part",
+ "prompt": "Write a ModuleScript that returns a table with a function `makePart(name: string, size: Vector3, color: Color3,\nparent: Instance): Part`. It creates a Part with that Name, Size and Color, Anchored = true, CanCollide = true,\nMaterial = SmoothPlastic, parents it to `parent` and returns it.",
+ "playSeconds": 40
+}

@@ -1,0 +1,69 @@
+```lua
+local function findPath(grid, start, goal)
+    local rows = #grid
+    if rows == 0 then return nil end
+    local cols = #grid[1]
+
+    local sx, sy = start.X, start.Y
+    local gx, gy = goal.X, goal.Y
+
+    -- Validate bounds and walkability
+    if sx < 1 or sx > cols or sy < 1 or sy > rows then return nil end
+    if gx < 1 or gx > cols or gy < 1 or gy > rows then return nil end
+    if not grid[sy][sx] then return nil end
+    if not grid[gy][gx] then return nil end
+
+    if sx == gx and sy == gy then
+        return {start}
+    end
+
+    -- BFS
+    local queue = {}
+    local head = 1
+    queue[1] = {x = sx, y = sy, parent = nil}
+
+    local visited = {}
+    visited[sy] = visited[sy] or {}
+    visited[sy][sx] = true
+
+    local dirs = {{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
+
+    while head <= #queue do
+        local current = queue[head]
+        head = head + 1
+
+        for _, d in ipairs(dirs) do
+            local nx = current.x + d[1]
+            local ny = current.y + d[2]
+
+            if nx >= 1 and nx <= cols and ny >= 1 and ny <= rows then
+                if grid[ny][nx] and not visited[ny][nx] then
+                    visited[ny] = visited[ny] or {}
+                    visited[ny][nx] = true
+
+                    local newNode = {x = nx, y = ny, parent = current}
+
+                    if nx == gx and ny == gy then
+                        -- Reconstruct path
+                        local path = {}
+                        local node = newNode
+                        while node do
+                            table.insert(path, 1, Vector2.new(node.x, node.y))
+                            node = node.parent
+                        end
+                        return path
+                    end
+
+                    table.insert(queue, newNode)
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+return {
+    findPath = findPath
+}
+```

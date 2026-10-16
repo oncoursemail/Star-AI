@@ -1,0 +1,8 @@
+{
+ "id": "M02-weighted-pick",
+ "level": "medium",
+ "kind": "module",
+ "title": "Weighted random pick",
+ "prompt": "Write a ModuleScript that returns a table with a function `pick(weights: {[string]: number}, rng: Random): string`.\nIt returns one key, chosen with probability proportional to its weight, using only `rng` for randomness\n(rng:NextNumber()). Keys with weight 0 are never chosen. If the total weight is not greater than 0, it raises an\nerror.",
+ "playSeconds": 40
+}

@@ -1,0 +1,8 @@
+{
+ "id": "M07-reconcile",
+ "level": "medium",
+ "kind": "module",
+ "title": "Reconcile saved data with a template",
+ "prompt": "Write a ModuleScript that returns a table with a function `reconcile(data: table, template: table): table`.\nIt returns a NEW table: a deep copy of `data`, plus every key that is missing in data filled with a deep copy of the\ntemplate's value, recursively for nested tables (when both sides have a table for a key, reconcile those too).\nValues that data already has are kept. Neither input table may be changed, and the result must not share any\nnested table with the inputs.",
+ "playSeconds": 40
+}

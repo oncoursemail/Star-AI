@@ -1,0 +1,29 @@
+```lua
+--[[
+    ModuleScript: formatTime module
+    Returns a table with function formatTime(seconds: number): string
+    Formats seconds as "M:SS", dropping fractions, rounding down.
+    Negative input yields "0:00". Minutes are not capped.
+]]
+
+local M = {}
+
+function M.formatTime(seconds)
+    if type(seconds) ~= "number" then
+        seconds = 0
+    end
+    if seconds < 0 then
+        seconds = 0
+    end
+    local floorSeconds = math.floor(seconds)
+    local minutes = math.floor(floorSeconds / 60)
+    local secs = floorSeconds % 60
+    local secStr = tostring(secs)
+    if secs < 10 then
+        secStr = "0" .. secStr
+    end
+    return minutes .. ":" .. secStr
+end
+
+return M
+```

@@ -1,0 +1,69 @@
+```lua
+local RoundManager = {}
+RoundManager.__index = RoundManager
+
+local STATE_ORDER = { "Intermission", "Playing", "Ended" }
+
+function RoundManager.new(durations)
+	local self = setmetatable({}, RoundManager)
+	self._durations = {
+		Intermission = durations.Intermission,
+		Playing = durations.Playing,
+		Ended = durations.Ended,
+	}
+	self._state = "Intermission"
+	self._timeInState = 0
+	self._listeners = {}
+	return self
+end
+
+function RoundManager:_nextState()
+	local idx = 1
+	for i, s in ipairs(STATE_ORDER) do
+		if s == self._state then
+			idx = i
+			break
+		end
+	end
+	local nextIdx = (idx % #STATE_ORDER) + 1
+	return STATE_ORDER[nextIdx]
+end
+
+function RoundManager:_setState(newState)
+	local oldState = self._state
+	self._state = newState
+	self._timeInState = 0
+	for _, fn in ipairs(self._listeners) do
+		fn(newState, oldState)
+	end
+end
+
+function RoundManager:state()
+	return self._state
+end
+
+function RoundManager:step(dt)
+	local remaining = dt
+	while remaining > 0 do
+		local duration = self._durations[self._state]
+		if duration <= 0 then
+			self:_setState(self:_nextState())
+		else
+			local timeLeft = duration - self._timeInState
+			if remaining >= timeLeft then
+				remaining = remaining - timeLeft
+				self:_setState(self:_nextState())
+			else
+				self._timeInState = self._timeInState + remaining
+				remaining = 0
+			end
+		end
+	end
+end
+
+function RoundManager:onChanged(fn)
+	table.insert(self._listeners, fn)
+end
+
+return RoundManager
+```

@@ -1,0 +1,21 @@
+```lua
+local TimeLeft = Instance.new("IntValue")
+TimeLeft.Name = "TimeLeft"
+TimeLeft.Value = 10
+TimeLeft.Parent = script.Parent
+
+local Status = Instance.new("StringValue")
+Status.Name = "Status"
+Status.Value = "Running"
+Status.Parent = script.Parent
+
+game:GetService("RunService").Heartbeat:Connect(function()
+	if Status.Value == "Running" then
+		TimeLeft.Value = TimeLeft.Value - 1
+		if TimeLeft.Value <= 0 then
+			Status.Value = "Ended"
+			TimeLeft.Value = 0
+		end
+	end
+end)
+```

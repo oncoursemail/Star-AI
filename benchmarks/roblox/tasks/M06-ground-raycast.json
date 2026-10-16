@@ -1,0 +1,8 @@
+{
+ "id": "M06-ground-raycast",
+ "level": "medium",
+ "kind": "module",
+ "title": "Raycast to the ground",
+ "prompt": "Write a ModuleScript that returns a table with a function\n`groundBelow(position: Vector3, ignore: {Instance}): (BasePart?, number?)`. It casts a ray straight down from\n`position` for up to 500 studs with workspace:Raycast, ignoring the instances in `ignore` and their descendants.\nIt returns the part hit and the distance from `position` to the hit point, or nil when nothing is hit.",
+ "playSeconds": 40
+}

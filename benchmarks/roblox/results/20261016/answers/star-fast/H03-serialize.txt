@@ -1,0 +1,102 @@
+```lua
+local function encode(value)
+	if typeof(value) == "Vector3" then
+		return {
+			__type = "Vector3",
+			x = value.X,
+			y = value.Y,
+			z = value.Z
+		}
+	elseif typeof(value) == "CFrame" then
+		local m = value:GetComponents()
+		return {
+			__type = "CFrame",
+			x = m[1], y = m[2], z = m[3],
+			r00 = m[4], r01 = m[5], r02 = m[6],
+			r10 = m[7], r11 = m[8], r12 = m[9],
+			r20 = m[10], r21 = m[11], r22 = m[12],
+			rx = m[13], ry = m[14], rz = m[15]
+		}
+	elseif typeof(value) == "Color3" then
+		return {
+			__type = "Color3",
+			r = value.R,
+			g = value.G,
+			b = value.B
+		}
+	elseif typeof(value) == "table" then
+		local t = {}
+		local is_array = true
+		local max_index = 0
+		for k, v in pairs(value) do
+			if type(k) ~= "number" or k < 1 or k ~= math.floor(k) then
+				is_array = false
+			else
+				if k > max_index then
+					max_index = k
+				end
+			end
+		end
+		if is_array then
+			for i = 1, max_index do
+				t[i] = encode(value[i])
+			end
+		else
+			for k, v in pairs(value) do
+				t[k] = encode(v)
+			end
+		end
+		return t
+	else
+		return value
+	end
+end
+
+local function decode(value)
+	if type(value) == "table" and value.__type then
+		if value.__type == "Vector3" then
+			return Vector3.new(value.x, value.y, value.z)
+		elseif value.__type == "CFrame" then
+			return CFrame.new(
+				value.x, value.y, value.z,
+				value.r00, value.r01, value.r02,
+				value.r10, value.r11, value.r12,
+				value.r20, value.r21, value.r22,
+				value.rx, value.ry, value.rz
+			)
+		elseif value.__type == "Color3" then
+			return Color3.new(value.r, value.g, value.b)
+		end
+	end
+	if type(value) == "table" then
+		local t = {}
+		local is_array = true
+		local max_index = 0
+		for k, v in pairs(value) do
+			if type(k) ~= "number" or k < 1 or k ~= math.floor(k) then
+				is_array = false
+			else
+				if k > max_index then
+					max_index = k
+				end
+			end
+		end
+		if is_array then
+			for i = 1, max_index do
+				t[i] = decode(value[i])
+			end
+		else
+			for k, v in pairs(value) do
+				t[k] = decode(v)
+			end
+		end
+		return t
+	end
+	return value
+end
+
+return {
+	encode = encode,
+	decode = decode
+}
+```

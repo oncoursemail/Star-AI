@@ -1,0 +1,67 @@
+```lua
+--[[
+	RoundManager ModuleScript
+	Manages round states: Intermission -> Playing -> Ended -> Intermission
+	durations: { Intermission = number, Playing = number, Ended = number }
+	Methods:
+		:state() -> string
+		:step(dt: number)
+		:onChanged(fn)
+--]]
+
+local RoundManager = {}
+RoundManager.__index = RoundManager
+
+function RoundManager.new(durations)
+	local self = setmetatable({}, RoundManager)
+	
+	self.durations = durations
+	self.currentTime = durations.Intermission
+	self.currentState = "Intermission"
+	self.changeCallbacks = {}
+	
+	return self
+end
+
+function RoundManager:state()
+	return self.currentState
+end
+
+function RoundManager:step(dt)
+	if dt <= 0 then return end
+	
+	local oldState = self.currentState
+	local duration = self.durations[self.currentState]
+	
+	self.currentTime = self.currentTime + dt
+	
+	-- Check if we need to transition to next state
+	if self.currentTime >= duration then
+		self.currentTime = self.currentTime - duration
+		
+		-- Cycle states
+		if self.currentState == "Intermission" then
+			self.currentState = "Playing"
+		elseif self.currentState == "Playing" then
+			self.currentState = "Ended"
+		else -- Ended
+			self.currentState = "Intermission"
+		end
+		
+		-- Call change callbacks if state actually changed
+		if self.currentState ~= oldState then
+			for _, callback in ipairs(self.changeCallbacks) do
+				callback(self.currentState, oldState)
+			end
+		end
+	end
+end
+
+function RoundManager:onChanged(callback)
+	table.insert(self.changeCallbacks, callback)
+	-- Optionally call immediately if already in a state that would trigger change?
+	-- Not required by spec
+end
+
+return RoundManager
+```

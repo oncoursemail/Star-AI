@@ -1,0 +1,8 @@
+{
+ "id": "M05-inventory",
+ "level": "medium",
+ "kind": "module",
+ "title": "Stacked inventory",
+ "prompt": "Write a ModuleScript that returns an Inventory class. `Inventory.new(maxStack: number, slots: number)`.\nEach slot holds one item type, up to maxStack of it. Methods:\n`:add(item: string, n: number): number` fills existing stacks of that item first, then empty slots, and returns how\nmany were added (the rest does not fit); `:remove(item: string, n: number): boolean` removes n if there are at least\nn (a slot that becomes empty is free again) and returns true, otherwise changes nothing and returns false;\n`:count(item: string): number`.",
+ "playSeconds": 40
+}

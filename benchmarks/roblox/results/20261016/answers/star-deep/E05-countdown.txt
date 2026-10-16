@@ -1,0 +1,20 @@
+```lua
+local parent = script.Parent
+
+local timeLeft = Instance.new("IntValue")
+timeLeft.Name = "TimeLeft"
+timeLeft.Value = 10
+timeLeft.Parent = parent
+
+local status = Instance.new("StringValue")
+status.Name = "Status"
+status.Value = "Running"
+status.Parent = parent
+
+while timeLeft.Value > 0 do
+    task.wait(1)
+    timeLeft.Value = timeLeft.Value - 1
+end
+
+status.Value = "Ended"
+```

@@ -1,0 +1,8 @@
+{
+ "id": "H05-round-machine",
+ "level": "hard",
+ "kind": "module",
+ "title": "Round state machine",
+ "prompt": "Write a ModuleScript that returns a RoundManager class. `RoundManager.new(durations)` where durations is\n{ Intermission = number, Playing = number, Ended = number } (seconds). States cycle Intermission -> Playing ->\nEnded -> Intermission, starting in Intermission. Methods: `:state(): string`; `:step(dt: number)` advances time by\ndt seconds, and one big step may pass through several states (leftover time carries into the next state);\n`:onChanged(fn)` registers fn(newState, oldState), called once for every state change, in order.",
+ "playSeconds": 40
+}

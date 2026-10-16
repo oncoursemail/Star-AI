@@ -1,0 +1,78 @@
+```lua
+local DamageGuard = {}
+DamageGuard.__index = DamageGuard
+
+function DamageGuard.new()
+	local self = setmetatable({}, DamageGuard)
+	self._lastAllowed = {} -- Map<UserId, number>
+	return self
+end
+
+function DamageGuard:allow(player, target, amount, now)
+	-- Validate amount
+	if type(amount) ~= "number" or not (amount > 0 and amount <= 25) or math.abs(amount) == math.huge or amount ~= amount then
+		return false
+	end
+
+	-- Validate target is a Model
+	if not (target and target:IsA("Model")) then
+		return false
+	end
+
+	-- Find Humanoid in target
+	local humanoid = target:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return false
+	end
+
+	-- Check humanoid health
+	if humanoid.Health <= 0 then
+		return false
+	end
+
+	-- Validate player
+	if not (player and player:IsA("Player")) then
+		return false
+	end
+
+	-- Get player's character
+	local playerCharacter = player.Character
+	if not playerCharacter then
+		return false
+	end
+
+	-- Check if target is the player's own character
+	if target == playerCharacter then
+		return false
+	end
+
+	-- Get HumanoidRootPart for both
+	local targetRoot = target:FindFirstChild("HumanoidRootPart") or target:FindFirstChild("HumanoidRootPart")
+	local playerRoot = playerCharacter:FindFirstChild("HumanoidRootPart")
+
+	if not targetRoot or not playerRoot then
+		return false
+	end
+
+	-- Check distance
+	local distance = (targetRoot.Position - playerRoot.Position).Magnitude
+	if distance > 15 then
+		return false
+	end
+
+	-- Check rate limit
+	local userId = player.UserId
+	local lastAllowed = self._lastAllowed[userId] or 0
+
+	if now - lastAllowed < 0.5 then
+		return false
+	end
+
+	-- Allow the request
+	self._lastAllowed[userId] = now
+
+	return true
+end
+
+return DamageGuard
+```

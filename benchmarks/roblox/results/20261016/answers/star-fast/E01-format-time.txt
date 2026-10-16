@@ -1,0 +1,17 @@
+```lua
+local function formatTime(seconds)
+	if seconds < 0 then
+		return "0:00"
+	end
+
+	local totalSeconds = math.floor(seconds)
+	local minutes = math.floor(totalSeconds / 60)
+	local secs = totalSeconds % 60
+
+	return string.format("%d:%02d", minutes, secs)
+end
+
+return {
+	formatTime = formatTime
+}
+```

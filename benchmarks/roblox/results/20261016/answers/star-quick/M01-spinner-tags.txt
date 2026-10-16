@@ -1,0 +1,61 @@
+```lua
+local script = script
+local workspace = game:GetService("Workspace")
+local collectionService = game:GetService("CollectionService")
+local runService = game:GetService("RunService")
+
+local spinRate = 90 -- degrees per second
+local lastTime = tick()
+
+-- function to rotate a part around its own Y axis
+local function rotatePart(part)
+    if part.Anchored and part.CanChange and part.Transparency == 0 then
+        local currentTime = tick()
+        local deltaTime = currentTime - lastTime
+        lastTime = currentTime
+
+        local angle = spinRate * (deltaTime / 60) -- assuming 60 FPS base, but better use deltaTime in seconds
+        -- Actually deltaTime is in seconds if using tick() which returns seconds since boot
+        angle = spinRate * deltaTime
+
+        part.CFrame = part.CFrame:AngleBetween(Vector3.new(0, 1, 0), Vector3.new(0, math.cos(math.rad(part.RotationAngles?.Y or 0)), 0))
+        -- Wait, we need to rotate around its own Y axis, so we should use CFrame: rotateY
+        local currentRotation = part.Rotation or Vector3.new(0, 0, 0)
+        part.Rotation = Vector3.new(0, currentRotation.Y + angle, currentRotation.Z)
+    end
+end
+
+-- initial setup: get all parts with "Spinner" tag
+local spinnerParts = collectionService:GetTagged("Spinner")
+for _, part in ipairs(spinnerParts) do
+    if part:IsA("BasePart") then
+        -- store original rotation if needed? We'll just rotate incrementally
+    end
+end
+
+-- connect to RenderStepped for smooth rotation
+runService.RenderStepped:Connect(function()
+    local currentTime = tick()
+    local deltaTime = currentTime - lastTime
+    lastTime = currentTime
+
+    local spinnerParts = collectionService:GetTagged("Spinner")
+    for _, part in ipairs(spinnerParts) do
+        if part:IsA("BasePart") and part.Anchored then
+            local currentRotation = part.Rotation or Vector3.new(0, 0, 0)
+            part.Rotation = Vector3.new(0, currentRotation.Y + spinRate * deltaTime, currentRotation.Z)
+        end
+    end
+end)
+
+-- also check for newly tagged parts
+local connection = collectionService:GetChanged():Connect(function(object, tag)
+    if tag == "Spinner" and object:IsA("BasePart") then
+        -- already handled by RenderStepped if we query tags each frame
+        -- but we can ensure it's included
+    end
+end)
+
+script.Parent:Destroy() -- unnecessary but clean
+return script
+```
