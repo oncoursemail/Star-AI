@@ -77,23 +77,26 @@ class AcpAdapter:
         calls: dict[str, dict[str, Any]] = {}
         perms: list[dict[str, Any]] = []
         nid = 0
+        stdin, stdout = proc.stdin, proc.stdout
+        if stdin is None or stdout is None:
+            return AcpTurn("error", error="agent pipes unavailable", agent=self.name)
 
         def send(obj: dict[str, Any]) -> None:
-            proc.stdin.write((json.dumps(obj) + "\n").encode())
+            stdin.write((json.dumps(obj) + "\n").encode())
 
         async def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
             nonlocal nid
             nid += 1
             mine = nid
             send({"jsonrpc": "2.0", "id": mine, "method": method, "params": params})
-            await proc.stdin.drain()
+            await stdin.drain()
             while True:
                 if self._cancel is not None and self._cancel.is_set():
                     send({"jsonrpc": "2.0", "method": "session/cancel",
                           "params": {"sessionId": params.get("sessionId", "")}})
-                    await proc.stdin.drain()
+                    await stdin.drain()
                     raise asyncio.CancelledError
-                line = await proc.stdout.readline()
+                line = await stdout.readline()
                 if not line:
                     raise ConnectionError("agent closed stdout")
                 try:
@@ -109,11 +112,11 @@ class AcpAdapter:
                     self._update((msg.get("params") or {}).get("update") or {}, text, calls)
                 elif method_in == "session/request_permission":
                     self._permission(msg, perms, send)
-                    await proc.stdin.drain()
+                    await stdin.drain()
                 elif method_in and "id" in msg:  # fs/terminal/etc: not offered
                     send({"jsonrpc": "2.0", "id": msg["id"],
                           "error": {"code": -32601, "message": "not offered by STAR"}})
-                    await proc.stdin.drain()
+                    await stdin.drain()
 
         try:
             init = await request("initialize", {"protocolVersion": 1, "clientCapabilities": {}})
