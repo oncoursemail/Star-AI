@@ -2,6 +2,8 @@
 
 Twenty-one case studies of projects that rebuilt old games, consoles, drivers and operating systems, written for STAR. The goal is the transferable engineering: how they reversed formats, protocols and architecture, how they verified their work, how they organised huge legacy codebases, and what the legal history teaches. No proprietary or decompiled code is reproduced. Each note cites the pages its researcher fetched and marks unverified claims. None of this is legal advice.
 
+New (2026-10-15): [Verification-first REA research and STAR integration roadmap](VERIFICATION_FIRST_20261015.md) examines yibie/awesome-rea, current agent-based recompilation projects, Windows tool choices, independent byte-oracle verification, and the bounded re_compare_artifacts gateway.
+
 STAR material built from this research:
 - Skill pack `re-decomp-lessons` (`star/skill_packs/re-decomp-lessons/`): lessons from RE/decomp projects, with `references/playbook.md` and `references/sources.md`.
 - Skill pack `eng-legacy-archaeology` (`star/skill_packs/eng-legacy-archaeology/`): method for understanding and changing large inherited codebases, Roblox games included.
