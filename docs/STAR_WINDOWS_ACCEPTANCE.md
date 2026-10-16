@@ -117,11 +117,22 @@ run has exercised it.
 
 1. Start the OLD STAR with "Run as administrator" (Restart Manager in a per-user Setup cannot close it) and
    run the new Setup interactively; choose to let Setup close applications. Expect the message
-   "STAR Intelligence is still running ... Nothing was changed"; after OK, Setup ends. Confirm the old
+   "STAR Intelligence is still running ... Setup stopped before copying new files"; after OK, Setup ends. Confirm the old
    version still starts, its chats are there, and no `*.star-previous` item is left.
 2. Close STAR, run the new Setup and press **Cancel** while files are being copied. Expect Setup's own
    rollback, then the old `_internal` and `STAR.exe` back in place: the OLD version starts with its chats.
 3. Run the new Setup to the end. Expect W04/W05 to pass and no `*.star-previous` item to be left.
+4. On a disposable installation only, leave an interrupted upgrade's `*.star-previous` items in place
+   and rerun Setup. Expect a recovery message before any runtime moves or copies. Verify the recovery
+   files are byte-for-byte unchanged. Setup must not guess which of the live/kept files is complete.
+5. On a disposable installation, hold a runtime file open or keep the old executable running while
+   declining automatic application closure. Expect refusal before either runtime item moves. Repeat
+   with a helper holding a file nested under `_internal`; Setup must not force-terminate the helper.
+
+Recovery copies are deliberately retained if rollback fails; Setup reports that failure and the next
+attempt refuses to overwrite them. In a disposable test, close every process using that installation,
+preserve both live and kept files, then restore the corresponding kept items to their original names.
+Do not delete recovery copies merely to make Setup continue. Report incomplete or mismatched pairs.
 
 Record for each step: installed and replacement versions, interactive or silent, the message shown, the
 version that starts afterwards, and PASS, FAIL or NOT RUN.

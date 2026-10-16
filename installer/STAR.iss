@@ -55,7 +55,7 @@ Filename: "{app}\{#STARExe}"; Flags: nowait skipifnotsilent runasoriginaluser
 ; Issue 120: never leave a half-replaced STAR. Setup's own rollback does not undo [InstallDelete], so the
 ; old runtime ({app}\_internal and {app}\STAR.exe) is moved aside before the new files are copied, put back
 ; if the installation does not finish, and deleted only after it has finished. Leftovers from a Setup that
-; was killed are removed by the next Setup or by the uninstaller.
+; was killed are preserved for recovery; the next Setup refuses to overwrite them.
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal.star-previous"
 Type: files; Name: "{app}\{#STARExe}.star-previous"
@@ -76,21 +76,64 @@ begin
   Result := AppFolder + '\' + Name + KeptSuffix;
 end;
 
-{ Removes the copy kept by an earlier Setup that never finished. }
-procedure RemoveLeftover(const Name: String);
+{ A previous interrupted Setup may have left the only working runtime here. }
+procedure CheckLeftover(const Name: String);
 var
   Path: String;
 begin
   Path := KeptPath(Name);
-  if DirExists(Path) then
-    DelTree(Path, True, True, True)
-  else if FileExists(Path) then
-    DeleteFile(Path);
+  if DirExists(Path) or FileExists(Path) then
+  begin
+    SuppressibleMsgBox('A previous STAR upgrade left a recovery copy at ' + Path + '.' +
+      #13#10 + 'Setup has not changed it. Close STAR and recover the previous installation ' +
+      'before trying again. Keep both .star-previous items together.', mbError, MB_OK, IDOK);
+    Abort;
+  end;
 end;
 
-{ Fails while STAR (or anything else) still has a file of the runtime open: nothing is deleted then.
-  Tried for a few seconds, so a STAR that is still finishing its shutdown or a virus scanner that briefly
-  holds a file does not stop the upgrade. }
+{ Opening an existing file for exclusive read/write does not modify it, but fails for a
+  loaded executable even on Windows versions that allow renaming that executable. }
+function RuntimeAvailable(const Path: String): Boolean;
+var
+  Stream: TFileStream;
+  Found: TFindRec;
+begin
+  Result := False;
+  if DirExists(Path) then
+  begin
+    if not FindFirst(Path + '\*', Found) then
+      Exit;
+    try
+      repeat
+        if (Found.Name <> '.') and (Found.Name <> '..') then
+        begin
+          { Do not follow junctions or symbolic links outside the installed runtime. }
+          if (Found.Attributes and $400) <> 0 then
+            Exit;
+          if not RuntimeAvailable(Path + '\' + Found.Name) then
+            Exit;
+        end;
+      until not FindNext(Found);
+    finally
+      FindClose(Found);
+    end;
+    Result := True;
+  end
+  else if FileExists(Path) then
+  begin
+    try
+      Stream := TFileStream.Create(Path, $0012); { fmOpenReadWrite or fmShareExclusive }
+      Stream.Free;
+      Result := True;
+    except
+      Log('Runtime file is unavailable: ' + Path);
+    end;
+  end
+  else
+    Result := True; { Fresh installation. }
+end;
+
+{ Retry transient rename failures after the open-file preflight; never delete live files here. }
 function MoveAside(const Name: String): Boolean;
 var
   Attempt: Integer;
@@ -106,7 +149,7 @@ begin
 end;
 
 { Replaces whatever a failed installation left with the kept old copy. }
-procedure PutBack(const Name: String);
+function PutBack(const Name: String): Boolean;
 var
   Live: String;
 begin
@@ -115,7 +158,8 @@ begin
     DelTree(Live, True, True, True)
   else if FileExists(Live) then
     DeleteFile(Live);
-  if not RenameFile(KeptPath(Name), Live) then
+  Result := RenameFile(KeptPath(Name), Live);
+  if not Result then
     Log('Could not put back ' + Live + '; the previous copy is kept at ' + KeptPath(Name));
 end;
 
@@ -123,7 +167,7 @@ procedure RefuseWhileRunning;
 begin
   SuppressibleMsgBox('STAR Intelligence is still running, or one of its files is open in another program, ' +
     'so Setup cannot replace it.' + #13#10 + #13#10 +
-    'Nothing was changed: the installed STAR, your chats and your settings are as they were. ' +
+    'Setup stopped before copying new files. Your chats and settings were not changed. ' +
     'Close every STAR window (also one started with "Run as administrator") and run Setup again.',
     mbError, MB_OK, IDOK);
   Abort;
@@ -135,8 +179,12 @@ begin
   begin
     { Restart Manager has already been asked to close STAR (CloseApplications=yes). }
     AppFolder := ExpandConstant('{app}');
-    RemoveLeftover(RuntimeDir);
-    RemoveLeftover('{#STARExe}');
+    CheckLeftover(RuntimeDir);
+    CheckLeftover('{#STARExe}');
+    if not RuntimeAvailable(AppFolder + '\{#STARExe}') then
+      RefuseWhileRunning;
+    if not RuntimeAvailable(AppFolder + '\' + RuntimeDir) then
+      RefuseWhileRunning;
     if DirExists(AppFolder + '\' + RuntimeDir) then
     begin
       if not MoveAside(RuntimeDir) then
@@ -148,8 +196,7 @@ begin
       if not MoveAside('{#STARExe}') then
       begin
         if RuntimeMoved then
-          PutBack(RuntimeDir);
-        RuntimeMoved := False;
+          RuntimeMoved := not PutBack(RuntimeDir);
         RefuseWhileRunning;
       end;
       ExeMoved := True;
@@ -171,7 +218,11 @@ begin
   if InstallFinished then
     Exit;
   if RuntimeMoved then
-    PutBack(RuntimeDir);
+    RuntimeMoved := not PutBack(RuntimeDir);
   if ExeMoved then
-    PutBack('{#STARExe}');
+    ExeMoved := not PutBack('{#STARExe}');
+  if RuntimeMoved or ExeMoved then
+    SuppressibleMsgBox('Setup could not restore all of the previous STAR runtime. ' +
+      'Keep the .star-previous recovery copies in ' + AppFolder + ' and close STAR before recovery.',
+      mbError, MB_OK, IDOK);
 end;
