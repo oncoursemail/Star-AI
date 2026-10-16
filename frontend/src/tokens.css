@@ -25,7 +25,7 @@
   --star-stroke-soft: #1c2025;
   --star-stroke-strong: #3a4047;
   --star-stroke-control: #6b747d; /* essential control boundaries, >=3:1 on raised layers */
-  --star-stroke-focus: #a7afb7; /* composer and menu focus borders: visibly brighter than --star-stroke-control */
+  --star-stroke-focus: #b99559; /* warm focus, visible against raised surfaces; matches STAR gold-soft */
   --star-veil: rgba(255, 255, 255, 0.06); /* hover on an already raised layer */
   --star-scrim: rgba(5, 6, 8, 0.86);
 
