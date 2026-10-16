@@ -213,8 +213,11 @@ def search_workspace(workspace, query: str, mode: str = 'text') -> dict:
     """Find bounded text lines or declaration signatures; no model-generated execution."""
     if not isinstance(query, str) or not 1 <= len(query) <= 300 or not query.strip():
         raise ValueError('Query must be between 1 and 300 characters')
-    if mode not in ('text', 'symbols'):
+    if mode not in ('text', 'symbols', 'map'):
         raise ValueError('Unknown workspace search mode')
+    if mode == 'map':
+        from .repo_map import code_map
+        return code_map(workspace, query)
     words = list(dict.fromkeys(word.casefold() for word in _IDENTIFIER.findall(query) if len(word) > 1))[:10]
     if mode == 'symbols' and not words:
         raise ValueError('Symbol search needs an identifier')
