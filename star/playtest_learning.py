@@ -469,7 +469,12 @@ class GameRun:
     async def playtest(self, spec: dict, run: str, folder: Path) -> dict:
         from .studio_loop import result_failed, result_text
         console, robot = "", parse_robot("", run)
-        started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id, "is_start": True})
+        for attempt in range(3):        # same transient as in apply(): refused before anything was sent
+            started = await self.guarded.call_tool("start_stop_play", {"studio_id": self.guarded.studio_id,
+                                                                       "is_start": True})
+            if not result_failed(started) or "could not confirm which place is open" not in result_text(started):
+                break
+            await self.sleep(5 * (attempt + 1))
         if result_failed(started):
             return {"started": False, "stopped": True, "detail": result_text(started)[:300], "robot": robot,
                     "errors": {"game": [], "robot": [], "other": []}, "seconds": 0.0}
@@ -546,7 +551,7 @@ class GameRun:
                     report["studio_problem"] = True     # GuardedStudio refuses later edits until a person looks
                     break
                 play = await self.playtest(spec, token, folder)
-                step["playtest"] = {k: play[k] for k in ("started", "stopped", "seconds", "errors")}
+                step["playtest"] = {k: play.get(k) for k in ("started", "stopped", "seconds", "errors", "detail")}
                 step["robot"] = play["robot"]
                 step["report"] = judge(play["robot"], play["errors"], [])
                 if not play["stopped"] or not play["started"]:
