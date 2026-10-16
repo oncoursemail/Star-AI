@@ -26,7 +26,7 @@ def test_only_loopback_discovery(tmp_path):
 def test_owner_consent_and_game_namespace_required(tmp_path):
     engine, _, calls = make_engine(tmp_path)
     for body in ({}, {"confirm": True, "game": "STAR_GAME"},
-                 {"confirm": True, "ownsGame": True, "game": "STAR_GAME"}):
+                 {"confirm": False, "ownsGame": True, "game": "STAR_GAME"}):
         with pytest.raises(PermissionError):
             engine.handle("clipMomentsRegister", body)
     with pytest.raises(ValueError):
