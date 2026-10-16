@@ -45,6 +45,10 @@ export type SettingsPageProps={
  chooseWorkflow:()=>void
  showStar:boolean
  setShowStar:(on:boolean)=>void
+ newHome?:boolean
+ setNewHome?:(on:boolean)=>void
+ clipsOn?:boolean
+ setClipsOn?:(on:boolean)=>void
  setReducedMotion:(on:boolean)=>void
  update:UpdateInfo|null
  updateBusy:boolean
@@ -195,9 +199,11 @@ export function SettingsPage(props:SettingsPageProps) {
 
  const panels:Record<SettingsSectionId,ReactNode>={
   general:<>
-   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility">
+   <Block id="interface" keywords="theme animation motion mascot pet appearance accessibility home start workbench clips obs replay recording game lab">
      <Panel className="settings-section"><h3 className="settings-group-title">Interface</h3>
        <Switch label="Show Star" hint="Off by default. Display the mascot over the chat. Saved on this device." checked={props.showStar} onChange={props.setShowStar}/>
+       {props.setNewHome&&<Switch label="Workbench home screen" hint="Off by default. Shows the new start canvas with starter tasks when a chat is empty. Saved on this device." checked={!!props.newHome} onChange={props.setNewHome}/>}
+       {props.setClipsOn&&<Switch label="STAR Clips and Game Lab" hint="Off by default. Shows the OBS replay, clip folder, SteelSeries Moments and Game Lab panels on the Tools page. Needs your own OBS Studio. Saved on this device." checked={!!props.clipsOn} onChange={props.setClipsOn}/>}
        <Switch label="Reduced motion" hint="Turns off animation everywhere in STAR. Applied and saved immediately." checked={draft.reduced_motion} onChange={props.setReducedMotion}/>
      </Panel>
    </Block>
@@ -293,6 +299,7 @@ export function SettingsPage(props:SettingsPageProps) {
        <div className="section-heading"><div><h3 className="settings-group-title">Knowledge & expert tools</h3><p>New tools are strictly read-only. STAR discovers them on demand to avoid slowing ordinary conversations.</p></div><BookOpen size={20} aria-hidden="true"/></div>
        <Switch label="Enable Agent Skills" hint="Load relevant local SKILL.md instructions; never auto-run bundled code." checked={draft.skills_enabled??true} onChange={on=>set({skills_enabled:on})}/>
        <Switch label="Use checked practice examples" hint="Off by default. Manually imported night-school answers are untrusted local references, never training data." checked={draft.worked_examples_enabled===true} onChange={on=>set({worked_examples_enabled:on})}/>
+       <Switch label="Pre-solve likely requests overnight" hint="Off by default. At night, when STAR Server has had nothing to do for 10 minutes, STAR answers up to 6 of your recent recurring requests again and keeps only answers whose Luau passes the automatic checks. A matching request then gets that answer at once, marked; send it again for a fresh one. Runs inside STAR between 02:00 and 07:00 when the app is open." checked={draft.presolve_enabled===true} onChange={on=>set({presolve_enabled:on})}/>
        <Switch label="Follow my workspace's project rules" hint="Off by default. Adds AGENTS.md (or CLAUDE.md, .cursorrules) from your workspace folder to each answer, up to 2,000 characters. Conventions only, never permissions." checked={draft.project_rules_enabled===true} onChange={on=>set({project_rules_enabled:on})}/>
        <Switch label="Enable Graphify graph queries" hint="Use graphify-out/graph.json in your selected project workspace; generation is a separate local step." checked={draft.graphify_enabled??true} onChange={on=>set({graphify_enabled:on})}/>
        <Switch label="Allow read-only Obsidian vault access" hint="STAR may search Markdown notes only in the folder you explicitly select." checked={draft.obsidian_enabled??false} onChange={on=>set({obsidian_enabled:on})}/>

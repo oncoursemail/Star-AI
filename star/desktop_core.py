@@ -137,6 +137,7 @@ class Settings:
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
     practice_lessons_enabled: bool = False  # off until the owner opts in
     worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
+    presolve_enabled: bool = False          # overnight pre-solved answers (star/presolve.py), off until owner opts in
     # Owner default (O1): night school's text lessons that won the paired gate go live for 14 days, visibly, with undo
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
@@ -194,7 +195,7 @@ class Settings:
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
                             'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau', 'reverse_engineering_enabled',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2', 'studio_tool_examples', 'project_rules_enabled', 'luau_retry_ladder', 'skill_pack_embeddings')):
+                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2', 'studio_tool_examples', 'project_rules_enabled', 'luau_retry_ladder', 'skill_pack_embeddings', 'presolve_enabled')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -1233,6 +1234,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         prepared_conversation = None
         async def run():
             nonlocal prepared_conversation, instant_answer, first_visible_token
+            # Opt-in (star/presolve.py): a request that closely matches one STAR answered and checked
+            # overnight gets that answer at once, marked; the same request sent again gets a fresh one.
+            if (settings.presolve_enabled is True and not images and not documents and not attachment_count
+                    and not research):
+                from . import presolve
+                solved = presolve.take(home, settings.project, chat_id, owner_text or prompt)
+                if solved is not None:
+                    text = presolve.marked(solved)
+                    first_visible_token = True
+                    audited_event({'event': 'presolved_answer', 'created': solved.created})
+                    audited_event({'event': 'assistant_delta', 'text': text})
+                    audited_event({'event': 'finished', 'model_calls': 0, 'tool_calls': 0})
+                    return (text, [{'role': 'user', 'content': prompt}, {'role': 'assistant', 'content': text}], [])
             # Do not touch the PC's model unless this standalone text turn is eligible.
             # The loopback /models probe reads only residency; a router's unloaded model
             # is never selected and no llama.cpp process is started or downloaded.

@@ -1,0 +1,29 @@
+{
+ "name": "KeyDoor",
+ "kind": "door",
+ "brief": "A key-and-door puzzle: a room with a SpawnLocation, a key lying on the floor, and a locked door in a wall in front of a finish pad. The door opens only for a player who picked up the key.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "The key is a Part named Key (CanCollide false); touching it gives the player the key and removes the Key part.",
+  "The door is a Part named Door in a wall too high to jump over that blocks the whole room; the finish pad behind it is a Part named Goal.",
+  "When a player who has the key touches the Door, the door opens (non-collidable, transparent). Without the key it stays closed."
+ ],
+ "checks": [
+  {
+   "do": "blocked",
+   "target": "Goal",
+   "seconds": 12
+  },
+  {
+   "do": "reach",
+   "target": "Key",
+   "seconds": 30
+  },
+  {
+   "do": "reach",
+   "target": "Goal",
+   "seconds": 30
+  }
+ ],
+ "playSeconds": 150
+}

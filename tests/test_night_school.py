@@ -850,3 +850,37 @@ def test_shares_split_the_practice_tasks_without_overlap_and_keep_the_validation
     assert {t["id"] for t in engine.training} == second
     assert [t["id"] for t in engine.validation] == ["V-1", "V-2"]
     assert "share 3/4" in store.state["pool"]
+
+
+def test_a_skip_file_leaves_out_tasks_another_worker_answered(tmp_path):
+    skip = tmp_path / "skip.json"
+    skip.write_text(json.dumps(["E-2", "X-1"]), encoding="utf-8")
+    settings, store, engine = engine_for(tmp_path, ["E-1", "E-2", "X-1", "V-1"], Script(), skip_file=str(skip))
+    assert [t["id"] for t in engine.training] == ["E-1"]
+    skip.write_text("not json", encoding="utf-8")                  # a broken file skips nothing
+    engine.set_pool(engine.pool)
+    assert [t["id"] for t in engine.training] == ["E-1", "E-2", "X-1"]
+
+
+def test_a_private_model_server_may_use_slot_0_and_the_sandbox_can_be_the_server_over_ssh(tmp_path):
+    pytest.importorskip("openai")
+    from nightschool.real import LocalSandbox, RealModel, SlotRefused
+    from star.eval_sandbox import ContainerSandbox
+    settings, _store, _engine = engine_for(tmp_path, ["X-1", "V-1"], Script())
+    gate = IdleGate(settings, BrainWatch(settings.brain_url, fetch=lambda _path: []), log=lambda _text: None)
+    shared = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok, wait=False)
+    try:
+        shared._slots, shared._slots_at = {"star-fast": 0}, time.monotonic()
+        with pytest.raises(SlotRefused):
+            shared.slot_of("star-fast")                              # the shared brain: never slot 0
+        assert isinstance(shared._sandbox, LocalSandbox)
+    finally:
+        shared.close()
+    settings.slot, settings.sandbox_ssh = 0, "star@sandbox.invalid"
+    private = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok, wait=False)
+    try:
+        private._slots, private._slots_at = {"star-fast": 0}, time.monotonic()
+        assert private.slot_of("star-fast") == 0
+        assert isinstance(private._sandbox, ContainerSandbox)
+    finally:
+        private.close()

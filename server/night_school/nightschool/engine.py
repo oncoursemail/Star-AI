@@ -54,6 +54,17 @@ def in_share(task_id: str, share: str) -> bool:
     return bucket in {int(k) for k in picks.split(",")}
 
 
+def read_skip(path: str) -> set[str]:
+    """Task ids from a JSON list file (another worker's answered tasks); an absent or broken file skips nothing."""
+    if not path:
+        return set()
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    return {str(i) for i in data} if isinstance(data, list) else set()
+
+
 def utc() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -164,7 +175,9 @@ class Engine:
                 frozen.append(task_id)
         self.validation = [t for t in pool.tasks if t["id"] in frozen]
         share = getattr(self.settings, "share", "")
-        self.training = [t for t in pool.tasks if t["id"] not in frozen and in_share(t["id"], share)]
+        skip = read_skip(getattr(self.settings, "skip_file", ""))
+        self.training = [t for t in pool.tasks
+                         if t["id"] not in frozen and in_share(t["id"], share) and t["id"] not in skip]
         self.store.state["pool"] = pool.summary() + f"; {len(self.validation)} set aside for validation" + (
             f"; share {share}: {len(self.training)} practice tasks" if share else "")
         self.store.state["validation_missing"] = len([i for i in frozen if i not in present])

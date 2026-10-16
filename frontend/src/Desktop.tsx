@@ -26,7 +26,10 @@ import {Composer,type Availability,type ChatMode} from './Composer'
 import {imageReadiness,webSearchAvailability} from './availability'
 import {overLimitMessage,promptKind} from './promptLimits'
 import {StarPet,type PetState} from './StarPet'
+import {ClipPanel} from './ClipPanel'
+import {GameLabPanel} from './GameLabPanel'
 import {StarFace,type StarMood} from './StarFace'
+import {StartCanvas} from './StartCanvas'
 import {ChatRow} from './ChatRow'
 import {ScreenConsent} from './ScreenConsent'
 import {useDismiss} from './Composer'
@@ -34,6 +37,7 @@ import './redesign.css'
 import './resilience.css'
 import {EmptyState} from './states'
 import './polish.css'
+import './start-canvas.css'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -94,6 +98,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const [messages,setMessages]=useState<ChatMessage[]>(initial?.messages??[])
  const [prompt,setPrompt]=useState('')
  const [showStar,setShowStar]=useState(()=>readPreference('star.pet.visible')==='on')
+ const [newHome,setNewHome]=useState(()=>readPreference('star.home.workbench')==='on')
+ const [clipsOn,setClipsOn]=useState(()=>readPreference('star.clips.panels')==='on')
  const [petTerminal,setPetTerminal]=useState<{kind:PetState;at:number}|null>(null)
  const [files,setFiles]=useState<string[]>([])
  const [busy,setBusy]=useState(false)
@@ -174,6 +180,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  const askedTarget=useRef('')
  const inactive=preview||!initial
  useEffect(()=>{writePreference('star.pet.visible',showStar?'on':'off')},[showStar])
+ useEffect(()=>{writePreference('star.home.workbench',newHome?'on':'off')},[newHome])
+ useEffect(()=>{writePreference('star.clips.panels',clipsOn?'on':'off')},[clipsOn])
  useEffect(()=>{if(!petTerminal)return;const timer=setTimeout(()=>setPetTerminal(null),petTerminal.kind==='finished'?2000:4000);return ()=>clearTimeout(timer)},[petTerminal])
  // The collapsed sidebar is a view preference: it survives restarts.
  useEffect(()=>writePreference('star.sidebar',sidebarCollapsed?'collapsed':'open'),[sidebarCollapsed])
@@ -700,6 +708,9 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
  const turns:ChatMessage[]=viewingAnswer&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
  const empty=!messages.length&&!viewingAnswer
+ // The workbench home is opt-in (Settings > Interface); preview review can force either with ?home=classic|workbench.
+ const homeParam=preview?new URLSearchParams(window.location.search).get('home'):null
+ const classicHome=homeParam==='classic'||(homeParam!=='workbench'&&!newHome)
  // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
  const pending=data.retry&&data.retry.prompt?data.retry:null
  const retryPrompt=retryText||pending?.prompt||''
@@ -720,7 +731,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
    <a className="skip-link" href="#star-main" onClick={e=>{e.preventDefault();const main=document.getElementById('star-main');main?.focus();if(tab==='chat')composerRef.current?.focus()}}>Skip to {tab==='chat'?'message box':'page content'}</a>
    <aside className="rail" aria-label="STAR navigation">
      <div className="rail-head">
-       <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span>STAR</span></button>
+       <button className="rail-brand" type="button" aria-label="STAR, back to chat" onClick={()=>nav('chat')}><StarMark size={20}/><span className="rail-brand-lockup"><strong>STAR</strong><small>Intelligence</small></span></button>
        <button className="rail-icon" type="button" aria-label="Hide sidebar" title="Hide sidebar" onClick={()=>{if(narrow())setLeftOpen(false);else setSidebarCollapsed(true)}}><PanelLeftClose size={17}/></button>
      </div>
      <div className="rail-group">
@@ -785,10 +796,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      {preview&&<div className="preview-ribbon" role="region" aria-label="Preview notice"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
        <MotionSurface as="main" id="star-main" tabIndex={-1} key={tab} className="page-stage" variants={pageFade}>
-         {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
+         {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')+(empty&&!classicHome?' is-crafted-home':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
-               {empty?<div className="thread-hello"><StarFace mood={faceMood} size={104} follow className="thread-hello-star" label="Star, STAR's mascot"/><h2>What are we making?</h2></div>
+               {empty?(classicHome?<div className="thread-hello"><StarFace mood={faceMood} size={104} follow className="thread-hello-star" label="Star, STAR's mascot"/><h2>What are we making?</h2></div>:<StartCanvas project={data.project} mood={faceMood} onStart={fillComposer}/>)
                :<section className="thread-turns" role="log" aria-live="off" aria-label="Conversation">
                  {turns.map((m,index)=>{
                    const live=m.id==='stream-live'
@@ -826,15 +837,15 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}
                onLookAtScreen={()=>{consentConfirmed.current=false;setScreenAsk(true)}} previews={previews}/>
-             {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
-               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
+             {empty?(classicHome?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>:null)
+               :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'Review generated changes and tests before using them in your project.'}</p>}
            </div>
            <div className="thread-rest" aria-hidden="true"/>
            <div className="sr-only" role="status" aria-live="polite">{announce}</div>
          </div>}
           {tab==='analytics'&&<AnalyticsView data={data.analytics}/>}
          {tab==='brain-overview'&&<div className="scroll-region"><div className="page-wrap"><BrainOverview load={!inactive}/></div></div>}
-         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong dir="auto" title={name}>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
+         {tab==='projects'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="PROJECT MANAGEMENT" title="Your workspaces" description="Separate contexts, conversations, and design decisions for every project."/><div className="project-create"><input aria-label="New project name" value={newProject} onChange={e=>setNewProject(e.target.value)} placeholder="New project name" maxLength={60} onKeyDown={e=>{if(e.key==='Enter'&&newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}/><button className="primary-button" onClick={()=>{if(newProject.trim()){void changeProject(newProject.trim());setNewProject('')}}}><Plus size={17}/> New workspace</button></div><div className="project-grid">{[...new Set([data.project,...data.projects])].map(name=><button className={'project-card '+(name===data.project?'project-current':'')} key={name} type="button" aria-current={name===data.project?'page':undefined} aria-label={'Workspace '+name+(name===data.project?' — current workspace':'')} onClick={()=>changeProject(name)}><FolderOpen size={25}/><strong dir="auto" title={name}>{name}</strong><span>{name===data.project?'Current workspace':'Open workspace'}</span><ArrowRight size={18}/></button>)}</div><LearningPanel project={data.project} settings={data.settings} counts={data.learning} invoke={act} disabled={inactive} refresh={()=>void sync()}/><ReferencesPanel project={data.project} invoke={act} disabled={inactive}/></div></div>}
          {tab==='brain'&&<div className="scroll-region"><div className="page-wrap brain-page">
             <PageTitle eyebrow="MODEL" title="Model & connection" description="Which model STAR talks to, and whether it is answering."/>
             {serverMode&&<ServerBrainPanel settings={data.settings} status={data.server} invoke={act} disabled={inactive} openSettings={()=>nav('settings')}/>}
@@ -865,7 +876,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
             </LocalBrainFallback>
             <section className="learn learn-brain" aria-label="What STAR learned"><div className="learn-head"><GraduationCap size={18} aria-hidden="true"/><div className="learn-title"><h2>What STAR learned</h2><p>This week’s lessons and your corrections are on the Projects page.</p></div><button type="button" className="learn-button" onClick={openLearned}>Open <ArrowRight size={14} aria-hidden="true"/></button></div></section>
           </div></div>}
-          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div><div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
+          {tab==='tools'&&<div className="scroll-region"><div className="page-wrap"><PageTitle eyebrow="DEVELOPER WORKSPACE" title="Connect your tools" description="Give STAR only the project access it needs, then inspect and build with evidence."/><div className="two-up"><StudioConnectionPanel settings={data.settings} status={data.studio} invoke={act} onSaved={()=>void sync()} disabled={inactive||busy}/><Panel className="settings-section"><div className="tool-icon"><Folder size={22}/></div><h2>Local workspace</h2><p>STAR can inspect a selected folder, and edit files only when you enable workspace write permissions.</p><Tag>{data.settings.workspace||'Not connected'}</Tag><button className="secondary-button" onClick={()=>nav('settings')}>Configure folder <ArrowRight size={14}/></button></Panel></div>{clipsOn&&<><ClipPanel disabled={inactive}/><GameLabPanel disabled={inactive}/></>}<div className="intelligence-heading"><div><span className="eyebrow">PROJECT INTELLIGENCE</span><h2>Knowledge, context & expert workflows</h2><p>Read only the information needed for your task. Nothing below grants shell access or runs downloaded skills.</p></div></div>
             <div className="intelligence-grid">
               <Panel className="settings-section integration-panel">
                 <div className="integration-head"><div className="tool-icon"><BookOpen size={22}/></div><Tag kind={data.intelligence?.obsidian.enabled?'green':'neutral'}>{data.intelligence?.obsidian.enabled?'Read-only connected':'Off'}</Tag></div>
@@ -895,7 +906,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
          {tab==='settings'&&<div className="scroll-region"><div className="page-wrap settings-page"><SettingsPage data={data} draft={draft} setDraft={setDraft} act={act} sync={()=>void sync()} inactive={inactive} busy={busy} nav={nav} serverDraft={serverDraft}
            modelChecking={modelChecking} modelCheck={modelCheck} modelList={modelList} testActualModel={()=>void testActualModel()} routerBusy={routerBusy} teamChecking={teamChecking} teamResult={teamResult}
            selectRouterFolder={()=>void selectRouterFolder()} startLocalRouter={()=>void startLocalRouter()} stopLocalBrain={()=>void stopLocalBrain()} testSpecialists={()=>void testSpecialists()}
-           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} setReducedMotion={setReducedMotion}
+           imageMode={imageMode} chooseWorkflow={()=>void chooseWorkflow()} showStar={showStar} setShowStar={setShowStar} newHome={newHome} setNewHome={setNewHome} clipsOn={clipsOn} setClipsOn={setClipsOn} setReducedMotion={setReducedMotion}
            update={update} updateBusy={updateBusy} updateProgress={updateProgress} checkForUpdates={()=>void checkForUpdates()} installVerifiedUpdate={()=>void installVerifiedUpdate()} saveSettings={()=>void saveSettings()}
            initialSection={preview?new URLSearchParams(window.location.search).get('section')||undefined:undefined}/></div></div>}
        </MotionSurface>

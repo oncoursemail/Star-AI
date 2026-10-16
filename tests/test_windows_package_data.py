@@ -24,6 +24,7 @@ PACKAGE_DATA_SITES = {
     "star/blender_bridge.py": "star/blender_worker.py",
     "star/build_info.py": "star/build-info.json",
     "star/build_planner.py": "examples/roblox-templates",
+    "star/business/opportunities.py": "star/data/business/candidate_catalog.json",  # PR #404 research catalogue
     "star/character_lifecycle_lessons.py": "docs/lessons/roblox-character-lifecycle.md",
     "star/design_db.py": "star/data/design/ui-ux-pro-max",
     "star/learned_week.py": "star/skill_packs",
@@ -51,6 +52,7 @@ OTHER_FILE_ANCHORS = {
     "star/general_knowledge_benchmark.py": "source-only benchmark",
     "star/github_app.py": "source-root check blocks credential files",
     "star/media_actions.py": "owner-installed external ComfyUI",
+    "star/playtest_learning.py": "server-only playtest learning: robot + specs in server/studio_lab/playtest (brain 2)",
     "star/shared_brain/improve.py": "development verifier source hash",
 }
 PENDING_OWNER_REVIEW = frozenset({
@@ -157,7 +159,7 @@ def test_runtime_missing_resources_are_recorded_and_not_claimed_bundled():
     assert missing == PENDING_OWNER_REVIEW
     bundled = set(PACKAGE_DATA_SITES.values()) - missing
     assert all(_bundle_has(resource, local_data) for resource in bundled)
-    assert len(bundled) == 6  # five readers share the skill-pack directory
+    assert len(bundled) == 7  # five readers share the skill-pack directory
 
 
 def test_actual_packaged_root_readers_resolve_resources(tmp_path):

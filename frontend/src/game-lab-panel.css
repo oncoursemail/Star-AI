@@ -1,0 +1,24 @@
+.game-lab{max-width:100%}
+.game-lab__summary{display:flex;align-items:center;gap:12px;list-style:none;cursor:pointer;outline-offset:4px}
+.game-lab__summary::-webkit-details-marker{display:none}
+.game-lab__summary strong{display:block;font-size:15px;letter-spacing:-.025em}
+.game-lab__summary small{display:block;margin-top:4px;font-size:12px;line-height:1.5;font-weight:400;color:var(--muted,#a3a7ad)}
+.game-lab__body{padding-top:18px;display:grid;gap:15px}
+.game-lab__body>p{font-size:13px;max-width:780px;line-height:1.5;margin:0}
+.game-lab__filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.game-lab__search{display:flex;align-items:center;gap:8px;min-width:220px;max-width:450px;flex:1;border:1px solid var(--line,#454545);border-radius:8px;padding:0 10px}
+.game-lab__search input{background:none;color:inherit;border:0;outline:0;width:100%;padding:10px 0;font:inherit;font-size:13px}
+.game-lab__filters select{padding:9px;border:1px solid var(--line,#454545);border-radius:8px;background:var(--surface,#181818);color:inherit;font:inherit;font-size:12px}
+.game-lab__results{display:grid;gap:12px}
+.game-lab__results>small{color:var(--muted,#a3a7ad)}
+.game-lab__results ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;max-height:440px;overflow:auto}
+.game-lab__results li{min-width:0;border:1px solid var(--line,#444);border-radius:9px;padding:12px;display:flex;flex-direction:column;gap:4px}
+.game-lab__results li a{display:flex;align-items:center;justify-content:space-between;gap:8px;color:inherit;text-decoration:none;font-size:13px}
+.game-lab__results li a:hover{text-decoration:underline}
+.game-lab__results li a strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.game-lab__meta{text-transform:capitalize;color:var(--muted,#a3a7ad);font-size:11px}
+.game-lab__results li p{font-size:12px;line-height:1.4;margin:4px 0 0}
+.game-lab__warning{font-size:11px;line-height:1.4;color:var(--muted,#a3a7ad);margin-top:3px}
+.game-lab__summary:focus-visible,.game-lab__filters select:focus-visible,.game-lab__search:focus-within{outline:2px solid var(--accent,#d5b975);outline-offset:3px}
+@media(max-width:900px){.game-lab__results ul{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.game-lab *{animation:none!important;transition:none!important}}

@@ -232,7 +232,7 @@
 
 /* ---------- Composer: quieter row, mode picker as one small pill ---------- */
 .cmp {
-  border-radius: 20px;
+  border-radius: var(--star-r-md);
   padding: var(--star-3) var(--star-3) 10px;
 }
 .cmp-mode-trigger {
@@ -242,7 +242,7 @@
   height: 32px;
   padding: 0 10px 0 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--star-r-sm);
   background: transparent;
   color: var(--star-muted);
   font-size: var(--star-fs-nav);

@@ -105,6 +105,9 @@ jobs:
           timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-desktop.png" 'http://127.0.0.1:8931/?visualqa=1'
           timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/chat-desktop.png" 'http://127.0.0.1:8931/?preview=1'
           timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/brain-desktop.png" 'http://127.0.0.1:8931/?preview=1&tab=brain'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/projects-desktop.png" 'http://127.0.0.1:8931/?preview=1&tab=projects'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=1440,900 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/settings-desktop.png" 'http://127.0.0.1:8931/?preview=1&tab=settings'
+          timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/chat-mobile.png" 'http://127.0.0.1:8931/?preview=1'
           timeout 45 "$BROWSER" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage --hide-scrollbars --window-size=390,844 --virtual-time-budget=2300 --screenshot="$PWD/react-qa/website-mobile.png" 'http://127.0.0.1:8931/?visualqa=1'
           test -s react-qa/website-desktop.png
           test -s react-qa/chat-desktop.png
