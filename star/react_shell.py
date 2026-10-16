@@ -45,6 +45,9 @@ from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
 from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_action as handle_discord_action, start_if_opted_in
 from .clips_obs import CLIP_ACTIONS, ClipService
+from .clip_library import ClipLibrary
+from .steelseries_moments import MomentsEvents
+from .game_lab_catalog import catalog as game_lab_catalog
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -99,6 +102,14 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | DISCORD_ACTIONS
 # STAR Clips only accepts explicit desktop UI clicks; never model tool calls.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_ACTIONS
+# Optional read-only clip folders and developer-owned SteelSeries Moments events.
+CLIP_INTEROP_ACTIONS = frozenset({
+    'clipChooseFolder', 'clipListFolder', 'clipClearFolder', 'clipOpenFile',
+    'clipMomentsStatus', 'clipMomentsRegister', 'clipMomentsTrigger',
+})
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_INTEROP_ACTIONS
+# A static read-only source index; no arbitrary fetch/install/execute capability.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | {'gameLabCatalog'}
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -717,6 +728,8 @@ def launch():
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
             self.clips = ClipService()  # No capture until explicit owner-controlled OBS actions.
+            self.clip_library = ClipLibrary()  # No folder until explicitly selected through Qt.
+            self.moments = MomentsEvents()  # Own-game events, local GG only; no auto-trigger.
             self.discord = DiscordSupervisor(app_data())
             self.discord.begin()
             # Opt-in only; a few seconds after launch so the window is not kept waiting.
@@ -1081,6 +1094,37 @@ def launch():
                         saved.discord_autostart=enabled
                         saved.save(self.settings_file)
                     return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
+                if action == 'gameLabCatalog':
+                    return json.dumps({'ok': True, 'data': game_lab_catalog(
+                        query=body.get('query', ''), category=body.get('category', ''), limit=28)})
+                if action in CLIP_INTEROP_ACTIONS:
+                    if action == 'clipChooseFolder':
+                        folder = QFileDialog.getExistingDirectory(
+                            self.host, 'Choose a local game clip folder (read-only)')
+                        if not folder:
+                            return json.dumps({'ok': True, 'data': {'cancelled': True}})
+                        self._run(rid, action, lambda: self.clip_library.choose(Path(folder)))
+                        return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+                    if action == 'clipListFolder':
+                        self._run(rid, action, self.clip_library.list_clips)
+                        return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+                    if action == 'clipClearFolder':
+                        if body.get('confirm') is not True:
+                            raise PermissionError('Disconnecting clips needs a user action.')
+                        return json.dumps({'ok': True, 'data': self.clip_library.clear()})
+                    if action == 'clipOpenFile':
+                        if body.get('confirm') is not True:
+                            raise PermissionError('Opening a video needs a user action.')
+                        # File ids, not user/model paths; verify selection and symlinks again.
+                        selected = self.clip_library.allowed_clip(str(body.get('id', '')))
+                        opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(selected)))
+                        if not opened:
+                            raise RuntimeError('Windows could not open the selected clip.')
+                        return json.dumps({'ok': True, 'data': {'opened': True}})
+                    # GameSense producer sends only fixed local protocol events to
+                    # human-claimed STAR_* developer games; never arbitrary live titles.
+                    self._run(rid, action, lambda: self.moments.handle(action, body))
+                    return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
                 if action in CLIP_ACTIONS:
                     # Local OBS WebSocket I/O is kept off the Qt/React UI thread.
                     # No model tool exposes these recording controls.

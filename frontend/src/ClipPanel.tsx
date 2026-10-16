@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from 'react'
 import {Clapperboard, CircleHelp, HardDriveDownload, Link2, Play, Square, Unplug} from 'lucide-react'
 import {onBackendEvent,request} from './bridge'
 import {Panel} from './components'
+import {ClipInteropPanel} from './ClipInteropPanel'
 import './clip-panel.css'
 
 type ClipReport={
@@ -98,5 +99,6 @@ export function ClipPanel({disabled=false}:{disabled?:boolean}){
    {feedback&&<p className="star-clips__feedback" role="status">{feedback}</p>}
    {error&&<p className="star-clips__error" role="alert">{error}</p>}
    <p className="star-clips__footnote"><CircleHelp size={14} aria-hidden="true"/> OBS decides what pixels and audio are recorded, and saves files in its configured recording folder. STAR does not upload them. Voice activation, automatic game-event clips, editing and companion reactions are future stages.</p>
+   <ClipInteropPanel disabled={disabled}/>
  </Panel>
 }
