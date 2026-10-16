@@ -47,7 +47,7 @@ remote "url=\$(sed -n 's,^STAR_NS_KNOWLEDGE_URL=\(http://[^:/]*\).*,\1:8080,p' /
   printf 'STAR_PLAYTEST_BRAIN_URL=%s\nSTAR_PLAYTEST_KEY_FILE=/opt/star/learning/secrets/api_keys\nSTAR_PLAYTEST_MODEL=star-fast\n' \"\$url\" |
   runuser -u star -- tee $pt/brain.env >/dev/null; chmod 600 $pt/brain.env"
 remote "[ -f $pt/switch.env ] || echo STAR_PLAYTEST_LEARNING=0 | runuser -u star -- tee $pt/switch.env >/dev/null"
-remote "cd /tmp && runuser -u star -- env PYTHONPATH=$pt/app:/opt/star/studio-lab/site-packages python3 -m star.playtest_learning check $pt/app/star/playtest_specs"
+remote "cd /tmp && runuser -u star -- env PYTHONPATH=$pt/app:/opt/star/studio-lab/site-packages python3 -m star.playtest_learning check $pt/app/server/studio_lab/playtest/specs"
 echo "== user units"
 for unit in star-playtest-learning.service star-playtest-learning.timer; do
   remote "runuser -u star -- cp $pt/app/server/studio_lab/$unit /home/star/.config/systemd/user/$unit"

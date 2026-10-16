@@ -37,7 +37,7 @@ systemd-run --user --unit=star-studio-mcp-host --quiet \
 sleep 20
 say "playtest learning: cap ${MINUTES} min"
 cd "$PT/app" && PYTHONPATH="$PT/app:$LAB/site-packages" timeout --signal=INT $(( MINUTES * 60 + 900 )) \
-  nice -n 5 python3 -m star.playtest_learning run "$PT/app/star/playtest_specs" --home "$LAB/home" \
+  nice -n 5 python3 -m star.playtest_learning run "$PT/app/server/studio_lab/playtest/specs" --home "$LAB/home" \
   --out "$PT/evidence" --outbox "$NS_HOME/outbox/playtest" --max-minutes "$MINUTES" >> "$LOG" 2>&1
 rc=$?
 # keep the newest $KEEP evidence folders

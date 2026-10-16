@@ -1,7 +1,7 @@
 """STAR learns game design from robot playtests of its own games (milestone 1).
 
     short game spec --STAR (the brain) writes server Scripts--> applied in STAR Test Place (Workspace/MapDrafts/
-    Playtest/<game>, one undo step) --> real Studio playtest: STAR's robot player plays it (star/playtest_robot.luau)
+    Playtest/<game>, one undo step) --> real Studio playtest: STAR's robot player plays it (server/studio_lab/playtest/robot.luau)
     --> playtest report (which checks passed, where it got stuck, script errors) --> failures go back to STAR as a
     fix task --> re-playtest (capped) --> before/after record --> night-school outbox (worked examples + lessons)
 
@@ -45,7 +45,13 @@ SERVICES_LUAU = ("local SERVICES = {}\nfor _, name in ipairs({ \"Workspace\", \"
 ORIGIN = (0, 30, 500)
 DEFAULT_ITERATIONS, MAX_ITERATIONS = 3, 5
 MAX_SCRIPTS, MAX_SCRIPT_CHARS = 3, 16000
-ROBOT_SOURCE = (Path(__file__).with_name("playtest_robot.luau")).read_text(encoding="utf-8")
+# Server-only (brain 2): the robot and the specs live in the source checkout, not in the packaged app.
+PLAYTEST_DIR = Path(__file__).resolve().parents[1] / "server" / "studio_lab" / "playtest"
+SPECS_DIR = PLAYTEST_DIR / "specs"
+
+
+def robot_source() -> str:
+    return (PLAYTEST_DIR / "robot.luau").read_text(encoding="utf-8")
 CHECKS = {"reach", "route", "blocked", "touch", "collect", "set_stat", "mark", "expect_stat", "expect_item",
           "expect_speed", "dies_on", "respawn_near", "near", "observe", "wait"}
 # The brain's scripts run in a playtest of STAR Test Place: nothing that leaves the place or the session.
@@ -273,7 +279,7 @@ def apply_luau(spec: dict, scripts: list[dict], run: str) -> str:
         'local robot = Instance.new("Script")',
         f"robot.Name = {_lua_string(ROBOT_NAME)}",
         f'robot:SetAttribute("StarPlayConfig", {_lua_string(canonical(robot_config(spec, run)))})',
-        f"robot.Source = {_lua_string(ROBOT_SOURCE)}",
+        f"robot.Source = {_lua_string(robot_source())}",
         "robot.Parent = root",
         "-- The playtest tests STAR's game alone: pause every other script of the place (Studio Lab probes, the",
         "-- place's own systems) and mark it, so the cleanup switches exactly those back on.",

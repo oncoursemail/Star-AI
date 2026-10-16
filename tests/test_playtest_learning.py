@@ -10,7 +10,7 @@ from star import playtest_learning as pl
 from star.studio_loop import EDIT_MARK, ChangeJournal
 from star.worked_examples import validate_row
 
-SPECS = Path(pl.__file__).with_name("playtest_specs")
+SPECS = pl.SPECS_DIR
 
 
 def spec(**extra):
