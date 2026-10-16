@@ -84,8 +84,8 @@ begin
   Path := KeptPath(Name);
   if DirExists(Path) or FileExists(Path) then
   begin
-    SuppressibleMsgBox('A previous STAR upgrade left a recovery copy at ' + Path + '.' +
-      #13#10 + 'Setup has not changed it. Close STAR and recover the previous installation ' +
+    SuppressibleMsgBox('A previous STAR upgrade left a recovery copy at ' + Path + '.' + #13#10 +
+      'Setup has not changed it. Close STAR and recover the previous installation ' +
       'before trying again. Keep both .star-previous items together.', mbError, MB_OK, IDOK);
     Abort;
   end;
