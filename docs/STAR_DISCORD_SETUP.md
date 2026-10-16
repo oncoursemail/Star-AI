@@ -201,7 +201,9 @@ installed from (`-m star.discord_bot.gpu_worker run` in that folder).
   or `STAR_COMFY_HOME`), and stops it again after 10 quiet minutes. One picture at a time; the first
   picture after a start takes longest. Pictures are kept in `~/.star/discord-images/generated-images`.
 - Slash commands: `/ask`, `/draw` (make an image), `/image` (look at an image), `/compare`, `/screen`,
-  `/status`, `/digest`, plus the `/star ...` group (research, speech, voice channel, reset, doctor).
+  `/status`, `/working`, `/digest`, plus the `/star ...` group (research, speech, voice channel, reset, doctor).
+  Questions such as `Hey Star, what are you working on?` get a **producer-reported** reply in the owner's DM
+  (or a private `/working` reply), not a model guess. No active work is asserted without a fresh real report.
 
 ## Opt-in switches (`discord-settings.env`)
 
@@ -221,11 +223,65 @@ candidates, screen capture and Night School DMs stay 0 until you change them.
 | `STAR_DISCORD_MENTIONS` | 0 | 1 = answer `@STAR ...` in your approved server (draw requests and, for you, questions). Discord then sends the bot server message events; without the message-content intent it only sees the text of messages that mention it. |
 | `STAR_DISCORD_HOST` | pc | `server` = the bot runs on a STAR server (section 4 C): drawing goes to the PC's STAR GPU worker, `/screen` answers that it needs the PC. |
 | `STAR_DISCORD_RATE_LIMIT` | 30 | Requests per 10 minutes before STAR asks you to slow down. |
+| `STAR_DISCORD_WORK_STATUS` | 0 | Enable read-only owner work pulse, once a trusted worker supervisor publishes reports on this bot host. No work begins automatically. |
+| `STAR_DISCORD_WORK_REPORT` | empty | Absolute `.json` path to the latest trusted local worker snapshot on the bot host. No path may be supplied from Discord messages. |
 | `STAR_DISCORD_LAB_STATUS` | 0 | Enable read-only owner Lab progress/screenshot reports from a trusted, pre-staged job receipt; does not control Studio or capture the host desktop. |
 | `STAR_DISCORD_LAB_REPORT` | empty | Absolute path on the bot host to an operator-approved latest.json receipt and same-folder checked viewport/render screenshot. |
 | `STAR_DISCORD_PRESENCE` | 0 | Optional bot-account activity while connected. Rotate only fixed, privacy-safe Playing/Watching labels. No activity is sent when off. |
 | `STAR_DISCORD_PRESENCE_MINUTES` | 15 | Time between changes while online, 10–120 minutes. No rapid presence updates or changes inside `on_ready`. |
 | `DISCORD_CHANNEL_IDS` | empty | Limit server use to these channels. |
+
+## Optional live work pulse (coding, studying, testing, research)
+
+The Discord bot is not allowed to invent its own background activities. `/working`,
+`/star working`, `/star ask` with an explicit activity question, and normal owner DM
+`Hey Star, what are you working on?` use a **read-only local JSON snapshot**, not
+a conversation response from the model. If no configured recent worker receipt
+exists, the bot will accurately say that current worker activity is unknown.
+
+To enable it, configure the bot host's `discord-settings.env` with
+`STAR_DISCORD_WORK_STATUS=1` and an **absolute** path under a trusted
+private directory, e.g. `STAR_DISCORD_WORK_REPORT=C:\\StarState\\work-status.json`
+on Windows or `/opt/star/discord/state/work-status.json` on Linux. The directory
+and report must be writable by a trusted STAR supervisor and readable by the bot.
+Never place the report under a web-served or world-writable folder. To turn it
+off, set the flag to 0.
+
+**The status feed isn't started by enabling the switch.** A real worker supervisor
+must produce that JSON with `star.discord_bot.work_status.publish_work_report` or
+an equivalent verified adapter on the **same host**. Connecting the Night School
+engine, model agents on Brain 1, Studio/Blender on Brain 2 and remote relays
+requires separate reviewed integration. No fake built-in data is provided.
+
+Schema v1 example (illustrative only, **not** a real task receipt):
+
+```json
+{
+  "version": 1,
+  "updated_at": "2026-10-15T23:00:00Z",
+  "workers": [
+    {
+      "id": "brain1-coder", "kind": "coding", "state": "working",
+      "task": "Recheck Luau checker regressions",
+      "last_step": "Reproduced three failures",
+      "next_step": "Run verified test cases",
+      "done": 3, "total": 8,
+      "updated_at": "2026-10-15T22:59:55Z"
+    }
+  ]
+}
+```
+
+The producer must refresh timestamps only after observing live work; the bot
+expires a nonfinal work receipt after three minutes and stops describing it as
+running. It never reads arbitrary host files, executes model-suggested jobs,
+publishes private work to public channels or follows untrusted paths. Keep
+reports at most 16 KiB / 12 worker entries and use private-data-free labels.
+The presence rotator still uses fixed generic public labels and **does not**
+claim anything about actual coding or studying.
+
+For integration architecture, image quality and audio dubbing research, see
+[STAR_DISCORD_LIVE_WORK_CREATIVE_DUBBING_20261015.md](research/STAR_DISCORD_LIVE_WORK_CREATIVE_DUBBING_20261015.md).
 
 ## Optional Studio Lab / Blender screenshot reports
 

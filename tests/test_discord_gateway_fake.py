@@ -483,16 +483,56 @@ def test_reference_compare_and_lab_slash_are_in_discord_workflow(tmp_path):
         asyncio.run(bot.close())
 
 
-def test_lab_phrases_stay_normal_chat_when_lab_reports_are_off():
-    """Default-off Lab must not change DM behaviour: 'what is star working on' goes to the brain."""
+def test_work_questions_are_never_a_generic_model_guess_when_feed_is_off():
+    """Even without telemetry STAR must admit what it cannot observe."""
     discord, bot, _, brain = make_bot()
 
     async def run():
         try:
             channel = DMChannel(discord)
             await bot.on_message(dm(discord, channel, "What is STAR working on?"))
-            assert brain.prompts and "working on" in brain.prompts[-1]
-            assert not any("Lab reports are disabled" in (c or "") for c, _ in channel.sent)
+            assert brain.prompts == []
+            assert "can't confirm" in channel.sent[0][0]
+            assert "no live multi-worker report" in channel.sent[0][0]
+        finally:
+            await bot.close()
+    asyncio.run(run())
+
+
+def test_private_work_command_and_dm_read_real_report_and_reject_strangers(tmp_path):
+    import json
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    report = tmp_path / "work.json"
+    report.write_text(json.dumps({
+        "version": 1, "updated_at": now,
+        "workers": [{"id": "coder-1", "kind": "coding", "state": "working",
+                     "task": "Fix Studio network stress-test bottleneck",
+                     "last_step": "Measured the queue", "next_step": "Rerun the benchmark",
+                     "done": 2, "total": 4, "updated_at": now}],
+    }), encoding="utf-8")
+    discord, bot, _, brain = make_bot({
+        "STAR_DISCORD_WORK_STATUS": "1", "STAR_DISCORD_WORK_REPORT": str(report)
+    })
+
+    async def run():
+        try:
+            direct = bot.tree.get_command("working")
+            nested = bot.tree.get_command("star").get_command("working")
+            assert direct is not None and nested is not None
+            owner = interaction()
+            await direct.callback(owner)
+            assert owner.log[0] == ("defer", {"thinking": True, "ephemeral": True})
+            answer = embeds_text(owner.log)
+            assert "Coding" in answer and "checks 2/4" in answer
+            assert "Fix Studio network stress-test bottleneck" in answer
+            stranger = interaction(user=STRANGER)
+            await nested.callback(stranger)
+            assert "Fix Studio" not in embeds_text(stranger.log)
+            channel = DMChannel(discord)
+            await bot.on_message(dm(discord, channel, "Hey Star, what are you working on?"))
+            assert "Fix Studio" in channel.sent[0][0] and brain.prompts == []
         finally:
             await bot.close()
     asyncio.run(run())
