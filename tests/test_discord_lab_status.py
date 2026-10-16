@@ -153,7 +153,7 @@ def test_screen_producer_claim_cannot_access_unrelated_files(tmp_path):
         link.symlink_to(private)
     except (OSError, NotImplementedError):
         pytest.skip("Host does not allow symlinks")
-    with pytest.raises(ValueError, match="not a trusted"):
+    with pytest.raises(ValueError, match="not a trusted|contain no links"):
         read_capture(cfg, now=NOW)
     with pytest.raises(ValueError, match="matching"):
         parse_receipt(encoded(record(capture_kind="studio-viewport",
