@@ -1,0 +1,52 @@
+{
+ "name": "PadShop",
+ "kind": "shop",
+ "brief": "A tiny shop: a floor with a SpawnLocation, 3 coins worth 10 each, and a shop pad. Standing on the shop pad buys a SpeedCoil tool for 25 coins if the player can afford it; otherwise nothing happens.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "leaderstats IntValue named Coins starting at 0; each Part named Coin (CanCollide false) adds 10 and is destroyed when touched.",
+  "The shop pad is a Part named BuyPad. Touching it with at least 25 Coins subtracts 25 and gives the player a Tool named SpeedCoil (put it in the player's Backpack). With fewer coins nothing happens.",
+  "A player must not be charged twice for one visit (debounce per player), and must not get a second SpeedCoil."
+ ],
+ "checks": [
+  {
+   "do": "touch",
+   "target": "BuyPad"
+  },
+  {
+   "do": "expect_item",
+   "item": "SpeedCoil",
+   "absent": true
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Coins",
+   "equals": 0
+  },
+  {
+   "do": "collect",
+   "name": "Coin",
+   "stat": "Coins",
+   "min": 3,
+   "each": 10
+  },
+  {
+   "do": "mark",
+   "stat": "Coins"
+  },
+  {
+   "do": "touch",
+   "target": "BuyPad"
+  },
+  {
+   "do": "expect_item",
+   "item": "SpeedCoil"
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Coins",
+   "delta": -25
+  }
+ ],
+ "playSeconds": 150
+}

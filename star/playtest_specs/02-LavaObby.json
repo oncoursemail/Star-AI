@@ -1,0 +1,26 @@
+{
+ "name": "LavaObby",
+ "kind": "obby",
+ "brief": "An obby over lava: a start floor with the SpawnLocation, 5 stepping-stone platforms with a lava floor below them that kills the player on touch, and a finish pad.",
+ "contract": [
+  "Create a SpawnLocation on the start floor inside script.Parent.",
+  "Name the stepping stones Stage1 ... Stage5 in jump order and the finish pad Goal.",
+  "The lava floor is one Part named Lava below the stones; touching it kills the player (set Humanoid.Health to 0).",
+  "Lava must not touch or overlap the stones or the Goal, so the route is safe if the player does not fall."
+ ],
+ "checks": [
+  {
+   "do": "route",
+   "prefix": "Stage",
+   "target": "Goal",
+   "min": 5,
+   "seconds": 20
+  },
+  {
+   "do": "dies_on",
+   "target": "Lava",
+   "seconds": 20
+  }
+ ],
+ "playSeconds": 150
+}

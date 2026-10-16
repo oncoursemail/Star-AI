@@ -1,0 +1,19 @@
+{
+ "name": "RoundTimer",
+ "kind": "timer",
+ "brief": "A round-based arena: a lobby floor with a SpawnLocation. The game loops forever: 5 seconds of intermission, then a 10 second round, then intermission again. A countdown value shows the seconds left.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "Create an IntValue named TimeLeft and a StringValue named Status inside script.Parent.",
+  "During intermission Status is \"Intermission\", during the round it is \"Round\". TimeLeft counts down once per second to 0 in both phases."
+ ],
+ "checks": [
+  {
+   "do": "observe",
+   "value": "TimeLeft",
+   "status": "Status",
+   "seconds": 40
+  }
+ ],
+ "playSeconds": 150
+}

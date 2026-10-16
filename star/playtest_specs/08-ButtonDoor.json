@@ -1,0 +1,28 @@
+{
+ "name": "ButtonDoor",
+ "kind": "door",
+ "brief": "A door puzzle: a room with a SpawnLocation, a wall with a closed door in it, and a finish pad behind the wall. A button on the floor in front of the wall opens the door.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent, on the same side of the wall as the button.",
+  "The door is a Part named Door filling the only gap in the wall; the button is a Part named Button on the floor; the finish pad behind the wall is a Part named Goal.",
+  "The wall must be too high to jump over and must reach the room's side walls, so the only way to the Goal is through the door.",
+  "Touching Button opens the door (make it non-collidable and transparent) and it stays open."
+ ],
+ "checks": [
+  {
+   "do": "blocked",
+   "target": "Goal",
+   "seconds": 12
+  },
+  {
+   "do": "touch",
+   "target": "Button"
+  },
+  {
+   "do": "reach",
+   "target": "Goal",
+   "seconds": 30
+  }
+ ],
+ "playSeconds": 150
+}
