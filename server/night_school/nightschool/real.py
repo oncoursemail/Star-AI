@@ -167,6 +167,9 @@ class RealModel:
         self.app_settings.validate()
         self._knowledge = client_for(self.app_settings)
         self._luau_check = luau_check
+        if sandbox is None and getattr(settings, "sandbox_ssh", ""):
+            from star.eval_sandbox import ContainerSandbox
+            sandbox = ContainerSandbox(settings.sandbox_ssh)
         self._sandbox = sandbox or LocalSandbox(settings.luau_vm)
         # Parallel lanes: lane 0 is this process (the old path, unchanged); lane k >= 1 has its own gate (its own
         # planner lease) and its own slot, and runs each answer in a child process (`python -m nightschool
@@ -208,7 +211,7 @@ class RealModel:
             except OSError:
                 pass
         slot = self._slots.get(model, self.settings.slot)
-        if slot <= 0:
+        if slot <= 0 and int(self.settings.slot) != 0:    # STAR_NS_SLOT=0: a model server of night school's own
             self._refusal = "night school never uses slot 0 (this model has a single slot: " + model[:40] + ")"
             raise SlotRefused(self._refusal)
         return slot
