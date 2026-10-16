@@ -53,6 +53,7 @@ OTHER_FILE_ANCHORS = {
     "star/github_app.py": "source-root check blocks credential files",
     "star/media_actions.py": "owner-installed external ComfyUI",
     "star/playtest_learning.py": "server-only playtest learning: robot + specs in server/studio_lab/playtest (brain 2)",
+    "star/roblox_benchmark.py": "server-only Roblox benchmark: tasks + harness in benchmarks/roblox (repo checkout, brain 2)",
     "star/shared_brain/improve.py": "development verifier source hash",
 }
 PENDING_OWNER_REVIEW = frozenset({

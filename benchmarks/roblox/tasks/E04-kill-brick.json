@@ -1,0 +1,8 @@
+{
+ "id": "E04-kill-brick",
+ "level": "easy",
+ "kind": "script",
+ "title": "Kill brick",
+ "prompt": "Write one server Script. It creates an anchored red Part named \"KillBrick\", size 8 x 1 x 8, at position\n(0, 40, 300), parented to `script.Parent`. When a character touches it, that character's Humanoid dies (health 0).",
+ "playSeconds": 40
+}

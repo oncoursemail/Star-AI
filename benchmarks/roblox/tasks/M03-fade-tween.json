@@ -1,0 +1,8 @@
+{
+ "id": "M03-fade-tween",
+ "level": "medium",
+ "kind": "module",
+ "title": "Fade out with TweenService",
+ "prompt": "Write a ModuleScript that returns a table with a function `fadeOut(part: BasePart, duration: number): Tween`.\nIt uses TweenService to tween the part's Transparency to 1 over `duration` seconds with Linear easing, starts the\ntween and returns it. When the tween completes, the part's CanCollide becomes false.",
+ "playSeconds": 40
+}

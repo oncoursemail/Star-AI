@@ -210,7 +210,7 @@ class Brain:
     STAR_PLAYTEST_MODEL (default star-fast). The URL and key are never written into a report."""
 
     def __init__(self, url: str | None = None, *, key_file: str | None = None, model: str | None = None,
-                 timeout: float = 900.0, max_tokens: int = 3000, opener=None):
+                 timeout: float = 900.0, max_tokens: int = 3000, opener=None, extra: dict | None = None):
         self.url = (url or os.environ.get("STAR_PLAYTEST_BRAIN_URL") or os.environ.get("STAR_BRAIN_URL") or "").rstrip("/")
         path = Path(key_file or os.environ.get("STAR_PLAYTEST_KEY_FILE") or Path.home() / ".star" / "server_api_key")
         try:
@@ -219,13 +219,14 @@ class Brain:
             self._key = ""
         self.model = model or os.environ.get("STAR_PLAYTEST_MODEL") or "star-fast"
         self.timeout, self.max_tokens = timeout, max_tokens
+        self.extra = dict(extra or {})          # extra request fields, e.g. chat_template_kwargs (benchmark)
         import urllib.request
         self._open = opener or urllib.request.urlopen
 
     def __call__(self, messages: list[dict]) -> dict:
         import urllib.request
         body = json.dumps({"model": self.model, "temperature": 0.3, "max_tokens": self.max_tokens,
-                           "messages": messages}).encode()
+                           "messages": messages, **self.extra}).encode()
         request = urllib.request.Request(self.url + "/v1/chat/completions", data=body, method="POST", headers={
             "Content-Type": "application/json", **({"Authorization": "Bearer " + self._key} if self._key else {})})
         started = time.monotonic()

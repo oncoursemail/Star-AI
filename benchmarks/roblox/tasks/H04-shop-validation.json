@@ -1,0 +1,8 @@
+{
+ "id": "H04-shop-validation",
+ "level": "hard",
+ "kind": "module",
+ "title": "Server-side shop with input validation",
+ "prompt": "Write a ModuleScript that returns a Shop class for the server. `Shop.new(prices: {[string]: number})`.\n`:buy(player: Player, itemId: any): (boolean, string)`. The player's coins are the player attribute \"Coins\" (a\nnumber). A purchase succeeds only if itemId is a string that is a key of prices, the player does not own it yet and\nhas enough coins; then the price is subtracted from \"Coins\", the attribute \"Owns_\" .. itemId is set to true, and it\nreturns true, \"ok\". Otherwise nothing changes and it returns false and a short reason. itemId comes from a client,\nso it can be any value.",
+ "playSeconds": 40
+}

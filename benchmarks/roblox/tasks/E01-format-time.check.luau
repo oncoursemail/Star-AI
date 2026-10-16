@@ -1,0 +1,7 @@
+local M = solution()
+check("zero", function() expect(M.formatTime(0) == "0:00", tostring(M.formatTime(0))) end)
+check("seconds pad", function() expect(M.formatTime(5) == "0:05", tostring(M.formatTime(5))) end)
+check("minutes", function() expect(M.formatTime(65) == "1:05", tostring(M.formatTime(65))) end)
+check("floors fractions", function() expect(M.formatTime(59.9) == "0:59", tostring(M.formatTime(59.9))) end)
+check("long", function() expect(M.formatTime(3725) == "62:05", tostring(M.formatTime(3725))) end)
+check("negative", function() expect(M.formatTime(-3) == "0:00", tostring(M.formatTime(-3))) end)

@@ -1,0 +1,8 @@
+{
+ "id": "H03-serialize",
+ "level": "hard",
+ "kind": "module",
+ "title": "Serialize Roblox values for saving",
+ "prompt": "Write a ModuleScript that returns a table with two functions. `encode(value)` turns a value that may contain\nVector3, CFrame (with rotation), Color3, numbers, strings, booleans and nested tables (arrays and dictionaries with\nstring keys) into plain tables, numbers, strings and booleans only, so it survives JSON. `decode(encoded)` turns the\nresult back into the original values and types. The runner sends the encoded value through JSONEncode/JSONDecode\nbetween the two calls.",
+ "playSeconds": 40
+}

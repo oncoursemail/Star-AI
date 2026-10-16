@@ -1,0 +1,8 @@
+{
+ "id": "H01-grid-path",
+ "level": "hard",
+ "kind": "module",
+ "title": "Shortest path on a grid",
+ "prompt": "Write a ModuleScript that returns a table with a function\n`findPath(grid: {{boolean}}, start: Vector2, goal: Vector2): {Vector2}?`. `grid[y][x]` is true when the cell is\nwalkable (x and y start at 1). Moves go up, down, left or right one cell. Return the shortest path as a list of\nVector2 cells from start to goal (both included), or nil when the goal cannot be reached.",
+ "playSeconds": 40
+}

@@ -1,0 +1,8 @@
+{
+ "id": "H07-damage-guard",
+ "level": "hard",
+ "kind": "module",
+ "title": "Validate damage requests from clients",
+ "prompt": "Write a ModuleScript that returns a DamageGuard class for the server. `DamageGuard.new()`.\n`:allow(player: Player, target: any, amount: any, now: number): boolean` decides whether a damage request a client\nsent is allowed. Allow only if: amount is a finite number with 0 < amount <= 25; target is a Model with a Humanoid\nwhose Health > 0; target is not the player's own character; the target's PrimaryPart (or HumanoidRootPart) is within\n15 studs of the player's HumanoidRootPart; and the player's last allowed request was at least 0.5 s before `now`\n(per player). Refused requests do not count for the rate limit. It never errors on bad input.",
+ "playSeconds": 40
+}
