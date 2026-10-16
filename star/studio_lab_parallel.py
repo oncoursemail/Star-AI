@@ -130,7 +130,7 @@ async def open_instance(session, discovered: list[dict], studio_id: str, *, home
     facts = {"studio_id": studio_id, "place": {"universe_id": place[0], "place_id": place[1]} if place else None,
              "pin": bool(answered), "editable": bool(guarded.verdict.editable), "verified": verified,
              "farm": reason, "verdict": guarded.verdict.public()}
-    guarded.play_guard = guard
+    setattr(guarded, "play_guard", guard)      # read back with getattr by the playtests
     return (guarded if admitted else None), facts
 
 
