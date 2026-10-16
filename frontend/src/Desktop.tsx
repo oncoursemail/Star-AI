@@ -27,6 +27,7 @@ import {imageReadiness,webSearchAvailability} from './availability'
 import {overLimitMessage,promptKind} from './promptLimits'
 import {StarPet,type PetState} from './StarPet'
 import {StarFace,type StarMood} from './StarFace'
+import {StartCanvas} from './StartCanvas'
 import {ChatRow} from './ChatRow'
 import {ScreenConsent} from './ScreenConsent'
 import {useDismiss} from './Composer'
@@ -34,6 +35,7 @@ import './redesign.css'
 import './resilience.css'
 import {EmptyState} from './states'
 import './polish.css'
+import './start-canvas.css'
 import {ActivityTimeline,RunStatus} from './ActivityTimeline'
 import {applyProgress,isRich,settleRun,startRun,type ActivityRun,type ProgressPayload} from './activity'
 import {classifyFailure,connectionTarget,describeConnection,type LastOutcome} from './connection'
@@ -696,6 +698,8 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
  // The live answer is the last entry of the same keyed list, so finishing it never remounts the text.
  const turns:ChatMessage[]=viewingAnswer&&streamingText&&!query?[...matchingMessages,{id:'stream-live',role:'assistant',text:streamingText}]:matchingMessages
  const empty=!messages.length&&!viewingAnswer
+ // Use the original empty state only for deliberate side-by-side preview review.
+ const classicHome=preview&&new URLSearchParams(window.location.search).get('home')==='classic'
  // Retry survives a restart: this session's last prompt first, else what the backend says went unanswered.
  const pending=data.retry&&data.retry.prompt?data.retry:null
  const retryPrompt=retryText||pending?.prompt||''
@@ -781,10 +785,10 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
      {preview&&<div className="preview-ribbon" role="region" aria-label="Preview notice"><Info size={14} aria-hidden="true"/><span>{fixture?'Preview fixture: scripted events for design review. No model is running.':'Interface preview. Chat needs STAR Desktop.'}</span></div>}
      <AnimatePresence mode="wait" initial={false}>
        <MotionSurface as="main" id="star-main" tabIndex={-1} key={tab} className="page-stage" variants={pageFade}>
-         {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')}>
+         {tab==='chat'&&<div className={'thread'+(empty?' is-empty':'')+(empty&&!classicHome?' is-crafted-home':'')}>
            <div className="thread-scroll" ref={chatScroll} onScroll={onChatScroll}>
              <div className="thread-column">
-               {empty?<div className="thread-hello"><StarFace mood={faceMood} size={104} follow className="thread-hello-star" label="Star, STAR's mascot"/><h2>What are we making?</h2></div>
+               {empty?(classicHome?<div className="thread-hello"><StarFace mood={faceMood} size={104} follow className="thread-hello-star" label="Star, STAR's mascot"/><h2>What are we making?</h2></div>:<StartCanvas project={data.project} mood={faceMood} onStart={fillComposer}/>)
                :<section className="thread-turns" role="log" aria-live="off" aria-label="Conversation">
                  {turns.map((m,index)=>{
                    const live=m.id==='stream-live'
@@ -822,7 +826,7 @@ export function Desktop({initial=null,preview=false}:{initial?:BootData|null;pre
                research={research} onResearch={setResearch} web={web} githubSource={githubSource} onGithubSource={setGithubSource}
                connection={connection} onOpenConnection={()=>nav('brain')}
                onLookAtScreen={()=>{consentConfirmed.current=false;setScreenAsk(true)}} previews={previews}/>
-             {empty?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>
+             {empty?(classicHome?<div className="starters" aria-label="Starting points">{starters.map(item=><button key={item.label} type="button" className="starter" onClick={()=>fillComposer(item.prompt)}><item.icon size={15} aria-hidden="true"/><span>{item.label}</span></button>)}</div>:null)
                :<p className="dock-hint">{teamMode?`Team: four read-only stages on ${serverMode?'your STAR Server':'this PC'}, ${teamSlots===1?'one':'at most two'} at a time.${research?' Web search sends your objective and queries to your configured search provider.':''}`:'STAR can make mistakes. Check important information.'}</p>}
            </div>
            <div className="thread-rest" aria-hidden="true"/>

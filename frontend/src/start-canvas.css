@@ -1,0 +1,283 @@
+/* STAR Creator Workbench — intentionally editorial, not a collection of cards.
+ * All colours, durations and type faces come from STAR's shared tokens.
+ * Scope to the crafted empty chat so history, settings and the classic preview
+ * keep their own audited layout.
+ */
+.thread.is-empty.is-crafted-home .thread-scroll {
+  justify-content: flex-start;
+  overflow-y: auto;
+}
+.thread.is-empty.is-crafted-home .thread-column {
+  min-height: 100%;
+  justify-content: center;
+  padding-top: var(--star-8);
+  padding-bottom: var(--star-8);
+}
+.thread.is-empty.is-crafted-home .thread-rest {
+  flex-grow: 0;
+}
+.thread.is-empty.is-crafted-home .dock {
+  padding-bottom: var(--star-6);
+}
+
+.start-canvas {
+  width: 100%;
+  max-width: 736px;
+  margin: 0 auto;
+  text-align: left;
+}
+.start-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  align-items: center;
+  column-gap: var(--star-8);
+  padding: var(--star-2) 0 var(--star-10);
+}
+.start-hero-copy {
+  min-width: 0;
+}
+.start-project {
+  display: flex;
+  align-items: center;
+  gap: var(--star-2);
+  min-width: 0;
+  margin-bottom: var(--star-5);
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+}
+.start-project-mark {
+  width: 5px;
+  height: 5px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  background: var(--star-gold);
+}
+.start-project strong {
+  overflow: hidden;
+  max-width: 16rem;
+  color: var(--star-body);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.start-hero h2 {
+  margin: 0;
+  max-width: 550px;
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: clamp(31px, 4vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.042em;
+  line-height: 1.09;
+  text-wrap: balance;
+}
+.start-hero h2 span {
+  display: block;
+  color: var(--star-gold);
+}
+.start-hero p {
+  max-width: 490px;
+  margin: var(--star-5) 0 0;
+  color: var(--star-muted);
+  font-size: var(--star-fs-ui);
+  line-height: 1.65;
+  text-wrap: pretty;
+}
+.start-portrait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--star-1);
+  min-width: 0;
+  align-self: center;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  text-align: center;
+  white-space: nowrap;
+}
+.start-portrait-face {
+  flex-shrink: 0;
+}
+.start-section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--star-4);
+  padding-bottom: var(--star-3);
+}
+.start-section-heading h3 {
+  margin: 0;
+  color: var(--star-text);
+  font-family: var(--star-font-display);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+.start-section-heading > span {
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+}
+.start-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--star-stroke);
+  border-bottom: 1px solid var(--star-stroke);
+}
+.start-action {
+  display: flex;
+  align-items: center;
+  gap: var(--star-3);
+  width: 100%;
+  min-width: 0;
+  min-height: 80px;
+  padding: var(--star-3);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--star-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--star-dur-hover) var(--star-ease);
+}
+.start-action:nth-child(2n) {
+  border-left: 1px solid var(--star-stroke);
+}
+.start-action:nth-child(-n + 2) {
+  border-bottom: 1px solid var(--star-stroke);
+}
+.start-action:hover,
+.start-action:focus-visible {
+  background: var(--star-surface-1);
+}
+.start-action:active {
+  background: var(--star-surface-2);
+}
+.start-action-icon {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--star-stroke);
+  border-radius: var(--star-r-sm);
+  background: var(--star-surface-1);
+  color: var(--star-muted);
+}
+.start-action-copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.start-action-copy strong {
+  color: var(--star-text);
+  font-size: var(--star-fs-nav);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.start-action-copy small {
+  color: var(--star-muted);
+  font-size: var(--star-fs-meta);
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.start-action-arrow {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin-top: 2px;
+  color: var(--star-faint);
+  opacity: 0.65;
+  transition: color var(--star-dur-hover) var(--star-ease), transform var(--star-dur-hover) var(--star-ease), opacity var(--star-dur-hover) var(--star-ease);
+}
+.start-action:hover .start-action-arrow,
+.start-action:focus-visible .start-action-arrow {
+  color: var(--star-gold);
+  opacity: 1;
+  transform: translate(2px, -2px);
+}
+.start-footer {
+  margin: var(--star-3) 0 0;
+  color: var(--star-faint);
+  font-size: var(--star-fs-meta);
+  line-height: 1.5;
+}
+
+@media (max-width: 680px) {
+  .thread.is-empty.is-crafted-home .thread-column {
+    justify-content: flex-start;
+    padding-top: var(--star-6);
+    padding-bottom: var(--star-5);
+  }
+  .start-hero {
+    grid-template-columns: minmax(0, 1fr) 110px;
+    column-gap: var(--star-3);
+    padding-bottom: var(--star-8);
+  }
+  .start-hero h2 {
+    font-size: clamp(29px, 6.8vw, 36px);
+  }
+  .start-hero p {
+    margin-top: var(--star-3);
+  }
+  .start-portrait > span {
+    display: none;
+  }
+  .start-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .start-action {
+    min-height: 68px;
+    padding: var(--star-2);
+  }
+  .start-action:nth-child(2n) {
+    border-left: 0;
+  }
+  .start-action:not(:last-child) {
+    border-bottom: 1px solid var(--star-stroke);
+  }
+  .start-section-heading > span {
+    display: none;
+  }
+}
+@media (max-width: 420px) {
+  .thread.is-empty.is-crafted-home .dock {
+    padding-bottom: var(--star-3);
+  }
+  .start-hero {
+    grid-template-columns: minmax(0, 1fr) 96px;
+    padding-bottom: var(--star-6);
+  }
+  .start-hero h2 {
+    font-size: 30px;
+    letter-spacing: -0.035em;
+  }
+  .start-project {
+    margin-bottom: var(--star-3);
+  }
+  .start-hero p {
+    font-size: var(--star-fs-nav);
+    line-height: 1.5;
+  }
+  .start-action {
+    min-height: 60px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .start-action,
+  .start-action-arrow {
+    transition: none;
+  }
+  .start-action:hover .start-action-arrow,
+  .start-action:focus-visible .start-action-arrow {
+    transform: none;
+  }
+}
+.shell[data-reduced-motion='true'] .start-action,
+.shell[data-reduced-motion='true'] .start-action-arrow {
+  transition: none;
+  transform: none;
+}
