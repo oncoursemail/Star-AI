@@ -5,7 +5,7 @@ import './clip-interop.css'
 
 type ClipMeta={id:string;name:string;relative:string;bytes:number;modified:string}
 type FolderData={selected:boolean;folder?:string;clips:ClipMeta[];truncated?:boolean;message?:string;cancelled?:boolean}
-type MomentsData={available?:boolean;registered?:string[];accepted?:boolean;message?:string}
+type MomentsData={available?:boolean;registered?:string[];accepted?:boolean;message?:string;game?:string}
 type InteropAction='clipChooseFolder'|'clipListFolder'|'clipClearFolder'|'clipOpenFile'
  |'clipMomentsStatus'|'clipMomentsRegister'|'clipMomentsTrigger'
 
@@ -36,7 +36,9 @@ export function ClipInteropPanel({disabled=false}:{disabled?:boolean}){
    const report=event.data as FolderData & MomentsData & {opened?:boolean}
    if(report&&typeof report==='object'){
      if(momentAction(requested.action)){
-       setMoments(old=>({...old,...report}))
+       setMoments(old=>({...old,...report,
+         ...(requested.action==='clipMomentsRegister'&&report.accepted&&report.game
+           ?{registered:[...new Set([...(old.registered||[]),report.game])]}:{})}))
      }else if(typeof report.selected==='boolean'&&Array.isArray(report.clips)){
        setFolder(report)
      }
@@ -62,7 +64,9 @@ export function ClipInteropPanel({disabled=false}:{disabled?:boolean}){
    waiting.current=null;setBusy(false)
    if(result.data?.cancelled){setMessage('Folder selection cancelled.');return}
    if(result.data&&typeof result.data.selected==='boolean'&&Array.isArray(result.data.clips))setFolder(result.data)
-   if(result.data&&momentAction(action))setMoments(old=>({...old,...result.data}))
+   if(result.data&&momentAction(action))setMoments(old=>({...old,...result.data,
+     ...(action==='clipMomentsRegister'&&result.data?.accepted&&result.data.game
+       ?{registered:[...new Set([...(old.registered||[]),result.data.game])]}:{})}))
    setMessage(result.data?.message||'Action completed.')
  }
 
