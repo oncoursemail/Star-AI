@@ -6,6 +6,7 @@ import pytest
 
 from star.discord_bot.work_status import (
     WorkSettings, classify_work_question, format_work_report, parse_work_report, read_work_report,
+    publish_work_report,
 )
 
 NOW = datetime(2026, 10, 15, 23, 0, tzinfo=timezone.utc)
@@ -105,7 +106,7 @@ def test_reject_injection_secrets_and_fake_metrics():
         [original, original],
     ]
     for workers in invalid_workers:
-        with pytest.raises((ValueError, TypeError)):
+        with pytest.raises(ValueError):
             parse_work_report(to_bytes(receipt(workers=workers)))
     for bad in ({"version": 2}, {"version": True}, {"updated_at": "now"},
                 {"workers": "any"}, {"workers": [original] * 13},
@@ -143,3 +144,35 @@ def test_natural_work_questions_are_factual_intents(question):
 ])
 def test_unrelated_chat_keeps_its_original_routing(question):
     assert not classify_work_question(question)
+
+
+def test_atomic_trusted_worker_publication_and_privacy(tmp_path):
+    out = tmp_path / "snapshot.json"
+    worker = dict(receipt()["workers"][0])
+    worker.pop("updated_at")
+    publish_work_report(out, [worker], now=NOW)
+    assert out.exists()
+    assert not list(tmp_path.glob("*.tmp"))
+    parsed = read_work_report(WorkSettings(True, out))
+    assert parsed.workers[0].kind == "coding" and parsed.workers[0].updated_at == NOW
+    assert "Coding · Working" in format_work_report(parsed, now=NOW)
+
+    # A failed update must preserve the last valid receipt in full.
+    previous = out.read_bytes()
+    with pytest.raises(ValueError):
+        publish_work_report(out, [{**worker, "task": "exfiltrate /etc/passwd"}], now=NOW)
+    assert out.read_bytes() == previous
+
+    # Completed work cannot be rendered as active.
+    publish_work_report(out, [{**worker, "state": "completed"}], now=NOW)
+    text = format_work_report(read_work_report(WorkSettings(True, out)), now=NOW)
+    assert "Coding · Completed" in text
+    assert "Coding · Working" not in text
+
+
+def test_atomic_publisher_rejects_relative_path_and_future_claims(tmp_path):
+    with pytest.raises(ValueError, match="absolute"):
+        publish_work_report(tmp_path.name, [])
+    with pytest.raises(ValueError):
+        publish_work_report(tmp_path / "work.json", [
+            {**receipt()["workers"][0], "updated_at": "2099-10-01T00:00:00Z"}], now=NOW)
