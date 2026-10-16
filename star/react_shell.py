@@ -47,6 +47,7 @@ from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_actio
 from .clips_obs import CLIP_ACTIONS, ClipService
 from .clip_library import ClipLibrary
 from .steelseries_moments import MomentsEvents
+from .game_lab_catalog import catalog as game_lab_catalog
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -104,6 +105,8 @@ CLIP_INTEROP_ACTIONS = frozenset({
     'clipMomentsStatus', 'clipMomentsRegister', 'clipMomentsTrigger',
 })
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_INTEROP_ACTIONS
+# A static read-only source index; no arbitrary fetch/install/execute capability.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | {'gameLabCatalog'}
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -1068,6 +1071,9 @@ def launch():
                         saved.discord_autostart=enabled
                         saved.save(self.settings_file)
                     return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
+                if action == 'gameLabCatalog':
+                    return json.dumps({'ok': True, 'data': game_lab_catalog(
+                        query=body.get('query', ''), category=body.get('category', ''), limit=28)})
                 if action in CLIP_INTEROP_ACTIONS:
                     if action == 'clipChooseFolder':
                         folder = QFileDialog.getExistingDirectory(
