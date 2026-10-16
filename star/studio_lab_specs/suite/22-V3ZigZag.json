@@ -1,0 +1,150 @@
+{
+ "name": "V3ZigZag",
+ "kind": "map",
+ "description": "Platforms zig-zag in Z; a thin decor flag stands in the diagonal gap P1 -> P2.",
+ "defect": "decor-in-gap",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "route-unintended-support",
+   "jump-corridor-blocked"
+  ],
+  "fixes": [
+   "move-aside"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3ZigZag",
+  "style": "obby",
+  "bounds": {
+   "size": [
+    65.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -19.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "P1",
+    "position": [
+     -28.0,
+     6.0,
+     156.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P2",
+    "position": [
+     -18.0,
+     7.0,
+     146.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "P3",
+    "position": [
+     -8.0,
+     7.0,
+     154.0
+    ],
+    "size": [
+     6.0,
+     1.0,
+     6.0
+    ],
+    "role": "platform",
+    "color": "#F2B134"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     3.0,
+     7.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   },
+   {
+    "name": "Flag",
+    "position": [
+     -23.0,
+     11.5,
+     151.0
+    ],
+    "size": [
+     0.4,
+     10.0,
+     6.0
+    ],
+    "role": "decor",
+    "color": "#C0392B"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "P1",
+    "P2",
+    "P3",
+    "Goal"
+   ]
+  }
+ }
+}

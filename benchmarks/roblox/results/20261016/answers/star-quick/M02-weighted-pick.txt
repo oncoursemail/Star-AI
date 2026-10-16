@@ -1,0 +1,32 @@
+```lua
+local M = {}
+
+function M.pick(weights, rng)
+	local totalWeight = 0
+	for _, w in pairs(weights) do
+		if w > 0 then
+			totalWeight = totalWeight + w
+		end
+	end
+
+	if totalWeight <= 0 then
+		error("Total weight must be greater than 0")
+	end
+
+	local randomValue = rng:NextNumber() * totalWeight
+	local cumulative = 0
+	for key, w in pairs(weights) do
+		if w > 0 then
+			cumulative = cumulative + w
+			if randomValue < cumulative then
+				return key
+			end
+		end
+	end
+
+	-- Fallback (should not be reached if logic is correct)
+	error("Failed to pick a key")
+end
+
+return M
+```

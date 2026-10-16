@@ -123,8 +123,10 @@ def test_real_close_cleans_children_before_watchdog(
 
     bridge.comfy_launcher = SimpleNamespace(stop=lambda: cleanup('comfy', 8.0))
     bridge.warmer = SimpleNamespace(cancel=lambda: cleanup('warmer'))
+    bridge.draft_warmer = SimpleNamespace(cancel=lambda: None)
     bridge.runtime = SimpleNamespace(stop=lambda: cleanup('runtime', 10.0))
     bridge.voice = SimpleNamespace(close=close_voice)
+    bridge.discord = SimpleNamespace(close=lambda: events.append('discord.close'))
     research_stops = []
     # The hourly research-watch timer is stopped once, before any child process is cleaned up.
     bridge.research_timer = SimpleNamespace(stop=lambda: research_stops.append(list(events)))
@@ -139,7 +141,7 @@ def test_real_close_cleans_children_before_watchdog(
     close(bridge)
     packaged_windows = platform == 'nt' and frozen
     expected = ['cancelled.saved'] if running else []
-    expected += ['comfy.start', 'comfy.done', 'warmer.start', 'warmer.done',
+    expected += ['comfy.start', 'comfy.done', 'discord.close', 'warmer.start', 'warmer.done',
                  'runtime.start', 'runtime.done']
     if packaged_windows:
         expected += ['timer.created', 'timer.started']

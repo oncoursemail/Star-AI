@@ -1,0 +1,8 @@
+{
+ "id": "E01-format-time",
+ "level": "easy",
+ "kind": "module",
+ "title": "Format seconds as M:SS",
+ "prompt": "Write a ModuleScript that returns a table with a function `formatTime(seconds: number): string`.\nIt formats a time as minutes and two-digit seconds, \"M:SS\". Fractions of a second are dropped (round down).\nNegative input gives \"0:00\". Minutes are not capped: 3725 seconds is \"62:05\".",
+ "playSeconds": 40
+}

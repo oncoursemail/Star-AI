@@ -1,14 +1,16 @@
 """STAR Desktop's local-only backend. The Qt GUI calls this from worker threads."""
 from __future__ import annotations
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
 import re
 import sqlite3
+import logging
 import time
 from .analytics import AnalyticsStore
+from .atomic_io import atomic_write_text, move_aside
 from dataclasses import dataclass, asdict, replace, field
 from contextlib import AsyncExitStack
 from typing import Callable
@@ -19,6 +21,7 @@ from .memory import Memory
 from . import conversation_memory
 from .workspace import Workspace
 from .intelligence import for_settings
+from .reverse_engineering import for_settings as reverse_engineering_for
 from .mcp_connections import MCPGateway
 from .tool_workshop import ToolWorkshop
 from .specialist_agents import ResearchTeam
@@ -32,7 +35,10 @@ from .instant_route import decide_instant_route, loaded_local_model, answer_on_p
 from . import server_roles, turn_memory
 from .doc_knowledge import validate_knowledge_endpoint
 from . import doc_grounding, skill_packs, roblox_errors
-from . import studio_loop
+from . import best_of_n
+from . import studio_loop, studio_tool_examples
+from . import project_rules
+from . import gpu_helper
 from .studio_connections import default_target, validate_target
 
 
@@ -61,6 +67,7 @@ class Settings:
     # The sandbox rule itself is code (star/studio_loop.py): edits only in a blank unsaved place.
     studio_own_places: bool = False       # ...and, when on, in places owned by STAR's own Roblox account
     studio_luau: bool = False             # let STAR run Luau in that sandbox (needed to create instances)
+    studio_tool_examples: bool = False    # opt-in: one example call appended to each error-prone Studio tool
     workspace_edit: bool = False
     max_calls: int = 12
     context_chars: int = 26000
@@ -93,6 +100,9 @@ class Settings:
     asset_forge_enabled: bool = False     # owner opt-in; external asset search also needs Roblox research
     tool_workshop_enabled: bool = True
     specialists_enabled: bool = True
+    # Local reverse-engineering tools (star/reverse_engineering.py). Off by default; opt-in.
+    # Defensive, workspace-confined analysis of your own/permitted binaries only.
+    reverse_engineering_enabled: bool = False
     specialist_parallelism: int = 1
     team_timeout_min: int = 30      # bounded specialist request deadline, seconds
     team_timeout_max: int = 900     # allows slow on-device and STAR Server inference
@@ -103,6 +113,7 @@ class Settings:
     blender_enabled: bool = False          # only attach STAR's local Blender MCP when requested
     blender_edit: bool = False             # explicit owner permission for new isolated scene jobs
     blender_executable: str = ''           # installed local executable; '' = discover without downloading
+    blender_brain2: bool = False           # use the Blender on brain 2 (the second STAR server) instead of a local one
     # STAR Server (provider 'star_server'): an owner-entered private LAN address.
     # The server key is never stored here; it lives in the OS keyring.
     server_endpoint: str = ''
@@ -114,6 +125,7 @@ class Settings:
     # STAR Knowledge (official docs search, API lookup, Luau checks) on the same private
     # network: '' = the STAR Server's host on the knowledge port, 'off' = never ask it.
     knowledge_endpoint: str = ''
+    luau_run_before_answer: bool = False  # explicit opt-in, remote sandbox only
     # STAR search (self-hosted SearXNG behind star-search-gateway, server/searxng): '' = the STAR
     # Server's host on port 8093, 'off' = never ask it. Used when no Brave/Tavily key is set.
     search_endpoint: str = ''
@@ -125,16 +137,37 @@ class Settings:
     learning_digest_cloud: bool = False   # ...also when the selected provider is a hosted one
     practice_lessons_enabled: bool = False  # off until the owner opts in
     worked_examples_enabled: bool = False   # read-only retrieval, off until owner opts in
+    presolve_enabled: bool = False          # overnight pre-solved answers (star/presolve.py), off until owner opts in
     # Owner default (O1): night school's text lessons that won the paired gate go live for 14 days, visibly, with undo
     # (star/learned_week.py). False = bundles only add candidates that wait for review.
     learning_auto_live: bool = True
     research_auto_check: bool = False      # opt-in daily public-doc checks while desktop is open
+    # Generate several, test, keep what works (star/best_of_n.py): 'off' or 'auto' (2 to best_of_n_max candidates
+    # for code requests on STAR Server, as many as the free model slots allow). Off until the owner opts in.
+    best_of_n: str = 'off'
+    best_of_n_max: int = 4
+    discord_autostart: bool = False        # opt-in: STAR Desktop starts and supervises the Discord bot (star/discord_supervisor.py)
+    roblox_docs_live_enabled: bool = False  # opt-in live retrieval from create.roblox.com/docs; STAR_ROBLOX_DOCS_LIVE=1 also enables
+    project_rules_enabled: bool = False    # opt-in: add the workspace's AGENTS.md (star/project_rules.py) to each turn
+    luau_retry_ladder: bool = False        # opt-in: a second, thinking repair after a failed Luau repair
+    skill_pack_embeddings: bool = False    # opt-in: STAR Server embeddings pick a skill pack the keywords missed
+    # Settings > "Use my GPU" (star/gpu_helper.py): STAR's code model on this PC's NVIDIA card, per request, the
+    # server as fallback. Off by default. Paths '' = <app data>/gpu-helper/llama-server.exe and star-fast.gguf.
+    use_my_gpu: bool = False
+    gpu_helper_server: str = ''
+    gpu_helper_model: str = ''
+    gpu_idle_minutes: int = 10
+    # Settings > "Start thinking while I type" (star/prefill_warm.py): while the owner types, the server reads the
+    # conversation and the draft into its prompt cache, so the answer starts sooner. Off by default.
+    prefill_while_typing: bool = False
 
     @classmethod
     def load(cls, file: Path):
         if not file.exists():
             return cls()
-        raw = json.loads(file.read_text(encoding='utf-8'))
+        raw = _read_settings_object(file)
+        if raw is None:
+            return cls()
         if 'studio_target' not in raw:
             # An old ID was selected on an unknown implicit route; never rebind its grants.
             raw = {**raw, 'studio_target': 'local_pc', 'studio_id': '', 'studio_edit': False, 'studio_luau': False}
@@ -142,8 +175,8 @@ class Settings:
 
     def validate(self):
         validate_target(self.studio_target)
-        for field in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
-            validate_alias(getattr(self, field), field=field)
+        for name in ('model', 'fast_model', 'reasoning_model', 'roblox_model', 'vision_model'):
+            validate_alias(getattr(self, name), field=name)
         if not isinstance(self.provider, str) or self.provider not in ALL_PROVIDERS:
             raise ValueError('Unknown model provider')
         if not re.fullmatch(r'http://(?:127\.0\.0\.1|localhost):\d{2,5}/v1/?', self.endpoint):
@@ -161,8 +194,8 @@ class Settings:
                             'mcp_graphify_docs','mcp_graphify_local','mcp_obsidian_live',
                             'roblox_research_enabled', 'asset_forge_enabled', 'tool_workshop_enabled',
                             'specialists_enabled', 'learning_auto_accept', 'learning_digest',
-                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau',
-                            'blender_enabled', 'blender_edit', 'allow_cgnat')):
+                            'learning_digest_cloud', 'practice_lessons_enabled', 'worked_examples_enabled', 'learning_auto_live', 'research_auto_check', 'discord_autostart', 'roblox_docs_live_enabled', 'media_chat_auto', 'session_capabilities_prompt', 'media_use_references', 'studio_own_places', 'studio_luau', 'reverse_engineering_enabled',
+                            'blender_enabled', 'blender_edit', 'allow_cgnat', 'luau_run_before_answer', 'blender_brain2', 'studio_tool_examples', 'project_rules_enabled', 'luau_retry_ladder', 'skill_pack_embeddings', 'presolve_enabled')):
             raise ValueError('Tool access settings must be true or false')
         if self.obsidian_vault and not Path(self.obsidian_vault).expanduser().is_dir():
             raise ValueError('Obsidian vault must be an existing folder')
@@ -170,6 +203,8 @@ class Settings:
             raise ValueError('Select an Obsidian vault before enabling read access')
         if self.workspace and (not Path(self.workspace).expanduser().is_dir()):
             raise ValueError('Choose an existing workspace directory')
+        if self.best_of_n not in ('off', 'auto') or type(self.best_of_n_max) is not int                 or not 2 <= self.best_of_n_max <= 8:
+            raise ValueError('Best-of-N must be off or auto, with 2 to 8 candidates')
         if type(self.specialist_parallelism) is not int or self.specialist_parallelism not in (1,2):
             raise ValueError('Limit specialists to 1 or 2 concurrent model calls')
         if (type(self.team_timeout_min) is not int or type(self.team_timeout_max) is not int
@@ -179,6 +214,8 @@ class Settings:
             raise ValueError('Invalid local Graphify MCP port')
         if self.blender_edit and not self.blender_enabled:
             raise ValueError('Enable Blender before enabling Blender scene creation')
+        if self.blender_brain2 and not self.blender_enabled:
+            raise ValueError('Enable Blender before choosing the Blender on brain 2')
         if (not isinstance(self.blender_executable, str) or len(self.blender_executable) > 2048
                 or '\x00' in self.blender_executable
                 or self.blender_executable.startswith(('\\\\', '//'))
@@ -208,6 +245,17 @@ class Settings:
                 or '\x00' in self.router_models_dir
                 or self.router_models_dir.lower().startswith(('http:', 'https:', 'file:'))):
             raise ValueError('Choose a local folder for the GGUF model router')
+        if type(self.use_my_gpu) is not bool:
+            raise ValueError('Use my GPU must be on or off')
+        if type(self.prefill_while_typing) is not bool:
+            raise ValueError('Start thinking while I type must be on or off')
+        for key in ('gpu_helper_server', 'gpu_helper_model'):
+            value = getattr(self, key)
+            if (not isinstance(value, str) or len(value) > 1024 or '\x00' in value
+                    or value.lower().startswith(('http:', 'https:', 'file:', '\\\\', '//'))):
+                raise ValueError('Choose local files for Use my GPU, not a URL or network share')
+        if type(self.gpu_idle_minutes) is not int or not 1 <= self.gpu_idle_minutes <= 240:
+            raise ValueError('Use my GPU: idle minutes must be 1 to 240')
         if not 1 <= self.max_calls <= 30 or not 6000 <= self.context_chars <= 80000:
             raise ValueError('Invalid model call or context budget')
 
@@ -240,12 +288,76 @@ class Settings:
 
     def save(self, file: Path):
         self.validate()
-        file.parent.mkdir(parents=True, exist_ok=True)
-        # configuration is nonsecret; never write bearer tokens here
-        file.write_text(json.dumps(asdict(self), indent=2), encoding='utf-8')
+        # configuration is nonsecret; never write bearer tokens here. Written in one step so a crash,
+        # power cut or a reader in another STAR process never sees half a settings file.
+        atomic_write_text(file, json.dumps(asdict(self), indent=2))
+
+
+_log = logging.getLogger(__name__)
+
+
+def _read_settings_object(file: Path) -> dict | None:
+    """The saved settings as a dict, or None after moving a damaged file aside.
+
+    A truncated or hand-broken settings.json used to raise on every Settings.load, so the desktop
+    could not start and every bridge request failed. The file is read twice (a writer from an older
+    STAR copy may still replace it in place) before it is renamed to settings.json.corrupt-<time>
+    for the owner to inspect, and the defaults are used. The defaults are the safe ones: Studio
+    editing, Luau execution and every opt-in feature are off.
+    """
+    problem = None
+    damaged = 0
+    for attempt in range(4):
+        try:
+            raw = json.loads(file.read_text(encoding='utf-8'))
+        except FileNotFoundError:
+            return None
+        except ValueError as exc:            # also UnicodeDecodeError: the content is damaged
+            problem = exc
+            damaged += 1
+            if damaged >= 2:
+                break
+            time.sleep(0.05)
+            continue
+        except OSError:
+            # Locked or unreadable right now (another STAR process swapping it in on Windows, a virus
+            # scanner, permissions): that is not damage, so the owner's file is never moved aside for it.
+            if attempt == 3:
+                raise
+            time.sleep(0.05)
+            continue
+        if isinstance(raw, dict):
+            return raw
+        problem = TypeError(f'settings file holds {type(raw).__name__}, not an object')
+        break
+    backup = move_aside(file)
+    _log.warning('STAR settings could not be read (%s); using defaults%s', type(problem).__name__,
+                 f'; the damaged file was kept as {backup.name}' if backup else '')
+    return None
 
 
 TERMINAL_STATUSES = ('failed', 'cancelled')
+
+
+# Gives every project whose pre-upgrade messages (chat_id 'legacy') have no chat row yet its
+# 'Previous conversation' row. Runs on every open, so it must not read the whole messages table:
+# the project names are walked through idx_chat_messages one index seek at a time (a "skip
+# scan"), projects that already have their legacy row are left out (INSERT OR IGNORE would keep
+# them unchanged anyway), and only the remaining projects' legacy rows are read, by index. The
+# rows inserted are exactly those of the plain form
+#   INSERT OR IGNORE ... SELECT ... FROM messages WHERE chat_id='legacy' GROUP BY project
+# which scanned every message on every open.
+LEGACY_CHAT_MIGRATION = (
+    "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
+    "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
+    "FROM messages WHERE chat_id='legacy' AND project IN ("
+    "WITH RECURSIVE projects(name) AS ("
+    "SELECT MIN(project) FROM messages "
+    "UNION ALL SELECT (SELECT MIN(project) FROM messages WHERE project>name) FROM projects WHERE name IS NOT NULL) "
+    "SELECT name FROM projects WHERE name IS NOT NULL "
+    "EXCEPT SELECT project FROM chats WHERE id='legacy') "
+    "GROUP BY project"
+)
 
 
 class Conversations:
@@ -298,12 +410,31 @@ class Conversations:
             'value TEXT NOT NULL, updated TEXT NOT NULL)'
         )
         # A pre-upgrade conversation is preserved verbatim under one stable ID.
-        self.connection.execute(
-            "INSERT OR IGNORE INTO chats (project,id,title,created,updated) "
-            "SELECT project,'legacy','Previous conversation',MIN(created),MAX(created) "
-            "FROM messages WHERE chat_id='legacy' GROUP BY project"
-        )
+        self.connection.execute(LEGACY_CHAT_MIGRATION)
         self.connection.commit()
+
+    def _next_chat_stamp(self, project: str) -> str:
+        """Make per-project chat activity order stable at coarse clock ticks.
+
+        Old SQLite databases have no sequence column. ISO UTC timestamps are
+        kept in the existing fields; ties in legacy rows sort by rowid.
+        """
+        stamp = datetime.now(timezone.utc)
+        newest = self.connection.execute(
+            'SELECT updated FROM chats WHERE project=? '
+            'ORDER BY updated DESC, rowid DESC LIMIT 1', (project,)
+        ).fetchone()
+        if newest:
+            try:
+                previous = datetime.fromisoformat(newest[0])
+                if previous.tzinfo is None:
+                    previous = previous.replace(tzinfo=timezone.utc)
+                if stamp <= previous:
+                    stamp = previous + timedelta(microseconds=1)
+            except (TypeError, ValueError, OverflowError):
+                # Older malformed dates are left untouched; new writes use UTC.
+                pass
+        return stamp.isoformat()
 
     def new_chat(self, project: str) -> str:
         import uuid
@@ -319,7 +450,7 @@ class Conversations:
         if current:
             return current[0]
         chat_id = uuid.uuid4().hex
-        created = datetime.now(timezone.utc).isoformat()
+        created = self._next_chat_stamp(project)
         with self.connection:
             self.connection.execute(
                 'INSERT INTO chats(project,id,title,created,updated) VALUES (?,?,?,?,?)',
@@ -341,7 +472,7 @@ class Conversations:
         if found:
             return found[0]
         newest = self.connection.execute(
-            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC LIMIT 1',
+            'SELECT id FROM chats WHERE project=? ORDER BY updated DESC, rowid DESC LIMIT 1',
             (project,)
         ).fetchone()
         if newest:
@@ -367,7 +498,7 @@ class Conversations:
             {'id': chat_id, 'title': title, 'created': created, 'updated': updated}
             for chat_id, title, created, updated in self.connection.execute(
                 'SELECT id,title,created,updated FROM chats WHERE project=? '
-                'ORDER BY updated DESC LIMIT ?', (project, limit)
+                'ORDER BY updated DESC, rowid DESC LIMIT ?', (project, limit)
             )
         ]
 
@@ -379,7 +510,7 @@ class Conversations:
         if status != 'complete' and (status not in TERMINAL_STATUSES or role != 'event'
                                      or type(reply_to) is not int):
             raise ValueError('Only an event record that answers a user message can be failed or cancelled')
-        stamp = datetime.now(timezone.utc).isoformat()
+        stamp = self._next_chat_stamp(project)
         target = chat_id if chat_id is not None else 'legacy'
         with self.connection:
             if chat_id is None:
@@ -445,19 +576,6 @@ class Conversations:
             (*args, limit)
         ).fetchall()
         return list(reversed(rows))
-
-    def history_rows(self, project: str, chat_id: str | None = None, clip: int = 4000):
-        """Every user/assistant row of the chat as (role, text), oldest first, without events.
-
-        All rows, not the newest few: the model's history window is measured from the
-        first message of the chat so that it stays put from turn to turn (see
-        context_layout.conversation_window). Each text is cut to ``clip`` characters.
-        """
-        scope, args = ('project=?', [project]) if chat_id is None else ('project=? AND chat_id=?', [project, chat_id])
-        return self.connection.execute(
-            f"SELECT role,SUBSTR(body,1,?) FROM messages WHERE {scope} AND role IN ('user','assistant') ORDER BY id",
-            (clip, *args)
-        ).fetchall()
 
     def raw_history_records(self, project: str, chat_id: str | None = None) -> list[dict]:
         """Full ID-bearing records of exactly one chat, including terminal outcomes."""
@@ -808,10 +926,16 @@ def history_char_budget(settings: Settings) -> int:
 
 
 def stable_memory(settings: Settings, checkpoint: str) -> str:
-    """The part of the compacted checkpoint that goes into the system message."""
-    # Request budgeting must see all of it. Silently taking the suffix can drop
-    # earlier requirements before the agent has a chance to detect overflow.
-    return checkpoint
+    """The byte-stable model prefix, shared with warm-up; no changed context hidden.
+
+    Optional finite owner-reviewed knowledge is reference DATA, never new
+    instructions. The same function is used by run_task and warm-up, so their
+    leading tokens match and llama.cpp can reuse the prompt. Invalid banks fail
+    closed to ordinary retrieval and the prior checkpoint.
+    """
+    # The bank is opt-in and local-private only; importing does no I/O or setup.
+    from .knowledge_bank import stable_checkpoint
+    return stable_checkpoint(settings, app_data(), checkpoint)
 
 
 def memory_scope_for(settings: Settings, chat_id: str | None) -> str:
@@ -837,13 +961,20 @@ def chat_history_snapshot(settings: Settings, home: Path, chat_id: str | None, *
     """Full scoped originals and a pure bounded window, shared with warm-up."""
     budget = history_char_budget(settings)
     dialogue = Conversations(home / 'conversations.sqlite3')
+    reuse = os.environ.get('STAR_FAST_HISTORY_SNAPSHOT') == '1'
     try:
         rows = dialogue.raw_history_records(settings.project, chat_id)
+        window = conversation_memory.select_window(rows, budget, current_text=current_text)
+        # Opt-in only: avoid a second SQLite file open while retaining
+        # the source digest, scope and complete-turn checkpoint checks.
+        if reuse:
+            checkpoint = conversation_memory.read_checkpoint_connection(
+                dialogue.connection, settings.project, chat_id, records=rows)
     finally:
         dialogue.close()
-    window = conversation_memory.select_window(rows, budget, current_text=current_text)
-    checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
-                                                      chat_id, records=rows)
+    if not reuse:
+        checkpoint = conversation_memory.read_checkpoint(home / 'conversations.sqlite3', settings.project,
+                                                          chat_id, records=rows)
     return with_sent_times(conversation_memory.respect_checkpoint(window, checkpoint)), rows
 
 
@@ -899,10 +1030,11 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
     audio transcript, a note about video frames). Only the owner's own words can become an
     automatically accepted lesson.
     """
-    from openai import AsyncOpenAI
     from .knowledge import KnowledgeStore
     from . import lessons as learning
     settings.validate()
+    # With consent, keep unreviewed code off the screen until review completes.
+    stream_tokens = stream_tokens and not settings.luau_run_before_answer
     if mode not in {'auto', 'fast', 'agent'}:
         raise ValueError('Invalid chat mode')
     if not settings.model.strip():
@@ -972,8 +1104,15 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                           'candidates': summary['candidates'],
                           **({'replaced': summary['replaced']} if summary['replaced'] else {}),
                           **({'not_kept': summary['not_kept']} if summary.get('not_kept') else {})})
-        except Exception:
-            pass
+        except Exception as exc:
+            # Never fail the turn, but never stop learning silently either. Type name only:
+            # the message can carry a file path or the owner's words.
+            _log.warning('Lesson capture failed (%s); this turn taught nothing', type(exc).__name__)
+            if on_event:
+                try:
+                    on_event({'event': 'lessons_capture_failed', 'error': type(exc).__name__})
+                except Exception:
+                    pass
     try:
         # Evidence is attached only to this project and conversation. Later turns
         # can retrieve it without reopening files elsewhere on the computer.
@@ -1066,6 +1205,8 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
             from .blender_mcp import wants_blender
             allow_blender = wants_blender(prompt)
         mcp_gateway = MCPGateway(settings) if use_tools else None
+        reverse_engineering = (reverse_engineering_for(settings, home)
+                               if use_tools and settings.reverse_engineering_enabled else None)
         # Searchable public metadata only; no connector is installed or approved.
         from .mcp_registry import RegistryDiscovery
         mcp_registry = RegistryDiscovery() if use_tools and research and mode == 'agent' else None
@@ -1093,6 +1234,19 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
         prepared_conversation = None
         async def run():
             nonlocal prepared_conversation, instant_answer, first_visible_token
+            # Opt-in (star/presolve.py): a request that closely matches one STAR answered and checked
+            # overnight gets that answer at once, marked; the same request sent again gets a fresh one.
+            if (settings.presolve_enabled is True and not images and not documents and not attachment_count
+                    and not research):
+                from . import presolve
+                solved = presolve.take(home, settings.project, chat_id, owner_text or prompt)
+                if solved is not None:
+                    text = presolve.marked(solved)
+                    first_visible_token = True
+                    audited_event({'event': 'presolved_answer', 'created': solved.created})
+                    audited_event({'event': 'assistant_delta', 'text': text})
+                    audited_event({'event': 'finished', 'model_calls': 0, 'tool_calls': 0})
+                    return (text, [{'role': 'user', 'content': prompt}, {'role': 'assistant', 'content': text}], [])
             # Do not touch the PC's model unless this standalone text turn is eligible.
             # The loopback /models probe reads only residency; a router's unloaded model
             # is never selected and no llama.cpp process is started or downloaded.
@@ -1145,6 +1299,12 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 audited_event({'event': 'search_finished'})
             # One client per task, with the selected provider's own time limits.
             async with open_client(settings) as client:
+                if kind == 'lan' and settings.use_my_gpu is True:
+                    # STAR's code model on this PC's graphics card when it is ready; the server otherwise and
+                    # whenever the PC fails (star/gpu_helper.py). Everything else in this turn is unchanged.
+                    if not gpu_helper.HELPER.enabled:
+                        gpu_helper.HELPER.configure(settings, home)
+                    client = gpu_helper.GpuRoutingClient(client, settings)
                 # Summaries, sub-agents, specialists and code repair are not the conversation:
                 # on STAR Server they carry no id_slot, the server places them (providers.llama_request_fields).
                 helper = background_client(client, settings, conversation=memory_scope)
@@ -1177,7 +1337,21 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                 # <<< STAR Knowledge
                 # >>> Skill packs (star/skill_packs): short Roblox guidance, only for prompts that match, and
                 # never in quick chat mode. It rides in the per-turn sections, after the documentation.
-                packs = [] if quick else skill_packs.select(prompt,home=home)
+                if quick:
+                    packs = []
+                elif settings.skill_pack_embeddings is True and provider_kind(settings) == 'lan':
+                    # Opt-in (star/skill_routing.py): keyword packs first; else the closest pack by STAR
+                    # Server's embedding model. Any problem leaves the keyword answer.
+                    from . import skill_routing
+
+                    async def embed(texts):
+                        reply = await client.embeddings.create(model=skill_routing.EMBED_MODEL, input=texts)
+                        return [row.embedding for row in sorted(reply.data, key=lambda row: row.index)]
+                    packs = await skill_routing.select(
+                        prompt, embed, home=home,
+                        on_fallback=lambda why: audited_event({'event': 'skill_packs_fallback', 'reason': why}))
+                else:
+                    packs = skill_packs.select(prompt,home=home)
                 pack_block = skill_packs.render(packs)
                 if pack_block:
                     turn_sections.insert(1 if docs.block else 0, (skill_packs.BLOCK_HEADING, pack_block))
@@ -1209,6 +1383,14 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             turn_sections.append((worked_examples.HEADING, example_block))
                             audited_event({'event': 'worked_example_used',
                                            'count': len(selected_examples), 'chars': len(example_block)})
+                # Opt-in project rules (star/project_rules.py): the workspace's AGENTS.md, as reference data.
+                rules_chars = 0
+                if settings.project_rules_enabled is True and settings.workspace and not quick:
+                    rules = project_rules.load(settings.workspace)
+                    if rules:
+                        turn_sections.append((project_rules.HEADING, rules[1]))
+                        rules_chars = len(rules[1]) + len(project_rules.HEADING) + 2
+                        audited_event({'event': 'project_rules', 'file': rules[0], 'chars': len(rules[1])})
                 kwargs = dict(client=client, model=route.model, prompt=prompt, image_paths=images,
                               now=current_turn_line(conversation_records),
                               project_memory=stable_memory(settings, memory.get(memory_scope)),
@@ -1220,7 +1402,7 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               # it is added on top so stored notes keep the room they had before.
                               turn_context_chars=(min(3000 if quick else 10000, memory_limit) + len(docs.block)
                                                   + len(document_block) + len(pack_block) + len(error_block)
-                                                  + example_extra_chars),
+                                                  + example_extra_chars + rules_chars),
                               # Standing guidance for every tool-using turn (the short
                               # plain-chat rules carry their own Roblox line).
                               guidance=ROBLOX_QUALITY_NOTES,
@@ -1243,6 +1425,20 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                               tool_workshop=workshop, specialists=specialists)
                 if document_tools is not None:
                     kwargs['document_tools'] = document_tools
+                if reverse_engineering is not None:
+                    kwargs['reverse_engineering'] = reverse_engineering
+                # Generate several, test, keep what works (star/best_of_n.py): only for a code request on STAR Server
+                # (not Agent mode, no Studio, Blender, pictures or documents), with the owner's setting on. A candidate
+                # that asks for a tool is dropped, and a main answer that used tools is kept as it is.
+                # None = the turn runs exactly as before.
+                several = await best_of_n.for_turn(
+                    settings, route, prompt, client=helper, knowledge=docs.client,
+                    eligible=(kind == 'lan' and mode != 'agent' and not images and document_tools is None
+                              and not document_block and not allow_studio and not allow_blender),
+                    quick_model=str(getattr(server_roles.effective(settings), 'fast_model', '') or ''),
+                    on_event=audited_event)
+                if several is not None:
+                    kwargs['on_first_request'] = several.on_first_request
                 audited_event({'event': 'model_started'})
                 async def answer_with(model):
                     nonlocal prepared_conversation
@@ -1263,7 +1459,10 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                             async with AsyncExitStack() as connections:
                                 tool_kwargs = dict(kwargs)
                                 if allow_blender:
-                                    from .blender_mcp import connect_blender
+                                    if settings.blender_brain2 is True:
+                                        from .blender_brain2 import connect_brain2_blender as connect_blender
+                                    else:
+                                        from .blender_mcp import connect_blender
                                     tool_kwargs["blender"] = await connections.enter_async_context(
                                         connect_blender(settings, home))
                                 if allow_studio:
@@ -1276,6 +1475,9 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                                     # The tool list is the connector's own, read now. What STAR may do in
                                     # the open place is decided in code from what that place is.
                                     discovered = guarded.discovered
+                                    if settings.studio_tool_examples:
+                                        # Description text only; what may run is still decided by policy.
+                                        discovered = studio_tool_examples.with_examples(discovered)
                                     sections = list(kwargs.get('turn_sections') or ())
                                     # The verdict's text can quote the place; like every other section
                                     # it may not look like lessons (guard_sections).
@@ -1316,24 +1518,38 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                     used = replace(route, model=quick_name)
                     audited_event({'event': 'route_busy_quick', 'model': quick_name})
                 try:
-                    result = await answer_with(used.model)
-                except Exception as exc:
-                    # A role's model that is missing or will not load: answer with the single
-                    # configured model instead, once, and only if nothing was shown or run yet.
-                    if (kind != 'lan' or used.model == settings.model or first_visible_token
-                            or tools_ran or not model_unavailable(exc)):
-                        raise
-                    server_roles.mark_failed(settings, used.model)
-                    used = replace(route, model=settings.model, subagent_model=(
-                        settings.model if route.subagent_model == route.model else route.subagent_model))
-                    if specialists is not None:
-                        specialists.model = used.subagent_model
-                    kwargs.update(subagent_model=used.subagent_model)
-                    audited_event({'event': 'route_fallback', 'model': settings.model})
-                    result = await answer_with(settings.model)
+                    try:
+                        result = await answer_with(used.model)
+                    except Exception as exc:
+                        # A role's model that is missing or will not load: answer with the single
+                        # configured model instead, once, and only if nothing was shown or run yet.
+                        if (kind != 'lan' or used.model == settings.model or first_visible_token
+                                or tools_ran or not model_unavailable(exc)):
+                            raise
+                        server_roles.mark_failed(settings, used.model)
+                        used = replace(route, model=settings.model, subagent_model=(
+                            settings.model if route.subagent_model == route.model else route.subagent_model))
+                        if specialists is not None:
+                            specialists.model = used.subagent_model
+                        kwargs.update(subagent_model=used.subagent_model)
+                        audited_event({'event': 'route_fallback', 'model': settings.model})
+                        result = await answer_with(settings.model)
+                except BaseException:
+                    # The main answer failed or the turn was cancelled: stop the extra candidates too, so they
+                    # do not keep generating on the server slots after the turn is over.
+                    if several is not None:
+                        await several.run.cancel()
+                    raise
+                if several is not None:
+                    # The best of the candidates (the main answer above is candidate 1) replaces the answer.
+                    result = await several.apply(result, used.model, started=started, budget=route.task_timeout,
+                                                 tools_ran=tools_ran)
                 # STAR Knowledge: static Luau check of the answer's code, then the sources list.
-                return await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
-                                                    started=started, on_event=audited_event)
+                result = await doc_grounding.finalize(docs, used, result, model_client=helper, prompt=prompt,
+                                                      started=started, on_event=audited_event, settings=settings,
+                                                      retry_ladder=settings.luau_retry_ladder is True,
+                                                      thinking=provider_kind(settings) in ('local', 'lan'))
+                return several.footer(result) if several is not None else result
         # Bound an entire task, not just each of up to 12 individual model calls.
         task_timeout = route.task_timeout
         async def controlled_run():
@@ -1362,7 +1578,6 @@ def run_task(settings: Settings, prompt: str, images: list[Path] | None = None,
                       'Try Fast mode, a smaller prompt, or a hosted provider.')
             raise TimeoutError(f'STAR exceeded its {task_timeout}s task budget. {advice}') from exc
         first = token_timing['first']
-        last = token_timing['last']
         requested = token_timing['requested']
         measured_first = (instant_answer.first_token_ms if instant_answer is not None else
                           model_stats.get('first_token_ms') if model_stats.get('first_token_ms') is not None else

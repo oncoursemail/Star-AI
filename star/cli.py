@@ -30,7 +30,7 @@ def loopback_endpoint(url: str) -> bool:
 
 def image_media_type(path: Path) -> str:
     """The media type of the picture's real format (validated by image_part), not of its file name."""
-    from PIL import Image
+    from .pil_safe import Image
     with Image.open(path) as image:
         media_type = _IMAGE_TYPES.get(image.format or "")
     if media_type is None:
@@ -57,7 +57,11 @@ def doctor():
     try:
         from .studio import launcher
         _, _, path = launcher()
-        print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
+        if path is None:
+            # A host-defined launcher command has no local file to look for (and may name a host).
+            print("Roblox MCP: custom launcher configured")
+        else:
+            print("Roblox MCP:", "FOUND" if path.is_file() else "NOT FOUND", path)
     except Exception as exc:
         print("Roblox MCP:", type(exc).__name__)
     print("This is not a live model or Roblox tool smoke test.")

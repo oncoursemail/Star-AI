@@ -53,15 +53,20 @@ ROBLOX_CLOUD = ["star_roblox_cloud_universe", "star_roblox_cloud_status", "star_
 CRAFT = ["star_roblox_craft_audit", "star_roblox_craft_recipe"]
 # Experimental Asset Forge (star/intelligence.py ASSET_TOOLS); owner opt-in required.
 ASSET = ["star_asset_search", "star_building_plan", "star_terrain_preview"]
+# Optional architectural planning tools; STAR_ARCHITECTURE_TOOLS=1 only.
+ARCHITECTURE = ["star_architecture_preview", "star_architecture_compare_styles"]
 # Prepared shared stores only: not in ordered general-prompt tool expectations.
 SHARED_BRAIN = ["shared_brain_query", "shared_brain_stats"]
 # Prompt-scoped design and map-plan tools, and the opt-in live Roblox docs (off unless enabled); not part
-# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating).
-DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan",
-               "star_roblox_docs_live_search", "star_roblox_docs_live_page"]
+# of the ordered general-prompt lists below (tests/test_design_roblox_tools.py covers their gating; the opt-in
+# Studio lab tool: tests/test_studio_lab.py).
+DESIGN_MAPS = ["star_design_search", "star_design_md", "star_roblox_map_plan", "star_roblox_studio_lab",
+               "star_roblox_docs_live_search", "star_roblox_docs_live_page", "star_roblox_vfx_make"]
 # The workspace folder (star/workspace.py TOOLS); workspace_write only with Settings.workspace_edit.
 WORKSPACE_READ = ["workspace_list", "workspace_read", "workspace_search"]
-WORKSPACE_WRITE = ["workspace_write"]
+WORKSPACE_WRITE = ["workspace_write", "workspace_edit"]
+# Three additional read-only Creator Intelligence tools, in their actual registration order.
+WORKSPACE_CREATOR = ["workspace_binary_triage", "workspace_asset_audit", "workspace_game_graph"]
 # Added in integration round 5 (pull request 69, game projects of several engines); not in a7a36a3.
 WORKSPACE_GAME = ["workspace_game_discover", "workspace_game_inspect", "workspace_game_plan"]
 # Read-only MCP connections (star/mcp_connections.py TOOLS): when one is switched on in Settings.
@@ -225,7 +230,7 @@ def test_every_built_in_tool_is_offered_when_its_source_is_on(desk, monkeypatch)
     # Every source on is more tool text than the default 26,000-character request budget (the web
     # page reader, star_web_fetch, tipped it over); this test is about which tools are offered.
     names = everything_on(desk, monkeypatch, knowledge=False, context_chars=40000)
-    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_CREATOR + WORKSPACE_GAME + SKILLS + OBSIDIAN + GRAPHIFY
                 + ROBLOX_GAMES + ROBLOX_LINKS + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP + REGISTRY + WORKSHOP
                 + SPECIALISTS)
     assert names == expected          # the order is part of the request the server caches
@@ -236,7 +241,7 @@ def test_star_knowledge_replaces_the_link_finder_and_write_needs_the_edit_switch
     # Every source on plus the calculator is more tool text than the default 26,000-character request budget;
     # this test is about which tools are offered, not about the budget, so give it room.
     names = everything_on(desk, monkeypatch, knowledge=True, workspace_edit=True, context_chars=40000)
-    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME + SKILLS + OBSIDIAN
+    expected = (CALCULATOR + GITHUB + ALWAYS + WEB + WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_CREATOR + WORKSPACE_GAME + SKILLS + OBSIDIAN
                 + GRAPHIFY + STAR_KNOWLEDGE + ROBLOX_GAMES + ROBLOX_FORUM + ROBLOX_VIDEO + ROBLOX_CLOUD + MCP
                 + REGISTRY + WORKSHOP + SPECIALISTS)
     assert names == expected
@@ -255,11 +260,12 @@ def test_the_written_lists_are_the_whole_built_in_catalogue():
     from star import intelligence, mcp_connections, mcp_registry, specialist_agents, tool_workshop, workspace
     assert set(intelligence.ALL_TOOLS) == set(SKILLS + OBSIDIAN + GRAPHIFY + ROBLOX_GAMES + ROBLOX_LINKS
                                              + ROBLOX_FORUM + ROBLOX_VIDEO + STAR_KNOWLEDGE + ROBLOX_CLOUD
-                                             + CRAFT + ASSET + SHARED_BRAIN + DESIGN_MAPS)
+                                             + CRAFT + ASSET + SHARED_BRAIN + DESIGN_MAPS + ARCHITECTURE)
+    assert [tool["name"] for tool in intelligence.ARCHITECTURE_TOOLS] == ARCHITECTURE
     assert [tool["name"] for tool in intelligence.ASSET_TOOLS] == ASSET
     assert [tool["name"] for tool in intelligence.SKILL_TOOLS] == SKILLS
     assert [tool["name"] for tool in intelligence.OBSIDIAN_TOOLS] == OBSIDIAN
-    assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_GAME)
+    assert {tool["name"] for tool in workspace.TOOLS} == set(WORKSPACE_READ + WORKSPACE_WRITE + WORKSPACE_CREATOR + WORKSPACE_GAME)
     assert [tool["name"] for tool in mcp_connections.TOOLS] == MCP
     assert [tool["name"] for tool in mcp_registry.TOOLS] == REGISTRY
     assert [tool["name"] for tool in tool_workshop.TOOL_SCHEMAS] == WORKSHOP
@@ -382,3 +388,81 @@ def test_craft_audit_is_offered_and_runs_through_real_agent(desk, source, expect
     assert report["reviewed_scripts"] == 1
     assert report["read_only"] is True and report["executed"] is False
     assert {item["rule"] for item in report["findings"]} == expected_rules
+
+
+@pytest.mark.parametrize(("name", "filename", "kind"), [
+    ("workspace_asset_audit", "character.gltf", "gltf"),
+    ("workspace_game_graph", "godot_project", "godot"),
+    ("workspace_binary_triage", "plugin.wasm", "WebAssembly"),
+])
+def test_creator_inspections_offered_and_dispatched_by_real_agent_turn(
+        desk, name, filename, kind):
+    """A scripted model reaches the actual tool offer, authorization and Workspace.call."""
+    folder = desk.tmp / "creator-workspace"
+    folder.mkdir()
+    if kind == "gltf":
+        (folder / filename).write_text('{"asset":{"version":"2.0"},"nodes":[]}',
+                                       encoding="utf-8")
+    elif kind == "godot":
+        project = folder / filename
+        project.mkdir()
+        (project / "project.godot").write_text(
+            '[application]\nconfig/name="Demo"\n', encoding="utf-8")
+        (project / "main.tscn").write_text(
+            '[node name="Root" type="Node"]\n', encoding="utf-8")
+    else:
+        (folder / filename).write_bytes(b"\x00asm\x01\x00\x00\x00")
+    settings = Settings(provider="star_server", server_endpoint=LAN, model="star-fast",
+                        knowledge_endpoint="off", workspace=str(folder),
+                        workspace_edit=False, skills_enabled=False,
+                        roblox_research_enabled=False)
+    result = desk.turn("Inspect this selected project file.", settings=settings, answers=[
+        reply(None, [tool_call(name, json.dumps({"path": filename}))]),
+        reply("Inspection complete."),
+    ])
+    assert len(result.requests) == 2
+    for request in result.requests:
+        available = offered(request)
+        assert [value for value in available if value in WORKSPACE_CREATOR] == WORKSPACE_CREATOR
+        assert "workspace_write" not in available
+    assert {"event": "tool_started", "tool": name} in desk.events
+    assert {"event": "tool_finished", "tool": name, "is_error": False} in desk.events
+    returned = [message for message in result.requests[1]["messages"]
+                if message["role"] == "tool"]
+    assert len(returned) == 1
+    payload = json.loads(returned[0]["content"])
+    assert payload["isError"] is False
+    evidence = json.loads(payload["output"])
+    assert evidence["read_only"] is True and evidence.get("executed") is not True
+    assert evidence.get("format", evidence.get("engine")) == kind
+
+
+@pytest.mark.parametrize("name", WORKSPACE_CREATOR)
+def test_creator_inspections_reject_an_unselected_workspace_through_agent(desk, name):
+    result = desk.turn("Inspect the selected artifact.", answers=[
+        reply(None, [tool_call(name, '{"path":"unselected.bin"}')]),
+        reply("No workspace selected."),
+    ])
+    assert name not in offered(result.requests[0])
+    assert {"event": "tool_rejected", "tool": name} in desk.events
+    assert {"event": "tool_started", "tool": name} not in desk.events
+    payloads = [json.loads(message["content"]) for message in result.requests[1]["messages"]
+                if message["role"] == "tool"]
+    assert len(payloads) == 1 and payloads[0]["isError"] is True
+
+
+def test_creator_inspections_do_not_enable_workspace_writes(desk):
+    folder = desk.tmp / "readonly-workspace"
+    folder.mkdir()
+    settings = Settings(provider="star_server", server_endpoint=LAN, model="star-fast",
+                        knowledge_endpoint="off", workspace=str(folder),
+                        workspace_edit=False, skills_enabled=False)
+    result = desk.turn("Inspect this workspace.", settings=settings, answers=[
+        reply(None, [tool_call("workspace_write",
+                              '{"path":"should-not-exist.txt","content":"unsafe"}')]),
+        reply("No file created."),
+    ])
+    assert set(WORKSPACE_CREATOR) <= set(offered(result.requests[0]))
+    assert "workspace_write" not in offered(result.requests[0])
+    assert {"event": "tool_rejected", "tool": "workspace_write"} in desk.events
+    assert not (folder / "should-not-exist.txt").exists()

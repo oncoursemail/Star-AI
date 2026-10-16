@@ -1,0 +1,44 @@
+```lua
+-- ModuleScript content
+local M = {}
+
+function M.reconcile(data, template)
+	local function deepCopy(tbl)
+		local copy = {}
+		for k, v in pairs(tbl) do
+			if type(v) == "table" then
+				copy[k] = deepCopy(v)
+			else
+				copy[k] = v
+			end
+		end
+		return copy
+	end
+
+	local result = {}
+	local function reconcileRecursive(d, t)
+		for k, v in pairs(t) do
+			if d[k] == nil then
+				if type(v) == "table" then
+					result[k] = deepCopy(v)
+				else
+					result[k] = v
+				end
+			else
+				if type(v) == "table" and type(d[k]) == "table" then
+					result[k] = {}
+					reconcileRecursive(d[k], v)
+				else
+					result[k] = d[k]
+				end
+			end
+		end
+	end
+
+	result = deepCopy(data)
+	reconcileRecursive(result, template)
+	return result
+end
+
+return M
+```

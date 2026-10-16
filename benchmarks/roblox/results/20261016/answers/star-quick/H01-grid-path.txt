@@ -1,0 +1,80 @@
+```lua
+local M = {}
+
+function M.findPath(grid, start, goal)
+	local startX, startY = start.X, start.Y
+	local goalX, goalY = goal.X, goal.Y
+	local height = #grid
+	if height == 0 then return end
+	local width = #grid[1]
+	if width == 0 then return end
+
+	-- Check bounds and walkable for start and goal
+	if startY < 1 or startY > height or startX < 1 or startX > width or not grid[startY][startX] then
+		return nil
+	end
+	if goalY < 1 or goalY > height or goalX < 1 or goalX > width or not grid[goalY][goalX] then
+		return nil
+	end
+
+	if startX == goalX and startY == goalY then
+		return Vector2.new(startX, startY)
+	end
+
+	local visited = {}
+	local queue = {}
+	local parent = {}
+
+	table.insert(queue, start)
+	visited[startY][startX] = true
+	parent[startY][startX] = nil
+
+	local directions = {
+		{0, 1},
+		{0, -1},
+		{1, 0},
+		{-1, 0},
+	}
+
+	local function isEmpty(t)
+		local count = 0
+		for _ in pairs(t) do count = count + 1 end
+		return count == 0
+	end
+
+	while #queue > 0 do
+		local current = queue[1]
+		table.remove(queue, 1)
+		local cx, cy = current.X, current.Y
+
+		for _, dir in ipairs(directions) do
+			local nx = cx + dir[1]
+			local ny = cy + dir[2]
+
+			if nx >= 1 and nx <= width and ny >= 1 and ny <= height then
+				if not visited[ny][nx] and grid[ny][nx] then
+					visited[ny][nx] = true
+					local nextPos = Vector2.new(nx, ny)
+					table.insert(queue, nextPos)
+					parent[ny][nx] = current
+					if nx == goalX and ny == goalY then
+						-- Reconstruct path
+						local path = {}
+						local cur = nextPos
+						while cur do
+							table.insert(path, 1, cur)
+							local p = parent[cur.Y][cur.X]
+							cur = p
+						end
+						return path
+					end
+				end
+			end
+		end
+	end
+
+	return nil
+end
+
+return M
+```

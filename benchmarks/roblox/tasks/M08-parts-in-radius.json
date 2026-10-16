@@ -1,0 +1,8 @@
+{
+ "id": "M08-parts-in-radius",
+ "level": "medium",
+ "kind": "module",
+ "title": "Parts in a radius, nearest first",
+ "prompt": "Write a ModuleScript that returns a table with a function\n`partsInRadius(center: Vector3, radius: number, exclude: {Instance}?): {BasePart}`. It uses a spatial query\n(workspace:GetPartBoundsInRadius with OverlapParams) to find parts whose bounds are within `radius` of `center`,\nskips the instances in `exclude` (and their descendants), and returns the parts sorted by distance from center,\nnearest first.",
+ "playSeconds": 40
+}

@@ -232,7 +232,7 @@
 
 /* ---------- Composer: quieter row, mode picker as one small pill ---------- */
 .cmp {
-  border-radius: 20px;
+  border-radius: var(--star-r-md);
   padding: var(--star-3) var(--star-3) 10px;
 }
 .cmp-mode-trigger {
@@ -242,7 +242,7 @@
   height: 32px;
   padding: 0 10px 0 12px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--star-r-sm);
   background: transparent;
   color: var(--star-muted);
   font-size: var(--star-fs-nav);
@@ -670,4 +670,19 @@
     bottom: calc(var(--star-16) + var(--star-12));
     max-width: none;
   }
+}
+
+/* A blocked + menu entry gives its reason under its name, so a longer reason ("Add your STAR Server key in
+ * Settings") wraps instead of running over the label (chat.css keeps both on one unwrapped line). */
+.shell .cmp-menu-item.is-blocked {
+  flex-wrap: wrap;
+  row-gap: 0;
+  padding-block: 6px;
+}
+.shell .cmp-menu-item.is-blocked small {
+  flex: 1 0 100%;
+  padding-left: 26px;
+  overflow: visible;
+  line-height: 1.35;
+  white-space: normal;
 }

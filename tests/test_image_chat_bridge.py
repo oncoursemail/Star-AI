@@ -55,6 +55,7 @@ def host(tmp_path, monkeypatch, **changes):
     instance.active_task = False
     instance.allowed_files = set()
     instance.warmer = Mock()
+    instance.draft_warmer = Mock()
     instance.digester = Mock()
     instance._emit = Mock()
     instance._warm = Mock()

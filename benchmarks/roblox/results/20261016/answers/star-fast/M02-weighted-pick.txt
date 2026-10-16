@@ -1,0 +1,41 @@
+```lua
+local function pick(weights, rng)
+	local totalWeight = 0
+	for _, weight in weights do
+		totalWeight = totalWeight + weight
+	end
+
+	if totalWeight <= 0 then
+		error("Total weight must be greater than 0")
+	end
+
+	local target = rng:NextNumber() * totalWeight
+	local cumulative = 0
+
+	for key, weight in weights do
+		cumulative = cumulative + weight
+		if target <= cumulative then
+			return key
+		end
+	end
+
+	-- Fallback for floating point errors, should theoretically not be reached if logic is correct
+	-- But to be safe, return the last key with non-zero weight or just error
+	-- Given the loop structure, if we get here, it's a precision issue.
+	-- Let's iterate again to find the last valid key or just pick the first one if all weights are 0 (but we checked total > 0).
+	-- Actually, due to floating point, target might be slightly larger than totalWeight.
+	-- We can clamp or just return the last key processed.
+	-- A safer approach is to ensure we pick a key.
+	for key, weight in weights do
+		if weight > 0 then
+			return key
+		end
+	end
+
+	error("No keys with positive weight found")
+end
+
+return {
+	pick = pick
+}
+```

@@ -297,11 +297,41 @@ def test_cli_builds_and_imports_a_bundle(tmp_path, capsys):
 
 
 def test_bundle_skips_worked_examples_the_importer_refuses(tmp_path):
+    from star.worked_examples import MAX_ANSWER_CHARS
+
     box = outbox(tmp_path)
     rows = (box / "worked-examples.jsonl").read_text(encoding="utf-8").splitlines()
     big = json.loads(rows[0])
-    big.update(id="night-school-P-99", group_id="P-99", response="x" * 5000)
-    (box / "worked-examples.jsonl").write_text("\n".join(rows + [json.dumps(big)]) + "\n", encoding="utf-8")
+    big.update(id="night-school-P-99", group_id="P-99", response="x" * MAX_ANSWER_CHARS)
+    oversized = {**big, "id": "night-school-P-100", "group_id": "P-100", "response": big["response"] + "x"}
+    (box / "worked-examples.jsonl").write_text(
+        "\n".join(rows + [json.dumps(big), json.dumps(oversized)]) + "\n", encoding="utf-8")
     report: dict = {}
     data = lw.build_bundle(box, report=report)
-    assert len(data["examples"]) == 1 and report["skipped_examples"] == {"Invalid response": 1}
+    assert len(data["examples"]) == 2 and report["skipped_examples"] == {"Invalid response": 1}
+    assert next(row for row in data["examples"] if row["group_id"] == "P-99")["response"] == big["response"]
+
+
+def test_a_bundle_never_pushes_a_full_example_corpus_over_the_retrieval_cap(tmp_path, bundle):
+    # worked_examples caps a project at 500 usable rows and select() refuses a larger corpus, so a
+    # bundle applied after a full import must not switch retrieval off; its example is skipped.
+    from star.worked_examples import MAX_ROWS, import_file
+    home = tmp_path / "home"
+    rows = [{"id": f"night-school-case-{i:03d}", "group_id": f"case-{i:03d}", "task_category": "roblox",
+             "instruction": ("Implement PathfindingService pursuit spline sentinel unique" if i == 7
+                             else "Implement generic training rehearsal puzzle"),
+             "response": f"return function() return {i} end\n",
+             "evidence": ["night-school automated checks: luau_check, unit_tests"],
+             "source": "night-school-verified", "reviewed": False, "rights_confirmed": False,
+             "lessons_in_context": []} for i in range(MAX_ROWS)]
+    export = tmp_path / "worked-examples.jsonl"
+    export.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    assert import_file(export, home=home, project="MyGame")["imported"] == MAX_ROWS
+    registry = lw.Registry(home)
+    try:
+        receipt = registry.apply(bundle, project="MyGame")
+    finally:
+        registry.close()
+    assert receipt["examples"] == 0 and receipt["live"] == 1
+    text, used = select(home, "MyGame", rows[7]["instruction"])
+    assert used and used[0].id == rows[7]["id"]

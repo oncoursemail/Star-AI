@@ -1,0 +1,8 @@
+{
+ "id": "H02-priority-queue",
+ "level": "hard",
+ "kind": "module",
+ "title": "Binary heap priority queue",
+ "prompt": "Write a ModuleScript that returns a PriorityQueue class. `PriorityQueue.new(less: ((a, b) -> boolean)?)`; the\ndefault order is a < b (smallest first). Methods: `:push(value)`, `:pop()` removes and returns the first value (nil\nwhen empty), `:peek()` returns it without removing, `:size()`. push and pop must be O(log n).",
+ "playSeconds": 40
+}

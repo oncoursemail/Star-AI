@@ -1,0 +1,27 @@
+```lua
+local part = Instance.new("Part")
+part.Name = "KillBrick"
+part.Size = Vector3.new(8, 1, 8)
+part.Position = Vector3.new(0, 40, 300)
+part.Anchored = true
+part.Color = Color3.new(1, 0, 0)
+part.Parent = script.Parent
+
+local function onTouch(part, otherPart)
+    local character = otherPart.Parent
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    if humanoid then
+        humanoid.Health = 0
+    end
+end
+
+part.Touched:Connect(function(hit)
+    local otherPart = hit.Parent
+    if otherPart:IsA("Model") then
+        local humanoid = otherPart:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.Health = 0
+        end
+    end
+end)
+```

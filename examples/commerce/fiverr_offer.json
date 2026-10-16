@@ -1,0 +1,19 @@
+{
+  "channel": "fiverr",
+  "offer_id": "custom-thumbnail",
+  "offer": {
+    "title": "Hand-finished custom video thumbnail",
+    "buyer_brief": "One original thumbnail matching customer's signed-off brief",
+    "rights_evidence": "replace-with-client-artwork-usage-review",
+    "customization_evidence": "",
+    "quality_qa_evidence": "",
+    "ai_used": true,
+    "buyer_allows_ai": false,
+    "financials": {
+      "order_price": "40.00",
+      "ai_generation": "1.25",
+      "labor": "12.00",
+      "revisions": "5.00"
+    }
+  }
+}

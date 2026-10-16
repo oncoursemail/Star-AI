@@ -1,0 +1,81 @@
+```lua
+local PriorityQueue = {}
+PriorityQueue.__index = PriorityQueue
+
+function PriorityQueue.new(less)
+	local self = setmetatable({}, PriorityQueue)
+	self._heap = {}
+	self._less = less or function(a, b)
+		return a < b
+	end
+	return self
+end
+
+local function siftUp(heap, less, index)
+	while index > 1 do
+		local parent = math.floor(index / 2)
+		if less(heap[index], heap[parent]) then
+			heap[index], heap[parent] = heap[parent], heap[index]
+			index = parent
+		else
+			break
+		end
+	end
+end
+
+local function siftDown(heap, less, index)
+	local n = #heap
+	while true do
+		local left = index * 2
+		local right = left + 1
+		local smallest = index
+
+		if left <= n and less(heap[left], heap[smallest]) then
+			smallest = left
+		end
+		if right <= n and less(heap[right], heap[smallest]) then
+			smallest = right
+		end
+
+		if smallest ~= index then
+			heap[index], heap[smallest] = heap[smallest], heap[index]
+			index = smallest
+		else
+			break
+		end
+	end
+end
+
+function PriorityQueue:push(value)
+	local heap = self._heap
+	local less = self._less
+	table.insert(heap, value)
+	siftUp(heap, less, #heap)
+end
+
+function PriorityQueue:pop()
+	local heap = self._heap
+	local less = self._less
+	local n = #heap
+	if n == 0 then
+		return nil
+	end
+	local top = heap[1]
+	heap[1] = heap[n]
+	table.remove(heap, n)
+	if #heap > 0 then
+		siftDown(heap, less, 1)
+	end
+	return top
+end
+
+function PriorityQueue:peek()
+	return self._heap[1]
+end
+
+function PriorityQueue:size()
+	return #self._heap
+end
+
+return PriorityQueue
+```

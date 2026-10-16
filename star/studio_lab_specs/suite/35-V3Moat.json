@@ -1,0 +1,121 @@
+{
+ "name": "V3Moat",
+ "kind": "map",
+ "description": "Two plazas separated by an 11-stud moat with no bridge (maxJumpGap 12).",
+ "defect": "gap-too-far",
+ "expect": {
+  "first_pass": false,
+  "defects": [
+   "jump-too-far"
+  ],
+  "fixes": [
+   "extend-platform"
+  ]
+ },
+ "maxIterations": 3,
+ "playSeconds": 60,
+ "plan": {
+  "version": 1,
+  "mapName": "V3Moat",
+  "style": "modern",
+  "bounds": {
+   "size": [
+    73.0,
+    40.0,
+    40.0
+   ],
+   "center": [
+    -15.5,
+    20.0,
+    150.0
+   ]
+  },
+  "parts": [
+   {
+    "name": "StartFloor",
+    "position": [
+     -40.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     12.0,
+     1.0,
+     12.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "PlazaA",
+    "position": [
+     -26.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     14.0,
+     1.0,
+     14.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "PlazaB",
+    "position": [
+     -1.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     14.0,
+     1.0,
+     14.0
+    ],
+    "role": "floor",
+    "color": "#95A5A6",
+    "material": "SmoothPlastic"
+   },
+   {
+    "name": "Goal",
+    "position": [
+     11.0,
+     6.0,
+     150.0
+    ],
+    "size": [
+     8.0,
+     1.0,
+     8.0
+    ],
+    "role": "goal",
+    "color": "#3CCB6B",
+    "material": "Neon"
+   }
+  ],
+  "spawns": [
+   {
+    "name": "Start",
+    "position": [
+     -40.0,
+     7.0,
+     150.0
+    ],
+    "color": "#FFFFFF"
+   }
+  ],
+  "route": {
+   "waypoints": [
+    "Start",
+    "StartFloor",
+    "PlazaA",
+    "PlazaB",
+    "Goal"
+   ],
+   "maxJumpGap": 12
+  }
+ }
+}

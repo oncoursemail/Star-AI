@@ -1,7 +1,8 @@
 """Conservative, offline Roblox API-name checks against a supplied Studio dump.
 
 This is not a Luau parser or a type checker. Only simple direct assignments
-from Instance.new or game:GetService establish a variable's class.
+from Instance.new or game:GetService (plus the globals game and workspace)
+establish a variable's class.
 """
 from __future__ import annotations
 
@@ -33,6 +34,29 @@ class ApiFinding:
     class_name: str | None
     name: str
     suggestion: str | None
+
+    @property
+    def severity(self) -> str:
+        """Normalized advisory severity; API spelling guesses are not engine proof."""
+        return "warning"
+
+    @property
+    def message(self) -> str:
+        """A bounded statement without echoing untrusted names."""
+        if self.rule_id == "unknown-class":
+            return "Unknown Roblox class in Instance.new; check against the local API dump."
+        if self.rule_id == "unknown-service":
+            return "Unknown service in GetService; check against the local API dump."
+        return "Possible unknown class member; verify its receiver and the local API dump."
+
+    @property
+    def suggested_fix(self) -> str:
+        """A repair action, not an unverified automatic rename."""
+        if self.rule_id == "unknown-class":
+            return "Use a class listed in the validated local Roblox API dump."
+        if self.rule_id == "unknown-service":
+            return "Use a service listed in the validated local Roblox API dump."
+        return "Confirm the inferred class and choose a documented member from the local API dump."
 
 
 @dataclass(frozen=True)
@@ -162,8 +186,18 @@ def _tokens(source: str) -> list[_Token]:
     return result
 
 
+# How alike two names must be (difflib ratio) before one is offered as "did you mean". With no
+# floor, every unknown name got the least-unlike real name, e.g. Instance.new("MyHitbox") -> "Model".
+SUGGESTION_CUTOFF = 0.6
+
+
 def _nearest(name: str, candidates: frozenset[str] | dict[str, ApiClass]) -> str | None:
-    matches = get_close_matches(name, sorted(candidates), n=1, cutoff=0)
+    """The real name the author most likely meant, or None when nothing is close enough."""
+    names = sorted(candidates)
+    folded = [candidate for candidate in names if candidate.lower() == name.lower()]
+    if folded:
+        return folded[0]    # wrong case only (Instance.new("part"), :findFirstChild)
+    matches = get_close_matches(name, names, n=1, cutoff=SUGGESTION_CUTOFF)
     return matches[0] if matches else None
 
 
@@ -188,11 +222,49 @@ def _creation_at(tokens: list[_Token], values: list[str], index: int,
     return None, finding
 
 
+def _call_ends_expression(tokens: list[_Token], opening: int) -> bool:
+    """True when the call whose '(' is at opening is not followed by . : ( [ (a chain)."""
+    depth = 0
+    for j in range(opening, len(tokens)):
+        if tokens[j].kind == "punct":
+            depth += {"(": 1, ")": -1}.get(tokens[j].value, 0)
+        if depth == 0:
+            follower = tokens[j + 1] if j + 1 < len(tokens) else None
+            return not (follower and follower.kind == "punct" and follower.value in ":.([")
+    return False
+
+
+_SIGNAL_METHODS = frozenset({"Connect", "ConnectParallel", "Once", "Wait", "connect", "wait"})
+
+
+def _receivers(tokens: list[_Token], values: list[str], index: int, known: dict[str, str],
+               dump: ApiDump) -> list[tuple[str, int]]:
+    """(class, index of the '.'/':' before the member) for receivers starting at index.
+
+    A known variable, or (while `game` is still the global) game:GetService("S") and game.S.
+    """
+    found: list[tuple[str, int]] = []
+    name = values[index]
+    if name in known:
+        found.append((known[name], index + 1))
+    if name == "game" and "game" in known:
+        if (values[index + 1:index + 4] == [":", "GetService", "("] and index + 5 < len(tokens)
+                and tokens[index + 4].kind == "string" and values[index + 5] == ")"
+                and tokens[index + 4].value in dump.services):
+            found.append((tokens[index + 4].value, index + 6))
+        elif (values[index + 1:index + 2] == ["."] and index + 2 < len(tokens)
+                and tokens[index + 2].kind == "word" and values[index + 2] in dump.services):
+            found.append((values[index + 2], index + 3))
+    return found
+
+
 def check_luau_api(source: str, dump: ApiDump) -> list[ApiFinding]:
     """Report definite spelling misses on known Roblox classes, without executing code.
 
-    Unknown receiver types, dynamic constructor arguments, property reads, and
-    chained expressions are intentionally not diagnosed.
+    Receivers: variables set from Instance.new / game:GetService, the globals game and workspace,
+    and game:GetService("S") / game.S chains. Method calls and assignments are checked; reads only
+    when used as a signal (X.Name:Connect) or when they miss a real member by case alone, because a
+    plain read can be a child's name. Unknown receivers and dynamic arguments are not diagnosed.
     """
     if not isinstance(source, str):
         raise TypeError("source must be str")
@@ -201,7 +273,8 @@ def check_luau_api(source: str, dump: ApiDump) -> list[ApiFinding]:
 
     tokens = _tokens(source)
     values = [token.value for token in tokens]
-    known: dict[str, str] = {}
+    # The two Roblox globals; a local or parameter of the same name removes them like any variable.
+    known: dict[str, str] = {"game": "DataModel", "workspace": "Workspace"}
     findings: list[ApiFinding] = []
     for i, token in enumerate(tokens):
         # Shadowed locals or function parameters do not retain an inferred class.
@@ -236,33 +309,42 @@ def check_luau_api(source: str, dump: ApiDump) -> list[ApiFinding]:
             # Only a simple variable = constructor establishes a type.
             if (i >= 2 and values[i - 1] == "=" and tokens[i - 2].kind == "word"
                     and (i < 3 or values[i - 3] not in (".", ":"))):
-                if class_name is not None:
+                # ...and only when the call is the whole value: game:GetService("X"):WaitForChild("Y")
+                # is a child, not the service.
+                if class_name is not None and _call_ends_expression(tokens, i + 3):
                     known[tokens[i - 2].value] = class_name
                 else:
                     known.pop(tokens[i - 2].value, None)
 
-        if (token.kind != "word" or token.value not in known or i + 3 >= len(tokens)
-                or (i and values[i - 1] in (".", ":"))
-                or values[i + 1] not in (".", ":")
-                or tokens[i + 2].kind != "word"):
+        if token.kind != "word" or (i and values[i - 1] in (".", ":")):
             continue
-        member = tokens[i + 2]
-        operation = values[i + 3]
-        is_method = operation == "("
-        is_assignment = (values[i + 1] == "." and (
-            (operation == "=" and values[i + 4:i + 5] != ["="])
-            or (operation in ("+", "-", "*", "/", "%", "^", "..")
-                and values[i + 4:i + 5] == ["="])
-        ))
-        if not (is_method or is_assignment):
-            continue
-        class_name = known[token.value]
-        members = dump.inherited_members[class_name]
-        if member.value not in members:
-            findings.append(ApiFinding(
-                "unknown-member", member.line, class_name, member.value,
-                _nearest(member.value, members),
+        for class_name, dot in _receivers(tokens, values, i, known, dump):
+            if (dot + 1 >= len(tokens) or values[dot] not in (".", ":")
+                    or tokens[dot + 1].kind != "word"):
+                continue
+            members = dump.inherited_members.get(class_name)
+            member = tokens[dot + 1]
+            if members is None or member.value in members:
+                continue
+            operation = values[dot + 2] if dot + 2 < len(tokens) else ""
+            is_method = operation == "("
+            is_assignment = (values[dot] == "." and (
+                (operation == "=" and values[dot + 3:dot + 4] != ["="])
+                or (operation in ("+", "-", "*", "/", "%", "^", "..")
+                    and values[dot + 3:dot + 4] == ["="])
             ))
+            # A read can be a child's name (workspace.Baseplate), but no Instance has :Connect/:Wait,
+            # so `X.Name:Connect(` proves Name was meant as an event. A read that differs from a
+            # real member only in case (Players.localplayer) is also a definite miss.
+            is_signal_use = (values[dot] == "." and operation == ":" and dot + 4 < len(tokens)
+                             and values[dot + 3] in _SIGNAL_METHODS and values[dot + 4] == "(")
+            is_case_slip = values[dot] == "." and any(
+                name.lower() == member.value.lower() for name in members)
+            if is_method or is_assignment or is_signal_use or is_case_slip:
+                findings.append(ApiFinding(
+                    "unknown-member", member.line, class_name, member.value,
+                    _nearest(member.value, members),
+                ))
     return sorted(set(findings), key=lambda item: (
         item.line, item.rule_id, item.class_name or "", item.name
     ))

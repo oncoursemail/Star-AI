@@ -1,0 +1,13 @@
+[Unit]
+Description=STAR playtest learning (STAR builds small games, a robot plays them in Studio, fixes, re-playtests)
+After=star-studio.service
+Requires=star-studio.service
+
+[Service]
+Type=oneshot
+Environment=PLAYTEST_MAX_MINUTES=150 PLAYTEST_KEEP=14
+ExecStart=/bin/bash /opt/star/playtest/app/server/studio_lab/playtest-learning-nightly.sh
+# Lock wait (30 min) + run cap (150 min) + the last game; the script's EXIT trap stops the connector host.
+TimeoutStartSec=210min
+KillSignal=SIGINT
+Nice=5

@@ -19,8 +19,9 @@ def key_file_status(home: Path | None = None) -> dict:
     return {'found': path.is_file() and not path.is_symlink()}
 
 
-def import_key_file(home: Path | None = None) -> dict:
-    path = _key_file(home)
+def read_key_file(home: Path | None = None, *, path: Path | None = None) -> str:
+    """The key in the key file (or in `path`), for the caller's memory only. Never print or log the result."""
+    path = path or _key_file(home)
     try:
         if path.is_symlink() or not path.is_file():
             raise OSError('not a regular file')
@@ -40,6 +41,11 @@ def import_key_file(home: Path | None = None) -> dict:
     token = value if value.strip('=') else first
     if not token or len(token) > 2048:
         raise ValueError('Server key file is invalid.')
+    return token
+
+
+def import_key_file(home: Path | None = None) -> dict:
+    token = read_key_file(home)
     try:
         save_api_key(STAR_SERVER, token)
     except ValueError:

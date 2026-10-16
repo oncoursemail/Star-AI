@@ -1,0 +1,78 @@
+```lua
+local Signal = {}
+Signal.__index = Signal
+
+function Signal.new()
+	local self = setmetatable({}, Signal)
+	self._connections = {}
+	return self
+end
+
+local Connection = {}
+Connection.__index = Connection
+
+function Connection.new(signal, fn)
+	local self = setmetatable({}, Connection)
+	self._signal = signal
+	self._fn = fn
+	self._connected = true
+	return self
+end
+
+function Connection:Disconnect()
+	if self._connected then
+		self._connected = false
+		local conns = self._signal._connections
+		for i, c in ipairs(conns) do
+			if c == self then
+				table.remove(conns, i)
+				break
+			end
+		end
+	end
+end
+
+function Signal:Connect(fn)
+	local conn = Connection.new(self, fn)
+	table.insert(self._connections, conn)
+	return conn
+end
+
+function Signal:Once(fn)
+	local conn
+	conn = self:Connect(function(...)
+		conn:Disconnect()
+		fn(...)
+	end)
+	return conn
+end
+
+function Signal:Fire(...)
+	local args = table.pack(...)
+	for _, conn in ipairs(self._connections) do
+		if conn._connected then
+			conn._fn(table.unpack(args, 1, args.n))
+		end
+	end
+end
+
+function Signal:Wait()
+	local thread = coroutine.running()
+	local conn
+	local result
+	local done = false
+	conn = self:Connect(function(...)
+		if not done then
+			done = true
+			result = table.pack(...)
+			task.spawn(thread)
+		end
+	end)
+	coroutine.yield()
+	conn:Disconnect()
+	local packed = result
+	return table.unpack(packed, 1, packed.n)
+end
+
+return Signal
+```

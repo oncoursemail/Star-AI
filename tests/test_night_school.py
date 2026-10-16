@@ -84,7 +84,9 @@ def test_the_gate_waits_while_the_brain_is_busy_and_needs_ten_quiet_minutes(tmp_
     assert "quiet" in gate.look()
     clock.sleep(599)
     assert "quiet" in gate.look()
-    slots.table[("star-embed", 0)][1] += 1                      # somebody searched the documentation
+    slots.table[("star-embed", 0)][1] += 1                      # a documentation search alone (helper model)
+    assert "quiet" in gate.look()                               # is not somebody using the brain
+    slots.table[("star-fast", 0)][1] += 1                       # a chat turn is
     assert gate.look() == "brain busy, waiting"
     assert "quiet" in gate.look()
     clock.sleep(601)
@@ -549,15 +551,26 @@ def test_real_path_backs_off_at_once_when_another_client_appears_and_writes_the_
 
         state = {"lessons": {"L1": {"id": "L1", "text": fake.LESSON, "status": "active", "promotion": {
             "fixed_tasks": ["P-01", "P-02"], "validation_before": "1/2", "validation_with": "2/2"}}}}
+        from star.worked_examples import MAX_ANSWER_CHARS, import_file
+        large_answer = "local x = 1\n" * 1500
         (settings.data / "examples.jsonl").write_text(json.dumps({
             "task": "P-01", "category": "luau", "prompt": task["prompt"], "answer": again.answer,
-            "checks": ["luau_block"], "lessons": ["L1"]}) + "\n", encoding="utf-8")
-        assert export_outbox(settings, state) == {"lessons": 1, "examples": 1}
+            "checks": ["luau_block"], "lessons": ["L1"]}) + "\n" + json.dumps({
+            "task": "P-02", "category": "luau", "prompt": task["prompt"], "answer": large_answer,
+            "checks": ["luau_block"], "lessons": []}) + "\n" + json.dumps({
+            "task": "P-03", "category": "luau", "prompt": task["prompt"], "answer": "local x = 1\n" * MAX_ANSWER_CHARS,
+            "checks": ["luau_block"], "lessons": []}) + "\n", encoding="utf-8")
+        # Large checked answers survive the outbox; only the answer over the new cap is left out.
+        assert export_outbox(settings, state) == {"lessons": 1, "examples": 2}
+        assert import_file(settings.outbox / "worked-examples.jsonl", home=tmp_path / "app-home",
+                           project="STAR")["imported"] == 2
         exported = json.loads((settings.outbox / "star-lessons-night-school.json").read_text(encoding="utf-8"))
         assert exported["format"] == "star-lessons-v1" and exported["lessons"][0]["text"] == fake.LESSON
         assert exported["lessons"][0]["status"] == "candidate" and "validation" in exported["lessons"][0]["evidence"]
-        row = json.loads((settings.outbox / "worked-examples.jsonl").read_text(encoding="utf-8"))
-        assert row["reviewed"] is False and row["instruction"] == task["prompt"]
+        rows = [json.loads(line) for line in (settings.outbox / "worked-examples.jsonl").read_text(encoding="utf-8").splitlines()]
+        assert {row["group_id"] for row in rows} == {"P-01", "P-02"}
+        assert rows[1]["response"] == large_answer
+        assert all(row["reviewed"] is False and row["instruction"] == task["prompt"] for row in rows)
         assert "next release" in (settings.outbox / "README.txt").read_text(encoding="utf-8")
         model.close()
         assert not providers.open_client.__qualname__.startswith("pin_slots")      # the app's own factory is back
@@ -777,3 +790,102 @@ def test_candidate_retry_budget_is_bounded_and_writes_one_final_task_record(tmp_
     assert store.state["tasks"]["X-1"]["tries"] == 1
     assert store.state["counters"]["still_failing"] == 1
     assert not (settings.data / "examples.jsonl").exists()
+
+
+# --- validation budget (STAR_NS_VALIDATION_SHARE) and worker shares (STAR_NS_SHARE) ---------------------------------
+
+def test_without_a_validation_budget_the_gate_runs_in_one_go_as_before(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1"] + NEEDS, script, batch=3,
+                                         recheck_every=99)
+    assert settings.validation_share == 0 and engine.validation_allowed()
+    engine.run_batch()
+    assert store.state["lessons"]["L1"]["status"] == "active"
+    assert store.state["counters"].get("validation_budget_waits", 0) == 0
+
+
+def test_the_validation_budget_spreads_a_gate_over_practice_and_still_needs_a_significant_win(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "E-1", "H-2", "V-1"] + NEEDS
+                                         + [f"E-{n}" for n in range(2, 40)], script, batch=3, recheck_every=999,
+                                         validation_share=1 / 3)
+    engine.run_batch()                                  # H-1 fixed, E-1 passes, H-2 fixed: 2 fixes, the gate starts
+    lesson = store.state["lessons"]["L1"]
+    state = store.state
+    assert lesson["status"] == "candidate"              # paused: the budget is used up before the slice is done
+    assert state["counters"]["validation_budget_waits"] >= 1
+    assert state["validation_seconds"] <= 0.5 * state["practice_seconds"] + 2 * 2.0     # at most one pair over
+    paired = [a for a in map(json.loads, (settings.data / "attempts.jsonl").read_text(encoding="utf-8").splitlines())
+              if a["purpose"].startswith("validation ")]
+    done = len(paired)
+    assert done < 16 and done % 2 == 0                  # both arms of a task always side by side
+    for _ in range(20):                                 # more practice: the paused run resumes where it stopped
+        if lesson["status"] != "candidate":
+            break
+        engine.run_batch()
+    assert lesson["status"] == "active" and lesson["promotion"]["gate"]["decision"] == "PROMOTE"
+    assert lesson["promotion"]["gate"]["wins"] == 6 and lesson["promotion"]["gate"]["k"] == 2
+    paired = [a for a in map(json.loads, (settings.data / "attempts.jsonl").read_text(encoding="utf-8").splitlines())
+              if a["purpose"].startswith("validation ")]
+    assert len(paired) == 16                            # 4 tasks x 2 arms x k=2: nothing measured twice
+    total = state["validation_seconds"] + state["practice_seconds"]
+    assert state["validation_seconds"] / total <= 1 / 3 + 0.05
+
+
+def test_a_budget_paused_gate_never_promotes_on_an_incomplete_slice(tmp_path):
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["H-1", "H-2", "V-1"] + NEEDS, script, batch=2,
+                                         recheck_every=999, validation_share=0.01)
+    engine.run_batch()
+    lesson = store.state["lessons"]["L1"]
+    assert lesson["status"] == "candidate" and "promotion" not in lesson and "gates" not in lesson
+    run = next(iter(store.state["paired_runs"].values()))
+    assert run["done"] is False
+
+
+def test_shares_split_the_practice_tasks_without_overlap_and_keep_the_validation_slice(tmp_path):
+    from nightschool.engine import in_share
+    ids = [f"T-{n}" for n in range(200)]
+    assert all(in_share(i, "") for i in ids)
+    first = {i for i in ids if in_share(i, "0,1,2/4")}
+    second = {i for i in ids if in_share(i, "3/4")}
+    assert not first & second and first | second == set(ids) and 30 < len(second) < 70
+    script = Script()
+    settings, store, engine = engine_for(tmp_path, ["V-1", "V-2"] + ids, script, share="3/4")
+    assert {t["id"] for t in engine.training} == second
+    assert [t["id"] for t in engine.validation] == ["V-1", "V-2"]
+    assert "share 3/4" in store.state["pool"]
+
+
+def test_a_skip_file_leaves_out_tasks_another_worker_answered(tmp_path):
+    skip = tmp_path / "skip.json"
+    skip.write_text(json.dumps(["E-2", "X-1"]), encoding="utf-8")
+    settings, store, engine = engine_for(tmp_path, ["E-1", "E-2", "X-1", "V-1"], Script(), skip_file=str(skip))
+    assert [t["id"] for t in engine.training] == ["E-1"]
+    skip.write_text("not json", encoding="utf-8")                  # a broken file skips nothing
+    engine.set_pool(engine.pool)
+    assert [t["id"] for t in engine.training] == ["E-1", "E-2", "X-1"]
+
+
+def test_a_private_model_server_may_use_slot_0_and_the_sandbox_can_be_the_server_over_ssh(tmp_path):
+    pytest.importorskip("openai")
+    from nightschool.real import LocalSandbox, RealModel, SlotRefused
+    from star.eval_sandbox import ContainerSandbox
+    settings, _store, _engine = engine_for(tmp_path, ["X-1", "V-1"], Script())
+    gate = IdleGate(settings, BrainWatch(settings.brain_url, fetch=lambda _path: []), log=lambda _text: None)
+    shared = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok, wait=False)
+    try:
+        shared._slots, shared._slots_at = {"star-fast": 0}, time.monotonic()
+        with pytest.raises(SlotRefused):
+            shared.slot_of("star-fast")                              # the shared brain: never slot 0
+        assert isinstance(shared._sandbox, LocalSandbox)
+    finally:
+        shared.close()
+    settings.slot, settings.sandbox_ssh = 0, "star@sandbox.invalid"
+    private = RealModel(settings, gate, knowledge="off", luau_check=fake.luau_ok, wait=False)
+    try:
+        private._slots, private._slots_at = {"star-fast": 0}, time.monotonic()
+        assert private.slot_of("star-fast") == 0
+        assert isinstance(private._sandbox, ContainerSandbox)
+    finally:
+        private.close()

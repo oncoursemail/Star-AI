@@ -271,6 +271,26 @@ def test_simultaneous_first_open_and_sync_bind_one_store(workspace):
     assert all(stats["entities"] == 1 for _, stats in results)
 
 
+def test_init_lock_being_deleted_on_windows_is_waited_for(workspace, monkeypatch):
+    # Windows answers O_CREAT|O_EXCL on a lock file another process is deleting with PermissionError.
+    from star.shared_brain import store
+    real_open, refused = os.open, []
+
+    def deleting_then_free(path, flags, *args):
+        if str(path).endswith(".shared-brain-init.lock") and len(refused) < 2:
+            refused.append(path)
+            raise PermissionError(13, "Permission denied", str(path))
+        return real_open(path, flags, *args)
+
+    monkeypatch.setattr(store.os, "open", deleting_then_free)
+    brain = SharedBrain(workspace)
+    try:
+        assert brain.sync()["generation"] == 1
+    finally:
+        brain.close()
+    assert len(refused) == 2
+
+
 @pytest.mark.parametrize("suffix", ["", "-wal", "-shm", "-journal"])
 def test_database_and_sidecar_links_are_rejected(workspace, tmp_path, suffix):
     from star.shared_brain import store

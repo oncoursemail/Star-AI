@@ -7,25 +7,39 @@ from dataclasses import dataclass, field
 import asyncio
 import io
 import logging
+import math
 import os
 
 from .audio import MAX_ATTACHMENT_BYTES, ffmpeg_path, post_voice_message, validate_attachment, pcm_to_wav
 from .core import (AccessPolicy, MAX_AUDIO_TEXT, MAX_EMBED_DESCRIPTION, RateLimited, RateLimiter, embed_parts,
                    split_message)
 from .digest_task import DigestConfig
-from .dm_mode import DMSettings, MAX_IMAGE_BYTES, classify_owner_dm, prepare_discord_image
+from .dm_mode import (DMAction, DMSettings, MAX_DOWNLOAD_BYTES, MAX_IMAGE_BYTES, classify_owner_dm,
+                      download_attachment, prepare_discord_image, is_visual_critique)
+from .draw import NO_SUBJECT, DrawSettings, Drawer, draw_authorized, draw_intent, strip_mentions
 from .service import DiscordService
 from .streaming import LiveReply
+from .lab_status import (LabSettings, read_receipt, read_capture, format_receipt, classify_lab_question)
+from .presence import PresenceSettings, activity_at, rotate_presence
+from .work_status import WorkSettings, classify_work_question, format_work_report, read_work_report
+from .local_config import bot_host
 
 _LOG = logging.getLogger(__name__)
+SCREEN_NEEDS_PC = ("Looking at your screen needs the STAR app on your PC: this Discord bot runs on a STAR "
+                   "server, which cannot see your screen. Use Look at my screen in STAR Desktop.")
 _GOLD = 0xE4B95B
 DM_HELP = (
     "**Talk to STAR here like a normal chat.**\n"
     "- Type a question: STAR answers (it remembers the last few turns for an hour).\n"
-    "- Attach one screenshot (PNG/JPG/WebP) with a question: STAR looks at it (if images are on).\n"
+    "- Attach one photo or screenshot (PNG/JPG/WebP/HEIC, up to 25 MB) with a question: STAR looks at it.\n"
+    "- Attach two images: desired reference first and STAR result second, to ask what to improve.\n"
+    "- `draw a dragon over a castle` (or `generate an image of ...`): STAR makes the picture on this PC.\n"
     "- `remember: ...` proposes a lesson you approve later in STAR Desktop (if switched on).\n"
     "- `wrong: ...` right after an answer saves a correction; approved in STAR Desktop, it becomes a regression test.\n"
-    "- Slash commands: `/ask`, `/image`, `/screen`, `/status`, `/digest`, `/star reset`.\n"
+    "- Slash commands: `/ask`, `/draw` (make an image), `/image` (look at an image), `/compare`, `/screen`, "
+    "`/status`, `/digest`, `/star reset`.\n"
+    "Ask `what are you working on?` or use `/working` for real producer-reported activity.\n"
+    "Ask `lab status` or `send lab screenshot` for approved, read-only Studio/Blender evidence (if enabled).\n"
     "STAR cannot touch your files, Roblox Studio, GitHub or a shell from Discord."
 )
 
@@ -41,6 +55,11 @@ class BotConfig:
     screen_capture: bool = False
     rate_limit: int = 30
     digest: DigestConfig = field(default_factory=lambda: DigestConfig(False))
+    draw: DrawSettings = field(default_factory=DrawSettings)
+    lab: LabSettings = field(default_factory=LabSettings)
+    presence: PresenceSettings = field(default_factory=PresenceSettings)
+    work: WorkSettings = field(default_factory=WorkSettings)
+    host: str = "pc"                # "server": no PC screen or graphics card (STAR_DISCORD_HOST)
 
     @classmethod
     def from_env(cls, env=None) -> "BotConfig":
@@ -66,22 +85,40 @@ class BotConfig:
         return cls(token, policy, sync == "1", int(raw) if raw else None,
                    DMSettings.from_env(vars), sync_global=sync == "global",
                    screen_capture=screen == "1", rate_limit=RateLimiter.from_env(vars).limit,
-                   digest=DigestConfig.from_env(vars, policy=policy))
+                   digest=DigestConfig.from_env(vars, policy=policy), draw=DrawSettings.from_env(vars),
+                   lab=LabSettings.from_env(vars),
+                   presence=PresenceSettings.from_env(vars), work=WorkSettings.from_env(vars),
+                    host=bot_host(vars))
 
 
-def create_bot(config: BotConfig, *, service: DiscordService | None = None):
-    """Create a Gateway-connected bot; importing this module remains dependency-light."""
+def create_bot(config: BotConfig, *, service: DiscordService | None = None, drawer: Drawer | None = None,
+               reporter=None):
+    """Create a Gateway-connected bot; importing this module remains dependency-light.
+
+    ``reporter`` (runtime_status.StatusReporter) lets STAR Desktop show whether the bot is connected.
+    """
     import discord
     from discord import app_commands
     from discord.ext import commands
 
-    service = service or DiscordService(config.policy, rate_limiter=RateLimiter(limit=config.rate_limit))
+    if service is None:
+        from .brain import DiscordBrain, system_prompt
+        # The system prompt names exactly the features this bot was started with (byte-stable per process).
+        brain = DiscordBrain(system=system_prompt(draw=config.draw.enabled, vision=config.dm.images))
+        service = DiscordService(config.policy, brain=brain, rate_limiter=RateLimiter(limit=config.rate_limit))
+    if drawer is None:
+        if config.draw.on_pc:
+            drawer = Drawer(config.draw)
+        else:   # on a server the picture is made by the STAR GPU worker on the owner's PC (gpu_link.py)
+            from .gpu_link import remote_drawer
+            drawer = remote_drawer(config.draw)
     intents = discord.Intents.default()
     intents.message_content = False
     intents.members = False
     intents.presences = False
-    # STAR never reads server conversations, so it does not even subscribe to them.
-    intents.guild_messages = False
+    # STAR never reads server conversations. Only with STAR_DISCORD_MENTIONS=1 does it subscribe to server
+    # messages, and without the message-content intent Discord gives it the text of mentions only.
+    intents.guild_messages = config.draw.mentions
     intents.guild_typing = False
     intents.dm_typing = False
     # DMs addressed directly to this bot do not require privileged MESSAGE_CONTENT.
@@ -100,11 +137,39 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 if guild:
                     self.tree.copy_global_to(guild=guild)
                 await self.tree.sync(guild=guild)
+            start = getattr(drawer, "start", None)
+            if start is not None:
+                await start()
             if config.digest.enabled:
                 self.loop.create_task(digest_loop())
+            if reporter is not None:
+                self.loop.create_task(heartbeat_loop())
+            if config.presence.enabled:
+                self._star_presence_task = self.loop.create_task(rotate_presence(
+                    self, config.presence, activity_factory=make_discord_activity,
+                    on_error=lambda name: _LOG.warning("STAR Discord activity update failed (%s)", name)))
 
+        async def close(self):
+            stop = getattr(drawer, "stop", None)
+            if stop is not None:
+                await stop()
+            task = getattr(self, "_star_presence_task", None)
+            if task is not None:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+            await super().close()
+
+    def make_discord_activity(kind: str, label: str):
+        return discord.Activity(type=getattr(discord.ActivityType, kind), name=label)
+
+    # The initial Gateway activity is constructor metadata. In particular,
+    # do not send presence updates inside on_ready (which runs on reconnect).
+    initial = {"activity": make_discord_activity(*activity_at(0))} if config.presence.enabled else {}
     bot = StarBot(command_prefix=commands.when_mentioned, help_command=None,
-                  intents=intents, allowed_mentions=discord.AllowedMentions.none())
+                  intents=intents, allowed_mentions=discord.AllowedMentions.none(), **initial)
 
     def embed(title: str, description: str, *, footer: str = "STAR Intelligence · Discord"):
         result = discord.Embed(title=title[:250], description=description[:MAX_EMBED_DESCRIPTION], color=_GOLD)
@@ -238,6 +303,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
     @star.command(name="ask", description="Ask STAR's configured local or hosted brain")
     @app_commands.describe(prompt="Question or Roblox development request", private="Only show your answer to you")
     async def ask(interaction: discord.Interaction, prompt: str, private: bool = True):
+        if config.work.enabled and classify_work_question(prompt):
+            await send_work(interaction)
+            return
         key = await permit(interaction)
         if key is None:
             return
@@ -267,10 +335,11 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         if await permit(interaction) is None:
             return
         result = embed("✦ STAR · Command Center",
-            "**Quick**\n`/ask` — ask STAR · `/image` — STAR looks at an image you attach\n"
-            "`/status` — what is switched on · `/digest` — latest Night School numbers\n"
+            "**Quick**\n`/ask` — ask STAR · `/draw` — make an image · `/image` — look at an image you attach\n"
+            "`/compare` — privately critique two images: reference vs STAR result\n"
+            "`/status` — settings · `/working` — actual live worker reports · `/digest` — Night School numbers\n"
             "`/screen` — STAR looks at this PC's screen (asks you to confirm every time)\n"
-            "Or just **DM the bot** like a normal chat (text or one screenshot).\n"
+            "Or just **DM the bot** like a normal chat (text, one photo, or `draw a ...`).\n"
             "**Thinking**\n`/star ask` — ask Star (private by default)\n"
             "`/star research` — web-supported answer with actual search sources\n"
             "`/star reset` — forget this channel's temporary context\n"
@@ -282,8 +351,12 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             "`/star leave` — disconnect\n"
             "**Operations**\n`/star status` — model configuration and permission status\n"
             "`/star doctor` — private setup diagnostics\n"
+            "`/star working` — what coding, research, study and test workers reported\n"
+            "`/star lab` — report the last verified Studio/Blender job receipt\n"
+            "`/star labshot` — privately view one approved Studio/Blender render\n"
             "Right-click a text or voice message → **Apps → Ask STAR about this**.\n\n"
-            "*Discord mode is chat-only: Roblox Studio, filesystem, GitHub and MCP edits are unavailable.*")
+            "*From Discord STAR chats, draws and looks at images; Roblox Studio, filesystem, GitHub and MCP "
+            "edits stay in STAR Desktop.*")
         await interaction.response.send_message(embed=result, ephemeral=True)
 
     def status_text() -> str:
@@ -305,14 +378,22 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             digest = config.digest.describe() + (f" · {ledger_state(config.digest)}" if config.digest.enabled else "")
         except Exception:  # a broken state file must not break /status
             digest = config.digest.describe()
-        return (f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
+        presence = (f"on · rotates every {config.presence.interval_minutes} min (when connected)"
+                    if config.presence.enabled else "off")
+        where = "the PC" if config.host == "pc" else "a STAR server (drawing uses the PC's GPU worker; /screen needs the PC)"
+        return (f"**Runs on:** {where}\n"
+                f"**Bot activity:** {presence}\n"
+                f"**Provider:** `{provider[:60]}`\n**Chat model:** `{model[:120]}`\n"
                 f"**Vision model:** `{vision[:120]}`\n"
                 "**Access:** configured Discord owner only · "
                 f"{config.rate_limit} requests / 10 min\n"
                 f"**DM chat:** {onoff(config.dm.enabled)} · **Images:** {onoff(config.dm.images)} · "
                 f"**Remember:** {onoff(config.dm.learning_candidates)} · "
                 f"**PC screenshots:** {onoff(config.screen_capture)} (each needs a button press)\n"
+                f"**Draw (make images):** {drawer.describe()} · **@mentions:** {onoff(config.draw.mentions)}\n"
                 f"**Night School digests:** {digest}\n"
+                f"**Studio/Blender reports:** {onoff(config.lab.enabled)} (read-only, owner only)\n"
+                f"**Multi-worker status feed:** {onoff(config.work.enabled)} (read-only, owner only)\n"
                 "**Intents:** non-privileged (no server message content)\n"
                 "**Tools:** none from Discord (no files, Studio, GitHub or shell)\n"
                 "**Context:** temporary, in RAM (`/star reset` clears it)\n"
@@ -322,6 +403,46 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         if await permit(interaction) is None:
             return
         await interaction.response.send_message(embed=embed("✦ STAR · Status", status_text()), ephemeral=True)
+
+    def work_overview() -> str:
+        """Read host-reported facts only; never prompt the model to invent an activity."""
+        if config.work.enabled:
+            try:
+                summary = format_work_report(read_work_report(config.work))
+            except (OSError, ValueError) as exc:
+                summary = ("I can't confirm live worker activity. " + str(exc)[:200] +
+                           ". The worker feed is missing, invalid or not yet updated.")
+        else:
+            summary = ("**STAR · Work Pulse**\nI can't confirm what my coding, research or learning "
+                       "workers are doing right now: no live multi-worker report is connected. "
+                       "Set STAR_DISCORD_WORK_STATUS=1 and a trusted STAR_DISCORD_WORK_REPORT "
+                       "on the bot host to enable factual updates.")
+        if config.lab.enabled:
+            try:
+                lab_receipt = read_receipt(config.lab)
+                if lab_receipt.fresh():
+                    summary += ("\n\n**Studio/Blender producer report:** " +
+                                lab_receipt.engine + " · " + lab_receipt.state + " · " +
+                                lab_receipt.phase + " — " + lab_receipt.task +
+                                ". Checks " + str(lab_receipt.checked) + "/" + str(lab_receipt.total) +
+                                ". This is not independently verified by Discord.")
+            except (OSError, ValueError):
+                pass
+        if getattr(drawer, "busy", False):
+            summary += "\n\n**This Discord bot:** currently generating an image."
+        return summary[:MAX_EMBED_DESCRIPTION]
+
+    async def send_work(interaction):
+        if await permit(interaction) is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        content = await asyncio.to_thread(work_overview)
+        await interaction.followup.send(embed=embed("✦ STAR · Work Pulse", content),
+                                        ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+
+    @star.command(name="working", description="What is STAR doing? Private live evidence, not a model guess")
+    async def working(interaction: discord.Interaction):
+        await send_work(interaction)
 
     @star.command(name="status", description="Check STAR's Discord configuration")
     async def status(interaction: discord.Interaction):
@@ -336,6 +457,36 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         report = await __import__("asyncio").to_thread(doctor_snapshot)
         await interaction.followup.send(embed=embed("✦ STAR · Diagnostics", format_checks(report)),
                                         ephemeral=True)
+
+    @star.command(name="lab", description="Check the latest trusted Studio/Blender job receipt (private)")
+    async def lab(interaction: discord.Interaction):
+        if await permit(interaction) is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            receipt = await asyncio.to_thread(read_receipt, config.lab)
+            result = format_receipt(receipt)
+            await interaction.followup.send(embed=embed("STAR · Lab activity", result),
+                                            ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        except (OSError, ValueError) as exc:
+            await problem(interaction, str(exc)[:300])
+
+    @star.command(name="labshot", description="See an approved Studio viewport or Blender render (private)")
+    async def labshot(interaction: discord.Interaction):
+        if await permit(interaction) is None:
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            receipt = await asyncio.to_thread(read_receipt, config.lab)
+            filename, jpeg = await asyncio.to_thread(read_capture, config.lab, receipt)
+            # This is only the explicit owner's request. No public channel screenshot
+            # or desktop-wide capture, even when the command was invoked in a guild.
+            await interaction.followup.send(
+                embed=embed("STAR · Lab screenshot", format_receipt(receipt)),
+                file=discord.File(io.BytesIO(jpeg), filename=filename),
+                ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
+        except (OSError, ValueError) as exc:
+            await problem(interaction, str(exc)[:300])
 
     @star.command(name="reset", description="Clear the current channel's private conversation memory")
     async def reset(interaction: discord.Interaction):
@@ -490,6 +641,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         return app_commands.allowed_contexts(guilds=True, dms=True, private_channels=False)(command)
 
     async def run_ask(interaction, prompt: str, private: bool):
+        if config.work.enabled and classify_work_question(prompt):
+            await send_work(interaction)
+            return
         key = await permit(interaction)
         if key is None:
             return
@@ -509,13 +663,18 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         await run_ask(interaction, prompt, private)
 
     @owner_contexts
+    @bot.tree.command(name="working", description="What STAR's workers are doing right now (private, factual)")
+    async def working_top(interaction: discord.Interaction):
+        await send_work(interaction)
+
+    @owner_contexts
     @bot.tree.command(name="status", description="What STAR's Discord bot has switched on")
     async def status_top(interaction: discord.Interaction):
         await send_status(interaction)
 
     @owner_contexts
     @bot.tree.command(name="image", description="STAR looks at an image or screenshot you attach")
-    @app_commands.describe(image="PNG, JPG or WebP, up to 6 MiB", question="What should STAR look for?",
+    @app_commands.describe(image="PNG, JPG, WebP or HEIC, up to 25 MB", question="What should STAR look for?",
                            private="Only show the answer to you")
     async def image_top(interaction: discord.Interaction, image: discord.Attachment,
                         question: str = "", private: bool = True):
@@ -528,15 +687,104 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
             return
         await interaction.response.defer(thinking=True, ephemeral=private)
         try:
-            if not 0 < (image.size or 0) <= MAX_IMAGE_BYTES:
-                raise ValueError("Image must be nonempty and at most 6 MiB")
-            payload = await image.read()
-            photo = prepare_discord_image(image.filename, image.content_type, image.size, payload)
+            payload = await download_attachment(image)
+            photo = await asyncio.to_thread(prepare_discord_image, image.filename, image.content_type,
+                                            image.size, payload)
             answer = await service.inspect_image(key, question or "Describe this image and point out problems.",
                                                  photo)
             await publish_answer(interaction, answer, ephemeral=private, key=key)
         except Exception as exc:
             await handle_failure(interaction, exc)
+
+    @owner_contexts
+    @bot.tree.command(name="compare", description="Compare a reference with STAR's result (private)")
+    @app_commands.describe(reference="Desired reference PNG/JPG/WebP",
+                           result="STAR's result PNG/JPG/WebP; omit to use the current native Lab capture",
+                           instruction="What should STAR change or preserve?")
+    async def compare_top(interaction: discord.Interaction, reference: discord.Attachment,
+                          result: discord.Attachment | None = None, instruction: str = ""):
+        key = await permit(interaction)
+        if key is None:
+            return
+        if not config.dm.images:
+            await problem(interaction, "Private image analysis is off; enable STAR_DISCORD_DM_IMAGES first.")
+            return
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        try:
+            photos = []
+            for attachment in (reference, result):
+                if attachment is None:
+                    continue
+                if not 0 < (attachment.size or 0) <= MAX_IMAGE_BYTES:
+                    raise ValueError("Each comparison image must be nonempty and at most 6 MiB")
+                payload = await attachment.read()
+                photos.append(prepare_discord_image(
+                    attachment.filename, attachment.content_type, attachment.size, payload))
+            prompt = instruction or "Identify mismatches and propose a reference-guided revision."
+            if result is None:
+                answer = await service.compare_lab_reference(key, prompt, photos[0], config.lab)
+            else:
+                answer = await service.compare_images(key, prompt, photos[0], photos[1])
+            await publish_answer(interaction, answer, ephemeral=True, key=key)
+        except Exception as exc:
+            await handle_failure(interaction, exc)
+
+    def drawing_file(picture):
+        return discord.File(io.BytesIO(picture.png), filename=picture.filename)
+
+    async def draw_in_channel(channel, prompt: str):
+        """DM or @mention: a 'Drawing…' message that tracks progress, then the picture with its prompt."""
+        if not prompt and config.draw.enabled:
+            await channel.send(NO_SUBJECT, allowed_mentions=discord.AllowedMentions.none())
+            return
+        status_message = await channel.send("🎨 Drawing…", allowed_mentions=discord.AllowedMentions.none())
+
+        async def on_status(text):
+            await status_message.edit(content="🎨 " + text, allowed_mentions=discord.AllowedMentions.none())
+        try:
+            picture = await drawer.draw(prompt, on_status=on_status)
+        except ValueError as exc:
+            await status_message.edit(content="⚠️ " + str(exc)[:1800], allowed_mentions=discord.AllowedMentions.none())
+            return
+        except Exception as exc:     # never log the prompt
+            _LOG.warning("STAR Discord drawing failed: %s", type(exc).__name__)
+            await status_message.edit(content="⚠️ STAR could not make the picture. The bot's log on the PC has "
+                                      "the error type.", allowed_mentions=discord.AllowedMentions.none())
+            return
+        await channel.send(content=picture.caption(), file=drawing_file(picture),
+                           allowed_mentions=discord.AllowedMentions.none())
+        try:
+            await status_message.delete()
+        except Exception:
+            pass
+
+    @owner_contexts
+    @bot.tree.command(name="draw", description="STAR makes an image on this PC's graphics card")
+    @app_commands.describe(prompt="What to draw, e.g. a red dragon over a castle at sunset",
+                           private="Only show the picture to you")
+    async def draw_top(interaction: discord.Interaction, prompt: str, private: bool = False):
+        try:
+            draw_authorized(service, config.draw, interaction.user.id, interaction.guild_id, interaction.channel_id)
+        except PermissionError as exc:
+            await problem(interaction, str(exc))
+            return
+        await interaction.response.defer(thinking=True, ephemeral=private)
+
+        async def on_status(text):
+            await interaction.edit_original_response(content="🎨 " + text,
+                                                     allowed_mentions=discord.AllowedMentions.none())
+        try:
+            picture = await drawer.draw(prompt, on_status=on_status)
+            await interaction.edit_original_response(content=picture.caption(), attachments=[drawing_file(picture)],
+                                                     allowed_mentions=discord.AllowedMentions.none())
+        except ValueError as exc:
+            await interaction.edit_original_response(content="⚠️ " + str(exc)[:1800],
+                                                     allowed_mentions=discord.AllowedMentions.none())
+        except Exception as exc:
+            _LOG.warning("STAR Discord drawing failed: %s", type(exc).__name__)
+            await interaction.edit_original_response(content="⚠️ STAR could not make the picture. The bot's log "
+                                                     "on the PC has the error type.",
+                                                     allowed_mentions=discord.AllowedMentions.none())
 
     class ScreenConfirm(discord.ui.View):
         """Per-request confirmation: one capture per button press, owner only, expires in 60 s."""
@@ -580,6 +828,9 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
     async def screen_top(interaction: discord.Interaction, question: str = ""):
         key = await permit(interaction)
         if key is None:
+            return
+        if config.host != "pc":
+            await problem(interaction, SCREEN_NEEDS_PC)
             return
         if not config.screen_capture:
             await problem(interaction, "PC screenshots are off. Set STAR_DISCORD_SCREEN_CAPTURE=1 in "
@@ -656,10 +907,15 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         Text is ephemeral, image bytes are inspected only for this request, and
         an explicit remember command proposes (never approves) a lesson.
         """
+        if message.author.bot:
+            return
+        if message.guild is not None:
+            if config.draw.mentions:
+                await on_mention(message)
+            return
         # A guild-less message can also be a group DM. Only one-to-one DMs
         # may reach owner authorization, local models, or learning candidates.
-        if (not config.dm.enabled or message.guild is not None or message.author.bot
-                or getattr(message.channel, "type", None) != discord.ChannelType.private):
+        if not config.dm.enabled or getattr(message.channel, "type", None) != discord.ChannelType.private:
             return
         try:
             key = service.authorized(message.author.id, None, message.channel.id)
@@ -671,8 +927,50 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
         if (message.content or "").strip().lower() in {"help", "/help", "?", "commands"} and not message.attachments:
             await message.channel.send(DM_HELP, allowed_mentions=discord.AllowedMentions.none())
             return
+        if config.work.enabled and not message.attachments and classify_work_question(message.content or ""):
+            report = await asyncio.to_thread(work_overview)
+            await message.channel.send(content=report, allowed_mentions=discord.AllowedMentions.none())
+            return
+        # Strict owner-DM lab questions bypass the LLM entirely. A recorded
+        # screenshot is returned only for an explicit owner request, never
+        # because the model suggested taking a desktop capture.
+        # With Lab reports off (the default) these phrases are ordinary chat for the brain.
+        lab_intent = (classify_lab_question(message.content or "")
+                      if config.lab.enabled and not message.attachments else "")
+        if lab_intent:
+            try:
+                receipt = await asyncio.to_thread(read_receipt, config.lab)
+                if lab_intent == "screenshot":
+                    filename, jpeg = await asyncio.to_thread(read_capture, config.lab, receipt)
+                    await message.channel.send(
+                        content=format_receipt(receipt),
+                        file=discord.File(io.BytesIO(jpeg), filename=filename),
+                        allowed_mentions=discord.AllowedMentions.none())
+                else:
+                    await message.channel.send(content=format_receipt(receipt),
+                                               allowed_mentions=discord.AllowedMentions.none())
+            except (OSError, ValueError) as exc:
+                await message.channel.send(content=str(exc)[:300],
+                                           allowed_mentions=discord.AllowedMentions.none())
+            return
+        if not message.attachments:
+            wanted = draw_intent(message.content or "")
+            if wanted is not None:
+                await draw_in_channel(message.channel, wanted.prompt)
+                return
         action = classify_owner_dm(
             message.content or "", attachments=len(message.attachments), options=config.dm)
+        # Natural criticism immediately after a visual question is a reviewable
+        # correction candidate, but ONLY when the owner enabled learning and
+        # the previous DM exchange actually involved an image. Generic dislikes
+        # in unrelated conversations never become training data.
+        if action.kind == "text" and config.dm.learning_candidates and is_visual_critique(action.prompt):
+            history = service.memory.history(key)
+            if (len(history) >= 2 and history[-2].get("role") == "user"
+                    and history[-1].get("role") == "assistant"
+                    and history[-2].get("content", "").startswith((
+                        "[Image discussed]", "[Image comparison reference="))):
+                action = DMAction("correct", action.prompt, "correction")
         if action.error:
             await message.channel.send(action.error, allowed_mentions=discord.AllowedMentions.none())
             return
@@ -690,12 +988,20 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                     reply_text = await service.ask(key, action.prompt, on_delta=live.update, on_status=live.status)
                 elif action.kind == "image":
                     attachment = message.attachments[0]
-                    if attachment.size > MAX_IMAGE_BYTES:
-                        raise ValueError("Image exceeds the 6 MiB limit")
-                    payload = await attachment.read()
-                    photo = prepare_discord_image(
-                        attachment.filename, attachment.content_type, attachment.size, payload)
+                    payload = await download_attachment(attachment, limit=MAX_DOWNLOAD_BYTES)
+                    photo = await asyncio.to_thread(prepare_discord_image, attachment.filename,
+                                                    attachment.content_type, attachment.size, payload)
                     reply_text = await service.inspect_image(key, action.prompt, photo)
+                elif action.kind == "compare":
+                    photos = []
+                    for attachment in message.attachments:
+                        if not 0 < (attachment.size or 0) <= MAX_IMAGE_BYTES:
+                            raise ValueError("Each comparison image must be at most 6 MiB")
+                        payload = await attachment.read()
+                        photos.append(prepare_discord_image(
+                            attachment.filename, attachment.content_type, attachment.size, payload))
+                    reply_text = await service.compare_images(
+                        key, action.prompt, photos[0], photos[1])
                 elif action.kind == "remember":
                     receipt = await service.propose_dm_lesson(
                         key, message_id=message.id, text=action.prompt,
@@ -744,8 +1050,69 @@ def create_bot(config: BotConfig, *, service: DiscordService | None = None):
                 part = part[:1900] + "\n\n*Full answer attached.*"
             await message.channel.send(content=part, **options)
 
+    def report_status():
+        if reporter is None:
+            return
+        if bot.is_ready():
+            latency = bot.latency
+            reporter.write("connected", guilds=len(bot.guilds),
+                         **({"latency_ms": round(latency * 1000)} if isinstance(latency, (int, float)) and math.isfinite(latency) else {}))
+        else:
+            reporter.write("reconnecting")
+
+    async def heartbeat_loop():
+        # Keeps the "connected" report fresh; a stalled gateway shows up as reconnecting.
+        while not bot.is_closed():
+            report_status()
+            await asyncio.sleep(30)
+
+    async def on_mention(message):
+        """@STAR in an approved server channel (STAR_DISCORD_MENTIONS=1): draw, or answer the owner."""
+        me = bot.user
+        if me is None or not any(getattr(user, "id", None) == me.id for user in (message.mentions or [])):
+            return
+        text = strip_mentions(message.content or "")
+        wanted = draw_intent(text)
+        try:
+            if wanted is not None:
+                draw_authorized(service, config.draw, message.author.id, message.guild.id, message.channel.id)
+            else:
+                key = service.authorized(message.author.id, message.guild.id, message.channel.id)
+        except RateLimited as exc:
+            await message.channel.send(str(exc), allowed_mentions=discord.AllowedMentions.none())
+            return
+        except PermissionError:
+            return  # No response or information to unapproved users.
+        if wanted is not None:
+            await draw_in_channel(message.channel, wanted.prompt)
+            return
+        if not text:
+            return
+        if config.work.enabled and classify_work_question(text):
+            await message.channel.send(
+                "I'll show work details privately. Use /working or DM me so project activity is not posted publicly.",
+                allowed_mentions=discord.AllowedMentions.none())
+            return
+        try:
+            async with message.channel.typing():
+                reply_text = await service.ask(key, text)
+        except (ValueError, PermissionError) as exc:
+            reply_text = str(exc)[:400]
+        except Exception as exc:
+            _LOG.warning("STAR mention reply failed: %s", type(exc).__name__)
+            reply_text = "STAR could not answer this. Check its configured model."
+        parts, _overflow = split_message(reply_text)
+        for part in parts:
+            await message.channel.send(content=part, allowed_mentions=discord.AllowedMentions.none())
+
     @bot.event
     async def on_ready():
         _LOG.info("STAR Discord bot connected (guild count: %s)", len(bot.guilds))
+        report_status()
+
+    @bot.event
+    async def on_disconnect():
+        if reporter is not None:
+            reporter.write("reconnecting")
 
     return bot

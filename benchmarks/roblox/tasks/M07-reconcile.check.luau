@@ -1,0 +1,20 @@
+local M = solution()
+local template = { coins = 0, settings = { music = true, volume = 0.5 }, inv = { "sword" } }
+local data = { coins = 25, settings = { volume = 0.9 }, extra = "keep" }
+local out
+check("fills missing values", function()
+	out = M.reconcile(data, template)
+	expect(out.coins == 25, "coins")
+	expect(out.settings.volume == 0.9 and out.settings.music == true, "settings merge")
+	expect(out.inv and out.inv[1] == "sword", "inv copied")
+	expect(out.extra == "keep", "extra key kept")
+end)
+check("inputs unchanged", function()
+	expect(data.settings.music == nil and data.inv == nil, "data changed")
+	expect(template.coins == 0 and template.settings.volume == 0.5, "template changed")
+end)
+check("no shared tables", function()
+	expect(out ~= data and out.settings ~= data.settings and out.settings ~= template.settings, "shared settings")
+	table.insert(out.inv, "bow")
+	expect(#template.inv == 1, "inv shared with template")
+end)

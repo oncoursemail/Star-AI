@@ -1,0 +1,13 @@
+local M = {}
+function M.makePart(name: string, size: Vector3, color: Color3, parent: Instance): Part
+	local part = Instance.new("Part")
+	part.Name = name
+	part.Size = size
+	part.Color = color
+	part.Anchored = true
+	part.CanCollide = true
+	part.Material = Enum.Material.SmoothPlastic
+	part.Parent = parent
+	return part
+end
+return M

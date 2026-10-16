@@ -1,0 +1,75 @@
+```lua
+local Inventory = {}
+Inventory.__index = Inventory
+
+function Inventory.new(maxStack, slots)
+	local self = setmetatable({}, Inventory)
+	self.maxStack = maxStack
+	self.slots = slots
+	self.items = {}
+	for i = 1, slots do
+		self.items[i] = nil
+	end
+	return self
+end
+
+function Inventory:count(item)
+	local total = 0
+	for i = 1, self.slots do
+		local slot = self.items[i]
+		if slot and slot.item == item then
+			total += slot.count
+		end
+	end
+	return total
+end
+
+function Inventory:add(item, n)
+	local added = 0
+	-- Fill existing stacks first
+	for i = 1, self.slots do
+		if added >= n then break end
+		local slot = self.items[i]
+		if slot and slot.item == item and slot.count < self.maxStack then
+			local space = self.maxStack - slot.count
+			local toAdd = math.min(space, n - added)
+			slot.count += toAdd
+			added += toAdd
+		end
+	end
+	-- Then fill empty slots
+	for i = 1, self.slots do
+		if added >= n then break end
+		local slot = self.items[i]
+		if not slot then
+			local toAdd = math.min(self.maxStack, n - added)
+			self.items[i] = { item = item, count = toAdd }
+			added += toAdd
+		end
+	end
+	return added
+end
+
+function Inventory:remove(item, n)
+	local total = self:count(item)
+	if total < n then
+		return false
+	end
+	local remaining = n
+	for i = 1, self.slots do
+		if remaining <= 0 then break end
+		local slot = self.items[i]
+		if slot and slot.item == item then
+			local toRemove = math.min(slot.count, remaining)
+			slot.count -= toRemove
+			remaining -= toRemove
+			if slot.count == 0 then
+				self.items[i] = nil
+			end
+		end
+	end
+	return true
+end
+
+return Inventory
+```

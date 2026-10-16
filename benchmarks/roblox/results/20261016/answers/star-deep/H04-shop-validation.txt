@@ -1,0 +1,41 @@
+```lua
+local Shop = {}
+Shop.__index = Shop
+
+function Shop.new(prices)
+	local self = setmetatable({}, Shop)
+	self.prices = prices
+	return self
+end
+
+function Shop:buy(player, itemId)
+	if typeof(itemId) ~= "string" then
+		return false, "invalid item id"
+	end
+
+	local price = self.prices[itemId]
+	if price == nil then
+		return false, "unknown item"
+	end
+
+	local ownsAttr = "Owns_" .. itemId
+	if player:GetAttribute(ownsAttr) == true then
+		return false, "already owned"
+	end
+
+	local coins = player:GetAttribute("Coins")
+	if typeof(coins) ~= "number" then
+		return false, "no coins"
+	end
+
+	if coins < price then
+		return false, "not enough coins"
+	end
+
+	player:SetAttribute("Coins", coins - price)
+	player:SetAttribute(ownsAttr, true)
+	return true, "ok"
+end
+
+return Shop
+```

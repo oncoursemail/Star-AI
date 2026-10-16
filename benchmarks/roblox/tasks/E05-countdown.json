@@ -1,0 +1,8 @@
+{
+ "id": "E05-countdown",
+ "level": "easy",
+ "kind": "script",
+ "title": "Round countdown values",
+ "prompt": "Write one server Script. It creates an IntValue named \"TimeLeft\" (start value 10) and a StringValue named\n\"Status\" (start value \"Running\"), both parented to `script.Parent`. TimeLeft goes down by 1 every second until it\nreaches 0; then Status becomes \"Ended\".",
+ "playSeconds": 45
+}

@@ -1,0 +1,34 @@
+{
+ "name": "WinPad",
+ "kind": "obby",
+ "brief": "A short run with a win counter: a start floor with a SpawnLocation, 3 platforms, and a win pad. Touching the win pad gives the player 1 Win and sends them back to the start.",
+ "contract": [
+  "Create a SpawnLocation named Start inside script.Parent on the start floor.",
+  "Name the platforms Stage1 ... Stage3 in jump order; the win pad is a Part named Goal.",
+  "leaderstats IntValue named Wins starting at 0. Touching Goal adds 1 Win once per visit and moves the character back onto Start."
+ ],
+ "checks": [
+  {
+   "do": "route",
+   "prefix": "Stage",
+   "target": "Goal",
+   "min": 3,
+   "seconds": 20
+  },
+  {
+   "do": "wait",
+   "seconds": 1.5
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Wins",
+   "equals": 1
+  },
+  {
+   "do": "near",
+   "target": "Start",
+   "within": 8
+  }
+ ],
+ "playSeconds": 150
+}

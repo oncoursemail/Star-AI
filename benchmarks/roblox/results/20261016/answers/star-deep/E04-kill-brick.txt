@@ -1,0 +1,19 @@
+```lua
+local killBrick = Instance.new("Part")
+killBrick.Name = "KillBrick"
+killBrick.Size = Vector3.new(8, 1, 8)
+killBrick.Position = Vector3.new(0, 40, 300)
+killBrick.Anchored = true
+killBrick.Color = Color3.new(1, 0, 0)
+killBrick.Parent = script.Parent
+
+killBrick.Touched:Connect(function(hit)
+	local character = hit:FindFirstAncestorOfClass("Model")
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			humanoid.Health = 0
+		end
+	end
+end)
+```

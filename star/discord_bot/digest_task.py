@@ -38,6 +38,8 @@ class DigestConfig:
     state_path: Path | None = None
     cooldown_hours: int = 6
     check_minutes: int = 30
+    evidence_directory: Path | None = None
+    evidence_reviews: Path | None = None
 
     @classmethod
     def from_env(cls, env=None, *, policy: AccessPolicy | None = None) -> "DigestConfig":
@@ -61,9 +63,18 @@ class DigestConfig:
             raise PermissionError("Learning DM target is not an approved STAR owner")
         path = str(source.get("STAR_DISCORD_LEARNING_REPORT", "")).strip()
         target = str(source.get("STAR_DISCORD_LEARNING_REPORT_SSH", "")).strip()
-        if bool(path) == bool(target):
+        evidence = str(source.get("STAR_DISCORD_EVIDENCE_DIRECTORY", "")).strip()
+        reviews = str(source.get("STAR_DISCORD_EVIDENCE_REVIEWS", "")).strip()
+        if (path and target) or not (path or target or evidence):
             raise ValueError("Set exactly one Night School report source: "
                              "STAR_DISCORD_LEARNING_REPORT (file) or STAR_DISCORD_LEARNING_REPORT_SSH")
+        from .native_evidence import trusted_path
+        if evidence:
+            trusted_path(Path(evidence))
+        if reviews:
+            trusted_path(Path(reviews))
+            if not evidence or Path(reviews).resolve().is_relative_to(Path(evidence).resolve()):
+                raise ValueError("Native reviews need a separate operator-only directory")
         if path and not Path(path).is_absolute():
             raise ValueError("STAR_DISCORD_LEARNING_REPORT must be an absolute path")
         if target and not _SSH_TARGET.fullmatch(target):
@@ -79,7 +90,8 @@ class DigestConfig:
         if not minutes.isdecimal() or not 10 <= int(minutes) <= 1440:
             raise ValueError("STAR_DISCORD_LEARNING_CHECK_MINUTES must be between 10 and 1440")
         return cls(True, owner, Path(path) if path else None, target, state_path,
-                   int(cooldown), int(minutes))
+                   int(cooldown), int(minutes), Path(evidence) if evidence else None,
+                   Path(reviews) if reviews else None)
 
     def delivery_settings(self) -> DeliverySettings:
         # report_path is unused when the snapshot is supplied (ssh source).
@@ -89,7 +101,9 @@ class DigestConfig:
     def describe(self) -> str:
         if not self.enabled:
             return "off (set STAR_DISCORD_LEARNING_DM_OPT_IN=1 to opt in)"
-        source = "local file" if self.report_path else "brain server over ssh"
+        source = "local file" if self.report_path else "brain server over ssh" if self.ssh_target else "native task events"
+        if self.evidence_directory is not None and (self.report_path or self.ssh_target):
+            source += " + native task events"
         return f"on: checks every {self.check_minutes} min ({source}), at most one DM per {self.cooldown_hours} h"
 
 
@@ -116,6 +130,8 @@ async def load_snapshot(config: DigestConfig, *, runner=subprocess.run) -> Learn
 
 async def current_digest(config: DigestConfig, *, runner=subprocess.run, now=None) -> str:
     """On-demand /digest text; changes no delivery state."""
+    if not config.report_path and not config.ssh_target:
+        return "Native task notifications are enabled. Use /star lab for the latest producer receipt."
     snapshot = await load_snapshot(config, runner=runner)
     return format_learning_digest(snapshot, now=now or datetime.now(timezone.utc))
 
@@ -124,6 +140,11 @@ async def check_and_send(config: DigestConfig, send, *, runner=subprocess.run, n
     """One timer tick: DM only on real, fresh, non-duplicate progress."""
     if not config.enabled:
         return {"state": "disabled", "sent": False}
+    if config.evidence_directory is not None:
+        from .task_events import check_task_events
+        result = await check_task_events(config, send, now=now)
+        if result["sent"] or not (config.report_path or config.ssh_target):
+            return result
     config.state_path.parent.mkdir(parents=True, exist_ok=True)
     snapshot = await load_snapshot(config, runner=runner)
     return await run_delivery(config.delivery_settings(), dry_run=False, now=now,
@@ -135,8 +156,12 @@ def ledger_state(config: DigestConfig) -> str:
         return "no digest sent yet"
     ledger = DeliveryLedger(config.state_path, config.owner_id)
     try:
-        row = ledger.db.execute("SELECT state, report_stamp FROM learning_dms WHERE owner_id=? "
-                                "ORDER BY claimed_at DESC LIMIT 1", (config.owner_id,)).fetchone()
+        row = ledger.db.execute(
+            "SELECT state, report_stamp, claimed_at, 'digest' FROM learning_dms WHERE owner_id=? "
+            "UNION ALL SELECT state, event_id, claimed_at, 'task' FROM task_dms WHERE owner_id=? "
+            "ORDER BY claimed_at DESC LIMIT 1", (config.owner_id, config.owner_id)).fetchone()
     finally:
         ledger.close()
+    if row and row[3] == "task":
+        return f"last native task: {row[0]} (event {row[1][:12]})"
     return f"last digest: {row[0]} (report {row[1]})" if row else "no digest sent yet"

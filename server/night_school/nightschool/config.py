@@ -27,6 +27,16 @@ class Settings:
     poll_s: float = field(default_factory=lambda: float(_env("STAR_NS_POLL_S", "10")))
     watch_s: float = field(default_factory=lambda: float(_env("STAR_NS_WATCH_S", "3")))
     slot: int = field(default_factory=lambda: int(_env("STAR_NS_SLOT", "1")))
+    # STAR's resource planner (star/resource_planner_service.py) on this machine; "off" = only the idle gate above.
+    # Planner down or without fresh data: the idle gate decides, exactly as before.
+    planner_url: str = field(default_factory=lambda: _env("STAR_NS_PLANNER_URL", "http://127.0.0.1:8098"))
+    # Parallel practice lanes (each its own planner lease and its own slot: slot, slot + 1, ...). Lanes 2..N run only
+    # while the planner admits them; with the planner off or down night school is single-lane, as before.
+    # The model that drafts lessons (the "diagnose" step, 260 tokens). "" = the answer model. star-quick (its own
+    # process and slots) keeps star-fast free for answers; a weak lesson costs nothing: it is kept only if the task
+    # then passes.
+    diagnose_model: str = field(default_factory=lambda: _env("STAR_NS_DIAGNOSE_MODEL", ""))
+    lanes: int = field(default_factory=lambda: max(1, min(4, int(_env("STAR_NS_LANES", "1")))))
     # Learning rules.
     validation_percent: int = field(default_factory=lambda: int(_env("STAR_NS_VALIDATION_PERCENT", "20")))
     # W1 paired gate (star/eval_stats.py): 24 validation tasks, k samples per arm, both arms interleaved in one
@@ -39,6 +49,21 @@ class Settings:
     batch: int = field(default_factory=lambda: int(_env("STAR_NS_BATCH", "5")))
     recheck_every: int = field(default_factory=lambda: int(_env("STAR_NS_RECHECK_EVERY", "40")))
     retry_candidates: int = field(default_factory=lambda: int(_env("STAR_NS_RETRY_CANDIDATES", "1")))
+    # Validation budget: validation answers (gates, rechecks) may take at most this share of all answer time; a gate
+    # run pauses between tasks when it is used up and resumes after more practice. 0 = no limit (the old behaviour).
+    # The gate itself is unchanged: only a significant paired win on the validation slice promotes.
+    validation_share: float = field(default_factory=lambda: float(_env("STAR_NS_VALIDATION_SHARE", "0")))
+    # A disjoint share of the practice tasks for one of several workers, "k/n" or "k1,k2/n": a task belongs to this
+    # worker when sha256(id) mod n is one of the k's. "" = every task. The validation slice is not affected.
+    share: str = field(default_factory=lambda: _env("STAR_NS_SHARE", ""))
+    # The documentation and Luau-check service; "" = the brain's own host on the knowledge port (as before).
+    knowledge_url: str = field(default_factory=lambda: _env("STAR_NS_KNOWLEDGE_URL", ""))
+    # Practice tasks another worker already answered (a JSON list of ids): left out of this worker's practice, so
+    # a share that moves from one worker to another is not answered twice. "" = none.
+    skip_file: str = field(default_factory=lambda: _env("STAR_NS_SKIP_FILE", ""))
+    # A worker outside the server (the PC's graphics card): run the unit tests in the server container's sandbox over
+    # SSH (star/eval_sandbox.ContainerSandbox, "user@address"), never on this machine. "" = the local Luau VM.
+    sandbox_ssh: str = field(default_factory=lambda: _env("STAR_NS_SANDBOX_SSH", ""))
 
     @property
     def app(self) -> Path:          # a copy of the repository (the folder that holds `star/`)

@@ -1,0 +1,48 @@
+```lua
+local CollectionService = game:GetService("CollectionService")
+local RunService = game:GetService("RunService")
+
+local SPINNER_TAG = "Spinner"
+local ROTATION_SPEED = 90 -- degrees per second
+
+-- Store original CFrame and orientation for parts tagged after start
+local partData = {}
+
+local function onPartAdded(part)
+	if part:IsA("BasePart") and part.Anchored then
+		partData[part] = {
+			OriginalOrientation = part.Orientation,
+			StartTime = tick()
+		}
+	end
+end
+
+-- Handle parts already tagged
+for _, part in ipairs(CollectionService:GetTagged(SPINNER_TAG)) do
+	onPartAdded(part)
+end
+
+-- Handle new tags
+CollectionService:GetInstanceAddedSignal(SPINNER_TAG):Connect(onPartAdded)
+
+-- Handle untagging (remove from tracking)
+CollectionService:GetInstanceRemovedSignal(SPINNER_TAG):Connect(function(part)
+	partData[part] = nil
+end)
+
+-- Run loop
+RunService.Heartbeat:Connect(function(dt)
+	for part, data in pairs(partData) do
+		if part.Parent and part.Anchored then
+			-- Calculate elapsed time since this part was added/started tracking
+			local elapsed = tick() - data.StartTime
+			local rotationY = data.OriginalOrientation.Y + (ROTATION_SPEED * elapsed)
+			
+			part.Orientation = Vector3.new(0, rotationY, 0)
+		else
+			-- Part is no longer anchored or parented, stop tracking
+			partData[part] = nil
+		end
+	end
+end)
+```

@@ -22,7 +22,7 @@ import uuid
 
 from .desktop_core import Settings, Conversations, app_data, run_task, query_models, check_studio
 from .analytics import get_dashboard
-from .brain_overview import brain_snapshot
+from .brain_overview import brain_snapshot, planner_snapshot
 from .brain_setup import BrainInstall, install_brain
 from .local_runtime import Runtime
 from .version import __version__
@@ -34,6 +34,7 @@ from .model_health import (explain_model_failure, missing_model_message, note_se
 from .chat_images import chat_image, generate_chat_image, latest_generated_path
 from .comfy import ComfyError
 from .warmup import Warmer
+from .prefill_warm import DraftWarmer
 from .diagnostics import export_review_bundle
 from .screen_capture import (require_consent as require_screen_consent, store_capture as store_screen_capture,
                              describe as describe_screen_capture, preview_url as screen_preview_url)
@@ -43,6 +44,11 @@ from .studio_connections import connection_status, validate_target, select_insta
 from .studio_host import STUDIO_HOST_ACTIONS, handle as handle_studio_host
 from .tool_workshop import ToolWorkshop
 from .voice.bridge import VOICE_ACTIONS, VoiceBridge
+from .discord_supervisor import DISCORD_ACTIONS, DiscordSupervisor, handle_action as handle_discord_action, start_if_opted_in
+from .clips_obs import CLIP_ACTIONS, ClipService
+from .clip_library import ClipLibrary
+from .steelseries_moments import MomentsEvents
+from .game_lab_catalog import catalog as game_lab_catalog
 from .lessons import (LESSON_ACTIONS, handle_action as handle_lesson_action,
                       import_bundled_lessons, learning_status, write_export)
 from .learned_week import LEARNED_ACTIONS, handle_action as handle_learned_action, import_bundled as import_learning_bundle
@@ -52,26 +58,31 @@ from . import image_gen
 from .media_actions import (MEDIA_ACTIONS, SLOW_MEDIA_ACTIONS, ComfyLauncher, effective_comfy_home,
                             handle as handle_media_action)
 from . import media_places
+from . import gpu_helper
 from .chat_media import prepare_turn
 from .roblox_cloud import (ROBLOX_ACTIONS, ROBLOX_NETWORK_ACTIONS, RobloxCloud,
                            handle_action as handle_roblox_action)
 
 ALLOWED_ACTIONS = frozenset({
-    'bootstrap','brainSnapshot','switchProject','pickFiles','sendMessage','saveSettings',
+    'bootstrap','brainSnapshot','plannerStatus','switchProject','pickFiles','sendMessage','saveSettings',
     'installBrain','startBrain','listModels','testModel','discoverStudio','selectStudio',
     'checkUpdates','installUpdate','transcribe','openDataFolder', 'copyText', 'openLegacy', 'selectFolder',
     'generateImage','saveProviderKey','clearProviderKey','cancelMessage','exportReviewBundle',
     'newChat','switchChat','testMcpConnection','runTeam','rememberDecision','listLearning',
     'researchStatus','researchCheck','researchEvidence','researchNominate',
     'listCustomTools','previewCustomTool','approveCustomTool','disableCustomTool',
-    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','testBlender',
+    'startModelRouter','stopBrain','testModelTeam','testServer','warmUp','warmDraft','testBlender',
     'serverKeyFileStatus','importServerKeyFile',
     # Sidebar chat menu (rename, delete after the Undo window) and the composer's
     # "Look at my screen", which needs the owner's per-use consent (star/screen_capture.py).
     'renameChat','deleteChat','captureScreen',
+    # Settings > Use my GPU (star/gpu_helper.py): its status line and the on/off switch.
+    'gpuHelperStatus','gpuHelperSet',
 })
 # Voice calls keep their own action list (star/voice/bridge.py, docs/STAR_VOICE_CALLS.md).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | VOICE_ACTIONS
+# Voice actions that make sound must run where Settings → Where STAR generates says (star/media_places.py).
+VOICE_PLACE_ACTIONS = frozenset({'voiceStartCall', 'voicePreviewVoice', 'voiceSpeak'})
 # Learning: review of lessons and thumbs on answers (star/lessons.py), plus the optional
 # background rewording of raw captures (star/lesson_digest.py).
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | LESSON_ACTIONS | {'digestLessons'}
@@ -87,6 +98,19 @@ ALLOWED_ACTIONS = ALLOWED_ACTIONS | ROBLOX_ACTIONS
 # Settings > Roblox Studio: whether an operator-made STAR Studio server connection exists
 # (star/studio_host.py). Read-only: the page cannot store one, and the command is never sent to it.
 ALLOWED_ACTIONS = ALLOWED_ACTIONS | STUDIO_HOST_ACTIONS
+# Settings > Discord: status, Start/Stop and the opt-in autostart for the Discord bot process
+# (star/discord_supervisor.py). Never carries the token, the owner's IDs or any key.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | DISCORD_ACTIONS
+# STAR Clips only accepts explicit desktop UI clicks; never model tool calls.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_ACTIONS
+# Optional read-only clip folders and developer-owned SteelSeries Moments events.
+CLIP_INTEROP_ACTIONS = frozenset({
+    'clipChooseFolder', 'clipListFolder', 'clipClearFolder', 'clipOpenFile',
+    'clipMomentsStatus', 'clipMomentsRegister', 'clipMomentsTrigger',
+})
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | CLIP_INTEROP_ACTIONS
+# A static read-only source index; no arbitrary fetch/install/execute capability.
+ALLOWED_ACTIONS = ALLOWED_ACTIONS | {'gameLabCatalog'}
 
 # A background warm-up (server check + prompt-cache priming) gives way at once to
 # anything that talks to the model server or changes what it would talk to.
@@ -102,18 +126,26 @@ PERMITTED_SETTINGS = frozenset({
     'endpoint','model','fast_model','reasoning_model','roblox_model','vision_model',
     'router_models_dir','router_context','gpu_layers','roblox_research_enabled','asset_forge_enabled',
     'tool_workshop_enabled','specialists_enabled','specialist_parallelism','provider',
-    'project','workspace','studio_target','studio_edit','studio_own_places','studio_luau','workspace_edit','max_calls',
+    'project','workspace','studio_target','studio_edit','studio_own_places','studio_luau','studio_tool_examples','workspace_edit','max_calls',
     'context_chars','reduced_motion','comfy_workflow','comfy_prompt_node','comfy_port',
     'obsidian_vault','obsidian_enabled','skills_enabled','graphify_enabled',
     'mcp_graphify_docs','mcp_graphify_local','mcp_graphify_port','mcp_obsidian_live',
-    'blender_enabled','blender_edit','blender_executable',
+    'blender_enabled','blender_edit','blender_executable','blender_brain2',
     'server_endpoint','server_timeout','server_parallel','server_context_tokens','allow_cgnat',
-    'instant_route_enabled',
-    'knowledge_endpoint',
-    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check',
+    'instant_route_enabled','web_auto_search',
+    'knowledge_endpoint','luau_run_before_answer',
+    'learning_auto_accept','learning_digest','learning_digest_cloud','practice_lessons_enabled','worked_examples_enabled','learning_auto_live','research_auto_check','skill_pack_embeddings','roblox_docs_live_enabled', 'project_rules_enabled', 'luau_retry_ladder', 'presolve_enabled',
     'media_images','media_voice','media_video','media_chat_auto','session_capabilities_prompt','media_use_references','comfy_home','ffmpeg_dir',
     'picture_max_side',
+    'best_of_n','best_of_n_max',
+    # Use my GPU: where its files are and when it unloads. The switch itself is `gpuHelperSet`, saved at once.
+    'gpu_helper_server','gpu_helper_model','gpu_idle_minutes',
+    'prefill_while_typing',   # star/prefill_warm.py: warm the prompt cache with the draft, off by default
 })
+
+# Settings > Media "session capabilities" line: put before the owner's words of every turn (and of a draft warm-up).
+SESSION_CAPABILITIES = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '
+                        'Other features depend on the current setup.\n\n')
 
 
 def prepare_desktop_update(bridge, request_id: str, home: Path) -> dict:
@@ -399,6 +431,27 @@ def sanitize_event(event: dict) -> dict:
             activity['repair']=True
         return {'phase':'Fixing the Luau code' if kind == 'luau_repair_started' else 'Checking the Luau code'
                 if kind == 'luau_check_started' else 'Luau check finished','activity':activity}
+    if kind.startswith('best_of_n_'):
+        # Generate several, test, keep what works (star/best_of_n.py): numbers only, never answer text.
+        n = _bounded_int(event.get('n'), 8)
+        index = _bounded_int(event.get('index'), 8)
+        passed, ran = _bounded_int(event.get('passed'), 20), _bounded_int(event.get('ran'), 20)
+        score = f' ({passed}/{ran} checks)' if passed is not None and ran else ''
+        if kind == 'best_of_n_started' and n:
+            return {'phase': f'Writing {n} versions to test'}
+        if kind == 'best_of_n_candidate' and index:
+            return {'phase': f'Version {index} ' + ('written' if event.get('state') == 'written' else 'did not finish')}
+        if kind == 'best_of_n_checked' and index:
+            return {'phase': f'Checked version {index}{score}'}
+        if kind == 'best_of_n_judging':
+            return {'phase': 'Comparing the versions that passed'}
+        if kind == 'best_of_n_repair':
+            return {'phase': 'No version passed every check: fixing the best one'}
+        if kind == 'best_of_n_selected' and index:
+            return {'phase': f'Keeping version {index}{score}'}
+        if kind == 'best_of_n_skipped':
+            return {'phase': 'Model slots busy: writing one version'}
+        return {'phase': 'Testing versions'}
     if kind == 'model_turn':
         activity={'type':'turn'}
         for key in ('step','max_steps'):
@@ -494,11 +547,13 @@ def record_turn_failure(home: Path, turn: TurnRef, status: str, detail: str) -> 
 
 
 def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
-               current_turn, cancelled, settings_file: Path | None = None) -> None:
+               current_turn, cancelled, settings_file: Path | None = None, settled=lambda: None) -> None:
     """Run one bridge worker and emit exactly one result or error event.
 
     A failed or cancelled chat/image/team turn is stored BEFORE its error event is
     emitted, so a reload or restart shows the same history the UI just displayed.
+    `settled()` runs just before the event (after a failure is stored): the bridge clears its
+    busy flag there, so a message sent the moment the interface sees the result is accepted.
     """
     try:
         data = worker()
@@ -508,8 +563,10 @@ def run_worker(request_id: str, action: str, worker, *, emit, home: Path,
         turn = current_turn() if action in TURN_ACTIONS else None
         if turn is not None:
             record_turn_failure(home, turn, status, detail)
+        settled()
         emit(request_id, 'error', detail)
         return
+    settled()
     try:
         emit(request_id, 'result', data)
     except Exception as exc:
@@ -535,18 +592,8 @@ def file_allowed(path: Path, approved: set[Path]) -> Path:
     return resolved
 
 
-def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
-    settings = Settings.load(settings_file)
-    home = app_data()
-    try:
-        lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
-    except (OSError, ValueError, sqlite3.Error) as exc:
-        lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
-    try:
-        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
-                                                 project=settings.project)
-    except (OSError, ValueError, sqlite3.Error) as exc:
-        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
+def _chat_view(home: Path, settings: Settings, busy: bool = False) -> dict:
+    """The chat part of the state: what changes when the owner opens, starts or deletes a chat."""
     chats = Conversations(home / 'conversations.sqlite3')
     try:
         active_chat = chats.active_chat(settings.project)
@@ -571,6 +618,28 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
         if preview:
             entry.update(preview)
         messages.append(entry)
+    return {'project': settings.project, 'projects': projects, 'messages': messages,
+            'active_chat': active_chat, 'chats': chat_threads, 'retry': retry}
+
+
+def _chat_state(settings_file: Path, busy: bool = False) -> dict:
+    """Answer to newChat/switchChat/deleteChat: no bundle imports, status probes or keyring reads."""
+    return _chat_view(app_data(), Settings.load(settings_file), busy)
+
+
+def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio_status=None) -> dict:
+    settings = Settings.load(settings_file)
+    home = app_data()
+    try:
+        lesson_bundle = import_bundled_lessons(home, __version__, enabled=settings.practice_lessons_enabled)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        lesson_bundle = {'status': 'error', 'message': str(exc)[:160], 'imported': 0}
+    try:
+        learning_bundle = import_learning_bundle(home, __version__, auto_live=settings.learning_auto_live,
+                                                 project=settings.project)
+    except (OSError, ValueError, sqlite3.Error) as exc:
+        learning_bundle = {'status': 'error', 'message': str(exc)[:160]}
+    chat = _chat_view(home, settings, busy)
     brain = BrainInstall.load(home / 'brain.json')
     workshop = ToolWorkshop(home=home,project=settings.project)
     try:
@@ -578,9 +647,7 @@ def _get_state(settings_file: Path, runtime: Runtime, busy: bool = False, studio
     finally:
         workshop.close()
     return {
-        'version':__version__,'build':read_build_info(),'project':settings.project,'projects':projects,
-        'messages':messages,'active_chat':active_chat,'chats':chat_threads,
-        'retry':retry,
+        'version':__version__,'build':read_build_info(),**chat,
         'settings':asdict(settings),
         'brain_installed':brain is not None,'brain_running':runtime.status()=='running',
         'model_router_running':runtime.router_running(),
@@ -607,7 +674,7 @@ def close_for_session(shell, manager=None):
 
 def launch():
     try:
-        from PySide6.QtCore import QObject, QUrl, Slot, Signal, Qt, QTimer
+        from PySide6.QtCore import QObject, QUrl, Slot, Signal, QTimer
         from PySide6.QtWidgets import QApplication, QMainWindow, QFileDialog
         from PySide6.QtGui import QDesktopServices
         from PySide6.QtWebEngineCore import QWebEnginePage
@@ -664,10 +731,32 @@ def launch():
             self.pending_update = None
             self._closing = False
             self.warmer = Warmer()
+            self.draft_warmer = DraftWarmer()
             self.digester = Digester()
             self.comfy_launcher = ComfyLauncher()
+            self.clips = ClipService()  # No capture until explicit owner-controlled OBS actions.
+            self.clip_library = ClipLibrary()  # No folder until explicitly selected through Qt.
+            self.moments = MomentsEvents()  # Own-game events, local GG only; no auto-trigger.
+            self.discord = DiscordSupervisor(app_data())
+            self.discord.begin()
+            # Opt-in only; a few seconds after launch so the window is not kept waiting.
+            QTimer.singleShot(3_000, self._discord_autostart)
+            try:   # Use my GPU: armed, not loaded; it loads with the first question that needs it
+                gpu_helper.HELPER.configure(Settings.load(self.settings_file), app_data())
+            except Exception:
+                pass
+            from . import presolve   # opt-in overnight pre-solving: until it is switched on it only reads the setting
+            presolve.start_nightly(self.settings_file, app_data())
             self.voice = VoiceBridge(lambda call_id, data: self._emit(call_id, 'voice', data),
                                      settings_path=app_data() / 'voice.json', save_turn=self._save_voice_turn)
+
+        def _discord_autostart(self):
+            if self._closing:
+                return
+            try:
+                start_if_opted_in(self.discord, Settings.load(self.settings_file).discord_autostart)
+            except Exception:
+                pass  # a bad settings file must not stop STAR from opening; the page shows the bot's state
 
         def _research_tick(self):
             """Check due official sources off the GUI thread, at most daily.
@@ -722,6 +811,18 @@ def launch():
                 self._warm_target, check=check,
                 on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
                 on_done=finished if (request_id or then is not None) else None)
+
+        def _warm_draft(self, body: dict) -> dict:
+            """Settings > Start thinking while I type: the server reads the draft into its prompt cache.
+            Answers at once; the request runs on its own thread (star/prefill_warm.py)."""
+            text=body.get('prompt')
+            if not isinstance(text,str) or len(text)>30000:raise ValueError('Invalid draft')
+            if self.active_task:
+                return {'primed':False,'skipped':'busy'}
+            mode=str(body.get('mode')) if body.get('mode') in ('auto','fast','agent') else 'auto'
+            prefix=SESSION_CAPABILITIES if Settings.load(self.settings_file).session_capabilities_prompt else ''
+            self.draft_warmer.submit(self._warm_target,prefix+text,mode=mode,research=body.get('research') is True)
+            return {'queued':True}
 
         def _digest_target(self):
             settings=Settings.load(self.settings_file)
@@ -788,15 +889,20 @@ def launch():
                                            screen_preview_url(encode(thumb,'JPEG',78),'image/jpeg'))
 
         def _run(self, request_id: str, action: str, worker):
+            settled=[]
+            def settle():
+                # Once only: after the event a new turn may already have started and set these again.
+                if action in TURN_ACTIONS and not settled:
+                    settled.append(True)
+                    self.turn=None
+                    self.active_task=False
             def task():
                 try:
                     run_worker(request_id, action, worker, emit=self._emit, home=app_data(),
                                current_turn=lambda: self.turn, cancelled=self.cancel_chat.is_set,
-                               settings_file=self.settings_file)
+                               settings_file=self.settings_file, settled=settle)
                 finally:
-                    if action in TURN_ACTIONS:
-                        self.turn=None
-                        self.active_task=False
+                    settle()     # also when emitting itself failed
                     if action=='installUpdate':self.active_update=False
             self.pool.submit(task)
 
@@ -812,7 +918,6 @@ def launch():
                 raise RuntimeError('Stop the active chat before switching STAR models')
             # The helper refuses non-local providers and never switches the
             # owner away from STAR Server while the router is loading.
-            from .brain_runtime_health import start_model_router
             info = BrainInstall.load(app_data()/'brain.json')
             source = info.executable if info is not None else Settings.load(self.settings_file).llama_server
             return self.runtime, self.settings_file, app_data(), source
@@ -854,10 +959,12 @@ def launch():
                         learned.update(accepted=int(e.get('accepted',0)),candidates=int(e.get('candidates',0)),
                                        replaced=int(e.get('replaced',0)),not_kept=int(e.get('not_kept',0)))
                         return
+                    if e.get('event')=='lessons_capture_failed':
+                        learned.update(capture_failed=1)
+                        return
                     self._emit(request_id,'progress',sanitize_event(e))
                 if settings.session_capabilities_prompt:
-                    full_prompt = ('Session capabilities: Image creation is available through STAR chat when the local engine is configured. '
-                                   'Other features depend on the current setup.\n\n' + full_prompt)
+                    full_prompt = SESSION_CAPABILITIES + full_prompt
                 answer=run_task(settings,full_prompt,pics,on_event=relay,
                     stream_tokens=True, mode=mode, research=research, cancel_event=self.cancel_chat, github_enabled=github, chat_id=active_chat,
                     owner_text=prompt, studio_configuration_home=self.settings_file.parent, attachment_count=len(selected),
@@ -903,6 +1010,9 @@ def launch():
                     raise ValueError('The previous picture is no longer available to edit.')
             # The chosen place first: a choice that cannot make pictures fails here, before ComfyUI is started.
             media_places.require(settings,'images',home)
+            if settings.media_images=='pc':
+                # Never two big models on the card: Use my GPU unloads before the picture is made.
+                gpu_helper.HELPER.yield_to('the image engine is making a picture')
             if not image_gen.status(settings)['running']:
                 if not effective_comfy_home(settings):
                     raise ComfyError('not_running', 'No image engine is set up: pictures are made by ComfyUI on this PC, it is not '
@@ -963,6 +1073,46 @@ def launch():
                 "elapsed_ms": team.elapsed_ms,
             }
 
+        def _clip_action(self, action: str, body: dict, rid: str) -> str:
+            """STAR Clips, clip folder, SteelSeries Moments and Game Lab (kept out of invoke for pyright)."""
+            if action == 'gameLabCatalog':
+                return json.dumps({'ok': True, 'data': game_lab_catalog(
+                    query=body.get('query', ''), category=body.get('category', ''), limit=28)})
+            if action in CLIP_INTEROP_ACTIONS:
+                if action == 'clipChooseFolder':
+                    folder = QFileDialog.getExistingDirectory(
+                        self.host, 'Choose a local game clip folder (read-only)')
+                    if not folder:
+                        return json.dumps({'ok': True, 'data': {'cancelled': True}})
+                    self._run(rid, action, lambda: self.clip_library.choose(Path(folder)))
+                    return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+                if action == 'clipListFolder':
+                    self._run(rid, action, self.clip_library.list_clips)
+                    return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+                if action == 'clipClearFolder':
+                    if body.get('confirm') is not True:
+                        raise PermissionError('Disconnecting clips needs a user action.')
+                    return json.dumps({'ok': True, 'data': self.clip_library.clear()})
+                if action == 'clipOpenFile':
+                    if body.get('confirm') is not True:
+                        raise PermissionError('Opening a video needs a user action.')
+                    # File ids, not user/model paths; verify selection and symlinks again.
+                    selected = self.clip_library.allowed_clip(str(body.get('id', '')))
+                    opened = QDesktopServices.openUrl(QUrl.fromLocalFile(str(selected)))
+                    if not opened:
+                        raise RuntimeError('Windows could not open the selected clip.')
+                    return json.dumps({'ok': True, 'data': {'opened': True}})
+                # GameSense producer sends only fixed local protocol events to
+                # human-claimed STAR_* developer games; never arbitrary live titles.
+                self._run(rid, action, lambda: self.moments.handle(action, body))
+                return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+            if action in CLIP_ACTIONS:
+                # Local OBS WebSocket I/O is kept off the Qt/React UI thread.
+                # No model tool exposes these recording controls.
+                self._run(rid, action, lambda: self.clips.handle(action, body))
+                return json.dumps({'ok': True, 'pending': True, 'requestId': rid})
+            raise PermissionError('Unsupported STAR Clips action.')
+
         @Slot(str,result=str)
         def invoke(self, raw: str) -> str:
             try:
@@ -973,18 +1123,38 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
-                if action in WARM_UP_STOPPERS:self.warmer.cancel()
+                if action in WARM_UP_STOPPERS:self.warmer.cancel();self.draft_warmer.cancel()
                 if action in WARM_UP_STOPPERS or action in VOICE_ACTIONS:self.digester.cancel()
+                if action=='warmDraft':return json.dumps({'ok':True,'data':self._warm_draft(body)})
                 if action=='warmUp':
                     if self.active_task:
                         return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
                     self._warm(rid)
                     return json.dumps({'ok':True,'pending':True,'requestId':rid})
                 if action in VOICE_ACTIONS:
-                    if action in {'voiceStartCall','voicePreviewVoice'}:
+                    if action in VOICE_PLACE_ACTIONS:
                         # Speech runs where Settings says; a place that does not exist is refused, not replaced.
                         media_places.require(Settings.load(self.settings_file),'voice',app_data())
                     return json.dumps({'ok':True,'data':self.voice.handle(action, body, rid)})
+                if action in ('gpuHelperStatus','gpuHelperSet'):
+                    if action=='gpuHelperSet':
+                        enabled=body.get('enabled')
+                        if type(enabled) is not bool:raise ValueError('Choose on or off')
+                        saved=Settings.load(self.settings_file)
+                        saved.use_my_gpu=enabled
+                        saved.save(self.settings_file)
+                        gpu_helper.HELPER.configure(saved,app_data(),start=enabled)
+                    return json.dumps({'ok':True,'data':gpu_helper.HELPER.status()})
+                if action in DISCORD_ACTIONS:
+                    saved=Settings.load(self.settings_file)
+                    if action=='discordSetAutostart':
+                        enabled=body.get('enabled')
+                        if type(enabled) is not bool:raise ValueError('Choose on or off')
+                        saved.discord_autostart=enabled
+                        saved.save(self.settings_file)
+                    return json.dumps({'ok':True,'data':handle_discord_action(action,self.discord,autostart=saved.discord_autostart)})
+                if action == 'gameLabCatalog' or action in CLIP_INTEROP_ACTIONS or action in CLIP_ACTIONS:
+                    return self._clip_action(action, body, rid)
                 if action in MEDIA_ACTIONS:
                     def media_worker():
                         return handle_media_action(
@@ -1017,8 +1187,8 @@ def launch():
                     return json.dumps({'ok':True,'data':research_task()},default=str)
                 if action=='bootstrap':return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task,studio_status=self.studio_status)})
                 if action=='brainSnapshot':return json.dumps({'ok':True,'data':brain_snapshot(self.settings_file,app_data())})
+                if action=='plannerStatus':return json.dumps({'ok':True,'data':planner_snapshot(self.settings_file)})
                 if action=='pickFiles':
-                    from .media_features import AUDIO_EXTENSIONS
                     kind=body.get('kind')
                     if kind=='audio':
                         names, _=QFileDialog.getOpenFileNames(self.host,'Select audio references','','Audio files (*.wav *.mp3 *.m4a *.flac *.ogg *.aac)')
@@ -1047,7 +1217,7 @@ def launch():
                     try: conversations.new_chat(settings.project)
                     finally: conversations.close()
                     self._warm(check=False)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file)})
                 if action=='switchChat':
                     # The running turn keeps its original chat_id; switching only changes the viewed thread.
                     chat_id=str(body.get('chatId',''))[:80]
@@ -1057,7 +1227,7 @@ def launch():
                     finally: conversations.close()
                     if not self.active_task:self._warm(check=False)
                     busy=bool(self.active_task and self.turn is not None and self.turn.chat_id==chat_id)
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=busy)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file,busy=busy)})
                 if action=='renameChat':
                     chat_id=str(body.get('chatId',''))[:80]
                     settings=Settings.load(self.settings_file)
@@ -1074,7 +1244,7 @@ def launch():
                     conversations=Conversations(app_data()/'conversations.sqlite3')
                     try: conversations.delete_chat(settings.project,chat_id)
                     finally: conversations.close()
-                    return json.dumps({'ok':True,'data':_get_state(self.settings_file,self.runtime,busy=self.active_task)})
+                    return json.dumps({'ok':True,'data':_chat_state(self.settings_file,busy=self.active_task)})
                 if action=='captureScreen':
                     # Only an explicit "Take screenshot" press reaches here (consent: true, per use).
                     require_screen_consent(body)
@@ -1141,12 +1311,14 @@ def launch():
                         raise RuntimeError('Wait for the current task before changing connections or permissions')
                     old=apply_setting_changes(Settings.load(self.settings_file),body.get('settings'))
                     old.save(self.settings_file)
+                    gpu_helper.HELPER.configure(old,app_data())
                     if old.research_auto_check:
                         QTimer.singleShot(200, self._research_tick)
                     return json.dumps({'ok':True,'data':asdict(old)})
                 if action in STUDIO_HOST_ACTIONS:
                     return json.dumps({'ok':True,'data':handle_studio_host(action,body,self.settings_file)})
                 if action=='testBlender':
+                    import asyncio
                     from .blender_bridge import BlenderController
                     settings=Settings.load(self.settings_file)
                     self._run(rid,action,lambda:asyncio.run(
@@ -1450,7 +1622,10 @@ def launch():
                 record_turn_failure(app_data(), self.turn, 'cancelled', detail)
             # Stop owned child processes before any forced exit can interrupt cleanup.
             self.comfy_launcher.stop()      # only a ComfyUI that STAR itself started
+            gpu_helper.HELPER.shutdown()    # Use my GPU: the model server STAR started
+            self.discord.close()            # the Discord bot STAR started (if any) stops with STAR
             self.warmer.cancel()
+            self.draft_warmer.cancel()
             self.runtime.stop()
             # A provider thread may be stuck in native I/O and ThreadPoolExecutor
             # workers are non-daemon. The packaged Windows fallback starts only

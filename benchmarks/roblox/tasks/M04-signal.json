@@ -1,0 +1,8 @@
+{
+ "id": "M04-signal",
+ "level": "medium",
+ "kind": "module",
+ "title": "A Signal class",
+ "prompt": "Write a ModuleScript that returns a Signal class. `Signal.new()` makes a signal with methods:\n`:Connect(fn)` returns a connection object with `:Disconnect()`; `:Fire(...)` calls every connected function with\nthe arguments; `:Once(fn)` connects a function that runs only on the next Fire; `:Wait()` yields until the next Fire\nand returns its arguments. Tables passed to Fire must arrive as the same table (not a copy).",
+ "playSeconds": 40
+}

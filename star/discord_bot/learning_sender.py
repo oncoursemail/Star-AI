@@ -11,7 +11,6 @@ import argparse
 import asyncio
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone, timedelta
-import hashlib
 import io
 import json
 import os
@@ -107,6 +106,11 @@ class DeliveryLedger:
             claimed_at TEXT NOT NULL, sent_at TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (owner_id, report_stamp)
         )""")
+        self.db.execute("""CREATE TABLE IF NOT EXISTS task_dms (
+            owner_id INTEGER NOT NULL, event_id TEXT NOT NULL, state TEXT NOT NULL,
+            claimed_at TEXT NOT NULL, sent_at TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (owner_id, event_id)
+        )""")
 
     def close(self):
         self.db.close()
@@ -141,12 +145,59 @@ class DeliveryLedger:
             return "no_new_evidence", earlier
         if sent_at is not None and now < sent_at + timedelta(hours=cooldown_hours):
             return "cooldown", earlier
+        hold = self.delivery_hold(now=now, cooldown_hours=cooldown_hours)
+        if hold:
+            return hold, earlier
         if self.db.execute(
             "SELECT 1 FROM learning_dms WHERE owner_id=? AND report_stamp=? LIMIT 1",
             (self.owner, snapshot.stamp),
         ).fetchone():
             return "already_processed", earlier
         return "ready", earlier
+
+    def delivery_hold(self, *, now, cooldown_hours):
+        """One cooldown/uncertain-send budget across aggregate and native task DMs."""
+        for table in ("learning_dms", "task_dms"):
+            rows = self.db.execute(
+                f"SELECT state, claimed_at, sent_at FROM {table} WHERE owner_id=? "
+                "AND state IN ('pending','unknown','sent')", (self.owner,)).fetchall()
+            for state, claimed, sent in rows:
+                if state in {"pending", "unknown"} and now < datetime.fromisoformat(claimed) + timedelta(hours=UNKNOWN_HOLD_HOURS):
+                    return "awaiting_review"
+                if state == "sent" and now < datetime.fromisoformat(sent) + timedelta(hours=cooldown_hours):
+                    return "cooldown"
+        return ""
+
+    def reserve_task(self, event_id: str, *, now, cooldown_hours: int):
+        if not re.fullmatch(r"[0-9a-f]{64}", event_id):
+            raise ValueError("Invalid task event identity")
+        if now.tzinfo is None or type(cooldown_hours) is not int or not 1 <= cooldown_hours <= 168:
+            raise ValueError("Invalid task delivery clock or cooldown")
+        self.db.execute("BEGIN IMMEDIATE")
+        try:
+            if self.db.execute("SELECT 1 FROM task_dms WHERE owner_id=? AND event_id=?",
+                               (self.owner, event_id)).fetchone():
+                reason = "already_processed"
+            else:
+                reason = self.delivery_hold(now=now, cooldown_hours=cooldown_hours) or "ready"
+            if reason == "ready":
+                self.db.execute("INSERT INTO task_dms(owner_id,event_id,state,claimed_at) VALUES(?,?,'pending',?)",
+                                (self.owner, event_id, now.astimezone(timezone.utc).isoformat()))
+            self.db.commit()
+            return reason
+        except BaseException:
+            self.db.rollback()
+            raise
+
+    def mark_task(self, event_id: str, state: str, *, now):
+        if state not in {"sent", "unknown"}:
+            raise ValueError("Invalid task delivery state")
+        updated = self.db.execute("UPDATE task_dms SET state=?, sent_at=? "
+                                  "WHERE owner_id=? AND event_id=? AND state='pending'",
+                                  (state, now.astimezone(timezone.utc).isoformat() if state == "sent" else "",
+                                   self.owner, event_id)).rowcount
+        if updated != 1:
+            raise ValueError("No matching pending task delivery")
 
     def reserve(self, snapshot: LearningSnapshot, *, now=None, cooldown_hours=6):
         now = now or datetime.now(timezone.utc)

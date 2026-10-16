@@ -1,0 +1,8 @@
+{
+ "id": "E03-leaderstats",
+ "level": "easy",
+ "kind": "script",
+ "title": "Leaderstats for every player",
+ "prompt": "Write one server Script. Every player gets a Folder named \"leaderstats\" containing an IntValue \"Coins\" and an\nIntValue \"Wins\", both starting at 0. It must also work for players who joined before the script started.",
+ "playSeconds": 40
+}

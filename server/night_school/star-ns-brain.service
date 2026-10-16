@@ -1,0 +1,28 @@
+# A small model server for a SECOND night-school worker on a machine without the STAR brain (server 2): one model,
+# 127.0.0.1 only, lowest priority, so the Discord bot and Roblox Studio on that machine keep the CPU first.
+# Night school there points at it with STAR_NS_BRAIN_URL=http://127.0.0.1:8093 and takes its own share of the
+# practice tasks (STAR_NS_SHARE); its report is separate from server 1's. Install:
+#   install -m 0644 star-ns-brain.service /etc/systemd/system/ && systemctl daemon-reload && systemctl enable --now star-ns-brain
+[Unit]
+Description=STAR night-school model server (second worker; one small model, lowest priority)
+After=network-online.target
+
+[Service]
+Type=simple
+User=star
+Group=star
+Environment=LD_LIBRARY_PATH=/opt/star/bin
+# The alias is the name night school asks for; this one model answers every request.
+ExecStart=/opt/star/bin/llama-server -m /opt/star/models/gemma-4-E2B-it-Q4_K_M.gguf --alias star-fast -t 4 -tb 4 -c 32768 -np 2 --jinja --reasoning off -fa on --host 127.0.0.1 --port 8093
+Nice=19
+CPUWeight=10
+IOSchedulingClass=idle
+MemoryMax=7G
+Restart=on-failure
+RestartSec=60
+NoNewPrivileges=yes
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -72,6 +72,8 @@ class ComfyLauncher:
         with self._lock:
             if not self.running():
                 command, folder = self.command(effective_comfy_home(settings), settings.comfy_port)
+                from .gpu_helper import HELPER
+                HELPER.yield_to('the image engine is using the graphics card')   # never both on the card
                 logs = home / 'logs'
                 logs.mkdir(parents=True, exist_ok=True)
                 with open(logs / 'comfyui.log', 'ab') as log:
@@ -181,7 +183,7 @@ def effective_comfy_home(settings) -> str:
 
 
 def _data_url(path: Path, side: int = 1600) -> str:
-    from PIL import Image
+    from .pil_safe import Image
     with Image.open(path) as image:
         shown = image.convert('RGB')
         shown.thumbnail((side, side))

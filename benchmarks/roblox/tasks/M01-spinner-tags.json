@@ -1,0 +1,8 @@
+{
+ "id": "M01-spinner-tags",
+ "level": "medium",
+ "kind": "script",
+ "title": "Spin every tagged part",
+ "prompt": "Write one server Script. Every anchored Part with the CollectionService tag \"Spinner\" rotates around its own\nY axis at 90 degrees per second, without moving. This includes parts tagged after the script started. Untagged\nparts are left alone.",
+ "playSeconds": 40
+}

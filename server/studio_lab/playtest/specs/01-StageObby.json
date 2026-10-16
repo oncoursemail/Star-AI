@@ -1,0 +1,21 @@
+{
+ "name": "StageObby",
+ "kind": "obby",
+ "brief": "A short obby: a start floor with the SpawnLocation, then 6 floating platforms to jump across one after another, then a finish pad.",
+ "contract": [
+  "Create a SpawnLocation (on the start floor) inside script.Parent.",
+  "Name the 6 platforms Stage1, Stage2, ... Stage6 in the order the player jumps them.",
+  "The finish pad is a Part named Goal after Stage6.",
+  "Every platform must be reachable with a normal jump from the one before it."
+ ],
+ "checks": [
+  {
+   "do": "route",
+   "prefix": "Stage",
+   "target": "Goal",
+   "min": 6,
+   "seconds": 20
+  }
+ ],
+ "playSeconds": 150
+}

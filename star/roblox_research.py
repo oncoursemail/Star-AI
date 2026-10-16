@@ -20,10 +20,16 @@ import sqlite3
 import time
 import uuid
 
-import httpx
+from ._lazy import lazy_attr, lazy_module
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:  # type checkers see the real module; at run time it loads on first use
+    import httpx
+else:
+    httpx = lazy_module("httpx")  # loaded on first request, not when the desktop starts
 
 from . import roblox_cloud
-from PIL import Image, ImageOps, UnidentifiedImageError
+Image = lazy_attr("star.pil_safe", "Image")   # Pillow loads on first use, with the pixel limit set
+ImageOps = lazy_module("PIL.ImageOps")
 
 _MAX_BYTES = 240_000
 _MAX_QUERY = 140
@@ -383,7 +389,7 @@ class RobloxResearch:
                 encoded = out.getvalue()
                 if len(encoded) > 2 * 1024 * 1024:
                     raise ValueError("Roblox image preview too large")
-        except (httpx.RequestError, UnidentifiedImageError, OSError) as exc:
+        except (httpx.RequestError, Image.UnidentifiedImageError, OSError) as exc:
             raise ValueError("Unable to load a valid Roblox CDN image (%s)" % type(exc).__name__) from None
         return {
             "universe_id": universe_id, "kind": kind, "index": index,

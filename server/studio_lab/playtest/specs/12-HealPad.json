@@ -1,0 +1,26 @@
+{
+ "name": "HealPad",
+ "kind": "pad",
+ "brief": "A damage and heal room: a floor with a SpawnLocation, a spike strip that hurts (20 damage per touch, at most once per second), and a heal pad that restores full health.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "The spike strip is a Part named Spikes (it damages but does not kill instantly); the heal pad is a Part named HealPad.",
+  "leaderstats IntValue named Heals starting at 0: each time the heal pad heals a hurt player, add 1 Heals (debounced per player, at most once per 2 seconds)."
+ ],
+ "checks": [
+  {
+   "do": "touch",
+   "target": "Spikes"
+  },
+  {
+   "do": "touch",
+   "target": "HealPad"
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Heals",
+   "min": 1
+  }
+ ],
+ "playSeconds": 150
+}

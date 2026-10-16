@@ -1,0 +1,27 @@
+{
+ "name": "CoinTower",
+ "kind": "coins",
+ "brief": "Coins on a tower: a floor with a SpawnLocation and a staircase of 4 steps going up to a top platform; one coin sits on each step and two on the top. Coins are worth 5 points.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "Each coin is a Part named Coin with CanCollide = false, about 2 studs above the surface it sits on.",
+  "Steps must be low enough to walk or jump up (each at most 3 studs higher than the one before).",
+  "leaderstats IntValue named Coins starting at 0; each coin adds 5 and is destroyed."
+ ],
+ "checks": [
+  {
+   "do": "collect",
+   "name": "Coin",
+   "stat": "Coins",
+   "min": 6,
+   "each": 5,
+   "seconds": 20
+  },
+  {
+   "do": "expect_stat",
+   "stat": "Coins",
+   "min": 30
+  }
+ ],
+ "playSeconds": 150
+}

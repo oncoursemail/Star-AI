@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from hashlib import sha256
 from dataclasses import dataclass
-from pathlib import Path
 
 from .audio import decode_attachment, ffmpeg_path, synthesize_pcm, validate_attachment, voice_message
 from .brain import DiscordBrain
@@ -141,6 +141,61 @@ class DiscordService:
             return answer
         finally:
             self._brain_lock.release()
+
+    async def compare_images(self, key: tuple, prompt: str, reference: bytes, rendered: bytes,
+                             *, vision=None, native_receipt=None) -> str:
+        """Compare exactly two owner-supplied, normalized private images.
+
+        Only a short, text-only receipt enters temporary chat context; the
+        screenshots are never stored, trained on, exported or cloud-routed.
+        A future owner correction can refer to the image hashes, but still
+        requires the existing desktop review and approval process.
+        """
+        if not isinstance(key, tuple) or len(key) != 3:
+            raise PermissionError("Reference comparison requires an authorized owner")
+        self.policy.require(key[2], key[0], key[1])
+        from .dm_mode import DiscordVision
+        question = clean_text(prompt, max_chars=MAX_PROMPT) or (
+            "Compare the desired reference with STAR's result and suggest concrete fixes.")
+        if native_receipt is not None and (not isinstance(prompt, str) or len(prompt) > 1000):
+            raise ValueError("Keep native reference instructions within 1000 characters")
+        await self._lock_brain()
+        try:
+            answer = await (vision or DiscordVision()).compare(question, reference, rendered)
+            ref_hash = sha256(reference).hexdigest()
+            render_hash = sha256(rendered).hexdigest()
+            context = ""
+            if native_receipt is not None:
+                context = (f" [Native job={native_receipt.job_id} build={native_receipt.build_sha256}"
+                           f" iteration={native_receipt.iteration} camera={native_receipt.camera}"
+                           f" capture={native_receipt.capture_sha256} at={native_receipt.captured_at}]")
+                answer = ("Advisory visual comparison only. Native evidence records "
+                          f"{native_receipt.checked}/{native_receipt.total} checks; "
+                          f"job state: {native_receipt.state}. "
+                          "A visual opinion cannot override rejection, verify motion/rig/VFX behavior, "
+                          "or approve a reusable lesson.\n\n" + answer)
+            self.memory.remember(
+                key, "[Image comparison reference=" + ref_hash + " result=" + render_hash
+                + "]" + context + " " + (prompt if native_receipt is not None else question[:300]), answer)
+            return answer
+        finally:
+            self._brain_lock.release()
+
+    async def compare_lab_reference(self, key: tuple, prompt: str, reference: bytes, lab, *, vision=None) -> str:
+        """Bind one owner reference and exact constraints to one immutable native capture.
+
+        Later corrections use the existing pending-only CorrectionStore workflow.
+        Native checks stay separate from the vision model's advisory opinions.
+        """
+        if not isinstance(key, tuple) or len(key) != 3:
+            raise PermissionError("Native comparison requires an authorized owner")
+        self.policy.require(key[2], key[0], key[1])
+        from .lab_status import read_receipt, read_capture
+        receipt = await asyncio.to_thread(read_receipt, lab)
+        if not receipt.source:
+            raise ValueError("Native comparison requires a build-bound producer receipt")
+        _, rendered = await asyncio.to_thread(read_capture, lab, receipt)
+        return await self.compare_images(key, prompt, reference, rendered, vision=vision, native_receipt=receipt)
 
     async def screen_capture(self, key: tuple, prompt: str, *, grab=None, vision=None) -> tuple[str, bytes]:
         """One capture of this PC's screen, ONLY after the owner pressed the confirm button.

@@ -293,6 +293,12 @@ def launch_installer(candidate: InstallerCandidate, *, unattended: bool = False)
     if unattended and (not candidate.checksum_verified or not candidate.expected_sha256):
         raise PermissionError('Unattended upgrades require a verified GitHub Release SHA-256')
     arguments = [str(checked.path)]
+    # Match the running copy, rather than letting a stale registration for a
+    # different scope choose the install mode (and possibly surprise the user
+    # with UAC). These switches do not bypass elevation for all-users installs.
+    scope_switch = {'per-user': '/CURRENTUSER', 'all-users': '/ALLUSERS'}.get(install_scope())
+    if scope_switch:
+        arguments.append(scope_switch)
     if unattended:
         # Inno Setup handles closing old app files and launching the new STAR.
         arguments += ['/SILENT', '/CLOSEAPPLICATIONS', '/NORESTART']

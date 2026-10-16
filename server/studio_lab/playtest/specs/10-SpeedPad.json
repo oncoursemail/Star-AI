@@ -1,0 +1,21 @@
+{
+ "name": "SpeedPad",
+ "kind": "pad",
+ "brief": "A speed pad course: a floor with a SpawnLocation and a glowing speed pad. Stepping on the pad doubles the player's WalkSpeed to 32 for 10 seconds.",
+ "contract": [
+  "Create a SpawnLocation inside script.Parent.",
+  "The pad is a Part named SpeedPad on the floor.",
+  "Touching SpeedPad sets the touching player's Humanoid.WalkSpeed to 32, and back to 16 after 10 seconds."
+ ],
+ "checks": [
+  {
+   "do": "touch",
+   "target": "SpeedPad"
+  },
+  {
+   "do": "expect_speed",
+   "min": 30
+  }
+ ],
+ "playSeconds": 150
+}

@@ -1,0 +1,8 @@
+{
+ "id": "H06-coin-collect",
+ "level": "hard",
+ "kind": "script",
+ "title": "Collectable coins",
+ "prompt": "Write one server Script. It gives every player (also ones already in the game) a \"leaderstats\" Folder with an\nIntValue \"Coins\" starting at 0. It creates a Folder named \"Coins\" in `script.Parent` with 5 anchored Parts named\n\"Coin\" (CanCollide false) at positions (400 + 10 * i, 50, 400) for i = 1..5. When a player's character touches a\ncoin, that player gets exactly +1 Coins and the coin is destroyed; a coin can never be counted twice, even when\nseveral body parts touch it at once.",
+ "playSeconds": 50
+}

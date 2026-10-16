@@ -41,9 +41,30 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_STATE", "STAR_DISCORD_LEARNING_DM_COOLDOWN_HOURS",
     "STAR_DISCORD_LEARNING_CHECK_MINUTES",
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
+    "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
+    "STAR_DISCORD_EVIDENCE_DIRECTORY", "STAR_DISCORD_EVIDENCE_REVIEWS",
+    "STAR_DISCORD_WORK_STATUS", "STAR_DISCORD_WORK_REPORT",
+    "STAR_DISCORD_PRESENCE", "STAR_DISCORD_PRESENCE_MINUTES",
+    "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
+    "STAR_DISCORD_HOST",
 })
 # The token may only come from the secret file or the process environment.
 _SECRET_KEYS = frozenset({"STAR_DISCORD_BOT_TOKEN"})
+
+
+# Where the bot runs. 'server': a STAR server (server/discord/), which has no graphics card for drawing
+# and no screen to capture, so those features say they need the PC instead of trying.
+HOSTS = ("pc", "server")
+# On the PC: this file in ~/.star means the bot runs on a server now, so the PC must not start a second copy.
+SERVER_MARKER = "discord-runs-on-server"
+
+
+def bot_host(env: Mapping[str, str] | None = None) -> str:
+    source = os.environ if env is None else env
+    value = str(source.get("STAR_DISCORD_HOST", "pc")).strip().lower() or "pc"
+    if value not in HOSTS:
+        raise ValueError("STAR_DISCORD_HOST must be pc or server")
+    return value
 
 
 def config_dir(env: Mapping[str, str] | None = None) -> Path:
@@ -106,11 +127,6 @@ def load_merged_env(env: Mapping[str, str] | None = None) -> dict[str, str]:
     return merged
 
 
-def token_file_present(env: Mapping[str, str] | None = None) -> bool:
-    """Existence only; the file content is not read here."""
-    return (config_dir(env) / TOKEN_FILE).is_file()
-
-
 SETTINGS_TEMPLATE = """# STAR Discord bot: nonsecret local settings (never commit; the bot token goes in discord.env).
 # Discord: User Settings > Advanced > Developer Mode, then right-click yourself / your server > Copy ID.
 DISCORD_OWNER_ID=
@@ -125,11 +141,54 @@ STAR_DISCORD_DM_IMAGES=1
 STAR_DISCORD_DM_LEARNING_CANDIDATES=0
 # PC screenshots via /screen: each capture still needs a button press in Discord.
 STAR_DISCORD_SCREEN_CAPTURE=0
+# Read-only status/screenshot from a trusted locally staged Studio/Blender job receipt.
+# Never accepts Discord-supplied file paths; the producer must supply SHA-matched evidence.
+STAR_DISCORD_LAB_STATUS=0
+STAR_DISCORD_LAB_REPORT=
+# Optional native task events: still requires STAR_DISCORD_LEARNING_DM_OPT_IN=1.
+# Operator-provisioned staging directory and SEPARATE operator-only review directory.
+STAR_DISCORD_EVIDENCE_DIRECTORY=
+STAR_DISCORD_EVIDENCE_REVIEWS=
+# Optional: real worker activity feed (coding/studying/testing/research). Only a trusted host producer
+# may write this local JSON; Discord users cannot choose a file path or start the jobs.
+STAR_DISCORD_WORK_STATUS=0
+STAR_DISCORD_WORK_REPORT=
+# Make images ("draw a dragon" or /draw) on this PC's graphics card. ANYONE=1 also lets members of your
+# approved server use /draw (never strangers' DMs). TIMEOUT: seconds before a picture is cancelled.
+STAR_DISCORD_DRAW=1
+STAR_DISCORD_DRAW_ANYONE=0
+STAR_DISCORD_DRAW_TIMEOUT=240
+# Where this bot runs: pc (default) or server (a STAR server: drawing and /screen then say they need the PC).
+STAR_DISCORD_HOST=pc
+# 1 = answer @STAR mentions in your approved server (Discord then sends the bot server message events;
+# it still only sees the text of messages that mention it).
+STAR_DISCORD_MENTIONS=0
 # Requests per 10 minutes from the owner before STAR asks to slow down.
 STAR_DISCORD_RATE_LIMIT=30
+# Optional: bot-account activity (runtime status, not a channel message), fixed safe labels.
+# Default off; updates no more often than every 10 minutes. Never put secrets in the labels.
+STAR_DISCORD_PRESENCE=0
+STAR_DISCORD_PRESENCE_MINUTES=15
 # Night School digest DMs: 1 = send a short DM when practice numbers really change.
 STAR_DISCORD_LEARNING_DM_OPT_IN=0
 # Where the report comes from: an ssh login that can run 'lxc exec starai' (key login), or a local file path.
 STAR_DISCORD_LEARNING_REPORT_SSH=
 STAR_DISCORD_LEARNING_REPORT=
 """
+
+
+def ensure_settings_file(env: Mapping[str, str] | None = None) -> bool:
+    """Write SETTINGS_TEMPLATE if discord-settings.env is missing; never overwrite.
+
+    Returns True only when a file was created. Holds no secrets; the token is never written here.
+    """
+    path = config_dir(env) / SETTINGS_FILE
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "x", encoding="utf-8", newline="\n") as handle:
+            handle.write(SETTINGS_TEMPLATE)
+    except FileExistsError:
+        return False
+    except OSError:
+        return False
+    return True

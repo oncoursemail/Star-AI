@@ -1,0 +1,16 @@
+local M = solution()
+local folder = Instance.new("Folder")
+folder.Parent = ROOT
+local part
+check("returns a Part", function()
+	part = M.makePart("Floor", Vector3.new(8, 1, 4), Color3.fromRGB(255, 0, 0), folder)
+	expect(typeof(part) == "Instance" and part:IsA("Part"), "not a Part")
+end)
+check("properties", function()
+	expect(part.Name == "Floor", "Name")
+	expect(part.Size == Vector3.new(8, 1, 4), "Size")
+	expect(part.Color == Color3.fromRGB(255, 0, 0), "Color")
+	expect(part.Anchored == true and part.CanCollide == true, "Anchored/CanCollide")
+	expect(part.Material == Enum.Material.SmoothPlastic, "Material")
+end)
+check("parent", function() expect(part.Parent == folder, "Parent") end)

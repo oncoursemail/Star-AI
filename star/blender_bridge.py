@@ -6,18 +6,18 @@ No external Blender MCP addon, network listener, downloaded scripts or assets ar
 """
 from __future__ import annotations
 
+from functools import lru_cache
 import asyncio
 from hashlib import sha256
 import json
-import math
 import os
 from pathlib import Path
 import re
 import secrets
 import shutil
-import sys
 
-from jsonschema import Draft202012Validator
+from ._lazy import lazy_attr
+Draft202012Validator = lazy_attr("jsonschema", "Draft202012Validator")  # loaded on first validation
 
 SCENE_NAME = r"^[A-Za-z][A-Za-z0-9_-]{1,39}$"
 HEX = r"^#[0-9a-fA-F]{6}$"
@@ -52,7 +52,14 @@ SCENE_SCHEMA = {
     },
     "required": ["name", "objects"],
 }
-VALIDATOR = Draft202012Validator(SCENE_SCHEMA)
+
+
+@lru_cache(maxsize=1)
+def _validator():
+    """The scene schema validator, built on first use (jsonschema is not imported at start-up)."""
+    return Draft202012Validator(SCENE_SCHEMA)
+
+
 JOB_ID = re.compile(r"^[a-f0-9]{24}$")
 MAX_SPEC_BYTES = 24_000
 MAX_REPORT_BYTES = 80_000
@@ -77,7 +84,7 @@ def validate_scene(spec: object) -> dict:
         raise ValueError("Blender scene contains invalid JSON values") from exc
     if len(encoded.encode("utf-8")) > MAX_SPEC_BYTES:
         raise ValueError("Blender scene request is too large")
-    errors = list(VALIDATOR.iter_errors(spec))
+    errors = list(_validator().iter_errors(spec))
     if errors:
         raise ValueError("Unsupported Blender scene field or out-of-range value")
     names = [item["name"].casefold() for item in spec["objects"]]
@@ -221,7 +228,24 @@ class BlenderController:
         report = json.loads(manifest.read_text(encoding="utf-8"))
         if not isinstance(report, dict) or report.get("job_id") != job_id or report.get("status") != "completed":
             raise ValueError("Blender job report did not pass validation")
-        # Never trust arbitrary report paths even if Blender worker was compromised.
+        # Never trust arbitrary paths reported by a worker. Animation jobs are
+        # separate draft artifacts, with FBX not GLB, and no claimed Studio proof.
+        if report.get("kind") == "animation":
+            for name in ("scene.blend", "animation.fbx"):
+                file = directory / name
+                if file.is_symlink() or not file.is_file() or not 0 < file.stat().st_size <= 150_000_000:
+                    raise ValueError("Expected Blender animation draft is missing or too large")
+            if report.get("rig") != "r15" or report.get("native_studio_import_tested") is not False:
+                raise ValueError("Blender animation evidence is invalid")
+            return {"job_id": job_id, "scene": report.get("scene"), "kind": "animation",
+                    "rig": "r15", "fps": report.get("fps"),
+                    "frame_count": report.get("frame_count"),
+                    "keyed_joints": report.get("keyed_joints"),
+                    "blend_file": str(directory / "scene.blend"),
+                    "fbx_file": str(directory / "animation.fbx"),
+                    "preview_file": None, "native_studio_import_tested": False,
+                    "notice": ("Experimental BONE-ONLY R15 proxy FBX. Must import to and test in "
+                               "real target Roblox rig using Studio Animation Editor. Not R6 compatible.")}
         for name in ("scene.blend", "scene.glb"):
             file = directory / name
             if file.is_symlink() or not file.is_file() or file.stat().st_size == 0:
@@ -249,6 +273,8 @@ class BlenderController:
             directory = root / job_id
             directory.mkdir(mode=0o700, exist_ok=False)
             (directory / "scene.json").write_text(json.dumps(scene, sort_keys=True), encoding="utf-8")
+            from .discord_bot.native_evidence import emit
+            emit("blender-worker", {"job_id": job_id, "status": "running"}, directory, scene=scene)
             try:
                 code, out, err = await self._invoke(str(executable), "--background",
                     "--factory-startup", "--python-exit-code", "17", "--python", str(worker),
@@ -260,8 +286,55 @@ class BlenderController:
             (directory / "worker.log").write_bytes((out + b"\n" + err)[-40_000:])
             if code:
                 raise BlenderJobError("Blender scene job failed; inspect the job's private worker.log")
-            return self.inspect(job_id)
+            report = self.inspect(job_id)
+            emit("blender-worker", report, directory, scene=scene)
+            return report
 
+
+
+    async def animate(self, spec: dict) -> dict:
+        """Generate one R15 bone-only FBX draft in a new project-private job.
+
+        Distinct experimental opt-in on top of the existing Blender create
+        permission. Refuses R6 until a verified Motor6D Studio import path is
+        available. Never imports user-owned assets or invokes arbitrary bpy.
+        """
+        from .blender_animation import validate_animation
+
+        if getattr(self.settings, "blender_edit", False) is not True:
+            raise PermissionError("Allow Blender scene creation explicitly in STAR settings")
+        if os.environ.get("STAR_BLENDER_R15_ANIMATION_EXPERIMENT") != "on":
+            raise PermissionError("R15 animation export is experimental and off by default")
+        clip = validate_animation(spec)
+        if clip["rig"] != "r15":
+            raise ValueError("R6 requires native Motor6D retarget testing; use animation preflight only")
+        executable = self._executable()
+        worker = Path(__file__).with_name("blender_animation_worker.py")
+        if not worker.is_file() or worker.is_symlink():
+            raise BlenderUnavailable("STAR's trusted animation worker is not available")
+        async with self.serial:
+            root = _job_root(self.home, self.settings.project)
+            root.mkdir(parents=True, exist_ok=True)
+            job_id = secrets.token_hex(12)
+            directory = root / job_id
+            directory.mkdir(mode=0o700, exist_ok=False)
+            (directory / "animation.json").write_text(
+                json.dumps(clip, sort_keys=True), encoding="utf-8")
+            try:
+                code, out, err = await self._invoke(
+                    str(executable), "--background", "--factory-startup",
+                    "--python-exit-code", "17", "--python", str(worker),
+                    "--", str(directory / "animation.json"),
+                    cwd=directory, timeout=MAX_JOB_SECONDS)
+            except asyncio.TimeoutError as exc:
+                raise BlenderJobError("Blender animation exceeded its bounded time budget") from exc
+            except OSError as exc:
+                raise BlenderUnavailable("Blender executable could not start") from exc
+            (directory / "worker.log").write_bytes((out + b"\n" + err)[-40_000:])
+            if code:
+                raise BlenderJobError(
+                    "Blender R15 draft animation failed; inspect its private worker.log")
+            return self.inspect(job_id)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -274,6 +347,8 @@ def main(argv: list[str] | None = None) -> int:
     actions = parser.add_mutually_exclusive_group(required=True)
     actions.add_argument("--probe", action="store_true")
     actions.add_argument("--scene", type=Path, help="Owner-reviewed JSON scene recipe")
+    actions.add_argument("--preflight-animation", type=Path, help="Read-only R15 or R6 animation check")
+    actions.add_argument("--animation", type=Path, help="Experimental approved R15 FBX draft export")
     actions.add_argument("--inspect", type=str, help="Previous STAR Blender job ID")
     arguments = parser.parse_args(argv)
     if not arguments.settings.is_file():
@@ -290,6 +365,18 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Choose a regular small local JSON scene file")
             spec = validate_scene(json.loads(file.read_text(encoding="utf-8")))
             report = asyncio.run(controller.build(spec))
+        elif arguments.preflight_animation or arguments.animation:
+            from .blender_animation import analyze_animation, validate_animation
+
+            file = arguments.preflight_animation or arguments.animation
+            if (file.is_symlink() or not file.is_file() or
+                    not 0 < file.stat().st_size <= MAX_SPEC_BYTES):
+                raise ValueError("Choose a regular small local JSON animation recipe")
+            spec = validate_animation(json.loads(file.read_text(encoding="utf-8")))
+            if arguments.preflight_animation:
+                report = analyze_animation(spec)
+            else:
+                report = asyncio.run(controller.animate(spec))
         else:
             report = controller.inspect(arguments.inspect)
     except (ValueError, PermissionError, BlenderUnavailable, BlenderJobError) as exc:
