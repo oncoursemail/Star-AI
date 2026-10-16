@@ -24,3 +24,9 @@
 - [ ] Any risky or new behaviour is opt-in and off by default
 - [ ] Model/provider endpoints stay on loopback by default
 - [ ] No force-push, no auto-merge; I checked open PRs for file overlap
+
+## Linked issue
+
+Closes #
+
+## Screenshots (UI changes only)
