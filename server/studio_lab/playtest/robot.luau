@@ -126,11 +126,23 @@ local function isCharacterPart(d)
 	local model = d:FindFirstAncestorOfClass("Model")
 	return model ~= nil and Players:GetPlayerFromCharacter(model) ~= nil
 end
+-- Inside an object of the same name (a Coin part in a Coin model), counted once. Only up to `stop`: the game's own
+-- folder is named after the game, and a game called SpeedPad has a part called SpeedPad (live run 2026-10-16).
+local function nestedInSame(d, name, stop)
+	local parent = d.Parent
+	while parent and parent ~= stop do
+		if parent.Name == name then
+			return true
+		end
+		parent = parent.Parent
+	end
+	return false
+end
 -- Objects with this name: inside the game folder first, anywhere in the Workspace as a fallback.
 local function allNamed(name)
 	local list = {}
 	for _, d in ipairs(gameRoot:GetDescendants()) do
-		if d.Name == name and (d:IsA("BasePart") or d:IsA("Model")) and not d:FindFirstAncestor(name) then
+		if d.Name == name and (d:IsA("BasePart") or d:IsA("Model")) and not nestedInSame(d, name, gameRoot) then
 			table.insert(list, d)
 		end
 	end
@@ -138,7 +150,7 @@ local function allNamed(name)
 	if #list == 0 then
 		where = "elsewhere"
 		for _, d in ipairs(workspace:GetDescendants()) do
-			if d.Name == name and (d:IsA("BasePart") or d:IsA("Model")) and not d:FindFirstAncestor(name)
+			if d.Name == name and (d:IsA("BasePart") or d:IsA("Model")) and not nestedInSame(d, name, workspace)
 				and not isCharacterPart(d) and not d:IsDescendantOf(workspace:FindFirstChild("MapDrafts") or gameRoot) then
 				table.insert(list, d)
 			end
