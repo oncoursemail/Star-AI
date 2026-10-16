@@ -527,6 +527,18 @@ RE_TOOLS = (
           {"path": _PATH, "offset": {"type": "integer", "minimum": 0, "default": 0},
            "length": {"type": "integer", "minimum": 1, "maximum": MAX_DISASM_BYTES, "default": 256},
            "arch": _ARCH}, ("path", "arch")),
+    _tool("re_compare_artifacts",
+          "Independently compare two distinct workspace artifacts byte-for-byte, either whole files or "
+          "bounded ranges at chosen offsets. Returns SHA-256 evidence, first mismatch, and PASS/FAIL for "
+          "byte equality only; never executes code or proves program behavior. A caller-supplied SHA-256 "
+          "pin is checked but its provenance is NOT authenticated.",
+          {"reference_path": _PATH, "candidate_path": _PATH,
+           "scope": {"type": "string", "enum": ["whole_file", "byte_range"], "default": "whole_file"},
+           "reference_offset": {"type": "integer", "minimum": 0, "default": 0},
+           "candidate_offset": {"type": "integer", "minimum": 0, "default": 0},
+           "length": {"type": "integer", "minimum": 1, "maximum": 1048576},
+           "expected_reference_sha256": {"type": "string", "pattern": "^[a-fA-F0-9]{64}$"}},
+          ("reference_path", "candidate_path")),
     _tool("re_file_detect",
           "Run Detect-It-Easy (diec) on a workspace file to detect compiler, packer, linker and protector, as JSON. "
           "Falls back to magic-byte identification if DIE is not installed.", {"path": _PATH}, ("path",)),
@@ -584,6 +596,7 @@ class ReverseEngineering:
                             for name in ("capstone", "pefile", "lief", "unicorn", "angr", "dnfile")},
             "external_tools": tools,
             "builtin": ["re_identify", "re_strings", "re_pe_info"],
+            "verification_tools": ["re_compare_artifacts"],
             "builtin_note": "Identify, strings and PE parsing are pure-Python and always available.",
             "policy": ("Local, defensive use on your own or permitted binaries only. No anti-cheat/client-protection "
                        "bypass, game cheats, DRM/licence cracking, or malware creation."),
@@ -625,6 +638,22 @@ class ReverseEngineering:
 
         if name == "re_tool_status":
             return self.status()
+
+        if name == "re_compare_artifacts":
+            from .re_artifact_verifier import compare_artifacts
+
+            reference = self._resolve(args["reference_path"])
+            candidate = self._resolve(args["candidate_path"])
+            return compare_artifacts(
+                reference, candidate,
+                reference_label=args["reference_path"],
+                candidate_label=args["candidate_path"],
+                scope=args.get("scope", "whole_file"),
+                reference_offset=args.get("reference_offset", 0),
+                candidate_offset=args.get("candidate_offset", 0),
+                length=args.get("length"),
+                expected_reference_sha256=args.get("expected_reference_sha256"),
+            )
 
         path = self._resolve(args["path"])
         self.sandbox.mkdir(parents=True, exist_ok=True)
