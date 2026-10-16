@@ -29,7 +29,8 @@ from .brain_router import select_route
 from .context_layout import assemble
 from .desktop_core import (Settings, app_data, chat_history, memory_scope_for, stable_memory)
 from .model_health import note_server_result, probe_server
-from .providers import llama_request_fields, open_client, own_warm_ended, own_warm_started, provider_kind
+from .providers import (llama_request_fields, look_for_busy_slots, open_client, own_warm_ended, own_warm_started,
+                        provider_kind)
 from . import server_roles, turn_memory
 from .conversation_memory import compose_memory, read_checkpoint
 
@@ -173,8 +174,24 @@ async def _prime(settings: Settings, request: dict, cancel_event, timeout: float
             own_warm_ended(mark, cancelled=stopped)
 
 
+async def _slot_busy(settings: Settings, request: dict, probe) -> bool:
+    """Issue 118: is the slot this warm-up names generating for another client right now?
+
+    Such a warm-up would wait for that whole answer and then push it out of the slot, and on a llama.cpp
+    server before b11583 it is worse: the server loads the warm-up's cached prompt into the busy slot and
+    the other client's answer goes on with the wrong context (unrelated text, or it stops mid-script)."""
+    slot = (request.get('extras') or {}).get('id_slot')
+    if type(slot) is not int:
+        return False
+    try:
+        return slot in await probe(settings, request['model'], conversation='warm-up-busy-check')
+    except Exception:
+        return False
+
+
 def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None = None,
-            cancel_event=None, on_checked=None, check: bool = True, transport=None) -> dict:
+            cancel_event=None, on_checked=None, check: bool = True, transport=None,
+            probe=look_for_busy_slots) -> dict:
     """Check the server (STAR Server only) and prime the cache. Never raises.
 
     Returns a small nonsecret report: `skipped` (why nothing was done), or
@@ -219,6 +236,8 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
         # Nothing was sent: a chat database or setting that cannot be read is a
         # local problem and says nothing about the server.
         return done(skipped='no_request', error=type(exc).__name__, **checked)
+    if kind == 'lan' and asyncio.run(_slot_busy(settings, request, probe)):
+        return done(skipped='slot_busy', **checked)
     # The optional bank is purely an accelerator for this same chat's already
     # authorized prompt. The ordinary prompt remains authoritative if restore
     # fails, and the model never receives an extra bank tool or instruction.
@@ -273,6 +292,8 @@ def warm_up(settings: Settings, *, home: Path | None = None, chat_id: str | None
     for extra in requests[1:]:
         if cancelled() or not result.get('primed'):
             break
+        if kind == 'lan' and asyncio.run(_slot_busy(settings, extra, probe)):
+            continue
         try:
             also += bool(asyncio.run(_prime(settings, extra, cancel_event, None)).get('primed'))
         except Exception:

@@ -15,8 +15,10 @@ if [ ! -d "$DST" ]; then
      && git -c user.name=ramforge -c user.email=ramforge@localhost commit -qm base)
 fi
 cd "$DST"
-git checkout -q -- ggml src
+git checkout -q -- ggml src tools/server
 git apply "$HERE/patches/0001-ramforge-numa-local-b11541.patch"
+# Issue 118: upstream b11583 fix, a request pinned to a busy slot no longer loads its cached prompt into that slot.
+git apply "$HERE/patches/0002-server-busy-pinned-slot-untouched.patch"
 nice -n 19 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=ON -DGGML_OPENMP=ON -DLLAMA_CURL=OFF -DLLAMA_BUILD_TESTS=OFF
 nice -n 19 cmake --build build -j "${JOBS:-8}" --target llama-server llama-bench llama-imatrix
 gcc -O3 -march=native -pthread "$HERE/numa_bw.c" -o "$HERE/numa_bw"

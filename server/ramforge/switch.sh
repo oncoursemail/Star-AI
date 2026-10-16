@@ -21,7 +21,11 @@ case "${1:-}" in
   install)
     [ -x "$SRC/llama-server" ] || { echo "no build at $SRC (run build.sh as user star first)"; exit 1; }
     mkdir -p "$DST"
-    cp -a "$SRC"/llama-server "$SRC"/lib*.so* "$DST"/
+    # Only changed files, each as a new file: rewriting a library a running star-brain has mapped crashes it, and
+    # replacing an unchanged llama-server would leave the running router unable to start model instances.
+    for f in "$SRC"/llama-server "$SRC"/lib*.so*; do
+      cmp -s "$f" "$DST/$(basename "$f")" 2>/dev/null || cp -a --remove-destination "$f" "$DST"/
+    done
     chown -R star:star "$DST"
     LD_LIBRARY_PATH=$DST ldd "$DST/llama-server" | grep -E "llama|ggml|mtmd" | grep -v "$DST" && { echo "a library resolves outside $DST"; exit 1; }
     LD_LIBRARY_PATH=$DST ldd "$DST/libllama-server-impl.so" | grep -E "llama|ggml|mtmd" | grep -v "$DST" && { echo "a library resolves outside $DST"; exit 1; }
