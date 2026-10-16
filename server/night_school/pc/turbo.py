@@ -171,7 +171,7 @@ class Turbo:
                                               encoding="utf-8")
 
     def _say(self, state: str, reason: str) -> None:
-        if (state, reason) != (self.state, self.reason):
+        if (state, reason.split(" (")[0]) != (self.state, self.reason.split(" (")[0]):    # not every idle minute
             self.log(f"{state}: {reason}" if reason else state)
         self.state, self.reason = state, reason
         self._status()
