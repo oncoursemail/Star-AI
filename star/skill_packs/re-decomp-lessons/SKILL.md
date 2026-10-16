@@ -8,6 +8,7 @@ These are lessons from long-running open projects that rebuilt old games, consol
 ## 1. Get an oracle before you change anything
 - Every project that finished had a cheap, automatic way to say "same" or "different": a rebuilt ROM whose checksum equals the original (sm64, OoT, pret), the original program run side by side (OpenRCT2 early on), conformance tests that also run on real Windows (Wine), hardware test programs and frame dumps (Dolphin), saved replays and desync checksums (OpenTTD, OpenRA).
 - Put the oracle in CI. A change that has not been compared against the oracle is unverified, however plausible it reads.
+- STAR's optional `re_compare_artifacts` tool can independently verify byte equality for two workspace files or bounded function ranges. PASS is not proof of a trustworthy original, semantic equivalence or a working port; the owner must anchor reference provenance and the runner must be outside the candidate's control.
 
 ## 2. Replace incrementally behind a working whole
 - OpenRCT2 started as a library loaded into the original executable and replaced functions one at a time, so the game was playable every day. ReactOS and Wine replace one DLL or API at a time. This is the strangler pattern: never a big-bang rewrite.
