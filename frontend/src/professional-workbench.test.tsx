@@ -15,6 +15,7 @@ afterEach(cleanup)
 
 describe('STAR professional desktop structure', () => {
   it('uses a single branded navigation and an editable task-first start canvas', async () => {
+    localStorage.setItem('star.home.workbench', 'on') // the workbench home is opt-in (Settings > Interface)
     render(<Desktop preview/>)
     const sidebar = screen.getByRole('complementary', {name: 'STAR navigation'})
     const brand = within(sidebar).getByRole('button', {name: 'STAR, back to chat'})
