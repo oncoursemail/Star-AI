@@ -37,6 +37,11 @@ MARK = "STAR_PLAY "
 APPLY_MARK = "STAR_PLAY_APPLY "
 ROBOT_NAME = "StarPlayRobot"
 PLAYTEST_FOLDER = "Playtest"
+PAUSED = "StarPlayPaused"
+SERVICES_LUAU = ("local SERVICES = {}\nfor _, name in ipairs({ \"Workspace\", \"ServerScriptService\", \"StarterPlayer\", "
+                 "\"StarterGui\", \"StarterPack\", \"ReplicatedFirst\", \"ReplicatedStorage\" }) do\n"
+                 "\tlocal ok, service = pcall(function() return game:GetService(name) end)\n"
+                 "\tif ok and service then table.insert(SERVICES, service) end\nend")
 ORIGIN = (0, 30, 500)
 DEFAULT_ITERATIONS, MAX_ITERATIONS = 3, 5
 MAX_SCRIPTS, MAX_SCRIPT_CHARS = 3, 16000
@@ -269,12 +274,17 @@ def apply_luau(spec: dict, scripts: list[dict], run: str) -> str:
         f'robot:SetAttribute("StarPlayConfig", {_lua_string(canonical(robot_config(spec, run)))})',
         f"robot.Source = {_lua_string(ROBOT_SOURCE)}",
         "robot.Parent = root",
-        "-- Only one robot may drive the character: switch off Studio Lab probes left in other drafts.",
+        "-- The playtest tests STAR's game alone: pause every other script of the place (Studio Lab probes, the",
+        "-- place's own systems) and mark it, so the cleanup switches exactly those back on.",
+        SERVICES_LUAU,
         "local silenced = 0",
-        "for _, other in ipairs(drafts:GetDescendants()) do",
-        '\tif other:IsA("Script") and other.Name == "StarLabProbe" and other.Enabled then',
-        "\t\tother.Enabled = false",
-        "\t\tsilenced += 1",
+        "for _, service in ipairs(SERVICES) do",
+        "\tfor _, other in ipairs(service:GetDescendants()) do",
+        '\t\tif other:IsA("BaseScript") and other.Enabled and not other:IsDescendantOf(tests) then',
+        "\t\t\tother.Enabled = false",
+        f"\t\t\tother:SetAttribute({_lua_string(PAUSED)}, true)",
+        "\t\t\tsilenced += 1",
+        "\t\tend",
         "\tend",
         "end",
         "root.Parent = tests",
@@ -285,10 +295,15 @@ def apply_luau(spec: dict, scripts: list[dict], run: str) -> str:
 
 
 def remove_luau() -> str:
-    return ("-- STAR playtest cleanup\nlocal drafts = workspace:FindFirstChild(\"MapDrafts\")\n"
+    """Remove the playtest folder and switch the scripts the apply paused back on."""
+    return ("-- STAR playtest cleanup\n" + SERVICES_LUAU + "\nlocal drafts = workspace:FindFirstChild(\"MapDrafts\")\n"
             f"local tests = drafts and drafts:FindFirstChild({_lua_string(PLAYTEST_FOLDER)})\n"
             "local n = 0\nif tests then n = #tests:GetChildren(); tests:Destroy() end\n"
-            f'return "{APPLY_MARK}" .. game:GetService("HttpService"):JSONEncode({{removed = n}})\n')
+            "local restored = 0\nfor _, service in ipairs(SERVICES) do\n\tfor _, item in ipairs(service:GetDescendants()) do\n"
+            f"\t\tif item:IsA(\"BaseScript\") and item:GetAttribute({_lua_string(PAUSED)}) then\n"
+            f"\t\t\titem:SetAttribute({_lua_string(PAUSED)}, nil)\n\t\t\titem.Enabled = true\n\t\t\trestored += 1\n"
+            "\t\tend\n\tend\nend\n"
+            f'return "{APPLY_MARK}" .. game:GetService("HttpService"):JSONEncode({{removed = n, restored = restored}})\n')
 
 
 def marked_json(text: str, mark: str) -> dict | None:
@@ -657,6 +672,8 @@ async def run_suite(specs: list[dict], open_guarded, brain, out: Path, *, log=pr
     async with open_guarded() as (guarded, facts):
         if guarded is None:
             return {"ok": False, "problem": (facts or {}).get("problem") or "no verified STAR test place", "facts": facts}
+        # A run that stopped half-way may have left a playtest folder and paused place scripts: clean up first.
+        await GameRun(guarded, brain, out, log=log).remove()
         for number, spec in enumerate(specs, 1):
             if max_seconds and time.monotonic() - started > max_seconds:
                 log("runtime cap reached: no new game")
@@ -710,11 +727,17 @@ def studio_opener(home: Path):
         if not command:
             yield None, {"problem": "no Studio connector command configured"}
             return
-        make = parallel.connector(command)
+        make: Any = parallel.connector(command)   # an async context manager factory (studio.connect)
         async with make() as session:
-            listed = await parallel.list_instances(session, expect=1, seconds=60)
+            try:
+                listed = await parallel.list_instances(session, expect=1, seconds=60)
+            except Exception as error:      # e.g. a connector with zero tools: Studio is signed out or not loaded
+                listed = []
+                problem = f"the Studio connector did not answer ({type(error).__name__})"
+            else:
+                problem = "no Studio attached to the connector"
             if not listed:
-                yield None, {"problem": "no Studio attached to the connector (is Studio running and signed in?)"}
+                yield None, {"problem": problem + ": is Studio running, signed in and on STAR Test Place?"}
                 return
             discovered = await studio.list_tools(session)
             guarded, facts = await parallel.open_instance(session, discovered, listed[0]["id"], home=home,
@@ -767,8 +790,11 @@ def main(arguments=None) -> int:
             log(json.dumps(rows[-1]))
         (out / "generate.json").write_text(json.dumps(rows, indent=1), encoding="utf-8")
         return 0
-    suite = asyncio.run(run_suite(specs, studio_opener(Path(chosen.home).expanduser()), brain, out, log=log,
-                                  max_seconds=chosen.max_minutes * 60 or None))
+    try:
+        suite = asyncio.run(run_suite(specs, studio_opener(Path(chosen.home).expanduser()), brain, out, log=log,
+                                      max_seconds=chosen.max_minutes * 60 or None))
+    except Exception as error:          # the connector could not start (no Studio, Studio signed out, ...)
+        suite = {"ok": False, "problem": f"Studio connection failed ({type(error).__name__})"}
     if chosen.outbox and suite.get("reports"):
         suite["outbox"] = write_outbox(Path(chosen.outbox), suite["reports"])
     print(json.dumps({k: v for k, v in suite.items() if k != "reports"}, indent=1, default=str))

@@ -57,7 +57,8 @@ def test_apply_luau_stores_sources_as_strings_and_configures_the_robot():
     assert 's.Source = "print(\\"hi\\")\\nlocal s = \\"]]\\"\\n"' in code
     config = json.loads(json.loads(re.search(r'robot:SetAttribute\("StarPlayConfig", (".*")\)', code).group(1)))
     assert config["run"] == "abcd1234ef" and [s["do"] for s in config["steps"]] == ["blocked", "touch", "reach"]
-    assert "tests:ClearAllChildren()" in code and "StarLabProbe" in code
+    assert "tests:ClearAllChildren()" in code and 'SetAttribute("StarPlayPaused", true)' in code
+    assert 'item:SetAttribute("StarPlayPaused", nil)' in pl.remove_luau()
     with pytest.raises(ValueError):
         pl.apply_luau(spec(), scripts, "not-a-token")
     with pytest.raises(ValueError):
@@ -173,6 +174,7 @@ def test_loop_fixes_a_failed_game_and_feeds_night_school(tmp_path):
     fix_task = brain.calls[1][-1]["content"]
     assert "should still be blocked" in fix_task and "LESSON:" in fix_task and brain.calls[1][-2]["role"] == "assistant"
     assert studio.calls.count("start_stop_play") == 4 and report["cleanup"]["ok"]
+    assert studio.calls.count("execute_luau") == 4          # cleanup first, 2 builds, cleanup after
     assert suite["summary"]["fix_rate"] == 1.0 and suite["summary"]["fixed"] == 1 and suite["summary"]["playtests"] == 2
     assert report["lesson"]["text"] == "Keep a door closed until its trigger fires."
     outbox = tmp_path / "outbox"
