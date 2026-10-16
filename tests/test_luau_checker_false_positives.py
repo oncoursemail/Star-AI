@@ -45,8 +45,6 @@ ALLOWLIST: dict[tuple[str, str, str], tuple[str, str]] = {
         ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/obby/ServerScriptService/PlayerData.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox-templates/obby/ServerScriptService/PlayerData.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/obby/ServerScriptService/PlayerData.luau", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "examples/roblox-templates/obby/ServerScriptService/TouchValidation.luau", "unknown-member"):
@@ -67,18 +65,10 @@ ALLOWLIST: dict[tuple[str, str, str], tuple[str, str]] = {
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
     ("roblox_api_checker", "examples/roblox-templates/simulator/ServerScriptService/Simulator.server.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox-templates/simulator/ServerScriptService/Simulator.server.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/simulator/ServerScriptService/Simulator.server.luau", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
-    ("roblox_api_checker", "examples/roblox-templates/simulator/ServerScriptService/SimulatorService.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/simulator/StarterPlayer/StarterPlayerScripts/Simulator.client.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox-templates/simulator/StarterPlayer/StarterPlayerScripts/Simulator.client.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
-    ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/PlayerData.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/PlayerData.luau", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/Plots.luau", "unknown-class"):
@@ -87,38 +77,26 @@ ALLOWLIST: dict[tuple[str, str, str], tuple[str, str]] = {
         ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/Tycoon.server.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/Tycoon.server.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox-templates/tycoon/ServerScriptService/Tycoon.server.luau", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "examples/roblox-templates/tycoon/StarterPlayer/StarterPlayerScripts/Hud.client.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox-templates/tycoon/StarterPlayer/StarterPlayerScripts/Hud.client.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox/obby/ServerScriptService/ObbyServer.server.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
     ("roblox_api_checker", "examples/roblox/obby/ServerScriptService/ObbyServer.server.luau", "unknown-member"):
         ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox/shop/ServerScriptService/ShopServer.server.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox/shop/ServerScriptService/ShopServer.server.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "examples/roblox/shop/ServerScriptService/ShopServer.server.luau", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "examples/roblox/shop/StarterPlayer/StarterPlayerScripts/ShopClient.client.luau", "unknown-class"):
         ("accepted_noise", "Small test API dump omits this Roblox class; requires full local Studio dump."),
-    ("roblox_api_checker", "examples/roblox/shop/StarterPlayer/StarterPlayerScripts/ShopClient.client.luau", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
     ("roblox_api_checker", "star/skill_packs/roblox-datastore-service-patterns/SKILL.md#luau-1", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "star/skill_packs/roblox-datastore-service-patterns/SKILL.md#luau-2", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
     ("roblox_api_checker", "star/skill_packs/roblox-datastore-service-patterns/SKILL.md#luau-3", "unknown-service"):
         ("accepted_noise", "Small test API dump omits this Roblox service; verify with full local dump."),
-    ("roblox_api_checker", "star/skill_packs/roblox-remote-event-function-patterns/SKILL.md#luau-2", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
-    ("roblox_api_checker", "star/skill_packs/roblox-remote-event-function-patterns/SKILL.md#luau-3", "unknown-member"):
-        ("accepted_noise", "Small API dump lacks this member/inherited type; receiver and real API remain unverified."),
 }
 
 
@@ -184,9 +162,9 @@ def test_known_good_corpus_has_no_unclassified_findings():
         "luau_lint_all_modes": 7,
         "luau_safety": 1,
         "luau_server_security": 0,
-        "roblox_api_checker": 92,
+        "roblox_api_checker": 74,
     }, "Reclassify changed checker findings before updating the baseline"
-    assert len(accepted) == 100
+    assert len(accepted) == 82
     assert sum(1 for _, _, _, _, verdict, _ in accepted
                if verdict == "true_positive") == 2
     print(f"corpus_count={len(sources)}")
