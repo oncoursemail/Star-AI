@@ -314,6 +314,10 @@ local function navigate(target, seconds, mode)
 		result.standing_on = short(below(c, root))
 		if part.Parent then
 			result.distance_left = r2((topOf(part) - root.Position).Magnitude)
+			-- Where the target is from the character's feet: what a level designer needs to see the mistake.
+			local feet = root.Position.Y - h.HipHeight - root.Size.Y / 2
+			result.target_above_feet = r2(topOf(part).Y - feet)
+			result.target_flat_distance = r2(Vector3.new(part.Position.X - root.Position.X, 0, part.Position.Z - root.Position.Z).Magnitude)
 		end
 	end
 	if #result.stuck == 0 then
@@ -335,6 +339,12 @@ local function whyNotReached(label, nav)
 	end
 	if nav.standing_on and nav.standing_on ~= "" then
 		text ..= "; ended on '" .. nav.standing_on .. "'"
+	end
+	if nav.target_above_feet and nav.target_above_feet > 7 then
+		text ..= "; the top of '" .. label .. "' is " .. nav.target_above_feet
+			.. " studs above the character's feet (a jump reaches about 7)"
+	elseif nav.target_flat_distance and (nav.fell or nav.reason == "stuck") then
+		text ..= "; '" .. label .. "' was still " .. nav.target_flat_distance .. " studs away horizontally"
 	end
 	return text
 end

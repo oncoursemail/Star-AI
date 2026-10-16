@@ -778,6 +778,10 @@ def main(arguments=None) -> int:
     check.add_argument("specs")
     generate = sub.add_parser("generate", help="brain only: STAR writes the games, no Studio (parse + static checks)")
     run = sub.add_parser("run", help="build, playtest, fix, re-playtest every spec in Studio")
+    ideas = sub.add_parser("ideas", help="STAR invents new game specs into the idea ledger (needs STAR_PLAYTEST_IDEAS=1)")
+    ideas.add_argument("specs", help="existing specs (for de-duplication)")
+    ideas.add_argument("--ideas-dir", required=True)
+    ideas.add_argument("--count", type=int, default=4)
     for command in (generate, run):
         command.add_argument("specs")
         command.add_argument("--out", required=True)
@@ -785,6 +789,8 @@ def main(arguments=None) -> int:
     run.add_argument("--home", required=True, help="Studio Lab home with studio/lab-multi.json")
     run.add_argument("--outbox", default="", help="night-school outbox folder for examples and lesson candidates")
     run.add_argument("--max-minutes", type=float, default=0, help="no new game after this many minutes (0 = no cap)")
+    run.add_argument("--ideas-dir", default="", help="idea ledger: play its build list first, record fun signals "
+                                                     "(needs STAR_PLAYTEST_IDEAS=1)")
     chosen = parser.parse_args(arguments)
     only = {name for name in getattr(chosen, "only", "").split(",") if name}
     specs, bad = load_specs(Path(chosen.specs), only or None)
@@ -795,11 +801,22 @@ def main(arguments=None) -> int:
         print(f"playtest learning is switched off (set {SWITCH}=1)")
         return 3
     log = lambda text: print(time.strftime("%H:%M:%S"), text, flush=True)   # noqa: E731
-    out = Path(chosen.out) / time.strftime("playtest-%Y%m%dT%H%M%SZ", time.gmtime())
+    out = Path(getattr(chosen, "out", ".")) / time.strftime("playtest-%Y%m%dT%H%M%SZ", time.gmtime())
     brain = Brain()
     if not brain.url:
         print("no brain URL (STAR_PLAYTEST_BRAIN_URL)")
         return 2
+    from . import playtest_ideas
+    ideas_on = bool(getattr(chosen, "ideas_dir", "")) and playtest_ideas.switched_on()
+    if chosen.command == "ideas":
+        if not ideas_on:
+            print(f"game ideas are switched off (set {playtest_ideas.IDEAS_SWITCH}=1)")
+            return 3
+        result = playtest_ideas.invent(brain, Path(chosen.ideas_dir), specs, count=max(1, min(chosen.count, 8)), log=log)
+        return 0 if result["ok"] else 1
+    if ideas_on and chosen.command == "run":
+        names = {s["name"] for s in specs}
+        specs = [s for s in playtest_ideas.build_list(Path(chosen.ideas_dir)) if s["name"] not in names] + specs
     if chosen.command == "generate":
         out.mkdir(parents=True, exist_ok=True)
         rows = []
@@ -820,6 +837,8 @@ def main(arguments=None) -> int:
         suite = {"ok": False, "problem": f"Studio connection failed ({type(error).__name__})"}
     if chosen.outbox and suite.get("reports"):
         suite["outbox"] = write_outbox(Path(chosen.outbox), suite["reports"])
+    if ideas_on and suite.get("reports"):
+        suite["ideas_recorded"] = playtest_ideas.record_results(Path(chosen.ideas_dir), suite["reports"])
     print(json.dumps({k: v for k, v in suite.items() if k != "reports"}, indent=1, default=str))
     return 0 if suite.get("ok") else 1
 

@@ -35,9 +35,17 @@ systemctl --user stop star-studio-mcp-host 2>/dev/null
 systemd-run --user --unit=star-studio-mcp-host --quiet \
   bash -c 'sleep infinity | STUDIO_MCP_NOLOCK=1 /home/star/bin/studio-mcp-multi.sh >/dev/null' || say "connector host did not start"
 sleep 20
+export STAR_PLAYTEST_IDEAS 2>/dev/null
+SPECS="$PT/app/server/studio_lab/playtest/specs"
+cd "$PT/app" || exit 1
+if [ "${STAR_PLAYTEST_IDEAS:-}" = 1 ]; then          # STAR invents new games first (same switch.env)
+  say "game ideas: asking STAR for ${PLAYTEST_IDEAS_COUNT:-4} new games"
+  PYTHONPATH="$PT/app:$LAB/site-packages" timeout 1800 nice -n 5 python3 -m star.playtest_learning ideas "$SPECS" \
+    --ideas-dir "$PT/ideas" --count "${PLAYTEST_IDEAS_COUNT:-4}" >> "$LOG" 2>&1
+fi
 say "playtest learning: cap ${MINUTES} min"
-cd "$PT/app" && PYTHONPATH="$PT/app:$LAB/site-packages" timeout --signal=INT $(( MINUTES * 60 + 900 )) \
-  nice -n 5 python3 -m star.playtest_learning run "$PT/app/server/studio_lab/playtest/specs" --home "$LAB/home" \
+PYTHONPATH="$PT/app:$LAB/site-packages" timeout --signal=INT $(( MINUTES * 60 + 900 )) \
+  nice -n 5 python3 -m star.playtest_learning run "$SPECS" --home "$LAB/home" --ideas-dir "$PT/ideas" \
   --out "$PT/evidence" --outbox "$NS_HOME/outbox/playtest" --max-minutes "$MINUTES" >> "$LOG" 2>&1
 rc=$?
 # keep the newest $KEEP evidence folders
