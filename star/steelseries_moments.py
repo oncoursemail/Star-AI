@@ -14,7 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 MAX_PROPS = 4096
 GAME_ID = re.compile(r"^STAR_[A-Z][A-Z0-9_]{1,31}$")
