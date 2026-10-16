@@ -159,7 +159,8 @@ def fix_messages(spec: dict, answer: str, report: dict) -> list[dict]:
            "line `LESSON: <one sentence a Roblox game developer should remember, general, not about this game>`."}]
 
 
-_BLOCK = re.compile(r"```[ \t]*(?:lua|luau)?[ \t]*\r?\n(.*?)```", re.S | re.I)
+# An answer cut off by the model still counts: its last block runs to the end (the playtest shows what breaks).
+_BLOCK = re.compile(r"```[ \t]*(?:lua|luau)?[ \t]*\r?\n(.*?)(?:```|\Z)", re.S | re.I)
 _HEADER = re.compile(r"^\s*--\s*Script:\s*([A-Za-z][A-Za-z0-9_]{0,39})\s*$")
 _LESSON = re.compile(r"(?im)^\s*LESSON:\s*(.{10,300}?)\s*$")
 

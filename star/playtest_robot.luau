@@ -55,6 +55,7 @@ if not player then
 	return
 end
 
+local owned = nil
 local function body(timeout)
 	local deadline = os.clock() + (timeout or 10)
 	repeat
@@ -62,6 +63,13 @@ local function body(timeout)
 		local h = c and c:FindFirstChildOfClass("Humanoid")
 		local root = c and c:FindFirstChild("HumanoidRootPart")
 		if h and root and h.Health > 0 then
+			if owned ~= c then
+				-- The server simulates the robot's character (also after every respawn), so MoveTo is real physics here.
+				owned = c
+				pcall(function()
+					root:SetNetworkOwner(nil)
+				end)
+			end
 			return c, h, root
 		end
 		task.wait(0.2)
@@ -183,7 +191,9 @@ local function over(part, pos)
 end
 
 -- Goal-directed movement with stuck detection. Returns facts, never errors on a game problem.
-local function navigate(target, seconds)
+-- mode "auto": pathfinding first, a direct run when no path exists; "direct": always run straight at the target
+-- (obby legs and "is it blocked?" checks: a path could drop off the build to the ground below and walk around).
+local function navigate(target, seconds, mode)
 	local c, h, root = body(8)
 	if not c then
 		return { reached = false, reason = "no-character" }
@@ -192,18 +202,21 @@ local function navigate(target, seconds)
 	if not part then
 		return { reached = false, reason = "target-has-no-part" }
 	end
+	-- A touch counts for pick-ups (CanCollide off) or from above; bumping a platform's side while falling does not.
 	local touched = false
 	local conn = part.Touched:Connect(function(hit)
-		if hit:IsDescendantOf(c) then
+		if hit:IsDescendantOf(c) and (not part.CanCollide or over(part, root.Position)) then
 			touched = true
 		end
 	end)
 	local p = params(c)
-	local result = { reached = false, stuck = {}, jumps = 0, mode = "path", from = vec(root.Position) }
+	local direct = mode == "direct"
+	local result = { reached = false, stuck = {}, jumps = 0, mode = if direct then "direct" else "path",
+		from = vec(root.Position) }
 	local t0 = os.clock()
 	local deadline = t0 + seconds
 	local waypoints, wi, lastPath = nil, 2, -100
-	local usePath = true
+	local usePath = not direct
 	local history = {}
 	local lastStuck, recover = -100, 0
 	while os.clock() < deadline do
@@ -220,7 +233,8 @@ local function navigate(target, seconds)
 			result.reason, result.fell = "fell", true
 			break
 		end
-		if touched or over(part, pos) then
+		local grounded = h.FloorMaterial ~= Enum.Material.Air
+		if touched or (over(part, pos) and (grounded or not part.CanCollide)) then
 			result.reached = true
 			break
 		end
@@ -249,7 +263,6 @@ local function navigate(target, seconds)
 			end
 		end
 		h:MoveTo(aim)
-		local grounded = h.FloorMaterial ~= Enum.Material.Air
 		local offset = Vector3.new(aim.X - pos.X, 0, aim.Z - pos.Z)
 		if not waypoints and grounded and offset.Magnitude > 1.5 then
 			-- Direct run: jump the way a player does, at the edge of the surface or when the next one is higher.
@@ -280,7 +293,7 @@ local function navigate(target, seconds)
 					local side = if offset.Magnitude > 0.1 then offset.Unit:Cross(Vector3.yAxis) else Vector3.xAxis
 					h:MoveTo(pos + side * 5)
 					task.wait(0.7)
-				elseif recover == 3 then
+				elseif recover == 3 and not direct then
 					usePath, waypoints = not usePath, nil
 					result.mode = if usePath then "path" else "direct"
 				else
@@ -341,7 +354,7 @@ function checks.reach(step)
 	if not target then
 		return false, "there is no part named '" .. step.target .. "'", {}
 	end
-	local nav = navigate(target, step.seconds or 30)
+	local nav = navigate(target, step.seconds or 30, step.mode)
 	nav.found = where
 	if nav.reached then
 		return true, "", nav
@@ -371,7 +384,7 @@ function checks.route(step)
 	table.insert(stages, { #stages + 1, goal })
 	local legs = {}
 	for _, item in ipairs(stages) do
-		local nav = navigate(item[2], step.seconds or 20)
+		local nav = navigate(item[2], step.seconds or 20, step.mode or "direct")
 		table.insert(legs, { name = item[2].Name, reached = nav.reached, reason = nav.reason, seconds = nav.seconds,
 			jumps = nav.jumps, stuck = nav.stuck and #nav.stuck or 0 })
 		if not nav.reached then
@@ -387,7 +400,7 @@ function checks.blocked(step)
 	if not target then
 		return false, "there is no part named '" .. step.target .. "'", {}
 	end
-	local nav = navigate(target, step.seconds or 12)
+	local nav = navigate(target, step.seconds or 12, step.mode or "direct")
 	if nav.reached then
 		return false, "the robot reached '" .. step.target .. "' although it should still be blocked", nav
 	end
@@ -666,21 +679,21 @@ end
 
 -- Start: the game's own SpawnLocation (or a part named Start). Other SpawnLocations in the place can win the
 -- random spawn choice, so the robot moves the character there, as the game's only spawn would.
-local spawn = nil
+local startPart = nil
 for _, d in ipairs(gameRoot:GetDescendants()) do
 	if d:IsA("SpawnLocation") then
-		spawn = d
+		startPart = d
 		break
 	end
 end
-spawn = spawn or asPart(findNamed("Start"))
+startPart = startPart or asPart(findNamed("Start"))
 local c, h, root = body(15)
 if not c then
 	say("done", { ok = false, problem = "the character did not load" })
 	return
 end
 local spawnFacts = { parts = #parts, natural = vec(root.Position), walk_speed = h.WalkSpeed, jump_height = h.JumpHeight,
-	leaderstats = {}, spawn = short(spawn) }
+	leaderstats = {}, spawn = short(startPart) }
 local ls = player:FindFirstChild("leaderstats")
 if ls then
 	for _, v in ipairs(ls:GetChildren()) do
@@ -690,24 +703,43 @@ end
 if #parts > 0 then
 	spawnFacts.bounds = { r2(lowY), r2(highY) }
 end
-if spawn then
-	pcall(function()
-		root:SetNetworkOwner(nil)
-	end)
-	c:PivotTo(CFrame.new(topOf(spawn) + Vector3.new(0, 3.2, 0)))
+if startPart then
+	c:PivotTo(CFrame.new(topOf(startPart) + Vector3.new(0, 3.2, 0)))
 	root.AssemblyLinearVelocity = Vector3.zero
 elseif #parts > 0 then
 	c:PivotTo(CFrame.new(sumX / #parts, highY + 4, sumZ / #parts))
 end
-local spawnOk = #parts > 0 and spawn ~= nil
+local spawnOk = #parts > 0 and startPart ~= nil
 say("check", { index = 0, ["do"] = "spawn", ok = spawnOk,
 	why = if #parts == 0 then "the game built no parts inside its folder"
-		elseif not spawn then "the game has no SpawnLocation (or part named Start) in its folder" else "",
+		elseif not startPart then "the game has no SpawnLocation (or part named Start) in its folder" else "",
 	facts = spawnFacts })
 task.wait(1)
 
+-- After a fall below the build (or a death the game did not answer with a respawn on it), the next check starts
+-- again from the game's start, as a player would after respawning.
+local function backToStart()
+	local c2, h2, root2 = body(0.5)
+	if c2 and root2.Position.Y >= killY then
+		return false
+	end
+	if h2 then
+		h2.Health = 0
+	end
+	c2, _, root2 = respawned(15)
+	if c2 and root2 and startPart then
+		c2:PivotTo(CFrame.new(topOf(startPart) + Vector3.new(0, 3.2, 0)))
+		root2.AssemblyLinearVelocity = Vector3.zero
+		task.wait(0.5)
+	end
+	return true
+end
+
 local allOk = spawnOk
 for index, step in ipairs(config.steps) do
+	if backToStart() then
+		say("reset", { index = index })
+	end
 	local fn = checks[step["do"]]
 	local ok, okOrWhy, why, facts = pcall(function()
 		if not fn then

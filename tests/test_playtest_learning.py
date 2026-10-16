@@ -49,6 +49,8 @@ def test_parse_answer_reads_scripts_lesson_and_forbidden_apis():
     assert pl.parse_answer("no code")["problems"] == ["the answer has no ```lua code block"]
     headerless = pl.parse_answer("```lua\nprint(1)\n```")
     assert headerless["scripts"][0]["name"] == "Game1" and not headerless["problems"]
+    cut = pl.parse_answer('```lua\n-- Script: Build\nlocal floor = Instance.new("Part", workspace)')
+    assert cut["scripts"][0]["source"].endswith("workspace)\n") and not cut["problems"]
 
 
 def test_apply_luau_stores_sources_as_strings_and_configures_the_robot():
