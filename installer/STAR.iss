@@ -26,6 +26,9 @@ LZMANumBlockThreads=4
 WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+; Manual Setup preserves an existing install's scope; the in-app updater passes
+; /CURRENTUSER or /ALLUSERS when it can identify the running copy's registration.
+UsePreviousPrivileges=yes
 DisableProgramGroupPage=yes
 UsePreviousAppDir=yes
 CloseApplications=yes

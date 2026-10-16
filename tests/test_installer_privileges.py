@@ -42,3 +42,8 @@ def test_installer_keeps_all_users_choice_in_privilege_dialog():
     assert len(values) == 1, f"Expected one install-scope override; got {values!r}"
     options = set(re.split(r"[\s,]+", values[0]))
     assert "dialog" in options, f"All-users choice must stay in installer dialog; got {values!r}"
+
+
+def test_manual_setup_preserves_previous_privileges():
+    source = INSTALLER.read_text(encoding='utf-8')
+    assert _setup_values(source, 'UsePreviousPrivileges') == ['yes']

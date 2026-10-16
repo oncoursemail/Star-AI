@@ -32,7 +32,10 @@ foreach ($scope in $scopes) {
 }
 ```
 
-**Per-user** means the uninstall entry belongs to your Windows account (`HKEY_CURRENT_USER`); **all-users** means it is registered for the machine (`HKEY_LOCAL_MACHINE`). If both appear, more than one install may be registered: confirm which copy you intend to upgrade. If neither appears, you may be running the portable ZIP or STAR may be installed under a different Windows account.
+**Per-user** means the uninstall entry belongs to your Windows account (`HKEY_CURRENT_USER`); **all-users** means it is registered for the machine (`HKEY_LOCAL_MACHINE`). If both appear, more than one install may be registered: confirm which copy you intend to upgrade. The in-app updater matches the running executable's folder to these entries and explicitly selects that scope for Setup. A matching per-user entry takes precedence if both entries point to the same folder. It does not remove stale entries or migrate an all-users installation. If neither matches, it leaves scope selection to Setup; it cannot promise there will be no administrator prompt.
+
+Installer references: [previous install mode](https://jrsoftware.org/ishelp/topic_setup_usepreviousprivileges.htm)
+and [scope overrides](https://jrsoftware.org/ishelp/topic_setup_privilegesrequiredoverridesallowed.htm).
 
 ## 2. Choose a brain: STAR Server or this PC
 
