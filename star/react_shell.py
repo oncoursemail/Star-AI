@@ -812,6 +812,22 @@ def launch():
                 on_checked=(lambda report:self._emit(request_id,'progress',{'phase':'Server checked'})) if request_id else None,
                 on_done=finished if (request_id or then is not None) else None)
 
+        def _stop_warm_ups(self):
+            self.warmer.cancel()
+            self.draft_warmer.cancel()
+
+        def _warm_draft(self, body: dict) -> dict:
+            """Settings > Start thinking while I type: the server reads the draft into its prompt cache.
+            Answers at once; the request runs on its own thread (star/prefill_warm.py)."""
+            text=body.get('prompt')
+            if not isinstance(text,str) or len(text)>30000:raise ValueError('Invalid draft')
+            if self.active_task:
+                return {'primed':False,'skipped':'busy'}
+            mode=str(body.get('mode')) if body.get('mode') in ('auto','fast','agent') else 'auto'
+            prefix=SESSION_CAPABILITIES if Settings.load(self.settings_file).session_capabilities_prompt else ''
+            self.draft_warmer.submit(self._warm_target,prefix+text,mode=mode,research=body.get('research') is True)
+            return {'queued':True}
+
         def _digest_target(self):
             settings=Settings.load(self.settings_file)
             return settings,app_data(),settings.project
@@ -1071,21 +1087,9 @@ def launch():
                 action=body.get('action')
                 if action not in ALLOWED_ACTIONS:raise PermissionError('Action not permitted')
                 rid=str(body.get('requestId',''))[:80]
-                if action in WARM_UP_STOPPERS:
-                    self.warmer.cancel()
-                    self.draft_warmer.cancel()
+                if action in WARM_UP_STOPPERS:self._stop_warm_ups()
                 if action in WARM_UP_STOPPERS or action in VOICE_ACTIONS:self.digester.cancel()
-                if action=='warmDraft':
-                    # Settings > Start thinking while I type: the server reads the draft into its prompt cache.
-                    # Answers at once; the request runs on its own thread (star/prefill_warm.py).
-                    text=body.get('prompt')
-                    if not isinstance(text,str) or len(text)>30000:raise ValueError('Invalid draft')
-                    if self.active_task:
-                        return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
-                    mode=str(body.get('mode')) if body.get('mode') in ('auto','fast','agent') else 'auto'
-                    prefix=SESSION_CAPABILITIES if Settings.load(self.settings_file).session_capabilities_prompt else ''
-                    self.draft_warmer.submit(self._warm_target,prefix+text,mode=mode,research=body.get('research') is True)
-                    return json.dumps({'ok':True,'data':{'queued':True}})
+                if action=='warmDraft':return json.dumps({'ok':True,'data':self._warm_draft(body)})
                 if action=='warmUp':
                     if self.active_task:
                         return json.dumps({'ok':True,'data':{'primed':False,'skipped':'busy'}})
