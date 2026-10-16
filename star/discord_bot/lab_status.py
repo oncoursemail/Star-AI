@@ -72,6 +72,11 @@ class LabReceipt:
     capture_kind: str = ""
     capture_file: str = ""
     capture_sha256: str = ""
+    build_sha256: str = ""
+    iteration: int = 0
+    source: str = ""
+    camera: str = ""
+    captured_at: str = ""
 
     @property
     def stamp(self) -> str:
@@ -116,10 +121,23 @@ def parse_receipt(data: bytes) -> LabReceipt:
     base = {"version", "job_id", "engine", "state", "phase", "task", "next_step",
             "checked", "total", "evidence", "updated_at"}
     picture = {"capture_kind", "capture_file", "capture_sha256"}
-    if not isinstance(record, dict) or not base <= set(record) or set(record) - base - picture:
+    native = {"build_sha256", "iteration", "source", "camera", "captured_at"}
+    if not isinstance(record, dict) or not base <= set(record) or set(record) - base - picture - native:
         raise ValueError("Lab report fields are missing or unsupported")
-    if record["version"] != 1 or type(record["version"]) is not int:
+    if record["version"] not in {1, 2} or type(record["version"]) is not int:
         raise ValueError("Unknown Lab report version")
+    if record["version"] == 1 and set(record) & native:
+        raise ValueError("Native metadata requires report version 2")
+    if record["version"] == 2:
+        if not native <= set(record):
+            raise ValueError("Native metadata is missing")
+        if not isinstance(record["build_sha256"], str) or not _HASH.fullmatch(record["build_sha256"]):
+            raise ValueError("Invalid native build hash")
+        _strict_integer(record["iteration"], 10000)
+        if record["source"] not in {"studio-lab", "studio-ui", "playtest-learning", "blender-worker"}:
+            raise ValueError("Unknown native producer")
+        if record["engine"] != ("blender" if record["source"] == "blender-worker" else "roblox-studio"):
+            raise ValueError("Native producer engine mismatch")
     job = record["job_id"]
     if not isinstance(job, str) or not _JOB.fullmatch(job):
         raise ValueError("Invalid Lab job id")
@@ -146,10 +164,23 @@ def parse_receipt(data: bytes) -> LabReceipt:
                 or not _IMAGE.fullmatch(name) or not isinstance(digest, str)
                 or not _HASH.fullmatch(digest)):
             raise ValueError("Lab screenshot needs a matching engine, file and SHA-256")
+    camera, captured = record.get("camera", ""), record.get("captured_at", "")
+    if record["version"] == 2:
+        if kind:
+            if not isinstance(camera, str) or not _JOB.fullmatch(camera):
+                raise ValueError("Invalid native camera")
+            if not isinstance(captured, str) or not _TIMESTAMP.fullmatch(captured):
+                raise ValueError("Invalid native capture timestamp")
+            if datetime.fromisoformat(captured.replace("Z", "+00:00")) > updated:
+                raise ValueError("Capture is newer than its receipt")
+        elif camera or captured:
+            raise ValueError("Camera metadata requires a capture")
     return LabReceipt(job, record["engine"], record["state"], record["phase"],
                       _line(record["task"], limit=180),
                       _line(record["next_step"], limit=180), checked, total,
-                      record["evidence"], updated, kind, name, digest)
+                      record["evidence"], updated, kind, name, digest,
+                      record.get("build_sha256", ""), record.get("iteration", 0),
+                      record.get("source", ""), camera, captured)
 
 
 def classify_lab_question(text: str) -> str:
@@ -182,6 +213,8 @@ def read_receipt(config: LabSettings) -> LabReceipt:
     if not config.enabled or config.report_path is None:
         raise ValueError("Lab reports are disabled; configure them on the bot host first")
     path = config.report_path
+    from .native_evidence import trusted_path
+    trusted_path(path)
     if not path.is_absolute() or path.is_symlink() or path.parent.is_symlink():
         raise ValueError("Lab report path is not trusted")
     try:
@@ -213,6 +246,11 @@ def format_receipt(receipt: LabReceipt, *, now: datetime | None = None) -> str:
         "**Screenshot:** " + ("available with /star labshot" if receipt.capture_kind else "no approved capture"),
         "A file receipt does not prove the application is still running or a screenshot is visually correct.",
     ]
+    if receipt.source:
+        lines.extend([f"**Native producer:** {receipt.source}; iteration {receipt.iteration}",
+                      f"**Build SHA-256:** {receipt.build_sha256}"])
+        if receipt.capture_kind:
+            lines.append(f"**Camera:** {receipt.camera}; captured {receipt.captured_at}")
     return "\n".join(lines)
 
 
@@ -229,9 +267,16 @@ def read_capture(config: LabSettings, receipt: LabReceipt | None = None,
         raise ValueError("The Lab report has no approved viewport/render screenshot")
     if not receipt.fresh(now):
         raise ValueError("Lab screenshot is stale; request a fresh producer report")
+    if receipt.captured_at:
+        age = ((now or datetime.now(timezone.utc)) -
+               datetime.fromisoformat(receipt.captured_at.replace("Z", "+00:00"))).total_seconds()
+        if not 0 <= age <= MAX_ACTIVE_AGE_SECONDS:
+            raise ValueError("Lab screenshot is stale; request a fresh producer report")
     if not config.report_path:
         raise ValueError("The trusted Lab report path is missing")
     path = config.report_path.parent / receipt.capture_file
+    from .native_evidence import trusted_path
+    trusted_path(path)
     if (path.is_symlink() or config.report_path.parent.is_symlink()
             or path.parent.resolve() != config.report_path.parent.resolve()):
         raise ValueError("Lab screenshot is not a trusted local file")

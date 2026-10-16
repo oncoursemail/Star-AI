@@ -273,6 +273,8 @@ class BlenderController:
             directory = root / job_id
             directory.mkdir(mode=0o700, exist_ok=False)
             (directory / "scene.json").write_text(json.dumps(scene, sort_keys=True), encoding="utf-8")
+            from .discord_bot.native_evidence import emit
+            emit("blender-worker", {"job_id": job_id, "status": "running"}, directory, scene=scene)
             try:
                 code, out, err = await self._invoke(str(executable), "--background",
                     "--factory-startup", "--python-exit-code", "17", "--python", str(worker),
@@ -284,7 +286,9 @@ class BlenderController:
             (directory / "worker.log").write_bytes((out + b"\n" + err)[-40_000:])
             if code:
                 raise BlenderJobError("Blender scene job failed; inspect the job's private worker.log")
-            return self.inspect(job_id)
+            report = self.inspect(job_id)
+            emit("blender-worker", report, directory, scene=scene)
+            return report
 
 
 

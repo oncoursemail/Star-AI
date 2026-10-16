@@ -42,6 +42,7 @@ ALLOWED = frozenset({
     "STAR_DISCORD_LEARNING_CHECK_MINUTES",
     "STAR_DISCORD_LEARNING_VISUAL_MANIFEST", "STAR_DISCORD_LEARNING_VISUAL_DIRECTORY",
     "STAR_DISCORD_LAB_STATUS", "STAR_DISCORD_LAB_REPORT",
+    "STAR_DISCORD_EVIDENCE_DIRECTORY", "STAR_DISCORD_EVIDENCE_REVIEWS",
     "STAR_DISCORD_WORK_STATUS", "STAR_DISCORD_WORK_REPORT",
     "STAR_DISCORD_PRESENCE", "STAR_DISCORD_PRESENCE_MINUTES",
     "STAR_DISCORD_DRAW", "STAR_DISCORD_DRAW_ANYONE", "STAR_DISCORD_DRAW_TIMEOUT", "STAR_DISCORD_MENTIONS",
@@ -144,6 +145,10 @@ STAR_DISCORD_SCREEN_CAPTURE=0
 # Never accepts Discord-supplied file paths; the producer must supply SHA-matched evidence.
 STAR_DISCORD_LAB_STATUS=0
 STAR_DISCORD_LAB_REPORT=
+# Optional native task events: still requires STAR_DISCORD_LEARNING_DM_OPT_IN=1.
+# Operator-provisioned staging directory and SEPARATE operator-only review directory.
+STAR_DISCORD_EVIDENCE_DIRECTORY=
+STAR_DISCORD_EVIDENCE_REVIEWS=
 # Optional: real worker activity feed (coding/studying/testing/research). Only a trusted host producer
 # may write this local JSON; Discord users cannot choose a file path or start the jobs.
 STAR_DISCORD_WORK_STATUS=0
